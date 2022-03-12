@@ -109,8 +109,12 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfCreateView(in)
 	case *CurTimeFuncExpr:
 		return CloneRefOfCurTimeFuncExpr(in)
+	case *DeallocateStmt:
+		return CloneRefOfDeallocateStmt(in)
 	case *Default:
 		return CloneRefOfDefault(in)
+	case *Definer:
+		return CloneRefOfDefiner(in)
 	case *Delete:
 		return CloneRefOfDelete(in)
 	case *DerivedTable:
@@ -125,14 +129,14 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfDropTable(in)
 	case *DropView:
 		return CloneRefOfDropView(in)
+	case *ExecuteStmt:
+		return CloneRefOfExecuteStmt(in)
 	case *ExistsExpr:
 		return CloneRefOfExistsExpr(in)
 	case *ExplainStmt:
 		return CloneRefOfExplainStmt(in)
 	case *ExplainTab:
 		return CloneRefOfExplainTab(in)
-	case *ExprOrColumns:
-		return CloneRefOfExprOrColumns(in)
 	case Exprs:
 		return CloneExprs(in)
 	case *ExtractFuncExpr:
@@ -153,8 +157,10 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfGroupConcatExpr(in)
 	case *IndexDefinition:
 		return CloneRefOfIndexDefinition(in)
-	case *IndexHints:
-		return CloneRefOfIndexHints(in)
+	case *IndexHint:
+		return CloneRefOfIndexHint(in)
+	case IndexHints:
+		return CloneIndexHints(in)
 	case *IndexInfo:
 		return CloneRefOfIndexInfo(in)
 	case *Insert:
@@ -195,6 +201,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfNotExpr(in)
 	case *NullVal:
 		return CloneRefOfNullVal(in)
+	case Offset:
+		return in
 	case OnDup:
 		return CloneOnDup(in)
 	case *OptLike:
@@ -219,8 +227,12 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPartitionOption(in)
 	case *PartitionSpec:
 		return CloneRefOfPartitionSpec(in)
+	case *PartitionValueRange:
+		return CloneRefOfPartitionValueRange(in)
 	case Partitions:
 		return ClonePartitions(in)
+	case *PrepareStmt:
+		return CloneRefOfPrepareStmt(in)
 	case ReferenceAction:
 		return in
 	case *ReferenceDefinition:
@@ -295,6 +307,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfTablespaceOperation(in)
 	case *TimestampFuncExpr:
 		return CloneRefOfTimestampFuncExpr(in)
+	case *TrimFuncExpr:
+		return CloneRefOfTrimFuncExpr(in)
 	case *TruncateTable:
 		return CloneRefOfTruncateTable(in)
 	case *UnaryExpr:
@@ -392,7 +406,7 @@ func CloneRefOfAliasedTableExpr(n *AliasedTableExpr) *AliasedTableExpr {
 	out.Expr = CloneSimpleTableExpr(n.Expr)
 	out.Partitions = ClonePartitions(n.Partitions)
 	out.As = CloneTableIdent(n.As)
-	out.Hints = CloneRefOfIndexHints(n.Hints)
+	out.Hints = CloneIndexHints(n.Hints)
 	out.Columns = CloneColumns(n.Columns)
 	return &out
 }
@@ -446,6 +460,7 @@ func CloneRefOfAlterTable(n *AlterTable) *AlterTable {
 	out.Table = CloneTableName(n.Table)
 	out.AlterOptions = CloneSliceOfAlterOption(n.AlterOptions)
 	out.PartitionSpec = CloneRefOfPartitionSpec(n.PartitionSpec)
+	out.PartitionOption = CloneRefOfPartitionOption(n.PartitionOption)
 	out.Comments = CloneComments(n.Comments)
 	return &out
 }
@@ -457,8 +472,10 @@ func CloneRefOfAlterView(n *AlterView) *AlterView {
 	}
 	out := *n
 	out.ViewName = CloneTableName(n.ViewName)
+	out.Definer = CloneRefOfDefiner(n.Definer)
 	out.Columns = CloneColumns(n.Columns)
 	out.Select = CloneSelectStatement(n.Select)
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 
@@ -750,8 +767,10 @@ func CloneRefOfCreateView(n *CreateView) *CreateView {
 	}
 	out := *n
 	out.ViewName = CloneTableName(n.ViewName)
+	out.Definer = CloneRefOfDefiner(n.Definer)
 	out.Columns = CloneColumns(n.Columns)
 	out.Select = CloneSelectStatement(n.Select)
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 
@@ -766,8 +785,28 @@ func CloneRefOfCurTimeFuncExpr(n *CurTimeFuncExpr) *CurTimeFuncExpr {
 	return &out
 }
 
+// CloneRefOfDeallocateStmt creates a deep clone of the input.
+func CloneRefOfDeallocateStmt(n *DeallocateStmt) *DeallocateStmt {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Comments = CloneComments(n.Comments)
+	out.Name = CloneColIdent(n.Name)
+	return &out
+}
+
 // CloneRefOfDefault creates a deep clone of the input.
 func CloneRefOfDefault(n *Default) *Default {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfDefiner creates a deep clone of the input.
+func CloneRefOfDefiner(n *Definer) *Definer {
 	if n == nil {
 		return nil
 	}
@@ -851,6 +890,19 @@ func CloneRefOfDropView(n *DropView) *DropView {
 	}
 	out := *n
 	out.FromTables = CloneTableNames(n.FromTables)
+	out.Comments = CloneComments(n.Comments)
+	return &out
+}
+
+// CloneRefOfExecuteStmt creates a deep clone of the input.
+func CloneRefOfExecuteStmt(n *ExecuteStmt) *ExecuteStmt {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneColIdent(n.Name)
+	out.Comments = CloneComments(n.Comments)
+	out.Arguments = CloneColumns(n.Arguments)
 	return &out
 }
 
@@ -881,17 +933,6 @@ func CloneRefOfExplainTab(n *ExplainTab) *ExplainTab {
 	}
 	out := *n
 	out.Table = CloneTableName(n.Table)
-	return &out
-}
-
-// CloneRefOfExprOrColumns creates a deep clone of the input.
-func CloneRefOfExprOrColumns(n *ExprOrColumns) *ExprOrColumns {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Expr = CloneExpr(n.Expr)
-	out.ColumnList = CloneColumns(n.ColumnList)
 	return &out
 }
 
@@ -1010,14 +1051,26 @@ func CloneRefOfIndexDefinition(n *IndexDefinition) *IndexDefinition {
 	return &out
 }
 
-// CloneRefOfIndexHints creates a deep clone of the input.
-func CloneRefOfIndexHints(n *IndexHints) *IndexHints {
+// CloneRefOfIndexHint creates a deep clone of the input.
+func CloneRefOfIndexHint(n *IndexHint) *IndexHint {
 	if n == nil {
 		return nil
 	}
 	out := *n
 	out.Indexes = CloneSliceOfColIdent(n.Indexes)
 	return &out
+}
+
+// CloneIndexHints creates a deep clone of the input.
+func CloneIndexHints(n IndexHints) IndexHints {
+	if n == nil {
+		return nil
+	}
+	res := make(IndexHints, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneRefOfIndexHint(x))
+	}
+	return res
 }
 
 // CloneRefOfIndexInfo creates a deep clone of the input.
@@ -1307,7 +1360,7 @@ func CloneRefOfPartitionDefinition(n *PartitionDefinition) *PartitionDefinition 
 	}
 	out := *n
 	out.Name = CloneColIdent(n.Name)
-	out.Limit = CloneExpr(n.Limit)
+	out.ValueRange = CloneRefOfPartitionValueRange(n.ValueRange)
 	return &out
 }
 
@@ -1317,8 +1370,7 @@ func CloneRefOfPartitionOption(n *PartitionOption) *PartitionOption {
 		return nil
 	}
 	out := *n
-	out.KeyColList = CloneColumns(n.KeyColList)
-	out.ExprOrCol = CloneRefOfExprOrColumns(n.ExprOrCol)
+	out.ColList = CloneColumns(n.ColList)
 	out.Expr = CloneExpr(n.Expr)
 	out.SubPartition = CloneRefOfSubPartition(n.SubPartition)
 	out.Definitions = CloneSliceOfRefOfPartitionDefinition(n.Definitions)
@@ -1338,6 +1390,16 @@ func CloneRefOfPartitionSpec(n *PartitionSpec) *PartitionSpec {
 	return &out
 }
 
+// CloneRefOfPartitionValueRange creates a deep clone of the input.
+func CloneRefOfPartitionValueRange(n *PartitionValueRange) *PartitionValueRange {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Range = CloneValTuple(n.Range)
+	return &out
+}
+
 // ClonePartitions creates a deep clone of the input.
 func ClonePartitions(n Partitions) Partitions {
 	if n == nil {
@@ -1348,6 +1410,18 @@ func ClonePartitions(n Partitions) Partitions {
 		res = append(res, CloneColIdent(x))
 	}
 	return res
+}
+
+// CloneRefOfPrepareStmt creates a deep clone of the input.
+func CloneRefOfPrepareStmt(n *PrepareStmt) *PrepareStmt {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneColIdent(n.Name)
+	out.Comments = CloneComments(n.Comments)
+	out.StatementIdentifier = CloneColIdent(n.StatementIdentifier)
+	return &out
 }
 
 // CloneRefOfReferenceDefinition creates a deep clone of the input.
@@ -1626,7 +1700,7 @@ func CloneRefOfSubPartition(n *SubPartition) *SubPartition {
 		return nil
 	}
 	out := *n
-	out.KeyColList = CloneColumns(n.KeyColList)
+	out.ColList = CloneColumns(n.ColList)
 	out.Expr = CloneExpr(n.Expr)
 	return &out
 }
@@ -1730,6 +1804,17 @@ func CloneRefOfTimestampFuncExpr(n *TimestampFuncExpr) *TimestampFuncExpr {
 	out := *n
 	out.Expr1 = CloneExpr(n.Expr1)
 	out.Expr2 = CloneExpr(n.Expr2)
+	return &out
+}
+
+// CloneRefOfTrimFuncExpr creates a deep clone of the input.
+func CloneRefOfTrimFuncExpr(n *TrimFuncExpr) *TrimFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.TrimArg = CloneExpr(n.TrimArg)
+	out.StringArg = CloneExpr(n.StringArg)
 	return &out
 }
 
@@ -2027,6 +2112,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfSubstrExpr(in)
 	case *TimestampFuncExpr:
 		return CloneRefOfTimestampFuncExpr(in)
+	case *TrimFuncExpr:
+		return CloneRefOfTrimFuncExpr(in)
 	case *ValuesFuncExpr:
 		return CloneRefOfValuesFuncExpr(in)
 	case *WeightStringFuncExpr:
@@ -2207,6 +2294,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfNotExpr(in)
 	case *NullVal:
 		return CloneRefOfNullVal(in)
+	case Offset:
+		return in
 	case *OrExpr:
 		return CloneRefOfOrExpr(in)
 	case *Subquery:
@@ -2215,6 +2304,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfSubstrExpr(in)
 	case *TimestampFuncExpr:
 		return CloneRefOfTimestampFuncExpr(in)
+	case *TrimFuncExpr:
+		return CloneRefOfTrimFuncExpr(in)
 	case *UnaryExpr:
 		return CloneRefOfUnaryExpr(in)
 	case ValTuple:
@@ -2345,6 +2436,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfCreateTable(in)
 	case *CreateView:
 		return CloneRefOfCreateView(in)
+	case *DeallocateStmt:
+		return CloneRefOfDeallocateStmt(in)
 	case *Delete:
 		return CloneRefOfDelete(in)
 	case *DropDatabase:
@@ -2353,6 +2446,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfDropTable(in)
 	case *DropView:
 		return CloneRefOfDropView(in)
+	case *ExecuteStmt:
+		return CloneRefOfExecuteStmt(in)
 	case *ExplainStmt:
 		return CloneRefOfExplainStmt(in)
 	case *ExplainTab:
@@ -2369,6 +2464,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfOtherAdmin(in)
 	case *OtherRead:
 		return CloneRefOfOtherRead(in)
+	case *PrepareStmt:
+		return CloneRefOfPrepareStmt(in)
 	case *Release:
 		return CloneRefOfRelease(in)
 	case *RenameTable:

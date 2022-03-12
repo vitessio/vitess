@@ -37,8 +37,9 @@ type analyzer struct {
 	err          error
 	inProjection int
 
-	projErr error
-	warning string
+	projErr      error
+	unshardedErr error
+	warning      string
 }
 
 // newAnalyzer create the semantic analyzer
@@ -82,6 +83,7 @@ func (a analyzer) newSemTable(statement sqlparser.SelectStatement, coll collatio
 		Tables:            a.tables.Tables,
 		selectScope:       a.scoper.rScope,
 		NotSingleRouteErr: a.projErr,
+		NotUnshardedErr:   a.unshardedErr,
 		Warning:           a.warning,
 		Comments:          statement.GetComments(),
 		SubqueryMap:       a.binder.subqueryMap,
@@ -92,16 +94,17 @@ func (a analyzer) newSemTable(statement sqlparser.SelectStatement, coll collatio
 }
 
 func (a *analyzer) setError(err error) {
-	prErr, ok := err.(ProjError)
-	if ok {
-		a.projErr = prErr.Inner
-		return
-	}
-
-	if a.inProjection > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
-		a.projErr = err
-	} else {
-		a.err = err
+	switch err := err.(type) {
+	case ProjError:
+		a.projErr = err.Inner
+	case UnshardedError:
+		a.unshardedErr = err.Inner
+	default:
+		if a.inProjection > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
+			a.projErr = err
+		} else {
+			a.err = err
+		}
 	}
 }
 
@@ -277,7 +280,7 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		}
 	case *sqlparser.JoinTableExpr:
 		if node.Condition != nil && node.Condition.Using != nil {
-			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries")
+			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries")}
 		}
 		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString())
@@ -334,5 +337,15 @@ type ProjError struct {
 }
 
 func (p ProjError) Error() string {
+	return p.Inner.Error()
+}
+
+// UnshardedError is used to mark an error as something that should only be returned
+// if the query is not unsharded
+type UnshardedError struct {
+	Inner error
+}
+
+func (p UnshardedError) Error() string {
 	return p.Inner.Error()
 }

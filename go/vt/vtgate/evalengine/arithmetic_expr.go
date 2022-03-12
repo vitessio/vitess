@@ -26,10 +26,8 @@ type (
 		Op ArithmeticOp
 	}
 
-	// ArithmeticOp allows arithmetic expressions to not have to evaluate child expressions - this is done by the BinaryExpr
 	ArithmeticOp interface {
 		eval(left, right, out *EvalResult) error
-		typeof(left sqltypes.Type) sqltypes.Type
 		String() string
 	}
 
@@ -48,7 +46,7 @@ func (b *ArithmeticExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	var left, right EvalResult
 	left.init(env, b.Left)
 	right.init(env, b.Right)
-	if left.null() || right.null() {
+	if left.isNull() || right.isNull() {
 		out.setNull()
 		return
 	}
@@ -60,34 +58,68 @@ func (b *ArithmeticExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	}
 }
 
+func makeNumericalType(t sqltypes.Type, f flag) sqltypes.Type {
+	if sqltypes.IsNumber(t) {
+		return t
+	}
+	if t == sqltypes.VarBinary && (f&flagHex) != 0 {
+		return sqltypes.Uint64
+	}
+	return sqltypes.Float64
+}
+
 // typeof implements the Expr interface
-func (b *ArithmeticExpr) typeof(env *ExpressionEnv) sqltypes.Type {
-	// TODO: this is returning an unknown type for this arithmetic expression;
-	// for some cases, it may be possible to calculate the resulting type
-	// of the expression ahead of time, making the evaluation lazier.
-	return -1
+func (b *ArithmeticExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	t1, f1 := b.Left.typeof(env)
+	t2, f2 := b.Right.typeof(env)
+	flags := f1 | f2
+
+	t1 = makeNumericalType(t1, f1)
+	t2 = makeNumericalType(t2, f2)
+
+	switch b.Op.(type) {
+	case *OpDivision:
+		if t1 == sqltypes.Float64 || t2 == sqltypes.Float64 {
+			return sqltypes.Float64, flags
+		}
+		return sqltypes.Decimal, flags
+	}
+
+	switch t1 {
+	case sqltypes.Int64:
+		switch t2 {
+		case sqltypes.Uint64, sqltypes.Float64, sqltypes.Decimal:
+			return t2, flags
+		}
+	case sqltypes.Uint64:
+		switch t2 {
+		case sqltypes.Float64, sqltypes.Decimal:
+			return t2, flags
+		}
+	case sqltypes.Decimal:
+		if t2 == sqltypes.Float64 {
+			return t2, flags
+		}
+	}
+	return t1, flags
 }
 
 func (a *OpAddition) eval(left, right, out *EvalResult) error {
 	return addNumericWithError(left, right, out)
 }
-func (a *OpAddition) typeof(left sqltypes.Type) sqltypes.Type { return left }
-func (a *OpAddition) String() string                          { return "+" }
+func (a *OpAddition) String() string { return "+" }
 
 func (s *OpSubstraction) eval(left, right, out *EvalResult) error {
 	return subtractNumericWithError(left, right, out)
 }
-func (s *OpSubstraction) typeof(left sqltypes.Type) sqltypes.Type { return left }
-func (s *OpSubstraction) String() string                          { return "-" }
+func (s *OpSubstraction) String() string { return "-" }
 
 func (m *OpMultiplication) eval(left, right, out *EvalResult) error {
 	return multiplyNumericWithError(left, right, out)
 }
-func (m *OpMultiplication) typeof(left sqltypes.Type) sqltypes.Type { return left }
-func (m *OpMultiplication) String() string                          { return "*" }
+func (m *OpMultiplication) String() string { return "*" }
 
 func (d *OpDivision) eval(left, right, out *EvalResult) error {
 	return divideNumericWithError(left, right, true, out)
 }
-func (d *OpDivision) typeof(sqltypes.Type) sqltypes.Type { return sqltypes.Float64 }
-func (d *OpDivision) String() string                     { return "/" }
+func (d *OpDivision) String() string { return "/" }

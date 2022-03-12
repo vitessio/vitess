@@ -99,19 +99,25 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		args = append(args, "Reshard")
 	}
 
+	args = append(args, "--")
+
+	if BypassLagCheck {
+		args = append(args, "--max_replication_lag_allowed=2542087h")
+	}
+
 	switch action {
 	case workflowActionCreate:
 		if currentWorkflowType == wrangler.MoveTablesWorkflow {
-			args = append(args, "-source", sourceKs, "-tables", tables)
+			args = append(args, "--source", sourceKs, "--tables", tables)
 		} else {
-			args = append(args, "-source_shards", sourceShards, "-target_shards", targetShards)
+			args = append(args, "--source_shards", sourceShards, "--target_shards", targetShards)
 		}
 	}
 	if cells != "" {
-		args = append(args, "-cells", cells)
+		args = append(args, "--cells", cells)
 	}
 	if tabletTypes != "" {
-		args = append(args, "-tablet_types", tabletTypes)
+		args = append(args, "--tablet_types", tabletTypes)
 	}
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	args = append(args, action, ksWorkflow)
@@ -365,6 +371,28 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	validateQuery(t, vtgateConn, "product", "select max(cid) from customer2", want)
 }
 
+// testReplicatingWithPKEnumCols ensures that we properly apply binlog events
+// in the stream where the PK contains an ENUM column
+func testReplicatingWithPKEnumCols(t *testing.T) {
+	// At this point we have an ongoing MoveTables operation for the customer table
+	// from the product to the customer keyspace. Let's delete and insert a row to
+	// ensure that the PK -- which is on (cid, typ) with typ being an ENUM -- is
+	// managed correctly in the WHERE clause for the delete. The end result is that
+	// we should see the proper deletes propogate and not get a duplicate key error
+	// when we re-insert the same row values and ultimately VDiff shows the table as
+	// being identical in both keyspaces.
+
+	// typ is an enum, with soho having a stored and binlogged value of 2
+	deleteQuery := "delete from customer where cid = 2 and typ = 'soho'"
+	insertQuery := "insert into customer(cid, name, typ, sport, meta) values(2, 'Paül','soho','cricket',convert(x'7b7d' using utf8mb4))"
+	execVtgateQuery(t, vtgateConn, "product", deleteQuery)
+	time.Sleep(2 * time.Second)
+	vdiff(t, ksWorkflow, "")
+	execVtgateQuery(t, vtgateConn, "product", insertQuery)
+	time.Sleep(2 * time.Second)
+	vdiff(t, ksWorkflow, "")
+}
+
 func testReshardV2Workflow(t *testing.T) {
 	currentWorkflowType = wrangler.ReshardWorkflow
 
@@ -406,6 +434,8 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	// Verify that we've properly ignored any internal operational tables
 	// and that they were not copied to the new target keyspace
 	verifyNoInternalTables(t, vtgateConn, targetKs)
+
+	testReplicatingWithPKEnumCols(t)
 
 	testRestOfWorkflow(t)
 
@@ -556,7 +586,7 @@ func setupCluster(t *testing.T) *VitessCluster {
 	zone1 := vc.Cells["zone1"]
 	zone2 := vc.Cells["zone2"]
 
-	vc.AddKeyspace(t, []*Cell{zone1, zone2}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
+	vc.AddKeyspace(t, []*Cell{zone1, zone2}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 
 	vtgate = zone1.Vtgates[0]
 	require.NotNil(t, vtgate)
@@ -575,7 +605,7 @@ func setupCluster(t *testing.T) *VitessCluster {
 
 func setupCustomerKeyspace(t *testing.T) {
 	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"], vc.Cells["zone2"]}, "customer", "-80,80-",
-		customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200); err != nil {
+		customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "-80"), 1); err != nil {
@@ -603,8 +633,8 @@ func TestSwitchReadsWritesInAnyOrder(t *testing.T) {
 }
 
 func switchReadsNew(t *testing.T, cells, ksWorkflow string, reverse bool) {
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+cells,
-		"-tablet_types=rdonly,replica", fmt.Sprintf("-reverse=%t", reverse), ksWorkflow)
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells,
+		"--tablet_types=rdonly,replica", fmt.Sprintf("-reverse=%t", reverse), ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("SwitchReads Error: %s: %s", err, output))
 	if output != "" {
 		fmt.Printf("SwitchReads output: %s\n", output)
@@ -727,7 +757,7 @@ func createAdditionalCustomerShards(t *testing.T, shards string) {
 }
 
 func tstApplySchemaOnlineDDL(t *testing.T, sql string, keyspace string) {
-	err := vc.VtctlClient.ExecuteCommand("ApplySchema", "-skip_preflight", "-ddl_strategy=online",
-		"-sql", sql, keyspace)
+	err := vc.VtctlClient.ExecuteCommand("ApplySchema", "--", "--skip_preflight", "--ddl_strategy=online",
+		"--sql", sql, keyspace)
 	require.NoError(t, err, fmt.Sprintf("ApplySchema Error: %s", err))
 }

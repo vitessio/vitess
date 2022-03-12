@@ -63,7 +63,19 @@ var _ logicalPlan = (*orderedAggregate)(nil)
 type orderedAggregate struct {
 	resultsBuilder
 	extraDistinct *sqlparser.ColName
-	eaggr         *engine.OrderedAggregate
+
+	// preProcess is true if one of the aggregates needs preprocessing.
+	preProcess bool
+
+	// aggregates specifies the aggregation parameters for each
+	// aggregation function: function opcode and input column number.
+	aggregates []*engine.AggregateParams
+
+	// groupByKeys specifies the input values that must be used for
+	// the aggregation key.
+	groupByKeys []*engine.GroupByParams
+
+	truncateColumnCount int
 }
 
 // checkAggregates analyzes the select expression for aggregates. If it determines
@@ -129,11 +141,9 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	}
 
 	// We need an aggregator primitive.
-	eaggr := &engine.OrderedAggregate{}
-	pb.plan = &orderedAggregate{
-		resultsBuilder: newResultsBuilder(rb, eaggr),
-		eaggr:          eaggr,
-	}
+	oa := &orderedAggregate{}
+	oa.resultsBuilder = newResultsBuilder(rb, oa)
+	pb.plan = oa
 	pb.plan.Reorder(0)
 	return nil
 }
@@ -215,8 +225,37 @@ func findAlias(colname *sqlparser.ColName, selects sqlparser.SelectExprs) sqlpar
 
 // Primitive implements the logicalPlan interface
 func (oa *orderedAggregate) Primitive() engine.Primitive {
-	oa.eaggr.Input = oa.input.Primitive()
-	return oa.eaggr
+	colls := map[int]collations.ID{}
+	for _, key := range oa.aggregates {
+		if key.CollationID != collations.Unknown {
+			colls[key.KeyCol] = key.CollationID
+		}
+	}
+	for _, key := range oa.groupByKeys {
+		if key.CollationID != collations.Unknown {
+			colls[key.KeyCol] = key.CollationID
+		}
+	}
+
+	input := oa.input.Primitive()
+	if len(oa.groupByKeys) == 0 {
+		return &engine.ScalarAggregate{
+			PreProcess:          oa.preProcess,
+			Aggregates:          oa.aggregates,
+			TruncateColumnCount: oa.truncateColumnCount,
+			Collations:          colls,
+			Input:               input,
+		}
+	}
+
+	return &engine.OrderedAggregate{
+		PreProcess:          oa.preProcess,
+		Aggregates:          oa.aggregates,
+		GroupByKeys:         oa.groupByKeys,
+		TruncateColumnCount: oa.truncateColumnCount,
+		Collations:          colls,
+		Input:               input,
+	}
 }
 
 func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin logicalPlan) (rc *resultColumn, colNumber int, err error) {
@@ -245,7 +284,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 			return nil, 0, err
 		}
 		oa.extraDistinct = col
-		oa.eaggr.PreProcess = true
+		oa.preProcess = true
 		var alias string
 		if expr.As.IsEmpty() {
 			alias = sqlparser.String(expr.Expr)
@@ -258,7 +297,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 		case engine.AggregateSum:
 			opcode = engine.AggregateSumDistinct
 		}
-		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, &engine.AggregateParams{
+		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
 			Opcode: opcode,
 			Col:    innerCol,
 			Alias:  alias,
@@ -269,7 +308,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 			return nil, 0, err
 		}
 		pb.plan = newBuilder
-		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, &engine.AggregateParams{
+		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
 			Opcode: opcode,
 			Col:    innerCol,
 		})
@@ -314,7 +353,7 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 // compare those instead. This is because we currently don't have the
 // ability to mimic mysql's collation behavior.
 func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
-	for i, gbk := range oa.eaggr.GroupByKeys {
+	for i, gbk := range oa.groupByKeys {
 		rc := oa.resultColumns[gbk.KeyCol]
 		if sqltypes.IsText(rc.column.typ) {
 			weightcolNumber, err := oa.input.SupplyWeightString(gbk.KeyCol, gbk.FromGroupBy)
@@ -326,38 +365,31 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 				return err
 			}
 			oa.weightStrings[rc] = weightcolNumber
-			oa.eaggr.GroupByKeys[i].WeightStringCol = weightcolNumber
-			oa.eaggr.GroupByKeys[i].KeyCol = weightcolNumber
-			oa.eaggr.TruncateColumnCount = len(oa.resultColumns)
+			oa.groupByKeys[i].WeightStringCol = weightcolNumber
+			oa.groupByKeys[i].KeyCol = weightcolNumber
+			oa.truncateColumnCount = len(oa.resultColumns)
 		}
 	}
 	return oa.input.Wireup(plan, jt)
 }
 
 func (oa *orderedAggregate) WireupGen4(semTable *semantics.SemTable) error {
-	colls := map[int]collations.ID{}
-	oa.eaggr.Collations = colls
-	for _, key := range oa.eaggr.Aggregates {
-		if key.CollationID != collations.Unknown {
-			colls[key.KeyCol] = key.CollationID
-		}
-	}
-	for _, key := range oa.eaggr.GroupByKeys {
-		if key.CollationID != collations.Unknown {
-			colls[key.KeyCol] = key.CollationID
-		}
-	}
 	return oa.input.WireupGen4(semTable)
 }
 
 // OutputColumns implements the logicalPlan interface
 func (oa *orderedAggregate) OutputColumns() []sqlparser.SelectExpr {
 	outputCols := sqlparser.CloneSelectExprs(oa.input.OutputColumns())
-	for _, aggr := range oa.eaggr.Aggregates {
+	for _, aggr := range oa.aggregates {
 		outputCols[aggr.Col] = &sqlparser.AliasedExpr{Expr: aggr.Expr, As: sqlparser.NewColIdent(aggr.Alias)}
 	}
-	if oa.eaggr.TruncateColumnCount > 0 {
-		return outputCols[:oa.eaggr.TruncateColumnCount]
+	if oa.truncateColumnCount > 0 {
+		return outputCols[:oa.truncateColumnCount]
 	}
 	return outputCols
+}
+
+// SetTruncateColumnCount sets the truncate column count.
+func (oa *orderedAggregate) SetTruncateColumnCount(count int) {
+	oa.truncateColumnCount = count
 }

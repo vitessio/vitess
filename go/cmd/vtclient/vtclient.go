@@ -23,6 +23,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"sort"
@@ -40,6 +41,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -76,11 +80,9 @@ var (
 )
 
 func init() {
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-		flag.PrintDefaults()
-		fmt.Fprint(os.Stderr, usage)
-	}
+	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
+		Epilogue: func(w io.Writer) { fmt.Fprint(w, usage) },
+	})
 }
 
 type bindvars []interface{}
@@ -145,8 +147,8 @@ func main() {
 }
 
 func run() (*results, error) {
-	flag.Parse()
-	args := flag.Args()
+	_flag.Parse()
+	args := _flag.Args()
 
 	if len(args) == 0 {
 		flag.Usage()

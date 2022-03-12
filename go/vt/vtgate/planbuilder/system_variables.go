@@ -45,6 +45,7 @@ func forSettings(systemVariables []sysvars.SystemVariable, f func(setting) planF
 			name:               sysvar.Name,
 			boolean:            sysvar.IsBoolean,
 			identifierAsString: sysvar.IdentifierAsString,
+			supportSetVar:      sysvar.SupportSetVar,
 		}
 
 		if sysvar.Default != "" {
@@ -61,7 +62,7 @@ func parseAndBuildDefaultValue(sysvar sysvars.SystemVariable) evalengine.Expr {
 	}
 	sel := stmt.(*sqlparser.Select)
 	aliasedExpr := sel.SelectExprs[0].(*sqlparser.AliasedExpr)
-	def, err := evalengine.Convert(aliasedExpr.Expr, nil)
+	def, err := evalengine.Translate(aliasedExpr.Expr, nil)
 	if err != nil {
 		panic(fmt.Sprintf("bug in set plan init - default value for %s not able to convert to evalengine.Expr: %s", sysvar.Name, sysvar.Default))
 	}

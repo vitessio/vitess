@@ -37,11 +37,18 @@ type (
 		SQLNode
 	}
 
+	// SupportOptimizerHint represents a statement that accepts optimizer hints.
+	SupportOptimizerHint interface {
+		iSupportOptimizerHint()
+		SetComments(comments Comments)
+		GetComments() Comments
+	}
+
 	// SelectStatement any SELECT statement.
 	SelectStatement interface {
 		Statement
+		InsertRows
 		iSelectStatement()
-		iInsertRows()
 		AddOrder(*Order)
 		SetOrderBy(OrderBy)
 		SetLimit(*Limit)
@@ -64,6 +71,7 @@ type (
 		GetOptLike() *OptLike
 		GetIfExists() bool
 		GetIfNotExists() bool
+		GetIsReplace() bool
 		GetTableSpec() *TableSpec
 		GetFromTables() TableNames
 		GetToTables() TableNames
@@ -456,11 +464,12 @@ type (
 
 	// AlterTable represents a ALTER TABLE statement.
 	AlterTable struct {
-		Table         TableName
-		AlterOptions  []AlterOption
-		PartitionSpec *PartitionSpec
-		Comments      Comments
-		FullyParsed   bool
+		Table           TableName
+		AlterOptions    []AlterOption
+		PartitionSpec   *PartitionSpec
+		PartitionOption *PartitionOption
+		Comments        Comments
+		FullyParsed     bool
 	}
 
 	// DropTable represents a DROP TABLE statement.
@@ -476,6 +485,7 @@ type (
 	DropView struct {
 		FromTables TableNames
 		IfExists   bool
+		Comments   Comments
 	}
 
 	// CreateTable represents a CREATE TABLE statement.
@@ -493,23 +503,31 @@ type (
 	CreateView struct {
 		ViewName    TableName
 		Algorithm   string
-		Definer     string
+		Definer     *Definer
 		Security    string
 		Columns     Columns
 		Select      SelectStatement
 		CheckOption string
 		IsReplace   bool
+		Comments    Comments
 	}
 
 	// AlterView represents a ALTER VIEW query
 	AlterView struct {
 		ViewName    TableName
 		Algorithm   string
-		Definer     string
+		Definer     *Definer
 		Security    string
 		Columns     Columns
 		Select      SelectStatement
 		CheckOption string
+		Comments    Comments
+	}
+
+	// Definer stores the user for AlterView and CreateView definers
+	Definer struct {
+		Name    string
+		Address string
 	}
 
 	// DDLAction is an enum for DDL.Action
@@ -593,6 +611,35 @@ type (
 		Table TableName
 		Wild  string
 	}
+
+	// PrepareStmt represents a Prepare Statement
+	// More info available on https://dev.mysql.com/doc/refman/8.0/en/sql-prepared-statements.html
+	PrepareStmt struct {
+		Name                ColIdent
+		Statement           string
+		Comments            Comments
+		StatementIdentifier ColIdent
+	}
+
+	// ExecuteStmt represents an Execute Statement
+	// More info available on https://dev.mysql.com/doc/refman/8.0/en/execute.html
+	ExecuteStmt struct {
+		Name      ColIdent
+		Comments  Comments
+		Arguments Columns
+	}
+
+	// DeallocateStmt represents a Deallocate Statement
+	// More info available on https://dev.mysql.com/doc/refman/8.0/en/deallocate-prepare.html
+	DeallocateStmt struct {
+		Type     DeallocateStmtType
+		Comments Comments
+		Name     ColIdent
+	}
+
+	// DeallocateStmtType is an enum to get types of deallocate
+	DeallocateStmtType int8
+
 	// IntervalTypes is an enum to get types of intervals
 	IntervalTypes int8
 
@@ -651,6 +698,9 @@ func (*RenameTable) iStatement()       {}
 func (*CallProc) iStatement()          {}
 func (*ExplainStmt) iStatement()       {}
 func (*ExplainTab) iStatement()        {}
+func (*PrepareStmt) iStatement()       {}
+func (*ExecuteStmt) iStatement()       {}
+func (*DeallocateStmt) iStatement()    {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
@@ -683,6 +733,14 @@ func (TableOptions) iAlterOption()             {}
 
 func (*ExplainStmt) iExplain() {}
 func (*ExplainTab) iExplain()  {}
+
+func (*Delete) iSupportOptimizerHint()  {}
+func (*Insert) iSupportOptimizerHint()  {}
+func (*Stream) iSupportOptimizerHint()  {}
+func (*Update) iSupportOptimizerHint()  {}
+func (*VStream) iSupportOptimizerHint() {}
+func (*Select) iSupportOptimizerHint()  {}
+func (*Union) iSupportOptimizerHint()   {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*TruncateTable) IsFullyParsed() bool {
@@ -992,6 +1050,46 @@ func (node *DropView) GetIfNotExists() bool {
 	return false
 }
 
+// GetIsReplace implements the DDLStatement interface
+func (node *RenameTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *CreateTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *TruncateTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *AlterTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *CreateView) GetIsReplace() bool {
+	return node.IsReplace
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *AlterView) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *DropTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *DropView) GetIsReplace() bool {
+	return false
+}
+
 // GetTableSpec implements the DDLStatement interface
 func (node *CreateTable) GetTableSpec() *TableSpec {
 	return node.TableSpec
@@ -1143,7 +1241,7 @@ func (node *CreateTable) SetComments(comments Comments) {
 
 // SetComments implements DDLStatement.
 func (node *CreateView) SetComments(comments Comments) {
-	// irrelevant
+	node.Comments = comments
 }
 
 // SetComments implements DDLStatement.
@@ -1153,16 +1251,41 @@ func (node *DropTable) SetComments(comments Comments) {
 
 // SetComments implements DDLStatement.
 func (node *DropView) SetComments(comments Comments) {
-	// irrelevant
+	node.Comments = comments
 }
 
 // SetComments implements DDLStatement.
 func (node *AlterView) SetComments(comments Comments) {
-	// irrelevant
+	node.Comments = comments
 }
 
 // SetComments for RevertMigration, does not implement DDLStatement
 func (node *RevertMigration) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments for Delete
+func (node *Delete) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments for Insert
+func (node *Insert) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments for Stream
+func (node *Stream) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments for Update
+func (node *Update) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments for VStream
+func (node *VStream) SetComments(comments Comments) {
 	node.Comments = comments
 }
 
@@ -1190,8 +1313,7 @@ func (node *CreateTable) GetComments() Comments {
 
 // GetComments implements DDLStatement.
 func (node *CreateView) GetComments() Comments {
-	// irrelevant
-	return nil
+	return node.Comments
 }
 
 // GetComments implements DDLStatement.
@@ -1201,14 +1323,37 @@ func (node *DropTable) GetComments() Comments {
 
 // GetComments implements DDLStatement.
 func (node *DropView) GetComments() Comments {
-	// irrelevant
-	return nil
+	return node.Comments
 }
 
 // GetComments implements DDLStatement.
 func (node *AlterView) GetComments() Comments {
-	// irrelevant
-	return nil
+	return node.Comments
+}
+
+// GetComments implements SupportOptimizerHint.
+func (node *Delete) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements Insert.
+func (node *Insert) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements Stream.
+func (node *Stream) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements Update.
+func (node *Update) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements VStream.
+func (node *VStream) GetComments() Comments {
+	return node.Comments
 }
 
 // GetToTables implements the DDLStatement interface
@@ -1472,41 +1617,42 @@ type PartitionSpecAction int8
 
 // PartitionDefinition describes a very minimal partition definition
 type PartitionDefinition struct {
-	Name     ColIdent
-	Limit    Expr
+	Name       ColIdent
+	ValueRange *PartitionValueRange
+}
+
+// PartitionValueRangeType is an enum for PartitionValueRange.Type
+type PartitionValueRangeType int8
+
+type PartitionValueRange struct {
+	Type     PartitionValueRangeType
+	Range    ValTuple
 	Maxvalue bool
 }
 
+// PartitionByType is an enum storing how we are partitioning a table
+type PartitionByType int8
+
 // PartitionOption describes partitioning control (for create table statements)
 type PartitionOption struct {
-	Linear       string
-	isHASH       bool
-	isKEY        bool
-	KeyAlgorithm string
-	KeyColList   Columns
-	RangeOrList  string
-	ExprOrCol    *ExprOrColumns
+	Type         PartitionByType
+	IsLinear     bool
+	KeyAlgorithm int
+	ColList      Columns
 	Expr         Expr
-	Partitions   string
+	Partitions   int
 	SubPartition *SubPartition
 	Definitions  []*PartitionDefinition
 }
 
-// ExprOrColumns describes expression and columnlist in the partition
-type ExprOrColumns struct {
-	Expr       Expr
-	ColumnList Columns
-}
-
 // SubPartition describes subpartitions control
 type SubPartition struct {
-	Linear        string
-	isHASH        bool
-	isKEY         bool
-	KeyAlgorithm  string
-	KeyColList    Columns
+	Type          PartitionByType
+	IsLinear      bool
+	KeyAlgorithm  int
+	ColList       Columns
 	Expr          Expr
-	SubPartitions string
+	SubPartitions int
 }
 
 // TableOptions specifies a list of table options
@@ -1712,7 +1858,7 @@ type (
 		Expr       SimpleTableExpr
 		Partitions Partitions
 		As         TableIdent
-		Hints      *IndexHints
+		Hints      IndexHints
 		Columns    Columns
 	}
 
@@ -1777,14 +1923,22 @@ type JoinCondition struct {
 	Using Columns
 }
 
-// IndexHints represents a list of index hints.
-type IndexHints struct {
-	Type    IndexHintsType
+// IndexHint represents an index hint.
+// More information available on https://dev.mysql.com/doc/refman/8.0/en/index-hints.html
+type IndexHint struct {
+	Type    IndexHintType
+	ForType IndexHintForType
 	Indexes []ColIdent
 }
 
-// IndexHintsType is an enum for IndexHints.Type
-type IndexHintsType int8
+// IndexHints represents a list of index hints.
+type IndexHints []*IndexHint
+
+// IndexHintType is an enum for IndexHint.Type
+type IndexHintType int8
+
+// IndexHintForType is an enum for FOR specified in an IndexHint
+type IndexHintForType int8
 
 // Where represents a WHERE or HAVING clause.
 type Where struct {
@@ -1794,6 +1948,22 @@ type Where struct {
 
 // WhereType is an enum for Where.Type
 type WhereType int8
+
+// TrimFuncExpr represents a TRIM function
+// More information available on https://dev.mysql.com/doc/refman/5.7/en/string-functions.html#function_trim
+type TrimFuncExpr struct {
+	TrimFuncType TrimFuncType
+	Type         TrimType
+	TrimArg      Expr
+	StringArg    Expr
+}
+
+// TrimFuncType is an enum to get types of TrimFunc.
+// TrimFunc stand for one of the following: LTRIM, RTRIM, TRIM
+type TrimFuncType int8
+
+// TrimType is an enum to get types of Trim
+type TrimType int8
 
 // *********** Expressions
 type (
@@ -2052,6 +2222,9 @@ type (
 		argName      string
 		alternative  Expr // this is what will be used to Format this struct
 	}
+
+	// Offset is another AST type that is used during planning and never produced by the parser
+	Offset int
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2090,6 +2263,8 @@ func (*MatchExpr) iExpr()            {}
 func (*GroupConcatExpr) iExpr()      {}
 func (*Default) iExpr()              {}
 func (*ExtractedSubquery) iExpr()    {}
+func (*TrimFuncExpr) iExpr()         {}
+func (Offset) iExpr()                {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()             {}
@@ -2099,6 +2274,7 @@ func (*WeightStringFuncExpr) iCallable() {}
 func (*CurTimeFuncExpr) iCallable()      {}
 func (*ValuesFuncExpr) iCallable()       {}
 func (*ConvertExpr) iCallable()          {}
+func (*TrimFuncExpr) iCallable()         {}
 func (*SubstrExpr) iCallable()           {}
 func (*ConvertUsingExpr) iCallable()     {}
 func (*MatchExpr) iCallable()            {}
@@ -2114,15 +2290,11 @@ func (ListArg) iColTuple()   {}
 
 // ConvertType represents the type in call to CONVERT(expr, type)
 type ConvertType struct {
-	Type     string
-	Length   *Literal
-	Scale    *Literal
-	Operator ConvertTypeOperator
-	Charset  string
+	Type    string
+	Length  *Literal
+	Scale   *Literal
+	Charset string
 }
-
-// ConvertTypeOperator is an enum for ConvertType.Operator
-type ConvertTypeOperator int8
 
 // GroupBy represents a GROUP BY clause.
 type GroupBy []Expr

@@ -505,7 +505,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if val.Type != sqlparser.IntVal && val.Type != sqlparser.StrVal {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
-			pv, err := evalengine.Convert(val, semantics.EmptySemTable())
+			pv, err := evalengine.Translate(val, semantics.EmptySemTable())
 			if err != nil {
 				return err
 			}

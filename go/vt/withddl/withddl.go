@@ -29,6 +29,8 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+const QueryToTriggerWithDDL = "SELECT _vt_no_such_column__init_schema FROM _vt.vreplication LIMIT 1"
+
 // WithDDL allows you to execute statements against
 // tables whose schema may not be up-to-date. If the tables
 // don't exist or result in a schema error, it can apply a series

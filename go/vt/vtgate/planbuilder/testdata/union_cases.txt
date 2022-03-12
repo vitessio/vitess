@@ -1016,7 +1016,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
+            "JoinColumnIndexes": "L:0,L:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -1071,7 +1071,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
+            "JoinColumnIndexes": "L:0,L:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -1140,7 +1140,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
+            "JoinColumnIndexes": "L:0,L:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -1195,7 +1195,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
+            "JoinColumnIndexes": "L:0,L:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -1241,7 +1241,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         "Inputs": [
           {
             "OperatorType": "Aggregate",
-            "Variant": "Ordered",
+            "Variant": "Scalar",
             "Aggregates": "count(0)",
             "Inputs": [
               {
@@ -1259,7 +1259,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           },
           {
             "OperatorType": "Aggregate",
-            "Variant": "Ordered",
+            "Variant": "Scalar",
             "Aggregates": "count(0)",
             "Inputs": [
               {
@@ -1291,8 +1291,8 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         "Inputs": [
           {
             "OperatorType": "Aggregate",
-            "Variant": "Ordered",
-            "Aggregates": "count(0) AS s",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS s",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1309,8 +1309,8 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           },
           {
             "OperatorType": "Aggregate",
-            "Variant": "Ordered",
-            "Aggregates": "count(0) AS s",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS s",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1698,7 +1698,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "tbl1_id": 0
     },
@@ -1799,3 +1799,50 @@ Gen4 error: Table 'user' from one of the SELECTs cannot be used in global ORDER 
 "select id from user union select 3 order by id"
 "can't do ORDER BY on top of UNION"
 Gen4 plan same as above
+
+"select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t"
+"unsupported: expression on results of a cross-shard subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      1
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Distinct",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id + 42 as foo, 1 from `user` where 1 != 1",
+                "Query": "select distinct id + 42 as foo, 1 from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 + id as foo, 1 from unsharded where 1 != 1",
+                "Query": "select distinct 1 + id as foo, 1 from unsharded",
+                "Table": "unsharded"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

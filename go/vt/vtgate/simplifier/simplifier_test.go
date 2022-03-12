@@ -111,7 +111,7 @@ func TestSimplifyEvalEngineExpr(t *testing.T) {
 	p0 := plus(p11, p12)
 
 	expr := SimplifyExpr(p0, func(expr sqlparser.Expr) bool {
-		local, err := evalengine.ConvertEx(expr, nil, true)
+		local, err := evalengine.TranslateEx(expr, nil, true)
 		if err != nil {
 			return false
 		}

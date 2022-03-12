@@ -372,7 +372,7 @@ type legacyTabletHealth struct {
 
 // NewLegacyDefaultHealthCheck creates a new LegacyHealthCheck object with a default configuration.
 func NewLegacyDefaultHealthCheck() LegacyHealthCheck {
-	return NewLegacyHealthCheck(DefaultHealthCheckRetryDelay, DefaultHealthCheckTimeout)
+	return NewLegacyHealthCheck(defaultHealthCheckRetryDelay, defaultHealthCheckTimeout)
 }
 
 // NewLegacyHealthCheck creates a new LegacyHealthCheck object.

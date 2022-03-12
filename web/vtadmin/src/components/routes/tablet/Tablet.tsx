@@ -25,6 +25,7 @@ import { WorkspaceHeader } from '../../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
 import { ExternalTabletLink } from '../../links/ExternalTabletLink';
 import { TabletServingPip } from '../../pips/TabletServingPip';
+import { ReadOnlyGate } from '../../ReadOnlyGate';
 import { Tab } from '../../tabs/Tab';
 import { TabContainer } from '../../tabs/TabContainer';
 import Advanced from './Advanced';
@@ -102,7 +103,10 @@ export const Tablet = () => {
                 <TabContainer>
                     <Tab text="QPS" to={`${url}/qps`} />
                     <Tab text="JSON" to={`${url}/json`} />
-                    <Tab text="Advanced" to={`${url}/advanced`} />
+
+                    <ReadOnlyGate>
+                        <Tab text="Advanced" to={`${url}/advanced`} />
+                    </ReadOnlyGate>
                 </TabContainer>
 
                 <Switch>
@@ -119,10 +123,14 @@ export const Tablet = () => {
                             )}
                         </div>
                     </Route>
-                    <Route path={`${path}/advanced`}>
-                        <Advanced tablet={tablet} />
-                    </Route>
-                    <Redirect from={path} to={`${path}/qps`} />
+
+                    <ReadOnlyGate>
+                        <Route path={`${path}/advanced`}>
+                            <Advanced tablet={tablet} />
+                        </Route>
+                    </ReadOnlyGate>
+
+                    <Redirect to={`${path}/qps`} />
                 </Switch>
             </ContentContainer>
 

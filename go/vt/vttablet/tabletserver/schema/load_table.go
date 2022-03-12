@@ -17,21 +17,24 @@ limitations under the License.
 package schema
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/mysqlctl"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 // LoadTable creates a Table from the schema info in the database.
-func LoadTable(conn *connpool.DBConn, tableName string, comment string) (*Table, error) {
+func LoadTable(conn *connpool.DBConn, databaseName, tableName string, comment string) (*Table, error) {
 	ta := NewTable(tableName)
 	sqlTableName := sqlparser.String(ta.Name)
-	if err := fetchColumns(ta, conn, sqlTableName); err != nil {
+	if err := fetchColumns(ta, conn, databaseName, sqlTableName); err != nil {
 		return nil, err
 	}
 	switch {
@@ -47,12 +50,16 @@ func LoadTable(conn *connpool.DBConn, tableName string, comment string) (*Table,
 	return ta, nil
 }
 
-func fetchColumns(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
-	qr, err := conn.Exec(tabletenv.LocalContext(), fmt.Sprintf("select * from %s where 1 != 1", sqlTableName), 0, true)
+func fetchColumns(ta *Table, conn *connpool.DBConn, databaseName, sqlTableName string) error {
+	ctx := context.Background()
+	exec := func(query string, maxRows int, wantFields bool) (*sqltypes.Result, error) {
+		return conn.Exec(ctx, query, maxRows, wantFields)
+	}
+	fields, _, err := mysqlctl.GetColumns(databaseName, sqlTableName, exec)
 	if err != nil {
 		return err
 	}
-	ta.Fields = qr.Fields
+	ta.Fields = fields
 	return nil
 }
 

@@ -42,6 +42,14 @@
 			},
 			"md5": {
 				"type": "unicode_loose_md5"
+			},
+			"multicol_vdx": {
+				"type": "multicol",
+				"params": {
+					"column_count": "2",
+					"column_bytes": "1,7",
+					"column_vindex": "numeric,xxhash"
+				}
 			}
 		},
 		"tables": {
@@ -121,6 +129,14 @@
 					{
 						"column": "email",
 						"name": "md5"
+					}
+				]
+			},
+			"user_region": {
+				"column_vindexes": [
+					{
+						"columns": ["regionId","userId"],
+						"name": "multicol_vdx"
 					}
 				]
 			}

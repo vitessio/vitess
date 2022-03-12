@@ -18,6 +18,7 @@ package semantics
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -73,6 +74,8 @@ type (
 
 		// NotSingleRouteErr stores any errors that have to be generated if the query cannot be planned as a single route.
 		NotSingleRouteErr error
+		// NotUnshardedErr stores any errors that have to be generated if the query is not unsharded.
+		NotUnshardedErr error
 
 		// Recursive contains the dependencies from the expression to the actual tables
 		// in the query (i.e. not including derived tables). If an expression is a column on a derived table,
@@ -140,6 +143,26 @@ func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 		}
 	}
 	return TableSet{}
+}
+
+// ReplaceTableSetFor replaces the given single TabletSet with the new *sqlparser.AliasedTableExpr
+func (st *SemTable) ReplaceTableSetFor(id TableSet, t *sqlparser.AliasedTableExpr) error {
+	if id.NumberOfTables() != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: tablet identifier should represent single table: %v", id)
+	}
+	tblOffset := id.TableOffset()
+	if tblOffset > len(st.Tables) {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: tablet identifier greater than number of tables: %v, %d", id, len(st.Tables))
+	}
+	switch tbl := st.Tables[id.TableOffset()].(type) {
+	case *RealTable:
+		tbl.ASTNode = t
+	case *DerivedTable:
+		tbl.ASTNode = t
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: replacement not expected for : %T", tbl)
+	}
+	return nil
 }
 
 // TableInfoFor returns the table info for the table set. It should contains only single table.
@@ -221,6 +244,15 @@ func (st *SemTable) CollationForExpr(e sqlparser.Expr) collations.ID {
 		return typ.Collation
 	}
 	return collations.Unknown
+}
+
+// NeedsWeightString returns true if the given expression needs weight_string to do safe comparisons
+func (st *SemTable) NeedsWeightString(e sqlparser.Expr) bool {
+	typ, found := st.ExprTypes[e]
+	if !found {
+		return true
+	}
+	return typ.Collation == collations.Unknown && !sqltypes.IsNumber(typ.Type)
 }
 
 func (st *SemTable) DefaultCollation() collations.ID {
@@ -324,11 +356,11 @@ func (st *SemTable) CopyExprInfo(src, dest sqlparser.Expr) {
 	}
 }
 
-var _ evalengine.ConverterLookup = (*SemTable)(nil)
+var _ evalengine.TranslationLookup = (*SemTable)(nil)
 
 var columnNotSupportedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
 
-// ColumnLookup implements the ConverterLookup interface
+// ColumnLookup implements the TranslationLookup interface
 func (st *SemTable) ColumnLookup(col *sqlparser.ColName) (int, error) {
 	return 0, columnNotSupportedErr
 }
@@ -339,7 +371,12 @@ func (st *SemTable) SingleUnshardedKeyspace() *vindexes.Keyspace {
 	for _, table := range st.Tables {
 		vindexTable := table.GetVindexTable()
 		if vindexTable == nil || vindexTable.Type != "" {
-			// this is not a simple table access - can't shortcut
+			_, isDT := table.getExpr().Expr.(*sqlparser.DerivedTable)
+			if isDT {
+				// derived tables are ok, as long as all real tables are from the same unsharded keyspace
+				// we check the real tables inside the derived table as well for same unsharded keyspace.
+				continue
+			}
 			return nil
 		}
 		name, ok := table.getExpr().Expr.(sqlparser.TableName)

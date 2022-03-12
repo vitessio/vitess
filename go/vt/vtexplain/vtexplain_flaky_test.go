@@ -27,6 +27,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
@@ -154,6 +156,12 @@ func TestExplain(t *testing.T) {
 			NumShards:       4,
 			Normalize:       false,
 			Target:          "ks_sharded/40-80",
+		}},
+		{"gen4", &Options{
+			ReplicationMode: "ROW",
+			NumShards:       4,
+			Normalize:       true,
+			PlannerVersion:  querypb.ExecuteOptions_Gen4,
 		}},
 	}
 

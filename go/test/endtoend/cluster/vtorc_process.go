@@ -49,18 +49,18 @@ func (orc *VtorcProcess) Setup() (err error) {
 	*/
 	orc.proc = exec.Command(
 		orc.Binary,
-		"-topo_implementation", orc.TopoImplementation,
-		"-topo_global_server_address", orc.TopoGlobalAddress,
-		"-topo_global_root", orc.TopoGlobalRoot,
-		"-config", orc.Config,
-		"-orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "orchestrator"),
+		"--topo_implementation", orc.TopoImplementation,
+		"--topo_global_server_address", orc.TopoGlobalAddress,
+		"--topo_global_root", orc.TopoGlobalRoot,
+		"--config", orc.Config,
+		"--orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "orchestrator"),
 	)
 	if *isCoverage {
-		orc.proc.Args = append(orc.proc.Args, "-test.coverprofile="+getCoveragePath("orc.out"))
+		orc.proc.Args = append(orc.proc.Args, "--test.coverprofile="+getCoveragePath("orc.out"))
 	}
 
 	orc.proc.Args = append(orc.proc.Args, orc.ExtraArgs...)
-	orc.proc.Args = append(orc.proc.Args, "-alsologtostderr", "http")
+	orc.proc.Args = append(orc.proc.Args, "--alsologtostderr", "http")
 
 	errFile, _ := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-stderr-%d.txt", time.Now().UnixNano())))
 	orc.proc.Stderr = errFile

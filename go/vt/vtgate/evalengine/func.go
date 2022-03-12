@@ -29,43 +29,60 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-var builtinFunctions = map[string]func(*ExpressionEnv, []EvalResult, *EvalResult){
-	"coalesce":  builtinFuncCoalesce,
-	"greatest":  builtinFuncGreatest,
-	"least":     builtinFuncLeast,
-	"collation": builtinFuncCollation,
-	"isnull":    builtinFuncIsNull,
-	"bit_count": builtinFuncBitCount,
+var builtinFunctions = map[string]builtin{
+	"coalesce":  builtinCoalesce{},
+	"greatest":  &builtinMultiComparison{name: "GREATEST", cmp: 1},
+	"least":     &builtinMultiComparison{name: "LEAST", cmp: -1},
+	"collation": builtinCollation{},
+	"bit_count": builtinBitCount{},
+	"hex":       builtinHex{},
 }
+
+var builtinFunctionsRewrite = map[string]builtinRewrite{
+	"isnull": builtinIsNullRewrite,
+}
+
+type builtin interface {
+	call(*ExpressionEnv, []EvalResult, *EvalResult)
+	typeof(*ExpressionEnv, []Expr) (sqltypes.Type, flag)
+}
+
+type builtinRewrite func([]Expr, TranslationLookup) (Expr, error)
 
 type CallExpr struct {
 	Arguments TupleExpr
 	Aliases   []sqlparser.ColIdent
 	Method    string
-	Call      func(*ExpressionEnv, []EvalResult, *EvalResult)
+	F         builtin
 }
 
-func (c *CallExpr) typeof(*ExpressionEnv) sqltypes.Type {
-	return -1
+func (c *CallExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	return c.F.typeof(env, c.Arguments)
 }
 
 func (c *CallExpr) eval(env *ExpressionEnv, result *EvalResult) {
-	var args []EvalResult = make([]EvalResult, len(c.Arguments))
+	var args = make([]EvalResult, len(c.Arguments))
 	for i, arg := range c.Arguments {
 		args[i].init(env, arg)
 	}
-	c.Call(env, args, result)
+	c.F.call(env, args, result)
 }
 
-func builtinFuncCoalesce(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
+type builtinCoalesce struct{}
+
+func (builtinCoalesce) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	for _, arg := range args {
-		if !arg.null() {
+		if !arg.isNull() {
 			*result = arg
 			result.resolve()
 			return
 		}
 	}
 	result.setNull()
+}
+
+func (builtinCoalesce) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	return aggregatedType(env, args), flagNullable
 }
 
 type multiComparisonFunc func(args []EvalResult, result *EvalResult, cmp int)
@@ -90,11 +107,13 @@ func getMultiComparisonFunc(args []EvalResult) multiComparisonFunc {
 
 	for i := range args {
 		arg := &args[i]
-		switch arg.typeof() {
-		case sqltypes.Null:
+		if arg.isNull() {
 			return func(args []EvalResult, result *EvalResult, cmp int) {
 				result.setNull()
 			}
+		}
+
+		switch arg.typeof() {
 		case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
 			integers++
 		case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
@@ -166,20 +185,19 @@ func compareAllFloat(args []EvalResult, result *EvalResult, cmp int) {
 
 func compareAllDecimal(args []EvalResult, result *EvalResult, cmp int) {
 	candidateD := args[0].coerceToDecimal()
-	maxFrac := candidateD.frac
+	maxFrac := args[0].length_
 
 	for _, arg := range args[1:] {
 		thisD := arg.coerceToDecimal()
-		if (cmp < 0) == (thisD.num.Cmp(&candidateD.num) < 0) {
+		if (cmp < 0) == (thisD.Cmp(candidateD) < 0) {
 			candidateD = thisD
 		}
-		if thisD.frac > maxFrac {
-			maxFrac = thisD.frac
+		if arg.length_ > maxFrac {
+			maxFrac = arg.length_
 		}
 	}
 
-	candidateD.frac = maxFrac
-	result.setDecimal(candidateD)
+	result.setDecimal(candidateD, maxFrac)
 }
 
 func compareAllText(args []EvalResult, result *EvalResult, cmp int) {
@@ -225,29 +243,90 @@ func compareAllBinary(args []EvalResult, result *EvalResult, cmp int) {
 	result.setRaw(sqltypes.VarBinary, candidateB, collationBinary)
 }
 
+type argError string
+
+func (err argError) Error() string {
+	return fmt.Sprintf("Incorrect parameter count in the call to native function '%s'", string(err))
+}
+
 func throwArgError(fname string) {
-	panic(evalError{fmt.Errorf("Incorrect parameter count in the call to native function '%s'", fname)})
+	panic(evalError{argError(fname)})
 }
 
-func builtinFuncLeast(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
+type builtinMultiComparison struct {
+	name string
+	cmp  int
+}
+
+func (cmp *builtinMultiComparison) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	getMultiComparisonFunc(args)(args, result, cmp.cmp)
+}
+
+func (cmp *builtinMultiComparison) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
 	if len(args) < 2 {
-		throwArgError("LEAST")
+		throwArgError(cmp.name)
 	}
-	getMultiComparisonFunc(args)(args, result, -1)
+
+	var (
+		integers int
+		floats   int
+		decimals int
+		text     int
+		binary   int
+		flags    flag
+	)
+
+	for _, expr := range args {
+		tt, f := expr.typeof(env)
+		flags |= f
+
+		switch tt {
+		case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
+			integers++
+		case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
+			if f&flagIntegerOvf != 0 {
+				decimals++
+			} else {
+				integers++
+			}
+		case sqltypes.Float32, sqltypes.Float64:
+			floats++
+		case sqltypes.Decimal:
+			decimals++
+		case sqltypes.Text, sqltypes.VarChar:
+			text++
+		case sqltypes.Blob, sqltypes.Binary, sqltypes.VarBinary:
+			binary++
+		}
+	}
+
+	if flags&flagNull != 0 {
+		return sqltypes.Null, flags
+	}
+	if integers == len(args) {
+		return sqltypes.Int64, flags
+	}
+	if binary > 0 || text > 0 {
+		if binary > 0 {
+			return sqltypes.VarBinary, flags
+		}
+		if text > 0 {
+			return sqltypes.VarChar, flags
+		}
+	} else {
+		if floats > 0 {
+			return sqltypes.Float64, flags
+		}
+		if decimals > 0 {
+			return sqltypes.Decimal, flags
+		}
+	}
+	panic("unexpected argument type")
 }
 
-func builtinFuncGreatest(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
-	if len(args) < 2 {
-		throwArgError("GREATEST")
-	}
-	getMultiComparisonFunc(args)(args, result, 1)
-}
+type builtinCollation struct{}
 
-func builtinFuncCollation(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
-	if len(args) != 1 {
-		throwArgError("COLLATION")
-	}
-
+func (builtinCollation) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	coll := collations.Local().LookupByID(args[0].collation().Collation)
 	result.setString(coll.Name(), collations.TypedCollation{
 		Collation:    env.DefaultCollation,
@@ -256,47 +335,67 @@ func builtinFuncCollation(env *ExpressionEnv, args []EvalResult, result *EvalRes
 	})
 }
 
-func builtinFuncIsNull(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
+func (builtinCollation) typeof(_ *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
 	if len(args) != 1 {
-		throwArgError("ISNULL")
+		throwArgError("COLLATION")
 	}
-	result.setBool(args[0].null())
+	return sqltypes.VarChar, 0
 }
 
-func builtinFuncBitCount(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
+func builtinIsNullRewrite(args []Expr, lookup TranslationLookup) (Expr, error) {
 	if len(args) != 1 {
-		throwArgError("BIT_COUNT")
+		return nil, argError("ISNULL")
 	}
+	return &IsExpr{
+		UnaryExpr: UnaryExpr{args[0]},
+		Op:        sqlparser.IsNullOp,
+		Check:     func(er *EvalResult) bool { return er.isNull() },
+	}, nil
+}
 
+type builtinBitCount struct{}
+
+func (builtinBitCount) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	var count int
 	inarg := &args[0]
 
-	if inarg.null() {
+	if inarg.isNull() {
 		result.setNull()
 		return
 	}
 
-	if inarg.bitwiseBinaryString() {
+	if inarg.isBitwiseBinaryString() {
 		binary := inarg.bytes()
 		for _, b := range binary {
 			count += bits.OnesCount8(b)
 		}
 	} else {
-		inarg.makeIntegral()
+		inarg.makeUnsignedIntegral()
 		count = bits.OnesCount64(inarg.uint64())
 	}
 
 	result.setInt64(int64(count))
 }
 
+func (builtinBitCount) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) != 1 {
+		throwArgError("BIT_COUNT")
+	}
+
+	_, f := args[0].typeof(env)
+	return sqltypes.Int64, f
+}
+
 type WeightStringCallExpr struct {
 	String Expr
 	Cast   string
 	Len    int
+	HasLen bool
 }
 
-func (c *WeightStringCallExpr) typeof(*ExpressionEnv) sqltypes.Type {
-	return sqltypes.VarBinary
+func (c *WeightStringCallExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	_, f := c.String.typeof(env)
+	return sqltypes.VarBinary, f
 }
 
 func (c *WeightStringCallExpr) eval(env *ExpressionEnv, result *EvalResult) {
@@ -334,4 +433,164 @@ func (c *WeightStringCallExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	collation := collations.Local().LookupByID(tc.Collation)
 	weights = collation.WeightString(weights, text, length)
 	result.setRaw(sqltypes.VarBinary, weights, collationBinary)
+}
+
+func aggregatedType(env *ExpressionEnv, expr []Expr) sqltypes.Type {
+	var (
+		double   int
+		decimal  int
+		signed   int
+		unsigned int
+
+		signedMax   sqltypes.Type
+		unsignedMax sqltypes.Type
+
+		bit    int
+		year   int
+		char   int
+		binary int
+		json   int
+
+		date      int
+		time      int
+		timestamp int
+		datetime  int
+
+		geometry int
+		blob     int
+		total    int
+	)
+
+	for _, e := range expr {
+		tt, _ := e.typeof(env)
+		switch tt {
+		case sqltypes.Float32, sqltypes.Float64:
+			double++
+		case sqltypes.Decimal:
+			decimal++
+		case sqltypes.Int8, sqltypes.Int16, sqltypes.Int24, sqltypes.Int32, sqltypes.Int64:
+			signed++
+			if tt > signedMax {
+				signedMax = tt
+			}
+		case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint24, sqltypes.Uint32, sqltypes.Uint64:
+			unsigned++
+			if tt > unsignedMax {
+				unsignedMax = tt
+			}
+		case sqltypes.Bit:
+			bit++
+		case sqltypes.Year:
+			year++
+		case sqltypes.Char, sqltypes.VarChar, sqltypes.Set, sqltypes.Enum:
+			char++
+		case sqltypes.Binary, sqltypes.VarBinary:
+			binary++
+		case sqltypes.TypeJSON:
+			json++
+		case sqltypes.Date:
+			date++
+		case sqltypes.Datetime:
+			datetime++
+		case sqltypes.Time:
+			time++
+		case sqltypes.Timestamp:
+			timestamp++
+		case sqltypes.Geometry:
+			geometry++
+		case sqltypes.Blob:
+			blob++
+		default:
+			continue
+		}
+		total++
+	}
+
+	/*
+		If all types are numeric, the aggregated type is also numeric:
+			If at least one argument is double precision, the result is double precision.
+			Otherwise, if at least one argument is DECIMAL, the result is DECIMAL.
+			Otherwise, the result is an integer type (with one exception):
+				If all integer types are all signed or all unsigned, the result is the same sign and the precision is the highest of all specified integer types (that is, TINYINT, SMALLINT, MEDIUMINT, INT, or BIGINT).
+				If there is a combination of signed and unsigned integer types, the result is signed and the precision may be higher. For example, if the types are signed INT and unsigned INT, the result is signed BIGINT.
+				The exception is unsigned BIGINT combined with any signed integer type. The result is DECIMAL with sufficient precision and scale 0.
+		If all types are BIT, the result is BIT. Otherwise, BIT arguments are treated similar to BIGINT.
+		If all types are YEAR, the result is YEAR. Otherwise, YEAR arguments are treated similar to INT.
+		If all types are character string (CHAR or VARCHAR), the result is VARCHAR with maximum length determined by the longest character length of the operands.
+		If all types are character or binary string, the result is VARBINARY.
+		SET and ENUM are treated similar to VARCHAR; the result is VARCHAR.
+		If all types are JSON, the result is JSON.
+		If all types are temporal, the result is temporal:
+			If all temporal types are DATE, TIME, or TIMESTAMP, the result is DATE, TIME, or TIMESTAMP, respectively.
+			Otherwise, for a mix of temporal types, the result is DATETIME.
+		If all types are GEOMETRY, the result is GEOMETRY.
+		If any type is BLOB, the result is BLOB.
+		For all other type combinations, the result is VARCHAR.
+		Literal NULL operands are ignored for type aggregation.
+	*/
+
+	if bit == total {
+		return sqltypes.Bit
+	} else if bit > 0 {
+		signed += bit
+		signedMax = sqltypes.Int64
+	}
+
+	if year == total {
+		return sqltypes.Year
+	} else if year > 0 {
+		signed += year
+		if sqltypes.Int32 > signedMax {
+			signedMax = sqltypes.Int32
+		}
+	}
+
+	if double+decimal+signed+unsigned == total {
+		if double > 0 {
+			return sqltypes.Float64
+		}
+		if decimal > 0 {
+			return sqltypes.Decimal
+		}
+		if signed == total {
+			return signedMax
+		}
+		if unsigned == total {
+			return unsignedMax
+		}
+		if unsignedMax == sqltypes.Uint64 && signed > 0 {
+			return sqltypes.Decimal
+		}
+		// TODO
+		return sqltypes.Uint64
+	}
+
+	if char == total {
+		return sqltypes.VarChar
+	}
+	if char+binary == total {
+		return sqltypes.VarBinary
+	}
+	if json == total {
+		return sqltypes.TypeJSON
+	}
+	if date+time+timestamp+datetime == total {
+		if date == total {
+			return sqltypes.Date
+		}
+		if time == total {
+			return sqltypes.Time
+		}
+		if timestamp == total {
+			return sqltypes.Timestamp
+		}
+		return sqltypes.Datetime
+	}
+	if geometry == total {
+		return sqltypes.Geometry
+	}
+	if blob > 0 {
+		return sqltypes.Blob
+	}
+	return sqltypes.VarChar
 }

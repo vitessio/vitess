@@ -39,7 +39,7 @@ import (
 )
 
 var (
-	enableSemiSync   = flag.Bool("enable_semi_sync", false, "Enable semi-sync when configuring replication, on primary and replica tablets only (rdonly tablets will not ack).")
+	_                = flag.Bool("enable_semi_sync", false, "(DEPRECATED - Set the correct durability_policy instead) Enable semi-sync when configuring replication, on primary and replica tablets only (rdonly tablets will not ack).")
 	setSuperReadOnly = flag.Bool("use_super_read_only", true, "Set super_read_only flag when performing planned failover.")
 )
 
@@ -643,7 +643,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		// Abort on any other non-nil error.
 		return err
 	}
-	if status.IOThreadRunning || status.SQLThreadRunning {
+	if status.IOHealthy() || status.SQLHealthy() {
 		wasReplicating = true
 		shouldbeReplicating = true
 	}
@@ -680,12 +680,16 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 			}
 		}
 	} else if shouldbeReplicating {
-		// The address is correct. Just start replication if needed.
-		if !status.ReplicationRunning() {
-			if err := tm.MysqlDaemon.StartReplication(tm.hookExtraEnv()); err != nil {
-				if err := tm.handleRelayLogError(err); err != nil {
-					return err
-				}
+		// The address is correct. We need to restart replication so that any semi-sync changes if any
+		// are taken into account
+		if err := tm.MysqlDaemon.StopReplication(tm.hookExtraEnv()); err != nil {
+			if err := tm.handleRelayLogError(err); err != nil {
+				return err
+			}
+		}
+		if err := tm.MysqlDaemon.StartReplication(tm.hookExtraEnv()); err != nil {
+			if err := tm.handleRelayLogError(err); err != nil {
+				return err
 			}
 		}
 	}
@@ -752,7 +756,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	before := mysql.ReplicationStatusToProto(rs)
 
 	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
-		if !rs.IOThreadRunning {
+		if !rs.IOHealthy() {
 			return StopReplicationAndGetStatusResponse{
 				HybridStatus: before,
 				Status: &replicationdatapb.StopReplicationStatus{
@@ -769,7 +773,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 			}, vterrors.Wrap(err, "stop io thread failed")
 		}
 	} else {
-		if !rs.IOThreadRunning && !rs.SQLThreadRunning {
+		if !rs.Healthy() {
 			// no replication is running, just return what we got
 			return StopReplicationAndGetStatusResponse{
 				HybridStatus: before,
@@ -887,29 +891,18 @@ func isPrimaryEligible(tabletType topodatapb.TabletType) bool {
 }
 
 func (tm *TabletManager) fixSemiSync(tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
-	if !*enableSemiSync {
-		// Semi-sync handling is not enabled.
-		if semiSync == SemiSyncActionSet {
-			log.Error("invalid configuration - semi-sync should be setup according to durability policies, but enable_semi_sync is not set")
-		}
+	switch semiSync {
+	case SemiSyncActionNone:
 		return nil
-	}
-
-	// Only enable if we're eligible for becoming primary (REPLICA type).
-	// Ineligible tablets (RDONLY) shouldn't ACK because we'll never promote them.
-	if !isPrimaryEligible(tabletType) {
-		if semiSync == SemiSyncActionSet {
-			log.Error("invalid configuration - semi-sync should be setup according to durability policies, but the tablet is not primaryEligible")
-		}
+	case SemiSyncActionSet:
+		// Always enable replica-side since it doesn't hurt to keep it on for a primary.
+		// The primary-side needs to be off for a replica, or else it will get stuck.
+		return tm.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_PRIMARY, true)
+	case SemiSyncActionUnset:
 		return tm.MysqlDaemon.SetSemiSyncEnabled(false, false)
+	default:
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "Unknown SemiSyncAction - %v", semiSync)
 	}
-
-	if semiSync == SemiSyncActionUnset {
-		log.Error("invalid configuration - enabling semi sync even though not specified by durability policies. Possibly in the process of upgrading.")
-	}
-	// Always enable replica-side since it doesn't hurt to keep it on for a primary.
-	// The primary-side needs to be off for a replica, or else it will get stuck.
-	return tm.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_PRIMARY, true)
 }
 
 func (tm *TabletManager) isPrimarySideSemiSyncEnabled() bool {
@@ -918,8 +911,8 @@ func (tm *TabletManager) isPrimarySideSemiSyncEnabled() bool {
 }
 
 func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
-	if !*enableSemiSync {
-		// Semi-sync handling is not enabled.
+	if semiSync == SemiSyncActionNone {
+		// Semi-sync handling is not required.
 		return nil
 	}
 
@@ -942,12 +935,12 @@ func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletT
 		// Replication is not configured, nothing to do.
 		return nil
 	}
-	if !status.IOThreadRunning {
+	if !status.IOHealthy() {
 		// IO thread is not running, nothing to do.
 		return nil
 	}
 
-	shouldAck := isPrimaryEligible(tabletType)
+	shouldAck := semiSync == SemiSyncActionSet
 	acking, err := tm.MysqlDaemon.SemiSyncReplicationStatus()
 	if err != nil {
 		return vterrors.Wrap(err, "failed to get SemiSyncReplicationStatus")

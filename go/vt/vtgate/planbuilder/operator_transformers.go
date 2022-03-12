@@ -66,7 +66,7 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op abstract.Physic
 			plan:              plan,
 		}
 		ast := sqlparser.AndExpressions(op.Predicates...)
-		predicate, err := evalengine.Convert(ast, scl)
+		predicate, err := evalengine.Translate(ast, scl)
 		if err != nil {
 			return nil, err
 		}
@@ -122,11 +122,12 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *physical.ApplyJ
 	//	}, nil
 	// }
 	return &joinGen4{
-		Left:   lhs,
-		Right:  rhs,
-		Cols:   n.Columns,
-		Vars:   n.Vars,
-		Opcode: opCode,
+		Left:       lhs,
+		Right:      rhs,
+		Cols:       n.Columns,
+		Vars:       n.Vars,
+		LHSColumns: n.LHSColumns,
+		Opcode:     opCode,
 	}, nil
 }
 

@@ -30,79 +30,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// PRS TESTS
-
-// TestPRSForInitialization tests whether calling PRS in the beginning sets up the cluster properly or not
-func TestPRSForInitialization(t *testing.T) {
-	var tablets []*cluster.Vttablet
-	clusterInstance := cluster.NewCluster("zone1", "localhost")
-	keyspace := &cluster.Keyspace{Name: utils.KeyspaceName}
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
-	// Start topo server
-	err := clusterInstance.StartTopo()
-	require.NoError(t, err)
-	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+"zone1")
-	require.NoError(t, err)
-	for i := 0; i < 4; i++ {
-		tablet := clusterInstance.NewVttabletInstance("replica", 100+i, "zone1")
-		tablets = append(tablets, tablet)
-	}
-
-	shard := &cluster.Shard{Name: utils.ShardName}
-	shard.Vttablets = tablets
-	clusterInstance.VtTabletExtraArgs = []string{
-		"-lock_tables_timeout", "5s",
-		"-enable_semi_sync",
-		"-init_populate_metadata",
-		"-track_schema_versions=true",
-	}
-
-	// Initialize Cluster
-	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
-	require.NoError(t, err)
-
-	//Start MySql
-	var mysqlCtlProcessList []*exec.Cmd
-	for _, shard := range clusterInstance.Keyspaces[0].Shards {
-		for _, tablet := range shard.Vttablets {
-			log.Infof("Starting MySql for tablet %v", tablet.Alias)
-			proc, err := tablet.MysqlctlProcess.StartProcess()
-			require.NoError(t, err)
-			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
-		}
-	}
-	// Wait for mysql processes to start
-	for _, proc := range mysqlCtlProcessList {
-		if err := proc.Wait(); err != nil {
-			t.Fatalf("Error starting mysql: %s", err.Error())
-		}
-	}
-
-	for _, tablet := range tablets {
-		// Start the tablet
-		err = tablet.VttabletProcess.Setup()
-		require.NoError(t, err)
-	}
-	for _, tablet := range tablets {
-		err := tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
-		require.NoError(t, err)
-	}
-
-	// Force the replica to reparent assuming that all the datasets are identical.
-	res, err := utils.Prs(t, clusterInstance, tablets[0])
-	require.NoError(t, err, res)
-
-	utils.ValidateTopology(t, clusterInstance, true)
-	// create Tables
-	utils.RunSQL(context.Background(), t, "create table vt_insert_test (id bigint, msg varchar(64), primary key (id)) Engine=InnoDB", tablets[0])
-	utils.CheckPrimaryTablet(t, clusterInstance, tablets[0])
-	utils.ValidateTopology(t, clusterInstance, false)
-	time.Sleep(100 * time.Millisecond) // wait for replication to catchup
-	strArray := utils.GetShardReplicationPositions(t, clusterInstance, utils.KeyspaceName, utils.ShardName, true)
-	assert.Equal(t, len(tablets), len(strArray))
-	assert.Contains(t, strArray[0], "primary") // primary first
-}
-
 // ERS TESTS
 
 // TestERSPromoteRdonly tests that we never end up promoting a rdonly instance as the primary
@@ -253,8 +180,9 @@ func TestNoReplicationStatusAndReplicationStopped(t *testing.T) {
 func TestERSForInitialization(t *testing.T) {
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster("zone1", "localhost")
+	defer clusterInstance.Teardown()
 	keyspace := &cluster.Keyspace{Name: utils.KeyspaceName}
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
+	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 	// Start topo server
 	err := clusterInstance.StartTopo()
 	require.NoError(t, err)
@@ -268,10 +196,10 @@ func TestERSForInitialization(t *testing.T) {
 	shard := &cluster.Shard{Name: utils.ShardName}
 	shard.Vttablets = tablets
 	clusterInstance.VtTabletExtraArgs = []string{
-		"-lock_tables_timeout", "5s",
-		"-enable_semi_sync",
-		"-init_populate_metadata",
-		"-track_schema_versions=true",
+		"--lock_tables_timeout", "5s",
+		"--enable_semi_sync",
+		"--init_populate_metadata",
+		"--track_schema_versions=true",
 	}
 
 	// Initialize Cluster
@@ -319,4 +247,62 @@ func TestERSForInitialization(t *testing.T) {
 	assert.Equal(t, len(tablets), len(strArray))
 	assert.Contains(t, strArray[0], "primary") // primary first
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
+}
+
+func TestRecoverWithMultipleFailures(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+
+	// make tablets[1] a rdonly tablet.
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
+	require.NoError(t, err)
+
+	// Confirm that replication is still working as intended
+	utils.ConfirmReplication(t, tablets[0], tablets[1:])
+
+	// Make the rdonly and primary tablets and databases unavailable.
+	utils.StopTablet(t, tablets[1], true)
+	utils.StopTablet(t, tablets[0], true)
+
+	// We expect this to succeed since we only have 1 primary eligible tablet which is down
+	out, err := utils.Ers(clusterInstance, nil, "30s", "10s")
+	require.NoError(t, err, out)
+
+	newPrimary := utils.GetNewPrimary(t, clusterInstance)
+	utils.ConfirmReplication(t, newPrimary, []*cluster.Vttablet{tablets[2], tablets[3]})
+}
+
+// TestERSFailFast tests that ERS will fail fast if it cannot find any tablet which can be safely promoted instead of promoting
+// a tablet and hanging while inserting a row in the reparent journal on getting semi-sync ACKs
+func TestERSFailFast(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+
+	// make tablets[1] a rdonly tablet.
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
+	require.NoError(t, err)
+
+	// Confirm that replication is still working as intended
+	utils.ConfirmReplication(t, tablets[0], tablets[1:])
+
+	strChan := make(chan string)
+	go func() {
+		// We expect this to fail since we have ignored all replica tablets and only the rdonly is left, which is not capable of sending semi-sync ACKs
+		out, err := utils.ErsIgnoreTablet(clusterInstance, tablets[2], "240s", "90s", []*cluster.Vttablet{tablets[0], tablets[3]}, false)
+		require.Error(t, err)
+		strChan <- out
+	}()
+
+	select {
+	case out := <-strChan:
+		require.Contains(t, out, "proposed primary zone1-0000000103 will not be able to make forward progress on being promoted")
+	case <-time.After(60 * time.Second):
+		require.Fail(t, "Emergency Reparent Shard did not fail in 60 seconds")
+	}
 }

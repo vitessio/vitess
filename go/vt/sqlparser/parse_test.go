@@ -399,6 +399,18 @@ var (
 	}, {
 		input: "select /* parenthessis in table list 1 */ 1 from (t1), t2",
 	}, {
+		input:  "SELECT * FROM t1 USE INDEX (i1) IGNORE INDEX FOR ORDER BY (i2) ORDER BY a",
+		output: "select * from t1 use index (i1) ignore index for order by (i2) order by a asc",
+	}, {
+		input:  "SELECT * FROM t1 USE INDEX FOR JOIN (i1) FORCE INDEX FOR JOIN (i2)",
+		output: "select * from t1 use index for join (i1) force index for join (i2)",
+	}, {
+		input:  "SELECT * FROM t1 USE INDEX FOR JOIN (i1) FORCE INDEX FOR JOIN (i2) IGNORE KEY FOR GROUP BY (i1, i2)",
+		output: "select * from t1 use index for join (i1) force index for join (i2) ignore index for group by (i1, i2)",
+	}, {
+		input:  "SELECT * FROM t1 USE KEY (), t2 FORCE KEY (i2), t3 IGNORE INDEX FOR GROUP BY (i1, i2)",
+		output: "select * from t1 use index (), t2 force index (i2), t3 ignore index for group by (i1, i2)",
+	}, {
 		input: "select /* parenthessis in table list 2 */ 1 from t1, (t2)",
 	}, {
 		input: "select /* use */ 1 from t1 use index (a) where b = 1",
@@ -787,11 +799,14 @@ var (
 		input:  "select /* - - */ - -b from t",
 		output: "select /* - - */ - -b from t",
 	}, {
-		input: "select /* binary binary */ binary  binary b from t",
+		input:  "select /* binary binary */ binary  binary b from t",
+		output: "select /* binary binary */ convert(convert(b, binary), binary) from t",
 	}, {
-		input: "select /* binary ~ */ binary  ~b from t",
+		input:  "select /* binary ~ */ binary  ~b from t",
+		output: "select /* binary ~ */ convert(~b, binary) from t",
 	}, {
-		input: "select /* ~ binary */ ~ binary b from t",
+		input:  "select /* ~ binary */ ~ binary b from t",
+		output: "select /* ~ binary */ ~convert(b, binary) from t",
 	}, {
 		input: "select /* interval */ adddate('2008-01-02', interval 31 day) from t",
 	}, {
@@ -1172,9 +1187,9 @@ var (
 		input: "alter table e comment 'hello' remove partitioning",
 	}, {
 		input:  "alter table a reorganize partition b into (partition c values less than (?), partition d values less than (maxvalue))",
-		output: "alter table a reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue))",
+		output: "alter table a reorganize partition b into (partition c values less than (:v1), partition d values less than maxvalue)",
 	}, {
-		input: "alter table a algorithm = default, lock none, add partition (partition d values less than (maxvalue))",
+		input: "alter table a algorithm = default, lock none, add partition (partition d values less than maxvalue)",
 	}, {
 		input: "alter table a discard partition all tablespace",
 	}, {
@@ -1213,9 +1228,9 @@ var (
 		input:  "alter table t2 add primary key `zzz` (id)",
 		output: "alter table t2 add primary key (id)",
 	}, {
-		input:      "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
-		output:     "alter table a",
-		partialDDL: true,
+		input: "alter table a partition by hash (id) partitions 4",
+	}, {
+		input: "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than maxvalue)",
 	}, {
 		input:      "create database a garbage values",
 		output:     "create database a",
@@ -1529,17 +1544,48 @@ var (
 		output: "create algorithm = merge sql security definer view a(b, c, d) as select * from e with cascaded check option",
 	}, {
 		input:  "create algorithm = temptable definer = a@b.c.d view a(b,c,d) as select * from e with local check option",
-		output: "create algorithm = temptable definer = a@b.c.d view a(b, c, d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = a@`b.c.d` view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = temptable definer = a@b view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = a@b view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = temptable definer = 'create'@b view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = 'create'@b view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = temptable definer = a@'create' view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = a@'create' view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = temptable definer = 'a' view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = 'a' view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = temptable definer = 'select'@'create' view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = 'select'@'create' view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = temptable definer = `create`@b view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = `create`@b view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = temptable definer = a@`create` view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = a@`create` view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = temptable definer = `select`@`create` view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = `select`@`create` view a(b, c, d) as select * from e with local check option",
 	}, {
 		input:  "create or replace algorithm = temptable definer = a@b.c.d sql security definer view a(b,c,d) as select * from e with local check option",
-		output: "create or replace algorithm = temptable definer = a@b.c.d sql security definer view a(b, c, d) as select * from e with local check option",
+		output: "create or replace algorithm = temptable definer = a@`b.c.d` sql security definer view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = undefined definer = `msandbox`@`localhost` sql security definer view `v3` as select `t`.`id` as `id` from `t`",
+		output: "create algorithm = undefined definer = msandbox@localhost sql security definer view v3 as select t.id as id from t",
 	}, {
 		input:  "create definer = 'sa'@b.c.d view a(b,c,d) as select * from e",
-		output: "create definer = 'sa'@b.c.d view a(b, c, d) as select * from e",
+		output: "create definer = 'sa'@`b.c.d` view a(b, c, d) as select * from e",
+	}, {
+		input: "create /*vt+ strategy=online */ or replace view v as select a, b, c from t",
 	}, {
 		input: "alter view a as select * from t",
 	}, {
-		input: "alter algorithm = merge definer = m@172.0.1.01 sql security definer view a as select * from t with local check option",
+		input: "alter /*vt+ strategy=online */ view a as select * from t",
+	}, {
+		input: "alter algorithm = merge definer = m@`172.0.1.01` sql security definer view a as select * from t with local check option",
 	}, {
 		input:  "rename table a to b",
 		output: "rename table a to b",
@@ -1549,6 +1595,8 @@ var (
 	}, {
 		input:  "drop view a,B,c",
 		output: "drop view a, b, c",
+	}, {
+		input: "drop /*vt+ strategy=online */ view if exists v",
 	}, {
 		input: "drop table a",
 	}, {
@@ -2002,7 +2050,8 @@ var (
 		input:  "select sql_calc_found_rows 'foo' from t",
 		output: "select sql_calc_found_rows 'foo' from t",
 	}, {
-		input: "select binary 'a' = 'A' from t",
+		input:  "select binary 'a' = 'A' from t",
+		output: "select convert('a', binary) = 'A' from t",
 	}, {
 		input: "select 1 from t where foo = _binary 'bar'",
 	}, {
@@ -2215,8 +2264,68 @@ var (
 	}, {
 		input: "call proc(@param)",
 	}, {
+		input:  "PREPARE stmt1 FROM 'SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse'",
+		output: "prepare stmt1 from SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse",
+	}, {
+		input:  "PREPARE stmt2 FROM @s",
+		output: "prepare stmt2 from @s",
+	}, {
+		input:  "PREPARE /* comment */ stmt2 FROM @s",
+		output: "prepare /* comment */ stmt2 from @s",
+	}, {
+		input:  "EXECUTE stmt1",
+		output: "execute stmt1",
+	}, {
+		input:  "EXECUTE /* comment */ stmt1",
+		output: "execute /* comment */ stmt1",
+	}, {
+		input:  "EXECUTE stmt1 USING @a",
+		output: "execute stmt1 using @a",
+	}, {
+		input:  "EXECUTE stmt1 USING @a, @b",
+		output: "execute stmt1 using @a, @b",
+	}, {
+		input:  "DEALLOCATE PREPARE stmt1",
+		output: "deallocate prepare stmt1",
+	}, {
+		input:  "DROP PREPARE stmt1",
+		output: "drop prepare stmt1",
+	}, {
+		input:  "DROP /* comment */ PREPARE stmt1",
+		output: "drop /* comment */ prepare stmt1",
+	}, {
 		input:  "create table unused_reserved_keywords (dense_rank bigint, lead VARCHAR(255), percent_rank decimal(3, 0), row TINYINT, rows CHAR(10), constraint PK_project PRIMARY KEY (dense_rank))",
 		output: "create table unused_reserved_keywords (\n\t`dense_rank` bigint,\n\t`lead` VARCHAR(255),\n\t`percent_rank` decimal(3,0),\n\t`row` TINYINT,\n\t`rows` CHAR(10),\n\tconstraint PK_project PRIMARY KEY (`dense_rank`)\n)",
+	}, {
+		input:  "SELECT LTRIM('abc')",
+		output: "select ltrim('abc') from dual",
+	}, {
+		input:  "SELECT RTRIM('abc')",
+		output: "select rtrim('abc') from dual",
+	}, {
+		input:  "SELECT TRIM('  abc  ')",
+		output: "select trim('  abc  ') from dual",
+	}, {
+		input:  "SELECT TRIM('aa' FROM 'aabccaaa')",
+		output: "select trim('aa' from 'aabccaaa') from dual",
+	}, {
+		input:  "SELECT TRIM(LEADING FROM 'aabccaaa')",
+		output: "select trim(leading from 'aabccaaa') from dual",
+	}, {
+		input:  "SELECT TRIM(TRAILING FROM 'abca')",
+		output: "select trim(trailing from 'abca') from dual",
+	}, {
+		input:  "SELECT TRIM(BOTH FROM 'abc')",
+		output: "select trim(both from 'abc') from dual",
+	}, {
+		input:  "SELECT TRIM(LEADING 'a' FROM 'abc')",
+		output: "select trim(leading 'a' from 'abc') from dual",
+	}, {
+		input:  "SELECT TRIM(TRAILING 'a' FROM 'abc')",
+		output: "select trim(trailing 'a' from 'abc') from dual",
+	}, {
+		input:  "SELECT TRIM(BOTH 'a' FROM 'abc')",
+		output: "select trim(both 'a' from 'abc') from dual",
 	}}
 )
 
@@ -2645,8 +2754,8 @@ func TestKeywords(t *testing.T) {
 		input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
 		output: "select /* share and mode as cols */ `share`, `mode` from t where `share` = 'foo'",
 	}, {
-		input:  "select /* unused keywords as cols */ `write`, varying from t where trailing = 'foo'",
-		output: "select /* unused keywords as cols */ `write`, `varying` from t where `trailing` = 'foo'",
+		input:  "select /* unused keywords as cols */ `write`, varying from t where `trailing` = 'foo' and `leading` = 'foo' and `both` = 'foo'",
+		output: "select /* unused keywords as cols */ `write`, `varying` from t where `trailing` = 'foo' and `leading` = 'foo' and `both` = 'foo'",
 	}, {
 		input:  "select status from t",
 		output: "select `status` from t",
@@ -2694,9 +2803,11 @@ func TestConvert(t *testing.T) {
 	}, {
 		input: "select convert('abc', char character set binary) from t",
 	}, {
-		input: "select convert('abc', char(4) ascii) from t",
+		input:  "select convert('abc', char(4) ascii) from t",
+		output: "select convert('abc', char(4) character set latin1) from t",
 	}, {
-		input: "select convert('abc', char unicode) from t",
+		input:  "select convert('abc', char unicode) from t",
+		output: "select convert('abc', char character set ucs2) from t",
 	}, {
 		input: "select convert('abc', char(4)) from t",
 	}, {
@@ -2733,8 +2844,6 @@ func TestConvert(t *testing.T) {
 		input: "select convert('abc', datetime) from t",
 	}, {
 		input: "select convert('abc', json) from t",
-	}, {
-		input: "select convert('abc' using ascii) from t",
 	}}
 
 	for _, tcase := range validSQL {
@@ -3101,6 +3210,26 @@ func TestCreateTable(t *testing.T) {
 	unique index by_username4 (username) using BTREE key_block_size 4 comment 'hi'
 )`,
 		},
+		{
+			input: `create table t1 (
+	first_name varchar(10),
+	last_name varchar(10),
+	full_name varchar(255) character set utf8mb4 collate utf8mb4_0900_ai_ci as (concat(first_name, ' ', last_name)) virtual,
+	middle_name varchar(255) character set utf8mb4 collate utf8mb4_0900_ai_ci default '' collate utf8mb4_bin
+)`,
+			output: `create table t1 (
+	first_name varchar(10),
+	last_name varchar(10),
+	full_name varchar(255) character set utf8mb4 collate utf8mb4_0900_ai_ci as (concat(first_name, ' ', last_name)) virtual,
+	middle_name varchar(255) character set utf8mb4 collate utf8mb4_bin default ''
+)`,
+		},
+		{
+			input: "create table t1 (`idb` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci GENERATED ALWAYS AS (json_unquote(json_extract(`jsonobj`,_utf8mb4'$._id'))) STORED NOT NULL)",
+			output: `create table t1 (
+	idb varchar(36) character set utf8mb4 collate utf8mb4_0900_ai_ci as (json_unquote(json_extract(jsonobj, _utf8mb4 '$._id'))) stored not null
+)`,
+		},
 		// multi-column indexes
 		{
 			input: `create table t (
@@ -3391,6 +3520,227 @@ func TestCreateTable(t *testing.T) {
 	id int(11)
 ) ENGINE FOOBAR`,
 		},
+		// partitions
+		{
+			input: `
+CREATE TABLE employees (
+    id INT NOT NULL,
+    fname VARCHAR(30),
+    lname VARCHAR(30),
+    hired DATE NOT NULL DEFAULT '1970-01-01',
+    separated DATE NOT NULL DEFAULT '9999-12-31',
+    job_code INT NOT NULL,
+    store_id INT NOT NULL
+)
+PARTITION BY RANGE (store_id) (
+    PARTITION p0 VALUES LESS THAN (6),
+    PARTITION p1 VALUES LESS THAN (11),
+    PARTITION p2 VALUES LESS THAN (16),
+    PARTITION p3 VALUES LESS THAN (21)
+)`,
+			output: `create table employees (
+	id INT not null,
+	fname VARCHAR(30),
+	lname VARCHAR(30),
+	hired DATE not null default '1970-01-01',
+	separated DATE not null default '9999-12-31',
+	job_code INT not null,
+	store_id INT not null
+) partition by range (store_id) (partition p0 values less than (6), partition p1 values less than (11), partition p2 values less than (16), partition p3 values less than (21))`,
+		},
+		{
+			input: `CREATE TABLE employees (
+    id INT NOT NULL,
+    fname VARCHAR(30),
+    lname VARCHAR(30),
+    hired DATE NOT NULL DEFAULT '1970-01-01',
+    separated DATE NOT NULL DEFAULT '9999-12-31',
+    job_code INT NOT NULL,
+    store_id INT NOT NULL
+)
+PARTITION BY RANGE (store_id) (
+    PARTITION p0 VALUES LESS THAN (6),
+    PARTITION p1 VALUES LESS THAN (11),
+    PARTITION p2 VALUES LESS THAN (16),
+    PARTITION p3 VALUES LESS THAN MAXVALUE
+)`,
+			output: `create table employees (
+	id INT not null,
+	fname VARCHAR(30),
+	lname VARCHAR(30),
+	hired DATE not null default '1970-01-01',
+	separated DATE not null default '9999-12-31',
+	job_code INT not null,
+	store_id INT not null
+) partition by range (store_id) (partition p0 values less than (6), partition p1 values less than (11), partition p2 values less than (16), partition p3 values less than maxvalue)`,
+		},
+		{
+			input: `CREATE TABLE employees (
+    id INT NOT NULL,
+    fname VARCHAR(30),
+    lname VARCHAR(30),
+    hired DATE NOT NULL DEFAULT '1970-01-01',
+    separated DATE NOT NULL DEFAULT '9999-12-31',
+    job_code INT NOT NULL,
+    store_id INT NOT NULL
+)
+PARTITION BY RANGE (job_code) (
+    PARTITION p0 VALUES LESS THAN (100),
+    PARTITION p1 VALUES LESS THAN (1000),
+    PARTITION p2 VALUES LESS THAN (10000)
+)`,
+			output: `create table employees (
+	id INT not null,
+	fname VARCHAR(30),
+	lname VARCHAR(30),
+	hired DATE not null default '1970-01-01',
+	separated DATE not null default '9999-12-31',
+	job_code INT not null,
+	store_id INT not null
+) partition by range (job_code) (partition p0 values less than (100), partition p1 values less than (1000), partition p2 values less than (10000))`,
+		},
+		{
+			input: `CREATE TABLE employees (
+    id INT NOT NULL,
+    fname VARCHAR(30),
+    lname VARCHAR(30),
+    hired DATE NOT NULL DEFAULT '1970-01-01',
+    separated DATE NOT NULL DEFAULT '9999-12-31',
+    job_code INT,
+    store_id INT
+)
+PARTITION BY RANGE ( YEAR(separated) ) (
+    PARTITION p0 VALUES LESS THAN (1991),
+    PARTITION p1 VALUES LESS THAN (1996),
+    PARTITION p2 VALUES LESS THAN (2001),
+    PARTITION p3 VALUES LESS THAN MAXVALUE
+)`,
+			output: `create table employees (
+	id INT not null,
+	fname VARCHAR(30),
+	lname VARCHAR(30),
+	hired DATE not null default '1970-01-01',
+	separated DATE not null default '9999-12-31',
+	job_code INT,
+	store_id INT
+) partition by range (YEAR(separated)) (partition p0 values less than (1991), partition p1 values less than (1996), partition p2 values less than (2001), partition p3 values less than maxvalue)`,
+		},
+		{
+			input: `CREATE TABLE quarterly_report_status (
+    report_id INT NOT NULL,
+    report_status VARCHAR(20) NOT NULL,
+    report_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)
+PARTITION BY RANGE ( UNIX_TIMESTAMP(report_updated) ) (
+    PARTITION p0 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-01-01 00:00:00') ),
+    PARTITION p1 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-04-01 00:00:00') ),
+    PARTITION p2 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-07-01 00:00:00') ),
+    PARTITION p3 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-10-01 00:00:00') ),
+    PARTITION p4 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-01-01 00:00:00') ),
+    PARTITION p5 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-04-01 00:00:00') ),
+    PARTITION p6 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-07-01 00:00:00') ),
+    PARTITION p7 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-10-01 00:00:00') ),
+    PARTITION p8 VALUES LESS THAN ( UNIX_TIMESTAMP('2010-01-01 00:00:00') ),
+    PARTITION p9 VALUES LESS THAN (MAXVALUE)
+)`,
+			output: `create table quarterly_report_status (
+	report_id INT not null,
+	report_status VARCHAR(20) not null,
+	report_updated TIMESTAMP not null default current_timestamp() on update current_timestamp()
+) partition by range (UNIX_TIMESTAMP(report_updated)) (partition p0 values less than (UNIX_TIMESTAMP('2008-01-01 00:00:00')), partition p1 values less than (UNIX_TIMESTAMP('2008-04-01 00:00:00')), partition p2 values less than (UNIX_TIMESTAMP('2008-07-01 00:00:00')), partition p3 values less than (UNIX_TIMESTAMP('2008-10-01 00:00:00')), partition p4 values less than (UNIX_TIMESTAMP('2009-01-01 00:00:00')), partition p5 values less than (UNIX_TIMESTAMP('2009-04-01 00:00:00')), partition p6 values less than (UNIX_TIMESTAMP('2009-07-01 00:00:00')), partition p7 values less than (UNIX_TIMESTAMP('2009-10-01 00:00:00')), partition p8 values less than (UNIX_TIMESTAMP('2010-01-01 00:00:00')), partition p9 values less than maxvalue)`,
+		},
+		{
+			input: `CREATE TABLE quarterly_report_status (
+    report_id INT NOT NULL,
+    report_status VARCHAR(20) NOT NULL,
+    report_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)
+PARTITION BY RANGE ( UNIX_TIMESTAMP(report_updated) ) (
+    PARTITION p0 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-01-01 00:00:00') ),
+    PARTITION p1 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-04-01 00:00:00') ),
+    PARTITION p2 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-07-01 00:00:00') ),
+    PARTITION p3 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-10-01 00:00:00') ),
+    PARTITION p4 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-01-01 00:00:00') ),
+    PARTITION p5 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-04-01 00:00:00') ),
+    PARTITION p6 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-07-01 00:00:00') ),
+    PARTITION p7 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-10-01 00:00:00') ),
+    PARTITION p8 VALUES LESS THAN ( UNIX_TIMESTAMP('2010-01-01 00:00:00') ),
+    PARTITION p9 VALUES LESS THAN (MAXVALUE)
+)`,
+			output: `create table quarterly_report_status (
+	report_id INT not null,
+	report_status VARCHAR(20) not null,
+	report_updated TIMESTAMP not null default current_timestamp() on update current_timestamp()
+) partition by range (UNIX_TIMESTAMP(report_updated)) (partition p0 values less than (UNIX_TIMESTAMP('2008-01-01 00:00:00')), partition p1 values less than (UNIX_TIMESTAMP('2008-04-01 00:00:00')), partition p2 values less than (UNIX_TIMESTAMP('2008-07-01 00:00:00')), partition p3 values less than (UNIX_TIMESTAMP('2008-10-01 00:00:00')), partition p4 values less than (UNIX_TIMESTAMP('2009-01-01 00:00:00')), partition p5 values less than (UNIX_TIMESTAMP('2009-04-01 00:00:00')), partition p6 values less than (UNIX_TIMESTAMP('2009-07-01 00:00:00')), partition p7 values less than (UNIX_TIMESTAMP('2009-10-01 00:00:00')), partition p8 values less than (UNIX_TIMESTAMP('2010-01-01 00:00:00')), partition p9 values less than maxvalue)`,
+		},
+		{
+			input: `CREATE TABLE members (
+    firstname VARCHAR(25) NOT NULL,
+    lastname VARCHAR(25) NOT NULL,
+    username VARCHAR(16) NOT NULL,
+    email VARCHAR(35),
+    joined DATE NOT NULL
+)
+PARTITION BY RANGE COLUMNS(joined) (
+    PARTITION p0 VALUES LESS THAN ('1960-01-01'),
+    PARTITION p1 VALUES LESS THAN ('1970-01-01'),
+    PARTITION p2 VALUES LESS THAN ('1980-01-01'),
+    PARTITION p3 VALUES LESS THAN ('1990-01-01'),
+    PARTITION p4 VALUES LESS THAN MAXVALUE
+)`,
+			output: `create table members (
+	firstname VARCHAR(25) not null,
+	lastname VARCHAR(25) not null,
+	username VARCHAR(16) not null,
+	email VARCHAR(35),
+	joined DATE not null
+) partition by range columns (joined) (partition p0 values less than ('1960-01-01'), partition p1 values less than ('1970-01-01'), partition p2 values less than ('1980-01-01'), partition p3 values less than ('1990-01-01'), partition p4 values less than maxvalue)`,
+		},
+		{
+			input: `CREATE TABLE ti (id INT, amount DECIMAL(7,2), tr_date DATE)
+    ENGINE=INNODB
+    PARTITION BY HASH( MONTH(tr_date) )
+    PARTITIONS 6`,
+			output: `create table ti (
+	id INT,
+	amount DECIMAL(7,2),
+	tr_date DATE
+) ENGINE INNODB partition by hash (MONTH(tr_date)) partitions 6`,
+		},
+		{
+			input: `CREATE TABLE members (
+    firstname VARCHAR(25) NOT NULL,
+    lastname VARCHAR(25) NOT NULL,
+    username VARCHAR(16) NOT NULL,
+    email VARCHAR(35),
+    joined DATE NOT NULL
+)
+PARTITION BY KEY(joined)
+PARTITIONS 6`,
+			output: `create table members (
+	firstname VARCHAR(25) not null,
+	lastname VARCHAR(25) not null,
+	username VARCHAR(16) not null,
+	email VARCHAR(35),
+	joined DATE not null
+) partition by key (joined) partitions 6`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5),
+	PARTITION MyPart VALUES IN (2,4,6)
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5), partition MyPart values in (2, 4, 6))`,
+		},
+		{
+			input: `create table t1 (id int primary key) partition by list (id) (partition p1 values in(11,21), partition p2 values in (12,22))`,
+			output: `create table t1 (
+	id int primary key
+) partition by list (id) (partition p1 values in (11, 21), partition p2 values in (12, 22))`,
+		},
 	}
 	for _, test := range createTableQueries {
 		sql := strings.TrimSpace(test.input)
@@ -3497,6 +3847,15 @@ var (
 	}{{
 		input:  "select : from t",
 		output: "syntax error at position 9 near ':'",
+	}, {
+		input:  "execute stmt using 1;",
+		output: "syntax error at position 21 near '1'",
+	}, {
+		input:  "PREPARE stmt FROM a;",
+		output: "syntax error at position 20 near 'a'",
+	}, {
+		input:  "PREPARE stmt FROM @@a;",
+		output: "syntax error at position 22 near 'a'",
 	}, {
 		input:  "select x'78 from t",
 		output: "syntax error at position 12 near '78'",

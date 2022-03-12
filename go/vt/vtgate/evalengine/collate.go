@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -49,6 +50,10 @@ func (c *CollateExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	out.replaceCollation(c.TypedCollation)
 }
 
+func (c *CollateExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	return c.Inner.typeof(env)
+}
+
 type LookupDefaultCollation collations.ID
 
 func (d LookupDefaultCollation) ColumnLookup(_ *sqlparser.ColName) (int, error) {
@@ -70,8 +75,8 @@ func mergeCollations(left, right *EvalResult) (collations.ID, error) {
 		return lc.Collation, nil
 	}
 
-	lt := left.textual()
-	rt := right.textual()
+	lt := left.isTextual()
+	rt := right.isTextual()
 	if !lt || !rt {
 		if lt {
 			return lc.Collation, nil

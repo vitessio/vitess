@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+
 	"vitess.io/vitess/go/vt/discovery"
 
 	"github.com/stretchr/testify/assert"
@@ -638,6 +640,7 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 // is not replicating to start with (IO_Thread is not running) and we
 // simulate an error from the attempt to start replication
 func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
+	_ = reparentutil.SetDurabilityPolicy("semi_sync")
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
@@ -686,6 +689,10 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 	// simulate error that will trigger a call to RestartReplication
 	goodReplica1.FakeMysqlDaemon.StartReplicationError = errors.New("Slave failed to initialize relay log info structure from the repository")
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// In SetReplicationSource, we find that the source host and port was already set correctly,
+		// So we try to stop and start replication. The first STOP SLAVE comes from there
+		"STOP SLAVE",
+		// During the START SLAVE call, we find a relay log error, so we try to restart replication.
 		"STOP SLAVE",
 		"RESET SLAVE",
 		"START SLAVE",

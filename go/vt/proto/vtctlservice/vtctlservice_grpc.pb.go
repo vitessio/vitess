@@ -148,6 +148,11 @@ type VtctldClient interface {
 	ApplySchema(ctx context.Context, in *vtctldata.ApplySchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplySchemaResponse, error)
 	// ApplyVSchema applies a vschema to a keyspace.
 	ApplyVSchema(ctx context.Context, in *vtctldata.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplyVSchemaResponse, error)
+	// Backup uses the BackupEngine and BackupStorage services on the specified
+	// tablet to create and store a new backup.
+	Backup(ctx context.Context, in *vtctldata.BackupRequest, opts ...grpc.CallOption) (Vtctld_BackupClient, error)
+	// BackupShard chooses a tablet in the shard and uses it to create a backup.
+	BackupShard(ctx context.Context, in *vtctldata.BackupShardRequest, opts ...grpc.CallOption) (Vtctld_BackupShardClient, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
 	// primary. For that, use InitShardPrimary.
@@ -223,6 +228,8 @@ type VtctldClient interface {
 	GetTablet(ctx context.Context, in *vtctldata.GetTabletRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletResponse, error)
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
 	GetTablets(ctx context.Context, in *vtctldata.GetTabletsRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletsResponse, error)
+	// GetVersion returns the version of a tablet from its debug vars.
+	GetVersion(ctx context.Context, in *vtctldata.GetVersionRequest, opts ...grpc.CallOption) (*vtctldata.GetVersionResponse, error)
 	// GetVSchema returns the vschema for a keyspace.
 	GetVSchema(ctx context.Context, in *vtctldata.GetVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.GetVSchemaResponse, error)
 	// GetWorkflows returns a list of workflows for the given keyspace.
@@ -268,6 +275,8 @@ type VtctldClient interface {
 	// on a best-effort basis, and log warnings for any tablets that fail to
 	// reload within the context deadline.
 	ReloadSchemaShard(ctx context.Context, in *vtctldata.ReloadSchemaShardRequest, opts ...grpc.CallOption) (*vtctldata.ReloadSchemaShardResponse, error)
+	// RemoveBackup removes a backup from the BackupStorage used by vtctld.
+	RemoveBackup(ctx context.Context, in *vtctldata.RemoveBackupRequest, opts ...grpc.CallOption) (*vtctldata.RemoveBackupResponse, error)
 	// RemoveKeyspaceCell removes the specified cell from the Cells list for all
 	// shards in the specified keyspace (by calling RemoveShardCell on every
 	// shard). It also removes the SrvKeyspace for that keyspace in that cell.
@@ -279,6 +288,8 @@ type VtctldClient interface {
 	// only works if the current replica position matches the last known reparent
 	// action.
 	ReparentTablet(ctx context.Context, in *vtctldata.ReparentTabletRequest, opts ...grpc.CallOption) (*vtctldata.ReparentTabletResponse, error)
+	// RestoreFromBackup stops mysqld for the given tablet and restores a backup.
+	RestoreFromBackup(ctx context.Context, in *vtctldata.RestoreFromBackupRequest, opts ...grpc.CallOption) (Vtctld_RestoreFromBackupClient, error)
 	// RunHealthCheck runs a healthcheck on the remote tablet.
 	RunHealthCheck(ctx context.Context, in *vtctldata.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldata.RunHealthCheckResponse, error)
 	// SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
@@ -338,9 +349,15 @@ type VtctldClient interface {
 	// ValidateKeyspace validates that all nodes reachable from the specified
 	// keyspace are consistent.
 	ValidateKeyspace(ctx context.Context, in *vtctldata.ValidateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateKeyspaceResponse, error)
+	// ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace.
+	ValidateSchemaKeyspace(ctx context.Context, in *vtctldata.ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateSchemaKeyspaceResponse, error)
 	// ValidateShard validates that all nodes reachable from the specified shard
 	// are consistent.
 	ValidateShard(ctx context.Context, in *vtctldata.ValidateShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateShardResponse, error)
+	// ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
+	ValidateVersionKeyspace(ctx context.Context, in *vtctldata.ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionKeyspaceResponse, error)
+	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
+	ValidateVSchema(ctx context.Context, in *vtctldata.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVSchemaResponse, error)
 }
 
 type vtctldClient struct {
@@ -394,6 +411,70 @@ func (c *vtctldClient) ApplyVSchema(ctx context.Context, in *vtctldata.ApplyVSch
 		return nil, err
 	}
 	return out, nil
+}
+
+func (c *vtctldClient) Backup(ctx context.Context, in *vtctldata.BackupRequest, opts ...grpc.CallOption) (Vtctld_BackupClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Vtctld_ServiceDesc.Streams[0], "/vtctlservice.Vtctld/Backup", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &vtctldBackupClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Vtctld_BackupClient interface {
+	Recv() (*vtctldata.BackupResponse, error)
+	grpc.ClientStream
+}
+
+type vtctldBackupClient struct {
+	grpc.ClientStream
+}
+
+func (x *vtctldBackupClient) Recv() (*vtctldata.BackupResponse, error) {
+	m := new(vtctldata.BackupResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *vtctldClient) BackupShard(ctx context.Context, in *vtctldata.BackupShardRequest, opts ...grpc.CallOption) (Vtctld_BackupShardClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Vtctld_ServiceDesc.Streams[1], "/vtctlservice.Vtctld/BackupShard", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &vtctldBackupShardClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Vtctld_BackupShardClient interface {
+	Recv() (*vtctldata.BackupResponse, error)
+	grpc.ClientStream
+}
+
+type vtctldBackupShardClient struct {
+	grpc.ClientStream
+}
+
+func (x *vtctldBackupShardClient) Recv() (*vtctldata.BackupResponse, error) {
+	m := new(vtctldata.BackupResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func (c *vtctldClient) ChangeTabletType(ctx context.Context, in *vtctldata.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldata.ChangeTabletTypeResponse, error) {
@@ -639,6 +720,15 @@ func (c *vtctldClient) GetTablets(ctx context.Context, in *vtctldata.GetTabletsR
 	return out, nil
 }
 
+func (c *vtctldClient) GetVersion(ctx context.Context, in *vtctldata.GetVersionRequest, opts ...grpc.CallOption) (*vtctldata.GetVersionResponse, error) {
+	out := new(vtctldata.GetVersionResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetVersion", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) GetVSchema(ctx context.Context, in *vtctldata.GetVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.GetVSchemaResponse, error) {
 	out := new(vtctldata.GetVSchemaResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetVSchema", in, out, opts...)
@@ -747,6 +837,15 @@ func (c *vtctldClient) ReloadSchemaShard(ctx context.Context, in *vtctldata.Relo
 	return out, nil
 }
 
+func (c *vtctldClient) RemoveBackup(ctx context.Context, in *vtctldata.RemoveBackupRequest, opts ...grpc.CallOption) (*vtctldata.RemoveBackupResponse, error) {
+	out := new(vtctldata.RemoveBackupResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/RemoveBackup", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) RemoveKeyspaceCell(ctx context.Context, in *vtctldata.RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*vtctldata.RemoveKeyspaceCellResponse, error) {
 	out := new(vtctldata.RemoveKeyspaceCellResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/RemoveKeyspaceCell", in, out, opts...)
@@ -772,6 +871,38 @@ func (c *vtctldClient) ReparentTablet(ctx context.Context, in *vtctldata.Reparen
 		return nil, err
 	}
 	return out, nil
+}
+
+func (c *vtctldClient) RestoreFromBackup(ctx context.Context, in *vtctldata.RestoreFromBackupRequest, opts ...grpc.CallOption) (Vtctld_RestoreFromBackupClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Vtctld_ServiceDesc.Streams[2], "/vtctlservice.Vtctld/RestoreFromBackup", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &vtctldRestoreFromBackupClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Vtctld_RestoreFromBackupClient interface {
+	Recv() (*vtctldata.RestoreFromBackupResponse, error)
+	grpc.ClientStream
+}
+
+type vtctldRestoreFromBackupClient struct {
+	grpc.ClientStream
+}
+
+func (x *vtctldRestoreFromBackupClient) Recv() (*vtctldata.RestoreFromBackupResponse, error) {
+	m := new(vtctldata.RestoreFromBackupResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func (c *vtctldClient) RunHealthCheck(ctx context.Context, in *vtctldata.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldata.RunHealthCheckResponse, error) {
@@ -909,9 +1040,36 @@ func (c *vtctldClient) ValidateKeyspace(ctx context.Context, in *vtctldata.Valid
 	return out, nil
 }
 
+func (c *vtctldClient) ValidateSchemaKeyspace(ctx context.Context, in *vtctldata.ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateSchemaKeyspaceResponse, error) {
+	out := new(vtctldata.ValidateSchemaKeyspaceResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ValidateSchemaKeyspace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) ValidateShard(ctx context.Context, in *vtctldata.ValidateShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateShardResponse, error) {
 	out := new(vtctldata.ValidateShardResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ValidateShard", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ValidateVersionKeyspace(ctx context.Context, in *vtctldata.ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionKeyspaceResponse, error) {
+	out := new(vtctldata.ValidateVersionKeyspaceResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ValidateVersionKeyspace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ValidateVSchema(ctx context.Context, in *vtctldata.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVSchemaResponse, error) {
+	out := new(vtctldata.ValidateVSchemaResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ValidateVSchema", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -938,6 +1096,11 @@ type VtctldServer interface {
 	ApplySchema(context.Context, *vtctldata.ApplySchemaRequest) (*vtctldata.ApplySchemaResponse, error)
 	// ApplyVSchema applies a vschema to a keyspace.
 	ApplyVSchema(context.Context, *vtctldata.ApplyVSchemaRequest) (*vtctldata.ApplyVSchemaResponse, error)
+	// Backup uses the BackupEngine and BackupStorage services on the specified
+	// tablet to create and store a new backup.
+	Backup(*vtctldata.BackupRequest, Vtctld_BackupServer) error
+	// BackupShard chooses a tablet in the shard and uses it to create a backup.
+	BackupShard(*vtctldata.BackupShardRequest, Vtctld_BackupShardServer) error
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
 	// primary. For that, use InitShardPrimary.
@@ -1013,6 +1176,8 @@ type VtctldServer interface {
 	GetTablet(context.Context, *vtctldata.GetTabletRequest) (*vtctldata.GetTabletResponse, error)
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
 	GetTablets(context.Context, *vtctldata.GetTabletsRequest) (*vtctldata.GetTabletsResponse, error)
+	// GetVersion returns the version of a tablet from its debug vars.
+	GetVersion(context.Context, *vtctldata.GetVersionRequest) (*vtctldata.GetVersionResponse, error)
 	// GetVSchema returns the vschema for a keyspace.
 	GetVSchema(context.Context, *vtctldata.GetVSchemaRequest) (*vtctldata.GetVSchemaResponse, error)
 	// GetWorkflows returns a list of workflows for the given keyspace.
@@ -1058,6 +1223,8 @@ type VtctldServer interface {
 	// on a best-effort basis, and log warnings for any tablets that fail to
 	// reload within the context deadline.
 	ReloadSchemaShard(context.Context, *vtctldata.ReloadSchemaShardRequest) (*vtctldata.ReloadSchemaShardResponse, error)
+	// RemoveBackup removes a backup from the BackupStorage used by vtctld.
+	RemoveBackup(context.Context, *vtctldata.RemoveBackupRequest) (*vtctldata.RemoveBackupResponse, error)
 	// RemoveKeyspaceCell removes the specified cell from the Cells list for all
 	// shards in the specified keyspace (by calling RemoveShardCell on every
 	// shard). It also removes the SrvKeyspace for that keyspace in that cell.
@@ -1069,6 +1236,8 @@ type VtctldServer interface {
 	// only works if the current replica position matches the last known reparent
 	// action.
 	ReparentTablet(context.Context, *vtctldata.ReparentTabletRequest) (*vtctldata.ReparentTabletResponse, error)
+	// RestoreFromBackup stops mysqld for the given tablet and restores a backup.
+	RestoreFromBackup(*vtctldata.RestoreFromBackupRequest, Vtctld_RestoreFromBackupServer) error
 	// RunHealthCheck runs a healthcheck on the remote tablet.
 	RunHealthCheck(context.Context, *vtctldata.RunHealthCheckRequest) (*vtctldata.RunHealthCheckResponse, error)
 	// SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
@@ -1128,9 +1297,15 @@ type VtctldServer interface {
 	// ValidateKeyspace validates that all nodes reachable from the specified
 	// keyspace are consistent.
 	ValidateKeyspace(context.Context, *vtctldata.ValidateKeyspaceRequest) (*vtctldata.ValidateKeyspaceResponse, error)
+	// ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace.
+	ValidateSchemaKeyspace(context.Context, *vtctldata.ValidateSchemaKeyspaceRequest) (*vtctldata.ValidateSchemaKeyspaceResponse, error)
 	// ValidateShard validates that all nodes reachable from the specified shard
 	// are consistent.
 	ValidateShard(context.Context, *vtctldata.ValidateShardRequest) (*vtctldata.ValidateShardResponse, error)
+	// ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
+	ValidateVersionKeyspace(context.Context, *vtctldata.ValidateVersionKeyspaceRequest) (*vtctldata.ValidateVersionKeyspaceResponse, error)
+	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
+	ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error)
 	mustEmbedUnimplementedVtctldServer()
 }
 
@@ -1152,6 +1327,12 @@ func (UnimplementedVtctldServer) ApplySchema(context.Context, *vtctldata.ApplySc
 }
 func (UnimplementedVtctldServer) ApplyVSchema(context.Context, *vtctldata.ApplyVSchemaRequest) (*vtctldata.ApplyVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApplyVSchema not implemented")
+}
+func (UnimplementedVtctldServer) Backup(*vtctldata.BackupRequest, Vtctld_BackupServer) error {
+	return status.Errorf(codes.Unimplemented, "method Backup not implemented")
+}
+func (UnimplementedVtctldServer) BackupShard(*vtctldata.BackupShardRequest, Vtctld_BackupShardServer) error {
+	return status.Errorf(codes.Unimplemented, "method BackupShard not implemented")
 }
 func (UnimplementedVtctldServer) ChangeTabletType(context.Context, *vtctldata.ChangeTabletTypeRequest) (*vtctldata.ChangeTabletTypeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ChangeTabletType not implemented")
@@ -1234,6 +1415,9 @@ func (UnimplementedVtctldServer) GetTablet(context.Context, *vtctldata.GetTablet
 func (UnimplementedVtctldServer) GetTablets(context.Context, *vtctldata.GetTabletsRequest) (*vtctldata.GetTabletsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTablets not implemented")
 }
+func (UnimplementedVtctldServer) GetVersion(context.Context, *vtctldata.GetVersionRequest) (*vtctldata.GetVersionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetVersion not implemented")
+}
 func (UnimplementedVtctldServer) GetVSchema(context.Context, *vtctldata.GetVSchemaRequest) (*vtctldata.GetVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVSchema not implemented")
 }
@@ -1270,6 +1454,9 @@ func (UnimplementedVtctldServer) ReloadSchemaKeyspace(context.Context, *vtctldat
 func (UnimplementedVtctldServer) ReloadSchemaShard(context.Context, *vtctldata.ReloadSchemaShardRequest) (*vtctldata.ReloadSchemaShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReloadSchemaShard not implemented")
 }
+func (UnimplementedVtctldServer) RemoveBackup(context.Context, *vtctldata.RemoveBackupRequest) (*vtctldata.RemoveBackupResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveBackup not implemented")
+}
 func (UnimplementedVtctldServer) RemoveKeyspaceCell(context.Context, *vtctldata.RemoveKeyspaceCellRequest) (*vtctldata.RemoveKeyspaceCellResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveKeyspaceCell not implemented")
 }
@@ -1278,6 +1465,9 @@ func (UnimplementedVtctldServer) RemoveShardCell(context.Context, *vtctldata.Rem
 }
 func (UnimplementedVtctldServer) ReparentTablet(context.Context, *vtctldata.ReparentTabletRequest) (*vtctldata.ReparentTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReparentTablet not implemented")
+}
+func (UnimplementedVtctldServer) RestoreFromBackup(*vtctldata.RestoreFromBackupRequest, Vtctld_RestoreFromBackupServer) error {
+	return status.Errorf(codes.Unimplemented, "method RestoreFromBackup not implemented")
 }
 func (UnimplementedVtctldServer) RunHealthCheck(context.Context, *vtctldata.RunHealthCheckRequest) (*vtctldata.RunHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
@@ -1324,8 +1514,17 @@ func (UnimplementedVtctldServer) Validate(context.Context, *vtctldata.ValidateRe
 func (UnimplementedVtctldServer) ValidateKeyspace(context.Context, *vtctldata.ValidateKeyspaceRequest) (*vtctldata.ValidateKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateKeyspace not implemented")
 }
+func (UnimplementedVtctldServer) ValidateSchemaKeyspace(context.Context, *vtctldata.ValidateSchemaKeyspaceRequest) (*vtctldata.ValidateSchemaKeyspaceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateSchemaKeyspace not implemented")
+}
 func (UnimplementedVtctldServer) ValidateShard(context.Context, *vtctldata.ValidateShardRequest) (*vtctldata.ValidateShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateShard not implemented")
+}
+func (UnimplementedVtctldServer) ValidateVersionKeyspace(context.Context, *vtctldata.ValidateVersionKeyspaceRequest) (*vtctldata.ValidateVersionKeyspaceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateVersionKeyspace not implemented")
+}
+func (UnimplementedVtctldServer) ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateVSchema not implemented")
 }
 func (UnimplementedVtctldServer) mustEmbedUnimplementedVtctldServer() {}
 
@@ -1428,6 +1627,48 @@ func _Vtctld_ApplyVSchema_Handler(srv interface{}, ctx context.Context, dec func
 		return srv.(VtctldServer).ApplyVSchema(ctx, req.(*vtctldata.ApplyVSchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_Backup_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(vtctldata.BackupRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(VtctldServer).Backup(m, &vtctldBackupServer{stream})
+}
+
+type Vtctld_BackupServer interface {
+	Send(*vtctldata.BackupResponse) error
+	grpc.ServerStream
+}
+
+type vtctldBackupServer struct {
+	grpc.ServerStream
+}
+
+func (x *vtctldBackupServer) Send(m *vtctldata.BackupResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _Vtctld_BackupShard_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(vtctldata.BackupShardRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(VtctldServer).BackupShard(m, &vtctldBackupShardServer{stream})
+}
+
+type Vtctld_BackupShardServer interface {
+	Send(*vtctldata.BackupResponse) error
+	grpc.ServerStream
+}
+
+type vtctldBackupShardServer struct {
+	grpc.ServerStream
+}
+
+func (x *vtctldBackupShardServer) Send(m *vtctldata.BackupResponse) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _Vtctld_ChangeTabletType_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -1916,6 +2157,24 @@ func _Vtctld_GetTablets_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_GetVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetVersionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetVersion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetVersion",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetVersion(ctx, req.(*vtctldata.GetVersionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_GetVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.GetVSchemaRequest)
 	if err := dec(in); err != nil {
@@ -2132,6 +2391,24 @@ func _Vtctld_ReloadSchemaShard_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_RemoveBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.RemoveBackupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).RemoveBackup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/RemoveBackup",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).RemoveBackup(ctx, req.(*vtctldata.RemoveBackupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_RemoveKeyspaceCell_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.RemoveKeyspaceCellRequest)
 	if err := dec(in); err != nil {
@@ -2184,6 +2461,27 @@ func _Vtctld_ReparentTablet_Handler(srv interface{}, ctx context.Context, dec fu
 		return srv.(VtctldServer).ReparentTablet(ctx, req.(*vtctldata.ReparentTabletRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_RestoreFromBackup_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(vtctldata.RestoreFromBackupRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(VtctldServer).RestoreFromBackup(m, &vtctldRestoreFromBackupServer{stream})
+}
+
+type Vtctld_RestoreFromBackupServer interface {
+	Send(*vtctldata.RestoreFromBackupResponse) error
+	grpc.ServerStream
+}
+
+type vtctldRestoreFromBackupServer struct {
+	grpc.ServerStream
+}
+
+func (x *vtctldRestoreFromBackupServer) Send(m *vtctldata.RestoreFromBackupResponse) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _Vtctld_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -2456,6 +2754,24 @@ func _Vtctld_ValidateKeyspace_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_ValidateSchemaKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ValidateSchemaKeyspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ValidateSchemaKeyspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ValidateSchemaKeyspace",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ValidateSchemaKeyspace(ctx, req.(*vtctldata.ValidateSchemaKeyspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_ValidateShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.ValidateShardRequest)
 	if err := dec(in); err != nil {
@@ -2470,6 +2786,42 @@ func _Vtctld_ValidateShard_Handler(srv interface{}, ctx context.Context, dec fun
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).ValidateShard(ctx, req.(*vtctldata.ValidateShardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ValidateVersionKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ValidateVersionKeyspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ValidateVersionKeyspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ValidateVersionKeyspace",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ValidateVersionKeyspace(ctx, req.(*vtctldata.ValidateVersionKeyspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ValidateVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ValidateVSchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ValidateVSchema(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ValidateVSchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ValidateVSchema(ctx, req.(*vtctldata.ValidateVSchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2610,6 +2962,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_GetTablets_Handler,
 		},
 		{
+			MethodName: "GetVersion",
+			Handler:    _Vtctld_GetVersion_Handler,
+		},
+		{
 			MethodName: "GetVSchema",
 			Handler:    _Vtctld_GetVSchema_Handler,
 		},
@@ -2656,6 +3012,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReloadSchemaShard",
 			Handler:    _Vtctld_ReloadSchemaShard_Handler,
+		},
+		{
+			MethodName: "RemoveBackup",
+			Handler:    _Vtctld_RemoveBackup_Handler,
 		},
 		{
 			MethodName: "RemoveKeyspaceCell",
@@ -2730,10 +3090,38 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_ValidateKeyspace_Handler,
 		},
 		{
+			MethodName: "ValidateSchemaKeyspace",
+			Handler:    _Vtctld_ValidateSchemaKeyspace_Handler,
+		},
+		{
 			MethodName: "ValidateShard",
 			Handler:    _Vtctld_ValidateShard_Handler,
 		},
+		{
+			MethodName: "ValidateVersionKeyspace",
+			Handler:    _Vtctld_ValidateVersionKeyspace_Handler,
+		},
+		{
+			MethodName: "ValidateVSchema",
+			Handler:    _Vtctld_ValidateVSchema_Handler,
+		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Backup",
+			Handler:       _Vtctld_Backup_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "BackupShard",
+			Handler:       _Vtctld_BackupShard_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "RestoreFromBackup",
+			Handler:       _Vtctld_RestoreFromBackup_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "vtctlservice.proto",
 }

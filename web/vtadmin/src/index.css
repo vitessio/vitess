@@ -347,4 +347,51 @@ table tbody td[rowSpan] {
     .btn-warning.btn-secondary:visited {
         @apply text-warning;
     }
+
+    .toggle {
+        height: 19px;
+        width: 37px;
+        @apply relative;
+        @apply inline-flex;
+        @apply flex-shrink-0;
+        @apply border-2;
+        @apply border-transparent;
+        @apply rounded-full;
+        @apply cursor-pointer;
+        @apply transition-colors;
+        @apply ease-in-out;
+        @apply duration-200;
+        @apply focus:outline-none;
+    }
+
+    .toggle.on {
+        @apply bg-vtblue;
+    }
+
+    .toggle.off {
+        @apply bg-gray-400;
+    }
+
+    .toggle-button {
+        height: 15px;
+        width: 15px;
+        @apply pointer-events-none;
+        @apply inline-block;
+        @apply rounded-full;
+        @apply bg-white;
+        @apply shadow-lg;
+        @apply transform;
+        @apply ring-0;
+        @apply transition;
+        @apply ease-in-out;
+        @apply duration-200;
+    }
+
+    .toggle-button.on {
+        @apply translate-x-7;
+    }
+
+    .toggle-button.off {
+        @apply translate-x-0;
+    }
 }

@@ -23,12 +23,13 @@ import (
 	"os"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -74,7 +75,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Set a short onterm timeout so the test goes faster.
-		clusterInstance.VtGateExtraArgs = []string{"-onterm_timeout", "1s"}
+		clusterInstance.VtGateExtraArgs = []string{"--onterm_timeout", "1s"}
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			panic(err)
@@ -89,15 +90,6 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return qr
-}
-
 func TestTransactionRollBackWhenShutDown(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
@@ -105,12 +97,12 @@ func TestTransactionRollBackWhenShutDown(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	exec(t, conn, "insert into buffer(id, msg) values(3,'mark')")
-	exec(t, conn, "insert into buffer(id, msg) values(4,'doug')")
+	utils.Exec(t, conn, "insert into buffer(id, msg) values(3,'mark')")
+	utils.Exec(t, conn, "insert into buffer(id, msg) values(4,'doug')")
 
 	// start an incomplete transaction
-	exec(t, conn, "begin")
-	exec(t, conn, "insert into buffer(id, msg) values(33,'mark')")
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into buffer(id, msg) values(33,'mark')")
 
 	// Enforce a restart to enforce rollback
 	if err = clusterInstance.RestartVtgate(); err != nil {
@@ -134,7 +126,7 @@ func TestTransactionRollBackWhenShutDown(t *testing.T) {
 	}
 
 	// Verify that rollback worked
-	qr := exec(t, conn2, "select id from buffer where msg='mark'")
+	qr := utils.Exec(t, conn2, "select id from buffer where msg='mark'")
 	got := fmt.Sprintf("%v", qr.Rows)
 	want = `[[INT64(3)]]`
 	assert.Equal(t, want, got)
@@ -147,16 +139,16 @@ func TestErrorInAutocommitSession(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	exec(t, conn, "set autocommit=true")
-	exec(t, conn, "insert into buffer(id, msg) values(1,'foo')")
+	utils.Exec(t, conn, "set autocommit=true")
+	utils.Exec(t, conn, "insert into buffer(id, msg) values(1,'foo')")
 	_, err = conn.ExecuteFetch("insert into buffer(id, msg) values(1,'bar')", 1, true)
 	require.Error(t, err) // this should fail with duplicate error
-	exec(t, conn, "insert into buffer(id, msg) values(2,'baz')")
+	utils.Exec(t, conn, "insert into buffer(id, msg) values(2,'baz')")
 
 	conn2, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn2.Close()
-	result := exec(t, conn2, "select * from buffer order by id")
+	result := utils.Exec(t, conn2, "select * from buffer order by id")
 
 	// if we have properly working autocommit code, both the successful inserts should be visible to a second
 	// connection, even if we have not done an explicit commit

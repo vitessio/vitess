@@ -358,6 +358,7 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 			DDLStrategy:          *defaultDDLStrategy,
 			SessionUUID:          u.String(),
 			EnableSystemSettings: *sysVarSetEnabled,
+			EnableSetVar:         *setVarEnabled,
 		}
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
 			session.Options.ClientFoundRows = true

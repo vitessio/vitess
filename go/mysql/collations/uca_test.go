@@ -18,6 +18,7 @@ package collations
 
 import (
 	"bytes"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -239,6 +240,10 @@ const ChineseString2 = "春江潮水连海平，海上明月共潮生。" +
 	"不知江月待何人，但见长江送流水。" +
 	"白云一片去悠悠，青枫浦上不胜愁。" +
 	"谁家今夜扁舟子？何处相思明月楼？"
+const SpanishString = "A mí se me hace cuento que empezó Buenos Aires: " +
+	"La juzgo tan eterna como el agua y el aire."
+const EnglishString = "Dame Mary Rosa Alleyne Hunnings DBE (nee Berry; born 24 March 1935), " +
+	"known professionally as Mary Berry, is an English food writer, chef, baker and television presenter."
 
 var AllTestStrings = []struct {
 	Name, Content string
@@ -251,6 +256,8 @@ var AllTestStrings = []struct {
 	{"Japanese2", JapaneseString2},
 	{"Chinese", ChineseString},
 	{"Chinese2", ChineseString2},
+	{"Spanish", SpanishString},
+	{"English", EnglishString},
 }
 
 var TestCases = []struct {
@@ -866,13 +873,13 @@ func (c *ConsistentCollation) Collate(left, right []byte, isPrefix bool) int {
 	w1 := c.WeightString(nil, left, 0)
 	w2 := c.WeightString(nil, right, 0)
 	if bytes.Equal(w1, w2) != equal {
-		c.t.Errorf("ConsistentCollation: expected WeightString %q / %v == %q / %v to be %v", left, w1, right, w2, equal)
+		c.t.Errorf("ConsistentCollation(%s): expected WeightString %q / %v == %q / %v to be %v", c.Name(), left, w1, right, w2, equal)
 	}
 
 	h1 := c.Hash(left, 0)
 	h2 := c.Hash(right, 0)
 	if (h1 == h2) != equal {
-		c.t.Errorf("ConsistentCollation: expected Hash %q / %v == %q / %v to be %v", left, h1, right, h2, equal)
+		c.t.Errorf("ConsistentCollation(%s): expected Hash %q / %v == %q / %v to be %v", c.Name(), left, h1, right, h2, equal)
 	}
 
 	return cmp
@@ -924,5 +931,37 @@ func TestCaseChangeEqualities(t *testing.T) {
 				_ = collation.Collate(trans2, trans3, false)
 			}
 		})
+	}
+}
+
+func BenchmarkUCA900Collation(b *testing.B) {
+	var Collations = []Collation{
+		testcollation(b, "utf8mb4_0900_as_cs"),
+		testcollation(b, "utf8mb4_0900_as_ci"),
+		testcollation(b, "utf8mb4_0900_ai_ci"),
+	}
+
+	var BenchStrings = []struct {
+		Name, Content string
+	}{
+		{"Long", ExampleStringLong},
+		{"Spanish", SpanishString},
+		{"English", EnglishString},
+		{"Japanese", JapaneseString2},
+	}
+
+	for _, teststr := range BenchStrings {
+		for _, length := range []int{1, 8} {
+			content := strings.Repeat(teststr.Content, length)
+			str1 := []byte(content)
+			str2 := []byte(strings.ToUpper(content))
+			for _, collation := range Collations {
+				b.Run(fmt.Sprintf("%s/%d/%s", teststr.Name, length, collation.Name()), func(b *testing.B) {
+					for i := 0; i < b.N; i++ {
+						_ = collation.Collate(str1, str2, false)
+					}
+				})
+			}
+		}
 	}
 }

@@ -19,14 +19,13 @@ limitations under the License.
 package vtctld
 
 import (
+	"context"
 	"flag"
 	"net/http"
 	"strings"
 	"time"
 
 	rice "github.com/GeertJohan/go.rice"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -43,6 +42,7 @@ var (
 	enableRealtimeStats = flag.Bool("enable_realtime_stats", false, "Required for the Realtime Stats view. If set, vtctld will maintain a streaming RPC to each tablet (in all cells) to gather the realtime health stats.")
 	enableUI            = flag.Bool("enable_vtctld_ui", true, "If true, the vtctld web interface will be enabled. Default is true.")
 	durabilityPolicy    = flag.String("durability_policy", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
+	sanitizeLogMessages = flag.Bool("vtctld_sanitize_log_messages", false, "When true, vtctld sanitizes logging.")
 
 	_ = flag.String("web_dir", "", "NOT USED, here for backward compatibility")
 	_ = flag.String("web_dir2", "", "NOT USED, here for backward compatibility")
@@ -54,7 +54,7 @@ const (
 
 // InitVtctld initializes all the vtctld functionality.
 func InitVtctld(ts *topo.Server) error {
-	err := reparentutil.SetDurabilityPolicy(*durabilityPolicy, nil)
+	err := reparentutil.SetDurabilityPolicy(*durabilityPolicy)
 	if err != nil {
 		log.Errorf("error in setting durability policy: %v", err)
 		return err
@@ -161,9 +161,6 @@ func InitVtctld(ts *topo.Server) error {
 
 	// Init workflow manager.
 	initWorkflowManager(ts)
-
-	// Init online DDL schema manager
-	initSchemaManager(ts)
 
 	// Setup reverse proxy for all vttablets through /vttablet/.
 	initVTTabletRedirection(ts)

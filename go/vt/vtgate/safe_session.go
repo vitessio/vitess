@@ -377,7 +377,7 @@ func (session *SafeSession) SetTargetString(target string) {
 	session.TargetString = target
 }
 
-//SetSystemVariable sets the system variable in th session.
+// SetSystemVariable sets the system variable in the session.
 func (session *SafeSession) SetSystemVariable(name string, expr string) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
@@ -385,6 +385,22 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 		session.SystemVariables = make(map[string]string)
 	}
 	session.SystemVariables[name] = expr
+}
+
+// GetSystemVariables takes a visitor function that will save each system variables of the session
+func (session *SafeSession) GetSystemVariables(f func(k string, v string)) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	for k, v := range session.SystemVariables {
+		f(k, v)
+	}
+}
+
+// HasSystemVariables returns whether the session has system variables set or not.
+func (session *SafeSession) HasSystemVariables() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return len(session.SystemVariables) > 0
 }
 
 // SetOptions sets the options
@@ -545,6 +561,13 @@ func (session *SafeSession) GetSessionEnableSystemSettings() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.EnableSystemSettings
+}
+
+// GetEnableSetVar returns the EnableSetVar value.
+func (session *SafeSession) GetEnableSetVar() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.EnableSetVar
 }
 
 // SetReadAfterWriteGTID set the ReadAfterWriteGtid setting.

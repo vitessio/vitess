@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/vt/sysvars"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -82,6 +84,7 @@ type (
 		Keyspace          *vindexes.Keyspace
 		TargetDestination key.Destination `json:",omitempty"`
 		Expr              string
+		SupportSetVar     bool
 	}
 
 	// SysVarSetAware implements the SetOp interface and will write the changes variable into the session
@@ -120,6 +123,7 @@ func (s *Set) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVaria
 	}
 	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	env.Row = input.Rows[0]
+	env.Fields = input.Fields
 	for _, setOp := range s.Ops {
 		err := setOp.Execute(vcursor, env)
 		if err != nil {
@@ -287,11 +291,11 @@ func (svs *SysVarReservedConn) Execute(vcursor VCursor, env *evalengine.Expressi
 		vcursor.Session().NeedsReservedConn()
 		return svs.execSetStatement(vcursor, rss, env)
 	}
-	isSysVarModified, err := svs.checkAndUpdateSysVar(vcursor, env)
+	needReservedConn, err := svs.checkAndUpdateSysVar(vcursor, env)
 	if err != nil {
 		return err
 	}
-	if !isSysVarModified {
+	if !needReservedConn {
 		// setting ignored, same as underlying datastore
 		return nil
 	}
@@ -352,9 +356,16 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(vcursor VCursor, res *evalen
 	}
 	buf := new(bytes.Buffer)
 	value.EncodeSQL(buf)
-	vcursor.Session().SetSysVar(svs.Name, buf.String())
-	vcursor.Session().NeedsReservedConn()
-	return true, nil
+	s := buf.String()
+	vcursor.Session().SetSysVar(svs.Name, s)
+
+	// If the condition below is true, we want to use reserved connection instead of SET_VAR query hint.
+	// MySQL supports SET_VAR only in MySQL80 and for a limited set of system variables.
+	if sqlparser.MySQLVersion < "80000" || !vcursor.Session().GetEnableSetVar() || !svs.SupportSetVar || s == "''" {
+		vcursor.Session().NeedsReservedConn()
+		return true, nil
+	}
+	return false, nil
 }
 
 func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value) {

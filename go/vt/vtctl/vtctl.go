@@ -87,6 +87,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"sort"
@@ -124,6 +125,9 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -506,7 +510,7 @@ var commands = []commandGroup{
 			{
 				name:   "VDiff",
 				method: commandVDiff,
-				params: "[-source_cell=<cell>] [-target_cell=<cell>] [-tablet_types=primary,replica,rdonly] [-filtered_replication_wait_time=30s] <keyspace.workflow>",
+				params: "[-source_cell=<cell>] [-target_cell=<cell>] [-tablet_types=primary,replica,rdonly] [-filtered_replication_wait_time=30s] [-max_extra_rows_to_compare=1000] <keyspace.workflow>",
 				help:   "Perform a diff of all tables in the workflow",
 			},
 			{
@@ -599,6 +603,30 @@ var commands = []commandGroup{
 				params: "",
 				help:   "Triggers a panic on the server side, to test the handling.",
 				hidden: true,
+			},
+			{
+				name: "LegacyVtctlCommand",
+				method: func(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+					subFlags.Usage = func() {
+						fmt.Fprintln(subFlags.Output(), "Runs the vtctl request through the legacy vtctlclient program syntax (default).")
+					}
+
+					return subFlags.Parse(args)
+				},
+				params: "<command> [args...]",
+				help:   "Runs the vtctl request through the legacy vtctlclient program syntax (default).",
+			},
+			{
+				name: "VtctldCommand",
+				method: func(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+					subFlags.Usage = func() {
+						fmt.Fprintln(subFlags.Output(), "Runs the vtctl request through the new vtctldclient program syntax. This will become the default in a future version of Vitess.")
+					}
+
+					return subFlags.Parse(args)
+				},
+				params: "<command> [args ...]",
+				help:   "Runs the vtctl request through the new vtctldclient program syntax. This will become the default in a future version of Vitess.",
 			},
 		},
 	},
@@ -2169,7 +2197,7 @@ func commandValidateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlag
 
 func useV1(args []string) bool {
 	for _, arg := range args {
-		if arg == "-v1" {
+		if arg == "-v1" || arg == "--v1" {
 			return true
 		}
 	}
@@ -2707,6 +2735,7 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	onlyPks := subFlags.Bool("only_pks", false, "When reporting missing rows, only show primary keys in the report.")
 	format := subFlags.String("format", "", "Format of report") //"json" or ""
 	tables := subFlags.String("tables", "", "Only run vdiff for these tables in the workflow")
+	maxExtraRowsToCompare := subFlags.Int("max_extra_rows_to_compare", 1000, "If there are collation differences between the soruce and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2722,7 +2751,7 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 		return fmt.Errorf("maximum number of rows to compare needs to be greater than 0")
 	}
 	_, err = wr.
-		VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime, *format, *maxRows, *tables, *debugQuery, *onlyPks)
+		VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime, *format, *maxRows, *tables, *debugQuery, *onlyPks, *maxExtraRowsToCompare)
 	if err != nil {
 		log.Errorf("vdiff returning with error: %v", err)
 		if strings.Contains(err.Error(), "context deadline exceeded") {
@@ -3219,7 +3248,28 @@ func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, s
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	return wr.ValidateSchemaKeyspace(ctx, keyspace, excludeTableArray, *includeViews, *skipNoPrimary, *includeVSchema)
+	resp, err := wr.VtctldServer().ValidateSchemaKeyspace(ctx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
+		Keyspace:       keyspace,
+		ExcludeTables:  excludeTableArray,
+		IncludeViews:   *includeViews,
+		SkipNoPrimary:  *skipNoPrimary,
+		IncludeVschema: *includeVSchema,
+	})
+
+	if err != nil {
+		wr.Logger().Errorf("%s\n", err.Error())
+		return err
+	}
+
+	for _, result := range resp.Results {
+		wr.Logger().Printf("%s\n", result)
+	}
+
+	if len(resp.Results) > 0 {
+		return fmt.Errorf("%s", resp.Results[0])
+	}
+
+	return nil
 }
 
 func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -3228,7 +3278,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	sqlFile := subFlags.String("sql-file", "", "Identifies the file that contains the SQL commands")
 	ddlStrategy := subFlags.String("ddl_strategy", string(schema.DDLStrategyDirect), "Online DDL strategy, compatible with @@ddl_strategy session variable (examples: 'gh-ost', 'pt-osc', 'gh-ost --max-load=Threads_running=100'")
 	uuidList := subFlags.String("uuid_list", "", "Optional: comma delimited explicit UUIDs for migration. If given, must match number of DDL changes")
-	migrationContext := subFlags.String("migration_context", "", "For Only DDL, optionally supply a custom unique string used as context for the migration(s) in this command. By default a unique context is auto-generated by Vitess")
+	migrationContext := subFlags.String("migration_context", "", "For Online DDL, optionally supply a custom unique string used as context for the migration(s) in this command. By default a unique context is auto-generated by Vitess")
 	requestContext := subFlags.String("request_context", "", "synonym for -migration_context")
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", wrangler.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
 	skipPreflight := subFlags.Bool("skip_preflight", false, "Skip pre-apply schema checks, and directly forward schema change query to shards")
@@ -3239,6 +3289,12 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <keyspace> argument is required for the commandApplySchema command")
+	}
+
+	// v14 deprecates `-skip-topo` flag. This check will be removed in v15
+	if settings, _ := schema.ParseDDLStrategy(*ddlStrategy); settings != nil && settings.IsSkipTopoFlag() {
+		deprecationMessage := `-skip-topo flag is deprecated and will be removed in v15`
+		log.Warningf(deprecationMessage)
 	}
 
 	keyspace := subFlags.Arg(0)
@@ -3273,7 +3329,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		Sql:                     parts,
 		SkipPreflight:           *skipPreflight,
 		UuidList:                textutil.SplitDelimitedList(*uuidList),
-		RequestContext:          *migrationContext,
+		MigrationContext:        *migrationContext,
 		WaitReplicasTimeout:     protoutil.DurationToProto(*waitReplicasTimeout),
 		CallerId:                cID,
 	})
@@ -3440,7 +3496,21 @@ func commandValidateVersionKeyspace(ctx context.Context, wr *wrangler.Wrangler, 
 	}
 
 	keyspace := subFlags.Arg(0)
-	return wr.ValidateVersionKeyspace(ctx, keyspace)
+	res, err := wr.VtctldServer().ValidateVersionKeyspace(ctx, &vtctldatapb.ValidateVersionKeyspaceRequest{Keyspace: keyspace})
+
+	if err != nil {
+		return err
+	}
+
+	for _, result := range res.Results {
+		wr.Logger().Printf("%s\n", result)
+	}
+
+	if len(res.Results) > 0 {
+		return fmt.Errorf("%s", res.Results[0])
+	}
+
+	return nil
 }
 
 func commandGetPermissions(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -4109,25 +4179,27 @@ func RunCommand(ctx context.Context, wr *wrangler.Wrangler, args []string) error
 			if strings.ToLower(cmd.name) == actionLowerCase {
 				subFlags := flag.NewFlagSet(action, flag.ContinueOnError)
 				subFlags.SetOutput(logutil.NewLoggerWriter(wr.Logger()))
-				subFlags.Usage = func() {
-					if cmd.deprecated {
-						msg := &strings.Builder{}
-						msg.WriteString("WARNING: ")
-						msg.WriteString(action)
-						msg.WriteString(" is deprecated and will be removed in a future release.")
-						if cmd.deprecatedBy != "" {
-							msg.WriteString(" Use ")
-							msg.WriteString(cmd.deprecatedBy)
-							msg.WriteString(" instead.")
+				_flag.SetUsage(subFlags, _flag.UsageOptions{
+					Preface: func(w io.Writer) {
+						if cmd.deprecated {
+							msg := &strings.Builder{}
+							msg.WriteString("WARNING: ")
+							msg.WriteString(action)
+							msg.WriteString(" is deprecated and will be removed in a future release.")
+							if cmd.deprecatedBy != "" {
+								msg.WriteString(" Use ")
+								msg.WriteString(cmd.deprecatedBy)
+								msg.WriteString(" instead.")
+							}
+
+							wr.Logger().Printf("%s\n", msg.String())
 						}
 
-						wr.Logger().Printf("%s\n", msg.String())
-					}
+						wr.Logger().Printf("Usage: %s %s\n\n", action, cmd.params)
+						wr.Logger().Printf("%s\n\n", cmd.help)
+					},
+				})
 
-					wr.Logger().Printf("Usage: %s %s\n\n", action, cmd.params)
-					wr.Logger().Printf("%s\n\n", cmd.help)
-					subFlags.PrintDefaults()
-				}
 				return cmd.method(ctx, wr, subFlags, args[1:])
 			}
 		}

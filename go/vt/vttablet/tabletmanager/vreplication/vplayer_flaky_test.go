@@ -38,6 +38,75 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
+func TestPlayerInvisibleColumns(t *testing.T) {
+	if !supportsInvisibleColumns() {
+		t.Skip()
+	}
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table t1(id int, val varchar(20), id2 int invisible, pk2 int invisible, primary key(id, pk2))",
+		fmt.Sprintf("create table %s.t1(id int, val varchar(20), id2 int invisible, pk2 int invisible, primary key(id, pk2))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	testcases := []struct {
+		input       string
+		output      string
+		table       string
+		data        [][]string
+		query       string
+		queryResult [][]string
+	}{{
+		input:  "insert into t1(id,val,id2,pk2) values (1,'aaa',10,100)",
+		output: "insert into t1(id,val,id2,pk2) values (1,'aaa',10,100)",
+		table:  "t1",
+		data: [][]string{
+			{"1", "aaa"},
+		},
+		query: "select id, val, id2, pk2 from t1",
+		queryResult: [][]string{
+			{"1", "aaa", "10", "100"},
+		},
+	}}
+
+	for _, tcases := range testcases {
+		execStatements(t, []string{tcases.input})
+		output := []string{
+			tcases.output,
+		}
+		expectNontxQueries(t, output)
+		time.Sleep(1 * time.Second)
+		log.Flush()
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
+		if tcases.query != "" {
+			expectQueryResult(t, tcases.query, tcases.queryResult)
+		}
+	}
+
+}
+
 func TestHeartbeatFrequencyFlag(t *testing.T) {
 	origVReplicationHeartbeatUpdateInterval := *vreplicationHeartbeatUpdateInterval
 	defer func() {
@@ -104,26 +173,36 @@ func TestVReplicationTimeUpdated(t *testing.T) {
 		"insert into t1 values(1, 'aaa')",
 	})
 
-	var getTimestamps = func() (int64, int64) {
-		qr, err := env.Mysqld.FetchSuperQuery(ctx, "select time_updated, transaction_timestamp from _vt.vreplication")
+	var getTimestamps = func() (int64, int64, int64) {
+		qr, err := env.Mysqld.FetchSuperQuery(ctx, "select time_updated, transaction_timestamp, time_heartbeat from _vt.vreplication")
 		require.NoError(t, err)
 		require.NotNil(t, qr)
 		require.Equal(t, 1, len(qr.Rows))
-		timeUpdated, err := qr.Rows[0][0].ToInt64()
+		row := qr.Named().Row()
+		timeUpdated, err := row.ToInt64("time_updated")
 		require.NoError(t, err)
-		transactionTimestamp, err := qr.Rows[0][1].ToInt64()
+		transactionTimestamp, err := row.ToInt64("transaction_timestamp")
 		require.NoError(t, err)
-		return timeUpdated, transactionTimestamp
+		timeHeartbeat, err := row.ToInt64("time_heartbeat")
+		require.NoError(t, err)
+		return timeUpdated, transactionTimestamp, timeHeartbeat
 	}
 	expectNontxQueries(t, []string{
 		"insert into t1(id,val) values (1,'aaa')",
 	})
 	time.Sleep(1 * time.Second)
-	timeUpdated1, transactionTimestamp1 := getTimestamps()
+	timeUpdated1, transactionTimestamp1, timeHeartbeat1 := getTimestamps()
 	time.Sleep(2 * time.Second)
-	timeUpdated2, _ := getTimestamps()
+	timeUpdated2, _, timeHeartbeat2 := getTimestamps()
 	require.Greater(t, timeUpdated2, timeUpdated1, "time_updated not updated")
 	require.Greater(t, timeUpdated2, transactionTimestamp1, "transaction_timestamp should not be < time_updated")
+	require.Greater(t, timeHeartbeat2, timeHeartbeat1, "time_heartbeat not updated")
+
+	// drop time_heartbeat column to test that heartbeat is updated using WithDDL and can self-heal by creating the column again
+	env.Mysqld.ExecuteSuperQuery(ctx, "alter table _vt.vreplication drop column time_heartbeat")
+	time.Sleep(2 * time.Second)
+	_, _, timeHeartbeat3 := getTimestamps()
+	require.Greater(t, timeHeartbeat3, timeHeartbeat2, "time_heartbeat not updated")
 }
 
 func TestCharPK(t *testing.T) {
@@ -1397,7 +1476,7 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b')",
-		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values ('a','b','c','d\\0\\0\\0\\0','e','f','g','h','1','3')",
+		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values ('a','b','c','d\\0\\0\\0\\0','e','f','g','h',1,'3')",
 		table:  "vitess_strings",
 		data: [][]string{
 			{"a", "b", "c", "d\000\000\000\000", "e", "f", "g", "h", "a", "a,b"},
@@ -2705,6 +2784,7 @@ func TestGeneratedColumns(t *testing.T) {
 		}
 	}
 }
+
 func TestPlayerInvalidDates(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 

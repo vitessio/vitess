@@ -25,10 +25,13 @@ import (
 
 func TestIsDirect(t *testing.T) {
 	assert.True(t, DDLStrategyDirect.IsDirect())
+	assert.False(t, DDLStrategyVitess.IsDirect())
 	assert.False(t, DDLStrategyOnline.IsDirect())
 	assert.False(t, DDLStrategyGhost.IsDirect())
 	assert.False(t, DDLStrategyPTOSC.IsDirect())
 	assert.True(t, DDLStrategy("").IsDirect())
+	assert.False(t, DDLStrategy("vitess").IsDirect())
+	assert.False(t, DDLStrategy("online").IsDirect())
 	assert.False(t, DDLStrategy("gh-ost").IsDirect())
 	assert.False(t, DDLStrategy("pt-osc").IsDirect())
 	assert.True(t, DDLStrategy("something").IsDirect())
@@ -49,6 +52,10 @@ func TestParseDDLStrategy(t *testing.T) {
 		{
 			strategyVariable: "direct",
 			strategy:         DDLStrategyDirect,
+		},
+		{
+			strategyVariable: "vitess",
+			strategy:         DDLStrategyVitess,
 		},
 		{
 			strategyVariable: "online",
@@ -103,6 +110,13 @@ func TestParseDDLStrategy(t *testing.T) {
 		{
 			strategyVariable:  "online -allow-concurrent",
 			strategy:          DDLStrategyOnline,
+			options:           "-allow-concurrent",
+			runtimeOptions:    "",
+			isAllowConcurrent: true,
+		},
+		{
+			strategyVariable:  "vitess -allow-concurrent",
+			strategy:          DDLStrategyVitess,
 			options:           "-allow-concurrent",
 			runtimeOptions:    "",
 			isAllowConcurrent: true,

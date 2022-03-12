@@ -26,7 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/test/endtoend/utils"
+
+	cmp "vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -70,13 +72,13 @@ func TestMessage(t *testing.T) {
 	require.NoError(t, err)
 	defer streamConn.Close()
 
-	exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
-	exec(t, conn, createMessage)
+	utils.Exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
+	utils.Exec(t, conn, createMessage)
 	clusterInstance.VtctlProcess.ExecuteCommand(fmt.Sprintf("ReloadSchemaKeyspace %s", lookupKeyspace))
 
-	defer exec(t, conn, "drop table vitess_message")
+	defer utils.Exec(t, conn, "drop table vitess_message")
 
-	exec(t, streamConn, "set workload = 'olap'")
+	utils.Exec(t, streamConn, "set workload = 'olap'")
 	err = streamConn.ExecuteStreamFetch("stream * from vitess_message")
 	require.NoError(t, err)
 
@@ -96,9 +98,9 @@ func TestMessage(t *testing.T) {
 		}
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, wantFields, gotFields)
+	cmp.MustMatch(t, wantFields, gotFields)
 
-	exec(t, conn, "insert into vitess_message(id, message) values(1, 'hello world')")
+	utils.Exec(t, conn, "insert into vitess_message(id, message) values(1, 'hello world')")
 
 	// account for jitter in timings, maxJitter uses the current hardcoded value for jitter in message_manager.go
 	jitter := int64(0)
@@ -113,9 +115,9 @@ func TestMessage(t *testing.T) {
 		sqltypes.NewInt64(1),
 		sqltypes.NewVarChar("hello world"),
 	}
-	utils.MustMatch(t, want, got)
+	cmp.MustMatch(t, want, got)
 
-	qr := exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
+	qr := utils.Exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
 	next, epoch := getTimeEpoch(qr)
 	jitter += epoch * maxJitter
 	// epoch could be 0 or 1, depending on how fast the row is updated
@@ -135,7 +137,7 @@ func TestMessage(t *testing.T) {
 	// Consume the resend.
 	_, err = streamConn.FetchNext(nil)
 	require.NoError(t, err)
-	qr = exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
+	qr = utils.Exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
 	next, epoch = getTimeEpoch(qr)
 	jitter += epoch * maxJitter
 	// epoch could be 1 or 2, depending on how fast the row is updated
@@ -153,12 +155,12 @@ func TestMessage(t *testing.T) {
 	}
 
 	// Ack the message.
-	qr = exec(t, conn, "update vitess_message set time_acked = 123, time_next = null where id = 1 and time_acked is null")
+	qr = utils.Exec(t, conn, "update vitess_message set time_acked = 123, time_next = null where id = 1 and time_acked is null")
 	assert.Equal(t, uint64(1), qr.RowsAffected)
 
 	// Within 3+1 seconds, the row should be deleted.
 	time.Sleep(4 * time.Second)
-	qr = exec(t, conn, "select time_acked, epoch from vitess_message where id = 1")
+	qr = utils.Exec(t, conn, "select time_acked, epoch from vitess_message where id = 1")
 	assert.Equal(t, 0, len(qr.Rows))
 }
 
@@ -190,11 +192,11 @@ func TestThreeColMessage(t *testing.T) {
 	require.NoError(t, err)
 	defer streamConn.Close()
 
-	exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
-	exec(t, conn, createThreeColMessage)
-	defer exec(t, conn, "drop table vitess_message3")
+	utils.Exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
+	utils.Exec(t, conn, createThreeColMessage)
+	defer utils.Exec(t, conn, "drop table vitess_message3")
 
-	exec(t, streamConn, "set workload = 'olap'")
+	utils.Exec(t, streamConn, "set workload = 'olap'")
 	err = streamConn.ExecuteStreamFetch("stream * from vitess_message3")
 	require.NoError(t, err)
 
@@ -217,9 +219,9 @@ func TestThreeColMessage(t *testing.T) {
 		}
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, wantFields, gotFields)
+	cmp.MustMatch(t, wantFields, gotFields)
 
-	exec(t, conn, "insert into vitess_message3(id, msg1, msg2) values(1, 'hello world', 3)")
+	utils.Exec(t, conn, "insert into vitess_message3(id, msg1, msg2) values(1, 'hello world', 3)")
 
 	got, err := streamConn.FetchNext(nil)
 	require.NoError(t, err)
@@ -228,10 +230,10 @@ func TestThreeColMessage(t *testing.T) {
 		sqltypes.NewVarChar("hello world"),
 		sqltypes.NewInt64(3),
 	}
-	utils.MustMatch(t, want, got)
+	cmp.MustMatch(t, want, got)
 
 	// Verify Ack.
-	qr := exec(t, conn, "update vitess_message3 set time_acked = 123, time_next = null where id = 1 and time_acked is null")
+	qr := utils.Exec(t, conn, "update vitess_message3 set time_acked = 123, time_next = null where id = 1 and time_acked is null")
 	assert.Equal(t, uint64(1), qr.RowsAffected)
 }
 
@@ -275,9 +277,9 @@ func TestReparenting(t *testing.T) {
 	// do planned reparenting, make one replica as primary
 	// and validate client connection count in correspond tablets
 	clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard",
-		"-keyspace_shard", userKeyspace+"/-80",
-		"-new_primary", shard0Replica.Alias)
+		"PlannedReparentShard", "--",
+		"--keyspace_shard", userKeyspace+"/-80",
+		"--new_primary", shard0Replica.Alias)
 	// validate topology
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err)
@@ -298,9 +300,9 @@ func TestReparenting(t *testing.T) {
 
 	// make old primary again as new primary
 	clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard",
-		"-keyspace_shard", userKeyspace+"/-80",
-		"-new_primary", shard0Primary.Alias)
+		"PlannedReparentShard", "--",
+		"--keyspace_shard", userKeyspace+"/-80",
+		"--new_primary", shard0Primary.Alias)
 	// validate topology
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err)

@@ -148,6 +148,11 @@ func newBuildSelectPlan(
 		return unshardedShortcut(selStmt, ks, semTable)
 	}
 
+	// From this point on, we know it is not an unsharded query and return the NotUnshardedErr if there is any
+	if semTable.NotUnshardedErr != nil {
+		return nil, semTable.NotUnshardedErr
+	}
+
 	err = queryRewrite(semTable, reservedVars, selStmt)
 	if err != nil {
 		return nil, err

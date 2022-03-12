@@ -620,7 +620,7 @@ func TestUpdateIn(t *testing.T) {
 				Opcode:   IN,
 				Keyspace: ks.Keyspace,
 				Vindex:   ks.Vindexes["hash"],
-				Values: []evalengine.Expr{&evalengine.TupleExpr{
+				Values: []evalengine.Expr{evalengine.TupleExpr{
 					evalengine.NewLiteralInt(1),
 					evalengine.NewLiteralInt(2),
 				}}},
@@ -645,7 +645,7 @@ func TestUpdateInStreamExecute(t *testing.T) {
 			Opcode:   IN,
 			Keyspace: ks.Keyspace,
 			Vindex:   ks.Vindexes["hash"],
-			Values: []evalengine.Expr{&evalengine.TupleExpr{
+			Values: []evalengine.Expr{evalengine.TupleExpr{
 				evalengine.NewLiteralInt(1),
 				evalengine.NewLiteralInt(2),
 			}}},
@@ -672,8 +672,8 @@ func TestUpdateInMultiCol(t *testing.T) {
 			Keyspace: ks.Keyspace,
 			Vindex:   ks.Vindexes["rg_vdx"],
 			Values: []evalengine.Expr{
-				&evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
-				&evalengine.TupleExpr{evalengine.NewLiteralInt(3), evalengine.NewLiteralInt(4)},
+				evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+				evalengine.TupleExpr{evalengine.NewLiteralInt(3), evalengine.NewLiteralInt(4)},
 			},
 		},
 		Query: "dummy_update",
@@ -697,7 +697,7 @@ func TestUpdateInChangedVindex(t *testing.T) {
 				Opcode:   IN,
 				Keyspace: ks.Keyspace,
 				Vindex:   ks.Vindexes["hash"],
-				Values: []evalengine.Expr{&evalengine.TupleExpr{
+				Values: []evalengine.Expr{evalengine.TupleExpr{
 					evalengine.NewLiteralInt(1),
 					evalengine.NewLiteralInt(2),
 				}},
@@ -827,7 +827,7 @@ func TestUpdateInChangedVindexMultiCol(t *testing.T) {
 				Keyspace: ks.Keyspace,
 				Vindex:   ks.Vindexes["rg_vdx"],
 				Values: []evalengine.Expr{
-					&evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+					evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
 					evalengine.NewLiteralInt(3),
 				},
 			},

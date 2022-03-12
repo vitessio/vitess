@@ -35,6 +35,13 @@ import { TabletLink } from '../links/TabletLink';
 import { ExternalTabletLink } from '../links/ExternalTabletLink';
 import { ShardLink } from '../links/ShardLink';
 import InfoDropdown from './tablets/InfoDropdown';
+import { isReadOnlyMode } from '../../util/env';
+import { ReadOnlyGate } from '../ReadOnlyGate';
+
+const COLUMNS = ['Keyspace', 'Shard', 'Alias', 'Type', 'Tablet State', 'Hostname'];
+if (!isReadOnlyMode()) {
+    COLUMNS.push('Actions');
+}
 
 export const Tablets = () => {
     useDocumentTitle('Tablets');
@@ -86,9 +93,12 @@ export const Tablets = () => {
                     <DataCell>
                         <ExternalTabletLink fqdn={`//${t._raw.FQDN}`}>{t.hostname}</ExternalTabletLink>
                     </DataCell>
-                    <DataCell>
-                        <InfoDropdown alias={t.alias as string} clusterID={t._raw.cluster?.id as string} />
-                    </DataCell>
+
+                    <ReadOnlyGate>
+                        <DataCell>
+                            <InfoDropdown alias={t.alias as string} clusterID={t._raw.cluster?.id as string} />
+                        </DataCell>
+                    </ReadOnlyGate>
                 </tr>
             ));
         },
@@ -108,11 +118,7 @@ export const Tablets = () => {
                     placeholder="Filter tablets"
                     value={filter || ''}
                 />
-                <DataTable
-                    columns={['Keyspace', 'Shard', 'Alias', 'Type', 'Tablet State', 'Hostname', 'Actions']}
-                    data={filteredData}
-                    renderRows={renderRows}
-                />
+                <DataTable columns={COLUMNS} data={filteredData} renderRows={renderRows} />
             </ContentContainer>
         </div>
     );

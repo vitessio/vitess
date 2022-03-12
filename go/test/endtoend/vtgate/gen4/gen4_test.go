@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/assert"
 
@@ -199,7 +199,7 @@ func TestSubQueries(t *testing.T) {
 	utils.AssertMatches(t, conn, `select t2.tcol1, t2.tcol2 from t2 where t2.id IN (select t3.id from t3 join t2 on t2.id = t3.id) order by t2.id`, `[[VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("C")] [VARCHAR("A") VARCHAR("C")] [VARCHAR("C") VARCHAR("A")] [VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("C")] [VARCHAR("B") VARCHAR("A")] [VARCHAR("C") VARCHAR("B")]]`)
 
 	utils.AssertMatches(t, conn, `select u_a.a from u_a left join t2 on t2.id IN (select id from t2)`, `[]`)
-	//inserting some data in u_a
+	// inserting some data in u_a
 	utils.Exec(t, conn, `insert into u_a(id, a) values (1, 1)`)
 
 	// execute same query again.

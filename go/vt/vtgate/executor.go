@@ -32,6 +32,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/hack"
@@ -387,10 +389,6 @@ func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, 
 
 	logStats.Keyspace = destKeyspace
 	logStats.TabletType = destTabletType.String()
-	// Legacy gateway allows transactions only on PRIMARY
-	if UsingLegacyGateway() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_PRIMARY {
-		return 0, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for primary tablet type, current type: %v", destTabletType)
-	}
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
@@ -505,6 +503,23 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.String())
 		case sysvars.Socket.Name:
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
+		default:
+			if value, hasSysVar := session.SystemVariables[sysVar]; hasSysVar {
+				expr, err := sqlparser.ParseExpr(value)
+				if err != nil {
+					return err
+				}
+
+				evalExpr, err := evalengine.Translate(expr, nil)
+				if err != nil {
+					return err
+				}
+				evaluated, err := evalengine.EmptyExpressionEnv().Evaluate(evalExpr)
+				if err != nil {
+					return err
+				}
+				bindVars[key] = sqltypes.ValueBindVariable(evaluated.Value())
+			}
 		}
 	}
 
@@ -651,7 +666,7 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 		return nil, err
 	}
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "", sqlparser.SQLSelectLimitUnset)
+	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "", sqlparser.SQLSelectLimitUnset, "", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1089,83 +1104,42 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 	tabletFilters := getTabletFilters(show)
 
 	rows := [][]sqltypes.Value{}
-	if UsingLegacyGateway() {
-		status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
-		for _, s := range status {
-			for _, ts := range s.TabletsStats {
-				state := "SERVING"
-				if !ts.Serving {
-					state = "NOT_SERVING"
-				}
-				mtst := ts.TabletExternallyReparentedTimestamp
-				mtstStr := ""
-				if mtst > 0 {
-					// this code depends on the fact that TabletExternallyReparentedTimestamp is the seconds since epoch start
-					mtstStr = time.Unix(mtst, 0).UTC().Format(time.RFC3339)
-				}
-
-				skipTablet := false
-				for _, filter := range tabletFilters {
-					if !filter(ts.Tablet, state, mtst) {
-						skipTablet = true
-						break
-					}
-				}
-
-				if skipTablet {
-					continue
-				}
-
-				rows = append(rows, buildVarCharRow(
-					s.Cell,
-					s.Target.Keyspace,
-					s.Target.Shard,
-					ts.Target.TabletType.String(),
-					state,
-					topoproto.TabletAliasString(ts.Tablet.Alias),
-					ts.Tablet.Hostname,
-					mtstStr,
-				))
+	status := e.scatterConn.GetHealthCheckCacheStatus()
+	for _, s := range status {
+		for _, ts := range s.TabletsStats {
+			state := "SERVING"
+			if !ts.Serving {
+				state = "NOT_SERVING"
 			}
-		}
-	} else {
-		status := e.scatterConn.GetHealthCheckCacheStatus()
-		for _, s := range status {
-			for _, ts := range s.TabletsStats {
-				state := "SERVING"
-				if !ts.Serving {
-					state = "NOT_SERVING"
-				}
-				mtst := ts.PrimaryTermStartTime
-				mtstStr := ""
-				if mtst > 0 {
-					// this code depends on the fact that PrimaryTermStartTime is the seconds since epoch start
-					mtstStr = time.Unix(mtst, 0).UTC().Format(time.RFC3339)
-				}
-
-				skipTablet := false
-				for _, filter := range tabletFilters {
-					if !filter(ts.Tablet, state, mtst) {
-						skipTablet = true
-						break
-					}
-				}
-
-				if skipTablet {
-					continue
-				}
-
-				rows = append(rows, buildVarCharRow(
-					s.Cell,
-					s.Target.Keyspace,
-					s.Target.Shard,
-					ts.Target.TabletType.String(),
-					state,
-					topoproto.TabletAliasString(ts.Tablet.Alias),
-					ts.Tablet.Hostname,
-					mtstStr,
-				))
+			mtst := ts.PrimaryTermStartTime
+			mtstStr := ""
+			if mtst > 0 {
+				// this code depends on the fact that PrimaryTermStartTime is the seconds since epoch start
+				mtstStr = time.Unix(mtst, 0).UTC().Format(time.RFC3339)
 			}
+
+			skipTablet := false
+			for _, filter := range tabletFilters {
+				if !filter(ts.Tablet, state, mtst) {
+					skipTablet = true
+					break
+				}
+			}
+
+			if skipTablet {
+				continue
+			}
+
+			rows = append(rows, buildVarCharRow(
+				s.Cell,
+				s.Target.Keyspace,
+				s.Target.Shard,
+				ts.Target.TabletType.String(),
+				state,
+				topoproto.TabletAliasString(ts.Tablet.Alias),
+				ts.Tablet.Hostname,
+				mtstStr,
+			))
 		}
 	}
 	return &sqltypes.Result{
@@ -1179,117 +1153,63 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, show *sqlpar
 	defer cancel()
 	rows := [][]sqltypes.Value{}
 
-	// This is only used for tests
-	if UsingLegacyGateway() {
-		status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
+	status := e.scatterConn.GetHealthCheckCacheStatus()
 
-		for _, s := range status {
-			for _, ts := range s.TabletsStats {
-				// We only want to show REPLICA and RDONLY tablets
-				if ts.Tablet.Type != topodatapb.TabletType_REPLICA && ts.Tablet.Type != topodatapb.TabletType_RDONLY {
+	for _, s := range status {
+		for _, ts := range s.TabletsStats {
+			// We only want to show REPLICA and RDONLY tablets
+			if ts.Tablet.Type != topodatapb.TabletType_REPLICA && ts.Tablet.Type != topodatapb.TabletType_RDONLY {
+				continue
+			}
+
+			// Allow people to filter by Keyspace and Shard using a LIKE clause
+			if show.ShowTablesOpt != nil && show.ShowTablesOpt.Filter != nil {
+				ksFilterRegex := sqlparser.LikeToRegexp(show.ShowTablesOpt.Filter.Like)
+				keyspaceShardStr := fmt.Sprintf("%s/%s", ts.Tablet.Keyspace, ts.Tablet.Shard)
+				if !ksFilterRegex.MatchString(keyspaceShardStr) {
 					continue
 				}
-
-				tabletHostPort := ts.GetTabletHostPort()
-				throttlerStatus, err := getTabletThrottlerStatus(tabletHostPort)
-				if err != nil {
-					log.Warningf("Could not get throttler status from %s: %v", tabletHostPort, err)
-				}
-
-				replSourceHost := ""
-				replSourcePort := int64(0)
-				replIOThreadHealth := ""
-				replSQLThreadHealth := ""
-				replLastError := ""
-				replLag := int64(-1)
-				sql := "show slave status"
-				results, err := e.txConn.gateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
-				if err != nil {
-					log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
-				} else if results != nil && len(results.Rows) == 1 {
-					replSourceHost = results.Rows[0][1].ToString()
-					replSourcePort, _ = results.Rows[0][3].ToInt64()
-					replIOThreadHealth = results.Rows[0][10].ToString()
-					replSQLThreadHealth = results.Rows[0][11].ToString()
-					replLastError = results.Rows[0][19].ToString()
-					if ts.Stats != nil {
-						replLag = int64(ts.Stats.ReplicationLagSeconds)
-					}
-				}
-				replicationHealth := fmt.Sprintf("{\"EventStreamRunning\":\"%s\",\"EventApplierRunning\":\"%s\",\"LastError\":\"%s\"}", replIOThreadHealth, replSQLThreadHealth, replLastError)
-
-				rows = append(rows, buildVarCharRow(
-					s.Target.Keyspace,
-					s.Target.Shard,
-					ts.Target.TabletType.String(),
-					topoproto.TabletAliasString(ts.Tablet.Alias),
-					ts.Tablet.Hostname,
-					fmt.Sprintf("%s:%d", replSourceHost, replSourcePort),
-					replicationHealth,
-					fmt.Sprintf("%d", replLag),
-					throttlerStatus,
-				))
 			}
-		}
-	} else {
-		status := e.scatterConn.GetHealthCheckCacheStatus()
 
-		for _, s := range status {
-			for _, ts := range s.TabletsStats {
-				// We only want to show REPLICA and RDONLY tablets
-				if ts.Tablet.Type != topodatapb.TabletType_REPLICA && ts.Tablet.Type != topodatapb.TabletType_RDONLY {
-					continue
-				}
-
-				// Allow people to filter by Keyspace and Shard using a LIKE clause
-				if show.ShowTablesOpt != nil && show.ShowTablesOpt.Filter != nil {
-					ksFilterRegex := sqlparser.LikeToRegexp(show.ShowTablesOpt.Filter.Like)
-					keyspaceShardStr := fmt.Sprintf("%s/%s", ts.Tablet.Keyspace, ts.Tablet.Shard)
-					if !ksFilterRegex.MatchString(keyspaceShardStr) {
-						continue
-					}
-				}
-
-				tabletHostPort := ts.GetTabletHostPort()
-				throttlerStatus, err := getTabletThrottlerStatus(tabletHostPort)
-				if err != nil {
-					log.Warningf("Could not get throttler status from %s: %v", tabletHostPort, err)
-				}
-
-				replSourceHost := ""
-				replSourcePort := int64(0)
-				replIOThreadHealth := ""
-				replSQLThreadHealth := ""
-				replLastError := ""
-				replLag := int64(-1)
-				sql := "show slave status"
-				results, err := e.txConn.gateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
-				if err != nil || results == nil {
-					log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
-				} else if row := results.Named().Row(); row != nil {
-					replSourceHost = row["Master_Host"].ToString()
-					replSourcePort, _ = row["Master_Port"].ToInt64()
-					replIOThreadHealth = row["Slave_IO_Running"].ToString()
-					replSQLThreadHealth = row["Slave_SQL_Running"].ToString()
-					replLastError = row["Last_Error"].ToString()
-					if ts.Stats != nil {
-						replLag = int64(ts.Stats.ReplicationLagSeconds)
-					}
-				}
-				replicationHealth := fmt.Sprintf("{\"EventStreamRunning\":\"%s\",\"EventApplierRunning\":\"%s\",\"LastError\":\"%s\"}", replIOThreadHealth, replSQLThreadHealth, replLastError)
-
-				rows = append(rows, buildVarCharRow(
-					s.Target.Keyspace,
-					s.Target.Shard,
-					ts.Target.TabletType.String(),
-					topoproto.TabletAliasString(ts.Tablet.Alias),
-					ts.Tablet.Hostname,
-					fmt.Sprintf("%s:%d", replSourceHost, replSourcePort),
-					replicationHealth,
-					fmt.Sprintf("%d", replLag),
-					throttlerStatus,
-				))
+			tabletHostPort := ts.GetTabletHostPort()
+			throttlerStatus, err := getTabletThrottlerStatus(tabletHostPort)
+			if err != nil {
+				log.Warningf("Could not get throttler status from %s: %v", tabletHostPort, err)
 			}
+
+			replSourceHost := ""
+			replSourcePort := int64(0)
+			replIOThreadHealth := ""
+			replSQLThreadHealth := ""
+			replLastError := ""
+			replLag := int64(-1)
+			sql := "show slave status"
+			results, err := e.txConn.gateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
+			if err != nil || results == nil {
+				log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
+			} else if row := results.Named().Row(); row != nil {
+				replSourceHost = row["Master_Host"].ToString()
+				replSourcePort, _ = row["Master_Port"].ToInt64()
+				replIOThreadHealth = row["Slave_IO_Running"].ToString()
+				replSQLThreadHealth = row["Slave_SQL_Running"].ToString()
+				replLastError = row["Last_Error"].ToString()
+				if ts.Stats != nil {
+					replLag = int64(ts.Stats.ReplicationLagSeconds)
+				}
+			}
+			replicationHealth := fmt.Sprintf("{\"EventStreamRunning\":\"%s\",\"EventApplierRunning\":\"%s\",\"LastError\":\"%s\"}", replIOThreadHealth, replSQLThreadHealth, replLastError)
+
+			rows = append(rows, buildVarCharRow(
+				s.Target.Keyspace,
+				s.Target.Shard,
+				ts.Target.TabletType.String(),
+				topoproto.TabletAliasString(ts.Tablet.Alias),
+				ts.Tablet.Hostname,
+				fmt.Sprintf("%s:%d", replSourceHost, replSourcePort),
+				replicationHealth,
+				fmt.Sprintf("%d", replLag),
+				throttlerStatus,
+			))
 		}
 	}
 	return &sqltypes.Result{
@@ -1419,10 +1339,23 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
 
+	setVarComment, err := prepareSetVarComment(vcursor, stmt)
+	if err != nil {
+		return nil, err
+	}
 	// Normalize if possible and retry.
-	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.MustRewriteAST(stmt, qo.getSelectLimit() > 0) {
+	if e.canNormalizeStatement(stmt, qo, setVarComment) {
 		parameterize := e.normalize // the public flag is called normalize
-		result, err := sqlparser.PrepareAST(stmt, reservedVars, bindVars, parameterize, vcursor.keyspace, qo.getSelectLimit())
+		result, err := sqlparser.PrepareAST(
+			stmt,
+			reservedVars,
+			bindVars,
+			parameterize,
+			vcursor.keyspace,
+			qo.getSelectLimit(),
+			setVarComment,
+			vcursor.safeSession.SystemVariables,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -1459,6 +1392,39 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	}
 
 	return e.checkThatPlanIsValid(stmt, plan)
+}
+
+func (e *Executor) canNormalizeStatement(stmt sqlparser.Statement, qo iQueryOption, setVarComment string) bool {
+	return (e.normalize && sqlparser.CanNormalize(stmt)) ||
+		sqlparser.MustRewriteAST(stmt, qo.getSelectLimit() > 0) || setVarComment != ""
+}
+
+func prepareSetVarComment(vcursor *vcursorImpl, stmt sqlparser.Statement) (string, error) {
+	if vcursor == nil || vcursor.Session().InReservedConn() {
+		return "", nil
+	}
+
+	if !vcursor.Session().HasSystemVariables() {
+		return "", nil
+	}
+
+	switch stmt.(type) {
+	// If the statement is a transaction statement or a set no reserved connection / SET_VAR is needed
+	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint,
+		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set:
+		return "", nil
+	case sqlparser.SupportOptimizerHint:
+		break
+	default:
+		vcursor.NeedsReservedConn()
+		return "", nil
+	}
+
+	var res strings.Builder
+	vcursor.Session().GetSystemVariables(func(k, v string) {
+		res.WriteString(fmt.Sprintf("SET_VAR(%s = %s) ", k, v))
+	})
+	return strings.TrimSpace(res.String()), nil
 }
 
 func (e *Executor) debugGetPlan(planKey string) (*engine.Plan, bool) {
@@ -1608,9 +1574,6 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 		return nil, err
 	}
 
-	if UsingLegacyGateway() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_PRIMARY {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for primary tablet type, current type: %v", destTabletType)
-	}
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
 	}

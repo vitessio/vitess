@@ -24,15 +24,13 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/google/go-cmp/cmp"
 
-	"vitess.io/vitess/go/test/utils"
-
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -143,8 +141,8 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
-		clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal", "-vschema_ddl_authorized_users", "%", "-schema_change_signal_user", "userData1"}
-		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-schema-change-signal", "-queryserver-config-schema-change-signal-interval", "0.1", "-queryserver-config-strict-table-acl", "-queryserver-config-acl-exempt-acl", "userData1", "-table-acl-config", "dummy.json"}
+		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--vschema_ddl_authorized_users", "%", "--schema_change_signal_user", "userData1"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1", "--queryserver-config-strict-table-acl", "--queryserver-config-acl-exempt-acl", "userData1", "--table-acl-config", "dummy.json"}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
 		if err != nil {
 			return 1
@@ -183,15 +181,15 @@ func TestNewTable(t *testing.T) {
 	require.NoError(t, err)
 	defer connShard2.Close()
 
-	_ = exec(t, conn, "create table test_table (id bigint, name varchar(100))")
+	_ = utils.Exec(t, conn, "create table test_table (id bigint, name varchar(100))")
 
 	time.Sleep(2 * time.Second)
 
-	assertMatches(t, conn, "select * from test_table", `[]`)
-	assertMatches(t, connShard1, "select * from test_table", `[]`)
-	assertMatches(t, connShard2, "select * from test_table", `[]`)
+	utils.AssertMatches(t, conn, "select * from test_table", `[]`)
+	utils.AssertMatches(t, connShard1, "select * from test_table", `[]`)
+	utils.AssertMatches(t, connShard2, "select * from test_table", `[]`)
 
-	exec(t, conn, "drop table test_table")
+	utils.Exec(t, conn, "drop table test_table")
 
 	time.Sleep(2 * time.Second)
 }
@@ -214,10 +212,10 @@ func TestInitAndUpdate(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	assertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`)
+	utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`)
 
 	// Init
-	_ = exec(t, conn, "create table test_sc (id bigint primary key)")
+	_ = utils.Exec(t, conn, "create table test_sc (id bigint primary key)")
 	assertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
 		`[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")]]`,
@@ -226,7 +224,7 @@ func TestInitAndUpdate(t *testing.T) {
 		"test_sc not in vschema tables")
 
 	// Tables Update via health check.
-	_ = exec(t, conn, "create table test_sc1 (id bigint primary key)")
+	_ = utils.Exec(t, conn, "create table test_sc1 (id bigint primary key)")
 	assertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
 		`[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")] [VARCHAR("test_sc1")]]`,
@@ -234,7 +232,7 @@ func TestInitAndUpdate(t *testing.T) {
 		3*time.Second,
 		"test_sc1 not in vschema tables")
 
-	_ = exec(t, conn, "drop table test_sc, test_sc1")
+	_ = utils.Exec(t, conn, "drop table test_sc, test_sc1")
 	assertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
 		`[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`,
@@ -251,7 +249,7 @@ func TestDMLOnNewTable(t *testing.T) {
 	defer conn.Close()
 
 	// create a new table which is not part of the VSchema
-	exec(t, conn, `create table new_table_tracked(id bigint, name varchar(100), primary key(id)) Engine=InnoDB`)
+	utils.Exec(t, conn, `create table new_table_tracked(id bigint, name varchar(100), primary key(id)) Engine=InnoDB`)
 
 	// wait for vttablet's schema reload interval to pass
 	assertMatchesWithTimeout(t, conn,
@@ -261,34 +259,24 @@ func TestDMLOnNewTable(t *testing.T) {
 		3*time.Second,
 		"test_sc not in vschema tables")
 
-	assertMatches(t, conn, "select id from new_table_tracked", `[]`)              // select
-	assertMatches(t, conn, "select id from new_table_tracked where id = 5", `[]`) // select
+	utils.AssertMatches(t, conn, "select id from new_table_tracked", `[]`)              // select
+	utils.AssertMatches(t, conn, "select id from new_table_tracked where id = 5", `[]`) // select
 	// DML on new table
 	// insert initial data ,update and delete will fail since we have not added a primary vindex
 	errorMessage := "table 'new_table_tracked' does not have a primary vindex (errno 1173) (sqlstate 42000)"
-	assertError(t, conn, `insert into new_table_tracked(id) values(0),(1)`, errorMessage)
-	assertError(t, conn, `update new_table_tracked set name = "newName1"`, errorMessage)
-	assertError(t, conn, "delete from new_table_tracked", errorMessage)
+	utils.AssertContainsError(t, conn, `insert into new_table_tracked(id) values(0),(1)`, errorMessage)
+	utils.AssertContainsError(t, conn, `update new_table_tracked set name = "newName1"`, errorMessage)
+	utils.AssertContainsError(t, conn, "delete from new_table_tracked", errorMessage)
 
-	exec(t, conn, `select name from new_table_tracked join t8`)
+	utils.Exec(t, conn, `select name from new_table_tracked join t8`)
 
 	// add a primary vindex for the table
-	exec(t, conn, "alter vschema on ks.new_table_tracked add vindex hash(id) using hash")
+	utils.Exec(t, conn, "alter vschema on ks.new_table_tracked add vindex hash(id) using hash")
 	time.Sleep(1 * time.Second)
-	exec(t, conn, `insert into new_table_tracked(id) values(0),(1)`)
-	exec(t, conn, `insert into t8(id8) values(2)`)
-	defer exec(t, conn, `delete from t8`)
-	assertMatchesNoOrder(t, conn, `select id from new_table_tracked join t8`, `[[INT64(0)] [INT64(1)]]`)
-}
-
-func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
-	t.Helper()
-	qr := exec(t, conn, query)
-	got := fmt.Sprintf("%v", qr.Rows)
-	diff := cmp.Diff(expected, got)
-	if diff != "" {
-		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
-	}
+	utils.Exec(t, conn, `insert into new_table_tracked(id) values(0),(1)`)
+	utils.Exec(t, conn, `insert into t8(id8) values(2)`)
+	defer utils.Exec(t, conn, `delete from t8`)
+	utils.AssertMatchesNoOrder(t, conn, `select id from new_table_tracked join t8`, `[[INT64(0)] [INT64(1)]]`)
 }
 
 func assertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected string, r time.Duration, d time.Duration, failureMsg string) {
@@ -300,31 +288,10 @@ func assertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected st
 		case <-timeout:
 			require.Fail(t, failureMsg, diff)
 		case <-time.After(r):
-			qr := exec(t, conn, query)
+			qr := utils.Exec(t, conn, query)
 			diff = cmp.Diff(expected,
 				fmt.Sprintf("%v", qr.Rows))
 		}
 
 	}
-}
-
-func assertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string) {
-	t.Helper()
-	qr := exec(t, conn, query)
-	actual := fmt.Sprintf("%v", qr.Rows)
-	assert.Equal(t, utils.SortString(expected), utils.SortString(actual), "for query: [%s] expected \n%s \nbut actual \n%s", query, expected, actual)
-}
-
-func assertError(t *testing.T, conn *mysql.Conn, query, errorMessage string) {
-	t.Helper()
-	_, err := conn.ExecuteFetch(query, 1000, true)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), errorMessage)
-}
-
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err, "for query: "+query)
-	return qr
 }

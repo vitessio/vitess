@@ -51,6 +51,12 @@ import {
     stopReplication,
     setReadOnly,
     setReadWrite,
+    ValidateKeyspaceParams,
+    validateKeyspace,
+    validateSchemaKeyspace,
+    ValidateSchemaKeyspaceParams,
+    ValidateVersionKeyspaceParams,
+    validateVersionKeyspace,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -309,6 +315,42 @@ export const useSchema = (params: FetchSchemaParams, options?: UseQueryOptions<p
         },
         ...options,
     });
+};
+
+/**
+ * useValidateKeyspace is a query hook that validates that all nodes reachable from the specified keyspace are consistent.
+ */
+export const useValidateKeyspace = (
+    params: ValidateKeyspaceParams,
+    options?: UseMutationOptions<Awaited<ReturnType<typeof validateKeyspace>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof validateKeyspace>>, Error>(() => {
+        return validateKeyspace(params);
+    }, options);
+};
+
+/**
+ * useValidateKeyspace is a query hook that validates that all nodes reachable from the specified keyspace are consistent.
+ */
+export const useValidateSchemaKeyspace = (
+    params: ValidateSchemaKeyspaceParams,
+    options?: UseMutationOptions<Awaited<ReturnType<typeof validateSchemaKeyspace>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof validateSchemaKeyspace>>, Error>(() => {
+        return validateSchemaKeyspace(params);
+    }, options);
+};
+
+/**
+ * useValidateVersion is a query hook that validates that all nodes reachable from the specified keyspace are consistent.
+ */
+export const useValidateVersionKeyspace = (
+    params: ValidateVersionKeyspaceParams,
+    options?: UseMutationOptions<Awaited<ReturnType<typeof validateVersionKeyspace>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof validateVersionKeyspace>>, Error>(() => {
+        return validateVersionKeyspace(params);
+    }, options);
 };
 
 /**

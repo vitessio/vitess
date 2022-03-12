@@ -2,15 +2,19 @@ package vreplication
 
 import (
 	"fmt"
+	"io"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"github.com/stretchr/testify/require"
@@ -26,8 +30,8 @@ var (
 	vtdataroot            string
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
-	extraVTGateArgs       = []string{"-tablet_refresh_interval", "10ms"}
-	extraVtctldArgs       = []string{"-remote_operation_timeout", "600s", "-topo_etcd_lease_ttl", "120"}
+	extraVTGateArgs       = []string{"--tablet_refresh_interval", "10ms"}
+	extraVtctldArgs       = []string{"--remote_operation_timeout", "600s", "--topo_etcd_lease_ttl", "120"}
 )
 
 // ClusterConfig defines the parameters like ports, tmpDir, tablet types which uniquely define a vitess cluster
@@ -104,6 +108,133 @@ func setTempVtDataRoot() string {
 	_ = os.Setenv("VTDATAROOT", vtdataroot)
 	fmt.Printf("VTDATAROOT is %s\n", vtdataroot)
 	return vtdataroot
+}
+
+// setVtMySQLRoot creates the root directory if it does not exist
+// and saves the directory in the VT_MYSQL_ROOT OS env var.
+// mysqlctl will then look for the mysql related binaries in the
+// ./bin, ./sbin, and ./libexec subdirectories of VT_MYSQL_ROOT.
+func setVtMySQLRoot(mysqlRoot string) error {
+	if _, err := os.Stat(mysqlRoot); os.IsNotExist(err) {
+		os.Mkdir(mysqlRoot, 0700)
+	}
+	err := os.Setenv("VT_MYSQL_ROOT", mysqlRoot)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("VT_MYSQL_ROOT is %s\n", mysqlRoot)
+	return nil
+}
+
+// setDBFlavor sets the MYSQL_FLAVOR OS env var.
+// You should call this after calling setVtMySQLRoot() to ensure that the
+// correct flavor is used by mysqlctl based on the current mysqld version
+// in the path. If you don't do this then mysqlctl will use the incorrect
+// config/mycnf/<flavor>.cnf file and mysqld may fail to start.
+func setDBFlavor() error {
+	versionStr, err := mysqlctl.GetVersionString()
+	if err != nil {
+		return err
+	}
+	f, v, err := mysqlctl.ParseVersionString(versionStr)
+	if err != nil {
+		return err
+	}
+	flavor := fmt.Sprintf("%s%d%d", f, v.Major, v.Minor)
+	err = os.Setenv("MYSQL_FLAVOR", string(flavor))
+	if err != nil {
+		return err
+	}
+	fmt.Printf("MYSQL_FLAVOR is %s\n", string(flavor))
+	return nil
+}
+
+func unsetVtMySQLRoot() {
+	_ = os.Unsetenv("VT_MYSQL_ROOT")
+}
+
+func unsetDBFlavor() {
+	_ = os.Unsetenv("MYSQL_FLAVOR")
+}
+
+// getDBTypeVersionInUse checks the major DB version of the mysqld binary
+// that mysqlctl would currently use, e.g. 5.7 or 8.0 (in semantic versioning
+// this would be major.minor but in MySQL it's effectively the major version).
+func getDBTypeVersionInUse() (string, error) {
+	var dbTypeMajorVersion string
+	versionStr, err := mysqlctl.GetVersionString()
+	if err != nil {
+		return dbTypeMajorVersion, err
+	}
+	flavor, version, err := mysqlctl.ParseVersionString(versionStr)
+	if err != nil {
+		return dbTypeMajorVersion, err
+	}
+	majorVersion := fmt.Sprintf("%d.%d", version.Major, version.Minor)
+	if flavor == mysqlctl.FlavorMySQL || flavor == mysqlctl.FlavorPercona {
+		dbTypeMajorVersion = fmt.Sprintf("mysql-%s", majorVersion)
+	} else {
+		dbTypeMajorVersion = fmt.Sprintf("%s-%s", strings.ToLower(string(flavor)), majorVersion)
+	}
+	return dbTypeMajorVersion, nil
+}
+
+// downloadDBTypeVersion downloads a recent major version release build for the specified
+// DB type.
+// If the file already exists, it will not download it again.
+// The artifact will be downloaded and extracted in the specified path. So e.g. if you
+// pass /tmp as the path and 5.7 as the majorVersion, mysqld will be installed in:
+// /tmp/mysql-5.7/bin/mysqld
+// You should then call setVtMySQLRoot() and setDBFlavor() to ensure that this new
+// binary is used by mysqlctl along with the correct flavor specific config file.
+func downloadDBTypeVersion(dbType string, majorVersion string, path string) error {
+	client := http.Client{
+		Timeout: 10 * time.Minute,
+	}
+	var url, file, versionFile string
+	dbType = strings.ToLower(dbType)
+
+	// This currently only supports x86_64 linux
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		return fmt.Errorf("downloadDBTypeVersion() only supports x86_64 linux, current test environment is %s %s", runtime.GOARCH, runtime.GOOS)
+	}
+
+	if dbType == "mysql" && majorVersion == "5.7" {
+		versionFile = "mysql-5.7.37-linux-glibc2.12-x86_64.tar.gz"
+		url = "https://dev.mysql.com/get/Downloads/MySQL-5.7/" + versionFile
+	} else if dbType == "mysql" && majorVersion == "8.0" {
+		versionFile = "mysql-8.0.28-linux-glibc2.17-x86_64-minimal.tar.xz"
+		url = "https://dev.mysql.com/get/Downloads/MySQL-8.0/" + versionFile
+	} else {
+		return fmt.Errorf("invalid/unsupported major version: %s for database: %s", majorVersion, dbType)
+	}
+	file = fmt.Sprintf("%s/%s", path, versionFile)
+	// Let's not download the file again if we already have it
+	if _, err := os.Stat(file); err == nil {
+		return nil
+	}
+	resp, err := client.Get(url)
+	if err != nil {
+		return fmt.Errorf("error downloading contents of %s to %s. Error: %v", url, file, err)
+	}
+	defer resp.Body.Close()
+	out, err := os.Create(file)
+	if err != nil {
+		return fmt.Errorf("error creating file %s to save the contents of %s. Error: %v", file, url, err)
+	}
+	defer out.Close()
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		return fmt.Errorf("error saving contents of %s to %s. Error: %v", url, file, err)
+	}
+
+	untarCmd := exec.Command("/bin/sh", "-c", fmt.Sprintf("tar xvf %s -C %s --strip-components=1", file, path))
+	output, err := untarCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("exec: %v failed: %v output: %s", untarCmd, err, string(output))
+	}
+
+	return nil
 }
 
 func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
@@ -189,8 +320,42 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 	return vc
 }
 
-// AddKeyspace creates a keyspace with specified shard keys and number of replica/read-only tablets
-func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string, shards string, vschema string, schema string, numReplicas int, numRdonly int, tabletIDBase int) (*Keyspace, error) {
+// AddKeyspace creates a keyspace with specified shard keys and number of replica/read-only tablets.
+// You can pass optional key value pairs (opts) if you want conditional behavior.
+func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string, shards string, vschema string, schema string, numReplicas int, numRdonly int, tabletIDBase int, opts map[string]string) (*Keyspace, error) {
+	if value, exists := opts["DBTypeVersion"]; exists {
+		details := strings.Split(value, "-")
+		if len(details) != 2 {
+			t.Fatalf("Invalid database details: %s", value)
+		}
+		dbType := strings.ToLower(details[0])
+		majorVersion := details[1]
+		dbTypeMajorVersion := fmt.Sprintf("%s-%s", dbType, majorVersion)
+		// Do nothing if this version is already installed
+		dbVersionInUse, err := getDBTypeVersionInUse()
+		if err != nil {
+			t.Fatalf("Could not get details of database to be used for the keyspace: %v", err)
+		}
+		if dbTypeMajorVersion == dbVersionInUse {
+			t.Logf("Requsted database version %s is already installed, doing nothing.", dbTypeMajorVersion)
+		} else {
+			path := fmt.Sprintf("/tmp/%s", dbTypeMajorVersion)
+			// Set the root path and create it if needed
+			if err := setVtMySQLRoot(path); err != nil {
+				t.Fatalf("Could not set VT_MYSQL_ROOT to %s, error: %v", path, err)
+			}
+			defer unsetVtMySQLRoot()
+			// Download and extract the version artifact if needed
+			if err := downloadDBTypeVersion(dbType, majorVersion, path); err != nil {
+				t.Fatalf("Could not download %s, error: %v", majorVersion, err)
+			}
+			// Set the MYSQL_FLAVOR OS ENV var for mysqlctl to use the correct config file
+			if err := setDBFlavor(); err != nil {
+				t.Fatalf("Could not set MYSQL_FLAVOR: %v", err)
+			}
+			defer unsetDBFlavor()
+		}
+	}
 	keyspace := &Keyspace{
 		Name:   ksName,
 		Shards: make(map[string]*Shard),
@@ -236,14 +401,14 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 	tablet := &Tablet{}
 
 	options := []string{
-		"-queryserver-config-schema-reload-time", "5",
-		"-enable-lag-throttler",
-		"-heartbeat_enable",
-		"-heartbeat_interval", "250ms",
-	} //FIXME: for multi-cell initial schema doesn't seem to load without "-queryserver-config-schema-reload-time"
+		"--queryserver-config-schema-reload-time", "5",
+		"--enable-lag-throttler",
+		"--heartbeat_enable",
+		"--heartbeat_interval", "250ms",
+	} //FIXME: for multi-cell initial schema doesn't seem to load without "--queryserver-config-schema-reload-time"
 
 	if mainClusterConfig.vreplicationCompressGTID {
-		options = append(options, "-vreplication_store_compressed_gtid=true")
+		options = append(options, "--vreplication_store_compressed_gtid=true")
 	}
 
 	vttablet := cluster.VttabletProcessInstance(
@@ -366,7 +531,7 @@ func (vc *VitessCluster) DeleteShard(t testing.TB, cellName string, ksName strin
 	}
 	log.Infof("Deleting Shard %s", shardName)
 	//TODO how can we avoid the use of even_if_serving?
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("DeleteShard", "-recursive", "-even_if_serving", ksName+"/"+shardName); err != nil {
+	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("DeleteShard", "--", "--recursive", "--even_if_serving", ksName+"/"+shardName); err != nil {
 		t.Fatalf("DeleteShard command failed with error %+v and output %s\n", err, output)
 	}
 

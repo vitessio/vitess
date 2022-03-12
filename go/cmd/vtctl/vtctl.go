@@ -20,6 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log/syslog"
 	"os"
 	"os/signal"
@@ -42,6 +43,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -53,13 +57,16 @@ var (
 func init() {
 	logger := logutil.NewConsoleLogger()
 	flag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
-	flag.Usage = func() {
-		logger.Printf("Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
-		logger.Printf("\nThe global optional parameters are:\n")
-		flag.PrintDefaults()
-		logger.Printf("\nThe commands are listed below, sorted by group. Use '%s <command> -h' for more help.\n\n", os.Args[0])
-		vtctl.PrintAllCommands(logger)
-	}
+	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
+		Preface: func(w io.Writer) {
+			logger.Printf("Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
+			logger.Printf("\nThe global optional parameters are:\n")
+		},
+		Epilogue: func(w io.Writer) {
+			logger.Printf("\nThe commands are listed below, sorted by group. Use '%s <command> -h' for more help.\n\n", os.Args[0])
+			vtctl.PrintAllCommands(logger)
+		},
+	})
 }
 
 // signal handling, centralized here
@@ -85,8 +92,6 @@ func main() {
 	args := servenv.ParseFlagsWithArgs("vtctl")
 	action := args[0]
 
-	log.Warningf("WARNING: vtctl should only be used for VDiff workflows. Consider using vtctldclient for all other commands.")
-
 	startMsg := fmt.Sprintf("USER=%v SUDO_USER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))
 
 	if syslogger, err := syslog.New(syslog.LOG_INFO, "vtctl "); err == nil {
@@ -95,7 +100,7 @@ func main() {
 		log.Warningf("cannot connect to syslog: %v", err)
 	}
 
-	if err := reparentutil.SetDurabilityPolicy(*durabilityPolicy, nil); err != nil {
+	if err := reparentutil.SetDurabilityPolicy(*durabilityPolicy); err != nil {
 		log.Errorf("error in setting durability policy: %v", err)
 		exit.Return(1)
 	}
@@ -152,6 +157,8 @@ func main() {
 		args = args[1:]
 		fallthrough
 	default:
+		log.Warningf("WARNING: vtctl should only be used for VDiff workflows. Consider using vtctldclient for all other commands.")
+
 		if args[0] == "--" {
 			args = args[1:]
 		}

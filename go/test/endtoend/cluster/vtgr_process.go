@@ -50,18 +50,18 @@ func (vtgr *VtgrProcess) Start(alias string) (err error) {
 	*/
 	vtgr.proc = exec.Command(
 		vtgr.Binary,
-		"-topo_implementation", vtgr.TopoImplementation,
-		"-topo_global_server_address", vtgr.TopoGlobalAddress,
-		"-topo_global_root", vtgr.TopoGlobalRoot,
-		"-tablet_manager_protocol", "grpc",
-		"-scan_repair_timeout", "50s",
-		"-clusters_to_watch", strings.Join(vtgr.clusters, ","),
+		"--topo_implementation", vtgr.TopoImplementation,
+		"--topo_global_server_address", vtgr.TopoGlobalAddress,
+		"--topo_global_root", vtgr.TopoGlobalRoot,
+		"--tablet_manager_protocol", "grpc",
+		"--scan_repair_timeout", "50s",
+		"--clusters_to_watch", strings.Join(vtgr.clusters, ","),
 	)
 	if vtgr.config != "" {
-		vtgr.proc.Args = append(vtgr.proc.Args, fmt.Sprintf("-config=%s", vtgr.config))
+		vtgr.proc.Args = append(vtgr.proc.Args, fmt.Sprintf("--config=%s", vtgr.config))
 	}
 	if vtgr.grPort != 0 {
-		vtgr.proc.Args = append(vtgr.proc.Args, fmt.Sprintf("-gr_port=%d", vtgr.grPort))
+		vtgr.proc.Args = append(vtgr.proc.Args, fmt.Sprintf("--gr_port=%d", vtgr.grPort))
 	}
 	vtgr.proc.Args = append(vtgr.proc.Args, vtgr.ExtraArgs...)
 	errFile, _ := os.Create(path.Join(vtgr.LogDir, fmt.Sprintf("vtgr-stderr-%v.txt", alias)))

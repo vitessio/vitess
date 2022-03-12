@@ -72,16 +72,29 @@ func normalize(v sqltypes.Value) string {
 var debugPrintAll = flag.Bool("print-all", false, "print all matching tests")
 var debugNormalize = flag.Bool("normalize", true, "normalize comparisons against MySQL values")
 var debugSimplify = flag.Bool("simplify", time.Now().UnixNano()&1 != 0, "simplify expressions before evaluating them")
+var debugCheckTypes = flag.Bool("check-types", true, "check the TypeOf operator for all queries")
 
 func compareRemoteQuery(t *testing.T, conn *mysql.Conn, query string) {
 	t.Helper()
 
-	local, evaluated, localErr := safeEvaluate(query)
+	local, localType, localErr := safeEvaluate(query)
 	remote, remoteErr := conn.ExecuteFetch(query, 1, false)
 
 	var localVal, remoteVal string
-	if evaluated {
-		localVal = local.Value().String()
+	if localErr == nil {
+		v := local.Value()
+		if *debugNormalize {
+			localVal = normalize(v)
+		} else {
+			localVal = v.String()
+		}
+		if *debugCheckTypes {
+			tt := v.Type()
+			if tt != sqltypes.Null && tt != localType {
+				t.Errorf("evaluation type mismatch: eval=%v vs typeof=%v\nlocal: %s\nquery: %s (SIMPLIFY=%v)",
+					tt, localType, localVal, query, *debugSimplify)
+			}
+		}
 	}
 	if remoteErr == nil {
 		if *debugNormalize {
@@ -90,7 +103,7 @@ func compareRemoteQuery(t *testing.T, conn *mysql.Conn, query string) {
 			remoteVal = remote.Rows[0][0].String()
 		}
 	}
-	if diff := compareResult(localErr, remoteErr, localVal, remoteVal, evaluated); diff != "" {
+	if diff := compareResult(localErr, remoteErr, localVal, remoteVal); diff != "" {
 		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)", diff, query, *debugSimplify)
 	} else if *debugPrintAll {
 		t.Logf("local=%s mysql=%s\nquery: %s", localVal, remoteVal, query)
@@ -335,21 +348,6 @@ func TestHexArithmetic(t *testing.T) {
 	}
 }
 
-func TestX(t *testing.T) {
-	var conn = mysqlconn(t)
-	defer conn.Close()
-
-	for _, expr := range []string{
-		"0 + -X'00'",
-		"0 - X'00'",
-		"-X'00'",
-		"X'00'",
-		"X'00'+0e0",
-	} {
-		compareRemoteQuery(t, conn, "SELECT "+expr)
-	}
-}
-
 func TestTypes(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
@@ -376,6 +374,7 @@ func TestTypes(t *testing.T) {
 		`"foobar"`,
 		`X'444444'`,
 		`_binary "foobar"`,
+		`-0x0`,
 	}
 
 	for _, query := range queries {
@@ -431,7 +430,8 @@ func TestWeightStrings(t *testing.T) {
 }
 
 var bitwiseInputs = []string{
-	"0", "1", "0xFF", "255", "1.0", "1.1", "-1", "-255", "7", "9", "13",
+	"0", "1", "0xFF", "255", "1.0", "1.1", "-1", "-255", "7", "9", "13", "1.5", "-1.5",
+	"0.0e0", "1.0e0", "255.0", "1.5e0", "-1.5e0", "1.1e0", "-1e0", "-255e0", "7e0", "9e0", "13e0",
 	strconv.FormatUint(math.MaxUint64, 10),
 	strconv.FormatUint(math.MaxInt64, 10),
 	strconv.FormatInt(math.MinInt64, 10),
@@ -465,5 +465,110 @@ func TestBitwiseOperatorsUnary(t *testing.T) {
 				compareRemoteQuery(t, conn, fmt.Sprintf("SELECT %s(%s)", op, rhs))
 			}
 		})
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+const Pi = "314159265358979323846264338327950288419716939937510582097494459"
+
+func TestDecimalClamping(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for pos := 0; pos < len(Pi); pos++ {
+		for m := 0; m < min(len(Pi), 67); m += 2 {
+			for d := 0; d <= min(m, 33); d += 2 {
+				query := fmt.Sprintf("SELECT CAST(%s.%s AS DECIMAL(%d, %d))", Pi[:pos], Pi[pos:], m, d)
+				compareRemoteQuery(t, conn, query)
+			}
+		}
+	}
+}
+
+func TestLargeIntegers(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	var largepi = Pi + Pi
+
+	for pos := 1; pos < len(largepi); pos++ {
+		query := fmt.Sprintf("SELECT %s", largepi[:pos])
+		compareRemoteQuery(t, conn, query)
+
+		query = fmt.Sprintf("SELECT -%s", largepi[:pos])
+		compareRemoteQuery(t, conn, query)
+	}
+}
+
+func TestLargeDecimals(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	var largepi = Pi + Pi
+
+	for pos := 0; pos < len(largepi); pos++ {
+		query := fmt.Sprintf("SELECT %s.%s", largepi[:pos], largepi[pos:])
+		compareRemoteQuery(t, conn, query)
+
+		query = fmt.Sprintf("SELECT -%s.%s", largepi[:pos], largepi[pos:])
+		compareRemoteQuery(t, conn, query)
+	}
+}
+
+func TestConversionOperators(t *testing.T) {
+	var left = []string{
+		"0", "1", "255",
+		"0.0e0", "1.0e0", "1.5e0", "-1.5e0", "1.1e0", "-1.1e0", "-1.7e0",
+		"0.0", "0.000", "1.5", "-1.5", "1.1", "1.7", "-1.1", "-1.7",
+		`'foobar'`, `_utf8 'foobar'`, `''`, `_binary 'foobar'`,
+		`0x0`, `0x1`, `0xff`, `X'00'`, `X'01'`, `X'ff'`,
+		"NULL",
+		"0xFF666F6F626172FF", "0x666F6F626172FF", "0xFF666F6F626172",
+	}
+	var right = []string{
+		"BINARY", "BINARY(1)", "BINARY(0)", "BINARY(16)", "BINARY(-1)",
+		"CHAR", "CHAR(1)", "CHAR(0)", "CHAR(16)", "CHAR(-1)",
+		"NCHAR", "NCHAR(1)", "NCHAR(0)", "NCHAR(16)", "NCHAR(-1)",
+		"DECIMAL", "DECIMAL(0, 4)", "DECIMAL(12, 0)", "DECIMAL(12, 4)",
+		"DOUBLE", "REAL",
+		"SIGNED", "UNSIGNED", "SIGNED INTEGER", "UNSIGNED INTEGER",
+	}
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, lhs := range left {
+		for _, rhs := range right {
+			compareRemoteQuery(t, conn, fmt.Sprintf("SELECT CAST(%s AS %s)", lhs, rhs))
+			compareRemoteQuery(t, conn, fmt.Sprintf("SELECT CONVERT(%s, %s)", lhs, rhs))
+		}
+	}
+}
+
+func TestCharsetConversionOperators(t *testing.T) {
+	var introducers = []string{
+		"", "_latin1", "_utf8mb4", "_utf8", "_binary",
+	}
+	var contents = []string{
+		`"foobar"`, `X'4D7953514C'`,
+	}
+	var charsets = []string{
+		"utf8mb4", "utf8", "utf16", "utf32", "latin1", "ucs2",
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, pfx := range introducers {
+		for _, lhs := range contents {
+			for _, rhs := range charsets {
+				compareRemoteQuery(t, conn, fmt.Sprintf("SELECT HEX(CONVERT(%s %s USING %s))", pfx, lhs, rhs))
+			}
+		}
 	}
 }

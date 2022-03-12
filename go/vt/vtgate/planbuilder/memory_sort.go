@@ -40,6 +40,16 @@ type memorySort struct {
 	eMemorySort *engine.MemorySort
 }
 
+func findColNumber(ms *memorySort, expr *sqlparser.ColName) int {
+	c := expr.Metadata.(*column)
+	for i, rc := range ms.ResultColumns() {
+		if rc.column == c {
+			return i
+		}
+	}
+	return -1
+}
+
 // newMemorySort builds a new memorySort.
 func newMemorySort(plan logicalPlan, orderBy v3OrderBy) (*memorySort, error) {
 	eMemorySort := &engine.MemorySort{}
@@ -48,7 +58,7 @@ func newMemorySort(plan logicalPlan, orderBy v3OrderBy) (*memorySort, error) {
 		eMemorySort:    eMemorySort,
 	}
 	for _, order := range orderBy {
-		colNumber := -1
+		var colNumber int
 		switch expr := order.Expr.(type) {
 		case *sqlparser.Literal:
 			var err error
@@ -56,25 +66,13 @@ func newMemorySort(plan logicalPlan, orderBy v3OrderBy) (*memorySort, error) {
 				return nil, err
 			}
 		case *sqlparser.ColName:
-			c := expr.Metadata.(*column)
-			for i, rc := range ms.ResultColumns() {
-				if rc.column == c {
-					colNumber = i
-					break
-				}
-			}
-		case *sqlparser.UnaryExpr:
+			colNumber = findColNumber(ms, expr)
+		case *sqlparser.ConvertExpr:
 			colName, ok := expr.Expr.(*sqlparser.ColName)
 			if !ok {
 				return nil, fmt.Errorf("unsupported: memory sort: complex order by expression: %s", sqlparser.String(expr))
 			}
-			c := colName.Metadata.(*column)
-			for i, rc := range ms.ResultColumns() {
-				if rc.column == c {
-					colNumber = i
-					break
-				}
-			}
+			colNumber = findColNumber(ms, colName)
 		default:
 			return nil, fmt.Errorf("unsupported: memory sort: complex order by expression: %s", sqlparser.String(expr))
 		}

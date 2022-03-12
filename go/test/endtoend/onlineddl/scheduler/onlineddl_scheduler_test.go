@@ -45,7 +45,8 @@ var (
 	keyspaceName          = "ks"
 	cell                  = "zone1"
 	schemaChangeDirectory = ""
-	ddlStrategy           = "online"
+	overrideVtctlParams   *cluster.VtctlClientParams
+	ddlStrategy           = "vitess"
 	t1Name                = "t1_test"
 	t2Name                = "t2_test"
 	createT1Statement     = `
@@ -94,15 +95,15 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
-			"-schema_change_dir", schemaChangeDirectory,
-			"-schema_change_controller", "local",
-			"-schema_change_check_interval", "1"}
+			"--schema_change_dir", schemaChangeDirectory,
+			"--schema_change_controller", "local",
+			"--schema_change_check_interval", "1"}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-enable-lag-throttler",
-			"-throttle_threshold", "1s",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
+			"--enable-lag-throttler",
+			"--throttle_threshold", "1s",
+			"--heartbeat_enable",
+			"--heartbeat_interval", "250ms",
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 
@@ -302,6 +303,14 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
 		})
+		t.Run("test ready-to-complete", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				readyToComplete := row.AsInt64("ready_to_complete", 0)
+				assert.Equal(t, int64(1), readyToComplete)
+			}
+		})
 		t.Run("complete t2", func(t *testing.T) {
 			// now that both are running, let's unblock t2. We expect it to complete.
 			// Issue a complete and wait for successful completion
@@ -464,6 +473,14 @@ func TestSchemaChange(t *testing.T) {
 			// drop1 migration should block. It can run concurrently to t1, but conflicts on table name
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusReady)
 		})
+		t.Run("t3 ready to complete", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, drop1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				readyToComplete := row.AsInt64("ready_to_complete", 0)
+				assert.Equal(t, int64(1), readyToComplete)
+			}
+		})
 		t.Run("t3drop complete", func(t *testing.T) {
 			// drop3 migration should not block. It can run concurrently to t1, and does not conflict
 			// even though t1drop is blocked! This is the heart of this test
@@ -489,6 +506,40 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		})
 	})
+
+	t.Run("Idempotent submission, retry failed migration", func(t *testing.T) {
+		uuid := "00000000_1111_2222_3333_444444444444"
+		overrideVtctlParams = &cluster.VtctlClientParams{DDLStrategy: ddlStrategy, SkipPreflight: true, UUIDList: uuid, MigrationContext: "idempotent:1111-2222-3333"}
+		defer func() { overrideVtctlParams = nil }()
+		// create a migration and cancel it. We don't let it complete. We want it in "failed" state
+		t.Run("start and fail migration", func(t *testing.T) {
+			executedUUID := testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy+" -postpone-completion", "vtctl", "", "", true) // skip wait
+			require.Equal(t, uuid, executedUUID)
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
+			// let's cancel it
+			onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, true)
+			time.Sleep(2 * time.Second)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		})
+
+		// now, we submit the exact same migratoin again: same UUID, same migration context.
+		t.Run("resubmit migration", func(t *testing.T) {
+			executedUUID := testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy, "vtctl", "", "", true) // skip wait
+			require.Equal(t, uuid, executedUUID)
+
+			// expect it to complete
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+
+			rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				retries := row.AsInt64("retries", 0)
+				assert.Greater(t, retries, int64(0))
+			}
+		})
+	})
 }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
@@ -511,7 +562,11 @@ func testOnlineDDLStatement(t *testing.T, ddlStatement string, ddlStrategy strin
 			}
 		}
 	} else {
-		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, ddlStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, SkipPreflight: true})
+		params := &cluster.VtctlClientParams{DDLStrategy: ddlStrategy, SkipPreflight: true}
+		if overrideVtctlParams != nil {
+			params = overrideVtctlParams
+		}
+		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, ddlStatement, *params)
 		if expectError == "" {
 			assert.NoError(t, err)
 			uuid = output

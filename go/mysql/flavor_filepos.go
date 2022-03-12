@@ -283,3 +283,8 @@ func (*filePosFlavor) disableBinlogPlaybackCommand() string {
 func (*filePosFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize56
 }
+
+// supportsFastDropTable is part of the Flavor interface.
+func (*filePosFlavor) supportsFastDropTable(c *Conn) (bool, error) {
+	return false, nil
+}

@@ -47,6 +47,11 @@ service Vtctld {
   rpc ApplySchema(vtctldata.ApplySchemaRequest) returns (vtctldata.ApplySchemaResponse) {};
   // ApplyVSchema applies a vschema to a keyspace.
   rpc ApplyVSchema(vtctldata.ApplyVSchemaRequest) returns (vtctldata.ApplyVSchemaResponse) {};
+  // Backup uses the BackupEngine and BackupStorage services on the specified
+  // tablet to create and store a new backup.
+  rpc Backup(vtctldata.BackupRequest) returns (stream vtctldata.BackupResponse) {};
+  // BackupShard chooses a tablet in the shard and uses it to create a backup.
+  rpc BackupShard(vtctldata.BackupShardRequest) returns (stream vtctldata.BackupResponse) {};
   // ChangeTabletType changes the db type for the specified tablet, if possible.
   // This is used primarily to arrange replicas, and it will not convert a
   // primary. For that, use InitShardPrimary.
@@ -122,6 +127,8 @@ service Vtctld {
   rpc GetTablet(vtctldata.GetTabletRequest) returns (vtctldata.GetTabletResponse) {};
   // GetTablets returns tablets, optionally filtered by keyspace and shard.
   rpc GetTablets(vtctldata.GetTabletsRequest) returns (vtctldata.GetTabletsResponse) {};
+  // GetVersion returns the version of a tablet from its debug vars.
+  rpc GetVersion(vtctldata.GetVersionRequest) returns (vtctldata.GetVersionResponse) {};
   // GetVSchema returns the vschema for a keyspace.
   rpc GetVSchema(vtctldata.GetVSchemaRequest) returns (vtctldata.GetVSchemaResponse) {};
   // GetWorkflows returns a list of workflows for the given keyspace.
@@ -167,6 +174,8 @@ service Vtctld {
   // on a best-effort basis, and log warnings for any tablets that fail to
   // reload within the context deadline.
   rpc ReloadSchemaShard(vtctldata.ReloadSchemaShardRequest) returns (vtctldata.ReloadSchemaShardResponse) {};
+  // RemoveBackup removes a backup from the BackupStorage used by vtctld.
+  rpc RemoveBackup(vtctldata.RemoveBackupRequest) returns (vtctldata.RemoveBackupResponse) {};
   // RemoveKeyspaceCell removes the specified cell from the Cells list for all
   // shards in the specified keyspace (by calling RemoveShardCell on every
   // shard). It also removes the SrvKeyspace for that keyspace in that cell.
@@ -178,6 +187,8 @@ service Vtctld {
   // only works if the current replica position matches the last known reparent
   // action.
   rpc ReparentTablet(vtctldata.ReparentTabletRequest) returns (vtctldata.ReparentTabletResponse) {};
+  // RestoreFromBackup stops mysqld for the given tablet and restores a backup.
+  rpc RestoreFromBackup(vtctldata.RestoreFromBackupRequest) returns (stream vtctldata.RestoreFromBackupResponse) {};
   // RunHealthCheck runs a healthcheck on the remote tablet.
   rpc RunHealthCheck(vtctldata.RunHealthCheckRequest) returns (vtctldata.RunHealthCheckResponse) {};
   // SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
@@ -237,7 +248,13 @@ service Vtctld {
   // ValidateKeyspace validates that all nodes reachable from the specified
   // keyspace are consistent.
   rpc ValidateKeyspace(vtctldata.ValidateKeyspaceRequest) returns (vtctldata.ValidateKeyspaceResponse) {};
+  // ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace.
+  rpc ValidateSchemaKeyspace(vtctldata.ValidateSchemaKeyspaceRequest) returns (vtctldata.ValidateSchemaKeyspaceResponse) {};
   // ValidateShard validates that all nodes reachable from the specified shard
   // are consistent.
   rpc ValidateShard(vtctldata.ValidateShardRequest) returns (vtctldata.ValidateShardResponse) {};
+  // ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
+  rpc ValidateVersionKeyspace(vtctldata.ValidateVersionKeyspaceRequest) returns (vtctldata.ValidateVersionKeyspaceResponse) {};
+  // ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
+  rpc ValidateVSchema(vtctldata.ValidateVSchemaRequest) returns (vtctldata.ValidateVSchemaResponse) {};
 }

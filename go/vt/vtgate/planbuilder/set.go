@@ -45,6 +45,7 @@ type (
 		// this allows identifiers (a.k.a. ColName) from the AST to be handled as if they are strings.
 		// SET transaction_mode = two_pc => SET transaction_mode = 'two_pc'
 		identifierAsString bool
+		supportSetVar      bool
 	}
 )
 
@@ -172,6 +173,7 @@ func buildSetOpReservedConn(s setting) planFunc {
 			Keyspace:          ks,
 			TargetDestination: vschema.Destination(),
 			Expr:              value,
+			SupportSetVar:     s.supportSetVar,
 		}, nil
 	}
 }

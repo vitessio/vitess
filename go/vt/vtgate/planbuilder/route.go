@@ -252,7 +252,7 @@ func (rb *route) procureValues(plan logicalPlan, jt *jointab, val sqlparser.Expr
 		joinVar := jt.Procure(plan, typedVal, rb.Order())
 		return evalengine.NewBindVar(joinVar, collations.TypedCollation{}), nil
 	default:
-		return evalengine.Convert(typedVal, semantics.EmptySemTable())
+		return evalengine.Translate(typedVal, semantics.EmptySemTable())
 	}
 }
 
@@ -342,7 +342,7 @@ func (rb *route) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weigh
 		if !isSelect {
 			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot add weight string in %T", rb.Select)
 		}
-		sel.GroupBy = append(sel.GroupBy, weightStringExpr)
+		sel.AddGroupBy(weightStringExpr)
 	}
 
 	if weightcolNumber, ok := rb.weightStrings[rc]; ok {

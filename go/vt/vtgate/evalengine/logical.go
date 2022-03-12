@@ -127,11 +127,12 @@ func (left boolean) xor(right boolean) boolean {
 func (n *NotExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	var inner EvalResult
 	inner.init(env, n.Inner)
-	out.setBoolean(inner.truthy().not())
+	out.setBoolean(inner.isTruthy().not())
 }
 
-func (n *NotExpr) typeof(*ExpressionEnv) sqltypes.Type {
-	return sqltypes.Uint64
+func (n *NotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	_, flags := n.Inner.typeof(env)
+	return sqltypes.Uint64, flags
 }
 
 func (l *LogicalExpr) eval(env *ExpressionEnv, out *EvalResult) {
@@ -141,11 +142,13 @@ func (l *LogicalExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	if left.typeof() == sqltypes.Tuple || right.typeof() == sqltypes.Tuple {
 		panic("did not typecheck tuples")
 	}
-	out.setBoolean(l.op(left.truthy(), right.truthy()))
+	out.setBoolean(l.op(left.isTruthy(), right.isTruthy()))
 }
 
-func (l *LogicalExpr) typeof(env *ExpressionEnv) sqltypes.Type {
-	return sqltypes.Uint64
+func (l *LogicalExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	_, f1 := l.Left.typeof(env)
+	_, f2 := l.Right.typeof(env)
+	return sqltypes.Uint64, f1 | f2
 }
 
 // IsExpr represents the IS expression in MySQL.
@@ -156,14 +159,12 @@ type IsExpr struct {
 	Check func(*EvalResult) bool
 }
 
-var _ Expr = (*IsExpr)(nil)
-
 func (i *IsExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	var in EvalResult
 	in.init(env, i.Inner)
 	result.setBool(i.Check(&in))
 }
 
-func (i *IsExpr) typeof(env *ExpressionEnv) sqltypes.Type {
-	return sqltypes.Int64
+func (i *IsExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	return sqltypes.Int64, 0
 }

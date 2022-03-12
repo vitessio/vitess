@@ -198,6 +198,12 @@ func (c *Conn) Ping() error {
 // Note the connection can be closed while this is running.
 // Returns a SQLError.
 func (c *Conn) clientHandshake(params *ConnParams) error {
+	// if EnableQueryInfo is set, make sure that all queries starting with the handshake
+	// will actually process the INFO fields in QUERY_OK packets
+	if params.EnableQueryInfo {
+		c.enableQueryInfo = true
+	}
+
 	// Wait for the server initial handshake packet, and parse it.
 	data, err := c.readPacket()
 	if err != nil {

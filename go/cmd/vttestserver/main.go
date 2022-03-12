@@ -137,10 +137,12 @@ func init() {
 
 	flag.StringVar(&config.Charset, "charset", "utf8mb4", "MySQL charset")
 
-	flag.StringVar(&config.PlannerVersion, "planner_version", "v3", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the new gen4 planner and falls back to the V3 planner if the gen4 fails. All Gen4 versions should be considered experimental!")
+	flag.StringVar(&config.PlannerVersion, "planner_version", "gen4", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the new gen4 planner and falls back to the V3 planner if the gen4 fails.")
 
 	flag.StringVar(&config.SnapshotFile, "snapshot_file", "",
 		"A MySQL DB snapshot file")
+
+	flag.BoolVar(&config.EnableSystemSettings, "enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
 
 	flag.StringVar(&config.TransactionMode, "transaction_mode", "MULTI", "Transaction mode MULTI (default), SINGLE or TWOPC ")
 	flag.Float64Var(&config.TransactionTimeout, "queryserver-config-transaction-timeout", 0, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")

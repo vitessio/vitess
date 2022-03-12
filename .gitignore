@@ -76,9 +76,6 @@ releases
 # Local examples
 /examples/local/vtdataroot
 
-# Vagrant
-.vagrant
-
 /dist/
 /vthook/
 /bin/

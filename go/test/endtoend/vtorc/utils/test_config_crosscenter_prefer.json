@@ -7,8 +7,5 @@
   "RecoveryPeriodBlockSeconds": 1,
   "InstancePollSeconds": 1,
   "LockShardTimeoutSeconds": 5,
-  "Durability": "specified",
-  "DurabilityParams": {
-    "zone2-0000000200": "prefer"
-  }
+  "Durability": "test"
 }

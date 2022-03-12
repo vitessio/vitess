@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -92,8 +91,6 @@ type (
 
 		ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.AlterVschema) error
 
-		SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error
-
 		Session() SessionActions
 
 		ConnCollation() collations.ID
@@ -153,6 +150,10 @@ type (
 
 		SetSessionEnableSystemSettings(bool) error
 		GetSessionEnableSystemSettings() bool
+		GetEnableSetVar() bool
+
+		GetSystemVariables(func(k string, v string))
+		HasSystemVariables() bool
 
 		// SetReadAfterWriteGTID sets the GTID that the user expects a replica to have caught up with before answering a query
 		SetReadAfterWriteGTID(string)

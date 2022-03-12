@@ -23,6 +23,9 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
+
 	"context"
 
 	"github.com/stretchr/testify/require"
@@ -1438,5 +1441,81 @@ func TestCopyTablesWithInvalidDates(t *testing.T) {
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",
 		"commit",
+	})
+}
+
+func supportsInvisibleColumns() bool {
+	if env.DBType == string(mysqlctl.FlavorMySQL) && env.DBMajorVersion >= 8 &&
+		(env.DBMinorVersion > 0 || env.DBPatchVersion >= 23) {
+		return true
+	}
+	log.Infof("invisible columns not supported in %d.%d.%d", env.DBMajorVersion, env.DBMinorVersion, env.DBPatchVersion)
+	return false
+}
+
+func TestCopyInvisibleColumns(t *testing.T) {
+	if !supportsInvisibleColumns() {
+		t.Skip()
+	}
+
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table src1(id int, id2 int, inv1 int invisible, inv2 int invisible, primary key(id, inv1))",
+		"insert into src1(id, id2, inv1, inv2) values(2, 20, 200, 2000), (1, 10, 100, 1000)",
+		fmt.Sprintf("create table %s.dst1(id int, id2 int, inv1 int invisible, inv2 int invisible, primary key(id, inv1))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src1",
+		fmt.Sprintf("drop table %s.dst1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst1",
+			Filter: "select * from src1",
+		}},
+	}
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+	}()
+
+	expectNontxQueries(t, []string{
+		// Create the list of tables to copy and transition to Copying state.
+		"/insert into _vt.vreplication",
+		"/update _vt.vreplication set message=",
+		"/insert into _vt.copy_state",
+		"/update _vt.vreplication set state",
+		// The first fast-forward has no starting point. So, it just saves the current position.
+		"insert into dst1(id,id2,inv1,inv2) values (1,10,100,1000), (2,20,200,2000)",
+		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"inv1\\" type:INT32} rows:{lengths:1 lengths:3 values:\\"2200\\"}' where vrepl_id=.*`,
+		// copy of dst1 is done: delete from copy_state.
+		"/delete from _vt.copy_state.*dst1",
+		"/update _vt.vreplication set state",
+	})
+	expectData(t, "dst1", [][]string{
+		{"1", "10"},
+		{"2", "20"},
+	})
+	expectQueryResult(t, "select id,id2,inv1,inv2 from vrepl.dst1", [][]string{
+		{"1", "10", "100", "1000"},
+		{"2", "20", "200", "2000"},
 	})
 }

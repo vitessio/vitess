@@ -101,9 +101,11 @@ var (
 		"resharding",
 		"resharding_bytes",
 		"mysql80",
+		"vreplication_across_db_versions",
 		"vreplication_multicell",
 		"vreplication_cellalias",
 		"vtorc",
+		"schemadiff_vrepl",
 	}
 
 	clusterSelfHostedList []string
@@ -122,6 +124,7 @@ var (
 	}
 	clustersRequiringMySQL80 = []string{
 		"mysql80",
+		"vreplication_across_db_versions",
 	}
 )
 

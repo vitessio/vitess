@@ -17,19 +17,16 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 
-	"context"
-
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -127,30 +124,23 @@ func (wr *Wrangler) StartReplication(ctx context.Context, tablet *topodatapb.Tab
 	return wr.TabletManagerClient().StartReplication(ctx, tablet, semiSync)
 }
 
+// SetReplicationSource is used to set the replication source on the specified tablet to the current shard primary (if available).
+// It also figures out if the tablet should be sending semi-sync ACKs or not and passes that to the tabletmanager RPC.
+// It does not start the replication forcefully
+func (wr *Wrangler) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return reparentutil.SetReplicationSource(ctx, wr.ts, wr.TabletManagerClient(), tablet)
+}
+
 func (wr *Wrangler) shouldSendSemiSyncAck(ctx context.Context, tablet *topodatapb.Tablet) (bool, error) {
-	shard, err := wr.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	shardPrimary, err := wr.getShardPrimaryForTablet(ctx, tablet)
 	if err != nil {
 		return false, err
 	}
-
-	if !shard.HasPrimary() {
-		return false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no primary tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
-	}
-
-	shardPrimary, err := wr.ts.GetTablet(ctx, shard.PrimaryAlias)
-	if err != nil {
-		return false, fmt.Errorf("cannot lookup primary tablet %v for shard %v/%v: %w", topoproto.TabletAliasString(shard.PrimaryAlias), tablet.Keyspace, tablet.Shard, err)
-	}
-
-	if shardPrimary.Type != topodatapb.TabletType_PRIMARY {
-		return false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "TopologyServer has incosistent state for shard primary %v", topoproto.TabletAliasString(shard.PrimaryAlias))
-	}
-
-	if shardPrimary.Keyspace != tablet.Keyspace || shardPrimary.Shard != tablet.Shard {
-		return false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %v and potential replica %v not in same keypace shard (%v/%v)", topoproto.TabletAliasString(shard.PrimaryAlias), topoproto.TabletAliasString(tablet.Alias), tablet.Keyspace, tablet.Shard)
-	}
-
 	return reparentutil.IsReplicaSemiSync(shardPrimary.Tablet, tablet), nil
+}
+
+func (wr *Wrangler) getShardPrimaryForTablet(ctx context.Context, tablet *topodatapb.Tablet) (*topo.TabletInfo, error) {
+	return topotools.GetShardPrimaryForTablet(ctx, wr.ts, tablet)
 }
 
 // RefreshTabletState refreshes tablet state

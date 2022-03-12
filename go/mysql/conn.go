@@ -198,6 +198,10 @@ type Conn struct {
 	// When 'true', events are assumed to be padded with 2-byte semi-sync information
 	// See https://dev.mysql.com/doc/internals/en/semi-sync-binlog-event.html
 	ExpectSemiSyncIndicator bool
+
+	// enableQueryInfo controls whether we parse the INFO field in QUERY_OK packets
+	// See: ConnParams.EnableQueryInfo
+	enableQueryInfo bool
 }
 
 // splitStatementFunciton is the function that is used to split the statement in case of a multi-statement query.
@@ -1448,10 +1452,13 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 	}
 	packetOK.warnings = warnings
 
-	if c.Capabilities&uint32(CapabilityClientSessionTrack) == CapabilityClientSessionTrack {
-		// info
-		info, _ := data.readLenEncInfo()
+	// info
+	info, _ := data.readLenEncInfo()
+	if c.enableQueryInfo {
 		packetOK.info = info
+	}
+
+	if c.Capabilities&uint32(CapabilityClientSessionTrack) == CapabilityClientSessionTrack {
 		// session tracking
 		if statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
 			_, ok := data.readLenEncInt()
@@ -1479,10 +1486,6 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 			}
 			packetOK.sessionStateData = gtids
 		}
-	} else {
-		// info
-		info, _ := data.readLenEncInfo()
-		packetOK.info = info
 	}
 
 	return packetOK, nil

@@ -17,10 +17,9 @@ limitations under the License.
 package vtctld
 
 import (
+	"context"
 	"flag"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/trace"
 
@@ -68,6 +67,7 @@ func initWorkflowManager(ts *topo.Server) {
 
 		// Create the WorkflowManager.
 		vtctl.WorkflowManager = workflow.NewManager(ts)
+		vtctl.WorkflowManager.SetSanitizeHTTPHeaders(*sanitizeLogMessages)
 
 		// Register the long polling and websocket handlers.
 		vtctl.WorkflowManager.HandleHTTPLongPolling(apiPrefix + "workflow")

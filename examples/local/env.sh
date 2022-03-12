@@ -61,6 +61,13 @@ elif [ "${TOPO}" = "k8s" ]; then
     K8S_KUBECONFIG=$VTDATAROOT/tmp/k8s.kubeconfig
     # shellcheck disable=SC2034
     TOPOLOGY_FLAGS="-topo_implementation k8s -topo_k8s_kubeconfig ${K8S_KUBECONFIG} -topo_global_server_address ${K8S_ADDR}:${K8S_PORT} -topo_global_root /vitess/global"
+elif [ "${TOPO}" = "consul" ]; then
+    # Set up topology environment parameters.
+    CONSUL_SERVER=127.0.0.1
+    CONSUL_HTTP_PORT=8500
+    CONSUL_SERVER_PORT=8300
+    TOPOLOGY_FLAGS="-topo_implementation consul -topo_global_server_address ${CONSUL_SERVER}:${CONSUL_HTTP_PORT} -topo_global_root vitess/global/"
+    mkdir -p "${VTDATAROOT}/consul"
 else
     ETCD_SERVER="localhost:2379"
     TOPOLOGY_FLAGS="-topo_implementation etcd2 -topo_global_server_address $ETCD_SERVER -topo_global_root /vitess/global"

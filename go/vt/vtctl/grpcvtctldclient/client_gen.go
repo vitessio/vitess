@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
 // AddCellInfo is part of the vtctlservicepb.VtctldClient interface.
@@ -71,6 +72,24 @@ func (client *gRPCVtctldClient) ApplyVSchema(ctx context.Context, in *vtctldatap
 	}
 
 	return client.c.ApplyVSchema(ctx, in, opts...)
+}
+
+// Backup is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) Backup(ctx context.Context, in *vtctldatapb.BackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_BackupClient, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.Backup(ctx, in, opts...)
+}
+
+// BackupShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) BackupShard(ctx context.Context, in *vtctldatapb.BackupShardRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_BackupShardClient, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.BackupShard(ctx, in, opts...)
 }
 
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
@@ -325,6 +344,15 @@ func (client *gRPCVtctldClient) GetVSchema(ctx context.Context, in *vtctldatapb.
 	return client.c.GetVSchema(ctx, in, opts...)
 }
 
+// GetVersion is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetVersion(ctx context.Context, in *vtctldatapb.GetVersionRequest, opts ...grpc.CallOption) (*vtctldatapb.GetVersionResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetVersion(ctx, in, opts...)
+}
+
 // GetWorkflows is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetWorkflows(ctx context.Context, in *vtctldatapb.GetWorkflowsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetWorkflowsResponse, error) {
 	if client.c == nil {
@@ -424,6 +452,15 @@ func (client *gRPCVtctldClient) ReloadSchemaShard(ctx context.Context, in *vtctl
 	return client.c.ReloadSchemaShard(ctx, in, opts...)
 }
 
+// RemoveBackup is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) RemoveBackup(ctx context.Context, in *vtctldatapb.RemoveBackupRequest, opts ...grpc.CallOption) (*vtctldatapb.RemoveBackupResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.RemoveBackup(ctx, in, opts...)
+}
+
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) RemoveKeyspaceCell(ctx context.Context, in *vtctldatapb.RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*vtctldatapb.RemoveKeyspaceCellResponse, error) {
 	if client.c == nil {
@@ -449,6 +486,15 @@ func (client *gRPCVtctldClient) ReparentTablet(ctx context.Context, in *vtctldat
 	}
 
 	return client.c.ReparentTablet(ctx, in, opts...)
+}
+
+// RestoreFromBackup is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) RestoreFromBackup(ctx context.Context, in *vtctldatapb.RestoreFromBackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_RestoreFromBackupClient, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.RestoreFromBackup(ctx, in, opts...)
 }
 
 // RunHealthCheck is part of the vtctlservicepb.VtctldClient interface.
@@ -586,6 +632,15 @@ func (client *gRPCVtctldClient) ValidateKeyspace(ctx context.Context, in *vtctld
 	return client.c.ValidateKeyspace(ctx, in, opts...)
 }
 
+// ValidateSchemaKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ValidateSchemaKeyspace(ctx context.Context, in *vtctldatapb.ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ValidateSchemaKeyspace(ctx, in, opts...)
+}
+
 // ValidateShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ValidateShard(ctx context.Context, in *vtctldatapb.ValidateShardRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateShardResponse, error) {
 	if client.c == nil {
@@ -593,4 +648,22 @@ func (client *gRPCVtctldClient) ValidateShard(ctx context.Context, in *vtctldata
 	}
 
 	return client.c.ValidateShard(ctx, in, opts...)
+}
+
+// ValidateVSchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ValidateVSchema(ctx context.Context, in *vtctldatapb.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateVSchemaResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ValidateVSchema(ctx, in, opts...)
+}
+
+// ValidateVersionKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ValidateVersionKeyspace(ctx context.Context, in *vtctldatapb.ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ValidateVersionKeyspace(ctx, in, opts...)
 }

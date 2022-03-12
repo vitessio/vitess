@@ -8,7 +8,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        topo: [etcd,k8s]
+        topo: [consul,etcd,k8s]
 
     steps:
 

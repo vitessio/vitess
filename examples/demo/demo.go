@@ -203,7 +203,12 @@ func resultToMap(title string, qr *sqltypes.Result) map[string]interface{} {
 		srow := make([]string, 0, len(row))
 		for _, value := range row {
 			if value.Type() == sqltypes.VarBinary {
-				srow = append(srow, hex.EncodeToString(value.ToBytes()))
+				bytes, err := value.ToBytes()
+				if err != nil {
+					log.Errorf("Error converting value to bytes: %v", err)
+					return nil
+				}
+				srow = append(srow, hex.EncodeToString(bytes))
 			} else {
 				srow = append(srow, value.ToString())
 			}

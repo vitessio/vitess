@@ -697,8 +697,8 @@ END
 INPUT
 select concat(':',trim(' m '),':',trim(BOTH FROM ' y '),':',trim('*' FROM '*s*'),':');
 END
-ERROR
-syntax error at position 49 near 'FROM'
+OUTPUT
+select concat(':', trim(' m '), ':', trim(both from ' y '), ':', trim('*' from '*s*'), ':') from dual
 END
 INPUT
 select ceiling(cast(-2 as unsigned)), ceiling(18446744073709551614), ceiling(-2);
@@ -1172,7 +1172,7 @@ INPUT
 select word, word=binary 0xdf as t from t1 having t > 0;
 END
 OUTPUT
-select word, word = binary 0xdf as t from t1 having t > 0
+select word, word = convert(0xdf, binary) as t from t1 having t > 0
 END
 INPUT
 select ST_astext(st_difference(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
@@ -1333,8 +1333,8 @@ END
 INPUT
 select trim(c1 from '�'),trim('�' from c1) from t1;
 END
-ERROR
-syntax error at position 20 near 'from'
+OUTPUT
+select trim(c1 from '�'), trim('�' from c1) from t1
 END
 INPUT
 select extract(DAY_MICROSECOND FROM "1999-01-02 10:11:12.000123");
@@ -1826,7 +1826,7 @@ INPUT
 select find_in_set(binary 'a',binary 'A,B,C');
 END
 OUTPUT
-select find_in_set(binary 'a', binary 'A,B,C') from dual
+select find_in_set(convert('a', binary), convert('A,B,C', binary)) from dual
 END
 INPUT
 select left('hello', 4294967296);
@@ -1987,8 +1987,8 @@ END
 INPUT
 select ltrim("a"),rtrim("a"),trim(BOTH "" from "a"),trim(BOTH " " from "a");
 END
-ERROR
-syntax error at position 47 near 'from'
+OUTPUT
+select ltrim('a'), rtrim('a'), trim(both '' from 'a'), trim(both ' ' from 'a') from dual
 END
 INPUT
 select repeat("a",0),repeat("ab",5+5),repeat("ab",-1),reverse(NULL);
@@ -2348,7 +2348,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_slovenian_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_slovenian_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_slovenian_ci
 END
 INPUT
 select from t2 where MATCH ticket AGAINST ('foobar');
@@ -2797,8 +2797,8 @@ END
 INPUT
 select collation(trim(BOTH _latin2' ' FROM _latin2'a')), coercibility(trim(BOTH _latin2'a' FROM _latin2'a'));
 END
-ERROR
-syntax error at position 35 near '_latin2'
+OUTPUT
+select collation(trim(both _latin2 ' ' from _latin2 'a')), coercibility(trim(both _latin2 'a' from _latin2 'a')) from dual
 END
 INPUT
 select hex(weight_string(ch)) w, name from t1 order by ch;
@@ -2936,7 +2936,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_roman_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_roman_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_roman_ci
 END
 INPUT
 select locate('lo','hello',4294967295);
@@ -3361,8 +3361,8 @@ END
 INPUT
 select trim(trailing NULL from 'xyz') as "must_be_null";
 END
-ERROR
-syntax error at position 26 near 'NULL'
+OUTPUT
+select trim(trailing null from 'xyz') as must_be_null from dual
 END
 INPUT
 select 0<=>0.0, 0.0<=>0E0, 0E0<=>"0", 10.0<=>1E1, 10<=>10.0, 10<=>1E1;
@@ -3548,7 +3548,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_slovenian_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_slovenian_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_slovenian_ci
 END
 INPUT
 select 123;
@@ -4250,7 +4250,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_hungarian_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_hungarian_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_hungarian_ci
 END
 INPUT
 select hex(a) from t1 order by a;
@@ -4646,7 +4646,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_turkish_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_turkish_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_turkish_ci
 END
 INPUT
 select char_length(_utf16 0xD87FDFFF), octet_length(_utf16 0xD87FDFFF);
@@ -4789,8 +4789,8 @@ END
 INPUT
 select trim(leading NULL from 'kate') as "must_be_null";
 END
-ERROR
-syntax error at position 25 near 'NULL'
+OUTPUT
+select trim(leading null from 'kate') as must_be_null from dual
 END
 INPUT
 select min(f4),max(f4) from t1;
@@ -4976,7 +4976,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_icelandic_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_icelandic_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_icelandic_ci
 END
 INPUT
 select from t1 where a = 0;
@@ -5030,7 +5030,7 @@ INPUT
 select CASE BINARY "b" when "a" then 1 when "B" then 2 WHEN "b" then "ok" END;
 END
 OUTPUT
-select case binary 'b' when 'a' then 1 when 'B' then 2 when 'b' then 'ok' end from dual
+select case convert('b', BINARY) when 'a' then 1 when 'B' then 2 when 'b' then 'ok' end from dual
 END
 INPUT
 select space(4294967297);
@@ -5143,8 +5143,8 @@ END
 INPUT
 select trim(trailing 'foo' from 'foo');
 END
-ERROR
-syntax error at position 32 near 'from'
+OUTPUT
+select trim(trailing 'foo' from 'foo') from dual
 END
 INPUT
 select from (t1 natural join t2) natural left join (t3 natural join t4);
@@ -5582,7 +5582,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_roman_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_roman_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_roman_ci
 END
 INPUT
 select distinct a1,a2,b from t1;
@@ -5882,7 +5882,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_czech_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_czech_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_czech_ci
 END
 INPUT
 select min(big),max(big),max(big)-1 from t1;
@@ -5948,7 +5948,7 @@ INPUT
 select find_in_set(binary 'a', 'A,B,C');
 END
 OUTPUT
-select find_in_set(binary 'a', 'A,B,C') from dual
+select find_in_set(convert('a', binary), 'A,B,C') from dual
 END
 INPUT
 select INTERVAL 1 DAY + "1997-12-31";
@@ -6392,7 +6392,7 @@ INPUT
 select b from t1 where binary b like '';
 END
 OUTPUT
-select b from t1 where binary b like ''
+select b from t1 where convert(b, binary) like ''
 END
 INPUT
 select from t1 where str='str';
@@ -6650,7 +6650,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_spanish_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_spanish_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_spanish_ci
 END
 INPUT
 select from t1,t1 as t2;
@@ -6764,7 +6764,7 @@ INPUT
 select if(u=1,binary st,st) s from t1 order by s;
 END
 OUTPUT
-select if(u = 1, binary st, st) as s from t1 order by s asc
+select if(u = 1, convert(st, binary), st) as s from t1 order by s asc
 END
 INPUT
 select from t1 where match a against ("(+aaa* +bbb1*)" in boolean mode);
@@ -7454,7 +7454,7 @@ INPUT
 select cast("A" as binary) = "a", cast(BINARY "a" as CHAR) = "A";
 END
 OUTPUT
-select convert('A', binary) = 'a', convert(binary 'a', CHAR) = 'A' from dual
+select convert('A', binary) = 'a', convert(convert('a', BINARY), CHAR) = 'A' from dual
 END
 INPUT
 select from `information_schema`.`TRIGGERS` where `EVENT_OBJECT_SCHEMA` = NULL;
@@ -7694,7 +7694,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_estonian_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_estonian_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_estonian_ci
 END
 INPUT
 select hex(soundex(_utf8mb4 0xD091D092D093));
@@ -7754,7 +7754,7 @@ INPUT
 select hex(min(binary a)),count(*) from t1 group by a;
 END
 OUTPUT
-select hex(min(binary a)), count(*) from t1 group by a
+select hex(min(convert(a, binary))), count(*) from t1 group by a
 END
 INPUT
 select SUBSTRING_INDEX(_latin1'abcdabcdabcd',_latin1'd',2);
@@ -8396,7 +8396,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_latvian_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_latvian_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_latvian_ci
 END
 INPUT
 select 1 from t1 where a like @pattern;
@@ -8414,7 +8414,7 @@ INPUT
 select find_in_set('a',binary 'A,B,C');
 END
 OUTPUT
-select find_in_set('a', binary 'A,B,C') from dual
+select find_in_set('a', convert('A,B,C', binary)) from dual
 END
 INPUT
 select week(19981231,2), week(19981231,3), week(20000101,2), week(20000101,3);
@@ -8942,7 +8942,7 @@ INPUT
 select a, a regexp '[a]' from t1 order by binary a;
 END
 OUTPUT
-select a, a regexp '[a]' from t1 order by binary a asc
+select a, a regexp '[a]' from t1 order by convert(a, binary) asc
 END
 INPUT
 select -1 -9223372036854775808 as result;
@@ -9014,7 +9014,7 @@ INPUT
 select collation(a), collation(b), collation(binary 'ccc') from t1 limit 1;
 END
 OUTPUT
-select collation(a), collation(b), collation(binary 'ccc') from t1 limit 1
+select collation(a), collation(b), collation(convert('ccc', binary)) from t1 limit 1
 END
 INPUT
 select from t1 where a like "%U%";
@@ -9224,7 +9224,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_spanish2_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_spanish2_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_spanish2_ci
 END
 INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "-10000:1" HOUR_MINUTE);
@@ -9536,7 +9536,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_unicode_520_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_unicode_520_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_unicode_520_ci
 END
 INPUT
 select c as c_a from t1 where c='Ã±';
@@ -9908,7 +9908,7 @@ INPUT
 select t1.*,t2.* from t1,t1 as t2 where t1.A=t2.B order by binary t1.a,t2.a;
 END
 OUTPUT
-select t1.*, t2.* from t1, t1 as t2 where t1.A = t2.B order by binary t1.a asc, t2.a asc
+select t1.*, t2.* from t1, t1 as t2 where t1.A = t2.B order by convert(t1.a, binary) asc, t2.a asc
 END
 INPUT
 select from information_schema.parameters where specific_schema='test';
@@ -9932,7 +9932,7 @@ INPUT
 select text1, length(text1) from t1 order by binary text1;
 END
 OUTPUT
-select text1, length(text1) from t1 order by binary text1 asc
+select text1, length(text1) from t1 order by convert(text1, binary) asc
 END
 INPUT
 select from t2 having MATCH inhalt AGAINST ('foobar');
@@ -10010,7 +10010,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_croatian_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_croatian_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_croatian_ci
 END
 INPUT
 select grp,group_concat(c order by c separator ",") from t1 group by grp;
@@ -10052,7 +10052,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_lithuanian_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_lithuanian_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_lithuanian_ci
 END
 INPUT
 select t2 from t2;
@@ -10454,7 +10454,7 @@ INPUT
 select instr('hello','HE'), instr('hello',binary 'HE'), instr(binary 'hello','HE');
 END
 OUTPUT
-select instr('hello', 'HE'), instr('hello', binary 'HE'), instr(binary 'hello', 'HE') from dual
+select instr('hello', 'HE'), instr('hello', convert('HE', binary)), instr(convert('hello', binary), 'HE') from dual
 END
 INPUT
 select c1 mod 50 as result from t1;
@@ -10730,7 +10730,7 @@ INPUT
 select if(u=1,st,binary st) s from t1 where st like "%a%" order by s;
 END
 OUTPUT
-select if(u = 1, st, binary st) as s from t1 where st like '%a%' order by s asc
+select if(u = 1, st, convert(st, binary)) as s from t1 where st like '%a%' order by s asc
 END
 INPUT
 select name, avg(value1), std(value1), variance(value1) from t1, t2 where t1.id = t2.id group by t1.id;
@@ -10958,7 +10958,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_spanish2_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_spanish2_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_spanish2_ci
 END
 INPUT
 select i from v1 where i = 1 into k;
@@ -11377,8 +11377,8 @@ END
 INPUT
 select concat(':',trim(LEADING '.*' FROM '.*my'),':',trim(TRAILING '.*' FROM 'sql.*.*'),':');
 END
-ERROR
-syntax error at position 41 near 'FROM'
+OUTPUT
+select concat(':', trim(leading '.*' from '.*my'), ':', trim(trailing '.*' from 'sql.*.*'), ':') from dual
 END
 INPUT
 select max(t1.a2) from t1 left outer join t2 on t1.a1=10;
@@ -11420,7 +11420,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_lithuanian_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_lithuanian_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_lithuanian_ci
 END
 INPUT
 select from t1 where id <=> value or value<=>id;
@@ -11504,7 +11504,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_romanian_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_romanian_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_romanian_ci
 END
 INPUT
 select format(atan(pi(), 0), 6);
@@ -11744,7 +11744,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_slovak_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_slovak_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_slovak_ci
 END
 INPUT
 select export_set(9,"Y","N","-",5),export_set(9,"Y","N"),export_set(9,"Y","N","");
@@ -12236,7 +12236,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_latvian_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_latvian_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_latvian_ci
 END
 INPUT
 select "a is a and less is more" as txt;
@@ -12344,7 +12344,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_esperanto_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_esperanto_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_esperanto_ci
 END
 INPUT
 select from t1,t2,t3 where t1.a=t2.a AND t2.b=t3.a and t1.b=t3.b order by t1.a,t1.b;
@@ -12638,7 +12638,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_polish_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_polish_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_polish_ci
 END
 INPUT
 select make_set(NULL,'a','b','c'),make_set(1|4,'a',NULL,'c'),make_set(1+2,'a',NULL,'c');
@@ -13075,8 +13075,8 @@ END
 INPUT
 select collation(trim(LEADING _latin2' ' FROM _latin2'a')), coercibility(trim(LEADING _latin2'a' FROM _latin2'a'));
 END
-ERROR
-syntax error at position 38 near '_latin2'
+OUTPUT
+select collation(trim(leading _latin2 ' ' from _latin2 'a')), coercibility(trim(leading _latin2 'a' from _latin2 'a')) from dual
 END
 INPUT
 select from t1 AS m LEFT JOIN t2 AS c1 ON m.c1id = c1.id AND c1.active = 'Yes' LEFT JOIN t3 AS c2 ON m.c2id = c2.id AND c2.active = 'Yes' WHERE m.pid=1 AND (c1.id IS NOT NULL OR c2.id IS NOT NULL);
@@ -13598,7 +13598,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_german2_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_german2_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_german2_ci
 END
 INPUT
 select str_to_date( 1, NULL );
@@ -13946,7 +13946,7 @@ INPUT
 select hex(s1), hex(convert(s1 using utf8)) from t1 order by binary s1;
 END
 OUTPUT
-select hex(s1), hex(convert(s1 using utf8)) from t1 order by binary s1 asc
+select hex(s1), hex(convert(s1 using utf8)) from t1 order by convert(s1, binary) asc
 END
 INPUT
 select "Test delimiter without arg" as " ";
@@ -14018,7 +14018,7 @@ INPUT
 select charset(a), charset(b), charset(binary 'ccc') from t1 limit 1;
 END
 OUTPUT
-select charset(a), charset(b), charset(binary 'ccc') from t1 limit 1
+select charset(a), charset(b), charset(convert('ccc', binary)) from t1 limit 1
 END
 INPUT
 select FIND_IN_SET(_latin1'B' COLLATE latin1_general_ci,_latin1'a,b,c,d' COLLATE latin1_bin);
@@ -14210,7 +14210,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_danish_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_danish_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_danish_ci
 END
 INPUT
 select group_concat(c order by (select concat(5-t1.c,group_concat(c order by a)) from t2 where t2.a=t1.a)) as grp from t1;
@@ -14563,8 +14563,8 @@ END
 INPUT
 select concat(':',trim(LEADING FROM ' left'),':',trim(TRAILING FROM ' right '),':');
 END
-ERROR
-syntax error at position 36 near 'FROM'
+OUTPUT
+select concat(':', trim(leading from ' left'), ':', trim(trailing from ' right '), ':') from dual
 END
 INPUT
 select ST_AsText(ST_PolygonFromText('POLYGON((10 10,20 10,20 20,10 20, 10 10))'));
@@ -14678,7 +14678,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_unicode_520_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_unicode_520_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_unicode_520_ci
 END
 INPUT
 select collation(charset(_utf8'a')), collation(collation(_utf8'a'));
@@ -14803,8 +14803,8 @@ END
 INPUT
 select hex(a) from t1 ignore key(a) where a like 'A_' order by a;
 END
-ERROR
-syntax error at position 33 near 'key'
+OUTPUT
+select hex(a) from t1 ignore index (a) where a like 'A_' order by a asc
 END
 INPUT
 select char(196 using utf8);
@@ -14816,7 +14816,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_romanian_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_romanian_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_romanian_ci
 END
 INPUT
 select substring_index('www.tcx.se','.',-2),substring_index('www.tcx.se','.',1);
@@ -14924,7 +14924,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_polish_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_polish_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_polish_ci
 END
 INPUT
 select -((9223372036854775808));
@@ -14966,7 +14966,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_unicode_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_unicode_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_unicode_ci
 END
 INPUT
 select ST_GeomFromText('linestring(5 5, 15 4)') into @l;
@@ -15488,7 +15488,7 @@ INPUT
 select b from t1 group by binary b like '';
 END
 OUTPUT
-select b from t1 group by binary b like ''
+select b from t1 group by convert(b, binary) like ''
 END
 INPUT
 select hex(_utf32 0x3344);
@@ -15698,7 +15698,7 @@ INPUT
 select CASE "b" when "a" then 1 when binary "B" then 2 WHEN "b" then "ok" END;
 END
 OUTPUT
-select case 'b' when 'a' then 1 when binary 'B' then 2 when 'b' then 'ok' end from dual
+select case 'b' when 'a' then 1 when convert('B', binary) then 2 when 'b' then 'ok' end from dual
 END
 INPUT
 select id,concat(facility) from t1 group by id;
@@ -15968,7 +15968,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_croatian_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_croatian_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_croatian_ci
 END
 INPUT
 select var_samp(e) as '0.5', var_pop(e) as '0.25' from bug22555;
@@ -16214,7 +16214,7 @@ INPUT
 select t1a.a, t1b.a from t1 as t1a, t1 as t1b where t1a.a=t1b.a order by binary t1a.a, binary t1b.a;
 END
 OUTPUT
-select t1a.a, t1b.a from t1 as t1a, t1 as t1b where t1a.a = t1b.a order by binary t1a.a asc, binary t1b.a asc
+select t1a.a, t1b.a from t1 as t1a, t1 as t1b where t1a.a = t1b.a order by convert(t1a.a, binary) asc, convert(t1b.a, binary) asc
 END
 INPUT
 select from information_schema.partitions where table_schema="test" and table_name="t4";
@@ -16286,7 +16286,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_hungarian_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_hungarian_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_hungarian_ci
 END
 INPUT
 select from t1 where a like "%ss%";
@@ -16304,7 +16304,7 @@ INPUT
 select concat(a,'.') from t1 where binary a='aaa';
 END
 OUTPUT
-select concat(a, '.') from t1 where binary a = 'aaa'
+select concat(a, '.') from t1 where convert(a, binary) = 'aaa'
 END
 INPUT
 select t1.a, dt.a from t1, lateral (select t1.a+t2.a as a from t2) dt;
@@ -17096,7 +17096,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_swedish_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_swedish_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_swedish_ci
 END
 INPUT
 select release_lock('ee_22830');
@@ -17324,7 +17324,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_vietnamese_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_vietnamese_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_vietnamese_ci
 END
 INPUT
 select group_concat(c order by (select c from t2 where t2.a=t1.a limit 1)) as grp from t1;
@@ -17588,7 +17588,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_estonian_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_estonian_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_estonian_ci
 END
 INPUT
 select substring('hello', 1, 4294967297);
@@ -18032,7 +18032,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_danish_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_danish_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_danish_ci
 END
 INPUT
 select char(0xd1,0x8f using utf8);
@@ -18068,7 +18068,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_slovak_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_slovak_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_slovak_ci
 END
 INPUT
 select concat("1","2")|0,concat("1",".5")+0.0;
@@ -18337,8 +18337,8 @@ END
 INPUT
 select concat(':',trim(BOTH 'ab' FROM 'ababmyabab'),':',trim(BOTH '*' FROM '***sql'),':');
 END
-ERROR
-syntax error at position 38 near 'FROM'
+OUTPUT
+select concat(':', trim(both 'ab' from 'ababmyabab'), ':', trim(both '*' from '***sql'), ':') from dual
 END
 INPUT
 select date_add(date,INTERVAL 1 YEAR) from t1;
@@ -18452,7 +18452,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_swedish_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_swedish_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_swedish_ci
 END
 INPUT
 select count(distinct a),count(distinct grp) from t1;
@@ -19147,14 +19147,14 @@ END
 INPUT
 select trim(null from 'kate') as "must_be_null";
 END
-ERROR
-syntax error at position 22 near 'from'
+OUTPUT
+ select trim(null from 'kate') as must_be_null from dual
 END
 INPUT
 select domain from t1 where concat('@', trim(leading '.' from concat('.', domain))) = '@hello.de';
 END
-ERROR
-syntax error at position 62 near 'from'
+OUTPUT
+select domain from t1 where concat('@', trim(leading '.' from concat('.', domain))) = '@hello.de'
 END
 INPUT
 select @topic4_id:= 10104;
@@ -19412,7 +19412,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_vietnamese_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_vietnamese_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_vietnamese_ci
 END
 INPUT
 select 'A' like 'a' collate ujis_bin;
@@ -19568,7 +19568,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_german2_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_german2_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_german2_ci
 END
 INPUT
 select cast(-19999999999999999999 as signed);
@@ -19982,7 +19982,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_turkish_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_turkish_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_turkish_ci
 END
 INPUT
 select insert(_utf32 0x000000610000006200000063,10,2,_utf32 0x000000640000006500000066);
@@ -20174,7 +20174,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_unicode_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_unicode_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_unicode_ci
 END
 INPUT
 select -(-(9223372036854775808));
@@ -20240,7 +20240,7 @@ INPUT
 select b from t1 having binary b like '';
 END
 OUTPUT
-select b from t1 having binary b like ''
+select b from t1 having convert(b, binary) like ''
 END
 INPUT
 select from t5 natural join ((t1 natural join t2) cross join (t3 natural join t4));
@@ -20894,7 +20894,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_czech_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_czech_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_czech_ci
 END
 INPUT
 select "Test default delimiter;
@@ -21007,8 +21007,8 @@ END
 INPUT
 select collation(trim(TRAILING _latin2' ' FROM _latin2'a')), coercibility(trim(TRAILING _latin2'a' FROM _latin2'a'));
 END
-ERROR
-syntax error at position 39 near '_latin2'
+OUTPUT
+select collation(trim(trailing _latin2 ' ' from _latin2 'a')), coercibility(trim(trailing _latin2 'a' from _latin2 'a')) from dual
 END
 INPUT
 select left('hello', -4294967296);
@@ -21091,8 +21091,8 @@ END
 INPUT
 select TRIM("foo" FROM "foo"), TRIM("foo" FROM "foook"), TRIM("foo" FROM "okfoo");
 END
-ERROR
-syntax error at position 23 near 'FROM'
+OUTPUT
+select trim('foo' from 'foo'), trim('foo' from 'foook'), trim('foo' from 'okfoo') from dual
 END
 INPUT
 select var_samp(s) as 'null', var_pop(s) as '0' from bug22555;
@@ -21115,8 +21115,8 @@ END
 INPUT
 select concat(':',trim(leading from ' left '),':',trim(trailing from ' right '),':');
 END
-ERROR
-syntax error at position 36 near 'from'
+OUTPUT
+select concat(':', trim(leading from ' left '), ':', trim(trailing from ' right '), ':') from dual
 END
 INPUT
 select DATE_ADD('20071108', INTERVAL 1 DAY);
@@ -21373,8 +21373,8 @@ END
 INPUT
 select trim(leading 'foo' from 'foo');
 END
-ERROR
-syntax error at position 31 near 'from'
+OUTPUT
+select trim(leading 'foo' from 'foo') from dual
 END
 INPUT
 select distinct id, IFNULL(dsc, '-') from t1;
@@ -21517,8 +21517,8 @@ END
 INPUT
 select trim('xyz' from null) as "must_be_null";
 END
-ERROR
-syntax error at position 23 near 'from'
+OUTPUT
+select trim('xyz' from null) as must_be_null from dual
 END
 INPUT
 select a.*, count(b.id) as c from t2 a left join t3 b on a.id=b.order_id group by a.id, a.description having (a.description is not null) and (c=0);
@@ -21968,7 +21968,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_icelandic_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_icelandic_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_icelandic_ci
 END
 INPUT
 select hex(substr(_utf16 0x00e400e5D800DC00,-1));
@@ -22766,7 +22766,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_esperanto_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf32_esperanto_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf32_esperanto_ci
 END
 INPUT
 select hex(29223372036854775809) as hex_signed, hex(cast(29223372036854775809 as unsigned)) as hex_unsigned;
@@ -22813,8 +22813,8 @@ END
 INPUT
 select domain from t1 where concat('@', trim(leading '.' from concat('.', domain))) = '@test.de';
 END
-ERROR
-syntax error at position 62 near 'from'
+OUTPUT
+select domain from t1 where concat('@', trim(leading '.' from concat('.', domain))) = '@test.de'
 END
 INPUT
 select from t1 natural left join (t4 natural join t5) where t4.y > 7;
@@ -22916,7 +22916,7 @@ INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_spanish_ci;
 END
 OUTPUT
-select group_concat(c1 order by binary c1 asc separator '') from t1 group by c1 collate utf16_spanish_ci
+select group_concat(c1 order by convert(c1, binary) asc separator '') from t1 group by c1 collate utf16_spanish_ci
 END
 INPUT
 select cast('1.2' as decimal(3,2));

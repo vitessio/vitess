@@ -59,7 +59,7 @@ create table customer(cid int, name varbinary(128), meta json default null, typ 
 	defer vc.TearDown(t)
 
 	defaultCell = vc.Cells[defaultCellName]
-	vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, "0", initialStressVSchema, initialStressSchema, 0, 0, 100)
+	vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, "0", initialStressVSchema, initialStressSchema, 0, 0, 100, nil)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
 
@@ -82,7 +82,7 @@ create table customer(cid int, name varbinary(128), meta json default null, typ 
 	validateCount(t, vtgateConn, "stress_src:0", "largebin", insertCount)
 
 	t.Logf("creating new keysepace '%s'", targetKs)
-	vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, "0", initialStressVSchema, initialStressSchema, 0, 0, 200)
+	vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, "0", initialStressVSchema, initialStressSchema, 0, 0, 200, nil)
 	validateCount(t, vtgateConn, "stress_tgt:0", "largebin", 0)
 
 	t.Logf("moving 'largebin' table...")

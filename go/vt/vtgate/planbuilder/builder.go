@@ -67,7 +67,7 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 	if err != nil {
 		return nil, err
 	}
-	result, err := sqlparser.RewriteAST(stmt, keyspace, sqlparser.SQLSelectLimitUnset)
+	result, err := sqlparser.RewriteAST(stmt, keyspace, sqlparser.SQLSelectLimitUnset, "", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +103,7 @@ func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) se
 	switch planner {
 	case Gen4CompareV3:
 		return gen4CompareV3Planner(query), nil
-	case Gen4, Gen4Left2Right, Gen4GreedyOnly:
+	case Gen4Left2Right, Gen4GreedyOnly:
 		return gen4Planner(query, planner), nil
 	case Gen4WithFallback:
 		fp := &fallbackPlanner{
@@ -111,9 +111,11 @@ func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) se
 			fallback: v3planner(query),
 		}
 		return fp.plan, nil
-	default:
-		// default is v3 plan
+	case V3:
 		return v3planner(query), nil
+	default:
+		// default is gen4 plan
+		return gen4Planner(query, Gen4), nil
 	}
 }
 
