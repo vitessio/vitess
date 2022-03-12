@@ -132,34 +132,43 @@ func RemoveShardReplicationRecord(ctx context.Context, ts *Server, cell, keyspac
 }
 
 // FixShardReplication will fix the first problem it encounters within
-// a ShardReplication object.
-func FixShardReplication(ctx context.Context, ts *Server, logger logutil.Logger, cell, keyspace, shard string) error {
+// a ShardReplication object. It returns info about the problem being fixed, if
+// a problem was found.
+//
+// A return value of (nil, nil) indicates no issues in the replication graph.
+func FixShardReplication(ctx context.Context, ts *Server, logger logutil.Logger, cell, keyspace, shard string) (*topodatapb.ShardReplicationProblem, error) {
 	sri, err := ts.GetShardReplication(ctx, cell, keyspace, shard)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, node := range sri.Nodes {
+		problem := &topodatapb.ShardReplicationProblem{
+			TabletAlias: node.TabletAlias,
+		}
+
 		ti, err := ts.GetTablet(ctx, node.TabletAlias)
 		if IsErrType(err, NoNode) {
+			problem.Type = topodatapb.ShardReplicationProblem_NOT_FOUND
 			logger.Warningf("Tablet %v is in the replication graph, but does not exist, removing it", node.TabletAlias)
-			return RemoveShardReplicationRecord(ctx, ts, cell, keyspace, shard, node.TabletAlias)
+			return problem, RemoveShardReplicationRecord(ctx, ts, cell, keyspace, shard, node.TabletAlias)
 		}
 		if err != nil {
 			// unknown error, we probably don't want to continue
-			return err
+			return nil, err
 		}
 
 		if ti.Keyspace != keyspace || ti.Shard != shard || ti.Alias.Cell != cell {
+			problem.Type = topodatapb.ShardReplicationProblem_TOPOLOGY_MISMATCH
 			logger.Warningf("Tablet '%v' is in the replication graph, but has wrong keyspace/shard/cell, removing it", ti.Tablet)
-			return RemoveShardReplicationRecord(ctx, ts, cell, keyspace, shard, node.TabletAlias)
+			return problem, RemoveShardReplicationRecord(ctx, ts, cell, keyspace, shard, node.TabletAlias)
 		}
 
 		logger.Infof("Keeping tablet %v in the replication graph", node.TabletAlias)
 	}
 
 	logger.Infof("All entries in replication graph are valid")
-	return nil
+	return nil, nil
 }
 
 // UpdateShardReplicationFields updates the fields inside a topo.ShardReplication object.
