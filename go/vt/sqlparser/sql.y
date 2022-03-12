@@ -5795,7 +5795,7 @@ kill_statement:
 reserved_keyword:
   ACCOUNT
 | ADD
-| AFTER // TODO: this isn't reserved in MySQL what is it doing here??? what is going on i'm so confused (see BEFORE keyword)
+| AFTER // TODO: this is not reserved in MySQL, why is it here?
 | ALTER
 | AND
 | ARRAY
@@ -5980,23 +5980,23 @@ non_reserved_keyword:
 | ADMIN
 | AGAINST
 | AUTHENTICATION
-//| BEFORE // TODO: this should be reserved find out why it's here
+| BEFORE // TODO: this (and some others) should be reserved, why is it here?
 | BEGIN
-//| BIGINT
+| BIGINT
 | SERIAL
 | BIT
-//| BLOB
+| BLOB
 | BOOL
 | BOOLEAN
 | BUCKETS
-//| CASCADE
+| CASCADE
 | CATALOG_NAME
-//| CHANGE
+| CHANGE
 | CHANNEL
-//| CHAR
+| CHAR
 | CHARACTER
 | CHARSET
-//| CHECK
+| CHECK
 | CIPHER
 | CLASS_ORIGIN
 | CLIENT
@@ -6007,7 +6007,7 @@ non_reserved_keyword:
 | COMMIT
 | COMMITTED
 | COMPONENT
-//| CONSTRAINT
+| CONSTRAINT
 | CONSTRAINT_CATALOG
 | CONSTRAINT_NAME
 | CONSTRAINT_SCHEMA
@@ -6017,8 +6017,8 @@ non_reserved_keyword:
 | DATE
 | DATETIME
 | DAY
-//| DECIMAL
-//| DECLARE
+| DECIMAL
+| DECLARE
 | DEFINER
 | DEFINITION
 | DESCRIPTION
@@ -6038,8 +6038,8 @@ non_reserved_keyword:
 | FIXED
 | FLOAT_TYPE
 | FLUSH
-//| FOREIGN
-//| FULLTEXT
+| FOREIGN
+| FULLTEXT
 | GENERAL
 | GEOMCOLLECTION
 | GEOMETRY
@@ -6060,7 +6060,7 @@ non_reserved_keyword:
 | ISOLATION
 | ISSUER
 | JSON
-//| KEYS
+| KEYS
 | KEY_BLOCK_SIZE
 | LANGUAGE
 | LAST_INSERT_ID
@@ -6068,12 +6068,12 @@ non_reserved_keyword:
 | LEVEL
 | LINES
 | LINESTRING
-//| LOAD
+| LOAD
 | LOCAL
 | LOCKED
 | LOGS
-//| LONGBLOB
-//| LONGTEXT
+| LONGBLOB
+| LONGTEXT
 | LOW_PRIORITY
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
@@ -6083,9 +6083,9 @@ non_reserved_keyword:
 | MAX_QUERIES_PER_HOUR
 | MAX_UPDATES_PER_HOUR
 | MAX_USER_CONNECTIONS
-//| MEDIUMBLOB
-//| MEDIUMINT
-//| MEDIUMTEXT
+| MEDIUMBLOB
+| MEDIUMINT
+| MEDIUMTEXT
 | MESSAGE_TEXT
 | MODE
 | MODIFY
@@ -6102,19 +6102,19 @@ non_reserved_keyword:
 | NO
 | NOWAIT
 | NULLS
-//| NUMERIC
+| NUMERIC
 | OFFSET
 | OJ
 | OLD
 | ONLY
-//| OPTIMIZE
-//| OPTION
+| OPTIMIZE
+| OPTION
 | OPTIONAL
-//| OPTIONALLY
+| OPTIONALLY
 | ORDINALITY
 | ORGANIZATION
 | OTHERS
-//| PARTITION
+| PARTITION
 | PATH
 | PERSIST
 | PERSIST_ONLY
@@ -6123,38 +6123,38 @@ non_reserved_keyword:
 | POLYGON
 | PRECEDES
 | PRECEDING
-//| PRECISION
-//| PRIMARY
+| PRECISION
+| PRIMARY
 | PRIVILEGE_CHECKS_USER
 | PRIVILEGES
 | PROCESSLIST
 | PROXY
 | QUERY
 | RANDOM
-//| RANGE
-//| READ
-//| REAL
+| RANGE
+| READ
+| REAL
 | REFERENCE
 | RELAY
-//| RELEASE
+| RELEASE
 | REORGANIZE
 | REPAIR
 | REPEATABLE
 | REPLICATION
 | REQUIRE_ROW_FORMAT
-//| RESIGNAL
+| RESIGNAL
 | RESOURCE
 | RESPECT
 | RESTART
-//| RESTRICT
+| RESTRICT
 | RETAIN
 | REUSE
 | ROLE
 | ROLLBACK
 | ROUTINE
-//| ROWS
+| ROWS
 | SAVEPOINT
-//| SCHEMAS
+| SCHEMAS
 | SCHEMA_NAME
 | SECONDARY
 | SECONDARY_ENGINE
@@ -6165,18 +6165,18 @@ non_reserved_keyword:
 | SERIALIZABLE
 | SESSION
 | SHARE
-//| SIGNAL
+| SIGNAL
 | SIGNED
 | SKIP
 | SLAVE
 | SLOW
-//| SMALLINT
-//| SPATIAL
+| SMALLINT
+| SPATIAL
 | SQLSTATE
 | SRID
-//| SSL
+| SSL
 | START
-//| STARTING
+| STARTING
 | STREAM
 | SUBCLASS_ORIGIN
 | SUBJECT
@@ -6190,22 +6190,22 @@ non_reserved_keyword:
 | TIES
 | TIME
 | TIMESTAMP
-//| TINYBLOB
-//| TINYINT
-//| TINYTEXT
+| TINYBLOB
+| TINYINT
+| TINYTEXT
 | TRANSACTION
 | TRIGGERS
 | TRUNCATE
 | UNBOUNDED
 | UNCOMMITTED
-//| UNSIGNED
+| UNSIGNED
 | UNUSED
 | USER
 | USER_RESOURCES
-//| VARBINARY
-//| VARCHAR
+| VARBINARY
+| VARCHAR
 | VARIABLES
-//| VARYING
+| VARYING
 | VCPU
 | VIEW
 | VISIBLE
@@ -6214,10 +6214,11 @@ non_reserved_keyword:
 | WRITE
 | X509
 | YEAR
-//| ZEROFILL
+| ZEROFILL
 
 // Reserved keywords that cause grammar conflicts in some places, but are safe to use as column name / alias identifiers.
 // These keywords should also go in reserved_keyword.
+// TODO: The ones commented out here cause shift/reduce conflicts but need to e column name safe
 column_name_safe_reserved_keyword:
   ACCOUNT
 | AFTER
