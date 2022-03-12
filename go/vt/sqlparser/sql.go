@@ -4,7 +4,6 @@
 package sqlparser
 
 import __yyfmt__ "fmt"
-
 //line sql.y:18
 
 import "fmt"
@@ -13245,7 +13244,7 @@ yydefault:
 		}
 	case 1640:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:6293
+//line sql.y:6294
 		{
 			if incNesting(yylex) {
 				yylex.Error("max nesting level reached")
@@ -13254,7 +13253,7 @@ yydefault:
 		}
 	case 1641:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:6302
+//line sql.y:6303
 		{
 			decNesting(yylex)
 		}
