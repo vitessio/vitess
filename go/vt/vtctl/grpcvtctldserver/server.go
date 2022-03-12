@@ -2583,6 +2583,11 @@ func (s *VtctldServer) SetWritable(ctx context.Context, req *vtctldatapb.SetWrit
 	return &vtctldatapb.SetWritableResponse{}, nil
 }
 
+// ShardReplicationFix is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ShardReplicationFix(ctx context.Context, req *vtctldatapb.ShardReplicationFixRequest) (*vtctldatapb.ShardReplicationFixResponse, error) {
+	panic("unimplemented!")
+}
+
 // ShardReplicationPositions is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctldatapb.ShardReplicationPositionsRequest) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ShardReplicationPositions")

@@ -569,6 +569,15 @@ func (client *gRPCVtctldClient) SetWritable(ctx context.Context, in *vtctldatapb
 	return client.c.SetWritable(ctx, in, opts...)
 }
 
+// ShardReplicationFix is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ShardReplicationFix(ctx context.Context, in *vtctldatapb.ShardReplicationFixRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationFixResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ShardReplicationFix(ctx, in, opts...)
+}
+
 // ShardReplicationPositions is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ShardReplicationPositions(ctx context.Context, in *vtctldatapb.ShardReplicationPositionsRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
 	if client.c == nil {

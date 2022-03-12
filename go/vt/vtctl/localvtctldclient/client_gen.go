@@ -467,6 +467,11 @@ func (client *localVtctldClient) SetWritable(ctx context.Context, in *vtctldatap
 	return client.s.SetWritable(ctx, in)
 }
 
+// ShardReplicationFix is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ShardReplicationFix(ctx context.Context, in *vtctldatapb.ShardReplicationFixRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationFixResponse, error) {
+	return client.s.ShardReplicationFix(ctx, in)
+}
+
 // ShardReplicationPositions is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ShardReplicationPositions(ctx context.Context, in *vtctldatapb.ShardReplicationPositionsRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
 	return client.s.ShardReplicationPositions(ctx, in)

@@ -317,6 +317,10 @@ type VtctldClient interface {
 	SetShardTabletControl(ctx context.Context, in *vtctldata.SetShardTabletControlRequest, opts ...grpc.CallOption) (*vtctldata.SetShardTabletControlResponse, error)
 	// SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
 	SetWritable(ctx context.Context, in *vtctldata.SetWritableRequest, opts ...grpc.CallOption) (*vtctldata.SetWritableResponse, error)
+	// ShardReplicationFix walks the replication graph for a shard in a cell and
+	// attempts to fix the first problem encountered, returning information about
+	// the problem fixed, if any.
+	ShardReplicationFix(ctx context.Context, in *vtctldata.ShardReplicationFixRequest, opts ...grpc.CallOption) (*vtctldata.ShardReplicationFixResponse, error)
 	// ShardReplicationPositions returns the replication position of each tablet
 	// in a shard. This RPC makes a best-effort to return partial results. For
 	// example, if one tablet in the shard graph is unreachable, then
@@ -991,6 +995,15 @@ func (c *vtctldClient) SetWritable(ctx context.Context, in *vtctldata.SetWritabl
 	return out, nil
 }
 
+func (c *vtctldClient) ShardReplicationFix(ctx context.Context, in *vtctldata.ShardReplicationFixRequest, opts ...grpc.CallOption) (*vtctldata.ShardReplicationFixResponse, error) {
+	out := new(vtctldata.ShardReplicationFixResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ShardReplicationFix", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) ShardReplicationPositions(ctx context.Context, in *vtctldata.ShardReplicationPositionsRequest, opts ...grpc.CallOption) (*vtctldata.ShardReplicationPositionsResponse, error) {
 	out := new(vtctldata.ShardReplicationPositionsResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ShardReplicationPositions", in, out, opts...)
@@ -1315,6 +1328,10 @@ type VtctldServer interface {
 	SetShardTabletControl(context.Context, *vtctldata.SetShardTabletControlRequest) (*vtctldata.SetShardTabletControlResponse, error)
 	// SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
 	SetWritable(context.Context, *vtctldata.SetWritableRequest) (*vtctldata.SetWritableResponse, error)
+	// ShardReplicationFix walks the replication graph for a shard in a cell and
+	// attempts to fix the first problem encountered, returning information about
+	// the problem fixed, if any.
+	ShardReplicationFix(context.Context, *vtctldata.ShardReplicationFixRequest) (*vtctldata.ShardReplicationFixResponse, error)
 	// ShardReplicationPositions returns the replication position of each tablet
 	// in a shard. This RPC makes a best-effort to return partial results. For
 	// example, if one tablet in the shard graph is unreachable, then
@@ -1556,6 +1573,9 @@ func (UnimplementedVtctldServer) SetShardTabletControl(context.Context, *vtctlda
 }
 func (UnimplementedVtctldServer) SetWritable(context.Context, *vtctldata.SetWritableRequest) (*vtctldata.SetWritableResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetWritable not implemented")
+}
+func (UnimplementedVtctldServer) ShardReplicationFix(context.Context, *vtctldata.ShardReplicationFixRequest) (*vtctldata.ShardReplicationFixResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ShardReplicationFix not implemented")
 }
 func (UnimplementedVtctldServer) ShardReplicationPositions(context.Context, *vtctldata.ShardReplicationPositionsRequest) (*vtctldata.ShardReplicationPositionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ShardReplicationPositions not implemented")
@@ -2704,6 +2724,24 @@ func _Vtctld_SetWritable_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_ShardReplicationFix_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ShardReplicationFixRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ShardReplicationFix(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ShardReplicationFix",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ShardReplicationFix(ctx, req.(*vtctldata.ShardReplicationFixRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_ShardReplicationPositions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.ShardReplicationPositionsRequest)
 	if err := dec(in); err != nil {
@@ -3208,6 +3246,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetWritable",
 			Handler:    _Vtctld_SetWritable_Handler,
+		},
+		{
+			MethodName: "ShardReplicationFix",
+			Handler:    _Vtctld_ShardReplicationFix_Handler,
 		},
 		{
 			MethodName: "ShardReplicationPositions",
