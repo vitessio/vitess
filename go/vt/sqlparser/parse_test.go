@@ -4399,6 +4399,8 @@ func TestParseDjangoQueries(t *testing.T) {
 	}
 }
 
+
+//
 // not reserved in mysql
 var correctlyDoParse = []string{
 	"account",
