@@ -980,6 +980,15 @@ message SetWritableRequest {
 message SetWritableResponse {
 }
 
+message ShardReplicationAddRequest {
+  string keyspace = 1;
+  string shard = 2;
+  topodata.TabletAlias tablet_alias = 3;
+}
+
+message ShardReplicationAddResponse {
+}
+
 message ShardReplicationFixRequest {
   string keyspace = 1;
   string shard = 2;
@@ -1005,6 +1014,15 @@ message ShardReplicationPositionsResponse {
   // TabletMap is the set of tablets whose replication statuses were queried,
   // keyed by tablet alias.
   map<string, topodata.Tablet> tablet_map = 2;
+}
+
+message ShardReplicationRemoveRequest {
+  string keyspace = 1;
+  string shard = 2;
+  topodata.TabletAlias tablet_alias = 3;
+}
+
+message ShardReplicationRemoveResponse {
 }
 
 message SleepTabletRequest {

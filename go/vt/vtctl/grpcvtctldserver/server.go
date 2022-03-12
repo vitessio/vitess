@@ -2583,6 +2583,11 @@ func (s *VtctldServer) SetWritable(ctx context.Context, req *vtctldatapb.SetWrit
 	return &vtctldatapb.SetWritableResponse{}, nil
 }
 
+// ShardReplicationAdd is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ShardReplicationAdd(ctx context.Context, req *vtctldatapb.ShardReplicationAddRequest) (*vtctldatapb.ShardReplicationAddResponse, error) {
+	panic("unimplemented!")
+}
+
 // ShardReplicationFix is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ShardReplicationFix(ctx context.Context, req *vtctldatapb.ShardReplicationFixRequest) (*vtctldatapb.ShardReplicationFixResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ShardReplicationFix")
@@ -2732,6 +2737,11 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 		ReplicationStatuses: results,
 		TabletMap:           tabletMap,
 	}, nil
+}
+
+// ShardReplicationRemove is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ShardReplicationRemove(ctx context.Context, req *vtctldatapb.ShardReplicationRemoveRequest) (*vtctldatapb.ShardReplicationRemoveResponse, error) {
+	panic("unimplemented!")
 }
 
 // SleepTablet is part of the vtctlservicepb.VtctldServer interface.

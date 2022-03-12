@@ -216,6 +216,10 @@ service Vtctld {
   rpc SetShardTabletControl(vtctldata.SetShardTabletControlRequest) returns (vtctldata.SetShardTabletControlResponse) {};
   // SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
   rpc SetWritable(vtctldata.SetWritableRequest) returns (vtctldata.SetWritableResponse) {};
+  // ShardReplicationAdd adds an entry to a topodata.ShardReplication object.
+  //
+  // It is a low-level function and should generally not be called.
+  rpc ShardReplicationAdd(vtctldata.ShardReplicationAddRequest) returns (vtctldata.ShardReplicationAddResponse) {};
   // ShardReplicationFix walks the replication graph for a shard in a cell and
   // attempts to fix the first problem encountered, returning information about
   // the problem fixed, if any.
@@ -226,6 +230,11 @@ service Vtctld {
   // ShardReplicationPositions will return non-error, and include valid results
   // for the reachable tablets.
   rpc ShardReplicationPositions(vtctldata.ShardReplicationPositionsRequest) returns (vtctldata.ShardReplicationPositionsResponse) {};
+  // ShardReplicationRemove removes an entry from a topodata.ShardReplication
+  // object.
+  //
+  // It is a low-level function and should generally not be called.
+  rpc ShardReplicationRemove(vtctldata.ShardReplicationRemoveRequest) returns (vtctldata.ShardReplicationRemoveResponse) {};
   // SleepTablet blocks the aciton queue on the specified tablet for the
   // specified duration.
   //
