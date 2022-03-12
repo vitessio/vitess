@@ -4441,7 +4441,7 @@ var correctlyDoParse = []string{"avg", "bit_and", "bit_or", "bit_xor", "count", 
 	"x509", "year", "zerofil"}
 var correctlyDontParse = []string{"auto_increment", "add", "and", "alter", "mod", "asc", "as", "between", "binary", "by",
 	"call", "case", "collate", "convert", "connection", "create", "cross", "current", "current_date", "current_time", "current_timestamp", "database", "databases", "default", "delete",
-	"desc", "describe", "deterministic", "distinct", "div", "drop", "else", "elseif", "end", "escape", "event", "execute",
+	"desc", "describe", "deterministic", "distinct", "div", "drop", "else", "elseif", "end", "escape", "execute",
 	"exists", "explain", "failed_login_attempts", "false", "file", "first", "following", "for", "force", "from", "function",
 	"grant", "group", "grouping", "groups", "having", "identified", "if", "ignore", "in", "inout", "index", "inner", "insert",
 	"interval", "into", "is", "join", "key", "kill", "left",
