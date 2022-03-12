@@ -20,11 +20,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"time"
 
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -183,6 +183,21 @@ func commandRemoveBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	return err
 }
 
+// backupRestoreEventStreamLogger takes backup restore events from the
+// vtctldserver and emits them via logutil.LogEvent, preserving legacy behavior.
+type backupRestoreEventStreamLogger struct {
+	grpc.ServerStream
+	logger logutil.Logger
+	ctx    context.Context
+}
+
+func (b *backupRestoreEventStreamLogger) Context() context.Context { return b.ctx }
+
+func (b *backupRestoreEventStreamLogger) Send(resp *vtctldatapb.RestoreFromBackupResponse) error {
+	logutil.LogEvent(b.logger, resp.Event)
+	return nil
+}
+
 func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	backupTimestampStr := subFlags.String("backup_timestamp", "", "Use the backup taken at or before this timestamp rather than using the latest backup.")
 	if err := subFlags.Parse(args); err != nil {
@@ -208,34 +223,14 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
+
+	req := &vtctldatapb.RestoreFromBackupRequest{
+		TabletAlias: tabletAlias,
 	}
-	stream, err := wr.TabletManagerClient().RestoreFromBackup(ctx, tabletInfo.Tablet, backupTime)
-	if err != nil {
-		return err
+
+	if !backupTime.IsZero() {
+		req.BackupTime = protoutil.TimeToProto(backupTime)
 	}
-	for {
-		e, err := stream.Recv()
-		switch err {
-		case nil:
-			logutil.LogEvent(wr.Logger(), e)
-		case io.EOF:
-			// Do not do anything when active reparenting is disabled
-			if *mysqlctl.DisableActiveReparents {
-				return nil
-			}
-			// Otherwise we find the correct primary tablet and set the replication source,
-			// since the primary could have changed while we restored which can
-			// also affect whether we want to send semi sync acks or not.
-			tabletInfo, err = wr.TopoServer().GetTablet(ctx, tabletAlias)
-			if err != nil {
-				return err
-			}
-			return wr.SetReplicationSource(ctx, tabletInfo.Tablet)
-		default:
-			return err
-		}
-	}
+
+	return wr.VtctldServer().RestoreFromBackup(req, &backupRestoreEventStreamLogger{logger: wr.Logger(), ctx: ctx})
 }

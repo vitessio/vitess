@@ -376,6 +376,57 @@ func (client *localVtctldClient) ReparentTablet(ctx context.Context, in *vtctlda
 	return client.s.ReparentTablet(ctx, in)
 }
 
+type restoreFromBackupStreamAdapter struct {
+	*grpcshim.BidiStream
+	ch chan *vtctldatapb.RestoreFromBackupResponse
+}
+
+func (stream *restoreFromBackupStreamAdapter) Recv() (*vtctldatapb.RestoreFromBackupResponse, error) {
+	select {
+	case <-stream.Context().Done():
+		return nil, stream.Context().Err()
+	case <-stream.Closed():
+		// Stream has been closed for future sends. If there are messages that
+		// have already been sent, receive them until there are no more. After
+		// all sent messages have been received, Recv will return the CloseErr.
+		select {
+		case msg := <-stream.ch:
+			return msg, nil
+		default:
+			return nil, stream.CloseErr()
+		}
+	case err := <-stream.ErrCh:
+		return nil, err
+	case msg := <-stream.ch:
+		return msg, nil
+	}
+}
+
+func (stream *restoreFromBackupStreamAdapter) Send(msg *vtctldatapb.RestoreFromBackupResponse) error {
+	select {
+	case <-stream.Context().Done():
+		return stream.Context().Err()
+	case <-stream.Closed():
+		return grpcshim.ErrStreamClosed
+	case stream.ch <- msg:
+		return nil
+	}
+}
+
+// RestoreFromBackup is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) RestoreFromBackup(ctx context.Context, in *vtctldatapb.RestoreFromBackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_RestoreFromBackupClient, error) {
+	stream := &restoreFromBackupStreamAdapter{
+		BidiStream: grpcshim.NewBidiStream(ctx),
+		ch:         make(chan *vtctldatapb.RestoreFromBackupResponse, 1),
+	}
+	go func() {
+		err := client.s.RestoreFromBackup(in, stream)
+		stream.CloseWithError(err)
+	}()
+
+	return stream, nil
+}
+
 // RunHealthCheck is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) RunHealthCheck(ctx context.Context, in *vtctldatapb.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldatapb.RunHealthCheckResponse, error) {
 	return client.s.RunHealthCheck(ctx, in)

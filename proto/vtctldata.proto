@@ -844,6 +844,21 @@ message ReparentTabletResponse {
   topodata.TabletAlias primary = 3;
 }
 
+message RestoreFromBackupRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  // BackupTime, if set, will use the backup taken most closely at or before
+  // this time. If nil, the latest backup will be restored on the tablet.
+  vttime.Time backup_time = 2;
+}
+
+message RestoreFromBackupResponse {
+  // TabletAlias is the alias of the tablet doing the restore.
+  topodata.TabletAlias tablet_alias = 1;
+  string keyspace = 2;
+  string shard = 3;
+  logutil.Event event = 4;
+}
+
 message RunHealthCheckRequest {
   topodata.TabletAlias tablet_alias = 1;
 }
