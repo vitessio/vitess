@@ -288,6 +288,8 @@ type VtctldClient interface {
 	// only works if the current replica position matches the last known reparent
 	// action.
 	ReparentTablet(ctx context.Context, in *vtctldata.ReparentTabletRequest, opts ...grpc.CallOption) (*vtctldata.ReparentTabletResponse, error)
+	// RestoreFromBackup stops mysqld for the given tablet and restores a backup.
+	RestoreFromBackup(ctx context.Context, in *vtctldata.RestoreFromBackupRequest, opts ...grpc.CallOption) (Vtctld_RestoreFromBackupClient, error)
 	// RunHealthCheck runs a healthcheck on the remote tablet.
 	RunHealthCheck(ctx context.Context, in *vtctldata.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldata.RunHealthCheckResponse, error)
 	// SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
@@ -871,6 +873,38 @@ func (c *vtctldClient) ReparentTablet(ctx context.Context, in *vtctldata.Reparen
 	return out, nil
 }
 
+func (c *vtctldClient) RestoreFromBackup(ctx context.Context, in *vtctldata.RestoreFromBackupRequest, opts ...grpc.CallOption) (Vtctld_RestoreFromBackupClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Vtctld_ServiceDesc.Streams[2], "/vtctlservice.Vtctld/RestoreFromBackup", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &vtctldRestoreFromBackupClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Vtctld_RestoreFromBackupClient interface {
+	Recv() (*vtctldata.RestoreFromBackupResponse, error)
+	grpc.ClientStream
+}
+
+type vtctldRestoreFromBackupClient struct {
+	grpc.ClientStream
+}
+
+func (x *vtctldRestoreFromBackupClient) Recv() (*vtctldata.RestoreFromBackupResponse, error) {
+	m := new(vtctldata.RestoreFromBackupResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *vtctldClient) RunHealthCheck(ctx context.Context, in *vtctldata.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldata.RunHealthCheckResponse, error) {
 	out := new(vtctldata.RunHealthCheckResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/RunHealthCheck", in, out, opts...)
@@ -1202,6 +1236,8 @@ type VtctldServer interface {
 	// only works if the current replica position matches the last known reparent
 	// action.
 	ReparentTablet(context.Context, *vtctldata.ReparentTabletRequest) (*vtctldata.ReparentTabletResponse, error)
+	// RestoreFromBackup stops mysqld for the given tablet and restores a backup.
+	RestoreFromBackup(*vtctldata.RestoreFromBackupRequest, Vtctld_RestoreFromBackupServer) error
 	// RunHealthCheck runs a healthcheck on the remote tablet.
 	RunHealthCheck(context.Context, *vtctldata.RunHealthCheckRequest) (*vtctldata.RunHealthCheckResponse, error)
 	// SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
@@ -1429,6 +1465,9 @@ func (UnimplementedVtctldServer) RemoveShardCell(context.Context, *vtctldata.Rem
 }
 func (UnimplementedVtctldServer) ReparentTablet(context.Context, *vtctldata.ReparentTabletRequest) (*vtctldata.ReparentTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReparentTablet not implemented")
+}
+func (UnimplementedVtctldServer) RestoreFromBackup(*vtctldata.RestoreFromBackupRequest, Vtctld_RestoreFromBackupServer) error {
+	return status.Errorf(codes.Unimplemented, "method RestoreFromBackup not implemented")
 }
 func (UnimplementedVtctldServer) RunHealthCheck(context.Context, *vtctldata.RunHealthCheckRequest) (*vtctldata.RunHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
@@ -2424,6 +2463,27 @@ func _Vtctld_ReparentTablet_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_RestoreFromBackup_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(vtctldata.RestoreFromBackupRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(VtctldServer).RestoreFromBackup(m, &vtctldRestoreFromBackupServer{stream})
+}
+
+type Vtctld_RestoreFromBackupServer interface {
+	Send(*vtctldata.RestoreFromBackupResponse) error
+	grpc.ServerStream
+}
+
+type vtctldRestoreFromBackupServer struct {
+	grpc.ServerStream
+}
+
+func (x *vtctldRestoreFromBackupServer) Send(m *vtctldata.RestoreFromBackupResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 func _Vtctld_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.RunHealthCheckRequest)
 	if err := dec(in); err != nil {
@@ -3055,6 +3115,11 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "BackupShard",
 			Handler:       _Vtctld_BackupShard_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "RestoreFromBackup",
+			Handler:       _Vtctld_RestoreFromBackup_Handler,
 			ServerStreams: true,
 		},
 	},

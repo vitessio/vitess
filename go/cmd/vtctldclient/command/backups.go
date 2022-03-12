@@ -20,10 +20,13 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -62,6 +65,14 @@ If no replica-type tablet can be found, the backup can be taken on the primary i
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
 		RunE:                  commandRemoveBackup,
+	}
+	// RestoreFromBackup makes a RestoreFromBackup gRPC call to a vtctld.
+	RestoreFromBackup = &cobra.Command{
+		Use:                   "RestoreFromBackup [--backup-timestamp|-t <YYYY-mm-DD.HHMMSS>] <tablet_alias>",
+		Short:                 "Stops mysqld on the specified tablet and restores the data from either the latest backup or closest before `backup-timestamp`.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandRestoreFromBackup,
 	}
 )
 
@@ -196,6 +207,49 @@ func commandRemoveBackup(cmd *cobra.Command, args []string) error {
 	return err
 }
 
+var restoreFromBackupOptions = struct {
+	BackupTimestamp string
+}{}
+
+func commandRestoreFromBackup(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	req := &vtctldatapb.RestoreFromBackupRequest{
+		TabletAlias: alias,
+	}
+
+	if restoreFromBackupOptions.BackupTimestamp != "" {
+		t, err := time.Parse(mysqlctl.BackupTimestampFormat, restoreFromBackupOptions.BackupTimestamp)
+		if err != nil {
+			return err
+		}
+
+		req.BackupTime = protoutil.TimeToProto(t)
+	}
+
+	cli.FinishedParsing(cmd)
+
+	stream, err := client.RestoreFromBackup(commandCtx, req)
+	if err != nil {
+		return err
+	}
+
+	for {
+		resp, err := stream.Recv()
+		switch err {
+		case nil:
+			fmt.Printf("%s/%s (%s): %v\n", resp.Keyspace, resp.Shard, topoproto.TabletAliasString(resp.TabletAlias), resp.Event)
+		case io.EOF:
+			return nil
+		default:
+			return err
+		}
+	}
+}
+
 func init() {
 	Backup.Flags().BoolVar(&backupOptions.AllowPrimary, "allow-primary", false, "Allow the primary of a shard to be used for the backup. WARNING: If using the builtin backup engine, this will shutdown mysqld on the primary and stop writes for the duration of the backup.")
 	Backup.Flags().Uint64Var(&backupOptions.Concurrency, "concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously.")
@@ -210,4 +264,7 @@ func init() {
 	Root.AddCommand(GetBackups)
 
 	Root.AddCommand(RemoveBackup)
+
+	RestoreFromBackup.Flags().StringVarP(&restoreFromBackupOptions.BackupTimestamp, "backup-timestamp", "t", "", "Use the backup taken at, or closest before, this timestamp. Omit to use the latest backup. Timestamp format is \"YYYY-mm-DD.HHMMSS\".")
+	Root.AddCommand(RestoreFromBackup)
 }
