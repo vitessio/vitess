@@ -2585,7 +2585,26 @@ func (s *VtctldServer) SetWritable(ctx context.Context, req *vtctldatapb.SetWrit
 
 // ShardReplicationFix is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ShardReplicationFix(ctx context.Context, req *vtctldatapb.ShardReplicationFixRequest) (*vtctldatapb.ShardReplicationFixResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ShardReplicationFix")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("cell", req.Cell)
+
+	problem, err := topo.FixShardReplication(ctx, s.ts, logutil.NewConsoleLogger(), req.Cell, req.Keyspace, req.Shard)
+	if err != nil {
+		return nil, err
+	}
+
+	if problem != nil {
+		span.Annotate("problem_tablet", topoproto.TabletAliasString(problem.TabletAlias))
+		span.Annotate("problem_type", strings.ToLower(topoproto.ShardReplicationErrorTypeString(problem.Type)))
+	}
+
+	return &vtctldatapb.ShardReplicationFixResponse{
+		Error: problem,
+	}, nil
 }
 
 // ShardReplicationPositions is part of the vtctldservicepb.VtctldServer interface.
