@@ -6217,6 +6217,7 @@ column_name_safe_reserved_keyword:
 | COUNT
 | CUME_DIST
 | DENSE_RANK
+| EVENT
 | FIRST_VALUE
 | FOUND
 | JSON_ARRAYAGG
