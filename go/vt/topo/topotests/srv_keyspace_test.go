@@ -17,6 +17,7 @@ limitations under the License.
 package topotests
 
 import (
+	"context"
 	"reflect"
 	"sort"
 	"strings"
@@ -24,9 +25,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
-	"context"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/json2"

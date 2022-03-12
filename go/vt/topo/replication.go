@@ -17,18 +17,16 @@ limitations under the License.
 package topo
 
 import (
+	"context"
 	"path"
 
-	"context"
-
 	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
