@@ -1882,6 +1882,7 @@ type (
 func (*AliasedTableExpr) iTableExpr() {}
 func (*ParenTableExpr) iTableExpr()   {}
 func (*JoinTableExpr) iTableExpr()    {}
+func (*JSONTableExpr) iTableExpr()    {}
 
 type (
 	// SimpleTableExpr represents a simple table expression.
@@ -2225,6 +2226,53 @@ type (
 
 	// Offset is another AST type that is used during planning and never produced by the parser
 	Offset int
+
+	// JSONTableExpr describes the components of JSON_TABLE()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/json-table-functions.html#function_json-table
+	JSONTableExpr struct {
+		Expr    Expr
+		Alias   TableIdent
+		Filter  Expr
+		Columns []*JtColumnDefinition
+	}
+
+	// JtOnResponseType describes the type of column: default, error or null
+	JtOnResponseType int
+
+	// JtColumnDefinition represents the structure of column definition in JSON_TABLE
+	JtColumnDefinition struct {
+		JtOrdinal    *JtOrdinalColDef
+		JtPath       *JtPathColDef
+		JtNestedPath *JtNestedPathColDef
+	}
+
+	// JtOrdinalColDef is a type of column definition similar to using AUTO_INCREMENT with a column
+	JtOrdinalColDef struct {
+		Name ColIdent
+	}
+
+	// JtPathColDef is a type of column definition specifying the path in JSON structure to extract values
+	JtPathColDef struct {
+		Name            ColIdent
+		Type            ColumnType
+		Collate         string
+		JtColExists     bool
+		Path            Expr
+		EmptyOnResponse *JtOnResponse
+		ErrorOnResponse *JtOnResponse
+	}
+
+	// JtNestedPathColDef is type of column definition with nested column definitions
+	JtNestedPathColDef struct {
+		Path    Expr
+		Columns []*JtColumnDefinition
+	}
+
+	// JtOnResponse specifies for a column the JtOnResponseType along with the expression for default and error
+	JtOnResponse struct {
+		ResponseType JtOnResponseType
+		Expr         Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr

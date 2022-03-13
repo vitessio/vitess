@@ -560,6 +560,13 @@ const (
 	DropType
 )
 
+// Constant for Enum Type - JtOnResponseType
+const (
+	ErrorJSONType JtOnResponseType = iota
+	NullJSONType
+	DefaultJSONType
+)
+
 // Constant for Enum Type - CollateAndCharsetType
 const (
 	CollateType CollateAndCharsetType = iota

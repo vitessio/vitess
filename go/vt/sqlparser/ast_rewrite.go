@@ -172,10 +172,16 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
 	case IsolationLevel:
 		return a.rewriteIsolationLevel(parent, node, replacer)
+	case *JSONTableExpr:
+		return a.rewriteRefOfJSONTableExpr(parent, node, replacer)
 	case *JoinCondition:
 		return a.rewriteRefOfJoinCondition(parent, node, replacer)
 	case *JoinTableExpr:
 		return a.rewriteRefOfJoinTableExpr(parent, node, replacer)
+	case *JtColumnDefinition:
+		return a.rewriteRefOfJtColumnDefinition(parent, node, replacer)
+	case *JtOnResponse:
+		return a.rewriteRefOfJtOnResponse(parent, node, replacer)
 	case *KeyState:
 		return a.rewriteRefOfKeyState(parent, node, replacer)
 	case *Limit:
@@ -2649,6 +2655,52 @@ func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer 
 	}
 	return true
 }
+func (a *application) rewriteRefOfJSONTableExpr(parent SQLNode, node *JSONTableExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*JSONTableExpr).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteTableIdent(node, node.Alias, func(newNode, parent SQLNode) {
+		parent.(*JSONTableExpr).Alias = newNode.(TableIdent)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Filter, func(newNode, parent SQLNode) {
+		parent.(*JSONTableExpr).Filter = newNode.(Expr)
+	}) {
+		return false
+	}
+	for x, el := range node.Columns {
+		if !a.rewriteRefOfJtColumnDefinition(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*JSONTableExpr).Columns[idx] = newNode.(*JtColumnDefinition)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfJoinCondition(parent SQLNode, node *JoinCondition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2705,6 +2757,57 @@ func (a *application) rewriteRefOfJoinTableExpr(parent SQLNode, node *JoinTableE
 	}
 	if !a.rewriteRefOfJoinCondition(node, node.Condition, func(newNode, parent SQLNode) {
 		parent.(*JoinTableExpr).Condition = newNode.(*JoinCondition)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJtColumnDefinition(parent SQLNode, node *JtColumnDefinition, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJtOnResponse(parent SQLNode, node *JtOnResponse, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*JtOnResponse).Expr = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -5823,6 +5926,8 @@ func (a *application) rewriteTableExpr(parent SQLNode, node TableExpr, replacer 
 	switch node := node.(type) {
 	case *AliasedTableExpr:
 		return a.rewriteRefOfAliasedTableExpr(parent, node, replacer)
+	case *JSONTableExpr:
+		return a.rewriteRefOfJSONTableExpr(parent, node, replacer)
 	case *JoinTableExpr:
 		return a.rewriteRefOfJoinTableExpr(parent, node, replacer)
 	case *ParenTableExpr:

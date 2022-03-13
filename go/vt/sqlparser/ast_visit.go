@@ -172,10 +172,16 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfIsExpr(in, f)
 	case IsolationLevel:
 		return VisitIsolationLevel(in, f)
+	case *JSONTableExpr:
+		return VisitRefOfJSONTableExpr(in, f)
 	case *JoinCondition:
 		return VisitRefOfJoinCondition(in, f)
 	case *JoinTableExpr:
 		return VisitRefOfJoinTableExpr(in, f)
+	case *JtColumnDefinition:
+		return VisitRefOfJtColumnDefinition(in, f)
+	case *JtOnResponse:
+		return VisitRefOfJtOnResponse(in, f)
 	case *KeyState:
 		return VisitRefOfKeyState(in, f)
 	case *Limit:
@@ -1398,6 +1404,29 @@ func VisitRefOfIsExpr(in *IsExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfJSONTableExpr(in *JSONTableExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitTableIdent(in.Alias, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Filter, f); err != nil {
+		return err
+	}
+	for _, el := range in.Columns {
+		if err := VisitRefOfJtColumnDefinition(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func VisitRefOfJoinCondition(in *JoinCondition, f Visit) error {
 	if in == nil {
 		return nil
@@ -1427,6 +1456,27 @@ func VisitRefOfJoinTableExpr(in *JoinTableExpr, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfJoinCondition(in.Condition, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJtColumnDefinition(in *JtColumnDefinition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJtOnResponse(in *JtOnResponse, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
 	}
 	return nil
@@ -3048,6 +3098,8 @@ func VisitTableExpr(in TableExpr, f Visit) error {
 	switch in := in.(type) {
 	case *AliasedTableExpr:
 		return VisitRefOfAliasedTableExpr(in, f)
+	case *JSONTableExpr:
+		return VisitRefOfJSONTableExpr(in, f)
 	case *JoinTableExpr:
 		return VisitRefOfJoinTableExpr(in, f)
 	case *ParenTableExpr:
