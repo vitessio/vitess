@@ -2694,6 +2694,16 @@ func (s *VtctldServer) SleepTablet(ctx context.Context, req *vtctldatapb.SleepTa
 	return &vtctldatapb.SleepTabletResponse{}, nil
 }
 
+// SourceShardAdd is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SourceShardAdd(ctx context.Context, req *vtctldatapb.SourceShardAddRequest) (*vtctldatapb.SourceShardAddResponse, error) {
+	panic("unimplemented!")
+}
+
+// SourceShardDelete is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SourceShardDelete(ctx context.Context, req *vtctldatapb.SourceShardDeleteRequest) (*vtctldatapb.SourceShardDeleteResponse, error) {
+	panic("unimplemented!")
+}
+
 // StartReplication is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) StartReplication(ctx context.Context, req *vtctldatapb.StartReplicationRequest) (*vtctldatapb.StartReplicationResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.StartReplication")

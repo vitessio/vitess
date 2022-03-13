@@ -324,6 +324,16 @@ type VtctldClient interface {
 	//
 	// This is typically used for testing.
 	SleepTablet(ctx context.Context, in *vtctldata.SleepTabletRequest, opts ...grpc.CallOption) (*vtctldata.SleepTabletResponse, error)
+	// SourceShardAdd adds the SourceShard record with the provided index. This
+	// should be used only as an emergency function.
+	//
+	// It does not call RefreshState for the shard primary.
+	SourceShardAdd(ctx context.Context, in *vtctldata.SourceShardAddRequest, opts ...grpc.CallOption) (*vtctldata.SourceShardAddResponse, error)
+	// SourceShardDelete deletes the SourceShard record with the provided index.
+	// This should be used only as an emergency cleanup function.
+	//
+	// It does not call RefreshState for the shard primary.
+	SourceShardDelete(ctx context.Context, in *vtctldata.SourceShardDeleteRequest, opts ...grpc.CallOption) (*vtctldata.SourceShardDeleteResponse, error)
 	// StartReplication starts replication on the specified tablet.
 	StartReplication(ctx context.Context, in *vtctldata.StartReplicationRequest, opts ...grpc.CallOption) (*vtctldata.StartReplicationResponse, error)
 	// StopReplication stops replication on the specified tablet.
@@ -977,6 +987,24 @@ func (c *vtctldClient) SleepTablet(ctx context.Context, in *vtctldata.SleepTable
 	return out, nil
 }
 
+func (c *vtctldClient) SourceShardAdd(ctx context.Context, in *vtctldata.SourceShardAddRequest, opts ...grpc.CallOption) (*vtctldata.SourceShardAddResponse, error) {
+	out := new(vtctldata.SourceShardAddResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SourceShardAdd", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) SourceShardDelete(ctx context.Context, in *vtctldata.SourceShardDeleteRequest, opts ...grpc.CallOption) (*vtctldata.SourceShardDeleteResponse, error) {
+	out := new(vtctldata.SourceShardDeleteResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SourceShardDelete", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) StartReplication(ctx context.Context, in *vtctldata.StartReplicationRequest, opts ...grpc.CallOption) (*vtctldata.StartReplicationResponse, error) {
 	out := new(vtctldata.StartReplicationResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/StartReplication", in, out, opts...)
@@ -1272,6 +1300,16 @@ type VtctldServer interface {
 	//
 	// This is typically used for testing.
 	SleepTablet(context.Context, *vtctldata.SleepTabletRequest) (*vtctldata.SleepTabletResponse, error)
+	// SourceShardAdd adds the SourceShard record with the provided index. This
+	// should be used only as an emergency function.
+	//
+	// It does not call RefreshState for the shard primary.
+	SourceShardAdd(context.Context, *vtctldata.SourceShardAddRequest) (*vtctldata.SourceShardAddResponse, error)
+	// SourceShardDelete deletes the SourceShard record with the provided index.
+	// This should be used only as an emergency cleanup function.
+	//
+	// It does not call RefreshState for the shard primary.
+	SourceShardDelete(context.Context, *vtctldata.SourceShardDeleteRequest) (*vtctldata.SourceShardDeleteResponse, error)
 	// StartReplication starts replication on the specified tablet.
 	StartReplication(context.Context, *vtctldata.StartReplicationRequest) (*vtctldata.StartReplicationResponse, error)
 	// StopReplication stops replication on the specified tablet.
@@ -1492,6 +1530,12 @@ func (UnimplementedVtctldServer) ShardReplicationPositions(context.Context, *vtc
 }
 func (UnimplementedVtctldServer) SleepTablet(context.Context, *vtctldata.SleepTabletRequest) (*vtctldata.SleepTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SleepTablet not implemented")
+}
+func (UnimplementedVtctldServer) SourceShardAdd(context.Context, *vtctldata.SourceShardAddRequest) (*vtctldata.SourceShardAddResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SourceShardAdd not implemented")
+}
+func (UnimplementedVtctldServer) SourceShardDelete(context.Context, *vtctldata.SourceShardDeleteRequest) (*vtctldata.SourceShardDeleteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SourceShardDelete not implemented")
 }
 func (UnimplementedVtctldServer) StartReplication(context.Context, *vtctldata.StartReplicationRequest) (*vtctldata.StartReplicationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartReplication not implemented")
@@ -2628,6 +2672,42 @@ func _Vtctld_SleepTablet_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_SourceShardAdd_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.SourceShardAddRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).SourceShardAdd(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/SourceShardAdd",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).SourceShardAdd(ctx, req.(*vtctldata.SourceShardAddRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_SourceShardDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.SourceShardDeleteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).SourceShardDelete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/SourceShardDelete",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).SourceShardDelete(ctx, req.(*vtctldata.SourceShardDeleteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_StartReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.StartReplicationRequest)
 	if err := dec(in); err != nil {
@@ -3060,6 +3140,14 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SleepTablet",
 			Handler:    _Vtctld_SleepTablet_Handler,
+		},
+		{
+			MethodName: "SourceShardAdd",
+			Handler:    _Vtctld_SourceShardAdd_Handler,
+		},
+		{
+			MethodName: "SourceShardDelete",
+			Handler:    _Vtctld_SourceShardDelete_Handler,
 		},
 		{
 			MethodName: "StartReplication",
