@@ -173,6 +173,14 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfIsExpr(in)
 	case IsolationLevel:
 		return in
+	case *JSONArrayExpr:
+		return CloneRefOfJSONArrayExpr(in)
+	case *JSONObjectExpr:
+		return CloneRefOfJSONObjectExpr(in)
+	case JSONObjectParam:
+		return CloneJSONObjectParam(in)
+	case *JSONQuoteExpr:
+		return CloneRefOfJSONQuoteExpr(in)
 	case *JoinCondition:
 		return CloneRefOfJoinCondition(in)
 	case *JoinTableExpr:
@@ -1126,6 +1134,41 @@ func CloneRefOfIsExpr(n *IsExpr) *IsExpr {
 	}
 	out := *n
 	out.Left = CloneExpr(n.Left)
+	return &out
+}
+
+// CloneRefOfJSONArrayExpr creates a deep clone of the input.
+func CloneRefOfJSONArrayExpr(n *JSONArrayExpr) *JSONArrayExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Params = CloneExprs(n.Params)
+	return &out
+}
+
+// CloneRefOfJSONObjectExpr creates a deep clone of the input.
+func CloneRefOfJSONObjectExpr(n *JSONObjectExpr) *JSONObjectExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Params = CloneSliceOfJSONObjectParam(n.Params)
+	return &out
+}
+
+// CloneJSONObjectParam creates a deep clone of the input.
+func CloneJSONObjectParam(n JSONObjectParam) JSONObjectParam {
+	return *CloneRefOfJSONObjectParam(&n)
+}
+
+// CloneRefOfJSONQuoteExpr creates a deep clone of the input.
+func CloneRefOfJSONQuoteExpr(n *JSONQuoteExpr) *JSONQuoteExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.StringArg = CloneExpr(n.StringArg)
 	return &out
 }
 
@@ -2106,6 +2149,12 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
+	case *JSONArrayExpr:
+		return CloneRefOfJSONArrayExpr(in)
+	case *JSONObjectExpr:
+		return CloneRefOfJSONObjectExpr(in)
+	case *JSONQuoteExpr:
+		return CloneRefOfJSONQuoteExpr(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
 	case *SubstrExpr:
@@ -2284,6 +2333,12 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
 		return CloneRefOfIsExpr(in)
+	case *JSONArrayExpr:
+		return CloneRefOfJSONArrayExpr(in)
+	case *JSONObjectExpr:
+		return CloneRefOfJSONObjectExpr(in)
+	case *JSONQuoteExpr:
+		return CloneRefOfJSONQuoteExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -2647,6 +2702,29 @@ func CloneSliceOfRefOfIndexOption(n []*IndexOption) []*IndexOption {
 		res = append(res, CloneRefOfIndexOption(x))
 	}
 	return res
+}
+
+// CloneSliceOfJSONObjectParam creates a deep clone of the input.
+func CloneSliceOfJSONObjectParam(n []JSONObjectParam) []JSONObjectParam {
+	if n == nil {
+		return nil
+	}
+	res := make([]JSONObjectParam, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneJSONObjectParam(x))
+	}
+	return res
+}
+
+// CloneRefOfJSONObjectParam creates a deep clone of the input.
+func CloneRefOfJSONObjectParam(n *JSONObjectParam) *JSONObjectParam {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Key = CloneExpr(n.Key)
+	out.Value = CloneExpr(n.Value)
+	return &out
 }
 
 // CloneTableAndLockTypes creates a deep clone of the input.

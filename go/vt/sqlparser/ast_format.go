@@ -1927,3 +1927,43 @@ func (node Offset) Format(buf *TrackedBuffer) {
 	buf.WriteString(strconv.Itoa(int(node)))
 	buf.WriteString("]")
 }
+
+// Format formats the node.
+func (node *JSONArrayExpr) Format(buf *TrackedBuffer) {
+	//buf.astPrintf(node,"%s(,"node.Name.Lowered())
+	buf.WriteString("json_array(")
+	if len(node.Params) > 0 {
+		var prefix string
+		for _, n := range node.Params {
+			buf.astPrintf(node, "%s%v", prefix, n)
+			prefix = ", "
+		}
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node.
+func (node *JSONObjectExpr) Format(buf *TrackedBuffer) {
+	//buf.astPrintf(node,"%s(,"node.Name.Lowered())
+	buf.WriteString("json_object(")
+	if len(node.Params) > 0 {
+		for i, p := range node.Params {
+			if i != 0 {
+				buf.astPrintf(node, ", ")
+
+			}
+			buf.astPrintf(node, "%v", p)
+		}
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node.
+func (node JSONObjectParam) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%v, %v", node.Key, node.Value)
+}
+
+// Format formats the node.
+func (node *JSONQuoteExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_quote(%v)", node.StringArg)
+}
