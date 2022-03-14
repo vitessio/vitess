@@ -32869,6 +32869,408 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of an ExecuteFetchAsAppRequest. */
+    interface IExecuteFetchAsAppRequest {
+
+        /** ExecuteFetchAsAppRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ExecuteFetchAsAppRequest query */
+        query?: (string|null);
+
+        /** ExecuteFetchAsAppRequest max_rows */
+        max_rows?: (number|Long|null);
+
+        /** ExecuteFetchAsAppRequest use_pool */
+        use_pool?: (boolean|null);
+    }
+
+    /** Represents an ExecuteFetchAsAppRequest. */
+    class ExecuteFetchAsAppRequest implements IExecuteFetchAsAppRequest {
+
+        /**
+         * Constructs a new ExecuteFetchAsAppRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IExecuteFetchAsAppRequest);
+
+        /** ExecuteFetchAsAppRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ExecuteFetchAsAppRequest query. */
+        public query: string;
+
+        /** ExecuteFetchAsAppRequest max_rows. */
+        public max_rows: (number|Long);
+
+        /** ExecuteFetchAsAppRequest use_pool. */
+        public use_pool: boolean;
+
+        /**
+         * Creates a new ExecuteFetchAsAppRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ExecuteFetchAsAppRequest instance
+         */
+        public static create(properties?: vtctldata.IExecuteFetchAsAppRequest): vtctldata.ExecuteFetchAsAppRequest;
+
+        /**
+         * Encodes the specified ExecuteFetchAsAppRequest message. Does not implicitly {@link vtctldata.ExecuteFetchAsAppRequest.verify|verify} messages.
+         * @param message ExecuteFetchAsAppRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IExecuteFetchAsAppRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ExecuteFetchAsAppRequest message, length delimited. Does not implicitly {@link vtctldata.ExecuteFetchAsAppRequest.verify|verify} messages.
+         * @param message ExecuteFetchAsAppRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IExecuteFetchAsAppRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ExecuteFetchAsAppRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ExecuteFetchAsAppRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ExecuteFetchAsAppRequest;
+
+        /**
+         * Decodes an ExecuteFetchAsAppRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ExecuteFetchAsAppRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ExecuteFetchAsAppRequest;
+
+        /**
+         * Verifies an ExecuteFetchAsAppRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ExecuteFetchAsAppRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ExecuteFetchAsAppRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ExecuteFetchAsAppRequest;
+
+        /**
+         * Creates a plain object from an ExecuteFetchAsAppRequest message. Also converts values to other types if specified.
+         * @param message ExecuteFetchAsAppRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ExecuteFetchAsAppRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ExecuteFetchAsAppRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an ExecuteFetchAsAppResponse. */
+    interface IExecuteFetchAsAppResponse {
+
+        /** ExecuteFetchAsAppResponse result */
+        result?: (query.IQueryResult|null);
+    }
+
+    /** Represents an ExecuteFetchAsAppResponse. */
+    class ExecuteFetchAsAppResponse implements IExecuteFetchAsAppResponse {
+
+        /**
+         * Constructs a new ExecuteFetchAsAppResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IExecuteFetchAsAppResponse);
+
+        /** ExecuteFetchAsAppResponse result. */
+        public result?: (query.IQueryResult|null);
+
+        /**
+         * Creates a new ExecuteFetchAsAppResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ExecuteFetchAsAppResponse instance
+         */
+        public static create(properties?: vtctldata.IExecuteFetchAsAppResponse): vtctldata.ExecuteFetchAsAppResponse;
+
+        /**
+         * Encodes the specified ExecuteFetchAsAppResponse message. Does not implicitly {@link vtctldata.ExecuteFetchAsAppResponse.verify|verify} messages.
+         * @param message ExecuteFetchAsAppResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IExecuteFetchAsAppResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ExecuteFetchAsAppResponse message, length delimited. Does not implicitly {@link vtctldata.ExecuteFetchAsAppResponse.verify|verify} messages.
+         * @param message ExecuteFetchAsAppResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IExecuteFetchAsAppResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ExecuteFetchAsAppResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ExecuteFetchAsAppResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ExecuteFetchAsAppResponse;
+
+        /**
+         * Decodes an ExecuteFetchAsAppResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ExecuteFetchAsAppResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ExecuteFetchAsAppResponse;
+
+        /**
+         * Verifies an ExecuteFetchAsAppResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ExecuteFetchAsAppResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ExecuteFetchAsAppResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ExecuteFetchAsAppResponse;
+
+        /**
+         * Creates a plain object from an ExecuteFetchAsAppResponse message. Also converts values to other types if specified.
+         * @param message ExecuteFetchAsAppResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ExecuteFetchAsAppResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ExecuteFetchAsAppResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an ExecuteFetchAsDBARequest. */
+    interface IExecuteFetchAsDBARequest {
+
+        /** ExecuteFetchAsDBARequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ExecuteFetchAsDBARequest query */
+        query?: (string|null);
+
+        /** ExecuteFetchAsDBARequest max_rows */
+        max_rows?: (number|Long|null);
+
+        /** ExecuteFetchAsDBARequest disable_binlogs */
+        disable_binlogs?: (boolean|null);
+
+        /** ExecuteFetchAsDBARequest reload_schema */
+        reload_schema?: (boolean|null);
+    }
+
+    /** Represents an ExecuteFetchAsDBARequest. */
+    class ExecuteFetchAsDBARequest implements IExecuteFetchAsDBARequest {
+
+        /**
+         * Constructs a new ExecuteFetchAsDBARequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IExecuteFetchAsDBARequest);
+
+        /** ExecuteFetchAsDBARequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ExecuteFetchAsDBARequest query. */
+        public query: string;
+
+        /** ExecuteFetchAsDBARequest max_rows. */
+        public max_rows: (number|Long);
+
+        /** ExecuteFetchAsDBARequest disable_binlogs. */
+        public disable_binlogs: boolean;
+
+        /** ExecuteFetchAsDBARequest reload_schema. */
+        public reload_schema: boolean;
+
+        /**
+         * Creates a new ExecuteFetchAsDBARequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ExecuteFetchAsDBARequest instance
+         */
+        public static create(properties?: vtctldata.IExecuteFetchAsDBARequest): vtctldata.ExecuteFetchAsDBARequest;
+
+        /**
+         * Encodes the specified ExecuteFetchAsDBARequest message. Does not implicitly {@link vtctldata.ExecuteFetchAsDBARequest.verify|verify} messages.
+         * @param message ExecuteFetchAsDBARequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IExecuteFetchAsDBARequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ExecuteFetchAsDBARequest message, length delimited. Does not implicitly {@link vtctldata.ExecuteFetchAsDBARequest.verify|verify} messages.
+         * @param message ExecuteFetchAsDBARequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IExecuteFetchAsDBARequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ExecuteFetchAsDBARequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ExecuteFetchAsDBARequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ExecuteFetchAsDBARequest;
+
+        /**
+         * Decodes an ExecuteFetchAsDBARequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ExecuteFetchAsDBARequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ExecuteFetchAsDBARequest;
+
+        /**
+         * Verifies an ExecuteFetchAsDBARequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ExecuteFetchAsDBARequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ExecuteFetchAsDBARequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ExecuteFetchAsDBARequest;
+
+        /**
+         * Creates a plain object from an ExecuteFetchAsDBARequest message. Also converts values to other types if specified.
+         * @param message ExecuteFetchAsDBARequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ExecuteFetchAsDBARequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ExecuteFetchAsDBARequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an ExecuteFetchAsDBAResponse. */
+    interface IExecuteFetchAsDBAResponse {
+
+        /** ExecuteFetchAsDBAResponse result */
+        result?: (query.IQueryResult|null);
+    }
+
+    /** Represents an ExecuteFetchAsDBAResponse. */
+    class ExecuteFetchAsDBAResponse implements IExecuteFetchAsDBAResponse {
+
+        /**
+         * Constructs a new ExecuteFetchAsDBAResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IExecuteFetchAsDBAResponse);
+
+        /** ExecuteFetchAsDBAResponse result. */
+        public result?: (query.IQueryResult|null);
+
+        /**
+         * Creates a new ExecuteFetchAsDBAResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ExecuteFetchAsDBAResponse instance
+         */
+        public static create(properties?: vtctldata.IExecuteFetchAsDBAResponse): vtctldata.ExecuteFetchAsDBAResponse;
+
+        /**
+         * Encodes the specified ExecuteFetchAsDBAResponse message. Does not implicitly {@link vtctldata.ExecuteFetchAsDBAResponse.verify|verify} messages.
+         * @param message ExecuteFetchAsDBAResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IExecuteFetchAsDBAResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ExecuteFetchAsDBAResponse message, length delimited. Does not implicitly {@link vtctldata.ExecuteFetchAsDBAResponse.verify|verify} messages.
+         * @param message ExecuteFetchAsDBAResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IExecuteFetchAsDBAResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ExecuteFetchAsDBAResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ExecuteFetchAsDBAResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ExecuteFetchAsDBAResponse;
+
+        /**
+         * Decodes an ExecuteFetchAsDBAResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ExecuteFetchAsDBAResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ExecuteFetchAsDBAResponse;
+
+        /**
+         * Verifies an ExecuteFetchAsDBAResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ExecuteFetchAsDBAResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ExecuteFetchAsDBAResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ExecuteFetchAsDBAResponse;
+
+        /**
+         * Creates a plain object from an ExecuteFetchAsDBAResponse message. Also converts values to other types if specified.
+         * @param message ExecuteFetchAsDBAResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ExecuteFetchAsDBAResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ExecuteFetchAsDBAResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of an ExecuteHookRequest. */
     interface IExecuteHookRequest {
 

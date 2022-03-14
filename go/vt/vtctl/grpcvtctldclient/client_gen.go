@@ -182,6 +182,24 @@ func (client *gRPCVtctldClient) EmergencyReparentShard(ctx context.Context, in *
 	return client.c.EmergencyReparentShard(ctx, in, opts...)
 }
 
+// ExecuteFetchAsApp is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ExecuteFetchAsApp(ctx context.Context, in *vtctldatapb.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteFetchAsAppResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ExecuteFetchAsApp(ctx, in, opts...)
+}
+
+// ExecuteFetchAsDBA is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ExecuteFetchAsDBA(ctx context.Context, in *vtctldatapb.ExecuteFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteFetchAsDBAResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ExecuteFetchAsDBA(ctx, in, opts...)
+}
+
 // ExecuteHook is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ExecuteHook(ctx context.Context, in *vtctldatapb.ExecuteHookRequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteHookResponse, error) {
 	if client.c == nil {

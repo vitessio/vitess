@@ -909,6 +909,16 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	return resp, err
 }
 
+// ExecuteFetchAsApp is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ExecuteFetchAsApp(ctx context.Context, req *vtctldatapb.ExecuteFetchAsAppRequest) (*vtctldatapb.ExecuteFetchAsAppResponse, error) {
+	panic("unimplemented!")
+}
+
+// ExecuteFetchAsDBA is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ExecuteFetchAsDBA(ctx context.Context, req *vtctldatapb.ExecuteFetchAsDBARequest) (*vtctldatapb.ExecuteFetchAsDBAResponse, error) {
+	panic("unimplemented!")
+}
+
 // ExecuteHook is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ExecuteHook(ctx context.Context, req *vtctldatapb.ExecuteHookRequest) (*vtctldatapb.ExecuteHookResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ExecuteHook")
