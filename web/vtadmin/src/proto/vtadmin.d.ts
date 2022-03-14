@@ -40950,6 +40950,414 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a SourceShardAddRequest. */
+    interface ISourceShardAddRequest {
+
+        /** SourceShardAddRequest keyspace */
+        keyspace?: (string|null);
+
+        /** SourceShardAddRequest shard */
+        shard?: (string|null);
+
+        /** SourceShardAddRequest uid */
+        uid?: (number|null);
+
+        /** SourceShardAddRequest source_keyspace */
+        source_keyspace?: (string|null);
+
+        /** SourceShardAddRequest source_shard */
+        source_shard?: (string|null);
+
+        /** SourceShardAddRequest key_range */
+        key_range?: (topodata.IKeyRange|null);
+
+        /** SourceShardAddRequest tables */
+        tables?: (string[]|null);
+    }
+
+    /** Represents a SourceShardAddRequest. */
+    class SourceShardAddRequest implements ISourceShardAddRequest {
+
+        /**
+         * Constructs a new SourceShardAddRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISourceShardAddRequest);
+
+        /** SourceShardAddRequest keyspace. */
+        public keyspace: string;
+
+        /** SourceShardAddRequest shard. */
+        public shard: string;
+
+        /** SourceShardAddRequest uid. */
+        public uid: number;
+
+        /** SourceShardAddRequest source_keyspace. */
+        public source_keyspace: string;
+
+        /** SourceShardAddRequest source_shard. */
+        public source_shard: string;
+
+        /** SourceShardAddRequest key_range. */
+        public key_range?: (topodata.IKeyRange|null);
+
+        /** SourceShardAddRequest tables. */
+        public tables: string[];
+
+        /**
+         * Creates a new SourceShardAddRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SourceShardAddRequest instance
+         */
+        public static create(properties?: vtctldata.ISourceShardAddRequest): vtctldata.SourceShardAddRequest;
+
+        /**
+         * Encodes the specified SourceShardAddRequest message. Does not implicitly {@link vtctldata.SourceShardAddRequest.verify|verify} messages.
+         * @param message SourceShardAddRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISourceShardAddRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SourceShardAddRequest message, length delimited. Does not implicitly {@link vtctldata.SourceShardAddRequest.verify|verify} messages.
+         * @param message SourceShardAddRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISourceShardAddRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SourceShardAddRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SourceShardAddRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SourceShardAddRequest;
+
+        /**
+         * Decodes a SourceShardAddRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SourceShardAddRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SourceShardAddRequest;
+
+        /**
+         * Verifies a SourceShardAddRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SourceShardAddRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SourceShardAddRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SourceShardAddRequest;
+
+        /**
+         * Creates a plain object from a SourceShardAddRequest message. Also converts values to other types if specified.
+         * @param message SourceShardAddRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SourceShardAddRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SourceShardAddRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SourceShardAddResponse. */
+    interface ISourceShardAddResponse {
+
+        /** SourceShardAddResponse shard */
+        shard?: (topodata.IShard|null);
+    }
+
+    /** Represents a SourceShardAddResponse. */
+    class SourceShardAddResponse implements ISourceShardAddResponse {
+
+        /**
+         * Constructs a new SourceShardAddResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISourceShardAddResponse);
+
+        /** SourceShardAddResponse shard. */
+        public shard?: (topodata.IShard|null);
+
+        /**
+         * Creates a new SourceShardAddResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SourceShardAddResponse instance
+         */
+        public static create(properties?: vtctldata.ISourceShardAddResponse): vtctldata.SourceShardAddResponse;
+
+        /**
+         * Encodes the specified SourceShardAddResponse message. Does not implicitly {@link vtctldata.SourceShardAddResponse.verify|verify} messages.
+         * @param message SourceShardAddResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISourceShardAddResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SourceShardAddResponse message, length delimited. Does not implicitly {@link vtctldata.SourceShardAddResponse.verify|verify} messages.
+         * @param message SourceShardAddResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISourceShardAddResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SourceShardAddResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SourceShardAddResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SourceShardAddResponse;
+
+        /**
+         * Decodes a SourceShardAddResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SourceShardAddResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SourceShardAddResponse;
+
+        /**
+         * Verifies a SourceShardAddResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SourceShardAddResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SourceShardAddResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SourceShardAddResponse;
+
+        /**
+         * Creates a plain object from a SourceShardAddResponse message. Also converts values to other types if specified.
+         * @param message SourceShardAddResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SourceShardAddResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SourceShardAddResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SourceShardDeleteRequest. */
+    interface ISourceShardDeleteRequest {
+
+        /** SourceShardDeleteRequest keyspace */
+        keyspace?: (string|null);
+
+        /** SourceShardDeleteRequest shard */
+        shard?: (string|null);
+
+        /** SourceShardDeleteRequest uid */
+        uid?: (number|null);
+    }
+
+    /** Represents a SourceShardDeleteRequest. */
+    class SourceShardDeleteRequest implements ISourceShardDeleteRequest {
+
+        /**
+         * Constructs a new SourceShardDeleteRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISourceShardDeleteRequest);
+
+        /** SourceShardDeleteRequest keyspace. */
+        public keyspace: string;
+
+        /** SourceShardDeleteRequest shard. */
+        public shard: string;
+
+        /** SourceShardDeleteRequest uid. */
+        public uid: number;
+
+        /**
+         * Creates a new SourceShardDeleteRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SourceShardDeleteRequest instance
+         */
+        public static create(properties?: vtctldata.ISourceShardDeleteRequest): vtctldata.SourceShardDeleteRequest;
+
+        /**
+         * Encodes the specified SourceShardDeleteRequest message. Does not implicitly {@link vtctldata.SourceShardDeleteRequest.verify|verify} messages.
+         * @param message SourceShardDeleteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISourceShardDeleteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SourceShardDeleteRequest message, length delimited. Does not implicitly {@link vtctldata.SourceShardDeleteRequest.verify|verify} messages.
+         * @param message SourceShardDeleteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISourceShardDeleteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SourceShardDeleteRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SourceShardDeleteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SourceShardDeleteRequest;
+
+        /**
+         * Decodes a SourceShardDeleteRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SourceShardDeleteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SourceShardDeleteRequest;
+
+        /**
+         * Verifies a SourceShardDeleteRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SourceShardDeleteRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SourceShardDeleteRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SourceShardDeleteRequest;
+
+        /**
+         * Creates a plain object from a SourceShardDeleteRequest message. Also converts values to other types if specified.
+         * @param message SourceShardDeleteRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SourceShardDeleteRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SourceShardDeleteRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SourceShardDeleteResponse. */
+    interface ISourceShardDeleteResponse {
+
+        /** SourceShardDeleteResponse shard */
+        shard?: (topodata.IShard|null);
+    }
+
+    /** Represents a SourceShardDeleteResponse. */
+    class SourceShardDeleteResponse implements ISourceShardDeleteResponse {
+
+        /**
+         * Constructs a new SourceShardDeleteResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISourceShardDeleteResponse);
+
+        /** SourceShardDeleteResponse shard. */
+        public shard?: (topodata.IShard|null);
+
+        /**
+         * Creates a new SourceShardDeleteResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SourceShardDeleteResponse instance
+         */
+        public static create(properties?: vtctldata.ISourceShardDeleteResponse): vtctldata.SourceShardDeleteResponse;
+
+        /**
+         * Encodes the specified SourceShardDeleteResponse message. Does not implicitly {@link vtctldata.SourceShardDeleteResponse.verify|verify} messages.
+         * @param message SourceShardDeleteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISourceShardDeleteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SourceShardDeleteResponse message, length delimited. Does not implicitly {@link vtctldata.SourceShardDeleteResponse.verify|verify} messages.
+         * @param message SourceShardDeleteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISourceShardDeleteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SourceShardDeleteResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SourceShardDeleteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SourceShardDeleteResponse;
+
+        /**
+         * Decodes a SourceShardDeleteResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SourceShardDeleteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SourceShardDeleteResponse;
+
+        /**
+         * Verifies a SourceShardDeleteResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SourceShardDeleteResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SourceShardDeleteResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SourceShardDeleteResponse;
+
+        /**
+         * Creates a plain object from a SourceShardDeleteResponse message. Also converts values to other types if specified.
+         * @param message SourceShardDeleteResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SourceShardDeleteResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SourceShardDeleteResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a StartReplicationRequest. */
     interface IStartReplicationRequest {
 

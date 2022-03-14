@@ -2694,6 +2694,113 @@ func (s *VtctldServer) SleepTablet(ctx context.Context, req *vtctldatapb.SleepTa
 	return &vtctldatapb.SleepTabletResponse{}, nil
 }
 
+// SourceShardAdd is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SourceShardAdd(ctx context.Context, req *vtctldatapb.SourceShardAddRequest) (*vtctldatapb.SourceShardAddResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SourceShardAdd")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("uid", req.Uid)
+	span.Annotate("source_keyspace", req.SourceKeyspace)
+	span.Annotate("source_shard", req.SourceShard)
+	span.Annotate("keyrange", key.KeyRangeString(req.KeyRange))
+	span.Annotate("tables", strings.Join(req.Tables, ","))
+
+	var (
+		si  *topo.ShardInfo
+		err error
+	)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, fmt.Sprintf("SourceShardAdd(%v)", req.Uid))
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock(&err)
+
+	si, err = s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
+		for _, ss := range si.SourceShards {
+			if ss.Uid == req.Uid {
+				return fmt.Errorf("%w: uid %v is already in use", topo.NewError(topo.NoUpdateNeeded, fmt.Sprintf("%s/%s", req.Keyspace, req.Shard)), req.Uid)
+			}
+		}
+
+		si.SourceShards = append(si.SourceShards, &topodatapb.Shard_SourceShard{
+			Keyspace: req.SourceKeyspace,
+			Shard:    req.SourceShard,
+			Uid:      req.Uid,
+			KeyRange: req.KeyRange,
+			Tables:   req.Tables,
+		})
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.SourceShardAddResponse{}
+	switch si {
+	case nil:
+		// If we return NoUpdateNeeded from ts.UpdateShardFields, then we don't
+		// get a ShardInfo back.
+	default:
+		resp.Shard = si.Shard
+	}
+
+	return resp, err
+}
+
+// SourceShardDelete is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SourceShardDelete(ctx context.Context, req *vtctldatapb.SourceShardDeleteRequest) (*vtctldatapb.SourceShardDeleteResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SourceShardDelete")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("uid", req.Uid)
+
+	var (
+		si  *topo.ShardInfo
+		err error
+	)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, fmt.Sprintf("SourceShardDelete(%v)", req.Uid))
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock(&err)
+
+	si, err = s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
+		var newSourceShards []*topodatapb.Shard_SourceShard
+		for _, ss := range si.SourceShards {
+			if ss.Uid != req.Uid {
+				newSourceShards = append(newSourceShards, ss)
+			}
+		}
+
+		if len(newSourceShards) == len(si.SourceShards) {
+			return fmt.Errorf("%w: no SourceShard with uid %v", topo.NewError(topo.NoUpdateNeeded, fmt.Sprintf("%s/%s", req.Keyspace, req.Shard)), req.Uid)
+		}
+
+		si.SourceShards = newSourceShards
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.SourceShardDeleteResponse{}
+	switch si {
+	case nil:
+		// If we return NoUpdateNeeded from ts.UpdateShardFields, then we don't
+		// get a ShardInfo back.
+	default:
+		resp.Shard = si.Shard
+	}
+
+	return resp, err
+}
+
 // StartReplication is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) StartReplication(ctx context.Context, req *vtctldatapb.StartReplicationRequest) (*vtctldatapb.StartReplicationResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.StartReplication")

@@ -467,6 +467,16 @@ func (client *localVtctldClient) SleepTablet(ctx context.Context, in *vtctldatap
 	return client.s.SleepTablet(ctx, in)
 }
 
+// SourceShardAdd is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SourceShardAdd(ctx context.Context, in *vtctldatapb.SourceShardAddRequest, opts ...grpc.CallOption) (*vtctldatapb.SourceShardAddResponse, error) {
+	return client.s.SourceShardAdd(ctx, in)
+}
+
+// SourceShardDelete is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SourceShardDelete(ctx context.Context, in *vtctldatapb.SourceShardDeleteRequest, opts ...grpc.CallOption) (*vtctldatapb.SourceShardDeleteResponse, error) {
+	return client.s.SourceShardDelete(ctx, in)
+}
+
 // StartReplication is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) StartReplication(ctx context.Context, in *vtctldatapb.StartReplicationRequest, opts ...grpc.CallOption) (*vtctldatapb.StartReplicationResponse, error) {
 	return client.s.StartReplication(ctx, in)

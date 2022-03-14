@@ -569,6 +569,24 @@ func (client *gRPCVtctldClient) SleepTablet(ctx context.Context, in *vtctldatapb
 	return client.c.SleepTablet(ctx, in, opts...)
 }
 
+// SourceShardAdd is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) SourceShardAdd(ctx context.Context, in *vtctldatapb.SourceShardAddRequest, opts ...grpc.CallOption) (*vtctldatapb.SourceShardAddResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.SourceShardAdd(ctx, in, opts...)
+}
+
+// SourceShardDelete is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) SourceShardDelete(ctx context.Context, in *vtctldatapb.SourceShardDeleteRequest, opts ...grpc.CallOption) (*vtctldatapb.SourceShardDeleteResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.SourceShardDelete(ctx, in, opts...)
+}
+
 // StartReplication is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) StartReplication(ctx context.Context, in *vtctldatapb.StartReplicationRequest, opts ...grpc.CallOption) (*vtctldatapb.StartReplicationResponse, error) {
 	if client.c == nil {
