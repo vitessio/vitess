@@ -482,6 +482,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfJSONRemoveExpr(a, b)
+	case *JSONUnquoteExpr:
+		b, ok := inB.(*JSONUnquoteExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONUnquoteExpr(a, b)
 	case *JSONValueMergeExpr:
 		b, ok := inB.(*JSONValueMergeExpr)
 		if !ok {
@@ -1970,6 +1976,17 @@ func EqualsRefOfJSONRemoveExpr(a, b *JSONRemoveExpr) bool {
 		EqualsSliceOfJSONValueModifierParam(a.PathList, b.PathList)
 }
 
+// EqualsRefOfJSONUnquoteExpr does deep equals between the two objects.
+func EqualsRefOfJSONUnquoteExpr(a, b *JSONUnquoteExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.JSONValue, b.JSONValue)
+}
+
 // EqualsRefOfJSONValueMergeExpr does deep equals between the two objects.
 func EqualsRefOfJSONValueMergeExpr(a, b *JSONValueMergeExpr) bool {
 	if a == b {
@@ -3239,6 +3256,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfJSONRemoveExpr(a, b)
+	case *JSONUnquoteExpr:
+		b, ok := inB.(*JSONUnquoteExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONUnquoteExpr(a, b)
 	case *JSONValueMergeExpr:
 		b, ok := inB.(*JSONValueMergeExpr)
 		if !ok {
@@ -3644,6 +3667,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfJSONRemoveExpr(a, b)
+	case *JSONUnquoteExpr:
+		b, ok := inB.(*JSONUnquoteExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONUnquoteExpr(a, b)
 	case *JSONValueMergeExpr:
 		b, ok := inB.(*JSONValueMergeExpr)
 		if !ok {

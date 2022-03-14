@@ -175,6 +175,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return in
 	case *JSONRemoveExpr:
 		return CloneRefOfJSONRemoveExpr(in)
+	case *JSONUnquoteExpr:
+		return CloneRefOfJSONUnquoteExpr(in)
 	case *JSONValueMergeExpr:
 		return CloneRefOfJSONValueMergeExpr(in)
 	case *JSONValueModifierExpr:
@@ -1145,6 +1147,16 @@ func CloneRefOfJSONRemoveExpr(n *JSONRemoveExpr) *JSONRemoveExpr {
 	out := *n
 	out.JSONDoc = CloneExpr(n.JSONDoc)
 	out.PathList = CloneSliceOfJSONValueModifierParam(n.PathList)
+	return &out
+}
+
+// CloneRefOfJSONUnquoteExpr creates a deep clone of the input.
+func CloneRefOfJSONUnquoteExpr(n *JSONUnquoteExpr) *JSONUnquoteExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.JSONValue = CloneExpr(n.JSONValue)
 	return &out
 }
 
@@ -2156,6 +2168,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfGroupConcatExpr(in)
 	case *JSONRemoveExpr:
 		return CloneRefOfJSONRemoveExpr(in)
+	case *JSONUnquoteExpr:
+		return CloneRefOfJSONUnquoteExpr(in)
 	case *JSONValueMergeExpr:
 		return CloneRefOfJSONValueMergeExpr(in)
 	case *JSONValueModifierExpr:
@@ -2340,6 +2354,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfIsExpr(in)
 	case *JSONRemoveExpr:
 		return CloneRefOfJSONRemoveExpr(in)
+	case *JSONUnquoteExpr:
+		return CloneRefOfJSONUnquoteExpr(in)
 	case *JSONValueMergeExpr:
 		return CloneRefOfJSONValueMergeExpr(in)
 	case *JSONValueModifierExpr:

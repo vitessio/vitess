@@ -2509,6 +2509,15 @@ var (
 	}, {
 		input:  "SELECT JSON_REMOVE('[\"a\", [\"b\", \"c\"], \"d\"]', @i, @j, '$[0]', '$[1]','$[2]')",
 		output: "select json_remove('[\\\"a\\\", [\\\"b\\\", \\\"c\\\"], \\\"d\\\"]', @i, @j, '$[0]', '$[1]', '$[2]') from dual",
+	}, {
+		input:  "SELECT JSON_UNQUOTE('abc')",
+		output: "select json_unquote('abc') from dual",
+	}, {
+		input:  "SELECT JSON_UNQUOTE('\"\\\\t\\\\u0032\"')",
+		output: "select json_unquote('\\\"\\\\t\\\\u0032\\\"') from dual",
+	}, {
+		input:  "SELECT JSON_UNQUOTE(@j)",
+		output: "select json_unquote(@j) from dual",
 	}}
 )
 

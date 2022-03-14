@@ -1977,3 +1977,9 @@ func (node *JSONRemoveExpr) Format(buf *TrackedBuffer) {
 	}
 	buf.WriteString(")")
 }
+
+// Format formats the node.
+func (node *JSONUnquoteExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_unquote(%v", node.JSONValue)
+	buf.WriteString(")")
+}

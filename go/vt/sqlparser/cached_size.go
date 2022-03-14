@@ -1398,6 +1398,20 @@ func (cached *JSONRemoveExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *JSONUnquoteExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field JSONValue vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONValue.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *JSONValueMergeExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

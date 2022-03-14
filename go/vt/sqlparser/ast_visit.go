@@ -174,6 +174,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitIsolationLevel(in, f)
 	case *JSONRemoveExpr:
 		return VisitRefOfJSONRemoveExpr(in, f)
+	case *JSONUnquoteExpr:
+		return VisitRefOfJSONUnquoteExpr(in, f)
 	case *JSONValueMergeExpr:
 		return VisitRefOfJSONValueMergeExpr(in, f)
 	case *JSONValueModifierExpr:
@@ -1420,6 +1422,18 @@ func VisitRefOfJSONRemoveExpr(in *JSONRemoveExpr, f Visit) error {
 		if err := VisitJSONValueModifierParam(el, f); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+func VisitRefOfJSONUnquoteExpr(in *JSONUnquoteExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.JSONValue, f); err != nil {
+		return err
 	}
 	return nil
 }
@@ -2745,6 +2759,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *JSONRemoveExpr:
 		return VisitRefOfJSONRemoveExpr(in, f)
+	case *JSONUnquoteExpr:
+		return VisitRefOfJSONUnquoteExpr(in, f)
 	case *JSONValueMergeExpr:
 		return VisitRefOfJSONValueMergeExpr(in, f)
 	case *JSONValueModifierExpr:
@@ -2915,6 +2931,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfIsExpr(in, f)
 	case *JSONRemoveExpr:
 		return VisitRefOfJSONRemoveExpr(in, f)
+	case *JSONUnquoteExpr:
+		return VisitRefOfJSONUnquoteExpr(in, f)
 	case *JSONValueMergeExpr:
 		return VisitRefOfJSONValueMergeExpr(in, f)
 	case *JSONValueModifierExpr:

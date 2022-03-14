@@ -2586,3 +2586,10 @@ func (node *JSONRemoveExpr) formatFast(buf *TrackedBuffer) {
 	}
 	buf.WriteString(")")
 }
+
+// formatFast formats the node.
+func (node *JSONUnquoteExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_unquote(")
+	buf.printExpr(node, node.JSONValue, true)
+	buf.WriteString(")")
+}

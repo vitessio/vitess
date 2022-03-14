@@ -327,6 +327,7 @@ var keywords = []keyword{
 	{"json_replace", JSON_REPLACE},
 	{"json_set", JSON_SET},
 	{"json_table", UNUSED},
+	{"json_unquote", JSON_UNQUOTE},
 	{"key", KEY},
 	{"keys", KEYS},
 	{"keyspaces", KEYSPACES},

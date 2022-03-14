@@ -4777,6 +4777,10 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONRemoveExpr{JSONDoc:$3, PathList: $5}
   }
+| JSON_UNQUOTE openb expression closeb
+  {
+    $$ = &JSONUnquoteExpr{JSONValue:$3}
+  }
 
 json_value_modifier_name:
   JSON_ARRAY_APPEND

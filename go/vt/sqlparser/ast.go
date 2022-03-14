@@ -2257,6 +2257,12 @@ type (
 		JSONDoc  Expr
 		PathList []JSONValueModifierParam
 	}
+
+	// JSONRemoveExpr represents the JSON_UNQUOTE()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/json-modification-functions.html#function_json-unquote
+	JSONUnquoteExpr struct {
+		JSONValue Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2300,6 +2306,7 @@ func (Offset) iExpr()                 {}
 func (*JSONValueModifierExpr) iExpr() {}
 func (*JSONValueMergeExpr) iExpr()    {}
 func (*JSONRemoveExpr) iExpr()        {}
+func (*JSONUnquoteExpr) iExpr()       {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()              {}
@@ -2317,6 +2324,7 @@ func (*GroupConcatExpr) iCallable()       {}
 func (*JSONValueModifierExpr) iCallable() {}
 func (*JSONValueMergeExpr) iCallable()    {}
 func (*JSONRemoveExpr) iCallable()        {}
+func (*JSONUnquoteExpr) iCallable()       {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.
