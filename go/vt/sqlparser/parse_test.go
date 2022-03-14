@@ -5042,7 +5042,7 @@ var correctlyDontParse = []string{
 	"with",
 }
 
-// reserved in mysql
+// not reserved in mysql
 var incorrectlyDontParse = []string{
 	"escape",
 	"next",
@@ -5052,7 +5052,7 @@ var incorrectlyDontParse = []string{
 	"sql_no_cache",
 }
 
-// not reserved in mysql
+// reserved in mysql
 var incorrectlyParse = []string{
 	"accessible",
 	"asensitive",
@@ -5135,9 +5135,9 @@ var incorrectlyParse = []string{
 	"year_month",
 }
 
-// not reserved in mysql
+// reserved in mysql
 // TODO: these parse in dolt but not in mysql (without backquotes)
-// removing them from non_reserved_keyword in sql.y fixes it (but might cause other other problems; need tests)
+// removing them from non_reserved_keyword in sql.y fixes it (without causing any shift/reduce conflicts but might cause other other problems; need tests)
 var incorrectlyParse2 = []string {
 	"before",
 	"bigint",
@@ -5317,8 +5317,8 @@ func TestKeywordsIncorrectlyDontParse(t *testing.T) {
 	for _, kw := range incorrectlyDontParse {
 		for _, query := range tests {
 			test := fmt.Sprintf(query, kw)
-			t.Skip()
 			t.Run(test, func(t *testing.T) {
+				t.Skip()
 				_, err := Parse(test)
 				assert.NoError(t, err)
 			})
