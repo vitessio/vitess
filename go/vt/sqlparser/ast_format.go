@@ -1928,6 +1928,7 @@ func (node Offset) Format(buf *TrackedBuffer) {
 	buf.WriteString("]")
 }
 
+// Format formats the node.
 func (node *JSONValueModifierExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%s(%v, ", node.Name.Lowered(), node.JSONDoc)
 	var prefix string
@@ -1938,8 +1939,15 @@ func (node *JSONValueModifierExpr) Format(buf *TrackedBuffer) {
 	buf.WriteString(")")
 }
 
+// Format formats the node.
 func (node JSONValueModifierParam) Format(buf *TrackedBuffer) {
-	if node.PathIdentifier.IsEmpty() && node.Path == "" {
+	if node.Value == nil {
+		if node.PathIdentifier.IsEmpty() {
+			buf.astPrintf(node, "'%s'", node.Path)
+		} else {
+			buf.astPrintf(node, "%v", node.PathIdentifier)
+		}
+	} else if node.PathIdentifier.IsEmpty() && node.Path == "" {
 		buf.astPrintf(node, "%v", node.Value)
 	} else if node.Path != "" {
 		buf.astPrintf(node, "'%s', %v", node.Path, node.Value)
@@ -1948,10 +1956,22 @@ func (node JSONValueModifierParam) Format(buf *TrackedBuffer) {
 	}
 }
 
+// Format formats the node.
 func (node *JSONValueMergeExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%s(%v, ", node.Name.Lowered(), node.JSONDoc)
 	var prefix string
 	for _, n := range node.JSONDocList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node.
+func (node *JSONRemoveExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_remove(%v, ", node.JSONDoc)
+	var prefix string
+	for _, n := range node.PathList {
 		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}

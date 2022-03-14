@@ -2519,6 +2519,7 @@ func (node Offset) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("]")
 }
 
+// formatFast formats the node.
 func (node *JSONValueModifierExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.Name.Lowered())
 	buf.WriteByte('(')
@@ -2533,8 +2534,17 @@ func (node *JSONValueModifierExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(")")
 }
 
+// formatFast formats the node.
 func (node JSONValueModifierParam) formatFast(buf *TrackedBuffer) {
-	if node.PathIdentifier.IsEmpty() && node.Path == "" {
+	if node.Value == nil {
+		if node.PathIdentifier.IsEmpty() {
+			buf.WriteByte('\'')
+			buf.WriteString(node.Path)
+			buf.WriteByte('\'')
+		} else {
+			node.PathIdentifier.formatFast(buf)
+		}
+	} else if node.PathIdentifier.IsEmpty() && node.Path == "" {
 		node.Value.formatFast(buf)
 	} else if node.Path != "" {
 		buf.WriteByte('\'')
@@ -2548,6 +2558,7 @@ func (node JSONValueModifierParam) formatFast(buf *TrackedBuffer) {
 	}
 }
 
+// formatFast formats the node.
 func (node *JSONValueMergeExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.Name.Lowered())
 	buf.WriteByte('(')
@@ -2555,6 +2566,20 @@ func (node *JSONValueMergeExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(", ")
 	var prefix string
 	for _, n := range node.JSONDocList {
+		buf.WriteString(prefix)
+		n.formatFast(buf)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// formatFast formats the node.
+func (node *JSONRemoveExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_remove(")
+	buf.printExpr(node, node.JSONDoc, true)
+	buf.WriteString(", ")
+	var prefix string
+	for _, n := range node.PathList {
 		buf.WriteString(prefix)
 		n.formatFast(buf)
 		prefix = ", "

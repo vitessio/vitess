@@ -461,8 +461,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
-%type <jsonValueModifierParam> json_value_modifier_param json_merge_expr_param
-%type <jsonValueModifierParams> json_value_modifier_param_list json_merge_expr_param_list
+%type <jsonValueModifierParam> json_value_modifier_param json_merge_expr_param json_remove_expr_param
+%type <jsonValueModifierParams> json_value_modifier_param_list json_merge_expr_param_list json_remove_expr_param_list
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
 %type <str> database_or_schema column_opt insert_method_options row_format_options
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
@@ -4773,6 +4773,10 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONValueMergeExpr{Name: $1, JSONDoc: $3, JSONDocList: $5}
   }
+| JSON_REMOVE openb expression ',' json_remove_expr_param_list closeb
+  {
+    $$ = &JSONRemoveExpr{JSONDoc:$3, PathList: $5}
+  }
 
 json_value_modifier_name:
   JSON_ARRAY_APPEND
@@ -4846,6 +4850,27 @@ json_merge_expr_param:
   expression
   {
     $$ = JSONValueModifierParam{Value: $1}
+  }
+
+json_remove_expr_param_list:
+  json_remove_expr_param
+  {
+    $$ = make([]JSONValueModifierParam, 0, 4)
+    $$ = append($$, $1)
+  }
+| json_remove_expr_param_list ',' json_remove_expr_param
+  {
+    $$ = append($$, $3)
+  }
+
+json_remove_expr_param:
+  STRING
+  {
+    $$ = JSONValueModifierParam{Path:$1}
+  }
+| AT_ID
+  {
+    $$ = JSONValueModifierParam{PathIdentifier:NewColIdentWithAt(string($1), SingleAt)}
   }
 
 interval:

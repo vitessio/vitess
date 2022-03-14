@@ -172,6 +172,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfIsExpr(in, f)
 	case IsolationLevel:
 		return VisitIsolationLevel(in, f)
+	case *JSONRemoveExpr:
+		return VisitRefOfJSONRemoveExpr(in, f)
 	case *JSONValueMergeExpr:
 		return VisitRefOfJSONValueMergeExpr(in, f)
 	case *JSONValueModifierExpr:
@@ -1401,6 +1403,23 @@ func VisitRefOfIsExpr(in *IsExpr, f Visit) error {
 	}
 	if err := VisitExpr(in.Left, f); err != nil {
 		return err
+	}
+	return nil
+}
+func VisitRefOfJSONRemoveExpr(in *JSONRemoveExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.JSONDoc, f); err != nil {
+		return err
+	}
+	for _, el := range in.PathList {
+		if err := VisitJSONValueModifierParam(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2724,6 +2743,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
+	case *JSONRemoveExpr:
+		return VisitRefOfJSONRemoveExpr(in, f)
 	case *JSONValueMergeExpr:
 		return VisitRefOfJSONValueMergeExpr(in, f)
 	case *JSONValueModifierExpr:
@@ -2892,6 +2913,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfIntroducerExpr(in, f)
 	case *IsExpr:
 		return VisitRefOfIsExpr(in, f)
+	case *JSONRemoveExpr:
+		return VisitRefOfJSONRemoveExpr(in, f)
 	case *JSONValueMergeExpr:
 		return VisitRefOfJSONValueMergeExpr(in, f)
 	case *JSONValueModifierExpr:

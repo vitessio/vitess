@@ -2497,6 +2497,18 @@ var (
 	}, {
 		input:  "SELECT JSON_MERGE_PRESERVE(@i, '[true, false]')",
 		output: "select json_merge_preserve(@i, '[true, false]') from dual",
+	}, {
+		input:  "SELECT JSON_REMOVE(@i, '$[1]')",
+		output: "select json_remove(@i, '$[1]') from dual",
+	}, {
+		input:  "SELECT JSON_REMOVE('[\"a\", [\"b\", \"c\"], \"d\"]', '$[1]')",
+		output: "select json_remove('[\\\"a\\\", [\\\"b\\\", \\\"c\\\"], \\\"d\\\"]', '$[1]') from dual",
+	}, {
+		input:  "SELECT JSON_REMOVE('[\"a\", [\"b\", \"c\"], \"d\"]', @i)",
+		output: "select json_remove('[\\\"a\\\", [\\\"b\\\", \\\"c\\\"], \\\"d\\\"]', @i) from dual",
+	}, {
+		input:  "SELECT JSON_REMOVE('[\"a\", [\"b\", \"c\"], \"d\"]', @i, @j, '$[0]', '$[1]','$[2]')",
+		output: "select json_remove('[\\\"a\\\", [\\\"b\\\", \\\"c\\\"], \\\"d\\\"]', @i, @j, '$[0]', '$[1]', '$[2]') from dual",
 	}}
 )
 
@@ -2639,6 +2651,9 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "SELECT JSON_MERGE_PRESERVE('[1, 2]')",
 		err:   "syntax error at position 37",
+	}, {
+		input: "SELECT JSON_REMOVE('[\"a\", [\"b\", \"c\"], \"d\"]')",
+		err:   "syntax error at position 45",
 	}}
 
 	for _, tcase := range invalidSQL {

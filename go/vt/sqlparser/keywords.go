@@ -323,6 +323,7 @@ var keywords = []keyword{
 	{"json_merge", JSON_MERGE},
 	{"json_merge_patch", JSON_MERGE_PATCH},
 	{"json_merge_preserve", JSON_MERGE_PRESERVE},
+	{"json_remove", JSON_REMOVE},
 	{"json_replace", JSON_REPLACE},
 	{"json_set", JSON_SET},
 	{"json_table", UNUSED},
