@@ -6218,7 +6218,7 @@ non_reserved_keyword:
 
 // Reserved keywords that cause grammar conflicts in some places, but are safe to use as column name / alias identifiers.
 // These keywords should also go in reserved_keyword.
-// TODO: The ones commented out here cause shift/reduce conflicts but need to e column name safe
+// TODO: The ones commented out here cause shift/reduce conflicts but need to be column name safe
 column_name_safe_reserved_keyword:
   ACCOUNT
 | AFTER
