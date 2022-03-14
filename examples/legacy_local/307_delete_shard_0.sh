@@ -16,4 +16,4 @@
 
 # this script deletes the old shard 0 which has been replaced by 2 shards
 
-vtctlclient -server localhost:15999 DeleteShard -recursive customer/0
+vtctlclient --server localhost:15999 DeleteShard -- --recursive customer/0

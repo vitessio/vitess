@@ -21,8 +21,8 @@ source ./env.sh
 
 vtworker \
  $TOPOLOGY_FLAGS \
- -cell zone1 \
- -log_dir "$VTDATAROOT"/tmp \
- -alsologtostderr \
- -use_v3_resharding_mode \
- SplitClone -min_healthy_rdonly_tablets=1 customer/0
+ --cell zone1 \
+ --log_dir "$VTDATAROOT"/tmp \
+ --alsologtostderr \
+ --use_v3_resharding_mode \
+ SplitClone -- --min_healthy_rdonly_tablets=1 customer/0
