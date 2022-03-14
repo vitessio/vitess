@@ -51,6 +51,12 @@ var (
 			input:  "select * from my_table_function('foo', 'bar')",
 			output: "select * from my_table_function('foo', 'bar')",
 		},
+		// TODO: We should be able to alias table functions, but that will require additional changes
+		//       to the grammar.
+		//{
+		//	input:  "select * from my_table_function('foo', another_function(123)) as function_alias",
+		//	output: "select * from my_table_function('foo', another_function(123)) as function_alias",
+		//},
 		{
 			input:  "select 1",
 			output: "select 1 from dual",

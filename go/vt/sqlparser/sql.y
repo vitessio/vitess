@@ -3903,7 +3903,6 @@ table_references:
 table_reference:
   table_factor
 | join_table
-| table_function
 
 table_factor:
   aliased_table_name
@@ -3930,6 +3929,7 @@ table_factor:
   {
     $$ = &ParenTableExpr{Exprs: $2}
   }
+| table_function
 
 values_statement:
   VALUES row_list
