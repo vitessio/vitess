@@ -9954,103 +9954,103 @@ export namespace topodata {
         }
     }
 
-    /** Properties of a ShardReplicationProblem. */
-    interface IShardReplicationProblem {
+    /** Properties of a ShardReplicationError. */
+    interface IShardReplicationError {
 
-        /** ShardReplicationProblem type */
-        type?: (topodata.ShardReplicationProblem.Type|null);
+        /** ShardReplicationError type */
+        type?: (topodata.ShardReplicationError.Type|null);
 
-        /** ShardReplicationProblem tablet_alias */
+        /** ShardReplicationError tablet_alias */
         tablet_alias?: (topodata.ITabletAlias|null);
     }
 
-    /** Represents a ShardReplicationProblem. */
-    class ShardReplicationProblem implements IShardReplicationProblem {
+    /** Represents a ShardReplicationError. */
+    class ShardReplicationError implements IShardReplicationError {
 
         /**
-         * Constructs a new ShardReplicationProblem.
+         * Constructs a new ShardReplicationError.
          * @param [properties] Properties to set
          */
-        constructor(properties?: topodata.IShardReplicationProblem);
+        constructor(properties?: topodata.IShardReplicationError);
 
-        /** ShardReplicationProblem type. */
-        public type: topodata.ShardReplicationProblem.Type;
+        /** ShardReplicationError type. */
+        public type: topodata.ShardReplicationError.Type;
 
-        /** ShardReplicationProblem tablet_alias. */
+        /** ShardReplicationError tablet_alias. */
         public tablet_alias?: (topodata.ITabletAlias|null);
 
         /**
-         * Creates a new ShardReplicationProblem instance using the specified properties.
+         * Creates a new ShardReplicationError instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns ShardReplicationProblem instance
+         * @returns ShardReplicationError instance
          */
-        public static create(properties?: topodata.IShardReplicationProblem): topodata.ShardReplicationProblem;
+        public static create(properties?: topodata.IShardReplicationError): topodata.ShardReplicationError;
 
         /**
-         * Encodes the specified ShardReplicationProblem message. Does not implicitly {@link topodata.ShardReplicationProblem.verify|verify} messages.
-         * @param message ShardReplicationProblem message or plain object to encode
+         * Encodes the specified ShardReplicationError message. Does not implicitly {@link topodata.ShardReplicationError.verify|verify} messages.
+         * @param message ShardReplicationError message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: topodata.IShardReplicationProblem, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: topodata.IShardReplicationError, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified ShardReplicationProblem message, length delimited. Does not implicitly {@link topodata.ShardReplicationProblem.verify|verify} messages.
-         * @param message ShardReplicationProblem message or plain object to encode
+         * Encodes the specified ShardReplicationError message, length delimited. Does not implicitly {@link topodata.ShardReplicationError.verify|verify} messages.
+         * @param message ShardReplicationError message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: topodata.IShardReplicationProblem, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: topodata.IShardReplicationError, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a ShardReplicationProblem message from the specified reader or buffer.
+         * Decodes a ShardReplicationError message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns ShardReplicationProblem
+         * @returns ShardReplicationError
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardReplicationProblem;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardReplicationError;
 
         /**
-         * Decodes a ShardReplicationProblem message from the specified reader or buffer, length delimited.
+         * Decodes a ShardReplicationError message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns ShardReplicationProblem
+         * @returns ShardReplicationError
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardReplicationProblem;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardReplicationError;
 
         /**
-         * Verifies a ShardReplicationProblem message.
+         * Verifies a ShardReplicationError message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a ShardReplicationProblem message from a plain object. Also converts values to their respective internal types.
+         * Creates a ShardReplicationError message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns ShardReplicationProblem
+         * @returns ShardReplicationError
          */
-        public static fromObject(object: { [k: string]: any }): topodata.ShardReplicationProblem;
+        public static fromObject(object: { [k: string]: any }): topodata.ShardReplicationError;
 
         /**
-         * Creates a plain object from a ShardReplicationProblem message. Also converts values to other types if specified.
-         * @param message ShardReplicationProblem
+         * Creates a plain object from a ShardReplicationError message. Also converts values to other types if specified.
+         * @param message ShardReplicationError
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: topodata.ShardReplicationProblem, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: topodata.ShardReplicationError, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this ShardReplicationProblem to JSON.
+         * Converts this ShardReplicationError to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
     }
 
-    namespace ShardReplicationProblem {
+    namespace ShardReplicationError {
 
         /** Type enum. */
         enum Type {

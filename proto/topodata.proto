@@ -333,9 +333,9 @@ message ShardReplication {
   repeated Node nodes = 1;
 }
 
-// ShardReplicationProblem describes the problem being fixed by
+// ShardReplicationError describes the error being fixed by
 // ShardReplicationFix.
-message ShardReplicationProblem {
+message ShardReplicationError {
   enum Type {
     // UNKNOWN is not a valid value.
     UNKNOWN = 0;

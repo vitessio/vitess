@@ -724,7 +724,7 @@ func (m *ShardReplication) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *ShardReplicationProblem) MarshalVT() (dAtA []byte, err error) {
+func (m *ShardReplicationError) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -737,12 +737,12 @@ func (m *ShardReplicationProblem) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ShardReplicationProblem) MarshalToVT(dAtA []byte) (int, error) {
+func (m *ShardReplicationError) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *ShardReplicationProblem) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *ShardReplicationError) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -1609,7 +1609,7 @@ func (m *ShardReplication) SizeVT() (n int) {
 	return n
 }
 
-func (m *ShardReplicationProblem) SizeVT() (n int) {
+func (m *ShardReplicationError) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -3851,7 +3851,7 @@ func (m *ShardReplication) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ShardReplicationProblem) UnmarshalVT(dAtA []byte) error {
+func (m *ShardReplicationError) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -3874,10 +3874,10 @@ func (m *ShardReplicationProblem) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ShardReplicationProblem: wiretype end group for non-group")
+			return fmt.Errorf("proto: ShardReplicationError: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ShardReplicationProblem: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: ShardReplicationError: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -3894,7 +3894,7 @@ func (m *ShardReplicationProblem) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Type |= ShardReplicationProblem_Type(b&0x7F) << shift
+				m.Type |= ShardReplicationError_Type(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

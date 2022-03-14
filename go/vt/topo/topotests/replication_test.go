@@ -107,8 +107,8 @@ func TestFixShardReplication(t *testing.T) {
 	if problem == nil {
 		t.Errorf("FixShardReplication should have found problem, but found none")
 	} else {
-		if problem.Type != topodatapb.ShardReplicationProblem_NOT_FOUND {
-			t.Errorf("FixShardReplication problem.Type mismatch: want %q got %q", topoproto.ShardReplicationProblemTypeString(topodatapb.ShardReplicationProblem_NOT_FOUND), topoproto.ShardReplicationProblemTypeString(problem.Type))
+		if problem.Type != topodatapb.ShardReplicationError_NOT_FOUND {
+			t.Errorf("FixShardReplication problem.Type mismatch: want %q got %q", topoproto.ShardReplicationErrorTypeString(topodatapb.ShardReplicationError_NOT_FOUND), topoproto.ShardReplicationErrorTypeString(problem.Type))
 		}
 
 		if !topoproto.TabletAliasEqual(problem.TabletAlias, bogusTablet.Alias) {
@@ -154,8 +154,8 @@ func TestFixShardReplication(t *testing.T) {
 	if problem == nil {
 		t.Errorf("FixShardReplication should have found problem, but found none")
 	} else {
-		if problem.Type != topodatapb.ShardReplicationProblem_TOPOLOGY_MISMATCH {
-			t.Errorf("FixShardReplication problem.Type mismatch: want %q got %q", topoproto.ShardReplicationProblemTypeString(topodatapb.ShardReplicationProblem_TOPOLOGY_MISMATCH), topoproto.ShardReplicationProblemTypeString(problem.Type))
+		if problem.Type != topodatapb.ShardReplicationError_TOPOLOGY_MISMATCH {
+			t.Errorf("FixShardReplication problem.Type mismatch: want %q got %q", topoproto.ShardReplicationErrorTypeString(topodatapb.ShardReplicationError_TOPOLOGY_MISMATCH), topoproto.ShardReplicationErrorTypeString(problem.Type))
 		}
 
 		if !topoproto.TabletAliasEqual(problem.TabletAlias, bogusTablet.Alias) {

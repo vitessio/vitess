@@ -18,19 +18,19 @@ package topoproto
 
 import topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
-var shardReplicationProblemTypeName map[int32]string
+var shardReplicationErrorTypeName map[int32]string
 
 func init() {
-	shardReplicationProblemTypeName = make(map[int32]string, len(topodatapb.ShardReplicationProblem_Type_name))
-	for k, v := range topodatapb.ShardReplicationProblem_Type_name {
-		shardReplicationProblemTypeName[k] = v
+	shardReplicationErrorTypeName = make(map[int32]string, len(topodatapb.ShardReplicationError_Type_name))
+	for k, v := range topodatapb.ShardReplicationError_Type_name {
+		shardReplicationErrorTypeName[k] = v
 	}
 }
 
-// ShardReplicationProblemTypeString returns a string representation of the
-// ShardReplicationProblem type, or "UNKNOWN" if not known.
-func ShardReplicationProblemTypeString(t topodatapb.ShardReplicationProblem_Type) string {
-	v, ok := shardReplicationProblemTypeName[int32(t)]
+// ShardReplicationErrorTypeString returns a string representation of the
+// ShardReplicationError type, or "UNKNOWN" if not known.
+func ShardReplicationErrorTypeString(t topodatapb.ShardReplicationError_Type) string {
+	v, ok := shardReplicationErrorTypeName[int32(t)]
 	if !ok {
 		return "UNKNOWN"
 	}
