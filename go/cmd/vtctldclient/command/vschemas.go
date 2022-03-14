@@ -97,12 +97,12 @@ func commandApplyVSchema(cmd *cobra.Command, args []string) error {
 			schema = []byte(applyVSchemaOptions.VSchema)
 		}
 
-		var vs *vschemapb.Keyspace
-		err = json2.Unmarshal(schema, vs)
+		var vs vschemapb.Keyspace
+		err = json2.Unmarshal(schema, &vs)
 		if err != nil {
 			return err
 		}
-		req.VSchema = vs
+		req.VSchema = &vs
 	}
 
 	cli.FinishedParsing(cmd)

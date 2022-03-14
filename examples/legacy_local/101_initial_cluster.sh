@@ -38,13 +38,13 @@ for i in 100 101 102; do
 done
 
 # set one of the replicas to primary
-vtctlclient -server localhost:15999 InitShardPrimary -force commerce/0 zone1-100
+vtctlclient --server localhost:15999 InitShardPrimary -- --force commerce/0 zone1-100
 
 # create the schema
-vtctlclient -server localhost:15999 ApplySchema -sql-file create_commerce_schema.sql commerce
+vtctlclient --server localhost:15999 ApplySchema -- --sql-file create_commerce_schema.sql commerce
 
 # create the vschema
-vtctlclient -server localhost:15999 ApplyVSchema -vschema_file vschema_commerce_initial.json commerce
+vtctlclient --server localhost:15999 ApplyVSchema -- --vschema_file vschema_commerce_initial.json commerce
 
 # start vtgate
 CELL=zone1 ./scripts/vtgate-up.sh
