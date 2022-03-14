@@ -333,6 +333,27 @@ message ShardReplication {
   repeated Node nodes = 1;
 }
 
+// ShardReplicationError describes the error being fixed by
+// ShardReplicationFix.
+message ShardReplicationError {
+  enum Type {
+    // UNKNOWN is not a valid value.
+    UNKNOWN = 0;
+    // NOT_FOUND occurs when a tablet is in the ShardReplication record
+    // but does not exist in the topology.
+    NOT_FOUND = 1;
+    // TOPOLOGY_MISMATCH occurs when a tablet is in the replication graph and
+    // exists in the topology, but at least one of the Keyspace, Shard, or Cell
+    // fields for that tablet does not match the ShardReplication record.
+    TOPOLOGY_MISMATCH = 2;
+  }
+
+  // Type is the category of problem being fixed.
+  Type type = 1;
+  // TabletAlias is the tablet record that has the problem.
+  topodata.TabletAlias tablet_alias = 2;
+}
+
 // ShardReference is used as a pointer from a SrvKeyspace to a Shard
 message ShardReference {
   // Copied from Shard.
