@@ -23,8 +23,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -104,6 +106,22 @@ Output is sorted by tablet type, then replication position.
 Use ctrl-C to interrupt the command and see partial results if needed.`,
 		Args: cobra.ExactArgs(1),
 		RunE: commandShardReplicationPositions,
+	}
+	// SourceShardAdd makes a SourceShardAdd gRPC request to a vtctld.
+	SourceShardAdd = &cobra.Command{
+		Use:                   "SourceShardAdd [--key-range <keyrange>] [--tables <table1,table2,...> [--tables <table3,...>]...] <keyspace/shard> <uid> <source keyspace/shard>",
+		Short:                 "Adds the SourceShard record with the provided index for emergencies only. It does not call RefreshState for the shard primary.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(3),
+		RunE:                  commandSourceShardAdd,
+	}
+	// SourceShardDelete makes a SourceShardDelete gRPC request to a vtctld.
+	SourceShardDelete = &cobra.Command{
+		Use:                   "SourceShardDelete <keyspace/shard> <uid>",
+		Short:                 "Deletes the SourceShard record with the provided index. This should only be used for emergency cleanup. It does not call RefreshState for the shard primary.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandSourceShardDelete,
 	}
 )
 
@@ -333,6 +351,101 @@ func commandShardReplicationPositions(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+var sourceShardAddOptions = struct {
+	KeyRangeStr string
+	Tables      []string
+}{}
+
+func commandSourceShardAdd(cmd *cobra.Command, args []string) error {
+	ks, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	uid, err := strconv.ParseUint(cmd.Flags().Arg(1), 10, 32)
+	if err != nil {
+		return fmt.Errorf("Failed to parse SourceShard uid: %w", err) // nolint
+	}
+
+	sks, sshard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(2))
+	if err != nil {
+		return err
+	}
+
+	var kr *topodatapb.KeyRange
+	if sourceShardAddOptions.KeyRangeStr != "" {
+		_, kr, err = topo.ValidateShardName(sourceShardAddOptions.KeyRangeStr)
+		if err != nil {
+			return fmt.Errorf("Invalid keyrange: %w", err)
+		}
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.SourceShardAdd(commandCtx, &vtctldatapb.SourceShardAddRequest{
+		Keyspace:       ks,
+		Shard:          shard,
+		Uid:            uint32(uid),
+		SourceKeyspace: sks,
+		SourceShard:    sshard,
+		KeyRange:       kr,
+		Tables:         sourceShardAddOptions.Tables,
+	})
+	if err != nil {
+		return err
+	}
+
+	switch resp.Shard {
+	case nil:
+		fmt.Printf("SourceShard with uid %v already exists for %s/%s, not adding it.\n", uid, ks, shard)
+	default:
+		data, err := cli.MarshalJSON(resp.Shard)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("Updated shard record:\n%s\n", data)
+	}
+
+	return nil
+}
+
+func commandSourceShardDelete(cmd *cobra.Command, args []string) error {
+	ks, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	uid, err := strconv.ParseUint(cmd.Flags().Arg(1), 10, 32)
+	if err != nil {
+		return fmt.Errorf("Failed to parse SourceShard uid: %w", err) // nolint
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.SourceShardDelete(commandCtx, &vtctldatapb.SourceShardDeleteRequest{
+		Keyspace: ks,
+		Shard:    shard,
+		Uid:      uint32(uid),
+	})
+	if err != nil {
+		return err
+	}
+
+	switch resp.Shard {
+	case nil:
+		fmt.Printf("No SourceShard with uid %v.\n", uid)
+	default:
+		data, err := cli.MarshalJSON(resp.Shard)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("Updated shard record:\n%s\n", data)
+	}
+	return nil
+}
+
 func init() {
 	CreateShard.Flags().BoolVarP(&createShardOptions.Force, "force", "f", false, "")
 	CreateShard.Flags().BoolVarP(&createShardOptions.IncludeParent, "include-parent", "p", false, "")
@@ -358,4 +471,10 @@ func init() {
 	Root.AddCommand(SetShardTabletControl)
 
 	Root.AddCommand(ShardReplicationPositions)
+
+	SourceShardAdd.Flags().StringVar(&sourceShardAddOptions.KeyRangeStr, "key-range", "", "Key range to use for the SourceShard")
+	SourceShardAdd.Flags().StringSliceVar(&sourceShardAddOptions.Tables, "tables", nil, "Comma-separated lists of tables to replicate (for MoveTables). Each table name is either an exact match, or a regular expression of the form \"/regexp/\".")
+	Root.AddCommand(SourceShardAdd)
+
+	Root.AddCommand(SourceShardDelete)
 }
