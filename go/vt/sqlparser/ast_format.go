@@ -1939,9 +1939,21 @@ func (node *JSONValueModifierExpr) Format(buf *TrackedBuffer) {
 }
 
 func (node JSONValueModifierParam) Format(buf *TrackedBuffer) {
-	if node.Path != "" {
+	if node.PathIdentifier.IsEmpty() && node.Path == "" {
+		buf.astPrintf(node, "%v", node.Value)
+	} else if node.Path != "" {
 		buf.astPrintf(node, "'%s', %v", node.Path, node.Value)
 	} else {
 		buf.astPrintf(node, "%v, %v", node.PathIdentifier, node.Value)
 	}
+}
+
+func (node *JSONValueMergeExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v, ", node.Name.Lowered(), node.JSONDoc)
+	var prefix string
+	for _, n := range node.JSONDocList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
 }

@@ -2235,10 +2235,19 @@ type (
 	}
 
 	// JSONValueModifierParam defines a path/value pair for a JSONValueModifier
+	// The value type is also used as JSONDocList in JSONValueMergeExpr
 	JSONValueModifierParam struct {
 		Path           string
 		PathIdentifier ColIdent
 		Value          Expr
+	}
+
+	// JSONValueMergeExpr represents the json value modifier functions which merges documents.
+	// Functions falling under this class: JSON_MERGE, JSON_MERGE_PATCH, JSON_MERGE_PRESERVE
+	JSONValueMergeExpr struct {
+		Name        ColIdent
+		JSONDoc     Expr
+		JSONDocList []JSONValueModifierParam
 	}
 )
 
@@ -2281,6 +2290,7 @@ func (*ExtractedSubquery) iExpr()     {}
 func (*TrimFuncExpr) iExpr()          {}
 func (Offset) iExpr()                 {}
 func (*JSONValueModifierExpr) iExpr() {}
+func (*JSONValueMergeExpr) iExpr()    {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()              {}
@@ -2296,6 +2306,7 @@ func (*ConvertUsingExpr) iCallable()      {}
 func (*MatchExpr) iCallable()             {}
 func (*GroupConcatExpr) iCallable()       {}
 func (*JSONValueModifierExpr) iCallable() {}
+func (*JSONValueMergeExpr) iCallable()    {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

@@ -476,6 +476,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return a == b
+	case *JSONValueMergeExpr:
+		b, ok := inB.(*JSONValueMergeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONValueMergeExpr(a, b)
 	case *JSONValueModifierExpr:
 		b, ok := inB.(*JSONValueModifierExpr)
 		if !ok {
@@ -1946,6 +1952,19 @@ func EqualsRefOfIsExpr(a, b *IsExpr) bool {
 		a.Right == b.Right
 }
 
+// EqualsRefOfJSONValueMergeExpr does deep equals between the two objects.
+func EqualsRefOfJSONValueMergeExpr(a, b *JSONValueMergeExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsExpr(a.JSONDoc, b.JSONDoc) &&
+		EqualsSliceOfJSONValueModifierParam(a.JSONDocList, b.JSONDocList)
+}
+
 // EqualsRefOfJSONValueModifierExpr does deep equals between the two objects.
 func EqualsRefOfJSONValueModifierExpr(a, b *JSONValueModifierExpr) bool {
 	if a == b {
@@ -3196,6 +3215,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfGroupConcatExpr(a, b)
+	case *JSONValueMergeExpr:
+		b, ok := inB.(*JSONValueMergeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONValueMergeExpr(a, b)
 	case *JSONValueModifierExpr:
 		b, ok := inB.(*JSONValueModifierExpr)
 		if !ok {
@@ -3589,6 +3614,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfIsExpr(a, b)
+	case *JSONValueMergeExpr:
+		b, ok := inB.(*JSONValueMergeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONValueMergeExpr(a, b)
 	case *JSONValueModifierExpr:
 		b, ok := inB.(*JSONValueModifierExpr)
 		if !ok {

@@ -2534,7 +2534,9 @@ func (node *JSONValueModifierExpr) formatFast(buf *TrackedBuffer) {
 }
 
 func (node JSONValueModifierParam) formatFast(buf *TrackedBuffer) {
-	if node.Path != "" {
+	if node.PathIdentifier.IsEmpty() && node.Path == "" {
+		node.Value.formatFast(buf)
+	} else if node.Path != "" {
 		buf.WriteByte('\'')
 		buf.WriteString(node.Path)
 		buf.WriteString("', ")
@@ -2544,4 +2546,18 @@ func (node JSONValueModifierParam) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(", ")
 		node.Value.formatFast(buf)
 	}
+}
+
+func (node *JSONValueMergeExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Name.Lowered())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.JSONDoc, true)
+	buf.WriteString(", ")
+	var prefix string
+	for _, n := range node.JSONDocList {
+		buf.WriteString(prefix)
+		n.formatFast(buf)
+		prefix = ", "
+	}
+	buf.WriteString(")")
 }

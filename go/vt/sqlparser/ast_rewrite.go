@@ -172,6 +172,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
 	case IsolationLevel:
 		return a.rewriteIsolationLevel(parent, node, replacer)
+	case *JSONValueMergeExpr:
+		return a.rewriteRefOfJSONValueMergeExpr(parent, node, replacer)
 	case *JSONValueModifierExpr:
 		return a.rewriteRefOfJSONValueModifierExpr(parent, node, replacer)
 	case JSONValueModifierParam:
@@ -2642,6 +2644,47 @@ func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer 
 		parent.(*IsExpr).Left = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONValueMergeExpr(parent SQLNode, node *JSONValueMergeExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*JSONValueMergeExpr).Name = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
+		parent.(*JSONValueMergeExpr).JSONDoc = newNode.(Expr)
+	}) {
+		return false
+	}
+	for x, el := range node.JSONDocList {
+		if !a.rewriteJSONValueModifierParam(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*JSONValueMergeExpr).JSONDocList[idx] = newNode.(JSONValueModifierParam)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5515,6 +5558,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case *GroupConcatExpr:
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
+	case *JSONValueMergeExpr:
+		return a.rewriteRefOfJSONValueMergeExpr(parent, node, replacer)
 	case *JSONValueModifierExpr:
 		return a.rewriteRefOfJSONValueModifierExpr(parent, node, replacer)
 	case *MatchExpr:
@@ -5681,6 +5726,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfIntroducerExpr(parent, node, replacer)
 	case *IsExpr:
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
+	case *JSONValueMergeExpr:
+		return a.rewriteRefOfJSONValueMergeExpr(parent, node, replacer)
 	case *JSONValueModifierExpr:
 		return a.rewriteRefOfJSONValueModifierExpr(parent, node, replacer)
 	case ListArg:

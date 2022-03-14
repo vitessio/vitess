@@ -1377,6 +1377,29 @@ func (cached *IsExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *JSONValueMergeExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(80)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
+	// field JSONDoc vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONDoc.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field JSONDocList []vitess.io/vitess/go/vt/sqlparser.JSONValueModifierParam
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.JSONDocList)) * int64(72))
+		for _, elem := range cached.JSONDocList {
+			size += elem.CachedSize(false)
+		}
+	}
+	return size
+}
 func (cached *JSONValueModifierExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

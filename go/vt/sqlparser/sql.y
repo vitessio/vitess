@@ -422,7 +422,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <boolean> exists_opt not_exists_opt enforced_opt temp_opt full_opt
 %type <empty> to_opt
 %type <str> reserved_keyword non_reserved_keyword
-%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt json_value_modifier_name
+%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt json_value_modifier_name json_merge_expr_name
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt
 %type <empty> as_opt work_opt savepoint_opt
@@ -461,8 +461,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
-%type <jsonValueModifierParam> json_value_modifier_param
-%type <jsonValueModifierParams> json_value_modifier_param_list
+%type <jsonValueModifierParam> json_value_modifier_param json_merge_expr_param
+%type <jsonValueModifierParams> json_value_modifier_param_list json_merge_expr_param_list
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
 %type <str> database_or_schema column_opt insert_method_options row_format_options
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
@@ -4769,6 +4769,10 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONValueModifierExpr{Name:$1,JSONDoc:$3,Params:$5}
   }
+| json_merge_expr_name openb expression ',' json_merge_expr_param_list closeb
+  {
+    $$ = &JSONValueMergeExpr{Name: $1, JSONDoc: $3, JSONDocList: $5}
+  }
 
 json_value_modifier_name:
   JSON_ARRAY_APPEND
@@ -4811,6 +4815,37 @@ json_value_modifier_param:
 | AT_ID ',' expression
   {
     $$ = JSONValueModifierParam{PathIdentifier:NewColIdentWithAt(string($1), SingleAt), Value: $3}
+  }
+
+json_merge_expr_name:
+  JSON_MERGE
+  {
+    $$ = NewColIdent($1)
+  }
+| JSON_MERGE_PATCH
+  {
+    $$ = NewColIdent($1)
+  }
+| JSON_MERGE_PRESERVE
+  {
+    $$ = NewColIdent($1)
+  }
+
+json_merge_expr_param_list:
+  json_merge_expr_param
+  {
+    $$ = make([]JSONValueModifierParam, 0, 4)
+    $$ = append($$, $1)
+  }
+| json_merge_expr_param_list ',' json_merge_expr_param
+  {
+    $$ = append($$, $3)
+  }
+
+json_merge_expr_param:
+  expression
+  {
+    $$ = JSONValueModifierParam{Value: $1}
   }
 
 interval:

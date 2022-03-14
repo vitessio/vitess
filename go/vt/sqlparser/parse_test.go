@@ -2443,6 +2443,60 @@ var (
 	}, {
 		input:  "SELECT JSON_SET(@j, '$.a', 10, '$.c', '[true, false]')",
 		output: "select json_set(@j, '$.a', 10, '$.c', '[true, false]') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE('[1, 2]', '[true, false]')",
+		output: "select json_merge('[1, 2]', '[true, false]') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE('[1, 2]', '[true, false]', 'hello')",
+		output: "select json_merge('[1, 2]', '[true, false]', 'hello') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE('[1, 2]', @i)",
+		output: "select json_merge('[1, 2]', @i) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE(@i, @j)",
+		output: "select json_merge(@i, @j) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE(@i, @j, @k)",
+		output: "select json_merge(@i, @j, @k) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE(@i, '[true, false]')",
+		output: "select json_merge(@i, '[true, false]') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PATCH('{\"name\": \"x\"}', '{\"id\": 47}')",
+		output: "select json_merge_patch('{\\\"name\\\": \\\"x\\\"}', '{\\\"id\\\": 47}') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PATCH('{ \"a\": 1, \"b\":2 }','{ \"a\": 3, \"c\":4 }',\n'{ \"a\": 5, \"d\":6 }');",
+		output: "select json_merge_patch('{ \\\"a\\\": 1, \\\"b\\\":2 }', '{ \\\"a\\\": 3, \\\"c\\\":4 }', '{ \\\"a\\\": 5, \\\"d\\\":6 }') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PATCH('[1, 2]', '[true, false]', 'hello')",
+		output: "select json_merge_patch('[1, 2]', '[true, false]', 'hello') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PATCH('[1, 2]', @i)",
+		output: "select json_merge_patch('[1, 2]', @i) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PATCH(@i, @j)",
+		output: "select json_merge_patch(@i, @j) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PATCH(@i, '[true, false]')",
+		output: "select json_merge_patch(@i, '[true, false]') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PRESERVE('{\"name\": \"x\"}', '{\"id\": 47}')",
+		output: "select json_merge_preserve('{\\\"name\\\": \\\"x\\\"}', '{\\\"id\\\": 47}') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PRESERVE('{ \"a\": 1, \"b\":2 }','{ \"a\": 3, \"c\":4 }',\n'{ \"a\": 5, \"d\":6 }');",
+		output: "select json_merge_preserve('{ \\\"a\\\": 1, \\\"b\\\":2 }', '{ \\\"a\\\": 3, \\\"c\\\":4 }', '{ \\\"a\\\": 5, \\\"d\\\":6 }') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PRESERVE('[1, 2]', '[true, false]', 'hello')",
+		output: "select json_merge_preserve('[1, 2]', '[true, false]', 'hello') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PRESERVE('[1, 2]', @i)",
+		output: "select json_merge_preserve('[1, 2]', @i) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PRESERVE(@i, @j)",
+		output: "select json_merge_preserve(@i, @j) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PRESERVE(@i, '[true, false]')",
+		output: "select json_merge_preserve(@i, '[true, false]') from dual",
 	}}
 )
 
@@ -2576,6 +2630,15 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "SELECT JSON_SET('{ \"a\": 1, \"b\": [2, 3]}','$[1]',)",
 		err:   "syntax error at position 50",
+	}, {
+		input: "SELECT JSON_MERGE('[1, 2]')",
+		err:   "syntax error at position 28",
+	}, {
+		input: "SELECT JSON_MERGE_PATCH('[1, 2]')",
+		err:   "syntax error at position 34",
+	}, {
+		input: "SELECT JSON_MERGE_PRESERVE('[1, 2]')",
+		err:   "syntax error at position 37",
 	}}
 
 	for _, tcase := range invalidSQL {
