@@ -3053,6 +3053,21 @@ func TestKeywords(t *testing.T) {
 		}, {
 			input:  "delete from x where found = 32",
 			output: "delete from x where `found` = 32",
+		}, {
+			input:  "select 1 as event",
+			output: "select 1 as `event` from dual",
+		}, {
+			input:  "select event from t",
+			output: "select `event` from t",
+		}, {
+			input:  "insert into t (event) values (42)",
+			output: "insert into t(`event`) values (42)",
+		}, {
+			input:  "update x set event = 32 where event = 42",
+			output: "update x set event = 32 where `event` = 42",
+		}, {
+			input:  "delete from x where event = 32",
+			output: "delete from x where `event` = 32",
 		}}
 
 	for _, tcase := range validSQL {
