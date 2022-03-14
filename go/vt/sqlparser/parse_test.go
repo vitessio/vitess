@@ -5212,37 +5212,14 @@ func TestKeywordsCorrectlyDoParse(t *testing.T) {
 	uTest := "UPDATE t SET %s=1"
 	cTest := "CREATE TABLE t(%s int)"
 
-	// Define expected format for non-reserved keywords
-	aliasTestFmt := "select 1 as %s from dual"
-	iTestFmt := "insert into t(%s) values (1)"
-	dTestFmt := "delete from t where %s = 1"
-	uTestFmt := "update t set %s = 1"
-	cTestFmt := "create table t (\n\t%s int\n)"
-
-	// TODO: most of them aren't back-ticked...but shouldn't they all be?
-	aliasTestFmtTicked := "select 1 as `%s` from dual"
-	iTestFmtTicked := "insert into t(`%s`) values (1)"
-	dTestFmtTicked := "delete from t where `%s` = 1"
-	uTestFmtTicked := "update t set `%s` = 1"
-	cTestFmtTicked := "create table t (\n\t`%s` int\n)"
-
 	tests := []string{aliasTest, iTest, dTest, uTest, cTest}
-	fmts := []string{aliasTestFmt, iTestFmt, dTestFmt, uTestFmt, cTestFmt}
-	fmtsTicked := []string{aliasTestFmtTicked, iTestFmtTicked, dTestFmtTicked, uTestFmtTicked, cTestFmtTicked}
 
 	for _, kw := range correctlyDoParse {
-		for i, query := range tests {
+		for _, query := range tests {
 			test := fmt.Sprintf(query, kw)
 			t.Run(test, func(t *testing.T) {
-				stmt, err := Parse(test)
+				_, err := Parse(test)
 				assert.NoError(t, err)
-
-				// TODO: not sure if it's supposed to be ticked or not
-				exp := fmt.Sprintf(fmts[i], kw)
-				expTicked := fmt.Sprintf(fmtsTicked[i], kw)
-				out := String(stmt)
-				result := exp == out || expTicked == out
-				assert.True(t, result)
 			})
 		}
 	}
