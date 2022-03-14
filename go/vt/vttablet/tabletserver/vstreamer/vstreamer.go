@@ -253,6 +253,15 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			curSize += newSize
 			bufferedEvents = append(bufferedEvents, vevent)
 		case binlogdatapb.VEventType_SAVEPOINT:
+			newSize := len(vevent.GetStatement())
+			if curSize+newSize > *defaultPacketSize {
+				vs.vse.vstreamerNumPackets.Add(1)
+				vevents := bufferedEvents
+				bufferedEvents = []*binlogdatapb.VEvent{vevent}
+				curSize = newSize
+				return vs.send(vevents)
+			}
+			curSize += newSize
 			bufferedEvents = append(bufferedEvents, vevent)
 		default:
 			vs.vse.errorCounts.Add("BufferAndTransmit", 1)

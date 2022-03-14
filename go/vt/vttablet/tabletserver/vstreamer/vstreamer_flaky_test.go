@@ -1416,6 +1416,27 @@ func TestBuffering(t *testing.T) {
 			`commit`,
 		}},
 	}, {
+		input: []string{
+			"begin",
+			"insert into packet_test values (9, '123')",
+			"SAVEPOINT a",
+			"insert into packet_test values (10, '12')",
+			"SAVEPOINT b",
+			"commit",
+		},
+		output: [][]string{{
+			`begin`,
+			`type:ROW row_event:{table_name:"packet_test" row_changes:{after:{lengths:1 lengths:3 values:"9123"}}}`,
+		}, {
+			"type:SAVEPOINT statement:\"SAVEPOINT `a`\"",
+		}, {
+			`type:ROW row_event:{table_name:"packet_test" row_changes:{after:{lengths:2 lengths:2 values:"1012"}}}`,
+		}, {
+			"type:SAVEPOINT statement:\"SAVEPOINT `b`\"",
+			`gtid`,
+			`commit`,
+		}},
+	}, {
 		// DDL is in its own packet
 		input: []string{
 			"alter table packet_test change val val varchar(128)",
