@@ -5980,7 +5980,7 @@ non_reserved_keyword:
 | ADMIN
 | AGAINST
 | AUTHENTICATION
-| BEFORE // TODO: this (and some others) should be reserved, why is it here?
+| BEFORE // TODO: this (and some others) should be reserved
 | BEGIN
 | BIGINT
 | SERIAL
