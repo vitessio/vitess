@@ -353,6 +353,7 @@ func (*Use) iStatement()               {}
 func (*Begin) iStatement()             {}
 func (*Commit) iStatement()            {}
 func (*Rollback) iStatement()          {}
+func (*Flush) iStatement()             {}
 func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
 func (*BeginEndBlock) iStatement()     {}
@@ -2816,6 +2817,33 @@ type Rollback struct{}
 // Format formats the node.
 func (node *Rollback) Format(buf *TrackedBuffer) {
 	buf.WriteString("rollback")
+}
+
+// FlushOption is used for trailing options for flush statement
+type FlushOption struct {
+	Name    string
+	Channel string
+}
+
+// Flush represents a Flush statement.
+type Flush struct {
+	Type   string
+	Option *FlushOption
+}
+
+// Format formats the node.
+func (node *Flush) Format(buf *TrackedBuffer) {
+	buf.WriteString("flush")
+
+	if node.Type != "" {
+		buf.Myprintf(" %s", strings.ToLower(node.Type))
+	}
+
+	if node.Option.Name == "RELAY LOGS" && node.Option.Channel != "" {
+		buf.Myprintf(" %s for channel %s", strings.ToLower(node.Option.Name), strings.ToLower(node.Option.Channel))
+	} else {
+		buf.Myprintf(" %s", strings.ToLower(node.Option.Name))
+	}
 }
 
 // OtherRead represents a DESCRIBE, or EXPLAIN statement.

@@ -118,6 +118,7 @@ func yyOldPosition(yylex interface{}) int {
   indexInfo     *IndexInfo
   indexOption   *IndexOption
   indexOptions  []*IndexOption
+  flushOption   *FlushOption
   indexColumn   *IndexColumn
   indexColumns  []*IndexColumn
   constraintDefinition *ConstraintDefinition
@@ -218,7 +219,7 @@ func yyOldPosition(yylex interface{}) int {
 %token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
 
 // DDL Tokens
-%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH MODIFY CHANGE
+%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD MODIFY CHANGE
 %token <bytes> SCHEMA TABLE INDEX INDEXES VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> FIRST AFTER
@@ -239,9 +240,10 @@ func yyOldPosition(yylex interface{}) int {
 // Permissions Tokens
 %token <bytes> USER IDENTIFIED ROLE REUSE GRANT GRANTS REVOKE NONE ATTRIBUTE RANDOM PASSWORD INITIAL AUTHENTICATION
 %token <bytes> SSL X509 CIPHER ISSUER SUBJECT ACCOUNT EXPIRE NEVER DAY OPTION OPTIONAL EXCEPT ADMIN PRIVILEGES
-%token <bytes> MAX_QUERIES_PER_HOUR MAX_UPDATES_PER_HOUR MAX_CONNECTIONS_PER_HOUR MAX_USER_CONNECTIONS
+%token <bytes> MAX_QUERIES_PER_HOUR MAX_UPDATES_PER_HOUR MAX_CONNECTIONS_PER_HOUR MAX_USER_CONNECTIONS FLUSH
 %token <bytes> FAILED_LOGIN_ATTEMPTS PASSWORD_LOCK_TIME UNBOUNDED REQUIRE PROXY ROUTINE TABLESPACE CLIENT SLAVE
-%token <bytes> EVENT EXECUTE FILE RELOAD REPLICATION SHUTDOWN SUPER USAGE
+%token <bytes> EVENT EXECUTE FILE RELOAD REPLICATION SHUTDOWN SUPER USAGE LOGS ENGINE ERROR GENERAL HOSTS
+%token <bytes> OPTIMIZER_COSTS RELAY SLOW USER_RESOURCES NO_WRITE_TO_BINLOG CHANNEL
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE
@@ -303,7 +305,7 @@ func yyOldPosition(yylex interface{}) int {
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
 %type <statement> begin_end_block declare_statement resignal_statement
 %type <statement> savepoint_statement rollback_savepoint_statement release_savepoint_statement
-%type <statement> lock_statement unlock_statement kill_statement grant_statement revoke_statement
+%type <statement> lock_statement unlock_statement kill_statement grant_statement revoke_statement flush_statement
 %type <statements> statement_list
 %type <caseStatementCases> case_statement_case_list
 %type <caseStatementCase> case_statement_case
@@ -392,6 +394,7 @@ func yyOldPosition(yylex interface{}) int {
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt not_exists_opt sql_calc_found_rows_opt temp_opt
 %type <str> key_type key_type_opt
+%type <str> flush_type flush_type_opt
 %type <empty> to_opt to_or_as as_opt column_opt describe
 %type <str> definer_opt
 %type <bytes> reserved_keyword non_reserved_keyword column_name_safe_reserved_keyword
@@ -426,6 +429,8 @@ func yyOldPosition(yylex interface{}) int {
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
 %type <indexOptions> index_option_list index_option_list_opt
+%type <flushOption> flush_option
+%type <str> relay_logs_attribute
 %type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
@@ -515,6 +520,7 @@ command:
 | kill_statement
 | grant_statement
 | revoke_statement
+| flush_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -2002,6 +2008,7 @@ statement_list_statement:
 | grant_statement
 | revoke_statement
 | begin_end_block
+| flush_statement
 
 create_table_prefix:
   CREATE temp_opt TABLE not_exists_opt table_name
@@ -2569,6 +2576,78 @@ column_comment:
   {
     $$ = NewStrVal($2)
   }
+
+flush_statement:
+  FLUSH flush_type_opt flush_option
+  {
+    $$ = &Flush{Type: $2, Option: $3}
+  }
+
+flush_option:
+  BINARY LOGS
+  {
+    $$ = &FlushOption{Name: string($1) + " " +  string($2)}
+  }
+| ENGINE LOGS
+  {
+    $$ = &FlushOption{Name: string($1) + " " +  string($2)}
+  }
+| ERROR LOGS
+  {
+    $$ = &FlushOption{Name: string($1) + " " +  string($2)}
+  }
+| GENERAL LOGS
+  {
+    $$ = &FlushOption{Name: string($1) + " " +  string($2)}
+  }
+| HOSTS
+  {
+    $$ = &FlushOption{Name: string($1)}
+  }
+| LOGS
+  {
+    $$ = &FlushOption{Name: string($1)}
+  }
+| PRIVILEGES
+  {
+    $$ = &FlushOption{Name: string($1)}
+  }
+| OPTIMIZER_COSTS
+  {
+    $$ = &FlushOption{Name: string($1)}
+  }
+| RELAY LOGS relay_logs_attribute
+  {
+    $$ = &FlushOption{Name: string($1) + " " +  string($2), Channel: $3}
+  }
+| SLOW LOGS
+  {
+    $$ = &FlushOption{Name: string($1) + " " +  string($2)}
+  }
+| STATUS
+  {
+    $$ = &FlushOption{Name: string($1)}
+  }
+| USER_RESOURCES
+  {
+    $$ = &FlushOption{Name: string($1)}
+  }
+
+relay_logs_attribute:
+  { $$ = "" }
+| FOR CHANNEL STRING
+  { $$ = string($3) }
+
+flush_type:
+  NO_WRITE_TO_BINLOG
+  { $$ = string($1) }
+| LOCAL
+  { $$ = string($1) }
+
+flush_type_opt:
+  { $$ = "" }
+| flush_type
+  { $$ = $1 }
 
 index_definition:
   index_info '(' index_column_list ')' index_option_list
@@ -5773,6 +5852,7 @@ reserved_keyword:
 | FOLLOWING
 | FOR
 | FORCE
+| FOUND
 | FROM
 | FUNCTION
 | GRANT
@@ -5819,6 +5899,7 @@ reserved_keyword:
 | OF
 | OFF
 | ON
+| OPTIMIZER_COSTS
 | OR
 | ORDER
 | OUT
@@ -5844,6 +5925,7 @@ reserved_keyword:
 | SET
 | SHOW
 | SHUTDOWN
+| STATUS
 | STD
 | STDDEV
 | STDDEV_POP
@@ -5881,7 +5963,6 @@ reserved_keyword:
 | WHERE
 | WINDOW
 | WITH
-| STATUS
 
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.
@@ -5908,6 +5989,7 @@ non_reserved_keyword:
 | CASCADE
 | CATALOG_NAME
 | CHANGE
+| CHANNEL
 | CHAR
 | CHARACTER
 | CHARSET
@@ -5941,8 +6023,10 @@ non_reserved_keyword:
 | DUPLICATE
 | EACH
 | ENFORCED
+| ENGINE
 | ENGINES
 | ENUM
+| ERROR
 | EXCEPT
 | EXCLUDE
 | EXPANSION
@@ -5953,12 +6037,14 @@ non_reserved_keyword:
 | FLUSH
 | FOREIGN
 | FULLTEXT
+| GENERAL
 | GEOMCOLLECTION
 | GEOMETRY
 | GEOMETRYCOLLECTION
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
 | GRANTS
+| HOSTS
 | HISTOGRAM
 | HISTORY
 | INACTIVE
@@ -5982,6 +6068,7 @@ non_reserved_keyword:
 | LOAD
 | LOCAL
 | LOCKED
+| LOGS
 | LONGBLOB
 | LONGTEXT
 | LOW_PRIORITY
@@ -6037,6 +6124,7 @@ non_reserved_keyword:
 | PRIMARY
 | PRIVILEGE_CHECKS_USER
 | PRIVILEGES
+| PROCESSLIST
 | PROXY
 | QUERY
 | RANDOM
@@ -6044,6 +6132,7 @@ non_reserved_keyword:
 | READ
 | REAL
 | REFERENCE
+| RELAY
 | RELEASE
 | REORGANIZE
 | REPAIR
@@ -6077,6 +6166,7 @@ non_reserved_keyword:
 | SIGNED
 | SKIP
 | SLAVE
+| SLOW
 | SMALLINT
 | SPATIAL
 | SQLSTATE
@@ -6108,6 +6198,7 @@ non_reserved_keyword:
 | UNSIGNED
 | UNUSED
 | USER
+| USER_RESOURCES
 | VARBINARY
 | VARCHAR
 | VARIABLES
@@ -6129,10 +6220,13 @@ column_name_safe_reserved_keyword:
 | BIT_AND
 | BIT_OR
 | BIT_XOR
+| COMMENT_KEYWORD
 | COUNT
 | CUME_DIST
 | DENSE_RANK
+| EVENT
 | FIRST_VALUE
+| FOUND
 | JSON_ARRAYAGG
 | JSON_OBJECTAGG
 | LAG
@@ -6155,7 +6249,6 @@ column_name_safe_reserved_keyword:
 | VARIANCE
 | VAR_POP
 | VAR_SAMP
-| COMMENT_KEYWORD
 
 openb:
   '('
