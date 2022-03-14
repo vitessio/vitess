@@ -2225,60 +2225,77 @@ type (
 
 	// Offset is another AST type that is used during planning and never produced by the parser
 	Offset int
+
+	// JSONValueModifierExpr represents a subset of json value modifier functions.
+	// Functions represented: JSON_ARRAY_APPEND, JSON_ARRAY_INSERT, JSON_INSERT, JSON_REPLACE, JSON_SET
+	JSONValueModifierExpr struct {
+		Name    ColIdent
+		JSONDoc Expr
+		Params  []JSONValueModifierParam
+	}
+
+	// JSONValueModifierParam defines a path/value pair for a JSONValueModifier
+	JSONValueModifierParam struct {
+		Path           string
+		PathIdentifier ColIdent
+		Value          Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
-func (*AndExpr) iExpr()              {}
-func (*OrExpr) iExpr()               {}
-func (*XorExpr) iExpr()              {}
-func (*NotExpr) iExpr()              {}
-func (*ComparisonExpr) iExpr()       {}
-func (*BetweenExpr) iExpr()          {}
-func (*IsExpr) iExpr()               {}
-func (*ExistsExpr) iExpr()           {}
-func (*Literal) iExpr()              {}
-func (Argument) iExpr()              {}
-func (*NullVal) iExpr()              {}
-func (BoolVal) iExpr()               {}
-func (*ColName) iExpr()              {}
-func (ValTuple) iExpr()              {}
-func (*Subquery) iExpr()             {}
-func (ListArg) iExpr()               {}
-func (*BinaryExpr) iExpr()           {}
-func (*UnaryExpr) iExpr()            {}
-func (*IntroducerExpr) iExpr()       {}
-func (*IntervalExpr) iExpr()         {}
-func (*CollateExpr) iExpr()          {}
-func (*FuncExpr) iExpr()             {}
-func (*TimestampFuncExpr) iExpr()    {}
-func (*ExtractFuncExpr) iExpr()      {}
-func (*WeightStringFuncExpr) iExpr() {}
-func (*CurTimeFuncExpr) iExpr()      {}
-func (*CaseExpr) iExpr()             {}
-func (*ValuesFuncExpr) iExpr()       {}
-func (*ConvertExpr) iExpr()          {}
-func (*SubstrExpr) iExpr()           {}
-func (*ConvertUsingExpr) iExpr()     {}
-func (*MatchExpr) iExpr()            {}
-func (*GroupConcatExpr) iExpr()      {}
-func (*Default) iExpr()              {}
-func (*ExtractedSubquery) iExpr()    {}
-func (*TrimFuncExpr) iExpr()         {}
-func (Offset) iExpr()                {}
+func (*AndExpr) iExpr()               {}
+func (*OrExpr) iExpr()                {}
+func (*XorExpr) iExpr()               {}
+func (*NotExpr) iExpr()               {}
+func (*ComparisonExpr) iExpr()        {}
+func (*BetweenExpr) iExpr()           {}
+func (*IsExpr) iExpr()                {}
+func (*ExistsExpr) iExpr()            {}
+func (*Literal) iExpr()               {}
+func (Argument) iExpr()               {}
+func (*NullVal) iExpr()               {}
+func (BoolVal) iExpr()                {}
+func (*ColName) iExpr()               {}
+func (ValTuple) iExpr()               {}
+func (*Subquery) iExpr()              {}
+func (ListArg) iExpr()                {}
+func (*BinaryExpr) iExpr()            {}
+func (*UnaryExpr) iExpr()             {}
+func (*IntroducerExpr) iExpr()        {}
+func (*IntervalExpr) iExpr()          {}
+func (*CollateExpr) iExpr()           {}
+func (*FuncExpr) iExpr()              {}
+func (*TimestampFuncExpr) iExpr()     {}
+func (*ExtractFuncExpr) iExpr()       {}
+func (*WeightStringFuncExpr) iExpr()  {}
+func (*CurTimeFuncExpr) iExpr()       {}
+func (*CaseExpr) iExpr()              {}
+func (*ValuesFuncExpr) iExpr()        {}
+func (*ConvertExpr) iExpr()           {}
+func (*SubstrExpr) iExpr()            {}
+func (*ConvertUsingExpr) iExpr()      {}
+func (*MatchExpr) iExpr()             {}
+func (*GroupConcatExpr) iExpr()       {}
+func (*Default) iExpr()               {}
+func (*ExtractedSubquery) iExpr()     {}
+func (*TrimFuncExpr) iExpr()          {}
+func (Offset) iExpr()                 {}
+func (*JSONValueModifierExpr) iExpr() {}
 
 // iCallable marks all expressions that represent function calls
-func (*FuncExpr) iCallable()             {}
-func (*TimestampFuncExpr) iCallable()    {}
-func (*ExtractFuncExpr) iCallable()      {}
-func (*WeightStringFuncExpr) iCallable() {}
-func (*CurTimeFuncExpr) iCallable()      {}
-func (*ValuesFuncExpr) iCallable()       {}
-func (*ConvertExpr) iCallable()          {}
-func (*TrimFuncExpr) iCallable()         {}
-func (*SubstrExpr) iCallable()           {}
-func (*ConvertUsingExpr) iCallable()     {}
-func (*MatchExpr) iCallable()            {}
-func (*GroupConcatExpr) iCallable()      {}
+func (*FuncExpr) iCallable()              {}
+func (*TimestampFuncExpr) iCallable()     {}
+func (*ExtractFuncExpr) iCallable()       {}
+func (*WeightStringFuncExpr) iCallable()  {}
+func (*CurTimeFuncExpr) iCallable()       {}
+func (*ValuesFuncExpr) iCallable()        {}
+func (*ConvertExpr) iCallable()           {}
+func (*TrimFuncExpr) iCallable()          {}
+func (*SubstrExpr) iCallable()            {}
+func (*ConvertUsingExpr) iCallable()      {}
+func (*MatchExpr) iCallable()             {}
+func (*GroupConcatExpr) iCallable()       {}
+func (*JSONValueModifierExpr) iCallable() {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

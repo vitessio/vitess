@@ -173,6 +173,10 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfIsExpr(in)
 	case IsolationLevel:
 		return in
+	case *JSONValueModifierExpr:
+		return CloneRefOfJSONValueModifierExpr(in)
+	case JSONValueModifierParam:
+		return CloneJSONValueModifierParam(in)
 	case *JoinCondition:
 		return CloneRefOfJoinCondition(in)
 	case *JoinTableExpr:
@@ -1127,6 +1131,23 @@ func CloneRefOfIsExpr(n *IsExpr) *IsExpr {
 	out := *n
 	out.Left = CloneExpr(n.Left)
 	return &out
+}
+
+// CloneRefOfJSONValueModifierExpr creates a deep clone of the input.
+func CloneRefOfJSONValueModifierExpr(n *JSONValueModifierExpr) *JSONValueModifierExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneColIdent(n.Name)
+	out.JSONDoc = CloneExpr(n.JSONDoc)
+	out.Params = CloneSliceOfJSONValueModifierParam(n.Params)
+	return &out
+}
+
+// CloneJSONValueModifierParam creates a deep clone of the input.
+func CloneJSONValueModifierParam(n JSONValueModifierParam) JSONValueModifierParam {
+	return *CloneRefOfJSONValueModifierParam(&n)
 }
 
 // CloneRefOfJoinCondition creates a deep clone of the input.
@@ -2106,6 +2127,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
+	case *JSONValueModifierExpr:
+		return CloneRefOfJSONValueModifierExpr(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
 	case *SubstrExpr:
@@ -2284,6 +2307,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
 		return CloneRefOfIsExpr(in)
+	case *JSONValueModifierExpr:
+		return CloneRefOfJSONValueModifierExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -2647,6 +2672,29 @@ func CloneSliceOfRefOfIndexOption(n []*IndexOption) []*IndexOption {
 		res = append(res, CloneRefOfIndexOption(x))
 	}
 	return res
+}
+
+// CloneSliceOfJSONValueModifierParam creates a deep clone of the input.
+func CloneSliceOfJSONValueModifierParam(n []JSONValueModifierParam) []JSONValueModifierParam {
+	if n == nil {
+		return nil
+	}
+	res := make([]JSONValueModifierParam, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneJSONValueModifierParam(x))
+	}
+	return res
+}
+
+// CloneRefOfJSONValueModifierParam creates a deep clone of the input.
+func CloneRefOfJSONValueModifierParam(n *JSONValueModifierParam) *JSONValueModifierParam {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.PathIdentifier = CloneColIdent(n.PathIdentifier)
+	out.Value = CloneExpr(n.Value)
+	return &out
 }
 
 // CloneTableAndLockTypes creates a deep clone of the input.

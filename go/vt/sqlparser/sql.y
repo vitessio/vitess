@@ -66,6 +66,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   joinCondition *JoinCondition
   collateAndCharset CollateAndCharset
   columnType    ColumnType
+  jsonValueModifierParam JSONValueModifierParam
 }
 
 %union {
@@ -130,6 +131,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   renameTablePairs []*RenameTablePair
   alterOptions	   []AlterOption
   vindexParams  []VindexParam
+  jsonValueModifierParams []JSONValueModifierParam
   partDefs      []*PartitionDefinition
   partitionValueRange	*PartitionValueRange
   partSpecs     []*PartitionSpec
@@ -287,6 +289,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> TIMESTAMPADD TIMESTAMPDIFF
 %token <str> WEIGHT_STRING
 %token <str> LTRIM RTRIM TRIM
+%token <str> JSON_ARRAY_APPEND JSON_ARRAY_INSERT JSON_INSERT JSON_MERGE JSON_MERGE_PATCH JSON_MERGE_PRESERVE JSON_REMOVE JSON_REPLACE JSON_SET JSON_UNQUOTE
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -419,7 +422,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <boolean> exists_opt not_exists_opt enforced_opt temp_opt full_opt
 %type <empty> to_opt
 %type <str> reserved_keyword non_reserved_keyword
-%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
+%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt json_value_modifier_name
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt
 %type <empty> as_opt work_opt savepoint_opt
@@ -458,6 +461,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
+%type <jsonValueModifierParam> json_value_modifier_param
+%type <jsonValueModifierParams> json_value_modifier_param_list
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
 %type <str> database_or_schema column_opt insert_method_options row_format_options
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
@@ -4759,6 +4764,53 @@ UTC_DATE func_paren_opt
 | TRIM openb expression FROM expression closeb
   {
     $$ = &TrimFuncExpr{TrimArg:$3, StringArg: $5}
+  }
+| json_value_modifier_name openb expression ',' json_value_modifier_param_list closeb
+  {
+    $$ = &JSONValueModifierExpr{Name:$1,JSONDoc:$3,Params:$5}
+  }
+
+json_value_modifier_name:
+  JSON_ARRAY_APPEND
+{
+  $$ = NewColIdent($1)
+}
+| JSON_ARRAY_INSERT
+  {
+    $$ = NewColIdent($1)
+  }
+| JSON_INSERT
+  {
+    $$ = NewColIdent($1)
+  }
+| JSON_REPLACE
+  {
+    $$ = NewColIdent($1)
+  }
+| JSON_SET
+  {
+    $$ = NewColIdent($1)
+  }
+
+json_value_modifier_param_list:
+  json_value_modifier_param
+  {
+    $$ = make([]JSONValueModifierParam, 0, 4)
+    $$ = append($$, $1)
+  }
+| json_value_modifier_param_list ',' json_value_modifier_param
+  {
+    $$ = append($$, $3)
+  }
+
+json_value_modifier_param:
+  STRING ',' expression
+  {
+    $$ = JSONValueModifierParam{Path:$1, Value: $3}
+  }
+| AT_ID ',' expression
+  {
+    $$ = JSONValueModifierParam{PathIdentifier:NewColIdentWithAt(string($1), SingleAt), Value: $3}
   }
 
 interval:

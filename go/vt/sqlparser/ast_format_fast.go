@@ -2518,3 +2518,30 @@ func (node Offset) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(strconv.Itoa(int(node)))
 	buf.WriteString("]")
 }
+
+func (node *JSONValueModifierExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Name.Lowered())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.JSONDoc, true)
+	buf.WriteString(", ")
+	var prefix string
+	for _, n := range node.Params {
+		buf.WriteString(prefix)
+		n.formatFast(buf)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+func (node JSONValueModifierParam) formatFast(buf *TrackedBuffer) {
+	if node.Path != "" {
+		buf.WriteByte('\'')
+		buf.WriteString(node.Path)
+		buf.WriteString("', ")
+		node.Value.formatFast(buf)
+	} else {
+		node.PathIdentifier.formatFast(buf)
+		buf.WriteString(", ")
+		node.Value.formatFast(buf)
+	}
+}

@@ -476,6 +476,18 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return a == b
+	case *JSONValueModifierExpr:
+		b, ok := inB.(*JSONValueModifierExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONValueModifierExpr(a, b)
+	case JSONValueModifierParam:
+		b, ok := inB.(JSONValueModifierParam)
+		if !ok {
+			return false
+		}
+		return EqualsJSONValueModifierParam(a, b)
 	case *JoinCondition:
 		b, ok := inB.(*JoinCondition)
 		if !ok {
@@ -1934,6 +1946,26 @@ func EqualsRefOfIsExpr(a, b *IsExpr) bool {
 		a.Right == b.Right
 }
 
+// EqualsRefOfJSONValueModifierExpr does deep equals between the two objects.
+func EqualsRefOfJSONValueModifierExpr(a, b *JSONValueModifierExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsExpr(a.JSONDoc, b.JSONDoc) &&
+		EqualsSliceOfJSONValueModifierParam(a.Params, b.Params)
+}
+
+// EqualsJSONValueModifierParam does deep equals between the two objects.
+func EqualsJSONValueModifierParam(a, b JSONValueModifierParam) bool {
+	return a.Path == b.Path &&
+		EqualsColIdent(a.PathIdentifier, b.PathIdentifier) &&
+		EqualsExpr(a.Value, b.Value)
+}
+
 // EqualsRefOfJoinCondition does deep equals between the two objects.
 func EqualsRefOfJoinCondition(a, b *JoinCondition) bool {
 	if a == b {
@@ -3164,6 +3196,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfGroupConcatExpr(a, b)
+	case *JSONValueModifierExpr:
+		b, ok := inB.(*JSONValueModifierExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONValueModifierExpr(a, b)
 	case *MatchExpr:
 		b, ok := inB.(*MatchExpr)
 		if !ok {
@@ -3551,6 +3589,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfIsExpr(a, b)
+	case *JSONValueModifierExpr:
+		b, ok := inB.(*JSONValueModifierExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONValueModifierExpr(a, b)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {
@@ -4265,6 +4309,32 @@ func EqualsSliceOfRefOfIndexOption(a, b []*IndexOption) bool {
 		}
 	}
 	return true
+}
+
+// EqualsSliceOfJSONValueModifierParam does deep equals between the two objects.
+func EqualsSliceOfJSONValueModifierParam(a, b []JSONValueModifierParam) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsJSONValueModifierParam(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsRefOfJSONValueModifierParam does deep equals between the two objects.
+func EqualsRefOfJSONValueModifierParam(a, b *JSONValueModifierParam) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Path == b.Path &&
+		EqualsColIdent(a.PathIdentifier, b.PathIdentifier) &&
+		EqualsExpr(a.Value, b.Value)
 }
 
 // EqualsTableAndLockTypes does deep equals between the two objects.

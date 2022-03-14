@@ -1927,3 +1927,21 @@ func (node Offset) Format(buf *TrackedBuffer) {
 	buf.WriteString(strconv.Itoa(int(node)))
 	buf.WriteString("]")
 }
+
+func (node *JSONValueModifierExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v, ", node.Name.Lowered(), node.JSONDoc)
+	var prefix string
+	for _, n := range node.Params {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+func (node JSONValueModifierParam) Format(buf *TrackedBuffer) {
+	if node.Path != "" {
+		buf.astPrintf(node, "'%s', %v", node.Path, node.Value)
+	} else {
+		buf.astPrintf(node, "%v, %v", node.PathIdentifier, node.Value)
+	}
+}
