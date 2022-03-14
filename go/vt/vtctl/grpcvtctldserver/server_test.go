@@ -8972,6 +8972,290 @@ func TestShardReplicationPositions(t *testing.T) {
 	}
 }
 
+func TestSourceShardAdd(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		shards       []*vtctldatapb.Shard
+		topoIsLocked bool
+		req          *vtctldatapb.SourceShardAddRequest
+		expected     *vtctldatapb.SourceShardAddResponse
+		shouldErr    bool
+		assertion    func(ctx context.Context, t *testing.T, ts *topo.Server)
+	}{
+		{
+			name: "ok",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "ks",
+					Name:     "-",
+				},
+			},
+			req: &vtctldatapb.SourceShardAddRequest{
+				Keyspace:       "ks",
+				Shard:          "-",
+				Uid:            1,
+				SourceKeyspace: "otherks",
+				SourceShard:    "-80",
+			},
+			expected: &vtctldatapb.SourceShardAddResponse{
+				Shard: &topodatapb.Shard{
+					IsPrimaryServing: true,
+					KeyRange:         &topodatapb.KeyRange{},
+					SourceShards: []*topodatapb.Shard_SourceShard{
+						{
+							Uid:      1,
+							Keyspace: "otherks",
+							Shard:    "-80",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "uid already used",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "ks",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						SourceShards: []*topodatapb.Shard_SourceShard{
+							{
+								Uid:      1,
+								Keyspace: "otherks",
+								Shard:    "-80",
+							},
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.SourceShardAddRequest{
+				Keyspace:       "ks",
+				Shard:          "-",
+				Uid:            1,
+				SourceKeyspace: "otherks",
+				SourceShard:    "80-",
+			},
+			expected: &vtctldatapb.SourceShardAddResponse{},
+			assertion: func(ctx context.Context, t *testing.T, ts *topo.Server) {
+				si, err := ts.GetShard(ctx, "ks", "-")
+				require.NoError(t, err, "failed to get shard ks/-")
+				utils.MustMatch(t, []*topodatapb.Shard_SourceShard{
+					{
+						Uid:      1,
+						Keyspace: "otherks",
+						Shard:    "-80",
+					},
+				}, si.SourceShards, "SourceShards should not have changed")
+			},
+		},
+		{
+			name: "cannot lock keyspace",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "ks",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						SourceShards: []*topodatapb.Shard_SourceShard{
+							{
+								Uid:      1,
+								Keyspace: "otherks",
+								Shard:    "-80",
+							},
+						},
+					},
+				},
+			},
+			topoIsLocked: true,
+			req: &vtctldatapb.SourceShardAddRequest{
+				Keyspace:       "ks",
+				Shard:          "-",
+				Uid:            1,
+				SourceKeyspace: "otherks",
+				SourceShard:    "80-",
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			ts := memorytopo.NewServer("zone1")
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+
+			testutil.AddShards(ctx, t, ts, tt.shards...)
+			if tt.topoIsLocked {
+				lctx, unlock, lerr := ts.LockKeyspace(ctx, tt.req.Keyspace, "test lock")
+				require.NoError(t, lerr, "failed to lock %s for test setup", tt.req.Keyspace)
+
+				defer func() {
+					var err error
+					unlock(&err)
+					assert.NoError(t, err, "failed to unlock %s after test", tt.req.Keyspace)
+				}()
+
+				ctx = lctx
+			}
+
+			resp, err := vtctld.SourceShardAdd(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+			if tt.assertion != nil {
+				func() {
+					t.Helper()
+					tt.assertion(ctx, t, ts)
+				}()
+			}
+		})
+	}
+}
+
+func TestSourceShardDelete(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		shards       []*vtctldatapb.Shard
+		topoIsLocked bool
+		req          *vtctldatapb.SourceShardDeleteRequest
+		expected     *vtctldatapb.SourceShardDeleteResponse
+		shouldErr    bool
+		assertion    func(ctx context.Context, t *testing.T, ts *topo.Server)
+	}{
+		{
+			name: "ok",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "ks",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						SourceShards: []*topodatapb.Shard_SourceShard{
+							{
+								Uid:      1,
+								Keyspace: "otherks",
+								Shard:    "-80",
+							},
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.SourceShardDeleteRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+				Uid:      1,
+			},
+			expected: &vtctldatapb.SourceShardDeleteResponse{
+				Shard: &topodatapb.Shard{},
+			},
+		},
+		{
+			name: "no SourceShard with uid",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "ks",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						SourceShards: []*topodatapb.Shard_SourceShard{
+							{
+								Uid:      1,
+								Keyspace: "otherks",
+								Shard:    "-80",
+							},
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.SourceShardDeleteRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+				Uid:      2,
+			},
+			expected: &vtctldatapb.SourceShardDeleteResponse{},
+			assertion: func(ctx context.Context, t *testing.T, ts *topo.Server) {
+				si, err := ts.GetShard(ctx, "ks", "-")
+				require.NoError(t, err, "failed to get shard ks/-")
+				utils.MustMatch(t, []*topodatapb.Shard_SourceShard{
+					{
+						Uid:      1,
+						Keyspace: "otherks",
+						Shard:    "-80",
+					},
+				}, si.SourceShards, "SourceShards should not have changed")
+			},
+		},
+		{
+			name: "cannot lock keyspace",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "ks",
+					Name:     "-",
+				},
+			},
+			topoIsLocked: true,
+			req: &vtctldatapb.SourceShardDeleteRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+				Uid:      1,
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			ts := memorytopo.NewServer("zone1")
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+
+			testutil.AddShards(ctx, t, ts, tt.shards...)
+			if tt.topoIsLocked {
+				lctx, unlock, lerr := ts.LockKeyspace(ctx, tt.req.Keyspace, "test lock")
+				require.NoError(t, lerr, "failed to lock %s for test setup", tt.req.Keyspace)
+
+				defer func() {
+					var err error
+					unlock(&err)
+					assert.NoError(t, err, "failed to unlock %s after test", tt.req.Keyspace)
+				}()
+
+				ctx = lctx
+			}
+
+			resp, err := vtctld.SourceShardDelete(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+			if tt.assertion != nil {
+				func() {
+					t.Helper()
+					tt.assertion(ctx, t, ts)
+				}()
+			}
+		})
+	}
+}
+
 func TestStartReplication(t *testing.T) {
 	t.Parallel()
 

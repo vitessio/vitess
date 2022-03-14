@@ -223,6 +223,16 @@ service Vtctld {
   //
   // This is typically used for testing.
   rpc SleepTablet(vtctldata.SleepTabletRequest) returns (vtctldata.SleepTabletResponse) {};
+  // SourceShardAdd adds the SourceShard record with the provided index. This
+  // should be used only as an emergency function.
+  //
+  // It does not call RefreshState for the shard primary.
+  rpc SourceShardAdd(vtctldata.SourceShardAddRequest) returns (vtctldata.SourceShardAddResponse) {};
+  // SourceShardDelete deletes the SourceShard record with the provided index.
+  // This should be used only as an emergency cleanup function.
+  //
+  // It does not call RefreshState for the shard primary.
+  rpc SourceShardDelete(vtctldata.SourceShardDeleteRequest) returns (vtctldata.SourceShardDeleteResponse) {};
   // StartReplication starts replication on the specified tablet.
   rpc StartReplication(vtctldata.StartReplicationRequest) returns (vtctldata.StartReplicationResponse) {};
   // StopReplication stops replication on the specified tablet.
