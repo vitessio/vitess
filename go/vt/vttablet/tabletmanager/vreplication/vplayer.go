@@ -66,6 +66,8 @@ type vplayer struct {
 	canAcceptStmtEvents bool
 
 	phase string
+
+	pendingSavepointEvents []*binlogdatapb.VEvent
 }
 
 // newVPlayer creates a new vplayer. Parameters:
@@ -432,6 +434,28 @@ func hasAnotherCommit(items [][]*binlogdatapb.VEvent, i, j int) bool {
 	return false
 }
 
+func (vp *vplayer) applyAndClearPendingSavepointEvents(ctx context.Context) error {
+	for _, pendingSavepointEvent := range vp.pendingSavepointEvents {
+		stats := NewVrLogStats(pendingSavepointEvent.Type.String())
+
+		// use event.Statement if available, preparing for deprecation in 8.0
+		sql := pendingSavepointEvent.Statement
+		if sql == "" {
+			sql = pendingSavepointEvent.Dml
+		}
+
+		if err := vp.applyStmtEvent(ctx, pendingSavepointEvent); err != nil {
+			return err
+		}
+
+		stats.Send(sql)
+	}
+
+	vp.pendingSavepointEvents = nil
+
+	return nil
+}
+
 func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool) error {
 	stats := NewVrLogStats(event.Type.String())
 	switch event.Type {
@@ -449,6 +473,9 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 	case binlogdatapb.VEventType_BEGIN:
 		// No-op: begin is called as needed.
 	case binlogdatapb.VEventType_COMMIT:
+		// Clear all pending savepoint events that haven't been processed yet as we don't care about them.
+		vp.pendingSavepointEvents = nil
+
 		if mustSave {
 			if err := vp.vr.dbClient.Begin(); err != nil {
 				return err
@@ -481,8 +508,39 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		vp.tablePlans[event.FieldEvent.TableName] = tplan
 		stats.Send(fmt.Sprintf("%v", event.FieldEvent))
 
+	case binlogdatapb.VEventType_SAVEPOINT:
+		if vp.vr.dbClient.InTransaction {
+			// use event.Statement if available, preparing for deprecation in 8.0
+			sql := event.Statement
+			if sql == "" {
+				sql = event.Dml
+			}
+
+			if strings.HasPrefix(sql, "ROLLBACK TO ") {
+				// If we got a `ROLLBACK TO` event (unlikely, but can happen on servers
+				// that do not have GTIDs enabled and do not enforce GTID consistency),
+				// we need to execute all pending savepoints and then immediately
+				// execute the savepoint rollback.
+				if err := vp.applyAndClearPendingSavepointEvents(ctx); err != nil {
+					return err
+				}
+
+				if err := vp.applyStmtEvent(ctx, event); err != nil {
+					return err
+				}
+
+				stats.Send(sql)
+			} else {
+				// Store the savepoint event for later use
+				vp.pendingSavepointEvents = append(vp.pendingSavepointEvents, event)
+			}
+		} else {
+			// Store the savepoint event for later use
+			vp.pendingSavepointEvents = append(vp.pendingSavepointEvents, event)
+		}
+
 	case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE,
-		binlogdatapb.VEventType_REPLACE, binlogdatapb.VEventType_SAVEPOINT:
+		binlogdatapb.VEventType_REPLACE:
 		// use event.Statement if available, preparing for deprecation in 8.0
 		sql := event.Statement
 		if sql == "" {
@@ -494,6 +552,12 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err := vp.vr.dbClient.Begin(); err != nil {
 				return err
 			}
+
+			// Apply any pending savepoint events before we modify any data
+			if err := vp.applyAndClearPendingSavepointEvents(ctx); err != nil {
+				return err
+			}
+
 			if err := vp.applyStmtEvent(ctx, event); err != nil {
 				return err
 			}
@@ -504,6 +568,12 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if err := vp.vr.dbClient.Begin(); err != nil {
 			return err
 		}
+
+		// Apply any pending savepoint events before we modify any data
+		if err := vp.applyAndClearPendingSavepointEvents(ctx); err != nil {
+			return err
+		}
+
 		if err := vp.applyRowEvent(ctx, event.RowEvent); err != nil {
 			return err
 		}

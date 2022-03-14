@@ -433,17 +433,19 @@ func TestPlayerSavepoint(t *testing.T) {
 		"savepoint vrepl_b",
 		"insert into t1(id) values (3)",
 		"release savepoint vrepl_b",
-		"savepoint vrepl_a",
+		"savepoint vrepl_c",
 		"insert into t1(id) values (42)",
-		"rollback work to savepoint vrepl_a",
+		"rollback work to savepoint vrepl_c",
 		"commit",
 	})
+
+	// `vrepl_a` savepoint is never written to the binlog by MySQL.
+	// `vrepl_c` savepoint is written to the binlog, but is skipped by vplayer.
 	expectDBClientQueries(t, []string{
 		"begin",
 		"/insert into t1.*2.*",
 		"SAVEPOINT `vrepl_b`",
 		"/insert into t1.*3.*",
-		"SAVEPOINT `vrepl_a`",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	})
@@ -482,8 +484,6 @@ func TestPlayerSavepointsWithoutData(t *testing.T) {
 	execStatements(t, []string{"insert into t1 values(1)"})
 	expectDBClientQueries(t, []string{
 		"/update _vt.vreplication set pos=",
-		"/update _vt.vreplication set pos=",
-		"/update _vt.vreplication set pos=",
 	})
 
 	execStatements(t, []string{
@@ -504,12 +504,75 @@ func TestPlayerSavepointsWithoutData(t *testing.T) {
 		"commit",
 	})
 	expectDBClientQueries(t, []string{
+		"/update _vt.vreplication set pos=",
+	})
+	cancel()
+}
+
+func TestPlayerSavepointsWithEventualData(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table t1(id int, primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, primary key(id))", vrepldb),
+		"create table t2(id int, primary key(id))",
+		fmt.Sprintf("create table %s.t2(id int, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+		"drop table t2",
+		fmt.Sprintf("drop table %s.t2", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			// Only look for queries made against t2
+			Match: "t2",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	// Issue a dummy change to ensure vreplication is initialized. Otherwise there
+	// is a race between the DDLs and the schema loader of vstreamer.
+	// Root cause seems to be with MySQL where t1 shows up in information_schema before
+	// the actual table is created.
+	execStatements(t, []string{"insert into t1 values(1)"})
+	expectDBClientQueries(t, []string{
+		"/update _vt.vreplication set pos=",
+	})
+
+	execStatements(t, []string{
+		"begin",
+		"savepoint vrepl_a",
+		"insert into t1(id) values (2)",
+		"savepoint vrepl_b",
+		"insert into t1(id) values (3)",
+		"release savepoint vrepl_b",
+		"savepoint vrepl_c",
+		"insert into t1(id) values (4)",
+		"savepoint vrepl_d",
+		"insert into t1(id) values (5)",
+		"savepoint vrepl_e",
+		"savepoint vrepl_f",
+		"insert into t1(id) values (42)",
+		"rollback work to savepoint vrepl_f",
+		"insert into t2(id) values (1)",
+		"commit",
+	})
+	expectDBClientQueries(t, []string{
 		"begin",
 		"SAVEPOINT `vrepl_b`",
 		"SAVEPOINT `vrepl_c`",
 		"SAVEPOINT `vrepl_d`",
 		"SAVEPOINT `vrepl_e`",
 		"SAVEPOINT `vrepl_f`",
+		"/insert into t2.*1.*",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	})
