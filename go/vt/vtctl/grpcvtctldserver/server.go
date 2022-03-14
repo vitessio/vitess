@@ -911,12 +911,47 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 
 // ExecuteFetchAsApp is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ExecuteFetchAsApp(ctx context.Context, req *vtctldatapb.ExecuteFetchAsAppRequest) (*vtctldatapb.ExecuteFetchAsAppResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ExecuteFetchAsApp")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("max_rows", req.MaxRows)
+	span.Annotate("use_pool", req.UsePool)
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	qr, err := s.tmc.ExecuteFetchAsApp(ctx, ti.Tablet, req.UsePool, []byte(req.Query), int(req.MaxRows))
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ExecuteFetchAsAppResponse{Result: qr}, nil
 }
 
 // ExecuteFetchAsDBA is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ExecuteFetchAsDBA(ctx context.Context, req *vtctldatapb.ExecuteFetchAsDBARequest) (*vtctldatapb.ExecuteFetchAsDBAResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ExecuteFetchAsDBA")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("max_rows", req.MaxRows)
+	span.Annotate("disable_binlogs", req.DisableBinlogs)
+	span.Annotate("reload_schema", req.ReloadSchema)
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	qr, err := s.tmc.ExecuteFetchAsDba(ctx, ti.Tablet, false, []byte(req.Query), int(req.MaxRows), req.DisableBinlogs, req.ReloadSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ExecuteFetchAsDBAResponse{Result: qr}, nil
 }
 
 // ExecuteHook is part of the vtctlservicepb.VtctldServer interface.
