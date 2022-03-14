@@ -27,9 +27,11 @@ $navRailHoverTransition: background-color 0.1s ease-in-out;
 }
 
 .logoContainer {
-    display: block;
+    display: flex;
     padding: 24px;
     text-align: center;
+    justify-content: center;
+    align-items: center;
 }
 
 .footerContainer {
