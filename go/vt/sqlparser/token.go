@@ -633,7 +633,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 	tkn.skipBlank()
 	switch ch := tkn.lastChar; {
 	// TODO: if letter or number, need to try and read as identifier
-	// TODO: how then do i know if it's just a number??
+	// TODO: how do i know if it's just a number?
 	case isLetter(ch):
 		tkn.next()
 		if ch == 'X' || ch == 'x' {
