@@ -2573,6 +2573,10 @@ column_key:
   {
     $$ = colKeyUnique
   }
+| FULLTEXT KEY
+  {
+    $$ = colKeyFulltextKey
+  }
 
 column_comment:
   COMMENT_KEYWORD STRING
@@ -2718,6 +2722,10 @@ index_info:
 | SPATIAL index_or_key name_opt
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Spatial: true, Unique: false}
+  }
+| FULLTEXT index_or_key_opt name_opt
+  {
+    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Fulltext: true}
   }
 | CONSTRAINT name_opt UNIQUE index_or_key_opt name_opt
   {
