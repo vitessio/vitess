@@ -298,6 +298,9 @@ func yyOldPosition(yylex interface{}) int {
 %token <bytes> REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
 %token <bytes> THREAD_PRIORITY TIES VCPU VISIBLE SYSTEM INFILE
 
+// TODO: categorize/organize these somehow later
+%token <bytes> NVAR PASSWORD_LOCK
+
 %type <statement> command
 %type <selStmt>  create_query_expression select_statement base_select base_select_no_cte union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
@@ -2570,6 +2573,10 @@ column_key:
   {
     $$ = colKeyUnique
   }
+| FULLTEXT KEY
+  {
+    $$ = colKeyFulltextKey
+  }
 
 column_comment:
   COMMENT_KEYWORD STRING
@@ -2715,6 +2722,10 @@ index_info:
 | SPATIAL index_or_key name_opt
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Spatial: true, Unique: false}
+  }
+| FULLTEXT index_or_key_opt name_opt
+  {
+    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Fulltext: true}
   }
 | CONSTRAINT name_opt UNIQUE index_or_key_opt name_opt
   {
@@ -5799,7 +5810,7 @@ kill_statement:
 reserved_keyword:
   ACCOUNT
 | ADD
-| AFTER
+| AFTER // TODO: this is not reserved in MySQL, why is it here?
 | ALTER
 | AND
 | ARRAY
@@ -5840,6 +5851,7 @@ reserved_keyword:
 | ELSE
 | ELSEIF
 | END
+| ERRORS
 | ESCAPE
 | EVENT
 | EXECUTE
@@ -5850,15 +5862,19 @@ reserved_keyword:
 | FILE
 | FIRST
 | FOLLOWING
+| FOLLOWS
 | FOR
 | FORCE
+| FORMAT
 | FOUND
 | FROM
+| FULL
 | FUNCTION
 | GRANT
 | GROUP
 | GROUPING
 | GROUPS
+| HANDLER
 | HAVING
 | IDENTIFIED
 | IF
@@ -5896,6 +5912,7 @@ reserved_keyword:
 | NONE
 | NOT
 | NULL
+| NVAR
 | OF
 | OFF
 | ON
@@ -5906,6 +5923,7 @@ reserved_keyword:
 | OUTER
 | OVER
 | PASSWORD
+| PASSWORD_LOCK
 | PASSWORD_LOCK_TIME
 | PROCEDURE
 | PROCESS
@@ -5925,12 +5943,12 @@ reserved_keyword:
 | SET
 | SHOW
 | SHUTDOWN
+| SQL
 | STATUS
 | STD
 | STDDEV
 | STDDEV_POP
 | STDDEV_SAMP
-| SQL
 | STRAIGHT_JOIN
 | SUBSTR
 | SUBSTRING
@@ -5977,7 +5995,7 @@ non_reserved_keyword:
 | ADMIN
 | AGAINST
 | AUTHENTICATION
-| BEFORE
+| BEFORE // TODO: this (and some others) should be reserved
 | BEGIN
 | BIGINT
 | SERIAL
@@ -6215,18 +6233,37 @@ non_reserved_keyword:
 
 // Reserved keywords that cause grammar conflicts in some places, but are safe to use as column name / alias identifiers.
 // These keywords should also go in reserved_keyword.
+// TODO: The ones commented out here cause shift/reduce conflicts but need to be column name safe
 column_name_safe_reserved_keyword:
-  AVG
+  ACCOUNT
+| AFTER
+| ATTRIBUTE
+| AUTO_INCREMENT
+| AVG
 | BIT_AND
 | BIT_OR
 | BIT_XOR
-| COMMENT_KEYWORD
+| CONNECTION
 | COUNT
 | CUME_DIST
+| CURRENT
 | DENSE_RANK
+| END
+| ERRORS
+//| ESCAPE
 | EVENT
+| EXECUTE
+| FAILED_LOGIN_ATTEMPTS
+| FILE
+| FIRST
 | FIRST_VALUE
+| FOLLOWING
+| FOLLOWS
+| FORMAT
 | FOUND
+| FULL
+| HANDLER
+| IDENTIFIED
 | JSON_ARRAYAGG
 | JSON_OBJECTAGG
 | LAG
@@ -6234,21 +6271,38 @@ column_name_safe_reserved_keyword:
 | LEAD
 | MAX
 | MIN
+//| NEXT
+| NONE
 | NTH_VALUE
 | NTILE
+| NVAR
+//| NVARCHAR
+//| OFF
+| PASSWORD
+| PASSWORD_LOCK
+| PASSWORD_LOCK_TIME
 | PERCENT_RANK
+| PROCESS
 | RANK
+| RELOAD
 | ROW_NUMBER
+| SHUTDOWN
+//| SQL_CACHE
+//| SQL_NO_CACHE
 | STATUS
 | STD
 | STDDEV
 | STDDEV_POP
 | STDDEV_SAMP
+| SUPER
+| TIMESTAMPADD
+| TIMESTAMPDIFF
 | SUM
 | VALUE
 | VARIANCE
 | VAR_POP
 | VAR_SAMP
+| COMMENT_KEYWORD
 
 openb:
   '('

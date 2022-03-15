@@ -2094,6 +2094,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.KeyOpt == colKey {
 		opts = append(opts, keywordStrings[KEY])
 	}
+	if ct.KeyOpt == colKeyFulltextKey {
+		opts = append(opts, keywordStrings[FULLTEXT])
+	}
 
 	if len(opts) != 0 {
 		buf.Myprintf(" %s", strings.Join(opts, " "))
@@ -2368,11 +2371,12 @@ func (idx *IndexDefinition) walkSubtree(visit Visit) error {
 
 // IndexInfo describes the name and type of an index in a CREATE TABLE statement
 type IndexInfo struct {
-	Type    string
-	Name    ColIdent
-	Primary bool
-	Spatial bool
-	Unique  bool
+	Type     string
+	Name     ColIdent
+	Primary  bool
+	Spatial  bool
+	Unique   bool
+	Fulltext bool
 }
 
 // Format formats the node.
@@ -2423,6 +2427,7 @@ const (
 	colKeyUnique
 	colKeyUniqueKey
 	colKey
+	colKeyFulltextKey
 )
 
 // AutoIncSpec defines an autoincrement value for a ADD AUTO_INCREMENT statement
