@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"io"
+	"unicode"
 )
 
 const (
@@ -1050,7 +1051,8 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 	buffer.WriteString("/*!")
 	tkn.next()
 	tkn.specialPosOffset = tkn.Position
-	seenLetter := false
+	finished := false
+	digitCount := 0
 	for {
 		if tkn.lastChar == '*' {
 			tkn.consumeNext(buffer)
@@ -1066,17 +1068,31 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 
 		tkn.consumeNext(buffer)
 
-		// Already found first letter since start of comment
-		if seenLetter {
+		// Already found special comment starting point
+		if finished {
 			continue
 		}
 
-		// Found first letter?
-		if isLetter(tkn.lastChar) {
-			seenLetter = true
-		} else {
-			tkn.specialPosOffset++
+		// Haven't reached character count
+		if digitCount < 5 {
+			if isDigit(tkn.lastChar) {
+				// Increase digit count
+				digitCount++
+				continue
+			} else {
+				// Provided less than 5 digits (which is already wrong), but force this to move on
+				digitCount = 5
+			}
 		}
+
+		// If no longer counting digits, ignore spaces until first non-space character
+		if unicode.IsSpace(rune(tkn.lastChar)) {
+			continue
+		}
+
+		// Found start of subexpression
+		tkn.specialPosOffset = tkn.Position - 1
+		finished = true
 	}
 	_, sql := ExtractMysqlComment(buffer.String())
 	tkn.specialComment = NewStringTokenizer(sql)
