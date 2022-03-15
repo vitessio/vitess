@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"io"
-	"strings"
 )
 
 const (
@@ -1050,6 +1049,8 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 	buffer := &bytes2.Buffer{}
 	buffer.WriteString("/*!")
 	tkn.next()
+	tkn.specialPosOffset = tkn.Position
+	seenLetter := false
 	for {
 		if tkn.lastChar == '*' {
 			tkn.consumeNext(buffer)
@@ -1062,11 +1063,23 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 		if tkn.lastChar == eofChar {
 			return LEX_ERROR, buffer.Bytes()
 		}
+
 		tkn.consumeNext(buffer)
+
+		// Already found first letter since start of comment
+		if seenLetter {
+			continue
+		}
+
+		// Found first letter?
+		if isLetter(tkn.lastChar) {
+			seenLetter = true
+		} else {
+			tkn.specialPosOffset++
+		}
 	}
 	_, sql := ExtractMysqlComment(buffer.String())
 	tkn.specialComment = NewStringTokenizer(sql)
-	tkn.specialPosOffset = strings.Index(string(tkn.buf), sql)
 	return tkn.Scan()
 }
 
