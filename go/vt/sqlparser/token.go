@@ -19,11 +19,11 @@ package sqlparser
 import (
 	"bytes"
 	"fmt"
-	"io"
-
 	"github.com/dolthub/vitess/go/bytes2"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/vterrors"
+	"io"
+	"strings"
 )
 
 const (
@@ -48,6 +48,7 @@ type Tokenizer struct {
 	nesting              int
 	multi                bool
 	specialComment       *Tokenizer
+	specialPosOffset     int
 	potentialAccountName bool
 
 	// If true, the parser should collaborate to set `stopped` on this
@@ -613,6 +614,9 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		specialComment := tkn.specialComment
 		tok, val := specialComment.Scan()
 		if tok != 0 {
+			// TODO: might need to adjust a bit for /*!
+			// Copy over position from specialComment
+			tkn.Position = tkn.specialPosOffset + specialComment.Position
 			// return the specialComment scan result as the result
 			return tok, val
 		}
@@ -1062,6 +1066,7 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 		tkn.consumeNext(buffer)
 	}
 	_, sql := ExtractMysqlComment(buffer.String())
+	tkn.specialPosOffset = strings.Index(string(tkn.buf), sql)
 	tkn.specialComment = NewStringTokenizer(sql)
 	return tkn.Scan()
 }
