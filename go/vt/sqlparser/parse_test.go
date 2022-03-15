@@ -40,6 +40,18 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
+			input:  "select * from my_table_function()",
+			output: "select * from my_table_function()",
+		},
+		{
+			input:  "select * from my_table_function('foo')",
+			output: "select * from my_table_function('foo')",
+		},
+		{
+			input:  "select * from my_table_function('foo', 'bar')",
+			output: "select * from my_table_function('foo', 'bar')",
+		},
+		{
 			input:  "select 1",
 			output: "select 1 from dual",
 		}, {

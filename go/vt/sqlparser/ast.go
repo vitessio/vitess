@@ -3102,6 +3102,7 @@ func (*ParenTableExpr) iTableExpr()   {}
 func (*JoinTableExpr) iTableExpr()    {}
 func (*CommonTableExpr) iTableExpr()  {}
 func (*ValuesStatement) iTableExpr()  {}
+func (TableFuncExpr) iTableExpr()     {}
 
 // AliasedTableExpr represents a table expression
 // coupled with an optional alias, AS OF expression, and index hints.
@@ -5463,6 +5464,51 @@ func (node *ColIdent) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	node.val = result
+	return nil
+}
+
+type TableFuncExpr struct {
+	Name  string
+	Exprs SelectExprs
+}
+
+// Format formats the node.
+func (node TableFuncExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s(%v)", node.Name, node.Exprs)
+}
+
+// IsEmpty returns true if TableFuncExpr's name is empty.
+func (node TableFuncExpr) IsEmpty() bool {
+	return node.Name == ""
+}
+
+// String returns the unescaped table function name. It must
+// not be used for SQL generation. Use sqlparser.String
+// instead. The Stringer conformance is for usage
+// in templates.
+func (node TableFuncExpr) String() string {
+	return node.Name
+}
+
+// CompliantName returns a compliant id name
+// that can be used for a bind var.
+func (node TableFuncExpr) CompliantName() string {
+	return compliantName(node.Name)
+}
+
+// MarshalJSON marshals into JSON.
+func (node TableFuncExpr) MarshalJSON() ([]byte, error) {
+	return json.Marshal(node.Name)
+}
+
+// UnmarshalJSON unmarshals from JSON.
+func (node *TableFuncExpr) UnmarshalJSON(b []byte) error {
+	var result string
+	err := json.Unmarshal(b, &result)
+	if err != nil {
+		return err
+	}
+	node.Name = result
 	return nil
 }
 
