@@ -1051,7 +1051,7 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 	buffer.WriteString("/*!")
 	tkn.next()
 	tkn.specialPosOffset = tkn.Position
-	finished := false
+	foundStartPos := false
 	digitCount := 0
 	for {
 		if tkn.lastChar == '*' {
@@ -1069,7 +1069,7 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 		tkn.consumeNext(buffer)
 
 		// Already found special comment starting point
-		if finished {
+		if foundStartPos {
 			continue
 		}
 
@@ -1080,7 +1080,7 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 				digitCount++
 				continue
 			} else {
-				// Provided less than 5 digits (which is already wrong), but force this to move on
+				// Provided less than 5 digits, but force this to move on
 				digitCount = 5
 			}
 		}
@@ -1092,7 +1092,7 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 
 		// Found start of subexpression
 		tkn.specialPosOffset = tkn.Position - 1
-		finished = true
+		foundStartPos = true
 	}
 	_, sql := ExtractMysqlComment(buffer.String())
 	tkn.specialComment = NewStringTokenizer(sql)
