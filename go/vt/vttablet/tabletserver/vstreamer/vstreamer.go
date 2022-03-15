@@ -200,7 +200,9 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	// data modification events in-between. To avoid sending these savepoint events,
 	// we can "flatten" them.
 	var savepointMap = make(map[string]string)
-	var previousSavepointName string
+
+	// This holds the latest pending savepoint event. We flush it before writing row data.
+	var pendingSavepointEvent *binlogdatapb.VEvent
 
 	// Only the following patterns are possible:
 	// BEGIN->ROWs or Statements->GTID->COMMIT. In the case of large transactions, this can be broken into chunks.
@@ -219,16 +221,13 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		vevent.Keyspace = vs.vse.keyspace
 		vevent.Shard = vs.vse.shard
 
-		if previousSavepointName != "" && vevent.Type != binlogdatapb.VEventType_SAVEPOINT {
-			previousSavepointName = ""
-		}
-
 		if vevent.Type == binlogdatapb.VEventType_COMMIT {
 			// We have reached the end of the current transaction
 			// and need to clear the savepoint map.
 			for k := range savepointMap {
 				delete(savepointMap, k)
 			}
+			pendingSavepointEvent = nil
 		}
 
 		switch vevent.Type {
@@ -250,6 +249,12 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			curSize = 0
 			return vs.send(vevents)
 		case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
+			if pendingSavepointEvent != nil {
+				curSize += len(pendingSavepointEvent.GetStatement())
+				bufferedEvents = append(bufferedEvents, pendingSavepointEvent)
+				pendingSavepointEvent = nil
+			}
+
 			newSize := len(vevent.GetDml())
 			if curSize+newSize > *defaultPacketSize {
 				vs.vse.vstreamerNumPackets.Add(1)
@@ -261,6 +266,12 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			curSize += newSize
 			bufferedEvents = append(bufferedEvents, vevent)
 		case binlogdatapb.VEventType_ROW:
+			if pendingSavepointEvent != nil {
+				curSize += len(pendingSavepointEvent.GetStatement())
+				bufferedEvents = append(bufferedEvents, pendingSavepointEvent)
+				pendingSavepointEvent = nil
+			}
+
 			// ROW events happen inside transactions. So, we can chunk them.
 			// Buffer everything until packet size is reached, and then send.
 			newSize := 0
@@ -290,40 +301,44 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			// a rollback (in other words, very unlikely).
 			//
 			// As Vitess supports non-GTID MySQL instances, we do need to support this.
+
 			statement := vevent.GetStatement()
 			savepointName := extractSavepointName.FindStringSubmatch(statement)[1]
 
-			if savepointName == "" {
-				return fmt.Errorf("unexpected savepoint event: %v", vevent)
-			}
+			if pendingSavepointEvent == nil {
+				// We don't have a pending savepoint event.
 
-			if strings.HasPrefix(statement, "ROLLBACK TO ") {
-				if savepointName == previousSavepointName {
-					// We're rolling back to the savepoint we've just created. We can safely ignore the rollback.
-				} else if savepointMap[savepointName] != "" {
-					if previousSavepointName == savepointMap[savepointName] {
-						// We're rolling back to the savepoint we've just created. We can safely ignore the rollback.
+				if strings.HasPrefix(statement, "ROLLBACK TO ") {
+					if savepointMap[savepointName] != "" {
+						savepointName = savepointMap[savepointName]
+						vevent.Statement = fmt.Sprintf("ROLLBACK TO `%s`", savepointName)
+					}
+
+					curSize += len(vevent.GetStatement())
+					bufferedEvents = append(bufferedEvents, vevent)
+				} else {
+					delete(savepointMap, savepointName)
+					pendingSavepointEvent = vevent
+				}
+			} else {
+				pendingSavepointName := extractSavepointName.FindStringSubmatch(pendingSavepointEvent.GetStatement())[1]
+
+				if strings.HasPrefix(statement, "ROLLBACK TO ") {
+					if savepointMap[savepointName] != "" {
+						savepointName = savepointMap[savepointName]
+						vevent.Statement = fmt.Sprintf("ROLLBACK TO `%s`", savepointName)
+					}
+
+					if savepointName == pendingSavepointName {
+						// We are trying to roll back to the pending savepoint. We can just skip the rollback.
 					} else {
-						// Re-write the event so we go back to the correct savepoint.
-						vevent.Statement = fmt.Sprintf("ROLLBACK TO `%s`", savepointMap[savepointName])
-						previousSavepointName = savepointMap[savepointName]
+						// We are trying to go back to an older savepoint. We can just skip the pending savepoint.
+						pendingSavepointEvent = nil
+						curSize += len(vevent.GetStatement())
 						bufferedEvents = append(bufferedEvents, vevent)
 					}
 				} else {
-					// Apparently we're rolling back to a savepoint we haven't seen before. We probably should abort here because that makes no sense.
-					previousSavepointName = savepointName
-					bufferedEvents = append(bufferedEvents, vevent)
-				}
-			} else {
-				// If we're creating a new savepoint, check if the previous event was also a savepoint
-				if previousSavepointName != "" {
-					// If it was, we skip the event but store a mapping from the current savepoint name
-					// to the previous savepoint name so that we know which savepoint name to use
-					// if we encounter a `ROLLBACK TO` statement later.
-					savepointMap[savepointName] = previousSavepointName
-				} else {
-					previousSavepointName = savepointName
-					bufferedEvents = append(bufferedEvents, vevent)
+					savepointMap[savepointName] = pendingSavepointName
 				}
 			}
 		default:
