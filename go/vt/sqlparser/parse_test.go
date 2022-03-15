@@ -2439,6 +2439,19 @@ func TestValid(t *testing.T) {
 	}
 }
 
+// TODO: delete me
+func TestValid1(t *testing.T) {
+	tests := []parseTest{
+		{
+			input: "create table t (1a int)",
+			output: "create table t (\n\t1a int null\n)",
+		},
+	}
+	for _, tcase := range tests {
+		runParseTestCase(t, tcase)
+	}
+}
+
 func TestParseOne(t *testing.T) {
 	type tc struct {
 		input     string
