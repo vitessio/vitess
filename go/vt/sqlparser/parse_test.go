@@ -782,6 +782,12 @@ var (
 			input:  "select /*!401011 from*/ t",
 			output: "select 1 from t",
 		}, {
+			input:  "/*! create view a as select 1 as x */",
+			output: "create view a as select 1 as x from dual",
+		}, {
+			input:  "/*!12345 create view a as select 1 as x */",
+			output: "create view a as select 1 as x from dual",
+		}, {
 			input: "select /* dual */ 1 from dual",
 		}, {
 			input:  "select * from (select 'tables') tables",
