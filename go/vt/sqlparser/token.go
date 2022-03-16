@@ -615,7 +615,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		tok, val := specialComment.Scan()
 		if tok != 0 {
 			// Copy over position from specialComment and add offset
-			//tkn.Position = tkn.specialPosOffset + specialComment.Position
+			tkn.Position = tkn.specialPosOffset + specialComment.Position
 			// return the specialComment scan result as the result
 			return tok, val
 		}
@@ -1050,7 +1050,7 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 	buffer := &bytes2.Buffer{}
 	buffer.WriteString("/*!")
 	tkn.next()
-	tkn.specialPosOffset = tkn.Position
+	//tkn.specialPosOffset = tkn.Position
 	foundStartPos := false
 	digitCount := 0
 	for {
