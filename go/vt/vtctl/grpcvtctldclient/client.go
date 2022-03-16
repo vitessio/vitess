@@ -19,6 +19,8 @@ limitations under the License.
 package grpcvtctldclient
 
 import (
+	"context"
+
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -69,6 +71,7 @@ func NewWithDialOpts(addr string, failFast grpcclient.FailFast, opts ...grpc.Dia
 	}, nil
 }
 
+// Close is part of the vtctldclient.VtctldClient interface.
 func (client *gRPCVtctldClient) Close() error {
 	err := client.cc.Close()
 	if err == nil {
@@ -76,6 +79,11 @@ func (client *gRPCVtctldClient) Close() error {
 	}
 
 	return err
+}
+
+// WaitForReady is part of the vtctldclient.VtctldClient interface.
+func (client *gRPCVtctldClient) WaitForReady(ctx context.Context) error {
+	return nil
 }
 
 func init() {
