@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"io"
-	"unicode"
 )
 
 const (
@@ -1086,7 +1085,10 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 		}
 
 		// If no longer counting digits, ignore spaces until first non-space character
-		if unicode.IsSpace(rune(tkn.lastChar)) {
+		//if unicode.IsSpace(rune(tkn.lastChar)) {
+		//	continue
+		//}
+		if tkn.lastChar == ' ' {
 			continue
 		}
 
