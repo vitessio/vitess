@@ -2585,7 +2585,18 @@ func (s *VtctldServer) SetWritable(ctx context.Context, req *vtctldatapb.SetWrit
 
 // ShardReplicationAdd is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ShardReplicationAdd(ctx context.Context, req *vtctldatapb.ShardReplicationAddRequest) (*vtctldatapb.ShardReplicationAddResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ShardReplicationAdd")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+
+	if err := topo.UpdateShardReplicationRecord(ctx, s.ts, req.Keyspace, req.Shard, req.TabletAlias); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ShardReplicationAddResponse{}, nil
 }
 
 // ShardReplicationFix is part of the vtctlservicepb.VtctldServer interface.
@@ -2741,7 +2752,18 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 
 // ShardReplicationRemove is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ShardReplicationRemove(ctx context.Context, req *vtctldatapb.ShardReplicationRemoveRequest) (*vtctldatapb.ShardReplicationRemoveResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ShardReplicationRemove")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+
+	if err := topo.RemoveShardReplicationRecord(ctx, s.ts, req.TabletAlias.Cell, req.Keyspace, req.Shard, req.TabletAlias); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ShardReplicationRemoveResponse{}, nil
 }
 
 // SleepTablet is part of the vtctlservicepb.VtctldServer interface.
