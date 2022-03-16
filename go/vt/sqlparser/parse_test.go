@@ -40,6 +40,18 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
+			input:  "select * from my_table_function()",
+			output: "select * from my_table_function()",
+		},
+		{
+			input:  "select * from my_table_function('foo')",
+			output: "select * from my_table_function('foo')",
+		},
+		{
+			input:  "select * from my_table_function('foo', 'bar')",
+			output: "select * from my_table_function('foo', 'bar')",
+		},
+		{
 			input:  "select 1",
 			output: "select 1 from dual",
 		}, {
@@ -2310,25 +2322,25 @@ var (
 			input:  "REVOKE PROXY ON UserName FROM Role1, Role2",
 			output: "revoke proxy on `UserName`@`%` from `Role1`@`%`, `Role2`@`%`",
 		}, {
-			input: "FLUSH PRIVILEGES",
+			input:  "FLUSH PRIVILEGES",
 			output: "flush privileges",
 		}, {
-			input: "FLUSH BINARY LOGS",
+			input:  "FLUSH BINARY LOGS",
 			output: "flush binary logs",
 		}, {
-			input: "FLUSH USER_RESOURCES",
+			input:  "FLUSH USER_RESOURCES",
 			output: "flush user_resources",
 		}, {
-			input: "FLUSH RELAY LOGS",
+			input:  "FLUSH RELAY LOGS",
 			output: "flush relay logs",
 		}, {
-			input: "FLUSH LOCAL RELAY LOGS FOR CHANNEL 'connections'",
+			input:  "FLUSH LOCAL RELAY LOGS FOR CHANNEL 'connections'",
 			output: "flush local relay logs for channel connections",
 		}, {
-			input: "FLUSH LOCAL OPTIMIZER_COSTS",
+			input:  "FLUSH LOCAL OPTIMIZER_COSTS",
 			output: "flush local optimizer_costs",
 		}, {
-			input: "FLUSH NO_WRITE_TO_BINLOG HOSTS",
+			input:  "FLUSH NO_WRITE_TO_BINLOG HOSTS",
 			output: "flush no_write_to_binlog hosts",
 		}, {
 			input:  "SHOW GRANTS",
@@ -2354,8 +2366,8 @@ var (
 		}, {
 			input:  "kill connection 423",
 			output: "kill connection 423",
-		},{
-			input: "SELECT * FROM information_schema.processlist",
+		}, {
+			input:  "SELECT * FROM information_schema.processlist",
 			output: "select * from information_schema.`processlist`",
 		},
 	}
@@ -3384,6 +3396,7 @@ func TestCreateTable(t *testing.T) {
 			"	status_nonkeyword varchar,\n" +
 			"	primary key (id),\n" +
 			"	spatial key geom (geom),\n" +
+			"	fulltext key fts (full_name),\n" +
 			"	unique key by_username (username),\n" +
 			"	unique by_username2 (username),\n" +
 			"	unique index by_username3 (username),\n" +
@@ -4429,7 +4442,6 @@ func TestParseDjangoQueries(t *testing.T) {
 	}
 }
 
-
 // not reserved in mysql
 var correctlyDoParse = []string{
 	"account",
@@ -5153,7 +5165,7 @@ var incorrectlyParse = []string{
 // reserved in mysql
 // TODO: these parse in dolt but not in mysql (without backquotes)
 // removing them from non_reserved_keyword in sql.y fixes it (without causing any shift/reduce conflicts but might cause other other problems; need tests)
-var incorrectlyParse2 = []string {
+var incorrectlyParse2 = []string{
 	"before",
 	"bigint",
 	"blob",

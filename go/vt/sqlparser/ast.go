@@ -353,7 +353,7 @@ func (*Use) iStatement()               {}
 func (*Begin) iStatement()             {}
 func (*Commit) iStatement()            {}
 func (*Rollback) iStatement()          {}
-func (*Flush) iStatement()   {}
+func (*Flush) iStatement()             {}
 func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
 func (*BeginEndBlock) iStatement()     {}
@@ -2094,6 +2094,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.KeyOpt == colKey {
 		opts = append(opts, keywordStrings[KEY])
 	}
+	if ct.KeyOpt == colKeyFulltextKey {
+		opts = append(opts, keywordStrings[FULLTEXT])
+	}
 
 	if len(opts) != 0 {
 		buf.Myprintf(" %s", strings.Join(opts, " "))
@@ -2368,11 +2371,12 @@ func (idx *IndexDefinition) walkSubtree(visit Visit) error {
 
 // IndexInfo describes the name and type of an index in a CREATE TABLE statement
 type IndexInfo struct {
-	Type    string
-	Name    ColIdent
-	Primary bool
-	Spatial bool
-	Unique  bool
+	Type     string
+	Name     ColIdent
+	Primary  bool
+	Spatial  bool
+	Unique   bool
+	Fulltext bool
 }
 
 // Format formats the node.
@@ -2423,6 +2427,7 @@ const (
 	colKeyUnique
 	colKeyUniqueKey
 	colKey
+	colKeyFulltextKey
 )
 
 // AutoIncSpec defines an autoincrement value for a ADD AUTO_INCREMENT statement
@@ -2821,13 +2826,13 @@ func (node *Rollback) Format(buf *TrackedBuffer) {
 
 // FlushOption is used for trailing options for flush statement
 type FlushOption struct {
-	Name string
+	Name    string
 	Channel string
 }
 
 // Flush represents a Flush statement.
-type Flush struct{
-	Type 	string
+type Flush struct {
+	Type   string
 	Option *FlushOption
 }
 
@@ -2839,7 +2844,7 @@ func (node *Flush) Format(buf *TrackedBuffer) {
 		buf.Myprintf(" %s", strings.ToLower(node.Type))
 	}
 
-	if node.Option.Name == "RELAY LOGS" && node.Option.Channel != ""{
+	if node.Option.Name == "RELAY LOGS" && node.Option.Channel != "" {
 		buf.Myprintf(" %s for channel %s", strings.ToLower(node.Option.Name), strings.ToLower(node.Option.Channel))
 	} else {
 		buf.Myprintf(" %s", strings.ToLower(node.Option.Name))
@@ -3097,6 +3102,7 @@ func (*ParenTableExpr) iTableExpr()   {}
 func (*JoinTableExpr) iTableExpr()    {}
 func (*CommonTableExpr) iTableExpr()  {}
 func (*ValuesStatement) iTableExpr()  {}
+func (TableFuncExpr) iTableExpr()     {}
 
 // AliasedTableExpr represents a table expression
 // coupled with an optional alias, AS OF expression, and index hints.
@@ -5458,6 +5464,51 @@ func (node *ColIdent) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	node.val = result
+	return nil
+}
+
+type TableFuncExpr struct {
+	Name  string
+	Exprs SelectExprs
+}
+
+// Format formats the node.
+func (node TableFuncExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s(%v)", node.Name, node.Exprs)
+}
+
+// IsEmpty returns true if TableFuncExpr's name is empty.
+func (node TableFuncExpr) IsEmpty() bool {
+	return node.Name == ""
+}
+
+// String returns the unescaped table function name. It must
+// not be used for SQL generation. Use sqlparser.String
+// instead. The Stringer conformance is for usage
+// in templates.
+func (node TableFuncExpr) String() string {
+	return node.Name
+}
+
+// CompliantName returns a compliant id name
+// that can be used for a bind var.
+func (node TableFuncExpr) CompliantName() string {
+	return compliantName(node.Name)
+}
+
+// MarshalJSON marshals into JSON.
+func (node TableFuncExpr) MarshalJSON() ([]byte, error) {
+	return json.Marshal(node.Name)
+}
+
+// UnmarshalJSON unmarshals from JSON.
+func (node *TableFuncExpr) UnmarshalJSON(b []byte) error {
+	var result string
+	err := json.Unmarshal(b, &result)
+	if err != nil {
+		return err
+	}
+	node.Name = result
 	return nil
 }
 
