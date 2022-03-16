@@ -23,11 +23,12 @@ import (
 	"flag"
 	"os"
 
+	rice "github.com/GeertJohan/go.rice"
+
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
@@ -40,7 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/yaml2"
 
-	rice "github.com/GeertJohan/go.rice"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
