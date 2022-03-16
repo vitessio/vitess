@@ -665,8 +665,10 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		if typ != LEX_ERROR {
 			return typ, res
 		}
+		ch = tkn.lastChar
+		tkn.next()
 		typ1, res1 := tkn.scanIdentifier(byte(ch), false)
-		return typ1, res1
+		return typ1, append(res, res1...)
 	case ch == ':':
 		return tkn.scanBindVar()
 	case ch == ';':

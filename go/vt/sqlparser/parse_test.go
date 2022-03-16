@@ -2464,12 +2464,20 @@ func TestParsingColumnsStartingWithNumbers(t *testing.T) {
 			output: "create table t (\n\t`1a` int\n)",
 		},
 		{
+			input:  "create table t (123456a int)",
+			output: "create table t (\n\t`123456a` int\n)",
+		},
+		{
 			input:  "create table t (1a int primary key, 2b int)",
 			output: "create table t (\n\t`1a` int primary key,\n\t`2b` int\n)",
 		},
 		{
 			input:  "alter table t add column 1a int",
 			output: "alter table t add column (\n\t`1a` int\n)",
+		},
+		{
+			input:  "select 0xH from t",
+			output: "select `0xH` from t",
 		},
 	}
 	for _, tcase := range tests {
@@ -4162,9 +4170,6 @@ var (
 	}, {
 		input:  "select : from t",
 		output: "syntax error at position 9 near ':'",
-	}, {
-		input:  "select 0xH from t",
-		output: "syntax error at position 10 near '0x'",
 	}, {
 		input:  "select x'78 from t",
 		output: "syntax error at position 12 near '78'",
