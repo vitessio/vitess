@@ -29,22 +29,19 @@ import (
 	"time"
 
 	"github.com/hashicorp/consul/api"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/tlstest"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/mysql"
-
+	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 	"vitess.io/vitess/go/vt/vttest"
 
-	"vitess.io/vitess/go/vt/proto/logutil"
-	"vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 type columnVindex struct {
@@ -355,8 +352,8 @@ func assertColumnVindex(t *testing.T, cluster vttest.LocalCluster, expected colu
 	args := []string{"GetVSchema", expected.keyspace}
 	ctx := context.Background()
 
-	err := vtctlclient.RunCommandAndWait(ctx, server, args, func(e *logutil.Event) {
-		var keyspace vschema.Keyspace
+	err := vtctlclient.RunCommandAndWait(ctx, server, args, func(e *logutilpb.Event) {
+		var keyspace vschemapb.Keyspace
 		if err := protojson.Unmarshal([]byte(e.Value), &keyspace); err != nil {
 			t.Error(err)
 		}

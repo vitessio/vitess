@@ -31,8 +31,9 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/log"
-	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 	"vitess.io/vitess/go/vt/vttest"
+
+	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
 type topoFlags struct {
