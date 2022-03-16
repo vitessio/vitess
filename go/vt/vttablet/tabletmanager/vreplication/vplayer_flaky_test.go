@@ -443,7 +443,6 @@ func TestPlayerSavepoint(t *testing.T) {
 		"/insert into t1.*2.*",
 		"SAVEPOINT `vrepl_b`",
 		"/insert into t1.*3.*",
-		"SAVEPOINT `vrepl_a`",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	})
