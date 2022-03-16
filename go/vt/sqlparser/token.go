@@ -616,7 +616,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		if tok != 0 {
 			// Copy over position from specialComment and add offset
 			// TODO (James): Causing problems in CI, specifically sysbench. Comment out for now
-			// tkn.Position = tkn.specialPosOffset + specialComment.Position
+			tkn.Position = tkn.specialPosOffset + specialComment.Position
 			// return the specialComment scan result as the result
 			return tok, val
 		}
