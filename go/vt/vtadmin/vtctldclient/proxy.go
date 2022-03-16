@@ -105,8 +105,7 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 
 	if vtctld.VtctldClient != nil {
 		if !vtctld.closed {
-			// TODO add a flag for context timeout
-			waitCtx, waitCancel := context.WithTimeout(ctx, 2*time.Second)
+			waitCtx, waitCancel := context.WithTimeout(ctx, vtctld.cfg.ConnectivityTimeout)
 			defer waitCancel()
 
 			if err := vtctld.VtctldClient.WaitForReady(waitCtx); err == nil {
@@ -161,8 +160,7 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 	}
 
 	log.Infof("Established gRPC connection to vtctld %s; waiting to transition to READY...\n", addr)
-	// TODO use flag
-	waitCtx, waitCancel := context.WithTimeout(ctx, 2*time.Second)
+	waitCtx, waitCancel := context.WithTimeout(ctx, vtctld.cfg.ConnectivityTimeout)
 	defer waitCancel()
 
 	if err := client.WaitForReady(waitCtx); err != nil {

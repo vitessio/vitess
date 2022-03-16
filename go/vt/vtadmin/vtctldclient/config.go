@@ -18,6 +18,7 @@ package vtctldclient
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/pflag"
 
@@ -36,6 +37,8 @@ type Config struct {
 	CredentialsPath string
 
 	Cluster *vtadminpb.Cluster
+
+	ConnectivityTimeout time.Duration
 }
 
 // Parse returns a new config with the given cluster and discovery, after
@@ -60,6 +63,8 @@ func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string)
 // (*cluster.Cluster).New().
 func (c *Config) Parse(args []string) error {
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
+
+	fs.DurationVar(&c.ConnectivityTimeout, "grpc-connectivity-timeout", 2*time.Second, "The maximum duration to wait for a vtctld gRPC connection to be established.")
 
 	credentialsTmplStr := fs.String("credentials-path-tmpl", "",
 		"Go template used to specify a path to a credentials file, which is a json file containing "+
