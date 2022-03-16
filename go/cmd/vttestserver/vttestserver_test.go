@@ -130,7 +130,7 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 	conf := config
 	defer resetFlags(args, conf)
 
-	cluster, err := startCluster("-foreign_key_mode=allow", "-enable_online_ddl=true", "-enable_direct_ddl=true")
+	cluster, err := startCluster("--foreign_key_mode=allow", "--enable_online_ddl=true", "--enable_direct_ddl=true")
 	assert.NoError(t, err)
 	defer cluster.TearDown()
 
@@ -156,7 +156,7 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 	assert.NoError(t, err)
 
 	cluster.TearDown()
-	cluster, err = startCluster("-foreign_key_mode=disallow", "-enable_online_ddl=false", "-enable_direct_ddl=false")
+	cluster, err = startCluster("--foreign_key_mode=disallow", "--enable_online_ddl=false", "--enable_direct_ddl=false")
 	assert.NoError(t, err)
 	defer cluster.TearDown()
 
@@ -210,8 +210,8 @@ func TestExternalTopoServerConsul(t *testing.T) {
 		}
 	}()
 
-	cluster, err := startCluster("-external_topo_implementation=consul",
-		fmt.Sprintf("-external_topo_global_server_address=%s", serverAddr), "-external_topo_global_root=consul_test/global")
+	cluster, err := startCluster("--external_topo_implementation=consul",
+		fmt.Sprintf("--external_topo_global_server_address=%s", serverAddr), "--external_topo_global_root=consul_test/global")
 	assert.NoError(t, err)
 	defer cluster.TearDown()
 
@@ -245,14 +245,14 @@ func TestMtlsAuth(t *testing.T) {
 	// When cluster starts it will apply SQL and VSchema migrations in the configured schema_dir folder
 	// With mtls authorization enabled, the authorized CN must match the certificate's CN
 	cluster, err := startCluster(
-		"-grpc_auth_mode=mtls",
-		fmt.Sprintf("-grpc_key=%s", key),
-		fmt.Sprintf("-grpc_cert=%s", cert),
-		fmt.Sprintf("-grpc_ca=%s", caCert),
-		fmt.Sprintf("-vtctld_grpc_key=%s", clientKey),
-		fmt.Sprintf("-vtctld_grpc_cert=%s", clientCert),
-		fmt.Sprintf("-vtctld_grpc_ca=%s", caCert),
-		fmt.Sprintf("-grpc_auth_mtls_allowed_substrings=%s", "CN=ClientApp"))
+		"--grpc_auth_mode=mtls",
+		fmt.Sprintf("--grpc_key=%s", key),
+		fmt.Sprintf("--grpc_cert=%s", cert),
+		fmt.Sprintf("--grpc_ca=%s", caCert),
+		fmt.Sprintf("--vtctld_grpc_key=%s", clientKey),
+		fmt.Sprintf("--vtctld_grpc_cert=%s", clientCert),
+		fmt.Sprintf("--vtctld_grpc_ca=%s", caCert),
+		fmt.Sprintf("--grpc_auth_mtls_allowed_substrings=%s", "CN=ClientApp"))
 	assert.NoError(t, err)
 	defer cluster.TearDown()
 
@@ -289,14 +289,14 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 	// For mtls authorization failure by providing a client certificate with different CN thant the
 	// authorized in the configuration
 	cluster, err := startCluster(
-		"-grpc_auth_mode=mtls",
-		fmt.Sprintf("-grpc_key=%s", key),
-		fmt.Sprintf("-grpc_cert=%s", cert),
-		fmt.Sprintf("-grpc_ca=%s", caCert),
-		fmt.Sprintf("-vtctld_grpc_key=%s", clientKey),
-		fmt.Sprintf("-vtctld_grpc_cert=%s", clientCert),
-		fmt.Sprintf("-vtctld_grpc_ca=%s", caCert),
-		fmt.Sprintf("-grpc_auth_mtls_allowed_substrings=%s", "CN=ClientApp"))
+		"--grpc_auth_mode=mtls",
+		fmt.Sprintf("--grpc_key=%s", key),
+		fmt.Sprintf("--grpc_cert=%s", cert),
+		fmt.Sprintf("--grpc_ca=%s", caCert),
+		fmt.Sprintf("--vtctld_grpc_key=%s", clientKey),
+		fmt.Sprintf("--vtctld_grpc_cert=%s", clientCert),
+		fmt.Sprintf("--vtctld_grpc_ca=%s", caCert),
+		fmt.Sprintf("--grpc_auth_mtls_allowed_substrings=%s", "CN=ClientApp"))
 	defer cluster.TearDown()
 
 	assert.Error(t, err)
@@ -305,20 +305,20 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 
 func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, error) {
 	flags = append(flags, []string{
-		"-persistent_mode",
+		"--persistent_mode",
 		// FIXME: if port is not provided, data_dir is not respected
-		fmt.Sprintf("-port=%d", randomPort()),
-		fmt.Sprintf("-data_dir=%s", dir),
+		fmt.Sprintf("--port=%d", randomPort()),
+		fmt.Sprintf("--data_dir=%s", dir),
 	}...)
 	return startCluster(flags...)
 }
 
 func startCluster(flags ...string) (vttest.LocalCluster, error) {
-	schemaDirArg := "-schema_dir=data/schema"
-	tabletHostname := "-tablet_hostname=localhost"
-	keyspaceArg := "-keyspaces=test_keyspace,app_customer"
-	numShardsArg := "-num_shards=2,2"
-	vschemaDDLAuthorizedUsers := "-vschema_ddl_authorized_users=%"
+	schemaDirArg := "--schema_dir=data/schema"
+	tabletHostname := "--tablet_hostname=localhost"
+	keyspaceArg := "--keyspaces=test_keyspace,app_customer"
+	numShardsArg := "--num_shards=2,2"
+	vschemaDDLAuthorizedUsers := "--vschema_ddl_authorized_users=%"
 	os.Args = append(os.Args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers}...)
 	os.Args = append(os.Args, flags...)
 	return runCluster()
@@ -390,8 +390,8 @@ func assertVtGateExecute(t *testing.T, cluster vttest.LocalCluster) {
 	stream, err := client.ExecuteVtctlCommand(
 		context.Background(),
 		[]string{
-			"VtGateExecute",
-			"-server",
+			"VtGateExecute", "--",
+			"--server",
 			fmt.Sprintf("localhost:%v", cluster.GrpcPort()),
 			"select 'success';",
 		},

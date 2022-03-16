@@ -88,8 +88,8 @@ func init() {
 		"If this flag is set, the MySQL data directory is not cleaned up"+
 			" when LocalCluster.TearDown() is called. This is useful for running"+
 			" vttestserver as a database container in local developer environments. Note"+
-			" that db migration files (-schema_dir option) and seeding of"+
-			" random data (-initialize_with_random_data option) will only run during"+
+			" that db migration files (--schema_dir option) and seeding of"+
+			" random data (--initialize_with_random_data option) will only run during"+
 			" cluster startup if the data directory does not already exist. vschema"+
 			" migrations are run every time the cluster starts, since persistence"+
 			" for the topology server has not been implemented yet")
