@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"io"
-	"unicode"
 )
 
 const (
@@ -615,7 +614,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		tok, val := specialComment.Scan()
 		if tok != 0 {
 			// Copy over position from specialComment and add offset
-			tkn.Position = tkn.specialPosOffset + specialComment.Position
+			//tkn.Position = tkn.specialPosOffset + specialComment.Position
 			// return the specialComment scan result as the result
 			return tok, val
 		}
@@ -1050,9 +1049,9 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 	buffer := &bytes2.Buffer{}
 	buffer.WriteString("/*!")
 	tkn.next()
-	tkn.specialPosOffset = tkn.Position
-	foundStartPos := false
-	digitCount := 0
+	//tkn.specialPosOffset = tkn.Position
+	//foundStartPos := false
+	//digitCount := 0
 	for {
 		if tkn.lastChar == '*' {
 			tkn.consumeNext(buffer)
@@ -1069,30 +1068,30 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 		tkn.consumeNext(buffer)
 
 		// Already found special comment starting point
-		if foundStartPos {
-			continue
-		}
+		//if foundStartPos {
+		//	continue
+		//}
 
 		// Haven't reached character count
-		if digitCount < 5 {
-			if isDigit(tkn.lastChar) {
-				// Increase digit count
-				digitCount++
-				continue
-			} else {
-				// Provided less than 5 digits, but force this to move on
-				digitCount = 5
-			}
-		}
-
-		// If no longer counting digits, ignore spaces until first non-space character
-		if unicode.IsSpace(rune(tkn.lastChar)) {
-			continue
-		}
-
-		// Found start of subexpression
-		tkn.specialPosOffset = tkn.Position - 1
-		foundStartPos = true
+		//if digitCount < 5 {
+		//	if isDigit(tkn.lastChar) {
+		//		// Increase digit count
+		//		digitCount++
+		//		continue
+		//	} else {
+		//		// Provided less than 5 digits, but force this to move on
+		//		digitCount = 5
+		//	}
+		//}
+		//
+		//// If no longer counting digits, ignore spaces until first non-space character
+		//if unicode.IsSpace(rune(tkn.lastChar)) {
+		//	continue
+		//}
+		//
+		//// Found start of subexpression
+		//tkn.specialPosOffset = tkn.Position - 1
+		//foundStartPos = true
 	}
 	_, sql := ExtractMysqlComment(buffer.String())
 	tkn.specialComment = NewStringTokenizer(sql)
