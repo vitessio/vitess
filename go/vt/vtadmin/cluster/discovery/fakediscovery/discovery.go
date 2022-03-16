@@ -60,6 +60,18 @@ func New() *Fake {
 	}
 }
 
+func (d *Fake) Clear() {
+	d.gates = &gates{
+		byTag:  map[string][]*vtadminpb.VTGate{},
+		byName: map[string]*vtadminpb.VTGate{},
+	}
+
+	d.vtctlds = &vtctlds{
+		byTag:  map[string][]*vtadminpb.Vtctld{},
+		byName: map[string]*vtadminpb.Vtctld{},
+	}
+}
+
 // AddTaggedGates adds the given gates to the discovery fake, associating each
 // gate with each tag. To tag different gates with multiple tags, call multiple
 // times with the same gates but different tag slices. Gates are uniquely

@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
@@ -104,14 +105,27 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 
 	if vtctld.VtctldClient != nil {
 		if !vtctld.closed {
-			span.Annotate("is_noop", true)
-			span.Annotate("vtctld_host", vtctld.host)
+			// TODO add a flag for context timeout
+			waitCtx, waitCancel := context.WithTimeout(ctx, 2*time.Second)
+			defer waitCancel()
 
-			vtctld.lastPing = time.Now()
+			if err := vtctld.VtctldClient.WaitForReady(waitCtx); err == nil {
+				// Our cached connection is still open and ready, so we're good to go.
+				log.Infof("Using cached connection to vtctld %s\n", vtctld.host)
 
-			return nil
+				span.Annotate("is_noop", true)
+				span.Annotate("vtctld_host", vtctld.host)
+
+				vtctld.lastPing = time.Now()
+
+				return nil
+			}
+			// If WaitForReady returns an error, that indicates our cached connection
+			// is no longer valid. We fall through to close the cached connection,
+			// discover a new vtctld, and establish a new connection.
 		}
 
+		log.Infof("Closing stale connection to vtctld %s\n", vtctld.host)
 		span.Annotate("is_stale", true)
 
 		// close before reopen. this is safe to call on an already-closed client.
@@ -120,6 +134,7 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 		}
 	}
 
+	log.Infof("Discovering vtctld to dial...\n")
 	addr, err := vtctld.discovery.DiscoverVtctldAddr(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("error discovering vtctld to dial: %w", err)
@@ -139,11 +154,27 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 		opts = append(opts, grpc.WithPerRPCCredentials(vtctld.creds))
 	}
 
+	log.Infof("Discovered vtctld %s; attempting to establish gRPC connection...\n", addr)
 	client, err := vtctld.DialFunc(addr, grpcclient.FailFast(false), opts...)
 	if err != nil {
 		return err
 	}
 
+	log.Infof("Established gRPC connection to vtctld %s; waiting to transition to READY...\n", addr)
+	// TODO use flag
+	waitCtx, waitCancel := context.WithTimeout(ctx, 2*time.Second)
+	defer waitCancel()
+
+	if err := client.WaitForReady(waitCtx); err != nil {
+		// If the gRPC connection does not transition to a READY state within the context timeout,
+		// then return an error. The onus to redial (or not) is on the caller of the Dial function.
+		// As an enhancement, we could update this Dial function to try redialing the discovered vtctld
+		// a few times with a backoff before giving up.
+		log.Infof("Could not transition to READY state for gRPC connection to %s: %s\n", addr, err.Error())
+		return err
+	}
+
+	log.Infof("Established gRPC connection to vtctld %s\n", addr)
 	vtctld.dialedAt = time.Now()
 	vtctld.host = addr
 	vtctld.VtctldClient = client
