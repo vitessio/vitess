@@ -43,10 +43,10 @@ done
 vtctldclient PlannedReparentShard commerce/0 --new-primary zone1-100
 
 # create the schema
-vtctlclient ApplySchema -- --sql-file create_commerce_schema.sql commerce
+vtctldclient ApplySchema --sql-file create_commerce_schema.sql commerce
 
 # create the vschema
-vtctlclient ApplyVSchema -- --vschema_file vschema_commerce_initial.json commerce
+vtctldclient ApplyVSchema --vschema-file vschema_commerce_initial.json commerce
 
 # start vtgate
 CELL=zone1 ./scripts/vtgate-up.sh
