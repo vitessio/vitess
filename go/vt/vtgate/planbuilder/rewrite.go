@@ -147,8 +147,8 @@ func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.Cursor, node *sqlpars
 	}
 
 	r.inSubquery++
-	argName := r.reservedVars.ReserveHasValuesSubQuery()
-	semTableSQ.SetArgName(argName)
+	hasValuesArg := r.reservedVars.ReserveHasValuesSubQuery()
+	semTableSQ.SetHasValuesArg(hasValuesArg)
 	cursor.Replace(semTableSQ)
 	return nil
 }

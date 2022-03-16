@@ -3447,11 +3447,8 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Projection",
-        "Columns": [
-          "1"
-        ],
         "Expressions": [
-          "INT64(1)"
+          "INT64(1) as 1"
         ],
         "Inputs": [
           {
@@ -3488,11 +3485,8 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Projection",
-        "Columns": [
-          "1"
-        ],
         "Expressions": [
-          "INT64(1)"
+          "INT64(1) as 1"
         ],
         "Inputs": [
           {

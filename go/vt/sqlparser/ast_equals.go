@@ -560,6 +560,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfNullVal(a, b)
+	case Offset:
+		b, ok := inB.(Offset)
+		if !ok {
+			return false
+		}
+		return a == b
 	case OnDup:
 		b, ok := inB.(OnDup)
 		if !ok {
@@ -872,6 +878,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfTimestampFuncExpr(a, b)
+	case *TrimFuncExpr:
+		b, ok := inB.(*TrimFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfTrimFuncExpr(a, b)
 	case *TruncateTable:
 		b, ok := inB.(*TruncateTable)
 		if !ok {
@@ -2716,6 +2728,20 @@ func EqualsRefOfTimestampFuncExpr(a, b *TimestampFuncExpr) bool {
 		EqualsExpr(a.Expr2, b.Expr2)
 }
 
+// EqualsRefOfTrimFuncExpr does deep equals between the two objects.
+func EqualsRefOfTrimFuncExpr(a, b *TrimFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.TrimFuncType == b.TrimFuncType &&
+		a.Type == b.Type &&
+		EqualsExpr(a.TrimArg, b.TrimArg) &&
+		EqualsExpr(a.StringArg, b.StringArg)
+}
+
 // EqualsRefOfTruncateTable does deep equals between the two objects.
 func EqualsRefOfTruncateTable(a, b *TruncateTable) bool {
 	if a == b {
@@ -3156,6 +3182,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfTimestampFuncExpr(a, b)
+	case *TrimFuncExpr:
+		b, ok := inB.(*TrimFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfTrimFuncExpr(a, b)
 	case *ValuesFuncExpr:
 		b, ok := inB.(*ValuesFuncExpr)
 		if !ok {
@@ -3549,6 +3581,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfNullVal(a, b)
+	case Offset:
+		b, ok := inB.(Offset)
+		if !ok {
+			return false
+		}
+		return a == b
 	case *OrExpr:
 		b, ok := inB.(*OrExpr)
 		if !ok {
@@ -3573,6 +3611,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfTimestampFuncExpr(a, b)
+	case *TrimFuncExpr:
+		b, ok := inB.(*TrimFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfTrimFuncExpr(a, b)
 	case *UnaryExpr:
 		b, ok := inB.(*UnaryExpr)
 		if !ok {

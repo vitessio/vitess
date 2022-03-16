@@ -378,7 +378,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 			log.Infof("Replication caught up to %v after %v", status.Position, time.Since(waitStartTime))
 			break
 		}
-		if !status.ReplicationRunning() {
+		if !status.Healthy() {
 			log.Warning("Replication has stopped before backup could be taken. Trying to restart replication.")
 			if err := startReplication(ctx, mysqld, topoServer); err != nil {
 				log.Warningf("Failed to restart replication: %v", err)

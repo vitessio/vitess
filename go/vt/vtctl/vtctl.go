@@ -604,6 +604,30 @@ var commands = []commandGroup{
 				help:   "Triggers a panic on the server side, to test the handling.",
 				hidden: true,
 			},
+			{
+				name: "LegacyVtctlCommand",
+				method: func(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+					subFlags.Usage = func() {
+						fmt.Fprintln(subFlags.Output(), "Runs the vtctl request through the legacy vtctlclient program syntax (default).")
+					}
+
+					return subFlags.Parse(args)
+				},
+				params: "<command> [args...]",
+				help:   "Runs the vtctl request through the legacy vtctlclient program syntax (default).",
+			},
+			{
+				name: "VtctldCommand",
+				method: func(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+					subFlags.Usage = func() {
+						fmt.Fprintln(subFlags.Output(), "Runs the vtctl request through the new vtctldclient program syntax. This will become the default in a future version of Vitess.")
+					}
+
+					return subFlags.Parse(args)
+				},
+				params: "<command> [args ...]",
+				help:   "Runs the vtctl request through the new vtctldclient program syntax. This will become the default in a future version of Vitess.",
+			},
 		},
 	},
 	{
@@ -1798,7 +1822,8 @@ func commandShardReplicationFix(ctx context.Context, wr *wrangler.Wrangler, subF
 	if err != nil {
 		return err
 	}
-	return topo.FixShardReplication(ctx, wr.TopoServer(), wr.Logger(), cell, keyspace, shard)
+	_, err = topo.FixShardReplication(ctx, wr.TopoServer(), wr.Logger(), cell, keyspace, shard)
+	return err
 }
 
 func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

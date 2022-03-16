@@ -16,5 +16,5 @@
 
 # this script migrates traffic for the rdonly and replica tablets
 
-vtctlclient -server localhost:15999 MigrateServedTypes customer/0 rdonly
-vtctlclient -server localhost:15999 MigrateServedTypes customer/0 replica
+vtctlclient --server localhost:15999 MigrateServedTypes customer/0 rdonly
+vtctlclient --server localhost:15999 MigrateServedTypes customer/0 replica
