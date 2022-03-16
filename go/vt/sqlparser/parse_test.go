@@ -2476,6 +2476,18 @@ func TestParsingColumnsStartingWithNumbers(t *testing.T) {
 			output: "alter table t add column (\n\t`1a` int\n)",
 		},
 		{
+			input:  "alter table t drop column 1a",
+			output: "alter table t drop column `1a`",
+		},
+		{
+			input:  "update t set 1a = 5",
+			output: "update t set 1a = 5",
+		},
+		{
+			input:  "insert into t (1a) values (1)",
+			output: "insert into t(`1a`) values (1)",
+		},
+		{
 			input:  "select 0xH from t",
 			output: "select `0xH` from t",
 		},
@@ -4401,6 +4413,36 @@ var (
 	}, {
 		input:  "show session status like asd",
 		output: "syntax error at position 29 near 'asd'",
+	}, {
+		input:  "create table 1 (i int)",
+		output: "syntax error at position 15 near '1'",
+	}, {
+		input:  "create table t (1 int)",
+		output: "syntax error at position 18 near '1'",
+	}, {
+		input:  "update 1 set x = 1",
+		output: "syntax error at position 9 near '1'",
+	}, {
+		input:  "update t set 1 = 1",
+		output: "syntax error at position 15 near '1'",
+	}, {
+		input:  "alter table 1 add column (i int)",
+		output: "syntax error at position 14 near '1'",
+	}, {
+		input:  "alter table t add column (1 int)",
+		output: "syntax error at position 28 near '1'",
+	}, {
+		input:  "alter table t drop column 1",
+		output: "syntax error at position 28 near '1'",
+	}, {
+		input:  "insert into 1 (i, j) values (1)",
+		output: "syntax error at position 14 near '1'",
+	}, {
+		input:  "insert into t (1, j) values (1)",
+		output: "syntax error at position 17 near '1'",
+	}, {
+		input:  "insert into t (i, 1) values (1)",
+		output: "syntax error at position 20 near '1'",
 	},
 	}
 )

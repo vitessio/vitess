@@ -665,10 +665,11 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		if typ != LEX_ERROR {
 			return typ, res
 		}
-		ch = tkn.lastChar
-		tkn.next()
+		// LEX_ERROR is returned from scanNumber iff we see an unexpected character, so try to parse as an identifier
+		ch = tkn.lastChar // Save last character
+		tkn.next()        // Move onto next character (as to not repeat symbol)
 		typ1, res1 := tkn.scanIdentifier(byte(ch), false)
-		return typ1, append(res, res1...)
+		return typ1, append(res, res1...) // Concatenate the two partial symbols
 	case ch == ':':
 		return tkn.scanBindVar()
 	case ch == ';':
