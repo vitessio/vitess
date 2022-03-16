@@ -249,7 +249,7 @@ commit;"
 	numCatchupEvents := 3 * 5                             /*2 t1, 1 t2 : BEGIN+FIELD+ROW+GTID+COMMIT*/
 	numFastForwardEvents := 5                             /*t1:FIELD+ROW*/
 	numMisc := 1                                          /* t2 insert during t1 catchup that comes in t2 copy */
-	numReplicateEvents := 2*5 /* insert into t1/t2 */ + 8 /* begin/field/2 inserts/gtid/commit + 2 savepoints */
+	numReplicateEvents := 2*5 /* insert into t1/t2 */ + 7 /* begin/field/2 inserts/gtid/commit + 1 savepoint (flattened) */
 	numExpectedEvents := numCopyEvents + numCatchupEvents + numFastForwardEvents + numMisc + numReplicateEvents
 
 	var lastRowEventSeen bool
@@ -542,7 +542,6 @@ var expectedEvents = []string{
 	"type:FIELD field_event:{table_name:\"t3\" fields:{name:\"id31\" type:INT32 table:\"t3\" org_table:\"t3\" database:\"vttest\" org_name:\"id31\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id32\" type:INT32 table:\"t3\" org_table:\"t3\" database:\"vttest\" org_name:\"id32\" column_length:11 charset:63 column_type:\"int(11)\"}}",
 	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:2 lengths:3 values:\"12360\"}}}",
 	"type:SAVEPOINT statement:\"SAVEPOINT `a`\"",
-	"type:SAVEPOINT statement:\"SAVEPOINT `b`\"",
 	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:2 lengths:3 values:\"13390\"}}}",
 	"type:GTID",
 	"type:COMMIT",

@@ -67,29 +67,28 @@ var (
 	TabletURLTemplateString = flag.String("tablet_url_template", "http://{{.GetTabletHostPort}}", "format string describing debug tablet url formatting. See the Go code for getTabletDebugURL() how to customize this.")
 	tabletURLTemplate       *template.Template
 
-	//TODO(deepthi): change these vars back to unexported when discoveryGateway is removed
-
 	// AllowedTabletTypes is the list of allowed tablet types. e.g. {PRIMARY, REPLICA}
 	AllowedTabletTypes []topodata.TabletType
-	// TabletFilters are the keyspace|shard or keyrange filters to apply to the full set of tablets
-	TabletFilters flagutil.StringListValue
 	// KeyspacesToWatch - if provided this specifies which keyspaces should be
 	// visible to the healthcheck. By default the healthcheck will watch all keyspaces.
 	KeyspacesToWatch flagutil.StringListValue
-	// RefreshInterval is the interval at which healthcheck refreshes its list of tablets from topo
-	RefreshInterval = flag.Duration("tablet_refresh_interval", 1*time.Minute, "tablet refresh interval")
-	// RefreshKnownTablets tells us whether to process all tablets or only new tablets
-	RefreshKnownTablets = flag.Bool("tablet_refresh_known_tablets", true, "tablet refresh reloads the tablet address/port map from topo in case it changes")
-	// TopoReadConcurrency tells us how many topo reads are allowed in parallel
-	TopoReadConcurrency = flag.Int("topo_read_concurrency", 32, "concurrent topo reads")
+
+	// tabletFilters are the keyspace|shard or keyrange filters to apply to the full set of tablets
+	tabletFilters flagutil.StringListValue
+	// refreshInterval is the interval at which healthcheck refreshes its list of tablets from topo
+	refreshInterval = flag.Duration("tablet_refresh_interval", 1*time.Minute, "tablet refresh interval")
+	// refreshKnownTablets tells us whether to process all tablets or only new tablets
+	refreshKnownTablets = flag.Bool("tablet_refresh_known_tablets", true, "tablet refresh reloads the tablet address/port map from topo in case it changes")
+	// topoReadConcurrency tells us how many topo reads are allowed in parallel
+	topoReadConcurrency = flag.Int("topo_read_concurrency", 32, "concurrent topo reads")
 )
 
 // See the documentation for NewHealthCheck below for an explanation of these parameters.
 const (
-	DefaultHealthCheckRetryDelay = 5 * time.Second
-	DefaultHealthCheckTimeout    = 1 * time.Minute
+	defaultHealthCheckRetryDelay = 5 * time.Second
+	defaultHealthCheckTimeout    = 1 * time.Minute
 
-	// DefaultTopoReadConcurrency is used as the default value for the TopoReadConcurrency parameter of a TopologyWatcher.
+	// DefaultTopoReadConcurrency is used as the default value for the topoReadConcurrency parameter of a TopologyWatcher.
 	DefaultTopoReadConcurrency int = 5
 	// DefaultTopologyWatcherRefreshInterval is used as the default value for
 	// the refresh interval of a topology watcher.
@@ -141,7 +140,7 @@ func ParseTabletURLTemplateFromFlag() {
 func init() {
 	// Flags are not parsed at this point and the default value of the flag (just the hostname) will be used.
 	ParseTabletURLTemplateFromFlag()
-	flag.Var(&TabletFilters, "tablet_filters", "Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch")
+	flag.Var(&tabletFilters, "tablet_filters", "Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch")
 	topoproto.TabletTypeListVar(&AllowedTabletTypes, "allowed_tablet_types", "Specifies the tablet types this vtgate is allowed to route queries to")
 	flag.Var(&KeyspacesToWatch, "keyspaces_to_watch", "Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema")
 }
@@ -283,12 +282,12 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		if c == "" {
 			continue
 		}
-		if len(TabletFilters) > 0 {
+		if len(tabletFilters) > 0 {
 			if len(KeyspacesToWatch) > 0 {
 				log.Exitf("Only one of -keyspaces_to_watch and -tablet_filters may be specified at a time")
 			}
 
-			fbs, err := NewFilterByShard(TabletFilters)
+			fbs, err := NewFilterByShard(tabletFilters)
 			if err != nil {
 				log.Exitf("Cannot parse tablet_filters parameter: %v", err)
 			}
@@ -296,7 +295,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		} else if len(KeyspacesToWatch) > 0 {
 			filter = NewFilterByKeyspace(KeyspacesToWatch)
 		}
-		topoWatchers = append(topoWatchers, NewCellTabletsWatcher(ctx, topoServer, hc, filter, c, *RefreshInterval, *RefreshKnownTablets, *TopoReadConcurrency))
+		topoWatchers = append(topoWatchers, NewCellTabletsWatcher(ctx, topoServer, hc, filter, c, *refreshInterval, *refreshKnownTablets, *topoReadConcurrency))
 	}
 
 	hc.topoWatchers = topoWatchers

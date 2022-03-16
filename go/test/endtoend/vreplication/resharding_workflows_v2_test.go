@@ -371,6 +371,28 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	validateQuery(t, vtgateConn, "product", "select max(cid) from customer2", want)
 }
 
+// testReplicatingWithPKEnumCols ensures that we properly apply binlog events
+// in the stream where the PK contains an ENUM column
+func testReplicatingWithPKEnumCols(t *testing.T) {
+	// At this point we have an ongoing MoveTables operation for the customer table
+	// from the product to the customer keyspace. Let's delete and insert a row to
+	// ensure that the PK -- which is on (cid, typ) with typ being an ENUM -- is
+	// managed correctly in the WHERE clause for the delete. The end result is that
+	// we should see the proper deletes propogate and not get a duplicate key error
+	// when we re-insert the same row values and ultimately VDiff shows the table as
+	// being identical in both keyspaces.
+
+	// typ is an enum, with soho having a stored and binlogged value of 2
+	deleteQuery := "delete from customer where cid = 2 and typ = 'soho'"
+	insertQuery := "insert into customer(cid, name, typ, sport, meta) values(2, 'Paül','soho','cricket',convert(x'7b7d' using utf8mb4))"
+	execVtgateQuery(t, vtgateConn, "product", deleteQuery)
+	time.Sleep(2 * time.Second)
+	vdiff(t, ksWorkflow, "")
+	execVtgateQuery(t, vtgateConn, "product", insertQuery)
+	time.Sleep(2 * time.Second)
+	vdiff(t, ksWorkflow, "")
+}
+
 func testReshardV2Workflow(t *testing.T) {
 	currentWorkflowType = wrangler.ReshardWorkflow
 
@@ -412,6 +434,8 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	// Verify that we've properly ignored any internal operational tables
 	// and that they were not copied to the new target keyspace
 	verifyNoInternalTables(t, vtgateConn, targetKs)
+
+	testReplicatingWithPKEnumCols(t)
 
 	testRestOfWorkflow(t)
 

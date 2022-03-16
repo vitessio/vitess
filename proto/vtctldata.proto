@@ -256,6 +256,17 @@ message BackupResponse {
   logutil.Event event = 4;
 }
 
+message BackupShardRequest {
+  string keyspace = 1;
+  string shard = 2;
+  // AllowPrimary allows the backup to occur on a PRIMARY tablet. See
+  // BackupRequest.AllowPrimary for warnings and caveats.
+  bool allow_primary = 3;
+  // Concurrency specifies the number of compression/checksum jobs to run
+  // simultaneously.
+  uint64 concurrency = 4;
+}
+
 message ChangeTabletTypeRequest {
   topodata.TabletAlias tablet_alias = 1;
   topodata.TabletType db_type = 2;
@@ -774,6 +785,15 @@ message ReloadSchemaShardResponse {
   repeated logutil.Event events = 2;
 }
 
+message RemoveBackupRequest {
+  string keyspace = 1;
+  string shard = 2;
+  string name = 3;
+}
+
+message RemoveBackupResponse {
+}
+
 message RemoveKeyspaceCellRequest {
   string keyspace = 1;
   string cell = 2;
@@ -822,6 +842,21 @@ message ReparentTabletResponse {
   string shard = 2;
   // Primary is the alias of the tablet that the tablet was reparented under.
   topodata.TabletAlias primary = 3;
+}
+
+message RestoreFromBackupRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  // BackupTime, if set, will use the backup taken most closely at or before
+  // this time. If nil, the latest backup will be restored on the tablet.
+  vttime.Time backup_time = 2;
+}
+
+message RestoreFromBackupResponse {
+  // TabletAlias is the alias of the tablet doing the restore.
+  topodata.TabletAlias tablet_alias = 1;
+  string keyspace = 2;
+  string shard = 3;
+  logutil.Event event = 4;
 }
 
 message RunHealthCheckRequest {
@@ -924,6 +959,36 @@ message SleepTabletRequest {
 }
 
 message SleepTabletResponse {
+}
+
+message SourceShardAddRequest {
+  string keyspace = 1;
+  string shard = 2;
+  uint32 uid = 3;
+  string source_keyspace = 4;
+  string source_shard = 5;
+  // KeyRange identifies the key range to use for the SourceShard. This field is
+  // optional.
+  topodata.KeyRange key_range = 6;
+  // Tables is a list of tables replicate (for MoveTables). Each "table" can be
+  // either an exact match or a regular expression of the form "/regexp/".
+  repeated string tables = 7;
+}
+
+message SourceShardAddResponse {
+  // Shard is the updated shard record.
+  topodata.Shard shard = 1;
+}
+
+message SourceShardDeleteRequest {
+  string keyspace = 1;
+  string shard = 2;
+  uint32 uid = 3;
+}
+
+message SourceShardDeleteResponse {
+  // Shard is the updated shard record.
+  topodata.Shard shard = 1;
 }
 
 message StartReplicationRequest {

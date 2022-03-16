@@ -41,14 +41,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-const (
-	tabletGatewayImplementation = "tabletgateway"
-)
-
-func init() {
-	RegisterGatewayCreator(tabletGatewayImplementation, createTabletGateway)
-}
-
 var (
 	_ discovery.HealthCheck = (*discovery.HealthCheckImpl)(nil)
 	// CellsToWatch is the list of cells the healthcheck operates over. If it is empty, only the local cell is watched
@@ -76,11 +68,6 @@ type TabletGateway struct {
 	buffer *buffer.Buffer
 }
 
-func createTabletGateway(ctx context.Context, _ discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, _ int) Gateway {
-	// we ignore the passed in LegacyHealthCheck and let TabletGateway create it's own HealthCheck
-	return NewTabletGateway(ctx, nil /*discovery.Healthcheck*/, serv, cell)
-}
-
 func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, ts *topo.Server, cell, cellsToWatch string) discovery.HealthCheck {
 	return discovery.NewHealthCheck(ctx, retryDelay, timeout, ts, cell, cellsToWatch)
 }
@@ -104,7 +91,7 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 		hc:                hc,
 		srvTopoServer:     serv,
 		localCell:         localCell,
-		retryCount:        *RetryCount,
+		retryCount:        *retryCount,
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 	}
 	gw.setupBuffering(ctx)
