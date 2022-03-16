@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"io"
+	"unicode"
 )
 
 const (
@@ -614,7 +615,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		tok, val := specialComment.Scan()
 		if tok != 0 {
 			// Copy over position from specialComment and add offset
-			tkn.Position = tkn.specialPosOffset + specialComment.Position
+			//tkn.Position = tkn.specialPosOffset + specialComment.Position
 			// return the specialComment scan result as the result
 			return tok, val
 		}
@@ -1085,10 +1086,7 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 		}
 
 		// If no longer counting digits, ignore spaces until first non-space character
-		//if unicode.IsSpace(rune(tkn.lastChar)) {
-		//	continue
-		//}
-		if tkn.lastChar == ' ' {
+		if unicode.IsSpace(rune(tkn.lastChar)) {
 			continue
 		}
 
