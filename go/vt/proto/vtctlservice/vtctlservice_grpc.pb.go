@@ -187,6 +187,10 @@ type VtctldClient interface {
 	// EmergencyReparentShard reparents the shard to the new primary. It assumes
 	// the old primary is dead or otherwise not responding.
 	EmergencyReparentShard(ctx context.Context, in *vtctldata.EmergencyReparentShardRequest, opts ...grpc.CallOption) (*vtctldata.EmergencyReparentShardResponse, error)
+	// ExecuteFetchAsApp executes a SQL query on the remote tablet as the App user.
+	ExecuteFetchAsApp(ctx context.Context, in *vtctldata.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*vtctldata.ExecuteFetchAsAppResponse, error)
+	// ExecuteFetchAsDBA executes a SQL query on the remote tablet as the DBA user.
+	ExecuteFetchAsDBA(ctx context.Context, in *vtctldata.ExecuteFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldata.ExecuteFetchAsDBAResponse, error)
 	// ExecuteHook runs the hook on the tablet.
 	ExecuteHook(ctx context.Context, in *vtctldata.ExecuteHookRequest, opts ...grpc.CallOption) (*vtctldata.ExecuteHookResponse, error)
 	// FindAllShardsInKeyspace returns a map of shard names to shard references
@@ -571,6 +575,24 @@ func (c *vtctldClient) DeleteTablets(ctx context.Context, in *vtctldata.DeleteTa
 func (c *vtctldClient) EmergencyReparentShard(ctx context.Context, in *vtctldata.EmergencyReparentShardRequest, opts ...grpc.CallOption) (*vtctldata.EmergencyReparentShardResponse, error) {
 	out := new(vtctldata.EmergencyReparentShardResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/EmergencyReparentShard", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ExecuteFetchAsApp(ctx context.Context, in *vtctldata.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*vtctldata.ExecuteFetchAsAppResponse, error) {
+	out := new(vtctldata.ExecuteFetchAsAppResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ExecuteFetchAsApp", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ExecuteFetchAsDBA(ctx context.Context, in *vtctldata.ExecuteFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldata.ExecuteFetchAsDBAResponse, error) {
+	out := new(vtctldata.ExecuteFetchAsDBAResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ExecuteFetchAsDBA", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1163,6 +1185,10 @@ type VtctldServer interface {
 	// EmergencyReparentShard reparents the shard to the new primary. It assumes
 	// the old primary is dead or otherwise not responding.
 	EmergencyReparentShard(context.Context, *vtctldata.EmergencyReparentShardRequest) (*vtctldata.EmergencyReparentShardResponse, error)
+	// ExecuteFetchAsApp executes a SQL query on the remote tablet as the App user.
+	ExecuteFetchAsApp(context.Context, *vtctldata.ExecuteFetchAsAppRequest) (*vtctldata.ExecuteFetchAsAppResponse, error)
+	// ExecuteFetchAsDBA executes a SQL query on the remote tablet as the DBA user.
+	ExecuteFetchAsDBA(context.Context, *vtctldata.ExecuteFetchAsDBARequest) (*vtctldata.ExecuteFetchAsDBAResponse, error)
 	// ExecuteHook runs the hook on the tablet.
 	ExecuteHook(context.Context, *vtctldata.ExecuteHookRequest) (*vtctldata.ExecuteHookResponse, error)
 	// FindAllShardsInKeyspace returns a map of shard names to shard references
@@ -1401,6 +1427,12 @@ func (UnimplementedVtctldServer) DeleteTablets(context.Context, *vtctldata.Delet
 }
 func (UnimplementedVtctldServer) EmergencyReparentShard(context.Context, *vtctldata.EmergencyReparentShardRequest) (*vtctldata.EmergencyReparentShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EmergencyReparentShard not implemented")
+}
+func (UnimplementedVtctldServer) ExecuteFetchAsApp(context.Context, *vtctldata.ExecuteFetchAsAppRequest) (*vtctldata.ExecuteFetchAsAppResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExecuteFetchAsApp not implemented")
+}
+func (UnimplementedVtctldServer) ExecuteFetchAsDBA(context.Context, *vtctldata.ExecuteFetchAsDBARequest) (*vtctldata.ExecuteFetchAsDBAResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExecuteFetchAsDBA not implemented")
 }
 func (UnimplementedVtctldServer) ExecuteHook(context.Context, *vtctldata.ExecuteHookRequest) (*vtctldata.ExecuteHookResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExecuteHook not implemented")
@@ -1891,6 +1923,42 @@ func _Vtctld_EmergencyReparentShard_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).EmergencyReparentShard(ctx, req.(*vtctldata.EmergencyReparentShardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ExecuteFetchAsApp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ExecuteFetchAsAppRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ExecuteFetchAsApp(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ExecuteFetchAsApp",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ExecuteFetchAsApp(ctx, req.(*vtctldata.ExecuteFetchAsAppRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ExecuteFetchAsDBA_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ExecuteFetchAsDBARequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ExecuteFetchAsDBA(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ExecuteFetchAsDBA",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ExecuteFetchAsDBA(ctx, req.(*vtctldata.ExecuteFetchAsDBARequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2972,6 +3040,14 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "EmergencyReparentShard",
 			Handler:    _Vtctld_EmergencyReparentShard_Handler,
+		},
+		{
+			MethodName: "ExecuteFetchAsApp",
+			Handler:    _Vtctld_ExecuteFetchAsApp_Handler,
+		},
+		{
+			MethodName: "ExecuteFetchAsDBA",
+			Handler:    _Vtctld_ExecuteFetchAsDBA_Handler,
 		},
 		{
 			MethodName: "ExecuteHook",

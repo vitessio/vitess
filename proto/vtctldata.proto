@@ -25,6 +25,7 @@ package vtctldata;
 import "binlogdata.proto";
 import "logutil.proto";
 import "mysqlctl.proto";
+import "query.proto";
 import "replicationdata.proto";
 import "tabletmanagerdata.proto";
 import "topodata.proto";
@@ -435,6 +436,46 @@ message EmergencyReparentShardResponse {
   // up-to-date.
   topodata.TabletAlias promoted_primary = 3;
   repeated logutil.Event events = 4;
+}
+
+message ExecuteFetchAsAppRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  string query = 2;
+  // MaxRows is an optional parameter to limit the number of rows read into the
+  // QueryResult. Note that this does not apply a LIMIT to the query, just how
+  // many rows are read from the MySQL server on the tablet side.
+  //
+  // This field is optional. Specifying a non-positive value will use whatever
+  // default is configured in the VtctldService.
+  int64 max_rows = 3;
+  // UsePool causes the query to be run with a pooled connection to the tablet.
+  bool use_pool = 4;
+}
+
+message ExecuteFetchAsAppResponse {
+  query.QueryResult result = 1;
+}
+
+message ExecuteFetchAsDBARequest {
+  topodata.TabletAlias tablet_alias = 1;
+  string query = 2;
+  // MaxRows is an optional parameter to limit the number of rows read into the
+  // QueryResult. Note that this does not apply a LIMIT to the query, just how
+  // many rows are read from the MySQL server on the tablet side.
+  //
+  // This field is optional. Specifying a non-positive value will use whatever
+  // default is configured in the VtctldService.
+  int64 max_rows = 3;
+  // DisableBinlogs instructs the tablet not to use binary logging when
+  // executing the query.
+  bool disable_binlogs = 4;
+  // ReloadSchema instructs the tablet to reload its schema after executing the
+  // query.
+  bool reload_schema = 5;
+}
+
+message ExecuteFetchAsDBAResponse {
+  query.QueryResult result = 1;
 }
 
 message ExecuteHookRequest {

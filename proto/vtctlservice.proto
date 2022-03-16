@@ -86,6 +86,10 @@ service Vtctld {
   // EmergencyReparentShard reparents the shard to the new primary. It assumes
   // the old primary is dead or otherwise not responding.
   rpc EmergencyReparentShard(vtctldata.EmergencyReparentShardRequest) returns (vtctldata.EmergencyReparentShardResponse) {};
+  // ExecuteFetchAsApp executes a SQL query on the remote tablet as the App user.
+  rpc ExecuteFetchAsApp(vtctldata.ExecuteFetchAsAppRequest) returns (vtctldata.ExecuteFetchAsAppResponse) {};
+  // ExecuteFetchAsDBA executes a SQL query on the remote tablet as the DBA user.
+  rpc ExecuteFetchAsDBA(vtctldata.ExecuteFetchAsDBARequest) returns (vtctldata.ExecuteFetchAsDBAResponse) {};
   // ExecuteHook runs the hook on the tablet.
   rpc ExecuteHook(vtctldata.ExecuteHookRequest) returns (vtctldata.ExecuteHookResponse);
   // FindAllShardsInKeyspace returns a map of shard names to shard references
