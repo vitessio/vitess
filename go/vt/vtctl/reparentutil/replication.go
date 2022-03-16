@@ -159,9 +159,12 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 // tabletmanager RPC.
 //
 // It does not start the replication forcefully.
+// If we are unable to find the shard primary of the tablet from the topo server
+// we exit out without any error.
 func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, tablet *topodatapb.Tablet) error {
 	shardPrimary, err := topotools.GetShardPrimaryForTablet(ctx, ts, tablet)
 	if err != nil {
+		// If we didn't find the shard primary, we return without any error
 		return nil
 	}
 
