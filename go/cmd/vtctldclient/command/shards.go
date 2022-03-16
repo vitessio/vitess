@@ -97,6 +97,14 @@ useful after a MoveTables has finished to remove serving restrictions.`,
 		Args:                  cobra.ExactArgs(2),
 		RunE:                  commandSetShardTabletControl,
 	}
+	// ShardReplicationFix makes a ShardReplicationFix gRPC request to a vtctld.
+	ShardReplicationFix = &cobra.Command{
+		Use:                   "ShardReplicationFix <cell> <keyspace/shard>",
+		Short:                 "Walks through a ShardReplication object and fixes the first error encountered.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandShardReplicationFix,
+	}
 	// ShardReplicationPositions makes a ShardReplicationPositions gRPC request
 	// to a vtctld.
 	ShardReplicationPositions = &cobra.Command{
@@ -319,6 +327,34 @@ func commandSetShardTabletControl(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandShardReplicationFix(cmd *cobra.Command, args []string) error {
+	cell := cmd.Flags().Arg(0)
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(1))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.ShardReplicationFix(commandCtx, &vtctldatapb.ShardReplicationFixRequest{
+		Keyspace: keyspace,
+		Shard:    shard,
+		Cell:     cell,
+	})
+	if err != nil {
+		return err
+	}
+
+	switch resp.Error {
+	case nil:
+		fmt.Println("All nodes in the replication graph are valid.")
+	default:
+		fmt.Printf("%s has been fixed for %s.\n", topoproto.ShardReplicationErrorTypeString(resp.Error.Type), topoproto.TabletAliasString(resp.Error.TabletAlias))
+	}
+
+	return nil
+}
+
 func commandShardReplicationPositions(cmd *cobra.Command, args []string) error {
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
 	if err != nil {
@@ -470,6 +506,7 @@ func init() {
 	SetShardTabletControl.Flags().BoolVar(&setShardTabletControlOptions.DisableQueryService, "disable-query-service", false, "Sets the DisableQueryService flag in the specified cells. This flag requires --denied-tables and --remove to be unset; if either is set, this flag is ignored.")
 	Root.AddCommand(SetShardTabletControl)
 
+	Root.AddCommand(ShardReplicationFix)
 	Root.AddCommand(ShardReplicationPositions)
 
 	SourceShardAdd.Flags().StringVar(&sourceShardAddOptions.KeyRangeStr, "key-range", "", "Key range to use for the SourceShard")

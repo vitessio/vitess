@@ -980,6 +980,19 @@ message SetWritableRequest {
 message SetWritableResponse {
 }
 
+message ShardReplicationFixRequest {
+  string keyspace = 1;
+  string shard = 2;
+  string cell = 3;
+}
+
+message ShardReplicationFixResponse {
+  // Error contains information about the error fixed by a
+  // ShardReplicationFix RPC. If there were no errors to fix (i.e. all nodes
+  // in the replication graph are valid), this field is nil.
+  topodata.ShardReplicationError error = 1;
+}
+
 message ShardReplicationPositionsRequest {
   string keyspace = 1;
   string shard = 2;
