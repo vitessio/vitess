@@ -502,6 +502,8 @@ func translateExpr(e sqlparser.Expr, lookup TranslationLookup) (Expr, error) {
 		return NewLiteralInt(0), nil
 	case *sqlparser.ColName:
 		return translateColName(node, lookup)
+	case sqlparser.Offset:
+		return NewColumn(int(node), getCollation(node, lookup)), nil
 	case *sqlparser.ComparisonExpr:
 		return translateComparisonExpr(node.Operator, node.Left, node.Right, lookup)
 	case sqlparser.Argument:

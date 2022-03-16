@@ -13,7 +13,6 @@ body:
     attributes:
       label: Feature Description
       description: A written overview of the feature
-      render: markdown
     validations:
       required: true
 
@@ -22,6 +21,5 @@ body:
     attributes:
       label: Use Case(s)
       description: Any relevant use-cases that you see.
-      render: markdown
     validations:
       required: true

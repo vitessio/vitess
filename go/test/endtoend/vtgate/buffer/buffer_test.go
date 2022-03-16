@@ -203,13 +203,13 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 	}
 
 	clusterInstance.VtGateExtraArgs = []string{
-		"-enable_buffer",
+		"--enable_buffer",
 		// Long timeout in case failover is slow.
-		"-buffer_window", "10m",
-		"-buffer_max_failover_duration", "10m",
-		"-buffer_min_time_between_failovers", "20m",
+		"--buffer_window", "10m",
+		"--buffer_max_failover_duration", "10m",
+		"--buffer_min_time_between_failovers", "20m",
 		// Use legacy gateway. tabletgateway test is at go/test/endtoend/tabletgateway/buffer/buffer_test.go
-		"-gateway_implementation", "discoverygateway",
+		"--gateway_implementation", "discoverygateway",
 	}
 
 	// Start vtgate
@@ -270,9 +270,9 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 		externalReparenting(t, clusterInstance)
 	} else {
 		//reparent call
-		if err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
+		if err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard",
 			fmt.Sprintf("%s/%s", keyspaceUnshardedName, "0"),
-			"-new_primary", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias); err != nil {
+			"--new_primary", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias); err != nil {
 			log.Errorf("clusterInstance.VtctlclientProcess.ExecuteCommand(\"PlannedRepare... caused an error : %v", err)
 		}
 	}

@@ -83,9 +83,8 @@ func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
 }
 
 func (txc *TxConn) queryService(alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
-	qs, _ := txc.gateway.(*DiscoveryGateway)
-	if qs != nil {
-		return qs, nil
+	if alias == nil {
+		return txc.gateway, nil
 	}
 	return txc.gateway.QueryServiceByAlias(alias, nil)
 }

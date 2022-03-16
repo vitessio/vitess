@@ -51,8 +51,8 @@ func SimplifyStatement(
 	}
 
 	// now let's try to simplify * expressions
-	if simplifyStarExpr(sqlparser.CloneSelectStatement(in), test) {
-		return SimplifyStatement(in, currentDB, si, testF)
+	if success := simplifyStarExpr(sqlparser.CloneSelectStatement(in), test); success != nil {
+		return SimplifyStatement(success, currentDB, si, testF)
 	}
 
 	// we try to remove select expressions next
@@ -176,7 +176,7 @@ func getTables(in sqlparser.SelectStatement, currentDB string, si semantics.Sche
 	return semTable.Tables, nil
 }
 
-func simplifyStarExpr(in sqlparser.SelectStatement, test func(sqlparser.SelectStatement) bool) bool {
+func simplifyStarExpr(in sqlparser.SelectStatement, test func(sqlparser.SelectStatement) bool) sqlparser.SelectStatement {
 	simplified := false
 	sqlparser.Rewrite(in, func(cursor *sqlparser.Cursor) bool {
 		se, ok := cursor.Node().(*sqlparser.StarExpr)
@@ -195,7 +195,10 @@ func simplifyStarExpr(in sqlparser.SelectStatement, test func(sqlparser.SelectSt
 
 		return true
 	}, nil)
-	return simplified
+	if simplified {
+		return in
+	}
+	return nil
 }
 
 // removeTable removes the table with the given index from the select statement, which includes the FROM clause

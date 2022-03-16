@@ -17,7 +17,6 @@ limitations under the License.
 package worker
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 
@@ -52,7 +51,7 @@ type RowAggregator struct {
 	builder       QueryBuilder
 	statsCounters *stats.CountersWithSingleLabel
 
-	buffer       bytes.Buffer
+	buffer       strings.Builder
 	bufferedRows int
 }
 
@@ -141,13 +140,13 @@ func (ra *RowAggregator) Flush() error {
 // build the SQL query for one or more rows.
 type QueryBuilder interface {
 	// WriteHead writes the beginning of the query into the buffer.
-	WriteHead(*bytes.Buffer)
+	WriteHead(*strings.Builder)
 	// WriteTail writes any required tailing string into the buffer.
-	WriteTail(*bytes.Buffer)
+	WriteTail(*strings.Builder)
 	// Write the separator between two rows.
-	WriteSeparator(*bytes.Buffer)
+	WriteSeparator(*strings.Builder)
 	// Write the row itself.
-	WriteRow(*bytes.Buffer, []sqltypes.Value)
+	WriteRow(*strings.Builder, []sqltypes.Value)
 }
 
 // BaseQueryBuilder partially implements the QueryBuilder interface.
@@ -160,17 +159,17 @@ type BaseQueryBuilder struct {
 }
 
 // WriteHead implements the QueryBuilder interface.
-func (b *BaseQueryBuilder) WriteHead(buffer *bytes.Buffer) {
+func (b *BaseQueryBuilder) WriteHead(buffer *strings.Builder) {
 	buffer.WriteString(b.head)
 }
 
 // WriteTail implements the QueryBuilder interface.
-func (b *BaseQueryBuilder) WriteTail(buffer *bytes.Buffer) {
+func (b *BaseQueryBuilder) WriteTail(buffer *strings.Builder) {
 	buffer.WriteString(b.tail)
 }
 
 // WriteSeparator implements the QueryBuilder interface.
-func (b *BaseQueryBuilder) WriteSeparator(buffer *bytes.Buffer) {
+func (b *BaseQueryBuilder) WriteSeparator(buffer *strings.Builder) {
 	if b.separator == "" {
 		panic("BaseQueryBuilder.WriteSeparator(): separator not defined")
 	}
@@ -194,7 +193,7 @@ func NewInsertsQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefiniti
 }
 
 // WriteRow implements the QueryBuilder interface.
-func (*InsertsQueryBuilder) WriteRow(buffer *bytes.Buffer, row []sqltypes.Value) {
+func (*InsertsQueryBuilder) WriteRow(buffer *strings.Builder, row []sqltypes.Value) {
 	// Example: (0, 10, 'a'), (1, 11, 'b')
 	buffer.WriteByte('(')
 	for i, value := range row {
@@ -237,12 +236,12 @@ func NewUpdatesQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefiniti
 
 // WriteSeparator implements the QueryBuilder interface and overrides
 // the BaseQueryBuilder implementation.
-func (b *UpdatesQueryBuilder) WriteSeparator(buffer *bytes.Buffer) {
+func (b *UpdatesQueryBuilder) WriteSeparator(buffer *strings.Builder) {
 	panic("UpdatesQueryBuilder does not support aggregating multiple rows in one query")
 }
 
 // WriteRow implements the QueryBuilder interface.
-func (b *UpdatesQueryBuilder) WriteRow(buffer *bytes.Buffer, row []sqltypes.Value) {
+func (b *UpdatesQueryBuilder) WriteRow(buffer *strings.Builder, row []sqltypes.Value) {
 	// Example: msg='a' WHERE id=0 AND sub_id=10
 	nonPrimaryOffset := len(b.td.PrimaryKeyColumns)
 	for i, column := range b.nonPrimaryKeyColumns {
@@ -287,7 +286,7 @@ func NewDeletesQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefiniti
 }
 
 // WriteRow implements the QueryBuilder interface.
-func (b *DeletesQueryBuilder) WriteRow(buffer *bytes.Buffer, row []sqltypes.Value) {
+func (b *DeletesQueryBuilder) WriteRow(buffer *strings.Builder, row []sqltypes.Value) {
 	// Example: (id=0 AND sub_id=10) OR (id=1 AND sub_id=11)
 	buffer.WriteByte('(')
 	for i, pkColumn := range b.td.PrimaryKeyColumns {

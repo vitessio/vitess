@@ -38,7 +38,7 @@ func TestFallbackSecurityPolicy(t *testing.T) {
 	require.NoError(t, err)
 
 	// Requesting an unregistered security_policy should fallback to deny-all.
-	clusterInstance.VtTabletExtraArgs = []string{"-security_policy", "bogus"}
+	clusterInstance.VtTabletExtraArgs = []string{"--security_policy", "bogus"}
 	err = clusterInstance.StartVttablet(mTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
 
@@ -93,7 +93,7 @@ func TestDenyAllSecurityPolicy(t *testing.T) {
 	require.NoError(t, err)
 
 	// Requesting a deny-all security_policy.
-	clusterInstance.VtTabletExtraArgs = []string{"-security_policy", "deny-all"}
+	clusterInstance.VtTabletExtraArgs = []string{"--security_policy", "deny-all"}
 	err = clusterInstance.StartVttablet(mTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
 
@@ -125,7 +125,7 @@ func TestReadOnlySecurityPolicy(t *testing.T) {
 	require.NoError(t, err)
 
 	// Requesting a read-only security_policy.
-	clusterInstance.VtTabletExtraArgs = []string{"-security_policy", "read-only"}
+	clusterInstance.VtTabletExtraArgs = []string{"--security_policy", "read-only"}
 	err = clusterInstance.StartVttablet(mTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
 
