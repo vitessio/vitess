@@ -884,7 +884,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2",
+        "JoinColumnIndexes": "L:0,L:1",
         "JoinVars": {
           "o_o_c_id": 3,
           "o_o_d_id": 1,

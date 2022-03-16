@@ -520,7 +520,7 @@ Gen4 error: Column 'col' in field list is ambiguous
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -657,7 +657,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -695,7 +695,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -733,7 +733,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -771,7 +771,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1,-2",
+    "JoinColumnIndexes": "L:0,R:0,L:1",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -809,7 +809,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -847,7 +847,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -885,7 +885,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "JoinVars": {
       "user_id": 0
     },
@@ -926,7 +926,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -1373,7 +1373,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,1",
+        "JoinColumnIndexes": "L:0,R:0",
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -2071,7 +2071,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,-2",
+    "JoinColumnIndexes": "L:0,L:1",
     "TableName": "`user`, user_extra_unsharded",
     "Inputs": [
       {
@@ -2105,7 +2105,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1,2",
+    "JoinColumnIndexes": "R:0,R:1",
     "TableName": "unsharded_`user`, user_extra",
     "Inputs": [
       {
@@ -2160,7 +2160,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "TableName": "dual_`user`",
     "Inputs": [
       {
@@ -2212,7 +2212,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "TableName": "dual_`user`",
     "Inputs": [
       {
@@ -2274,7 +2274,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1",
+        "JoinColumnIndexes": "L:0",
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -2336,7 +2336,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1",
+        "JoinColumnIndexes": "L:0",
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -2406,7 +2406,7 @@ Gen4 plan same as above
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1",
+            "JoinColumnIndexes": "L:0",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -2474,7 +2474,7 @@ Gen4 plan same as above
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1",
+            "JoinColumnIndexes": "L:0",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -2538,7 +2538,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_id": 0
     },
@@ -2678,7 +2678,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,1,-2",
+        "JoinColumnIndexes": "L:0,R:0,L:1",
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -2816,7 +2816,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_col": 0,
       "user_id": 1
@@ -2854,7 +2854,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_extra_col": 1,
       "user_extra_id": 0
@@ -2925,6 +2925,24 @@ Gen4 plan same as above
     "FieldQuery": "select 1 from (select col, count(*) as a from unsharded where 1 != 1 group by col) as f left join unsharded as u on f.col = u.id where 1 != 1",
     "Query": "select 1 from (select col, count(*) as a from unsharded group by col having a \u003e 0 limit 0, 12) as f left join unsharded as u on f.col = u.id",
     "Table": "unsharded"
+  }
+}
+Gen4 plan same as above
+
+"select user.id, trim(leading 'x' from user.name) from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.id, trim(leading 'x' from user.name) from user",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select `user`.id, trim(leading 'x' from `user`.`name`) from `user` where 1 != 1",
+    "Query": "select `user`.id, trim(leading 'x' from `user`.`name`) from `user`",
+    "Table": "`user`"
   }
 }
 Gen4 plan same as above

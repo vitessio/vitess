@@ -27,14 +27,16 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // FindValidEmergencyReparentCandidates will find candidates for an emergency
@@ -148,7 +150,23 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
 	}
 
-	return stopStatus.Before.IoThreadRunning || stopStatus.Before.SqlThreadRunning, nil
+	return stopStatus.Before.IoState == int32(mysql.ReplicationStateRunning) || stopStatus.Before.SqlState == int32(mysql.ReplicationStateRunning), nil
+}
+
+// SetReplicationSource is used to set the replication source on the specified
+// tablet to the current shard primary (if available). It also figures out if
+// the tablet should be sending semi-sync ACKs or not and passes that to the
+// tabletmanager RPC.
+//
+// It does not start the replication forcefully.
+func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, tablet *topodatapb.Tablet) error {
+	shardPrimary, err := topotools.GetShardPrimaryForTablet(ctx, ts, tablet)
+	if err != nil {
+		return nil
+	}
+
+	isSemiSync := IsReplicaSemiSync(shardPrimary.Tablet, tablet)
+	return tmc.SetReplicationSource(ctx, tablet, shardPrimary.Alias, 0, "", false, isSemiSync)
 }
 
 // replicationSnapshot stores the status maps and the tablets that were reachable

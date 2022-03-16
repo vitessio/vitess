@@ -19,4 +19,4 @@
 
 source ./env.sh
 
-vtctlclient MoveTables -tablet_types=primary SwitchTraffic customer.commerce2customer
+vtctlclient MoveTables -- --tablet_types=primary SwitchTraffic customer.commerce2customer

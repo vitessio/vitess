@@ -83,6 +83,15 @@ func (client *gRPCVtctldClient) Backup(ctx context.Context, in *vtctldatapb.Back
 	return client.c.Backup(ctx, in, opts...)
 }
 
+// BackupShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) BackupShard(ctx context.Context, in *vtctldatapb.BackupShardRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_BackupShardClient, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.BackupShard(ctx, in, opts...)
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ChangeTabletType(ctx context.Context, in *vtctldatapb.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	if client.c == nil {
@@ -443,6 +452,15 @@ func (client *gRPCVtctldClient) ReloadSchemaShard(ctx context.Context, in *vtctl
 	return client.c.ReloadSchemaShard(ctx, in, opts...)
 }
 
+// RemoveBackup is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) RemoveBackup(ctx context.Context, in *vtctldatapb.RemoveBackupRequest, opts ...grpc.CallOption) (*vtctldatapb.RemoveBackupResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.RemoveBackup(ctx, in, opts...)
+}
+
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) RemoveKeyspaceCell(ctx context.Context, in *vtctldatapb.RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*vtctldatapb.RemoveKeyspaceCellResponse, error) {
 	if client.c == nil {
@@ -468,6 +486,15 @@ func (client *gRPCVtctldClient) ReparentTablet(ctx context.Context, in *vtctldat
 	}
 
 	return client.c.ReparentTablet(ctx, in, opts...)
+}
+
+// RestoreFromBackup is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) RestoreFromBackup(ctx context.Context, in *vtctldatapb.RestoreFromBackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_RestoreFromBackupClient, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.RestoreFromBackup(ctx, in, opts...)
 }
 
 // RunHealthCheck is part of the vtctlservicepb.VtctldClient interface.
@@ -540,6 +567,24 @@ func (client *gRPCVtctldClient) SleepTablet(ctx context.Context, in *vtctldatapb
 	}
 
 	return client.c.SleepTablet(ctx, in, opts...)
+}
+
+// SourceShardAdd is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) SourceShardAdd(ctx context.Context, in *vtctldatapb.SourceShardAddRequest, opts ...grpc.CallOption) (*vtctldatapb.SourceShardAddResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.SourceShardAdd(ctx, in, opts...)
+}
+
+// SourceShardDelete is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) SourceShardDelete(ctx context.Context, in *vtctldatapb.SourceShardDeleteRequest, opts ...grpc.CallOption) (*vtctldatapb.SourceShardDeleteResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.SourceShardDelete(ctx, in, opts...)
 }
 
 // StartReplication is part of the vtctlservicepb.VtctldClient interface.

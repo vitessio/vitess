@@ -40,9 +40,9 @@ etcdctl --endpoints "http://${ETCD_SERVER}" mkdir /vitess/$cell &
 echo "add $cell CellInfo"
 set +e
 # shellcheck disable=SC2086
-vtctl $TOPOLOGY_FLAGS AddCellInfo \
-  -root /vitess/$cell \
-  -server_address "${ETCD_SERVER}" \
+vtctl $TOPOLOGY_FLAGS AddCellInfo -- \
+  --root /vitess/$cell \
+  --server_address "${ETCD_SERVER}" \
   $cell
 set -e
 

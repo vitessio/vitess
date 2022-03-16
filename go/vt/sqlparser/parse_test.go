@@ -2296,6 +2296,36 @@ var (
 	}, {
 		input:  "create table unused_reserved_keywords (dense_rank bigint, lead VARCHAR(255), percent_rank decimal(3, 0), row TINYINT, rows CHAR(10), constraint PK_project PRIMARY KEY (dense_rank))",
 		output: "create table unused_reserved_keywords (\n\t`dense_rank` bigint,\n\t`lead` VARCHAR(255),\n\t`percent_rank` decimal(3,0),\n\t`row` TINYINT,\n\t`rows` CHAR(10),\n\tconstraint PK_project PRIMARY KEY (`dense_rank`)\n)",
+	}, {
+		input:  "SELECT LTRIM('abc')",
+		output: "select ltrim('abc') from dual",
+	}, {
+		input:  "SELECT RTRIM('abc')",
+		output: "select rtrim('abc') from dual",
+	}, {
+		input:  "SELECT TRIM('  abc  ')",
+		output: "select trim('  abc  ') from dual",
+	}, {
+		input:  "SELECT TRIM('aa' FROM 'aabccaaa')",
+		output: "select trim('aa' from 'aabccaaa') from dual",
+	}, {
+		input:  "SELECT TRIM(LEADING FROM 'aabccaaa')",
+		output: "select trim(leading from 'aabccaaa') from dual",
+	}, {
+		input:  "SELECT TRIM(TRAILING FROM 'abca')",
+		output: "select trim(trailing from 'abca') from dual",
+	}, {
+		input:  "SELECT TRIM(BOTH FROM 'abc')",
+		output: "select trim(both from 'abc') from dual",
+	}, {
+		input:  "SELECT TRIM(LEADING 'a' FROM 'abc')",
+		output: "select trim(leading 'a' from 'abc') from dual",
+	}, {
+		input:  "SELECT TRIM(TRAILING 'a' FROM 'abc')",
+		output: "select trim(trailing 'a' from 'abc') from dual",
+	}, {
+		input:  "SELECT TRIM(BOTH 'a' FROM 'abc')",
+		output: "select trim(both 'a' from 'abc') from dual",
 	}}
 )
 
@@ -2724,8 +2754,8 @@ func TestKeywords(t *testing.T) {
 		input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
 		output: "select /* share and mode as cols */ `share`, `mode` from t where `share` = 'foo'",
 	}, {
-		input:  "select /* unused keywords as cols */ `write`, varying from t where trailing = 'foo'",
-		output: "select /* unused keywords as cols */ `write`, `varying` from t where `trailing` = 'foo'",
+		input:  "select /* unused keywords as cols */ `write`, varying from t where `trailing` = 'foo' and `leading` = 'foo' and `both` = 'foo'",
+		output: "select /* unused keywords as cols */ `write`, `varying` from t where `trailing` = 'foo' and `leading` = 'foo' and `both` = 'foo'",
 	}, {
 		input:  "select status from t",
 		output: "select `status` from t",

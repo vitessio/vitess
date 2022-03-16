@@ -9954,6 +9954,112 @@ export namespace topodata {
         }
     }
 
+    /** Properties of a ShardReplicationError. */
+    interface IShardReplicationError {
+
+        /** ShardReplicationError type */
+        type?: (topodata.ShardReplicationError.Type|null);
+
+        /** ShardReplicationError tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+    }
+
+    /** Represents a ShardReplicationError. */
+    class ShardReplicationError implements IShardReplicationError {
+
+        /**
+         * Constructs a new ShardReplicationError.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IShardReplicationError);
+
+        /** ShardReplicationError type. */
+        public type: topodata.ShardReplicationError.Type;
+
+        /** ShardReplicationError tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /**
+         * Creates a new ShardReplicationError instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardReplicationError instance
+         */
+        public static create(properties?: topodata.IShardReplicationError): topodata.ShardReplicationError;
+
+        /**
+         * Encodes the specified ShardReplicationError message. Does not implicitly {@link topodata.ShardReplicationError.verify|verify} messages.
+         * @param message ShardReplicationError message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IShardReplicationError, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardReplicationError message, length delimited. Does not implicitly {@link topodata.ShardReplicationError.verify|verify} messages.
+         * @param message ShardReplicationError message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IShardReplicationError, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardReplicationError message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShardReplicationError
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardReplicationError;
+
+        /**
+         * Decodes a ShardReplicationError message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShardReplicationError
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardReplicationError;
+
+        /**
+         * Verifies a ShardReplicationError message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardReplicationError message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardReplicationError
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ShardReplicationError;
+
+        /**
+         * Creates a plain object from a ShardReplicationError message. Also converts values to other types if specified.
+         * @param message ShardReplicationError
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ShardReplicationError, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardReplicationError to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    namespace ShardReplicationError {
+
+        /** Type enum. */
+        enum Type {
+            UNKNOWN = 0,
+            NOT_FOUND = 1,
+            TOPOLOGY_MISMATCH = 2
+        }
+    }
+
     /** Properties of a ShardReference. */
     interface IShardReference {
 
@@ -20836,6 +20942,9 @@ export namespace query {
 
         /** QueryResult rows */
         rows?: (query.IRow[]|null);
+
+        /** QueryResult info */
+        info?: (string|null);
     }
 
     /** Represents a QueryResult. */
@@ -20858,6 +20967,9 @@ export namespace query {
 
         /** QueryResult rows. */
         public rows: query.IRow[];
+
+        /** QueryResult info. */
+        public info: string;
 
         /**
          * Creates a new QueryResult instance using the specified properties.
@@ -26748,12 +26860,6 @@ export namespace replicationdata {
         /** Status position */
         position?: (string|null);
 
-        /** Status io_thread_running */
-        io_thread_running?: (boolean|null);
-
-        /** Status sql_thread_running */
-        sql_thread_running?: (boolean|null);
-
         /** Status replication_lag_seconds */
         replication_lag_seconds?: (number|null);
 
@@ -26780,6 +26886,18 @@ export namespace replicationdata {
 
         /** Status source_uuid */
         source_uuid?: (string|null);
+
+        /** Status io_state */
+        io_state?: (number|null);
+
+        /** Status last_io_error */
+        last_io_error?: (string|null);
+
+        /** Status sql_state */
+        sql_state?: (number|null);
+
+        /** Status last_sql_error */
+        last_sql_error?: (string|null);
     }
 
     /** Represents a Status. */
@@ -26793,12 +26911,6 @@ export namespace replicationdata {
 
         /** Status position. */
         public position: string;
-
-        /** Status io_thread_running. */
-        public io_thread_running: boolean;
-
-        /** Status sql_thread_running. */
-        public sql_thread_running: boolean;
 
         /** Status replication_lag_seconds. */
         public replication_lag_seconds: number;
@@ -26826,6 +26938,18 @@ export namespace replicationdata {
 
         /** Status source_uuid. */
         public source_uuid: string;
+
+        /** Status io_state. */
+        public io_state: number;
+
+        /** Status last_io_error. */
+        public last_io_error: string;
+
+        /** Status sql_state. */
+        public sql_state: number;
+
+        /** Status last_sql_error. */
+        public last_sql_error: string;
 
         /**
          * Creates a new Status instance using the specified properties.
@@ -30051,8 +30175,8 @@ export namespace vtctldata {
         /** ApplySchemaRequest uuid_list */
         uuid_list?: (string[]|null);
 
-        /** ApplySchemaRequest request_context */
-        request_context?: (string|null);
+        /** ApplySchemaRequest migration_context */
+        migration_context?: (string|null);
 
         /** ApplySchemaRequest wait_replicas_timeout */
         wait_replicas_timeout?: (vttime.IDuration|null);
@@ -30088,8 +30212,8 @@ export namespace vtctldata {
         /** ApplySchemaRequest uuid_list. */
         public uuid_list: string[];
 
-        /** ApplySchemaRequest request_context. */
-        public request_context: string;
+        /** ApplySchemaRequest migration_context. */
+        public migration_context: string;
 
         /** ApplySchemaRequest wait_replicas_timeout. */
         public wait_replicas_timeout?: (vttime.IDuration|null);
@@ -30676,6 +30800,114 @@ export namespace vtctldata {
 
         /**
          * Converts this BackupResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a BackupShardRequest. */
+    interface IBackupShardRequest {
+
+        /** BackupShardRequest keyspace */
+        keyspace?: (string|null);
+
+        /** BackupShardRequest shard */
+        shard?: (string|null);
+
+        /** BackupShardRequest allow_primary */
+        allow_primary?: (boolean|null);
+
+        /** BackupShardRequest concurrency */
+        concurrency?: (number|Long|null);
+    }
+
+    /** Represents a BackupShardRequest. */
+    class BackupShardRequest implements IBackupShardRequest {
+
+        /**
+         * Constructs a new BackupShardRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IBackupShardRequest);
+
+        /** BackupShardRequest keyspace. */
+        public keyspace: string;
+
+        /** BackupShardRequest shard. */
+        public shard: string;
+
+        /** BackupShardRequest allow_primary. */
+        public allow_primary: boolean;
+
+        /** BackupShardRequest concurrency. */
+        public concurrency: (number|Long);
+
+        /**
+         * Creates a new BackupShardRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BackupShardRequest instance
+         */
+        public static create(properties?: vtctldata.IBackupShardRequest): vtctldata.BackupShardRequest;
+
+        /**
+         * Encodes the specified BackupShardRequest message. Does not implicitly {@link vtctldata.BackupShardRequest.verify|verify} messages.
+         * @param message BackupShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IBackupShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BackupShardRequest message, length delimited. Does not implicitly {@link vtctldata.BackupShardRequest.verify|verify} messages.
+         * @param message BackupShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IBackupShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BackupShardRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BackupShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.BackupShardRequest;
+
+        /**
+         * Decodes a BackupShardRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BackupShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.BackupShardRequest;
+
+        /**
+         * Verifies a BackupShardRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BackupShardRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BackupShardRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.BackupShardRequest;
+
+        /**
+         * Creates a plain object from a BackupShardRequest message. Also converts values to other types if specified.
+         * @param message BackupShardRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.BackupShardRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BackupShardRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -31685,6 +31917,9 @@ export namespace vtctldata {
 
         /** DeleteKeyspaceRequest recursive */
         recursive?: (boolean|null);
+
+        /** DeleteKeyspaceRequest force */
+        force?: (boolean|null);
     }
 
     /** Represents a DeleteKeyspaceRequest. */
@@ -31701,6 +31936,9 @@ export namespace vtctldata {
 
         /** DeleteKeyspaceRequest recursive. */
         public recursive: boolean;
+
+        /** DeleteKeyspaceRequest force. */
+        public force: boolean;
 
         /**
          * Creates a new DeleteKeyspaceRequest instance using the specified properties.
@@ -31868,6 +32106,9 @@ export namespace vtctldata {
 
         /** DeleteShardsRequest even_if_serving */
         even_if_serving?: (boolean|null);
+
+        /** DeleteShardsRequest force */
+        force?: (boolean|null);
     }
 
     /** Represents a DeleteShardsRequest. */
@@ -31887,6 +32128,9 @@ export namespace vtctldata {
 
         /** DeleteShardsRequest even_if_serving. */
         public even_if_serving: boolean;
+
+        /** DeleteShardsRequest force. */
+        public force: boolean;
 
         /**
          * Creates a new DeleteShardsRequest instance using the specified properties.
@@ -35946,6 +36190,186 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a GetVersionRequest. */
+    interface IGetVersionRequest {
+
+        /** GetVersionRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+    }
+
+    /** Represents a GetVersionRequest. */
+    class GetVersionRequest implements IGetVersionRequest {
+
+        /**
+         * Constructs a new GetVersionRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetVersionRequest);
+
+        /** GetVersionRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /**
+         * Creates a new GetVersionRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetVersionRequest instance
+         */
+        public static create(properties?: vtctldata.IGetVersionRequest): vtctldata.GetVersionRequest;
+
+        /**
+         * Encodes the specified GetVersionRequest message. Does not implicitly {@link vtctldata.GetVersionRequest.verify|verify} messages.
+         * @param message GetVersionRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetVersionRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetVersionRequest message, length delimited. Does not implicitly {@link vtctldata.GetVersionRequest.verify|verify} messages.
+         * @param message GetVersionRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetVersionRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetVersionRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetVersionRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetVersionRequest;
+
+        /**
+         * Decodes a GetVersionRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetVersionRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetVersionRequest;
+
+        /**
+         * Verifies a GetVersionRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetVersionRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetVersionRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetVersionRequest;
+
+        /**
+         * Creates a plain object from a GetVersionRequest message. Also converts values to other types if specified.
+         * @param message GetVersionRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetVersionRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetVersionRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetVersionResponse. */
+    interface IGetVersionResponse {
+
+        /** GetVersionResponse version */
+        version?: (string|null);
+    }
+
+    /** Represents a GetVersionResponse. */
+    class GetVersionResponse implements IGetVersionResponse {
+
+        /**
+         * Constructs a new GetVersionResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetVersionResponse);
+
+        /** GetVersionResponse version. */
+        public version: string;
+
+        /**
+         * Creates a new GetVersionResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetVersionResponse instance
+         */
+        public static create(properties?: vtctldata.IGetVersionResponse): vtctldata.GetVersionResponse;
+
+        /**
+         * Encodes the specified GetVersionResponse message. Does not implicitly {@link vtctldata.GetVersionResponse.verify|verify} messages.
+         * @param message GetVersionResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetVersionResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetVersionResponse message, length delimited. Does not implicitly {@link vtctldata.GetVersionResponse.verify|verify} messages.
+         * @param message GetVersionResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetVersionResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetVersionResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetVersionResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetVersionResponse;
+
+        /**
+         * Decodes a GetVersionResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetVersionResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetVersionResponse;
+
+        /**
+         * Verifies a GetVersionResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetVersionResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetVersionResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetVersionResponse;
+
+        /**
+         * Creates a plain object from a GetVersionResponse message. Also converts values to other types if specified.
+         * @param message GetVersionResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetVersionResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetVersionResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a GetVSchemaResponse. */
     interface IGetVSchemaResponse {
 
@@ -38124,6 +38548,192 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a RemoveBackupRequest. */
+    interface IRemoveBackupRequest {
+
+        /** RemoveBackupRequest keyspace */
+        keyspace?: (string|null);
+
+        /** RemoveBackupRequest shard */
+        shard?: (string|null);
+
+        /** RemoveBackupRequest name */
+        name?: (string|null);
+    }
+
+    /** Represents a RemoveBackupRequest. */
+    class RemoveBackupRequest implements IRemoveBackupRequest {
+
+        /**
+         * Constructs a new RemoveBackupRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IRemoveBackupRequest);
+
+        /** RemoveBackupRequest keyspace. */
+        public keyspace: string;
+
+        /** RemoveBackupRequest shard. */
+        public shard: string;
+
+        /** RemoveBackupRequest name. */
+        public name: string;
+
+        /**
+         * Creates a new RemoveBackupRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RemoveBackupRequest instance
+         */
+        public static create(properties?: vtctldata.IRemoveBackupRequest): vtctldata.RemoveBackupRequest;
+
+        /**
+         * Encodes the specified RemoveBackupRequest message. Does not implicitly {@link vtctldata.RemoveBackupRequest.verify|verify} messages.
+         * @param message RemoveBackupRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IRemoveBackupRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RemoveBackupRequest message, length delimited. Does not implicitly {@link vtctldata.RemoveBackupRequest.verify|verify} messages.
+         * @param message RemoveBackupRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IRemoveBackupRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RemoveBackupRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RemoveBackupRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.RemoveBackupRequest;
+
+        /**
+         * Decodes a RemoveBackupRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RemoveBackupRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.RemoveBackupRequest;
+
+        /**
+         * Verifies a RemoveBackupRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RemoveBackupRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RemoveBackupRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.RemoveBackupRequest;
+
+        /**
+         * Creates a plain object from a RemoveBackupRequest message. Also converts values to other types if specified.
+         * @param message RemoveBackupRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.RemoveBackupRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RemoveBackupRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RemoveBackupResponse. */
+    interface IRemoveBackupResponse {
+    }
+
+    /** Represents a RemoveBackupResponse. */
+    class RemoveBackupResponse implements IRemoveBackupResponse {
+
+        /**
+         * Constructs a new RemoveBackupResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IRemoveBackupResponse);
+
+        /**
+         * Creates a new RemoveBackupResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RemoveBackupResponse instance
+         */
+        public static create(properties?: vtctldata.IRemoveBackupResponse): vtctldata.RemoveBackupResponse;
+
+        /**
+         * Encodes the specified RemoveBackupResponse message. Does not implicitly {@link vtctldata.RemoveBackupResponse.verify|verify} messages.
+         * @param message RemoveBackupResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IRemoveBackupResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RemoveBackupResponse message, length delimited. Does not implicitly {@link vtctldata.RemoveBackupResponse.verify|verify} messages.
+         * @param message RemoveBackupResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IRemoveBackupResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RemoveBackupResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RemoveBackupResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.RemoveBackupResponse;
+
+        /**
+         * Decodes a RemoveBackupResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RemoveBackupResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.RemoveBackupResponse;
+
+        /**
+         * Verifies a RemoveBackupResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RemoveBackupResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RemoveBackupResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.RemoveBackupResponse;
+
+        /**
+         * Creates a plain object from a RemoveBackupResponse message. Also converts values to other types if specified.
+         * @param message RemoveBackupResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.RemoveBackupResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RemoveBackupResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a RemoveKeyspaceCellRequest. */
     interface IRemoveKeyspaceCellRequest {
 
@@ -38701,6 +39311,210 @@ export namespace vtctldata {
 
         /**
          * Converts this ReparentTabletResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RestoreFromBackupRequest. */
+    interface IRestoreFromBackupRequest {
+
+        /** RestoreFromBackupRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** RestoreFromBackupRequest backup_time */
+        backup_time?: (vttime.ITime|null);
+    }
+
+    /** Represents a RestoreFromBackupRequest. */
+    class RestoreFromBackupRequest implements IRestoreFromBackupRequest {
+
+        /**
+         * Constructs a new RestoreFromBackupRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IRestoreFromBackupRequest);
+
+        /** RestoreFromBackupRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** RestoreFromBackupRequest backup_time. */
+        public backup_time?: (vttime.ITime|null);
+
+        /**
+         * Creates a new RestoreFromBackupRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RestoreFromBackupRequest instance
+         */
+        public static create(properties?: vtctldata.IRestoreFromBackupRequest): vtctldata.RestoreFromBackupRequest;
+
+        /**
+         * Encodes the specified RestoreFromBackupRequest message. Does not implicitly {@link vtctldata.RestoreFromBackupRequest.verify|verify} messages.
+         * @param message RestoreFromBackupRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IRestoreFromBackupRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RestoreFromBackupRequest message, length delimited. Does not implicitly {@link vtctldata.RestoreFromBackupRequest.verify|verify} messages.
+         * @param message RestoreFromBackupRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IRestoreFromBackupRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RestoreFromBackupRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RestoreFromBackupRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.RestoreFromBackupRequest;
+
+        /**
+         * Decodes a RestoreFromBackupRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RestoreFromBackupRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.RestoreFromBackupRequest;
+
+        /**
+         * Verifies a RestoreFromBackupRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RestoreFromBackupRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RestoreFromBackupRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.RestoreFromBackupRequest;
+
+        /**
+         * Creates a plain object from a RestoreFromBackupRequest message. Also converts values to other types if specified.
+         * @param message RestoreFromBackupRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.RestoreFromBackupRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RestoreFromBackupRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RestoreFromBackupResponse. */
+    interface IRestoreFromBackupResponse {
+
+        /** RestoreFromBackupResponse tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** RestoreFromBackupResponse keyspace */
+        keyspace?: (string|null);
+
+        /** RestoreFromBackupResponse shard */
+        shard?: (string|null);
+
+        /** RestoreFromBackupResponse event */
+        event?: (logutil.IEvent|null);
+    }
+
+    /** Represents a RestoreFromBackupResponse. */
+    class RestoreFromBackupResponse implements IRestoreFromBackupResponse {
+
+        /**
+         * Constructs a new RestoreFromBackupResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IRestoreFromBackupResponse);
+
+        /** RestoreFromBackupResponse tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** RestoreFromBackupResponse keyspace. */
+        public keyspace: string;
+
+        /** RestoreFromBackupResponse shard. */
+        public shard: string;
+
+        /** RestoreFromBackupResponse event. */
+        public event?: (logutil.IEvent|null);
+
+        /**
+         * Creates a new RestoreFromBackupResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RestoreFromBackupResponse instance
+         */
+        public static create(properties?: vtctldata.IRestoreFromBackupResponse): vtctldata.RestoreFromBackupResponse;
+
+        /**
+         * Encodes the specified RestoreFromBackupResponse message. Does not implicitly {@link vtctldata.RestoreFromBackupResponse.verify|verify} messages.
+         * @param message RestoreFromBackupResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IRestoreFromBackupResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RestoreFromBackupResponse message, length delimited. Does not implicitly {@link vtctldata.RestoreFromBackupResponse.verify|verify} messages.
+         * @param message RestoreFromBackupResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IRestoreFromBackupResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RestoreFromBackupResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RestoreFromBackupResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.RestoreFromBackupResponse;
+
+        /**
+         * Decodes a RestoreFromBackupResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RestoreFromBackupResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.RestoreFromBackupResponse;
+
+        /**
+         * Verifies a RestoreFromBackupResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RestoreFromBackupResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RestoreFromBackupResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.RestoreFromBackupResponse;
+
+        /**
+         * Creates a plain object from a RestoreFromBackupResponse message. Also converts values to other types if specified.
+         * @param message RestoreFromBackupResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.RestoreFromBackupResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RestoreFromBackupResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -40237,6 +41051,414 @@ export namespace vtctldata {
 
         /**
          * Converts this SleepTabletResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SourceShardAddRequest. */
+    interface ISourceShardAddRequest {
+
+        /** SourceShardAddRequest keyspace */
+        keyspace?: (string|null);
+
+        /** SourceShardAddRequest shard */
+        shard?: (string|null);
+
+        /** SourceShardAddRequest uid */
+        uid?: (number|null);
+
+        /** SourceShardAddRequest source_keyspace */
+        source_keyspace?: (string|null);
+
+        /** SourceShardAddRequest source_shard */
+        source_shard?: (string|null);
+
+        /** SourceShardAddRequest key_range */
+        key_range?: (topodata.IKeyRange|null);
+
+        /** SourceShardAddRequest tables */
+        tables?: (string[]|null);
+    }
+
+    /** Represents a SourceShardAddRequest. */
+    class SourceShardAddRequest implements ISourceShardAddRequest {
+
+        /**
+         * Constructs a new SourceShardAddRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISourceShardAddRequest);
+
+        /** SourceShardAddRequest keyspace. */
+        public keyspace: string;
+
+        /** SourceShardAddRequest shard. */
+        public shard: string;
+
+        /** SourceShardAddRequest uid. */
+        public uid: number;
+
+        /** SourceShardAddRequest source_keyspace. */
+        public source_keyspace: string;
+
+        /** SourceShardAddRequest source_shard. */
+        public source_shard: string;
+
+        /** SourceShardAddRequest key_range. */
+        public key_range?: (topodata.IKeyRange|null);
+
+        /** SourceShardAddRequest tables. */
+        public tables: string[];
+
+        /**
+         * Creates a new SourceShardAddRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SourceShardAddRequest instance
+         */
+        public static create(properties?: vtctldata.ISourceShardAddRequest): vtctldata.SourceShardAddRequest;
+
+        /**
+         * Encodes the specified SourceShardAddRequest message. Does not implicitly {@link vtctldata.SourceShardAddRequest.verify|verify} messages.
+         * @param message SourceShardAddRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISourceShardAddRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SourceShardAddRequest message, length delimited. Does not implicitly {@link vtctldata.SourceShardAddRequest.verify|verify} messages.
+         * @param message SourceShardAddRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISourceShardAddRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SourceShardAddRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SourceShardAddRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SourceShardAddRequest;
+
+        /**
+         * Decodes a SourceShardAddRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SourceShardAddRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SourceShardAddRequest;
+
+        /**
+         * Verifies a SourceShardAddRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SourceShardAddRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SourceShardAddRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SourceShardAddRequest;
+
+        /**
+         * Creates a plain object from a SourceShardAddRequest message. Also converts values to other types if specified.
+         * @param message SourceShardAddRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SourceShardAddRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SourceShardAddRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SourceShardAddResponse. */
+    interface ISourceShardAddResponse {
+
+        /** SourceShardAddResponse shard */
+        shard?: (topodata.IShard|null);
+    }
+
+    /** Represents a SourceShardAddResponse. */
+    class SourceShardAddResponse implements ISourceShardAddResponse {
+
+        /**
+         * Constructs a new SourceShardAddResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISourceShardAddResponse);
+
+        /** SourceShardAddResponse shard. */
+        public shard?: (topodata.IShard|null);
+
+        /**
+         * Creates a new SourceShardAddResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SourceShardAddResponse instance
+         */
+        public static create(properties?: vtctldata.ISourceShardAddResponse): vtctldata.SourceShardAddResponse;
+
+        /**
+         * Encodes the specified SourceShardAddResponse message. Does not implicitly {@link vtctldata.SourceShardAddResponse.verify|verify} messages.
+         * @param message SourceShardAddResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISourceShardAddResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SourceShardAddResponse message, length delimited. Does not implicitly {@link vtctldata.SourceShardAddResponse.verify|verify} messages.
+         * @param message SourceShardAddResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISourceShardAddResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SourceShardAddResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SourceShardAddResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SourceShardAddResponse;
+
+        /**
+         * Decodes a SourceShardAddResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SourceShardAddResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SourceShardAddResponse;
+
+        /**
+         * Verifies a SourceShardAddResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SourceShardAddResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SourceShardAddResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SourceShardAddResponse;
+
+        /**
+         * Creates a plain object from a SourceShardAddResponse message. Also converts values to other types if specified.
+         * @param message SourceShardAddResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SourceShardAddResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SourceShardAddResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SourceShardDeleteRequest. */
+    interface ISourceShardDeleteRequest {
+
+        /** SourceShardDeleteRequest keyspace */
+        keyspace?: (string|null);
+
+        /** SourceShardDeleteRequest shard */
+        shard?: (string|null);
+
+        /** SourceShardDeleteRequest uid */
+        uid?: (number|null);
+    }
+
+    /** Represents a SourceShardDeleteRequest. */
+    class SourceShardDeleteRequest implements ISourceShardDeleteRequest {
+
+        /**
+         * Constructs a new SourceShardDeleteRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISourceShardDeleteRequest);
+
+        /** SourceShardDeleteRequest keyspace. */
+        public keyspace: string;
+
+        /** SourceShardDeleteRequest shard. */
+        public shard: string;
+
+        /** SourceShardDeleteRequest uid. */
+        public uid: number;
+
+        /**
+         * Creates a new SourceShardDeleteRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SourceShardDeleteRequest instance
+         */
+        public static create(properties?: vtctldata.ISourceShardDeleteRequest): vtctldata.SourceShardDeleteRequest;
+
+        /**
+         * Encodes the specified SourceShardDeleteRequest message. Does not implicitly {@link vtctldata.SourceShardDeleteRequest.verify|verify} messages.
+         * @param message SourceShardDeleteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISourceShardDeleteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SourceShardDeleteRequest message, length delimited. Does not implicitly {@link vtctldata.SourceShardDeleteRequest.verify|verify} messages.
+         * @param message SourceShardDeleteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISourceShardDeleteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SourceShardDeleteRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SourceShardDeleteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SourceShardDeleteRequest;
+
+        /**
+         * Decodes a SourceShardDeleteRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SourceShardDeleteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SourceShardDeleteRequest;
+
+        /**
+         * Verifies a SourceShardDeleteRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SourceShardDeleteRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SourceShardDeleteRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SourceShardDeleteRequest;
+
+        /**
+         * Creates a plain object from a SourceShardDeleteRequest message. Also converts values to other types if specified.
+         * @param message SourceShardDeleteRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SourceShardDeleteRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SourceShardDeleteRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SourceShardDeleteResponse. */
+    interface ISourceShardDeleteResponse {
+
+        /** SourceShardDeleteResponse shard */
+        shard?: (topodata.IShard|null);
+    }
+
+    /** Represents a SourceShardDeleteResponse. */
+    class SourceShardDeleteResponse implements ISourceShardDeleteResponse {
+
+        /**
+         * Constructs a new SourceShardDeleteResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISourceShardDeleteResponse);
+
+        /** SourceShardDeleteResponse shard. */
+        public shard?: (topodata.IShard|null);
+
+        /**
+         * Creates a new SourceShardDeleteResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SourceShardDeleteResponse instance
+         */
+        public static create(properties?: vtctldata.ISourceShardDeleteResponse): vtctldata.SourceShardDeleteResponse;
+
+        /**
+         * Encodes the specified SourceShardDeleteResponse message. Does not implicitly {@link vtctldata.SourceShardDeleteResponse.verify|verify} messages.
+         * @param message SourceShardDeleteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISourceShardDeleteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SourceShardDeleteResponse message, length delimited. Does not implicitly {@link vtctldata.SourceShardDeleteResponse.verify|verify} messages.
+         * @param message SourceShardDeleteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISourceShardDeleteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SourceShardDeleteResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SourceShardDeleteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SourceShardDeleteResponse;
+
+        /**
+         * Decodes a SourceShardDeleteResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SourceShardDeleteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SourceShardDeleteResponse;
+
+        /**
+         * Verifies a SourceShardDeleteResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SourceShardDeleteResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SourceShardDeleteResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SourceShardDeleteResponse;
+
+        /**
+         * Creates a plain object from a SourceShardDeleteResponse message. Also converts values to other types if specified.
+         * @param message SourceShardDeleteResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SourceShardDeleteResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SourceShardDeleteResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -42133,6 +43355,210 @@ export namespace vtctldata {
 
         /**
          * Converts this ValidateVersionKeyspaceResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ValidateVSchemaRequest. */
+    interface IValidateVSchemaRequest {
+
+        /** ValidateVSchemaRequest keyspace */
+        keyspace?: (string|null);
+
+        /** ValidateVSchemaRequest shards */
+        shards?: (string[]|null);
+
+        /** ValidateVSchemaRequest exclude_tables */
+        exclude_tables?: (string[]|null);
+
+        /** ValidateVSchemaRequest include_views */
+        include_views?: (boolean|null);
+    }
+
+    /** Represents a ValidateVSchemaRequest. */
+    class ValidateVSchemaRequest implements IValidateVSchemaRequest {
+
+        /**
+         * Constructs a new ValidateVSchemaRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IValidateVSchemaRequest);
+
+        /** ValidateVSchemaRequest keyspace. */
+        public keyspace: string;
+
+        /** ValidateVSchemaRequest shards. */
+        public shards: string[];
+
+        /** ValidateVSchemaRequest exclude_tables. */
+        public exclude_tables: string[];
+
+        /** ValidateVSchemaRequest include_views. */
+        public include_views: boolean;
+
+        /**
+         * Creates a new ValidateVSchemaRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ValidateVSchemaRequest instance
+         */
+        public static create(properties?: vtctldata.IValidateVSchemaRequest): vtctldata.ValidateVSchemaRequest;
+
+        /**
+         * Encodes the specified ValidateVSchemaRequest message. Does not implicitly {@link vtctldata.ValidateVSchemaRequest.verify|verify} messages.
+         * @param message ValidateVSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IValidateVSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ValidateVSchemaRequest message, length delimited. Does not implicitly {@link vtctldata.ValidateVSchemaRequest.verify|verify} messages.
+         * @param message ValidateVSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IValidateVSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ValidateVSchemaRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ValidateVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ValidateVSchemaRequest;
+
+        /**
+         * Decodes a ValidateVSchemaRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ValidateVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ValidateVSchemaRequest;
+
+        /**
+         * Verifies a ValidateVSchemaRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ValidateVSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ValidateVSchemaRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ValidateVSchemaRequest;
+
+        /**
+         * Creates a plain object from a ValidateVSchemaRequest message. Also converts values to other types if specified.
+         * @param message ValidateVSchemaRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ValidateVSchemaRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ValidateVSchemaRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ValidateVSchemaResponse. */
+    interface IValidateVSchemaResponse {
+
+        /** ValidateVSchemaResponse results */
+        results?: (string[]|null);
+
+        /** ValidateVSchemaResponse results_by_shard */
+        results_by_shard?: ({ [k: string]: vtctldata.IValidateShardResponse }|null);
+    }
+
+    /** Represents a ValidateVSchemaResponse. */
+    class ValidateVSchemaResponse implements IValidateVSchemaResponse {
+
+        /**
+         * Constructs a new ValidateVSchemaResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IValidateVSchemaResponse);
+
+        /** ValidateVSchemaResponse results. */
+        public results: string[];
+
+        /** ValidateVSchemaResponse results_by_shard. */
+        public results_by_shard: { [k: string]: vtctldata.IValidateShardResponse };
+
+        /**
+         * Creates a new ValidateVSchemaResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ValidateVSchemaResponse instance
+         */
+        public static create(properties?: vtctldata.IValidateVSchemaResponse): vtctldata.ValidateVSchemaResponse;
+
+        /**
+         * Encodes the specified ValidateVSchemaResponse message. Does not implicitly {@link vtctldata.ValidateVSchemaResponse.verify|verify} messages.
+         * @param message ValidateVSchemaResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IValidateVSchemaResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ValidateVSchemaResponse message, length delimited. Does not implicitly {@link vtctldata.ValidateVSchemaResponse.verify|verify} messages.
+         * @param message ValidateVSchemaResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IValidateVSchemaResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ValidateVSchemaResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ValidateVSchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ValidateVSchemaResponse;
+
+        /**
+         * Decodes a ValidateVSchemaResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ValidateVSchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ValidateVSchemaResponse;
+
+        /**
+         * Verifies a ValidateVSchemaResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ValidateVSchemaResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ValidateVSchemaResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ValidateVSchemaResponse;
+
+        /**
+         * Creates a plain object from a ValidateVSchemaResponse message. Also converts values to other types if specified.
+         * @param message ValidateVSchemaResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ValidateVSchemaResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ValidateVSchemaResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

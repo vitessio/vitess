@@ -48,7 +48,7 @@ var (
 	normalize          = flag.Bool("normalize", false, "Whether to enable vtgate normalization")
 	outputMode         = flag.String("output-mode", "text", "Output in human-friendly text or json")
 	dbName             = flag.String("dbname", "", "Optional database target to override normal routing")
-	plannerVersionStr  = flag.String("planner-version", "V3", "Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4")
+	plannerVersionStr  = flag.String("planner-version", "gen4", "Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4")
 
 	// vtexplainFlags lists all the flags that should show in usage
 	vtexplainFlags = []string{

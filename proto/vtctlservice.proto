@@ -50,6 +50,8 @@ service Vtctld {
   // Backup uses the BackupEngine and BackupStorage services on the specified
   // tablet to create and store a new backup.
   rpc Backup(vtctldata.BackupRequest) returns (stream vtctldata.BackupResponse) {};
+  // BackupShard chooses a tablet in the shard and uses it to create a backup.
+  rpc BackupShard(vtctldata.BackupShardRequest) returns (stream vtctldata.BackupResponse) {};
   // ChangeTabletType changes the db type for the specified tablet, if possible.
   // This is used primarily to arrange replicas, and it will not convert a
   // primary. For that, use InitShardPrimary.
@@ -172,6 +174,8 @@ service Vtctld {
   // on a best-effort basis, and log warnings for any tablets that fail to
   // reload within the context deadline.
   rpc ReloadSchemaShard(vtctldata.ReloadSchemaShardRequest) returns (vtctldata.ReloadSchemaShardResponse) {};
+  // RemoveBackup removes a backup from the BackupStorage used by vtctld.
+  rpc RemoveBackup(vtctldata.RemoveBackupRequest) returns (vtctldata.RemoveBackupResponse) {};
   // RemoveKeyspaceCell removes the specified cell from the Cells list for all
   // shards in the specified keyspace (by calling RemoveShardCell on every
   // shard). It also removes the SrvKeyspace for that keyspace in that cell.
@@ -183,6 +187,8 @@ service Vtctld {
   // only works if the current replica position matches the last known reparent
   // action.
   rpc ReparentTablet(vtctldata.ReparentTabletRequest) returns (vtctldata.ReparentTabletResponse) {};
+  // RestoreFromBackup stops mysqld for the given tablet and restores a backup.
+  rpc RestoreFromBackup(vtctldata.RestoreFromBackupRequest) returns (stream vtctldata.RestoreFromBackupResponse) {};
   // RunHealthCheck runs a healthcheck on the remote tablet.
   rpc RunHealthCheck(vtctldata.RunHealthCheckRequest) returns (vtctldata.RunHealthCheckResponse) {};
   // SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
@@ -217,6 +223,16 @@ service Vtctld {
   //
   // This is typically used for testing.
   rpc SleepTablet(vtctldata.SleepTabletRequest) returns (vtctldata.SleepTabletResponse) {};
+  // SourceShardAdd adds the SourceShard record with the provided index. This
+  // should be used only as an emergency function.
+  //
+  // It does not call RefreshState for the shard primary.
+  rpc SourceShardAdd(vtctldata.SourceShardAddRequest) returns (vtctldata.SourceShardAddResponse) {};
+  // SourceShardDelete deletes the SourceShard record with the provided index.
+  // This should be used only as an emergency cleanup function.
+  //
+  // It does not call RefreshState for the shard primary.
+  rpc SourceShardDelete(vtctldata.SourceShardDeleteRequest) returns (vtctldata.SourceShardDeleteResponse) {};
   // StartReplication starts replication on the specified tablet.
   rpc StartReplication(vtctldata.StartReplicationRequest) returns (vtctldata.StartReplicationResponse) {};
   // StopReplication stops replication on the specified tablet.
