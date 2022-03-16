@@ -2457,12 +2457,19 @@ func TestValid(t *testing.T) {
 	}
 }
 
-// TODO: delete me
-func TestValid1(t *testing.T) {
+func TestParsingColumnsStartingWithNumbers(t *testing.T) {
 	tests := []parseTest{
 		{
-			input: "create table t (1a int)",
-			output: "create table t (\n\t1a int null\n)",
+			input:  "create table t (1a int)",
+			output: "create table t (\n\t`1a` int\n)",
+		},
+		{
+			input:  "create table t (1a int primary key, 2b int)",
+			output: "create table t (\n\t`1a` int primary key,\n\t`2b` int\n)",
+		},
+		{
+			input:  "alter table t add column 1a int",
+			output: "alter table t add column (\n\t`1a` int\n)",
 		},
 	}
 	for _, tcase := range tests {

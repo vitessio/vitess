@@ -635,8 +635,6 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 
 	tkn.skipBlank()
 	switch ch := tkn.lastChar; {
-	// TODO: if letter or number, need to try and read as identifier
-	// TODO: how do i know if it's just a number?
 	case isLetter(ch):
 		tkn.next()
 		if ch == 'X' || ch == 'x' {
@@ -663,7 +661,12 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		}
 		return tkn.scanIdentifier(byte(ch), isDbSystemVariable)
 	case isDigit(ch):
-		return tkn.scanNumber(false)
+		typ, res := tkn.scanNumber(false)
+		if typ != LEX_ERROR {
+			return typ, res
+		}
+		typ1, res1 := tkn.scanIdentifier(byte(ch), false)
+		return typ1, res1
 	case ch == ':':
 		return tkn.scanBindVar()
 	case ch == ';':
