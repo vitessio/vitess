@@ -30,6 +30,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // Tablet related methods for wrangler
@@ -157,20 +158,33 @@ func (wr *Wrangler) RefreshTabletState(ctx context.Context, tabletAlias *topodat
 
 // ExecuteFetchAsApp executes a query remotely using the App pool
 func (wr *Wrangler) ExecuteFetchAsApp(ctx context.Context, tabletAlias *topodatapb.TabletAlias, usePool bool, query string, maxRows int) (*querypb.QueryResult, error) {
-	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
+	resp, err := wr.VtctldServer().ExecuteFetchAsApp(ctx, &vtctldatapb.ExecuteFetchAsAppRequest{
+		TabletAlias: tabletAlias,
+		Query:       query,
+		MaxRows:     int64(maxRows),
+		UsePool:     usePool,
+	})
 	if err != nil {
 		return nil, err
 	}
-	return wr.tmc.ExecuteFetchAsApp(ctx, ti.Tablet, usePool, []byte(query), maxRows)
+
+	return resp.Result, nil
 }
 
 // ExecuteFetchAsDba executes a query remotely using the DBA pool
 func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias *topodatapb.TabletAlias, query string, maxRows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
-	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
+	resp, err := wr.VtctldServer().ExecuteFetchAsDBA(ctx, &vtctldatapb.ExecuteFetchAsDBARequest{
+		TabletAlias:    tabletAlias,
+		Query:          query,
+		MaxRows:        int64(maxRows),
+		DisableBinlogs: disableBinlogs,
+		ReloadSchema:   reloadSchema,
+	})
 	if err != nil {
 		return nil, err
 	}
-	return wr.tmc.ExecuteFetchAsDba(ctx, ti.Tablet, false, []byte(query), maxRows, disableBinlogs, reloadSchema)
+
+	return resp.Result, nil
 }
 
 // VReplicationExec executes a query remotely using the DBA pool
