@@ -104,7 +104,7 @@ func (client *gRPCVtctldClient) WaitForReady(ctx context.Context) error {
 				return nil
 
 			// Per https://github.com/grpc/grpc/blob/master/doc/connectivity-semantics-and-api.md,
-			// a client that enters SHUTDOWN state never leave this state, and all new RPCs should
+			// a client that enters SHUTDOWN state never leaves this state, and all new RPCs should
 			// fail immediately. So, we don't need to waste time by continuing to poll and can
 			// return an error immediately so that the caller can close the connection.
 			case connectivity.Shutdown:
