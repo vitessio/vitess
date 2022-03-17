@@ -35,15 +35,24 @@ type fakeVtctld struct {
 	vtctlservicepb.VtctlServer
 }
 
-func TestDial(t *testing.T) {
+func initVtctlServer() (net.Listener, *grpc.Server, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-
-	defer listener.Close()
+	if err != nil {
+		return nil, nil, err
+	}
 
 	vtctld := &fakeVtctld{}
 	server := grpc.NewServer()
 	vtctlservicepb.RegisterVtctlServer(server, vtctld)
+
+	return listener, server, err
+}
+
+func TestDial(t *testing.T) {
+	listener, server, err := initVtctlServer()
+	require.NoError(t, err)
+
+	defer listener.Close()
 
 	go server.Serve(listener)
 	defer server.Stop()
@@ -74,30 +83,22 @@ func TestDial(t *testing.T) {
 // a vtctld by rediscovering and redialing a new one.
 func TestRedial(t *testing.T) {
 	// Initialize vtctld #1
-	listener1, err := net.Listen("tcp", "127.0.0.1:0")
+	listener1, server1, err := initVtctlServer()
 	require.NoError(t, err)
-	defer listener1.Close()
 
-	vtctld1 := &fakeVtctld{}
-	server1 := grpc.NewServer()
+	defer listener1.Close()
 
 	go server1.Serve(listener1)
 	defer server1.Stop()
 
-	vtctlservicepb.RegisterVtctlServer(server1, vtctld1)
-
 	// Initialize vtctld #2
-	listener2, err := net.Listen("tcp", "127.0.0.1:0")
+	listener2, server2, err := initVtctlServer()
 	require.NoError(t, err)
-	defer listener2.Close()
 
-	vtctld2 := &fakeVtctld{}
-	server2 := grpc.NewServer()
+	defer listener2.Close()
 
 	go server2.Serve(listener2)
 	defer server2.Stop()
-
-	vtctlservicepb.RegisterVtctlServer(server2, vtctld2)
 
 	// Register both vtctlds with VTAdmin
 	disco := fakediscovery.New()
