@@ -622,7 +622,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		}
 		// leave specialComment scan mode after all stream consumed.
 		tkn.specialComment = nil
-		// TODO: restoring tkn.Position here to what it was before using tkn.specialPosOffset fixes sever issue, but then the SubStatementPositionEnd is wrong
+		return 0, nil // TODO: this probably doesn't work with tkn.multi
 	}
 	if tkn.potentialAccountName {
 		defer func() {
@@ -1097,12 +1097,9 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 	_, sql := ExtractMysqlComment(buffer.String())
 	tkn.specialComment = NewStringTokenizer(sql)
 	// Save current position of Tokenizer for later
-	oldPosition := tkn.OldPosition
+	tkn.OldPosition = tkn.Position
 	// Recurse on subquery
-	typ, val := tkn.Scan()
-	// restore Position to what it used to be before offsets
-	tkn.OldPosition = oldPosition
-	return typ, val
+	return tkn.Scan()
 }
 
 func (tkn *Tokenizer) consumeNext(buffer *bytes2.Buffer) {
