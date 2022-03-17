@@ -58,7 +58,8 @@ func TestDial(t *testing.T) {
 			Id:   "test",
 			Name: "testcluster",
 		},
-		Discovery: disco,
+		Discovery:           disco,
+		ConnectivityTimeout: 2 * time.Second,
 	})
 
 	// We don't have a vtctld host until we call Dial
