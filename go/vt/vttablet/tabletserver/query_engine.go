@@ -18,14 +18,13 @@ package tabletserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
@@ -115,7 +114,7 @@ type QueryEngine struct {
 	// mu protects the following fields.
 	mu               sync.RWMutex
 	tables           map[string]*schema.Table
-	plans            cache.Cache
+	plans            cache.Cache[*TabletPlan]
 	queryRuleSources *rules.Map
 
 	// Pools
@@ -171,7 +170,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 		env:              env,
 		se:               se,
 		tables:           make(map[string]*schema.Table),
-		plans:            cache.NewDefaultCacheImpl(cacheCfg),
+		plans:            cache.NewDefaultCacheImpl[*TabletPlan](cacheCfg),
 		queryRuleSources: rules.NewMap(),
 	}
 
@@ -400,8 +399,8 @@ func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, a
 
 // getQuery fetches the plan and makes it the most recent.
 func (qe *QueryEngine) getQuery(sql string) *TabletPlan {
-	if cacheResult, ok := qe.plans.Get(sql); ok {
-		return cacheResult.(*TabletPlan)
+	if plan, ok := qe.plans.Get(sql); ok {
+		return plan
 	}
 	return nil
 }
@@ -470,8 +469,7 @@ func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, reques
 	}
 
 	response.Header().Set("Content-Type", "text/plain")
-	qe.plans.ForEach(func(value any) bool {
-		plan := value.(*TabletPlan)
+	qe.plans.ForEach(func(plan *TabletPlan) bool {
 		response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(plan.Original))))
 		if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
 			response.Write([]byte(err.Error()))
@@ -490,9 +488,7 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 	}
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	var qstats []perQueryStats
-	qe.plans.ForEach(func(value any) bool {
-		plan := value.(*TabletPlan)
-
+	qe.plans.ForEach(func(plan *TabletPlan) bool {
 		var pqstats perQueryStats
 		pqstats.Query = unicoded(sqlparser.TruncateForUI(plan.Original))
 		pqstats.Table = plan.TableName().String()

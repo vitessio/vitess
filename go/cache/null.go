@@ -17,57 +17,57 @@ limitations under the License.
 package cache
 
 // nullCache is a no-op cache that does not store items
-type nullCache struct{}
+type nullCache[I any] struct{}
 
 // Get never returns anything on the nullCache
-func (n *nullCache) Get(_ string) (any, bool) {
-	return nil, false
+func (n *nullCache[I]) Get(_ string) (i I, b bool) {
+	return
 }
 
 // Set is a no-op in the nullCache
-func (n *nullCache) Set(_ string, _ any) bool {
+func (n *nullCache[I]) Set(_ string, _ I) bool {
 	return false
 }
 
 // ForEach iterates the nullCache, which is always empty
-func (n *nullCache) ForEach(_ func(any) bool) {}
+func (n *nullCache[I]) ForEach(_ func(I) bool) {}
 
 // Delete is a no-op in the nullCache
-func (n *nullCache) Delete(_ string) {}
+func (n *nullCache[I]) Delete(_ string) {}
 
 // Clear is a no-op in the nullCache
-func (n *nullCache) Clear() {}
+func (n *nullCache[I]) Clear() {}
 
 // Wait is a no-op in the nullcache
-func (n *nullCache) Wait() {}
+func (n *nullCache[I]) Wait() {}
 
-func (n *nullCache) Len() int {
+func (n *nullCache[I]) Len() int {
 	return 0
 }
 
 // Hits returns number of cache hits since creation
-func (n *nullCache) Hits() int64 {
+func (n *nullCache[I]) Hits() int64 {
 	return 0
 }
 
 // Hits returns number of cache misses since creation
-func (n *nullCache) Misses() int64 {
+func (n *nullCache[I]) Misses() int64 {
 	return 0
 }
 
 // Capacity returns the capacity of the nullCache, which is always 0
-func (n *nullCache) UsedCapacity() int64 {
+func (n *nullCache[I]) UsedCapacity() int64 {
 	return 0
 }
 
 // Capacity returns the capacity of the nullCache, which is always 0
-func (n *nullCache) MaxCapacity() int64 {
+func (n *nullCache[I]) MaxCapacity() int64 {
 	return 0
 }
 
 // SetCapacity sets the capacity of the null cache, which is a no-op
-func (n *nullCache) SetCapacity(_ int64) {}
+func (n *nullCache[I]) SetCapacity(_ int64) {}
 
-func (n *nullCache) Evictions() int64 {
+func (n *nullCache[I]) Evictions() int64 {
 	return 0
 }

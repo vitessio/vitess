@@ -22,10 +22,10 @@ import (
 )
 
 // TODO: Do we need this to be a separate struct from Item?
-type storeItem struct {
+type storeItem[I any] struct {
 	key      uint64
 	conflict uint64
-	value    any
+	value    I
 }
 
 // store is the interface fulfilled by all hash map implementations in this
@@ -34,52 +34,52 @@ type storeItem struct {
 // in Ristretto.
 //
 // Every store is safe for concurrent usage.
-type store interface {
+type store[I any] interface {
 	// Get returns the value associated with the key parameter.
-	Get(uint64, uint64) (any, bool)
+	Get(uint64, uint64) (I, bool)
 	// Set adds the key-value pair to the Map or updates the value if it's
 	// already present. The key-value pair is passed as a pointer to an
 	// item object.
-	Set(*Item)
+	Set(*Item[I])
 	// Del deletes the key-value pair from the Map.
-	Del(uint64, uint64) (uint64, any)
+	Del(uint64, uint64) (uint64, I)
 	// Update attempts to update the key with a new value and returns true if
 	// successful.
-	Update(*Item) (any, bool)
+	Update(*Item[I]) (I, bool)
 	// Clear clears all contents of the store.
-	Clear(onEvict itemCallback)
+	Clear(onEvict func(*Item[I]))
 	// ForEach yields all the values in the store
-	ForEach(forEach func(any) bool)
+	ForEach(forEach func(I) bool)
 	// Len returns the number of entries in the store
 	Len() int
 }
 
 // newStore returns the default store implementation.
-func newStore() store {
-	return newShardedMap()
+func newStore[I any]() store[I] {
+	return newShardedMap[I]()
 }
 
 const numShards uint64 = 256
 
-type shardedMap struct {
-	shards []*lockedMap
+type shardedMap[I any] struct {
+	shards []*lockedMap[I]
 }
 
-func newShardedMap() *shardedMap {
-	sm := &shardedMap{
-		shards: make([]*lockedMap, int(numShards)),
+func newShardedMap[I any]() *shardedMap[I] {
+	sm := &shardedMap[I]{
+		shards: make([]*lockedMap[I], int(numShards)),
 	}
 	for i := range sm.shards {
-		sm.shards[i] = newLockedMap()
+		sm.shards[i] = newLockedMap[I]()
 	}
 	return sm
 }
 
-func (sm *shardedMap) Get(key, conflict uint64) (any, bool) {
+func (sm *shardedMap[I]) Get(key, conflict uint64) (I, bool) {
 	return sm.shards[key%numShards].get(key, conflict)
 }
 
-func (sm *shardedMap) Set(i *Item) {
+func (sm *shardedMap[I]) Set(i *Item[I]) {
 	if i == nil {
 		// If item is nil make this Set a no-op.
 		return
@@ -88,15 +88,15 @@ func (sm *shardedMap) Set(i *Item) {
 	sm.shards[i.Key%numShards].Set(i)
 }
 
-func (sm *shardedMap) Del(key, conflict uint64) (uint64, any) {
+func (sm *shardedMap[I]) Del(key, conflict uint64) (uint64, I) {
 	return sm.shards[key%numShards].Del(key, conflict)
 }
 
-func (sm *shardedMap) Update(newItem *Item) (any, bool) {
+func (sm *shardedMap[I]) Update(newItem *Item[I]) (I, bool) {
 	return sm.shards[newItem.Key%numShards].Update(newItem)
 }
 
-func (sm *shardedMap) ForEach(forEach func(any) bool) {
+func (sm *shardedMap[I]) ForEach(forEach func(I) bool) {
 	for _, shard := range sm.shards {
 		if !shard.foreach(forEach) {
 			break
@@ -104,7 +104,7 @@ func (sm *shardedMap) ForEach(forEach func(any) bool) {
 	}
 }
 
-func (sm *shardedMap) Len() int {
+func (sm *shardedMap[I]) Len() int {
 	l := 0
 	for _, shard := range sm.shards {
 		l += shard.Len()
@@ -112,37 +112,39 @@ func (sm *shardedMap) Len() int {
 	return l
 }
 
-func (sm *shardedMap) Clear(onEvict itemCallback) {
+func (sm *shardedMap[I]) Clear(onEvict func(*Item[I])) {
 	for i := uint64(0); i < numShards; i++ {
 		sm.shards[i].Clear(onEvict)
 	}
 }
 
-type lockedMap struct {
+type lockedMap[I any] struct {
 	sync.RWMutex
-	data map[uint64]storeItem
+	data map[uint64](storeItem[I])
 }
 
-func newLockedMap() *lockedMap {
-	return &lockedMap{
-		data: make(map[uint64]storeItem),
+func newLockedMap[I any]() *lockedMap[I] {
+	return &lockedMap[I]{
+		data: make(map[uint64]storeItem[I]),
 	}
 }
 
-func (m *lockedMap) get(key, conflict uint64) (any, bool) {
+func (m *lockedMap[I]) get(key, conflict uint64) (I, bool) {
 	m.RLock()
 	item, ok := m.data[key]
 	m.RUnlock()
 	if !ok {
-		return nil, false
+		var empty I
+		return empty, false
 	}
 	if conflict != 0 && (conflict != item.conflict) {
-		return nil, false
+		var empty I
+		return empty, false
 	}
 	return item.value, true
 }
 
-func (m *lockedMap) Set(i *Item) {
+func (m *lockedMap[I]) Set(i *Item[I]) {
 	if i == nil {
 		// If the item is nil make this Set a no-op.
 		return
@@ -160,23 +162,25 @@ func (m *lockedMap) Set(i *Item) {
 		}
 	}
 
-	m.data[i.Key] = storeItem{
+	m.data[i.Key] = storeItem[I]{
 		key:      i.Key,
 		conflict: i.Conflict,
 		value:    i.Value,
 	}
 }
 
-func (m *lockedMap) Del(key, conflict uint64) (uint64, any) {
+func (m *lockedMap[I]) Del(key, conflict uint64) (uint64, I) {
 	m.Lock()
 	item, ok := m.data[key]
 	if !ok {
 		m.Unlock()
-		return 0, nil
+		var empty I
+		return 0, empty
 	}
 	if conflict != 0 && (conflict != item.conflict) {
 		m.Unlock()
-		return 0, nil
+		var empty I
+		return 0, empty
 	}
 
 	delete(m.data, key)
@@ -184,19 +188,21 @@ func (m *lockedMap) Del(key, conflict uint64) (uint64, any) {
 	return item.conflict, item.value
 }
 
-func (m *lockedMap) Update(newItem *Item) (any, bool) {
+func (m *lockedMap[I]) Update(newItem *Item[I]) (I, bool) {
 	m.Lock()
 	item, ok := m.data[newItem.Key]
 	if !ok {
 		m.Unlock()
-		return nil, false
+		var empty I
+		return empty, false
 	}
 	if newItem.Conflict != 0 && (newItem.Conflict != item.conflict) {
 		m.Unlock()
-		return nil, false
+		var empty I
+		return empty, false
 	}
 
-	m.data[newItem.Key] = storeItem{
+	m.data[newItem.Key] = storeItem[I]{
 		key:      newItem.Key,
 		conflict: newItem.Conflict,
 		value:    newItem.Value,
@@ -206,16 +212,16 @@ func (m *lockedMap) Update(newItem *Item) (any, bool) {
 	return item.value, true
 }
 
-func (m *lockedMap) Len() int {
+func (m *lockedMap[I]) Len() int {
 	m.RLock()
 	l := len(m.data)
 	m.RUnlock()
 	return l
 }
 
-func (m *lockedMap) Clear(onEvict itemCallback) {
+func (m *lockedMap[I]) Clear(onEvict func(*Item[I])) {
 	m.Lock()
-	i := &Item{}
+	i := &Item[I]{}
 	if onEvict != nil {
 		for _, si := range m.data {
 			i.Key = si.key
@@ -224,11 +230,11 @@ func (m *lockedMap) Clear(onEvict itemCallback) {
 			onEvict(i)
 		}
 	}
-	m.data = make(map[uint64]storeItem)
+	m.data = make(map[uint64]storeItem[I])
 	m.Unlock()
 }
 
-func (m *lockedMap) foreach(forEach func(any) bool) bool {
+func (m *lockedMap[I]) foreach(forEach func(I) bool) bool {
 	m.RLock()
 	defer m.RUnlock()
 	for _, si := range m.data {

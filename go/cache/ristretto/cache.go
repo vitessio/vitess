@@ -43,31 +43,30 @@ func defaultStringHash(key string) (uint64, uint64) {
 	return hack.RuntimeStrhash(key, Seed1), hack.RuntimeStrhash(key, Seed2)
 }
 
-type itemCallback func(*Item)
-
-// CacheItemSize is the overhead in bytes for every stored cache item
-var CacheItemSize = hack.RuntimeAllocSize(int64(unsafe.Sizeof(storeItem{})))
+func cacheItemSize[I any]() int64 {
+	return hack.RuntimeAllocSize(int64(unsafe.Sizeof(storeItem[I]{})))
+}
 
 // Cache is a thread-safe implementation of a hashmap with a TinyLFU admission
 // policy and a Sampled LFU eviction policy. You can use the same Cache instance
 // from as many goroutines as you want.
-type Cache struct {
+type Cache[I any] struct {
 	// store is the central concurrent hashmap where key-value items are stored.
-	store store
+	store store[I]
 	// policy determines what gets let in to the cache and what gets kicked out.
-	policy policy
+	policy policy[I]
 	// getBuf is a custom ring buffer implementation that gets pushed to when
 	// keys are read.
 	getBuf *ringBuffer
 	// setBuf is a buffer allowing us to batch/drop Sets during times of high
 	// contention.
-	setBuf chan *Item
+	setBuf chan *Item[I]
 	// onEvict is called for item evictions.
-	onEvict itemCallback
+	onEvict func(*Item[I])
 	// onReject is called when an item is rejected via admission policy.
-	onReject itemCallback
+	onReject func(*Item[I])
 	// onExit is called whenever a value goes out of scope from the cache.
-	onExit func(any)
+	onExit func(I)
 	// KeyToHash function is used to customize the key hashing algorithm.
 	// Each key will be hashed using the provided function. If keyToHash value
 	// is not set, the default keyToHash function is used.
@@ -77,7 +76,7 @@ type Cache struct {
 	// indicates whether cache is closed.
 	isClosed bool
 	// cost calculates cost from a value.
-	cost func(value any) int64
+	cost func(value I) int64
 	// ignoreInternalCost dictates whether to ignore the cost of internally storing
 	// the item in the cost calculation.
 	ignoreInternalCost bool
@@ -87,7 +86,7 @@ type Cache struct {
 }
 
 // Config is passed to NewCache for creating new Cache instances.
-type Config struct {
+type Config[I any] struct {
 	// NumCounters determines the number of counters (keys) to keep that hold
 	// access frequency information. It's generally a good idea to have more
 	// counters than the max cache capacity, as this will improve eviction
@@ -118,13 +117,13 @@ type Config struct {
 	Metrics bool
 	// OnEvict is called for every eviction and passes the hashed key, value,
 	// and cost to the function.
-	OnEvict func(item *Item)
+	OnEvict func(item *Item[I])
 	// OnReject is called for every rejection done via the policy.
-	OnReject func(item *Item)
+	OnReject func(item *Item[I])
 	// OnExit is called whenever a value is removed from cache. This can be
 	// used to do manual memory deallocation. Would also be called on eviction
 	// and rejection of the value.
-	OnExit func(val any)
+	OnExit func(val I)
 	// KeyToHash function is used to customize the key hashing algorithm.
 	// Each key will be hashed using the provided function. If keyToHash value
 	// is not set, the default keyToHash function is used.
@@ -132,7 +131,7 @@ type Config struct {
 	// Cost evaluates a value and outputs a corresponding cost. This function
 	// is ran after Set is called for a new item or an item update with a cost
 	// param of 0.
-	Cost func(value any) int64
+	Cost func(value I) int64
 	// IgnoreInternalCost set to true indicates to the cache that the cost of
 	// internally storing the value should be ignored. This is useful when the
 	// cost passed to set is not using bytes as units. Keep in mind that setting
@@ -149,17 +148,17 @@ const (
 )
 
 // Item is passed to setBuf so items can eventually be added to the cache.
-type Item struct {
+type Item[I any] struct {
 	flag     itemFlag
 	Key      uint64
 	Conflict uint64
-	Value    any
+	Value    I
 	Cost     int64
 	wg       *sync.WaitGroup
 }
 
 // NewCache returns a new Cache instance and any configuration errors, if any.
-func NewCache(config *Config) (*Cache, error) {
+func NewCache[I any](config *Config[I]) (*Cache[I], error) {
 	switch {
 	case config.NumCounters == 0:
 		return nil, errors.New("NumCounters can't be zero")
@@ -168,29 +167,28 @@ func NewCache(config *Config) (*Cache, error) {
 	case config.BufferItems == 0:
 		return nil, errors.New("BufferItems can't be zero")
 	}
-	policy := newPolicy(config.NumCounters, config.MaxCost)
-	cache := &Cache{
-		store:              newStore(),
+	policy := newPolicy[I](config.NumCounters, config.MaxCost)
+	cache := &Cache[I]{
+		store:              newStore[I](),
 		policy:             policy,
 		getBuf:             newRingBuffer(policy, config.BufferItems),
-		setBuf:             make(chan *Item, setBufSize),
+		setBuf:             make(chan *Item[I], setBufSize),
 		keyToHash:          config.KeyToHash,
 		stop:               make(chan struct{}),
-		cost:               config.Cost,
 		ignoreInternalCost: config.IgnoreInternalCost,
 	}
-	cache.onExit = func(val any) {
-		if config.OnExit != nil && val != nil {
+	cache.onExit = func(val I) {
+		if config.OnExit != nil {
 			config.OnExit(val)
 		}
 	}
-	cache.onEvict = func(item *Item) {
+	cache.onEvict = func(item *Item[I]) {
 		if config.OnEvict != nil {
 			config.OnEvict(item)
 		}
 		cache.onExit(item.Value)
 	}
-	cache.onReject = func(item *Item) {
+	cache.onReject = func(item *Item[I]) {
 		if config.OnReject != nil {
 			config.OnReject(item)
 		}
@@ -210,22 +208,23 @@ func NewCache(config *Config) (*Cache, error) {
 }
 
 // Wait blocks until all the current cache operations have been processed in the background
-func (c *Cache) Wait() {
+func (c *Cache[I]) Wait() {
 	if c == nil || c.isClosed {
 		return
 	}
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	c.setBuf <- &Item{wg: wg}
+	c.setBuf <- &Item[I]{wg: wg}
 	wg.Wait()
 }
 
 // Get returns the value (if any) and a boolean representing whether the
 // value was found or not. The value can be nil and the boolean can be true at
 // the same time.
-func (c *Cache) Get(key string) (any, bool) {
+func (c *Cache[I]) Get(key string) (I, bool) {
 	if c == nil || c.isClosed {
-		return nil, false
+		var empty I
+		return empty, false
 	}
 	keyHash, conflictHash := c.keyToHash(key)
 	c.getBuf.Push(keyHash)
@@ -245,20 +244,20 @@ func (c *Cache) Get(key string) (any, bool) {
 // item will be added and other items will be evicted in order to make room.
 //
 // The cost of the entry will be evaluated lazily by the cache's Cost function.
-func (c *Cache) Set(key string, value any) bool {
+func (c *Cache[I]) Set(key string, value I) bool {
 	return c.SetWithCost(key, value, 0)
 }
 
 // SetWithCost works like Set but adds a key-value pair to the cache with a specific
 // cost. The built-in Cost function will not be called to evaluate the object's cost
 // and instead the given value will be used.
-func (c *Cache) SetWithCost(key string, value any, cost int64) bool {
+func (c *Cache[I]) SetWithCost(key string, value I, cost int64) bool {
 	if c == nil || c.isClosed {
 		return false
 	}
 
 	keyHash, conflictHash := c.keyToHash(key)
-	i := &Item{
+	i := &Item[I]{
 		flag:     itemNew,
 		Key:      keyHash,
 		Conflict: conflictHash,
@@ -288,7 +287,7 @@ func (c *Cache) SetWithCost(key string, value any, cost int64) bool {
 }
 
 // Delete deletes the key-value item from the cache if it exists.
-func (c *Cache) Delete(key string) {
+func (c *Cache[I]) Delete(key string) {
 	if c == nil || c.isClosed {
 		return
 	}
@@ -300,7 +299,7 @@ func (c *Cache) Delete(key string) {
 	// So we must push the same item to `setBuf` with the deletion flag.
 	// This ensures that if a set is followed by a delete, it will be
 	// applied in the correct order.
-	c.setBuf <- &Item{
+	c.setBuf <- &Item[I]{
 		flag:     itemDelete,
 		Key:      keyHash,
 		Conflict: conflictHash,
@@ -308,7 +307,7 @@ func (c *Cache) Delete(key string) {
 }
 
 // Close stops all goroutines and closes all channels.
-func (c *Cache) Close() {
+func (c *Cache[I]) Close() {
 	if c == nil || c.isClosed {
 		return
 	}
@@ -325,7 +324,7 @@ func (c *Cache) Close() {
 // Clear empties the hashmap and zeroes all policy counters. Note that this is
 // not an atomic operation (but that shouldn't be a problem as it's assumed that
 // Set/Get calls won't be occurring until after this).
-func (c *Cache) Clear() {
+func (c *Cache[I]) Clear() {
 	if c == nil || c.isClosed {
 		return
 	}
@@ -363,7 +362,7 @@ loop:
 }
 
 // Len returns the size of the cache (in entries)
-func (c *Cache) Len() int {
+func (c *Cache[I]) Len() int {
 	if c == nil {
 		return 0
 	}
@@ -371,7 +370,7 @@ func (c *Cache) Len() int {
 }
 
 // UsedCapacity returns the size of the cache (in bytes)
-func (c *Cache) UsedCapacity() int64 {
+func (c *Cache[I]) UsedCapacity() int64 {
 	if c == nil {
 		return 0
 	}
@@ -379,7 +378,7 @@ func (c *Cache) UsedCapacity() int64 {
 }
 
 // MaxCapacity returns the max cost of the cache (in bytes)
-func (c *Cache) MaxCapacity() int64 {
+func (c *Cache[I]) MaxCapacity() int64 {
 	if c == nil {
 		return 0
 	}
@@ -387,7 +386,7 @@ func (c *Cache) MaxCapacity() int64 {
 }
 
 // SetCapacity updates the maxCost of an existing cache.
-func (c *Cache) SetCapacity(maxCost int64) {
+func (c *Cache[I]) SetCapacity(maxCost int64) {
 	if c == nil {
 		return
 	}
@@ -395,7 +394,7 @@ func (c *Cache) SetCapacity(maxCost int64) {
 }
 
 // Evictions returns the number of evictions
-func (c *Cache) Evictions() int64 {
+func (c *Cache[I]) Evictions() int64 {
 	// TODO
 	if c == nil || c.Metrics == nil {
 		return 0
@@ -404,7 +403,7 @@ func (c *Cache) Evictions() int64 {
 }
 
 // Hits returns the number of cache hits
-func (c *Cache) Hits() int64 {
+func (c *Cache[I]) Hits() int64 {
 	if c == nil || c.Metrics == nil {
 		return 0
 	}
@@ -412,7 +411,7 @@ func (c *Cache) Hits() int64 {
 }
 
 // Misses returns the number of cache misses
-func (c *Cache) Misses() int64 {
+func (c *Cache[I]) Misses() int64 {
 	if c == nil || c.Metrics == nil {
 		return 0
 	}
@@ -421,7 +420,7 @@ func (c *Cache) Misses() int64 {
 
 // ForEach yields all the values currently stored in the cache to the given callback.
 // The callback may return `false` to stop the iteration early.
-func (c *Cache) ForEach(forEach func(any) bool) {
+func (c *Cache[I]) ForEach(forEach func(I) bool) {
 	if c == nil {
 		return
 	}
@@ -429,7 +428,7 @@ func (c *Cache) ForEach(forEach func(any) bool) {
 }
 
 // processItems is ran by goroutines processing the Set buffer.
-func (c *Cache) processItems() {
+func (c *Cache[I]) processItems() {
 	startTs := make(map[uint64]time.Time)
 	numToKeep := 100000 // TODO: Make this configurable via options.
 
@@ -447,12 +446,14 @@ func (c *Cache) processItems() {
 			}
 		}
 	}
-	onEvict := func(i *Item) {
+	onEvict := func(i *Item[I]) {
 		delete(startTs, i.Key)
 		if c.onEvict != nil {
 			c.onEvict(i)
 		}
 	}
+
+	internalItemCost := cacheItemSize[I]()
 
 	for {
 		select {
@@ -467,7 +468,7 @@ func (c *Cache) processItems() {
 			}
 			if !c.ignoreInternalCost {
 				// Add the cost of internally storing the object.
-				i.Cost += CacheItemSize
+				i.Cost += internalItemCost
 			}
 
 			switch i.flag {
@@ -501,7 +502,7 @@ func (c *Cache) processItems() {
 
 // collectMetrics just creates a new *Metrics instance and adds the pointers
 // to the cache and policy instances.
-func (c *Cache) collectMetrics() {
+func (c *Cache[I]) collectMetrics() {
 	c.Metrics = newMetrics()
 	c.policy.CollectMetrics(c.Metrics)
 }

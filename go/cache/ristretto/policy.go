@@ -35,12 +35,12 @@ const (
 //
 // TODO: remove this interface and just rename defaultPolicy to policy, as we
 //       are probably only going to use/implement/maintain one policy.
-type policy interface {
+type policy[I any] interface {
 	ringConsumer
 	// Add attempts to Add the key-cost pair to the Policy. It returns a slice
 	// of evicted keys and a bool denoting whether or not the key-cost pair
 	// was added. If it returns true, the key should be stored in cache.
-	Add(uint64, int64) ([]*Item, bool)
+	Add(uint64, int64) ([]*Item[I], bool)
 	// Has returns true if the key exists in the Policy.
 	Has(uint64) bool
 	// Del deletes the key from the Policy.
@@ -63,11 +63,11 @@ type policy interface {
 	UpdateMaxCost(int64)
 }
 
-func newPolicy(numCounters, maxCost int64) policy {
-	return newDefaultPolicy(numCounters, maxCost)
+func newPolicy[I any](numCounters, maxCost int64) policy[I] {
+	return newDefaultPolicy[I](numCounters, maxCost)
 }
 
-type defaultPolicy struct {
+type defaultPolicy[I any] struct {
 	sync.Mutex
 	admit       *tinyLFU
 	evict       *sampledLFU
@@ -79,8 +79,8 @@ type defaultPolicy struct {
 	maxCost     int64
 }
 
-func newDefaultPolicy(numCounters, maxCost int64) *defaultPolicy {
-	p := &defaultPolicy{
+func newDefaultPolicy[I any](numCounters, maxCost int64) *defaultPolicy[I] {
+	p := &defaultPolicy[I]{
 		admit:       newTinyLFU(numCounters),
 		evict:       newSampledLFU(maxCost),
 		itemsCh:     make(chan []uint64, 3),
@@ -92,7 +92,7 @@ func newDefaultPolicy(numCounters, maxCost int64) *defaultPolicy {
 	return p
 }
 
-func (p *defaultPolicy) CollectMetrics(metrics *Metrics) {
+func (p *defaultPolicy[I]) CollectMetrics(metrics *Metrics) {
 	p.metrics = metrics
 	p.evict.metrics = metrics
 }
@@ -102,7 +102,7 @@ type policyPair struct {
 	cost int64
 }
 
-func (p *defaultPolicy) processItems() {
+func (p *defaultPolicy[I]) processItems() {
 	for {
 		select {
 		case items := <-p.itemsCh:
@@ -115,7 +115,7 @@ func (p *defaultPolicy) processItems() {
 	}
 }
 
-func (p *defaultPolicy) Push(keys []uint64) bool {
+func (p *defaultPolicy[I]) Push(keys []uint64) bool {
 	if p.isClosed {
 		return false
 	}
@@ -137,7 +137,7 @@ func (p *defaultPolicy) Push(keys []uint64) bool {
 // Add decides whether the item with the given key and cost should be accepted by
 // the policy. It returns the list of victims that have been evicted and a boolean
 // indicating whether the incoming item should be accepted.
-func (p *defaultPolicy) Add(key uint64, cost int64) ([]*Item, bool) {
+func (p *defaultPolicy[I]) Add(key uint64, cost int64) ([]*Item[I], bool) {
 	p.Lock()
 	defer p.Unlock()
 
@@ -171,7 +171,7 @@ func (p *defaultPolicy) Add(key uint64, cost int64) ([]*Item, bool) {
 	// O(lg N).
 	sample := make([]*policyPair, 0, lfuSample)
 	// As items are evicted they will be appended to victims.
-	victims := make([]*Item, 0)
+	victims := make([]*Item[I], 0)
 
 	// Delete victims until there's enough space or a minKey is found that has
 	// more hits than incoming item.
@@ -201,7 +201,7 @@ func (p *defaultPolicy) Add(key uint64, cost int64) ([]*Item, bool) {
 		sample[minID] = sample[len(sample)-1]
 		sample = sample[:len(sample)-1]
 		// Store victim in evicted victims slice.
-		victims = append(victims, &Item{
+		victims = append(victims, &Item[I]{
 			Key:      minKey,
 			Conflict: 0,
 			Cost:     minCost,
@@ -213,33 +213,33 @@ func (p *defaultPolicy) Add(key uint64, cost int64) ([]*Item, bool) {
 	return victims, true
 }
 
-func (p *defaultPolicy) Has(key uint64) bool {
+func (p *defaultPolicy[I]) Has(key uint64) bool {
 	p.Lock()
 	_, exists := p.evict.keyCosts[key]
 	p.Unlock()
 	return exists
 }
 
-func (p *defaultPolicy) Del(key uint64) {
+func (p *defaultPolicy[I]) Del(key uint64) {
 	p.Lock()
 	p.evict.del(key)
 	p.Unlock()
 }
 
-func (p *defaultPolicy) Used() int64 {
+func (p *defaultPolicy[I]) Used() int64 {
 	p.Lock()
 	used := p.evict.used
 	p.Unlock()
 	return used
 }
 
-func (p *defaultPolicy) Update(key uint64, cost int64) {
+func (p *defaultPolicy[I]) Update(key uint64, cost int64) {
 	p.Lock()
 	p.evict.updateIfHas(key, cost)
 	p.Unlock()
 }
 
-func (p *defaultPolicy) Cost(key uint64) int64 {
+func (p *defaultPolicy[I]) Cost(key uint64) int64 {
 	p.Lock()
 	if cost, found := p.evict.keyCosts[key]; found {
 		p.Unlock()
@@ -249,14 +249,14 @@ func (p *defaultPolicy) Cost(key uint64) int64 {
 	return -1
 }
 
-func (p *defaultPolicy) Clear() {
+func (p *defaultPolicy[I]) Clear() {
 	p.Lock()
 	p.admit = newTinyLFU(p.numCounters)
 	p.evict = newSampledLFU(p.maxCost)
 	p.Unlock()
 }
 
-func (p *defaultPolicy) Close() {
+func (p *defaultPolicy[I]) Close() {
 	if p.isClosed {
 		return
 	}
@@ -268,14 +268,14 @@ func (p *defaultPolicy) Close() {
 	p.isClosed = true
 }
 
-func (p *defaultPolicy) MaxCost() int64 {
+func (p *defaultPolicy[I]) MaxCost() int64 {
 	if p == nil || p.evict == nil {
 		return 0
 	}
 	return p.evict.getMaxCost()
 }
 
-func (p *defaultPolicy) UpdateMaxCost(maxCost int64) {
+func (p *defaultPolicy[I]) UpdateMaxCost(maxCost int64) {
 	if p == nil || p.evict == nil {
 		return
 	}

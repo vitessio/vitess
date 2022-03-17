@@ -24,24 +24,23 @@ limitations under the License.
 package cache
 
 import (
-	"container/list"
 	"sync"
 	"time"
-)
 
-var _ Cache = &LRUCache{}
+	"vitess.io/vitess/go/generics/list"
+)
 
 // LRUCache is a typical LRU cache implementation.  If the cache
 // reaches the capacity, the least recently used item is deleted from
 // the cache. Note the capacity is not the number of items, but the
 // total sum of the CachedSize() of each item.
-type LRUCache struct {
+type LRUCache[I any] struct {
 	mu sync.Mutex
 
 	// list & table contain *entry objects.
-	list  *list.List
-	table map[string]*list.Element
-	cost  func(any) int64
+	list  *list.List[*entry[I]]
+	table map[string]*list.Element[*entry[I]]
+	cost  func(I) int64
 
 	size      int64
 	capacity  int64
@@ -51,23 +50,23 @@ type LRUCache struct {
 }
 
 // Item is what is stored in the cache
-type Item struct {
+type Item[I any] struct {
 	Key   string
-	Value any
+	Value I
 }
 
-type entry struct {
+type entry[I any] struct {
 	key          string
-	value        any
+	value        I
 	size         int64
 	timeAccessed time.Time
 }
 
 // NewLRUCache creates a new empty cache with the given capacity.
-func NewLRUCache(capacity int64, cost func(any) int64) *LRUCache {
-	return &LRUCache{
-		list:     list.New(),
-		table:    make(map[string]*list.Element),
+func NewLRUCache[I any](capacity int64, cost func(I) int64) *LRUCache[I] {
+	return &LRUCache[I]{
+		list:     list.New[*entry[I]](),
+		table:    make(map[string]*list.Element[*entry[I]]),
 		capacity: capacity,
 		cost:     cost,
 	}
@@ -75,22 +74,23 @@ func NewLRUCache(capacity int64, cost func(any) int64) *LRUCache {
 
 // Get returns a value from the cache, and marks the entry as most
 // recently used.
-func (lru *LRUCache) Get(key string) (v any, ok bool) {
+func (lru *LRUCache[I]) Get(key string) (v I, ok bool) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
 	element := lru.table[key]
 	if element == nil {
 		lru.misses++
-		return nil, false
+		var empty I
+		return empty, false
 	}
 	lru.moveToFront(element)
 	lru.hits++
-	return element.Value.(*entry).value, true
+	return element.Value.value, true
 }
 
 // Set sets a value in the cache.
-func (lru *LRUCache) Set(key string, value any) bool {
+func (lru *LRUCache[I]) Set(key string, value I) bool {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
@@ -104,7 +104,7 @@ func (lru *LRUCache) Set(key string, value any) bool {
 }
 
 // Delete removes an entry from the cache, and returns if the entry existed.
-func (lru *LRUCache) delete(key string) bool {
+func (lru *LRUCache[I]) delete(key string) bool {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
@@ -115,27 +115,27 @@ func (lru *LRUCache) delete(key string) bool {
 
 	lru.list.Remove(element)
 	delete(lru.table, key)
-	lru.size -= element.Value.(*entry).size
+	lru.size -= element.Value.size
 	return true
 }
 
 // Delete removes an entry from the cache
-func (lru *LRUCache) Delete(key string) {
+func (lru *LRUCache[I]) Delete(key string) {
 	lru.delete(key)
 }
 
 // Clear will clear the entire cache.
-func (lru *LRUCache) Clear() {
+func (lru *LRUCache[I]) Clear() {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
 	lru.list.Init()
-	lru.table = make(map[string]*list.Element)
+	lru.table = make(map[string]*list.Element[*entry[I]])
 	lru.size = 0
 }
 
 // Len returns the size of the cache (in entries)
-func (lru *LRUCache) Len() int {
+func (lru *LRUCache[I]) Len() int {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 	return lru.list.Len()
@@ -144,7 +144,7 @@ func (lru *LRUCache) Len() int {
 // SetCapacity will set the capacity of the cache. If the capacity is
 // smaller, and the current cache size exceed that capacity, the cache
 // will be shrank.
-func (lru *LRUCache) SetCapacity(capacity int64) {
+func (lru *LRUCache[I]) SetCapacity(capacity int64) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
@@ -153,36 +153,36 @@ func (lru *LRUCache) SetCapacity(capacity int64) {
 }
 
 // Wait is a no-op in the LRU cache
-func (lru *LRUCache) Wait() {}
+func (lru *LRUCache[I]) Wait() {}
 
 // UsedCapacity returns the size of the cache (in bytes)
-func (lru *LRUCache) UsedCapacity() int64 {
+func (lru *LRUCache[I]) UsedCapacity() int64 {
 	return lru.size
 }
 
 // MaxCapacity returns the cache maximum capacity.
-func (lru *LRUCache) MaxCapacity() int64 {
+func (lru *LRUCache[I]) MaxCapacity() int64 {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 	return lru.capacity
 }
 
 // Evictions returns the number of evictions
-func (lru *LRUCache) Evictions() int64 {
+func (lru *LRUCache[I]) Evictions() int64 {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 	return lru.evictions
 }
 
 // Hits returns number of cache hits since creation
-func (lru *LRUCache) Hits() int64 {
+func (lru *LRUCache[I]) Hits() int64 {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 	return lru.hits
 }
 
 // Misses returns number of cache misses since creation
-func (lru *LRUCache) Misses() int64 {
+func (lru *LRUCache[I]) Misses() int64 {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 	return lru.misses
@@ -190,13 +190,12 @@ func (lru *LRUCache) Misses() int64 {
 
 // ForEach yields all the values for the cache, ordered from most recently
 // used to least recently used.
-func (lru *LRUCache) ForEach(callback func(value any) bool) {
+func (lru *LRUCache[I]) ForEach(callback func(value I) bool) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
 	for e := lru.list.Front(); e != nil; e = e.Next() {
-		v := e.Value.(*entry)
-		if !callback(v.value) {
+		if !callback(e.Value.value) {
 			break
 		}
 	}
@@ -204,46 +203,46 @@ func (lru *LRUCache) ForEach(callback func(value any) bool) {
 
 // Items returns all the values for the cache, ordered from most recently
 // used to least recently used.
-func (lru *LRUCache) Items() []Item {
+func (lru *LRUCache[I]) Items() []Item[I] {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
-	items := make([]Item, 0, lru.list.Len())
+	items := make([]Item[I], 0, lru.list.Len())
 	for e := lru.list.Front(); e != nil; e = e.Next() {
-		v := e.Value.(*entry)
-		items = append(items, Item{Key: v.key, Value: v.value})
+		v := e.Value
+		items = append(items, Item[I]{Key: v.key, Value: v.value})
 	}
 	return items
 }
 
-func (lru *LRUCache) updateInplace(element *list.Element, value any) {
+func (lru *LRUCache[I]) updateInplace(element *list.Element[*entry[I]], value I) {
 	valueSize := lru.cost(value)
-	sizeDiff := valueSize - element.Value.(*entry).size
-	element.Value.(*entry).value = value
-	element.Value.(*entry).size = valueSize
+	sizeDiff := valueSize - element.Value.size
+	element.Value.value = value
+	element.Value.size = valueSize
 	lru.size += sizeDiff
 	lru.moveToFront(element)
 	lru.checkCapacity()
 }
 
-func (lru *LRUCache) moveToFront(element *list.Element) {
+func (lru *LRUCache[I]) moveToFront(element *list.Element[*entry[I]]) {
 	lru.list.MoveToFront(element)
-	element.Value.(*entry).timeAccessed = time.Now()
+	element.Value.timeAccessed = time.Now()
 }
 
-func (lru *LRUCache) addNew(key string, value any) {
-	newEntry := &entry{key, value, lru.cost(value), time.Now()}
+func (lru *LRUCache[I]) addNew(key string, value I) {
+	newEntry := &entry[I]{key, value, lru.cost(value), time.Now()}
 	element := lru.list.PushFront(newEntry)
 	lru.table[key] = element
 	lru.size += newEntry.size
 	lru.checkCapacity()
 }
 
-func (lru *LRUCache) checkCapacity() {
+func (lru *LRUCache[I]) checkCapacity() {
 	// Partially duplicated from Delete
 	for lru.size > lru.capacity {
 		delElem := lru.list.Back()
-		delValue := delElem.Value.(*entry)
+		delValue := delElem.Value
 		lru.list.Remove(delElem)
 		delete(lru.table, delValue.key)
 		lru.size -= delValue.size

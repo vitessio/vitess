@@ -95,7 +95,7 @@ type Executor struct {
 	mu           sync.Mutex
 	vschema      *vindexes.VSchema
 	streamSize   int
-	plans        cache.Cache
+	plans        cache.Cache[*engine.Plan]
 	vschemaStats *VSchemaStats
 
 	normalize       bool
@@ -122,7 +122,7 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 		resolver:        resolver,
 		scatterConn:     resolver.scatterConn,
 		txConn:          resolver.scatterConn.txConn,
-		plans:           cache.NewDefaultCacheImpl(cacheCfg),
+		plans:           cache.NewDefaultCacheImpl[*engine.Plan](cacheCfg),
 		normalize:       normalize,
 		warnShardedOnly: warnOnShardedOnly,
 		streamSize:      streamSize,
@@ -1376,7 +1376,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	planKey := hex.EncodeToString(planHash.Sum(nil))
 
 	if plan, ok := e.plans.Get(planKey); ok {
-		return plan.(*engine.Plan), nil
+		return plan, nil
 	}
 
 	plan, err := planbuilder.BuildFromStmt(query, statement, reservedVars, vcursor, bindVarNeeds, *enableOnlineDDL, *enableDirectDDL)
@@ -1430,10 +1430,7 @@ func prepareSetVarComment(vcursor *vcursorImpl, stmt sqlparser.Statement) (strin
 func (e *Executor) debugGetPlan(planKey string) (*engine.Plan, bool) {
 	planHash := sha256.Sum256([]byte(planKey))
 	planHex := hex.EncodeToString(planHash[:])
-	if plan, ok := e.plans.Get(planHex); ok {
-		return plan.(*engine.Plan), true
-	}
-	return nil, false
+	return e.plans.Get(planHex)
 }
 
 type cacheItem struct {
@@ -1442,8 +1439,7 @@ type cacheItem struct {
 }
 
 func (e *Executor) debugCacheEntries() (items []cacheItem) {
-	e.plans.ForEach(func(value any) bool {
-		plan := value.(*engine.Plan)
+	e.plans.ForEach(func(plan *engine.Plan) bool {
 		items = append(items, cacheItem{
 			Key:   plan.Original,
 			Value: plan,
@@ -1485,7 +1481,7 @@ func returnAsJSON(response http.ResponseWriter, stuff any) {
 }
 
 // Plans returns the LRU plan cache
-func (e *Executor) Plans() cache.Cache {
+func (e *Executor) Plans() cache.Cache[*engine.Plan] {
 	return e.plans
 }
 

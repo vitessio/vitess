@@ -16,12 +16,16 @@ limitations under the License.
 
 package cache
 
+type Cacheable interface {
+	CachedSize(alloc bool) int64
+}
+
 // Cache is a generic interface type for a data structure that keeps recently used
 // objects in memory and evicts them when it becomes full.
-type Cache interface {
-	Get(key string) (any, bool)
-	Set(key string, val any) bool
-	ForEach(callback func(any) bool)
+type Cache[I Cacheable] interface {
+	Get(key string) (I, bool)
+	Set(key string, val I) bool
+	ForEach(callback func(I) bool)
 
 	Delete(key string)
 	Clear()
@@ -40,31 +44,27 @@ type Cache interface {
 	SetCapacity(int64)
 }
 
-type cachedObject interface {
-	CachedSize(alloc bool) int64
-}
-
 // NewDefaultCacheImpl returns the default cache implementation for Vitess. The options in the
 // Config struct control the memory and entry limits for the cache, and the underlying cache
 // implementation.
-func NewDefaultCacheImpl(cfg *Config) Cache {
+func NewDefaultCacheImpl[I Cacheable](cfg *Config) Cache[I] {
 	switch {
 	case cfg == nil:
-		return &nullCache{}
+		return &nullCache[I]{}
 
 	case cfg.LFU:
 		if cfg.MaxEntries == 0 || cfg.MaxMemoryUsage == 0 {
-			return &nullCache{}
+			return &nullCache[I]{}
 		}
-		return NewRistrettoCache(cfg.MaxEntries, cfg.MaxMemoryUsage, func(val any) int64 {
-			return val.(cachedObject).CachedSize(true)
+		return NewRistrettoCache(cfg.MaxEntries, cfg.MaxMemoryUsage, func(val I) int64 {
+			return val.CachedSize(true)
 		})
 
 	default:
 		if cfg.MaxEntries == 0 {
-			return &nullCache{}
+			return &nullCache[I]{}
 		}
-		return NewLRUCache(cfg.MaxEntries, func(_ any) int64 {
+		return NewLRUCache(cfg.MaxEntries, func(_ I) int64 {
 			return 1
 		})
 	}
