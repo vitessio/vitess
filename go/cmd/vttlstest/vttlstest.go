@@ -34,14 +34,14 @@ var doc = `
 vttlstest is a tool for generating test certificates and keys for TLS tests.
 
 To create a toplevel CA, use:
-  $ vttlstest -root /tmp CreateCA
+  $ vttlstest --root /tmp CreateCA
 
 To create an intermediate or leaf CA, use:
-  $ vttlstest -root /tmp CreateSignedCert servers
-  $ vttlstest -root /tmp CreateSignedCert -parent servers server
+  $ vttlstest --root /tmp CreateSignedCert servers
+  $ vttlstest --root /tmp CreateSignedCert --parent servers server
 
 To get help on a command, use:
-  $ vttlstest <command> -help
+  $ vttlstest <command> --help
 `
 
 type cmdFunc func(subFlags *flag.FlagSet, args []string)
