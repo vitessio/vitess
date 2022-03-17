@@ -2269,8 +2269,8 @@ type IndexSpec struct {
 }
 
 func (idx *IndexSpec) Format(buf *TrackedBuffer) {
-	switch idx.Action {
-	case "create", "CREATE":
+	switch strings.ToLower(idx.Action) {
+	case "create":
 		buf.Myprintf("add ")
 		if idx.Type != "" {
 			if idx.Type == PrimaryStr {
@@ -2315,14 +2315,18 @@ func (idx *IndexSpec) Format(buf *TrackedBuffer) {
 				buf.Myprintf(" %v", opt.Value)
 			}
 		}
-	case "drop", "DROP":
+	case "drop":
 		if idx.Type == PrimaryStr {
 			buf.Myprintf("drop primary key")
 		} else {
 			buf.Myprintf("drop index %s", idx.ToName.val)
 		}
-	case "rename", "RENAME":
+	case "rename":
 		buf.Myprintf("rename index %s to %s", idx.FromName.val, idx.ToName.val)
+	case "disable":
+		buf.Myprintf("disable keys")
+	case "enable":
+		buf.Myprintf("enable keys")
 	}
 }
 

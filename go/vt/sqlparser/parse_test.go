@@ -1213,6 +1213,12 @@ var (
 			input:  "alter table a drop id",
 			output: "alter table a drop column id",
 		}, {
+			input:  "alter table a disable keys",
+			output: "alter table a disable keys",
+		}, {
+			input:  "alter table a enable keys",
+			output: "alter table a enable keys",
+		}, {
 			input:  "create table a (\n\t`a` int\n)",
 			output: "create table a (\n\ta int\n)",
 		}, {
@@ -1236,6 +1242,9 @@ var (
 			output: "create temporary table if not exists a (\n\ta int\n)",
 		}, {
 			input:  "create index a on b (id)",
+			output: "alter table b add index a (id)",
+		}, {
+			input:  "CREATE INDEX a ON b (id)",
 			output: "alter table b add index a (id)",
 		}, {
 			input:  "create index a on b (foo(6) desc, foo asc)",
