@@ -4457,6 +4457,15 @@ var (
 	}, {
 		input:  "insert into t (i, 1) values (1)",
 		output: "syntax error at position 20 near '1'",
+	}, {
+		input:  "insert into t values (1.a)",
+		output: "syntax error at position 25 near '1.'",
+	}, {
+		input:  "insert into t values (1.1a)",
+		output: "syntax error at position 26 near '1.1'",
+	}, {
+		input:  "insert into t values (1234.1a)",
+		output: "syntax error at position 29 near '1234.1'",
 	},
 	}
 )
