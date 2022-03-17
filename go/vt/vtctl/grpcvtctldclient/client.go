@@ -20,6 +20,7 @@ package grpcvtctldclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"google.golang.org/grpc"
@@ -30,6 +31,11 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
+)
+
+var (
+	ErrConnectionShutdown = errors.New("gRPCVtctldClient in a SHUTDOWN state")
+	ErrConnectionTimeout  = errors.New("gRPC connection wait time exceeded")
 )
 
 const connClosedMsg = "grpc: the client connection is closed"
@@ -93,7 +99,7 @@ func (client *gRPCVtctldClient) WaitForReady(ctx context.Context) error {
 		// within the context timeout. The caller should close their
 		// existing connection and establish a new one.
 		case <-ctx.Done():
-			return fmt.Errorf("gRPC connection wait time exceeded")
+			return ErrConnectionTimeout
 
 		// Wait to transition to READY state
 		default:
@@ -108,7 +114,7 @@ func (client *gRPCVtctldClient) WaitForReady(ctx context.Context) error {
 			// fail immediately. So, we don't need to waste time by continuing to poll and can
 			// return an error immediately so that the caller can close the connection.
 			case connectivity.Shutdown:
-				return fmt.Errorf("gRPCVtctldClient in a SHUTDOWN state")
+				return ErrConnectionShutdown
 
 			// If the connection is IDLE, CONNECTING, or in a TRANSIENT_FAILURE mode,
 			// then we wait to see if it will transition to a READY state.
