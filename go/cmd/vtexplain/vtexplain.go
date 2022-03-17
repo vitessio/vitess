@@ -42,7 +42,7 @@ var (
 	vschemaFileFlag    = flag.String("vschema-file", "", "Identifies the VTGate routing schema file")
 	ksShardMapFlag     = flag.String("ks-shard-map", "", "JSON map of keyspace name -> shard name -> ShardReference object. The inner map is the same as the output of FindAllShardsInKeyspace")
 	ksShardMapFileFlag = flag.String("ks-shard-map-file", "", "File containing json blob of keyspace name -> shard name -> ShardReference object")
-	numShards          = flag.Int("shards", 2, "Number of shards per keyspace. Passing -ks-shard-map/-ks-shard-map-file causes this flag to be ignored.")
+	numShards          = flag.Int("shards", 2, "Number of shards per keyspace. Passing --ks-shard-map/--ks-shard-map-file causes this flag to be ignored.")
 	executionMode      = flag.String("execution-mode", "multi", "The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc")
 	replicationMode    = flag.String("replication-mode", "ROW", "The replication mode to simulate -- must be set to either ROW or STATEMENT")
 	normalize          = flag.Bool("normalize", false, "Whether to enable vtgate normalization")
