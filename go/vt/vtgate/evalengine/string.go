@@ -18,8 +18,6 @@ package evalengine
 
 import (
 	"strconv"
-	"unicode"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -40,8 +38,9 @@ func (builtinAscii) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult
 	}
 
 	toascii.makeBinary()
-	if len(toascii.bytes()) > 0 {
-		result.setInt64(int64(toascii.bytes()[0]))
+	bs := toascii.bytes()
+	if len(bs) > 0 {
+		result.setInt64(int64(bs[0]))
 	} else {
 		result.setInt64(0)
 	}
@@ -68,20 +67,12 @@ func (builtinBin) call(env *ExpressionEnv, args []EvalResult, result *EvalResult
 		tobin.makeUnsignedIntegral()
 		raw = strconv.AppendUint(raw, tobin.uint64(), 2)
 	case sqltypes.IsText(t):
-		input := tobin.string()
-		index := len(input)
-		if index == 0 {
-			break
+		if len(tobin.bytes()) == 0 {
+			return
 		}
-		for i, ch := range input {
-			if !unicode.IsDigit(ch) {
-				index = i
-				break
-			}
-		}
-		intstr := input[:index]
-		toint64, _ := strconv.ParseInt(intstr, 10, 64)
-		raw = strconv.AppendUint(raw, uint64(toint64), 2)
+		tobin.makeFloat()
+		float, _ := tobin.coerceToFloat()
+		raw = strconv.AppendUint(raw, uint64(float), 2)
 	default:
 		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported BIN argument: %s", t.String()))
 	}
@@ -108,12 +99,7 @@ func (builtinBitLength) call(_ *ExpressionEnv, args []EvalResult, result *EvalRe
 		return
 	}
 
-	switch t := arg1.typeof(); {
-	case sqltypes.IsQuoted(t):
-		result.setInt64(int64(8 * len(arg1.bytes())))
-	default:
-		result.setInt64(int64(8 * len(arg1.toRawBytes())))
-	}
+	result.setInt64(int64(8 * len(arg1.toRawBytes())))
 }
 
 func (builtinBitLength) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
