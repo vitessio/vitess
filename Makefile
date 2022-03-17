@@ -88,7 +88,7 @@ endif
 	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 	# unset GOOS and embed local resources in the vttablet executable
 	if [ -d /go/bin ]; then
-		# Probably in a container
+		# Probably in the bootstrap container
 		(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=/go/bin/${GOOS}_${GOARCH}/vttablet)
 	else
 		(cd go/cmd/vttablet && unset GOOS && unset GOARCH && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=$${HOME}/go/bin/${GOOS}_${GOARCH}/vttablet)
@@ -282,11 +282,11 @@ define build_docker_image
 	# Fix permissions before copying files, to avoid AUFS bug other must have read/access permissions
 	chmod -R o=rx *;
 
-	@if grep -q arm64 <<< ${2}; then
+	if grep -q arm64 <<< ${2}; then \
 		# arm64/aarch64 build, use docker cross build
-		docker buildx build --platform linux/arm64 -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .;
-	else
-		docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .;
+		docker buildx build --platform linux/arm64 -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
+	else \
+		docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
 	fi
 endef
 
