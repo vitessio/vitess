@@ -71,7 +71,7 @@ func (vtworker *VtworkerProcess) Setup(cell string) (err error) {
 		"--command_display_interval", "10ms",
 	)
 	if *isCoverage {
-		vtworker.proc.Args = append(vtworker.proc.Args, "--test.coverprofile=vtworker.out", "-test.v")
+		vtworker.proc.Args = append(vtworker.proc.Args, "--test.coverprofile=vtworker.out", "--test.v")
 	}
 	vtworker.proc.Args = append(vtworker.proc.Args, vtworker.ExtraArgs...)
 
