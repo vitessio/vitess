@@ -117,7 +117,7 @@ func shouldInclude(table string, excludes []string) bool {
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
-	externalCluster string) error {
+	externalCluster string, dropConstraints bool) error {
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
@@ -242,13 +242,19 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		StopAfterCopy:         stopAfterCopy,
 		ExternalCluster:       externalCluster,
 	}
+
+	createDDLMode := createDDLAsCopy
+	if dropConstraints {
+		createDDLMode = createDDLAsCopyDropConstraint
+	}
+
 	for _, table := range tables {
 		buf := sqlparser.NewTrackedBuffer(nil)
 		buf.Myprintf("select * from %v", sqlparser.NewTableIdent(table))
 		ms.TableSettings = append(ms.TableSettings, &vtctldatapb.TableMaterializeSettings{
 			TargetTable:      table,
 			SourceExpression: buf.String(),
-			CreateDdl:        createDDLAsCopy,
+			CreateDdl:        createDDLMode,
 		})
 	}
 	mz, err := wr.prepareMaterializerStreams(ctx, ms)
