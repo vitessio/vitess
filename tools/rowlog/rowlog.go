@@ -424,7 +424,7 @@ func processPositionResult(gtidset string) (string, string) {
 
 // hack, should read json in a structured manner
 func parseExecOutput(result string) string {
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	err := json.Unmarshal([]byte(result), &resultMap)
 	if err != nil {
 		fmt.Errorf("error parsing result json %s", result)
