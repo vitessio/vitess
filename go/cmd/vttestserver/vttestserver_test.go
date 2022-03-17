@@ -390,7 +390,7 @@ func assertVtGateExecute(t *testing.T, cluster vttest.LocalCluster) {
 	stream, err := client.ExecuteVtctlCommand(
 		context.Background(),
 		[]string{
-			"VtGateExecute", "--",
+			"VtGateExecute",
 			"--server",
 			fmt.Sprintf("localhost:%v", cluster.GrpcPort()),
 			"select 'success';",
