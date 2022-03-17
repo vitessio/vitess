@@ -615,7 +615,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		specialComment := tkn.specialComment
 		tok, val := specialComment.Scan()
 		if tok != 0 {
-			// Copy over position from specialComment and add offset
+			// Copy over position from specialComment and add offset; this corrects ddl.SubStatementPositionStart and ddl.SubStatementPositionEnd
 			tkn.Position = tkn.specialPosOffset + specialComment.Position
 			// return the specialComment scan result as the result
 			return tok, val
