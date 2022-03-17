@@ -45,7 +45,7 @@ func clearListeners() {
 	listenersMutex.Lock()
 	defer listenersMutex.Unlock()
 
-	listeners = make(map[reflect.Type][]interface{})
+	listeners = make(map[reflect.Type][]any)
 	interfaces = make([]reflect.Type, 0)
 }
 
@@ -92,7 +92,7 @@ func TestEmptyInterfaceListener(t *testing.T) {
 	clearListeners()
 
 	triggered := false
-	AddListener(func(interface{}) { triggered = true })
+	AddListener(func(any) { triggered = true })
 	Dispatch("this should match interface{}")
 
 	if !triggered {
@@ -228,10 +228,10 @@ func TestDispatchValueToPointerInterfaceListener(t *testing.T) {
 }
 
 type testUpdateEvent struct {
-	update interface{}
+	update any
 }
 
-func (ev *testUpdateEvent) Update(update interface{}) {
+func (ev *testUpdateEvent) Update(update any) {
 	ev.update = update
 }
 

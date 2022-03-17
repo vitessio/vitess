@@ -6108,7 +6108,7 @@ func file_query_proto_rawDescGZIP() []byte {
 
 var file_query_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
 var file_query_proto_msgTypes = make([]protoimpl.MessageInfo, 64)
-var file_query_proto_goTypes = []interface{}{
+var file_query_proto_goTypes = []any{
 	(MySqlFlag)(0),                            // 0: query.MySqlFlag
 	(Flag)(0),                                 // 1: query.Flag
 	(Type)(0),                                 // 2: query.Type
@@ -6335,7 +6335,7 @@ func file_query_proto_init() {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_query_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[0].Exporter = func(v any, i int) any {
 			switch v := v.(*Target); i {
 			case 0:
 				return &v.state
@@ -6347,7 +6347,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[1].Exporter = func(v any, i int) any {
 			switch v := v.(*VTGateCallerID); i {
 			case 0:
 				return &v.state
@@ -6359,7 +6359,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[2].Exporter = func(v any, i int) any {
 			switch v := v.(*EventToken); i {
 			case 0:
 				return &v.state
@@ -6371,7 +6371,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[3].Exporter = func(v any, i int) any {
 			switch v := v.(*Value); i {
 			case 0:
 				return &v.state
@@ -6383,7 +6383,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[4].Exporter = func(v any, i int) any {
 			switch v := v.(*BindVariable); i {
 			case 0:
 				return &v.state
@@ -6395,7 +6395,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[5].Exporter = func(v any, i int) any {
 			switch v := v.(*BoundQuery); i {
 			case 0:
 				return &v.state
@@ -6407,7 +6407,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[6].Exporter = func(v any, i int) any {
 			switch v := v.(*ExecuteOptions); i {
 			case 0:
 				return &v.state
@@ -6419,7 +6419,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[7].Exporter = func(v any, i int) any {
 			switch v := v.(*Field); i {
 			case 0:
 				return &v.state
@@ -6431,7 +6431,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[8].Exporter = func(v any, i int) any {
 			switch v := v.(*Row); i {
 			case 0:
 				return &v.state
@@ -6443,7 +6443,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[9].Exporter = func(v any, i int) any {
 			switch v := v.(*QueryResult); i {
 			case 0:
 				return &v.state
@@ -6455,7 +6455,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[10].Exporter = func(v any, i int) any {
 			switch v := v.(*QueryWarning); i {
 			case 0:
 				return &v.state
@@ -6467,7 +6467,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[11].Exporter = func(v any, i int) any {
 			switch v := v.(*StreamEvent); i {
 			case 0:
 				return &v.state
@@ -6479,7 +6479,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[12].Exporter = func(v any, i int) any {
 			switch v := v.(*ExecuteRequest); i {
 			case 0:
 				return &v.state
@@ -6491,7 +6491,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[13].Exporter = func(v any, i int) any {
 			switch v := v.(*ExecuteResponse); i {
 			case 0:
 				return &v.state
@@ -6503,7 +6503,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[14].Exporter = func(v any, i int) any {
 			switch v := v.(*ResultWithError); i {
 			case 0:
 				return &v.state
@@ -6515,7 +6515,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[15].Exporter = func(v any, i int) any {
 			switch v := v.(*StreamExecuteRequest); i {
 			case 0:
 				return &v.state
@@ -6527,7 +6527,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[16].Exporter = func(v any, i int) any {
 			switch v := v.(*StreamExecuteResponse); i {
 			case 0:
 				return &v.state
@@ -6539,7 +6539,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[17].Exporter = func(v any, i int) any {
 			switch v := v.(*BeginRequest); i {
 			case 0:
 				return &v.state
@@ -6551,7 +6551,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[18].Exporter = func(v any, i int) any {
 			switch v := v.(*BeginResponse); i {
 			case 0:
 				return &v.state
@@ -6563,7 +6563,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[19].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[19].Exporter = func(v any, i int) any {
 			switch v := v.(*CommitRequest); i {
 			case 0:
 				return &v.state
@@ -6575,7 +6575,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[20].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[20].Exporter = func(v any, i int) any {
 			switch v := v.(*CommitResponse); i {
 			case 0:
 				return &v.state
@@ -6587,7 +6587,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[21].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[21].Exporter = func(v any, i int) any {
 			switch v := v.(*RollbackRequest); i {
 			case 0:
 				return &v.state
@@ -6599,7 +6599,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[22].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[22].Exporter = func(v any, i int) any {
 			switch v := v.(*RollbackResponse); i {
 			case 0:
 				return &v.state
@@ -6611,7 +6611,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[23].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[23].Exporter = func(v any, i int) any {
 			switch v := v.(*PrepareRequest); i {
 			case 0:
 				return &v.state
@@ -6623,7 +6623,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[24].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[24].Exporter = func(v any, i int) any {
 			switch v := v.(*PrepareResponse); i {
 			case 0:
 				return &v.state
@@ -6635,7 +6635,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[25].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[25].Exporter = func(v any, i int) any {
 			switch v := v.(*CommitPreparedRequest); i {
 			case 0:
 				return &v.state
@@ -6647,7 +6647,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[26].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[26].Exporter = func(v any, i int) any {
 			switch v := v.(*CommitPreparedResponse); i {
 			case 0:
 				return &v.state
@@ -6659,7 +6659,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[27].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[27].Exporter = func(v any, i int) any {
 			switch v := v.(*RollbackPreparedRequest); i {
 			case 0:
 				return &v.state
@@ -6671,7 +6671,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[28].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[28].Exporter = func(v any, i int) any {
 			switch v := v.(*RollbackPreparedResponse); i {
 			case 0:
 				return &v.state
@@ -6683,7 +6683,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[29].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[29].Exporter = func(v any, i int) any {
 			switch v := v.(*CreateTransactionRequest); i {
 			case 0:
 				return &v.state
@@ -6695,7 +6695,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[30].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[30].Exporter = func(v any, i int) any {
 			switch v := v.(*CreateTransactionResponse); i {
 			case 0:
 				return &v.state
@@ -6707,7 +6707,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[31].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[31].Exporter = func(v any, i int) any {
 			switch v := v.(*StartCommitRequest); i {
 			case 0:
 				return &v.state
@@ -6719,7 +6719,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[32].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[32].Exporter = func(v any, i int) any {
 			switch v := v.(*StartCommitResponse); i {
 			case 0:
 				return &v.state
@@ -6731,7 +6731,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[33].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[33].Exporter = func(v any, i int) any {
 			switch v := v.(*SetRollbackRequest); i {
 			case 0:
 				return &v.state
@@ -6743,7 +6743,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[34].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[34].Exporter = func(v any, i int) any {
 			switch v := v.(*SetRollbackResponse); i {
 			case 0:
 				return &v.state
@@ -6755,7 +6755,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[35].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[35].Exporter = func(v any, i int) any {
 			switch v := v.(*ConcludeTransactionRequest); i {
 			case 0:
 				return &v.state
@@ -6767,7 +6767,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[36].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[36].Exporter = func(v any, i int) any {
 			switch v := v.(*ConcludeTransactionResponse); i {
 			case 0:
 				return &v.state
@@ -6779,7 +6779,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[37].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[37].Exporter = func(v any, i int) any {
 			switch v := v.(*ReadTransactionRequest); i {
 			case 0:
 				return &v.state
@@ -6791,7 +6791,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[38].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[38].Exporter = func(v any, i int) any {
 			switch v := v.(*ReadTransactionResponse); i {
 			case 0:
 				return &v.state
@@ -6803,7 +6803,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[39].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[39].Exporter = func(v any, i int) any {
 			switch v := v.(*BeginExecuteRequest); i {
 			case 0:
 				return &v.state
@@ -6815,7 +6815,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[40].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[40].Exporter = func(v any, i int) any {
 			switch v := v.(*BeginExecuteResponse); i {
 			case 0:
 				return &v.state
@@ -6827,7 +6827,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[41].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[41].Exporter = func(v any, i int) any {
 			switch v := v.(*BeginStreamExecuteRequest); i {
 			case 0:
 				return &v.state
@@ -6839,7 +6839,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[42].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[42].Exporter = func(v any, i int) any {
 			switch v := v.(*BeginStreamExecuteResponse); i {
 			case 0:
 				return &v.state
@@ -6851,7 +6851,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[43].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[43].Exporter = func(v any, i int) any {
 			switch v := v.(*MessageStreamRequest); i {
 			case 0:
 				return &v.state
@@ -6863,7 +6863,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[44].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[44].Exporter = func(v any, i int) any {
 			switch v := v.(*MessageStreamResponse); i {
 			case 0:
 				return &v.state
@@ -6875,7 +6875,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[45].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[45].Exporter = func(v any, i int) any {
 			switch v := v.(*MessageAckRequest); i {
 			case 0:
 				return &v.state
@@ -6887,7 +6887,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[46].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[46].Exporter = func(v any, i int) any {
 			switch v := v.(*MessageAckResponse); i {
 			case 0:
 				return &v.state
@@ -6899,7 +6899,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[47].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[47].Exporter = func(v any, i int) any {
 			switch v := v.(*ReserveExecuteRequest); i {
 			case 0:
 				return &v.state
@@ -6911,7 +6911,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[48].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[48].Exporter = func(v any, i int) any {
 			switch v := v.(*ReserveExecuteResponse); i {
 			case 0:
 				return &v.state
@@ -6923,7 +6923,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[49].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[49].Exporter = func(v any, i int) any {
 			switch v := v.(*ReserveStreamExecuteRequest); i {
 			case 0:
 				return &v.state
@@ -6935,7 +6935,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[50].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[50].Exporter = func(v any, i int) any {
 			switch v := v.(*ReserveStreamExecuteResponse); i {
 			case 0:
 				return &v.state
@@ -6947,7 +6947,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[51].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[51].Exporter = func(v any, i int) any {
 			switch v := v.(*ReserveBeginExecuteRequest); i {
 			case 0:
 				return &v.state
@@ -6959,7 +6959,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[52].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[52].Exporter = func(v any, i int) any {
 			switch v := v.(*ReserveBeginExecuteResponse); i {
 			case 0:
 				return &v.state
@@ -6971,7 +6971,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[53].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[53].Exporter = func(v any, i int) any {
 			switch v := v.(*ReserveBeginStreamExecuteRequest); i {
 			case 0:
 				return &v.state
@@ -6983,7 +6983,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[54].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[54].Exporter = func(v any, i int) any {
 			switch v := v.(*ReserveBeginStreamExecuteResponse); i {
 			case 0:
 				return &v.state
@@ -6995,7 +6995,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[55].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[55].Exporter = func(v any, i int) any {
 			switch v := v.(*ReleaseRequest); i {
 			case 0:
 				return &v.state
@@ -7007,7 +7007,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[56].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[56].Exporter = func(v any, i int) any {
 			switch v := v.(*ReleaseResponse); i {
 			case 0:
 				return &v.state
@@ -7019,7 +7019,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[57].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[57].Exporter = func(v any, i int) any {
 			switch v := v.(*StreamHealthRequest); i {
 			case 0:
 				return &v.state
@@ -7031,7 +7031,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[58].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[58].Exporter = func(v any, i int) any {
 			switch v := v.(*RealtimeStats); i {
 			case 0:
 				return &v.state
@@ -7043,7 +7043,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[59].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[59].Exporter = func(v any, i int) any {
 			switch v := v.(*AggregateStats); i {
 			case 0:
 				return &v.state
@@ -7055,7 +7055,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[60].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[60].Exporter = func(v any, i int) any {
 			switch v := v.(*StreamHealthResponse); i {
 			case 0:
 				return &v.state
@@ -7067,7 +7067,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[61].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[61].Exporter = func(v any, i int) any {
 			switch v := v.(*TransactionMetadata); i {
 			case 0:
 				return &v.state
@@ -7079,7 +7079,7 @@ func file_query_proto_init() {
 				return nil
 			}
 		}
-		file_query_proto_msgTypes[63].Exporter = func(v interface{}, i int) interface{} {
+		file_query_proto_msgTypes[63].Exporter = func(v any, i int) any {
 			switch v := v.(*StreamEvent_Statement); i {
 			case 0:
 				return &v.state

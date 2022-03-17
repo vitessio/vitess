@@ -48,7 +48,7 @@ import (
 // In Test*() function:
 //
 // mustMatch(t, want, got, "something doesn't match")
-func MustMatchFn(ignoredFields ...string) func(t *testing.T, want, got interface{}, errMsg ...string) {
+func MustMatchFn(ignoredFields ...string) func(t *testing.T, want, got any, errMsg ...string) {
 	diffOpts := []cmp.Option{
 		cmp.Comparer(func(a, b proto.Message) bool {
 			return proto.Equal(a, b)
@@ -59,7 +59,7 @@ func MustMatchFn(ignoredFields ...string) func(t *testing.T, want, got interface
 		cmpIgnoreFields(ignoredFields...),
 	}
 	// Diffs want/got and fails with errMsg on any failure.
-	return func(t *testing.T, want, got interface{}, errMsg ...string) {
+	return func(t *testing.T, want, got any, errMsg ...string) {
 		t.Helper()
 		diff := cmp.Diff(want, got, diffOpts...)
 		if diff != "" {

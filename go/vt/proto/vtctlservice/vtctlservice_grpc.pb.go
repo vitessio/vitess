@@ -90,7 +90,7 @@ func RegisterVtctlServer(s grpc.ServiceRegistrar, srv VtctlServer) {
 	s.RegisterService(&Vtctl_ServiceDesc, srv)
 }
 
-func _Vtctl_ExecuteVtctlCommand_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Vtctl_ExecuteVtctlCommand_Handler(srv any, stream grpc.ServerStream) error {
 	m := new(vtctldata.ExecuteVtctlCommandRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -1635,7 +1635,7 @@ func RegisterVtctldServer(s grpc.ServiceRegistrar, srv VtctldServer) {
 	s.RegisterService(&Vtctld_ServiceDesc, srv)
 }
 
-func _Vtctld_AddCellInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_AddCellInfo_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.AddCellInfoRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1647,13 +1647,13 @@ func _Vtctld_AddCellInfo_Handler(srv interface{}, ctx context.Context, dec func(
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/AddCellInfo",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).AddCellInfo(ctx, req.(*vtctldata.AddCellInfoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_AddCellsAlias_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_AddCellsAlias_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.AddCellsAliasRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1665,13 +1665,13 @@ func _Vtctld_AddCellsAlias_Handler(srv interface{}, ctx context.Context, dec fun
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/AddCellsAlias",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).AddCellsAlias(ctx, req.(*vtctldata.AddCellsAliasRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ApplyRoutingRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_ApplyRoutingRules_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ApplyRoutingRulesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1683,13 +1683,13 @@ func _Vtctld_ApplyRoutingRules_Handler(srv interface{}, ctx context.Context, dec
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/ApplyRoutingRules",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).ApplyRoutingRules(ctx, req.(*vtctldata.ApplyRoutingRulesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ApplySchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_ApplySchema_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ApplySchemaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1701,13 +1701,13 @@ func _Vtctld_ApplySchema_Handler(srv interface{}, ctx context.Context, dec func(
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/ApplySchema",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).ApplySchema(ctx, req.(*vtctldata.ApplySchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ApplyVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_ApplyVSchema_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ApplyVSchemaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1719,13 +1719,13 @@ func _Vtctld_ApplyVSchema_Handler(srv interface{}, ctx context.Context, dec func
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/ApplyVSchema",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).ApplyVSchema(ctx, req.(*vtctldata.ApplyVSchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_Backup_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Vtctld_Backup_Handler(srv any, stream grpc.ServerStream) error {
 	m := new(vtctldata.BackupRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -1746,7 +1746,7 @@ func (x *vtctldBackupServer) Send(m *vtctldata.BackupResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Vtctld_BackupShard_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Vtctld_BackupShard_Handler(srv any, stream grpc.ServerStream) error {
 	m := new(vtctldata.BackupShardRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -1767,7 +1767,7 @@ func (x *vtctldBackupShardServer) Send(m *vtctldata.BackupResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Vtctld_ChangeTabletType_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_ChangeTabletType_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ChangeTabletTypeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1779,13 +1779,13 @@ func _Vtctld_ChangeTabletType_Handler(srv interface{}, ctx context.Context, dec 
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/ChangeTabletType",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).ChangeTabletType(ctx, req.(*vtctldata.ChangeTabletTypeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_CreateKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_CreateKeyspace_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.CreateKeyspaceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1797,13 +1797,13 @@ func _Vtctld_CreateKeyspace_Handler(srv interface{}, ctx context.Context, dec fu
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/CreateKeyspace",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).CreateKeyspace(ctx, req.(*vtctldata.CreateKeyspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_CreateShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_CreateShard_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.CreateShardRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1815,13 +1815,13 @@ func _Vtctld_CreateShard_Handler(srv interface{}, ctx context.Context, dec func(
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/CreateShard",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).CreateShard(ctx, req.(*vtctldata.CreateShardRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_DeleteCellInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_DeleteCellInfo_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.DeleteCellInfoRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1833,13 +1833,13 @@ func _Vtctld_DeleteCellInfo_Handler(srv interface{}, ctx context.Context, dec fu
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/DeleteCellInfo",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).DeleteCellInfo(ctx, req.(*vtctldata.DeleteCellInfoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_DeleteCellsAlias_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_DeleteCellsAlias_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.DeleteCellsAliasRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1851,13 +1851,13 @@ func _Vtctld_DeleteCellsAlias_Handler(srv interface{}, ctx context.Context, dec 
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/DeleteCellsAlias",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).DeleteCellsAlias(ctx, req.(*vtctldata.DeleteCellsAliasRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_DeleteKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_DeleteKeyspace_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.DeleteKeyspaceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1869,13 +1869,13 @@ func _Vtctld_DeleteKeyspace_Handler(srv interface{}, ctx context.Context, dec fu
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/DeleteKeyspace",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).DeleteKeyspace(ctx, req.(*vtctldata.DeleteKeyspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_DeleteShards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_DeleteShards_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.DeleteShardsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1887,13 +1887,13 @@ func _Vtctld_DeleteShards_Handler(srv interface{}, ctx context.Context, dec func
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/DeleteShards",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).DeleteShards(ctx, req.(*vtctldata.DeleteShardsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_DeleteSrvVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_DeleteSrvVSchema_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.DeleteSrvVSchemaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1905,13 +1905,13 @@ func _Vtctld_DeleteSrvVSchema_Handler(srv interface{}, ctx context.Context, dec 
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/DeleteSrvVSchema",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).DeleteSrvVSchema(ctx, req.(*vtctldata.DeleteSrvVSchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_DeleteTablets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_DeleteTablets_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.DeleteTabletsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1923,13 +1923,13 @@ func _Vtctld_DeleteTablets_Handler(srv interface{}, ctx context.Context, dec fun
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/DeleteTablets",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).DeleteTablets(ctx, req.(*vtctldata.DeleteTabletsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_EmergencyReparentShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_EmergencyReparentShard_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.EmergencyReparentShardRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1941,13 +1941,13 @@ func _Vtctld_EmergencyReparentShard_Handler(srv interface{}, ctx context.Context
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/EmergencyReparentShard",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).EmergencyReparentShard(ctx, req.(*vtctldata.EmergencyReparentShardRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ExecuteFetchAsApp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_ExecuteFetchAsApp_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ExecuteFetchAsAppRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1959,13 +1959,13 @@ func _Vtctld_ExecuteFetchAsApp_Handler(srv interface{}, ctx context.Context, dec
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/ExecuteFetchAsApp",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).ExecuteFetchAsApp(ctx, req.(*vtctldata.ExecuteFetchAsAppRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ExecuteFetchAsDBA_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_ExecuteFetchAsDBA_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ExecuteFetchAsDBARequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1977,13 +1977,13 @@ func _Vtctld_ExecuteFetchAsDBA_Handler(srv interface{}, ctx context.Context, dec
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/ExecuteFetchAsDBA",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).ExecuteFetchAsDBA(ctx, req.(*vtctldata.ExecuteFetchAsDBARequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ExecuteHook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_ExecuteHook_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ExecuteHookRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1995,13 +1995,13 @@ func _Vtctld_ExecuteHook_Handler(srv interface{}, ctx context.Context, dec func(
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/ExecuteHook",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).ExecuteHook(ctx, req.(*vtctldata.ExecuteHookRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_FindAllShardsInKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_FindAllShardsInKeyspace_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.FindAllShardsInKeyspaceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2013,13 +2013,13 @@ func _Vtctld_FindAllShardsInKeyspace_Handler(srv interface{}, ctx context.Contex
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/FindAllShardsInKeyspace",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).FindAllShardsInKeyspace(ctx, req.(*vtctldata.FindAllShardsInKeyspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_GetBackups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_GetBackups_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.GetBackupsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2031,13 +2031,13 @@ func _Vtctld_GetBackups_Handler(srv interface{}, ctx context.Context, dec func(i
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/GetBackups",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).GetBackups(ctx, req.(*vtctldata.GetBackupsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_GetCellInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_GetCellInfo_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.GetCellInfoRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2049,13 +2049,13 @@ func _Vtctld_GetCellInfo_Handler(srv interface{}, ctx context.Context, dec func(
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/GetCellInfo",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).GetCellInfo(ctx, req.(*vtctldata.GetCellInfoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_GetCellInfoNames_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_GetCellInfoNames_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.GetCellInfoNamesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2067,13 +2067,13 @@ func _Vtctld_GetCellInfoNames_Handler(srv interface{}, ctx context.Context, dec 
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/GetCellInfoNames",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).GetCellInfoNames(ctx, req.(*vtctldata.GetCellInfoNamesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_GetCellsAliases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_GetCellsAliases_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.GetCellsAliasesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2085,13 +2085,13 @@ func _Vtctld_GetCellsAliases_Handler(srv interface{}, ctx context.Context, dec f
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/GetCellsAliases",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).GetCellsAliases(ctx, req.(*vtctldata.GetCellsAliasesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_GetKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_GetKeyspace_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.GetKeyspaceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2103,13 +2103,13 @@ func _Vtctld_GetKeyspace_Handler(srv interface{}, ctx context.Context, dec func(
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/GetKeyspace",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).GetKeyspace(ctx, req.(*vtctldata.GetKeyspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_GetKeyspaces_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_GetKeyspaces_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.GetKeyspacesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2121,13 +2121,13 @@ func _Vtctld_GetKeyspaces_Handler(srv interface{}, ctx context.Context, dec func
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/GetKeyspaces",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).GetKeyspaces(ctx, req.(*vtctldata.GetKeyspacesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_GetRoutingRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_GetRoutingRules_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.GetRoutingRulesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2139,13 +2139,13 @@ func _Vtctld_GetRoutingRules_Handler(srv interface{}, ctx context.Context, dec f
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/GetRoutingRules",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).GetRoutingRules(ctx, req.(*vtctldata.GetRoutingRulesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_GetSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_GetSchema_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.GetSchemaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2157,13 +2157,13 @@ func _Vtctld_GetSchema_Handler(srv interface{}, ctx context.Context, dec func(in
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/GetSchema",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).GetSchema(ctx, req.(*vtctldata.GetSchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_GetShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_GetShard_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.GetShardRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2175,13 +2175,13 @@ func _Vtctld_GetShard_Handler(srv interface{}, ctx context.Context, dec func(int
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/GetShard",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).GetShard(ctx, req.(*vtctldata.GetShardRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_GetSrvKeyspaceNames_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_GetSrvKeyspaceNames_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.GetSrvKeyspaceNamesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2193,13 +2193,13 @@ func _Vtctld_GetSrvKeyspaceNames_Handler(srv interface{}, ctx context.Context, d
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/GetSrvKeyspaceNames",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).GetSrvKeyspaceNames(ctx, req.(*vtctldata.GetSrvKeyspaceNamesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_GetSrvKeyspaces_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_GetSrvKeyspaces_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.GetSrvKeyspacesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2211,13 +2211,13 @@ func _Vtctld_GetSrvKeyspaces_Handler(srv interface{}, ctx context.Context, dec f
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/GetSrvKeyspaces",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).GetSrvKeyspaces(ctx, req.(*vtctldata.GetSrvKeyspacesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_GetSrvVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_GetSrvVSchema_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.GetSrvVSchemaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2229,13 +2229,13 @@ func _Vtctld_GetSrvVSchema_Handler(srv interface{}, ctx context.Context, dec fun
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/GetSrvVSchema",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).GetSrvVSchema(ctx, req.(*vtctldata.GetSrvVSchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_GetSrvVSchemas_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_GetSrvVSchemas_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.GetSrvVSchemasRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2247,13 +2247,13 @@ func _Vtctld_GetSrvVSchemas_Handler(srv interface{}, ctx context.Context, dec fu
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/GetSrvVSchemas",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).GetSrvVSchemas(ctx, req.(*vtctldata.GetSrvVSchemasRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_GetTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_GetTablet_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.GetTabletRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2265,13 +2265,13 @@ func _Vtctld_GetTablet_Handler(srv interface{}, ctx context.Context, dec func(in
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/GetTablet",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).GetTablet(ctx, req.(*vtctldata.GetTabletRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_GetTablets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_GetTablets_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.GetTabletsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2283,13 +2283,13 @@ func _Vtctld_GetTablets_Handler(srv interface{}, ctx context.Context, dec func(i
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/GetTablets",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).GetTablets(ctx, req.(*vtctldata.GetTabletsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_GetVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_GetVersion_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.GetVersionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2301,13 +2301,13 @@ func _Vtctld_GetVersion_Handler(srv interface{}, ctx context.Context, dec func(i
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/GetVersion",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).GetVersion(ctx, req.(*vtctldata.GetVersionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_GetVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_GetVSchema_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.GetVSchemaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2319,13 +2319,13 @@ func _Vtctld_GetVSchema_Handler(srv interface{}, ctx context.Context, dec func(i
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/GetVSchema",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).GetVSchema(ctx, req.(*vtctldata.GetVSchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_GetWorkflows_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_GetWorkflows_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.GetWorkflowsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2337,13 +2337,13 @@ func _Vtctld_GetWorkflows_Handler(srv interface{}, ctx context.Context, dec func
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/GetWorkflows",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).GetWorkflows(ctx, req.(*vtctldata.GetWorkflowsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_InitShardPrimary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_InitShardPrimary_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.InitShardPrimaryRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2355,13 +2355,13 @@ func _Vtctld_InitShardPrimary_Handler(srv interface{}, ctx context.Context, dec 
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/InitShardPrimary",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).InitShardPrimary(ctx, req.(*vtctldata.InitShardPrimaryRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_PingTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_PingTablet_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.PingTabletRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2373,13 +2373,13 @@ func _Vtctld_PingTablet_Handler(srv interface{}, ctx context.Context, dec func(i
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/PingTablet",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).PingTablet(ctx, req.(*vtctldata.PingTabletRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_PlannedReparentShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_PlannedReparentShard_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.PlannedReparentShardRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2391,13 +2391,13 @@ func _Vtctld_PlannedReparentShard_Handler(srv interface{}, ctx context.Context, 
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/PlannedReparentShard",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).PlannedReparentShard(ctx, req.(*vtctldata.PlannedReparentShardRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_RebuildKeyspaceGraph_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_RebuildKeyspaceGraph_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.RebuildKeyspaceGraphRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2409,13 +2409,13 @@ func _Vtctld_RebuildKeyspaceGraph_Handler(srv interface{}, ctx context.Context, 
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/RebuildKeyspaceGraph",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).RebuildKeyspaceGraph(ctx, req.(*vtctldata.RebuildKeyspaceGraphRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_RebuildVSchemaGraph_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_RebuildVSchemaGraph_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.RebuildVSchemaGraphRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2427,13 +2427,13 @@ func _Vtctld_RebuildVSchemaGraph_Handler(srv interface{}, ctx context.Context, d
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/RebuildVSchemaGraph",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).RebuildVSchemaGraph(ctx, req.(*vtctldata.RebuildVSchemaGraphRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_RefreshState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_RefreshState_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.RefreshStateRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2445,13 +2445,13 @@ func _Vtctld_RefreshState_Handler(srv interface{}, ctx context.Context, dec func
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/RefreshState",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).RefreshState(ctx, req.(*vtctldata.RefreshStateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_RefreshStateByShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_RefreshStateByShard_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.RefreshStateByShardRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2463,13 +2463,13 @@ func _Vtctld_RefreshStateByShard_Handler(srv interface{}, ctx context.Context, d
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/RefreshStateByShard",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).RefreshStateByShard(ctx, req.(*vtctldata.RefreshStateByShardRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ReloadSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_ReloadSchema_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ReloadSchemaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2481,13 +2481,13 @@ func _Vtctld_ReloadSchema_Handler(srv interface{}, ctx context.Context, dec func
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/ReloadSchema",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).ReloadSchema(ctx, req.(*vtctldata.ReloadSchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ReloadSchemaKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_ReloadSchemaKeyspace_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ReloadSchemaKeyspaceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2499,13 +2499,13 @@ func _Vtctld_ReloadSchemaKeyspace_Handler(srv interface{}, ctx context.Context, 
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/ReloadSchemaKeyspace",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).ReloadSchemaKeyspace(ctx, req.(*vtctldata.ReloadSchemaKeyspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ReloadSchemaShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_ReloadSchemaShard_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ReloadSchemaShardRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2517,13 +2517,13 @@ func _Vtctld_ReloadSchemaShard_Handler(srv interface{}, ctx context.Context, dec
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/ReloadSchemaShard",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).ReloadSchemaShard(ctx, req.(*vtctldata.ReloadSchemaShardRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_RemoveBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_RemoveBackup_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.RemoveBackupRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2535,13 +2535,13 @@ func _Vtctld_RemoveBackup_Handler(srv interface{}, ctx context.Context, dec func
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/RemoveBackup",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).RemoveBackup(ctx, req.(*vtctldata.RemoveBackupRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_RemoveKeyspaceCell_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_RemoveKeyspaceCell_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.RemoveKeyspaceCellRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2553,13 +2553,13 @@ func _Vtctld_RemoveKeyspaceCell_Handler(srv interface{}, ctx context.Context, de
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/RemoveKeyspaceCell",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).RemoveKeyspaceCell(ctx, req.(*vtctldata.RemoveKeyspaceCellRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_RemoveShardCell_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_RemoveShardCell_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.RemoveShardCellRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2571,13 +2571,13 @@ func _Vtctld_RemoveShardCell_Handler(srv interface{}, ctx context.Context, dec f
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/RemoveShardCell",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).RemoveShardCell(ctx, req.(*vtctldata.RemoveShardCellRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ReparentTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_ReparentTablet_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ReparentTabletRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2589,13 +2589,13 @@ func _Vtctld_ReparentTablet_Handler(srv interface{}, ctx context.Context, dec fu
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/ReparentTablet",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).ReparentTablet(ctx, req.(*vtctldata.ReparentTabletRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_RestoreFromBackup_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Vtctld_RestoreFromBackup_Handler(srv any, stream grpc.ServerStream) error {
 	m := new(vtctldata.RestoreFromBackupRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -2616,7 +2616,7 @@ func (x *vtctldRestoreFromBackupServer) Send(m *vtctldata.RestoreFromBackupRespo
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Vtctld_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_RunHealthCheck_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.RunHealthCheckRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2628,13 +2628,13 @@ func _Vtctld_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec fu
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/RunHealthCheck",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).RunHealthCheck(ctx, req.(*vtctldata.RunHealthCheckRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_SetKeyspaceServedFrom_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_SetKeyspaceServedFrom_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.SetKeyspaceServedFromRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2646,13 +2646,13 @@ func _Vtctld_SetKeyspaceServedFrom_Handler(srv interface{}, ctx context.Context,
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/SetKeyspaceServedFrom",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).SetKeyspaceServedFrom(ctx, req.(*vtctldata.SetKeyspaceServedFromRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_SetKeyspaceShardingInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_SetKeyspaceShardingInfo_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.SetKeyspaceShardingInfoRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2664,13 +2664,13 @@ func _Vtctld_SetKeyspaceShardingInfo_Handler(srv interface{}, ctx context.Contex
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/SetKeyspaceShardingInfo",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).SetKeyspaceShardingInfo(ctx, req.(*vtctldata.SetKeyspaceShardingInfoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_SetShardIsPrimaryServing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_SetShardIsPrimaryServing_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.SetShardIsPrimaryServingRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2682,13 +2682,13 @@ func _Vtctld_SetShardIsPrimaryServing_Handler(srv interface{}, ctx context.Conte
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/SetShardIsPrimaryServing",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).SetShardIsPrimaryServing(ctx, req.(*vtctldata.SetShardIsPrimaryServingRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_SetShardTabletControl_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_SetShardTabletControl_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.SetShardTabletControlRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2700,13 +2700,13 @@ func _Vtctld_SetShardTabletControl_Handler(srv interface{}, ctx context.Context,
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/SetShardTabletControl",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).SetShardTabletControl(ctx, req.(*vtctldata.SetShardTabletControlRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_SetWritable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_SetWritable_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.SetWritableRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2718,13 +2718,13 @@ func _Vtctld_SetWritable_Handler(srv interface{}, ctx context.Context, dec func(
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/SetWritable",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).SetWritable(ctx, req.(*vtctldata.SetWritableRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ShardReplicationFix_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_ShardReplicationFix_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ShardReplicationFixRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2736,13 +2736,13 @@ func _Vtctld_ShardReplicationFix_Handler(srv interface{}, ctx context.Context, d
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/ShardReplicationFix",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).ShardReplicationFix(ctx, req.(*vtctldata.ShardReplicationFixRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ShardReplicationPositions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_ShardReplicationPositions_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ShardReplicationPositionsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2754,13 +2754,13 @@ func _Vtctld_ShardReplicationPositions_Handler(srv interface{}, ctx context.Cont
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/ShardReplicationPositions",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).ShardReplicationPositions(ctx, req.(*vtctldata.ShardReplicationPositionsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_SleepTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_SleepTablet_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.SleepTabletRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2772,13 +2772,13 @@ func _Vtctld_SleepTablet_Handler(srv interface{}, ctx context.Context, dec func(
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/SleepTablet",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).SleepTablet(ctx, req.(*vtctldata.SleepTabletRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_SourceShardAdd_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_SourceShardAdd_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.SourceShardAddRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2790,13 +2790,13 @@ func _Vtctld_SourceShardAdd_Handler(srv interface{}, ctx context.Context, dec fu
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/SourceShardAdd",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).SourceShardAdd(ctx, req.(*vtctldata.SourceShardAddRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_SourceShardDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_SourceShardDelete_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.SourceShardDeleteRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2808,13 +2808,13 @@ func _Vtctld_SourceShardDelete_Handler(srv interface{}, ctx context.Context, dec
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/SourceShardDelete",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).SourceShardDelete(ctx, req.(*vtctldata.SourceShardDeleteRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_StartReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_StartReplication_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.StartReplicationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2826,13 +2826,13 @@ func _Vtctld_StartReplication_Handler(srv interface{}, ctx context.Context, dec 
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/StartReplication",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).StartReplication(ctx, req.(*vtctldata.StartReplicationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_StopReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_StopReplication_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.StopReplicationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2844,13 +2844,13 @@ func _Vtctld_StopReplication_Handler(srv interface{}, ctx context.Context, dec f
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/StopReplication",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).StopReplication(ctx, req.(*vtctldata.StopReplicationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_TabletExternallyReparented_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_TabletExternallyReparented_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.TabletExternallyReparentedRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2862,13 +2862,13 @@ func _Vtctld_TabletExternallyReparented_Handler(srv interface{}, ctx context.Con
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/TabletExternallyReparented",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).TabletExternallyReparented(ctx, req.(*vtctldata.TabletExternallyReparentedRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_UpdateCellInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_UpdateCellInfo_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.UpdateCellInfoRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2880,13 +2880,13 @@ func _Vtctld_UpdateCellInfo_Handler(srv interface{}, ctx context.Context, dec fu
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/UpdateCellInfo",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).UpdateCellInfo(ctx, req.(*vtctldata.UpdateCellInfoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_UpdateCellsAlias_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_UpdateCellsAlias_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.UpdateCellsAliasRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2898,13 +2898,13 @@ func _Vtctld_UpdateCellsAlias_Handler(srv interface{}, ctx context.Context, dec 
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/UpdateCellsAlias",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).UpdateCellsAlias(ctx, req.(*vtctldata.UpdateCellsAliasRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_Validate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_Validate_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ValidateRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2916,13 +2916,13 @@ func _Vtctld_Validate_Handler(srv interface{}, ctx context.Context, dec func(int
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/Validate",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).Validate(ctx, req.(*vtctldata.ValidateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ValidateKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_ValidateKeyspace_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ValidateKeyspaceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2934,13 +2934,13 @@ func _Vtctld_ValidateKeyspace_Handler(srv interface{}, ctx context.Context, dec 
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/ValidateKeyspace",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).ValidateKeyspace(ctx, req.(*vtctldata.ValidateKeyspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ValidateSchemaKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_ValidateSchemaKeyspace_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ValidateSchemaKeyspaceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2952,13 +2952,13 @@ func _Vtctld_ValidateSchemaKeyspace_Handler(srv interface{}, ctx context.Context
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/ValidateSchemaKeyspace",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).ValidateSchemaKeyspace(ctx, req.(*vtctldata.ValidateSchemaKeyspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ValidateShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_ValidateShard_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ValidateShardRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2970,13 +2970,13 @@ func _Vtctld_ValidateShard_Handler(srv interface{}, ctx context.Context, dec fun
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/ValidateShard",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).ValidateShard(ctx, req.(*vtctldata.ValidateShardRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ValidateVersionKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_ValidateVersionKeyspace_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ValidateVersionKeyspaceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -2988,13 +2988,13 @@ func _Vtctld_ValidateVersionKeyspace_Handler(srv interface{}, ctx context.Contex
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/ValidateVersionKeyspace",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).ValidateVersionKeyspace(ctx, req.(*vtctldata.ValidateVersionKeyspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ValidateVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vtctld_ValidateVSchema_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtctldata.ValidateVSchemaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -3006,7 +3006,7 @@ func _Vtctld_ValidateVSchema_Handler(srv interface{}, ctx context.Context, dec f
 		Server:     srv,
 		FullMethod: "/vtctlservice.Vtctld/ValidateVSchema",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VtctldServer).ValidateVSchema(ctx, req.(*vtctldata.ValidateVSchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)

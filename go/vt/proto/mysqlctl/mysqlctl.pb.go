@@ -696,7 +696,7 @@ func file_mysqlctl_proto_rawDescGZIP() []byte {
 
 var file_mysqlctl_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_mysqlctl_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
-var file_mysqlctl_proto_goTypes = []interface{}{
+var file_mysqlctl_proto_goTypes = []any{
 	(BackupInfo_Status)(0),          // 0: mysqlctl.BackupInfo.Status
 	(*StartRequest)(nil),            // 1: mysqlctl.StartRequest
 	(*StartResponse)(nil),           // 2: mysqlctl.StartResponse
@@ -739,7 +739,7 @@ func file_mysqlctl_proto_init() {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_mysqlctl_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_mysqlctl_proto_msgTypes[0].Exporter = func(v any, i int) any {
 			switch v := v.(*StartRequest); i {
 			case 0:
 				return &v.state
@@ -751,7 +751,7 @@ func file_mysqlctl_proto_init() {
 				return nil
 			}
 		}
-		file_mysqlctl_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_mysqlctl_proto_msgTypes[1].Exporter = func(v any, i int) any {
 			switch v := v.(*StartResponse); i {
 			case 0:
 				return &v.state
@@ -763,7 +763,7 @@ func file_mysqlctl_proto_init() {
 				return nil
 			}
 		}
-		file_mysqlctl_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+		file_mysqlctl_proto_msgTypes[2].Exporter = func(v any, i int) any {
 			switch v := v.(*ShutdownRequest); i {
 			case 0:
 				return &v.state
@@ -775,7 +775,7 @@ func file_mysqlctl_proto_init() {
 				return nil
 			}
 		}
-		file_mysqlctl_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+		file_mysqlctl_proto_msgTypes[3].Exporter = func(v any, i int) any {
 			switch v := v.(*ShutdownResponse); i {
 			case 0:
 				return &v.state
@@ -787,7 +787,7 @@ func file_mysqlctl_proto_init() {
 				return nil
 			}
 		}
-		file_mysqlctl_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+		file_mysqlctl_proto_msgTypes[4].Exporter = func(v any, i int) any {
 			switch v := v.(*RunMysqlUpgradeRequest); i {
 			case 0:
 				return &v.state
@@ -799,7 +799,7 @@ func file_mysqlctl_proto_init() {
 				return nil
 			}
 		}
-		file_mysqlctl_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+		file_mysqlctl_proto_msgTypes[5].Exporter = func(v any, i int) any {
 			switch v := v.(*RunMysqlUpgradeResponse); i {
 			case 0:
 				return &v.state
@@ -811,7 +811,7 @@ func file_mysqlctl_proto_init() {
 				return nil
 			}
 		}
-		file_mysqlctl_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+		file_mysqlctl_proto_msgTypes[6].Exporter = func(v any, i int) any {
 			switch v := v.(*ReinitConfigRequest); i {
 			case 0:
 				return &v.state
@@ -823,7 +823,7 @@ func file_mysqlctl_proto_init() {
 				return nil
 			}
 		}
-		file_mysqlctl_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+		file_mysqlctl_proto_msgTypes[7].Exporter = func(v any, i int) any {
 			switch v := v.(*ReinitConfigResponse); i {
 			case 0:
 				return &v.state
@@ -835,7 +835,7 @@ func file_mysqlctl_proto_init() {
 				return nil
 			}
 		}
-		file_mysqlctl_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+		file_mysqlctl_proto_msgTypes[8].Exporter = func(v any, i int) any {
 			switch v := v.(*RefreshConfigRequest); i {
 			case 0:
 				return &v.state
@@ -847,7 +847,7 @@ func file_mysqlctl_proto_init() {
 				return nil
 			}
 		}
-		file_mysqlctl_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+		file_mysqlctl_proto_msgTypes[9].Exporter = func(v any, i int) any {
 			switch v := v.(*RefreshConfigResponse); i {
 			case 0:
 				return &v.state
@@ -859,7 +859,7 @@ func file_mysqlctl_proto_init() {
 				return nil
 			}
 		}
-		file_mysqlctl_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+		file_mysqlctl_proto_msgTypes[10].Exporter = func(v any, i int) any {
 			switch v := v.(*BackupInfo); i {
 			case 0:
 				return &v.state

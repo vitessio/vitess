@@ -180,7 +180,7 @@ var file_queryservice_proto_rawDesc = []byte{
 	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
-var file_queryservice_proto_goTypes = []interface{}{
+var file_queryservice_proto_goTypes = []any{
 	(*query.ExecuteRequest)(nil),                    // 0: query.ExecuteRequest
 	(*query.StreamExecuteRequest)(nil),              // 1: query.StreamExecuteRequest
 	(*query.BeginRequest)(nil),                      // 2: query.BeginRequest

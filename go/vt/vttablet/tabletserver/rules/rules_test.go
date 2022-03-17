@@ -346,7 +346,7 @@ type BVCreation struct {
 	onAbsent   bool
 	onMismatch bool
 	op         Operator
-	value      interface{}
+	value      any
 	expecterr  bool
 }
 
@@ -754,7 +754,7 @@ func TestInvalidJSON(t *testing.T) {
 }
 
 func TestBuildQueryRuleActionFail(t *testing.T) {
-	var ruleInfo map[string]interface{}
+	var ruleInfo map[string]any
 	err := json.Unmarshal([]byte(`{"Action": "FAIL" }`), &ruleInfo)
 	if err != nil {
 		t.Fatalf("failed to unmarshal json, got error: %v", err)
@@ -802,7 +802,7 @@ func compacted(in string) string {
 	return dst.String()
 }
 
-func marshalled(in interface{}) string {
+func marshalled(in any) string {
 	b, err := json.Marshal(in)
 	if err != nil {
 		panic(err)

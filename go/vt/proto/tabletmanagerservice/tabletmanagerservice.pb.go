@@ -385,7 +385,7 @@ var file_tabletmanagerservice_proto_rawDesc = []byte{
 	0x69, 0x63, 0x65, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
-var file_tabletmanagerservice_proto_goTypes = []interface{}{
+var file_tabletmanagerservice_proto_goTypes = []any{
 	(*tabletmanagerdata.PingRequest)(nil),                         // 0: tabletmanagerdata.PingRequest
 	(*tabletmanagerdata.SleepRequest)(nil),                        // 1: tabletmanagerdata.SleepRequest
 	(*tabletmanagerdata.ExecuteHookRequest)(nil),                  // 2: tabletmanagerdata.ExecuteHookRequest

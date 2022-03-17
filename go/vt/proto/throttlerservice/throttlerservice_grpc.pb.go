@@ -149,7 +149,7 @@ func RegisterThrottlerServer(s grpc.ServiceRegistrar, srv ThrottlerServer) {
 	s.RegisterService(&Throttler_ServiceDesc, srv)
 }
 
-func _Throttler_MaxRates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Throttler_MaxRates_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(throttlerdata.MaxRatesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -161,13 +161,13 @@ func _Throttler_MaxRates_Handler(srv interface{}, ctx context.Context, dec func(
 		Server:     srv,
 		FullMethod: "/throttlerservice.Throttler/MaxRates",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ThrottlerServer).MaxRates(ctx, req.(*throttlerdata.MaxRatesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Throttler_SetMaxRate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Throttler_SetMaxRate_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(throttlerdata.SetMaxRateRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -179,13 +179,13 @@ func _Throttler_SetMaxRate_Handler(srv interface{}, ctx context.Context, dec fun
 		Server:     srv,
 		FullMethod: "/throttlerservice.Throttler/SetMaxRate",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ThrottlerServer).SetMaxRate(ctx, req.(*throttlerdata.SetMaxRateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Throttler_GetConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Throttler_GetConfiguration_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(throttlerdata.GetConfigurationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -197,13 +197,13 @@ func _Throttler_GetConfiguration_Handler(srv interface{}, ctx context.Context, d
 		Server:     srv,
 		FullMethod: "/throttlerservice.Throttler/GetConfiguration",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ThrottlerServer).GetConfiguration(ctx, req.(*throttlerdata.GetConfigurationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Throttler_UpdateConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Throttler_UpdateConfiguration_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(throttlerdata.UpdateConfigurationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -215,13 +215,13 @@ func _Throttler_UpdateConfiguration_Handler(srv interface{}, ctx context.Context
 		Server:     srv,
 		FullMethod: "/throttlerservice.Throttler/UpdateConfiguration",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ThrottlerServer).UpdateConfiguration(ctx, req.(*throttlerdata.UpdateConfigurationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Throttler_ResetConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Throttler_ResetConfiguration_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(throttlerdata.ResetConfigurationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -233,7 +233,7 @@ func _Throttler_ResetConfiguration_Handler(srv interface{}, ctx context.Context,
 		Server:     srv,
 		FullMethod: "/throttlerservice.Throttler/ResetConfiguration",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(ThrottlerServer).ResetConfiguration(ctx, req.(*throttlerdata.ResetConfigurationRequest))
 	}
 	return interceptor(ctx, in, info, handler)

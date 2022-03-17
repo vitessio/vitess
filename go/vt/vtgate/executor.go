@@ -689,7 +689,7 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 		logStats.ExecuteTime = time.Since(execStart)
 	}()
 
-	var value interface{}
+	var value any
 	for _, expr := range set.Exprs {
 		// This is what correctly allows us to handle queries such as "set @@session.`autocommit`=1"
 		// it will remove backticks and double quotes that might surround the part after the first period
@@ -717,7 +717,7 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 	return &sqltypes.Result{}, nil
 }
 
-func getValueFor(expr *sqlparser.SetExpr) (interface{}, error) {
+func getValueFor(expr *sqlparser.SetExpr) (any, error) {
 	switch expr := expr.Expr.(type) {
 	case *sqlparser.Literal:
 		switch expr.Type {
@@ -1442,7 +1442,7 @@ type cacheItem struct {
 }
 
 func (e *Executor) debugCacheEntries() (items []cacheItem) {
-	e.plans.ForEach(func(value interface{}) bool {
+	e.plans.ForEach(func(value any) bool {
 		plan := value.(*engine.Plan)
 		items = append(items, cacheItem{
 			Key:   plan.Original,
@@ -1472,7 +1472,7 @@ func (e *Executor) ServeHTTP(response http.ResponseWriter, request *http.Request
 	}
 }
 
-func returnAsJSON(response http.ResponseWriter, stuff interface{}) {
+func returnAsJSON(response http.ResponseWriter, stuff any) {
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	buf, err := json.MarshalIndent(stuff, "", " ")
 	if err != nil {

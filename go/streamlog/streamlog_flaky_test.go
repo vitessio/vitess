@@ -38,7 +38,7 @@ func (l *logMessage) Format(params url.Values) string {
 	return l.val + "\n"
 }
 
-func testLogf(w io.Writer, params url.Values, m interface{}) error {
+func testLogf(w io.Writer, params url.Values, m any) error {
 	_, err := io.WriteString(w, m.(*logMessage).Format(params))
 	return err
 }

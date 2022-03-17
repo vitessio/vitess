@@ -85,7 +85,7 @@ func init() {
 	})
 }
 
-type bindvars []interface{}
+type bindvars []any
 
 func (bv *bindvars) String() string {
 	b, err := json.Marshal(bv)
@@ -116,7 +116,7 @@ func (bv *bindvars) Set(s string) (err error) {
 }
 
 // For internal flag compatibility
-func (bv *bindvars) Get() interface{} {
+func (bv *bindvars) Get() any {
 	return bv
 }
 
@@ -191,8 +191,8 @@ func run() (*results, error) {
 	return execMulti(ctx, db, args[0])
 }
 
-func prepareBindVariables() []interface{} {
-	bv := make([]interface{}, 0, len(*bindVariables)+1)
+func prepareBindVariables() []any {
+	bv := make([]any, 0, len(*bindVariables)+1)
 	bv = append(bv, (*bindVariables)...)
 	if *maxSeqID > *minSeqID {
 		bv = append(bv, <-seqChan)
@@ -263,7 +263,7 @@ func execDml(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 		return nil, vterrors.Wrap(err, "BEGIN failed")
 	}
 
-	result, err := tx.ExecContext(ctx, sql, []interface{}(prepareBindVariables())...)
+	result, err := tx.ExecContext(ctx, sql, []any(prepareBindVariables())...)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "failed to execute DML")
 	}
@@ -284,7 +284,7 @@ func execDml(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 
 func execNonDml(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 	start := time.Now()
-	rows, err := db.QueryContext(ctx, sql, []interface{}(prepareBindVariables())...)
+	rows, err := db.QueryContext(ctx, sql, []any(prepareBindVariables())...)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "client error")
 	}
@@ -300,7 +300,7 @@ func execNonDml(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 
 	// get the rows
 	for rows.Next() {
-		row := make([]interface{}, len(cols))
+		row := make([]any, len(cols))
 		for i := range row {
 			var col string
 			row[i] = &col

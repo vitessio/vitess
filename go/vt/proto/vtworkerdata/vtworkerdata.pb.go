@@ -167,7 +167,7 @@ func file_vtworkerdata_proto_rawDescGZIP() []byte {
 }
 
 var file_vtworkerdata_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_vtworkerdata_proto_goTypes = []interface{}{
+var file_vtworkerdata_proto_goTypes = []any{
 	(*ExecuteVtworkerCommandRequest)(nil),  // 0: vtworkerdata.ExecuteVtworkerCommandRequest
 	(*ExecuteVtworkerCommandResponse)(nil), // 1: vtworkerdata.ExecuteVtworkerCommandResponse
 	(*logutil.Event)(nil),                  // 2: logutil.Event
@@ -187,7 +187,7 @@ func file_vtworkerdata_proto_init() {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_vtworkerdata_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_vtworkerdata_proto_msgTypes[0].Exporter = func(v any, i int) any {
 			switch v := v.(*ExecuteVtworkerCommandRequest); i {
 			case 0:
 				return &v.state
@@ -199,7 +199,7 @@ func file_vtworkerdata_proto_init() {
 				return nil
 			}
 		}
-		file_vtworkerdata_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_vtworkerdata_proto_msgTypes[1].Exporter = func(v any, i int) any {
 			switch v := v.(*ExecuteVtworkerCommandResponse); i {
 			case 0:
 				return &v.state

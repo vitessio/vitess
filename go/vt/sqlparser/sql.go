@@ -5240,7 +5240,7 @@ var yyPgo = [...]int{
 
 //line sql.y:6250
 type yySymType struct {
-	union             interface{}
+	union             any
 	empty             struct{}
 	LengthScaleOption LengthScaleOption
 	tableName         TableName
@@ -6720,7 +6720,7 @@ var yyErrorMessages = [...]struct {
 
 /*	parser for yacc output	*/
 
-func yyIaddr(v interface{}) __yyunsafe__.Pointer {
+func yyIaddr(v any) __yyunsafe__.Pointer {
 	type h struct {
 		t __yyunsafe__.Pointer
 		p __yyunsafe__.Pointer

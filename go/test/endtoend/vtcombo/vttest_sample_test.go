@@ -125,13 +125,13 @@ func TestStandalone(t *testing.T) {
 	resp, err := http.Get(fmt.Sprintf("http://%s/debug/vars", vtctldAddr))
 	require.Nil(t, err)
 	require.Equal(t, 200, resp.StatusCode)
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	respByte, _ := io.ReadAll(resp.Body)
 	err = json.Unmarshal(respByte, &resultMap)
 	require.Nil(t, err)
 	cmd := resultMap["cmdline"]
 	require.NotNil(t, cmd, "cmdline is not available in debug vars")
-	tmp, _ := cmd.([]interface{})
+	tmp, _ := cmd.([]any)
 	require.Contains(t, tmp[0], "vtcombo")
 
 	ctx := context.Background()

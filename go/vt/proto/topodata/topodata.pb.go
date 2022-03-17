@@ -2066,7 +2066,7 @@ func file_topodata_proto_rawDescGZIP() []byte {
 
 var file_topodata_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
 var file_topodata_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
-var file_topodata_proto_goTypes = []interface{}{
+var file_topodata_proto_goTypes = []any{
 	(KeyspaceType)(0),                     // 0: topodata.KeyspaceType
 	(KeyspaceIdType)(0),                   // 1: topodata.KeyspaceIdType
 	(TabletType)(0),                       // 2: topodata.TabletType
@@ -2143,7 +2143,7 @@ func file_topodata_proto_init() {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_topodata_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[0].Exporter = func(v any, i int) any {
 			switch v := v.(*KeyRange); i {
 			case 0:
 				return &v.state
@@ -2155,7 +2155,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[1].Exporter = func(v any, i int) any {
 			switch v := v.(*TabletAlias); i {
 			case 0:
 				return &v.state
@@ -2167,7 +2167,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[2].Exporter = func(v any, i int) any {
 			switch v := v.(*Tablet); i {
 			case 0:
 				return &v.state
@@ -2179,7 +2179,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[3].Exporter = func(v any, i int) any {
 			switch v := v.(*Shard); i {
 			case 0:
 				return &v.state
@@ -2191,7 +2191,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[4].Exporter = func(v any, i int) any {
 			switch v := v.(*Keyspace); i {
 			case 0:
 				return &v.state
@@ -2203,7 +2203,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[5].Exporter = func(v any, i int) any {
 			switch v := v.(*ShardReplication); i {
 			case 0:
 				return &v.state
@@ -2215,7 +2215,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[6].Exporter = func(v any, i int) any {
 			switch v := v.(*ShardReplicationError); i {
 			case 0:
 				return &v.state
@@ -2227,7 +2227,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[7].Exporter = func(v any, i int) any {
 			switch v := v.(*ShardReference); i {
 			case 0:
 				return &v.state
@@ -2239,7 +2239,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[8].Exporter = func(v any, i int) any {
 			switch v := v.(*ShardTabletControl); i {
 			case 0:
 				return &v.state
@@ -2251,7 +2251,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[9].Exporter = func(v any, i int) any {
 			switch v := v.(*SrvKeyspace); i {
 			case 0:
 				return &v.state
@@ -2263,7 +2263,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[10].Exporter = func(v any, i int) any {
 			switch v := v.(*CellInfo); i {
 			case 0:
 				return &v.state
@@ -2275,7 +2275,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[11].Exporter = func(v any, i int) any {
 			switch v := v.(*CellsAlias); i {
 			case 0:
 				return &v.state
@@ -2287,7 +2287,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[12].Exporter = func(v any, i int) any {
 			switch v := v.(*TopoConfig); i {
 			case 0:
 				return &v.state
@@ -2299,7 +2299,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[13].Exporter = func(v any, i int) any {
 			switch v := v.(*ExternalVitessCluster); i {
 			case 0:
 				return &v.state
@@ -2311,7 +2311,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[14].Exporter = func(v any, i int) any {
 			switch v := v.(*ExternalClusters); i {
 			case 0:
 				return &v.state
@@ -2323,7 +2323,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[17].Exporter = func(v any, i int) any {
 			switch v := v.(*Shard_SourceShard); i {
 			case 0:
 				return &v.state
@@ -2335,7 +2335,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[18].Exporter = func(v any, i int) any {
 			switch v := v.(*Shard_TabletControl); i {
 			case 0:
 				return &v.state
@@ -2347,7 +2347,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[19].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[19].Exporter = func(v any, i int) any {
 			switch v := v.(*Keyspace_ServedFrom); i {
 			case 0:
 				return &v.state
@@ -2359,7 +2359,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[20].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[20].Exporter = func(v any, i int) any {
 			switch v := v.(*ShardReplication_Node); i {
 			case 0:
 				return &v.state
@@ -2371,7 +2371,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[21].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[21].Exporter = func(v any, i int) any {
 			switch v := v.(*SrvKeyspace_KeyspacePartition); i {
 			case 0:
 				return &v.state
@@ -2383,7 +2383,7 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[22].Exporter = func(v interface{}, i int) interface{} {
+		file_topodata_proto_msgTypes[22].Exporter = func(v any, i int) any {
 			switch v := v.(*SrvKeyspace_ServedFrom); i {
 			case 0:
 				return &v.state

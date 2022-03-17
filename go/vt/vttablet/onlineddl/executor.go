@@ -345,7 +345,7 @@ func (e *Executor) allowConcurrentMigration(onlineDDL *schema.OnlineDDL) bool {
 func (e *Executor) isAnyNonConcurrentMigrationRunning() bool {
 	nonConcurrentMigrationFound := false
 
-	e.ownedRunningMigrations.Range(func(_, val interface{}) bool {
+	e.ownedRunningMigrations.Range(func(_, val any) bool {
 		onlineDDL, ok := val.(*schema.OnlineDDL)
 		if !ok {
 			return true
@@ -367,7 +367,7 @@ func (e *Executor) isAnyNonConcurrentMigrationRunning() bool {
 // operating on given table.
 func (e *Executor) isAnyMigrationRunningOnTable(tableName string) bool {
 	sameTableMigrationFound := false
-	e.ownedRunningMigrations.Range(func(_, val interface{}) bool {
+	e.ownedRunningMigrations.Range(func(_, val any) bool {
 		onlineDDL, ok := val.(*schema.OnlineDDL)
 		if !ok {
 			return true
@@ -2932,7 +2932,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 			uuidsFoundPending[uuid] = true
 		}
 
-		e.ownedRunningMigrations.Range(func(k, _ interface{}) bool {
+		e.ownedRunningMigrations.Range(func(k, _ any) bool {
 			uuid, ok := k.(string)
 			if !ok {
 				return true

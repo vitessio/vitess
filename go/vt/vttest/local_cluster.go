@@ -543,12 +543,12 @@ func (db *LocalCluster) Query(sql, dbname string, limit int) (*sqltypes.Result, 
 // JSONConfig returns a key/value object with the configuration
 // settings for the local cluster. It should be serialized with
 // `json.Marshal`
-func (db *LocalCluster) JSONConfig() interface{} {
+func (db *LocalCluster) JSONConfig() any {
 	if db.OnlyMySQL {
 		return db.mysql.Params("")
 	}
 
-	config := map[string]interface{}{
+	config := map[string]any{
 		"port":               db.vt.Port,
 		"socket":             db.mysql.UnixSocket(),
 		"vtcombo_mysql_port": db.Env.PortForProtocol("vtcombo_mysql_port", ""),

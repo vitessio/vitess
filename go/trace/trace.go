@@ -40,7 +40,7 @@ type Span interface {
 	Finish()
 	// Annotate records a key/value pair associated with a Span. It should be
 	// called between Start and Finish.
-	Annotate(key string, value interface{})
+	Annotate(key string, value any)
 }
 
 // NewSpan creates a new Span with the currently installed tracing plugin.

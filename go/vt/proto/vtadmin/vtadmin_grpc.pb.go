@@ -633,7 +633,7 @@ func RegisterVTAdminServer(s grpc.ServiceRegistrar, srv VTAdminServer) {
 	s.RegisterService(&VTAdmin_ServiceDesc, srv)
 }
 
-func _VTAdmin_CreateKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_CreateKeyspace_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(CreateKeyspaceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -645,13 +645,13 @@ func _VTAdmin_CreateKeyspace_Handler(srv interface{}, ctx context.Context, dec f
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/CreateKeyspace",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).CreateKeyspace(ctx, req.(*CreateKeyspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_CreateShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_CreateShard_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(CreateShardRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -663,13 +663,13 @@ func _VTAdmin_CreateShard_Handler(srv interface{}, ctx context.Context, dec func
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/CreateShard",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).CreateShard(ctx, req.(*CreateShardRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_DeleteKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_DeleteKeyspace_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(DeleteKeyspaceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -681,13 +681,13 @@ func _VTAdmin_DeleteKeyspace_Handler(srv interface{}, ctx context.Context, dec f
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/DeleteKeyspace",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).DeleteKeyspace(ctx, req.(*DeleteKeyspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_DeleteShards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_DeleteShards_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(DeleteShardsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -699,13 +699,13 @@ func _VTAdmin_DeleteShards_Handler(srv interface{}, ctx context.Context, dec fun
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/DeleteShards",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).DeleteShards(ctx, req.(*DeleteShardsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_DeleteTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_DeleteTablet_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(DeleteTabletRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -717,13 +717,13 @@ func _VTAdmin_DeleteTablet_Handler(srv interface{}, ctx context.Context, dec fun
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/DeleteTablet",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).DeleteTablet(ctx, req.(*DeleteTabletRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_FindSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_FindSchema_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(FindSchemaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -735,13 +735,13 @@ func _VTAdmin_FindSchema_Handler(srv interface{}, ctx context.Context, dec func(
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/FindSchema",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).FindSchema(ctx, req.(*FindSchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_GetBackups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_GetBackups_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetBackupsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -753,13 +753,13 @@ func _VTAdmin_GetBackups_Handler(srv interface{}, ctx context.Context, dec func(
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/GetBackups",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).GetBackups(ctx, req.(*GetBackupsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_GetClusters_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_GetClusters_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetClustersRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -771,13 +771,13 @@ func _VTAdmin_GetClusters_Handler(srv interface{}, ctx context.Context, dec func
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/GetClusters",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).GetClusters(ctx, req.(*GetClustersRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_GetGates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_GetGates_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetGatesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -789,13 +789,13 @@ func _VTAdmin_GetGates_Handler(srv interface{}, ctx context.Context, dec func(in
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/GetGates",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).GetGates(ctx, req.(*GetGatesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_GetKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_GetKeyspace_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetKeyspaceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -807,13 +807,13 @@ func _VTAdmin_GetKeyspace_Handler(srv interface{}, ctx context.Context, dec func
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/GetKeyspace",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).GetKeyspace(ctx, req.(*GetKeyspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_GetKeyspaces_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_GetKeyspaces_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetKeyspacesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -825,13 +825,13 @@ func _VTAdmin_GetKeyspaces_Handler(srv interface{}, ctx context.Context, dec fun
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/GetKeyspaces",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).GetKeyspaces(ctx, req.(*GetKeyspacesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_GetSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_GetSchema_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetSchemaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -843,13 +843,13 @@ func _VTAdmin_GetSchema_Handler(srv interface{}, ctx context.Context, dec func(i
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/GetSchema",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).GetSchema(ctx, req.(*GetSchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_GetSchemas_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_GetSchemas_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetSchemasRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -861,13 +861,13 @@ func _VTAdmin_GetSchemas_Handler(srv interface{}, ctx context.Context, dec func(
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/GetSchemas",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).GetSchemas(ctx, req.(*GetSchemasRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_GetShardReplicationPositions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_GetShardReplicationPositions_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetShardReplicationPositionsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -879,13 +879,13 @@ func _VTAdmin_GetShardReplicationPositions_Handler(srv interface{}, ctx context.
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/GetShardReplicationPositions",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).GetShardReplicationPositions(ctx, req.(*GetShardReplicationPositionsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_GetSrvVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_GetSrvVSchema_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetSrvVSchemaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -897,13 +897,13 @@ func _VTAdmin_GetSrvVSchema_Handler(srv interface{}, ctx context.Context, dec fu
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/GetSrvVSchema",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).GetSrvVSchema(ctx, req.(*GetSrvVSchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_GetSrvVSchemas_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_GetSrvVSchemas_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetSrvVSchemasRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -915,13 +915,13 @@ func _VTAdmin_GetSrvVSchemas_Handler(srv interface{}, ctx context.Context, dec f
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/GetSrvVSchemas",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).GetSrvVSchemas(ctx, req.(*GetSrvVSchemasRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_GetTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_GetTablet_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetTabletRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -933,13 +933,13 @@ func _VTAdmin_GetTablet_Handler(srv interface{}, ctx context.Context, dec func(i
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/GetTablet",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).GetTablet(ctx, req.(*GetTabletRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_GetTablets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_GetTablets_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetTabletsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -951,13 +951,13 @@ func _VTAdmin_GetTablets_Handler(srv interface{}, ctx context.Context, dec func(
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/GetTablets",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).GetTablets(ctx, req.(*GetTabletsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_GetVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_GetVSchema_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetVSchemaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -969,13 +969,13 @@ func _VTAdmin_GetVSchema_Handler(srv interface{}, ctx context.Context, dec func(
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/GetVSchema",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).GetVSchema(ctx, req.(*GetVSchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_GetVSchemas_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_GetVSchemas_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetVSchemasRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -987,13 +987,13 @@ func _VTAdmin_GetVSchemas_Handler(srv interface{}, ctx context.Context, dec func
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/GetVSchemas",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).GetVSchemas(ctx, req.(*GetVSchemasRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_GetVtctlds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_GetVtctlds_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetVtctldsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1005,13 +1005,13 @@ func _VTAdmin_GetVtctlds_Handler(srv interface{}, ctx context.Context, dec func(
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/GetVtctlds",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).GetVtctlds(ctx, req.(*GetVtctldsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_GetWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_GetWorkflow_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetWorkflowRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1023,13 +1023,13 @@ func _VTAdmin_GetWorkflow_Handler(srv interface{}, ctx context.Context, dec func
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/GetWorkflow",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).GetWorkflow(ctx, req.(*GetWorkflowRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_GetWorkflows_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_GetWorkflows_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetWorkflowsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1041,13 +1041,13 @@ func _VTAdmin_GetWorkflows_Handler(srv interface{}, ctx context.Context, dec fun
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/GetWorkflows",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).GetWorkflows(ctx, req.(*GetWorkflowsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_PingTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_PingTablet_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(PingTabletRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1059,13 +1059,13 @@ func _VTAdmin_PingTablet_Handler(srv interface{}, ctx context.Context, dec func(
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/PingTablet",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).PingTablet(ctx, req.(*PingTabletRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_RefreshState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_RefreshState_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(RefreshStateRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1077,13 +1077,13 @@ func _VTAdmin_RefreshState_Handler(srv interface{}, ctx context.Context, dec fun
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/RefreshState",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).RefreshState(ctx, req.(*RefreshStateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_ReparentTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_ReparentTablet_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(ReparentTabletRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1095,13 +1095,13 @@ func _VTAdmin_ReparentTablet_Handler(srv interface{}, ctx context.Context, dec f
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/ReparentTablet",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).ReparentTablet(ctx, req.(*ReparentTabletRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_RunHealthCheck_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(RunHealthCheckRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1113,13 +1113,13 @@ func _VTAdmin_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec f
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/RunHealthCheck",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).RunHealthCheck(ctx, req.(*RunHealthCheckRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_SetReadOnly_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_SetReadOnly_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(SetReadOnlyRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1131,13 +1131,13 @@ func _VTAdmin_SetReadOnly_Handler(srv interface{}, ctx context.Context, dec func
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/SetReadOnly",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).SetReadOnly(ctx, req.(*SetReadOnlyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_SetReadWrite_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_SetReadWrite_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(SetReadWriteRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1149,13 +1149,13 @@ func _VTAdmin_SetReadWrite_Handler(srv interface{}, ctx context.Context, dec fun
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/SetReadWrite",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).SetReadWrite(ctx, req.(*SetReadWriteRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_StartReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_StartReplication_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(StartReplicationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1167,13 +1167,13 @@ func _VTAdmin_StartReplication_Handler(srv interface{}, ctx context.Context, dec
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/StartReplication",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).StartReplication(ctx, req.(*StartReplicationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_StopReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_StopReplication_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(StopReplicationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1185,13 +1185,13 @@ func _VTAdmin_StopReplication_Handler(srv interface{}, ctx context.Context, dec 
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/StopReplication",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).StopReplication(ctx, req.(*StopReplicationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_ValidateKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_ValidateKeyspace_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(ValidateKeyspaceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1203,13 +1203,13 @@ func _VTAdmin_ValidateKeyspace_Handler(srv interface{}, ctx context.Context, dec
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/ValidateKeyspace",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).ValidateKeyspace(ctx, req.(*ValidateKeyspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_ValidateSchemaKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_ValidateSchemaKeyspace_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(ValidateSchemaKeyspaceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1221,13 +1221,13 @@ func _VTAdmin_ValidateSchemaKeyspace_Handler(srv interface{}, ctx context.Contex
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/ValidateSchemaKeyspace",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).ValidateSchemaKeyspace(ctx, req.(*ValidateSchemaKeyspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_ValidateVersionKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_ValidateVersionKeyspace_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(ValidateVersionKeyspaceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1239,13 +1239,13 @@ func _VTAdmin_ValidateVersionKeyspace_Handler(srv interface{}, ctx context.Conte
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/ValidateVersionKeyspace",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).ValidateVersionKeyspace(ctx, req.(*ValidateVersionKeyspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_VTExplain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _VTAdmin_VTExplain_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(VTExplainRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1257,7 +1257,7 @@ func _VTAdmin_VTExplain_Handler(srv interface{}, ctx context.Context, dec func(i
 		Server:     srv,
 		FullMethod: "/vtadmin.VTAdmin/VTExplain",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VTAdminServer).VTExplain(ctx, req.(*VTExplainRequest))
 	}
 	return interceptor(ctx, in, info, handler)

@@ -748,7 +748,7 @@ func file_vschema_proto_rawDescGZIP() []byte {
 }
 
 var file_vschema_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
-var file_vschema_proto_goTypes = []interface{}{
+var file_vschema_proto_goTypes = []any{
 	(*RoutingRules)(nil),  // 0: vschema.RoutingRules
 	(*RoutingRule)(nil),   // 1: vschema.RoutingRule
 	(*Keyspace)(nil),      // 2: vschema.Keyspace
@@ -791,7 +791,7 @@ func file_vschema_proto_init() {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_vschema_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_vschema_proto_msgTypes[0].Exporter = func(v any, i int) any {
 			switch v := v.(*RoutingRules); i {
 			case 0:
 				return &v.state
@@ -803,7 +803,7 @@ func file_vschema_proto_init() {
 				return nil
 			}
 		}
-		file_vschema_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_vschema_proto_msgTypes[1].Exporter = func(v any, i int) any {
 			switch v := v.(*RoutingRule); i {
 			case 0:
 				return &v.state
@@ -815,7 +815,7 @@ func file_vschema_proto_init() {
 				return nil
 			}
 		}
-		file_vschema_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+		file_vschema_proto_msgTypes[2].Exporter = func(v any, i int) any {
 			switch v := v.(*Keyspace); i {
 			case 0:
 				return &v.state
@@ -827,7 +827,7 @@ func file_vschema_proto_init() {
 				return nil
 			}
 		}
-		file_vschema_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+		file_vschema_proto_msgTypes[3].Exporter = func(v any, i int) any {
 			switch v := v.(*Vindex); i {
 			case 0:
 				return &v.state
@@ -839,7 +839,7 @@ func file_vschema_proto_init() {
 				return nil
 			}
 		}
-		file_vschema_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+		file_vschema_proto_msgTypes[4].Exporter = func(v any, i int) any {
 			switch v := v.(*Table); i {
 			case 0:
 				return &v.state
@@ -851,7 +851,7 @@ func file_vschema_proto_init() {
 				return nil
 			}
 		}
-		file_vschema_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+		file_vschema_proto_msgTypes[5].Exporter = func(v any, i int) any {
 			switch v := v.(*ColumnVindex); i {
 			case 0:
 				return &v.state
@@ -863,7 +863,7 @@ func file_vschema_proto_init() {
 				return nil
 			}
 		}
-		file_vschema_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+		file_vschema_proto_msgTypes[6].Exporter = func(v any, i int) any {
 			switch v := v.(*AutoIncrement); i {
 			case 0:
 				return &v.state
@@ -875,7 +875,7 @@ func file_vschema_proto_init() {
 				return nil
 			}
 		}
-		file_vschema_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+		file_vschema_proto_msgTypes[7].Exporter = func(v any, i int) any {
 			switch v := v.(*Column); i {
 			case 0:
 				return &v.state
@@ -887,7 +887,7 @@ func file_vschema_proto_init() {
 				return nil
 			}
 		}
-		file_vschema_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+		file_vschema_proto_msgTypes[8].Exporter = func(v any, i int) any {
 			switch v := v.(*SrvVSchema); i {
 			case 0:
 				return &v.state

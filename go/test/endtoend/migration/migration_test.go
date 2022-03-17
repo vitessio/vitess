@@ -250,7 +250,7 @@ func startCluster(t *testing.T) string {
 	return yamlFile
 }
 
-func createKeyspace(t *testing.T, ks cluster.Keyspace, shards []string, customizers ...interface{}) {
+func createKeyspace(t *testing.T, ks cluster.Keyspace, shards []string, customizers ...any) {
 	t.Helper()
 
 	err := clusterInstance.StartKeyspace(ks, shards, 1, false, customizers...)

@@ -169,7 +169,7 @@ func showThrottlerLog(w http.ResponseWriter, m *managerImpl, name string) {
 	if count > 0 {
 		d = results[0].Now.Sub(results[count-1].Now)
 	}
-	if err := logFooterTemplate.Execute(w, map[string]interface{}{
+	if err := logFooterTemplate.Execute(w, map[string]any{
 		"Count":    count,
 		"TimeSpan": fmt.Sprintf("%.1f", d.Minutes()),
 	}); err != nil {

@@ -135,7 +135,7 @@ func RegisterUpdateStreamServer(s grpc.ServiceRegistrar, srv UpdateStreamServer)
 	s.RegisterService(&UpdateStream_ServiceDesc, srv)
 }
 
-func _UpdateStream_StreamKeyRange_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _UpdateStream_StreamKeyRange_Handler(srv any, stream grpc.ServerStream) error {
 	m := new(binlogdata.StreamKeyRangeRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -156,7 +156,7 @@ func (x *updateStreamStreamKeyRangeServer) Send(m *binlogdata.StreamKeyRangeResp
 	return x.ServerStream.SendMsg(m)
 }
 
-func _UpdateStream_StreamTables_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _UpdateStream_StreamTables_Handler(srv any, stream grpc.ServerStream) error {
 	m := new(binlogdata.StreamTablesRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err

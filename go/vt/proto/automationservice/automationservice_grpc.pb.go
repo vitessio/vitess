@@ -87,7 +87,7 @@ func RegisterAutomationServer(s grpc.ServiceRegistrar, srv AutomationServer) {
 	s.RegisterService(&Automation_ServiceDesc, srv)
 }
 
-func _Automation_EnqueueClusterOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Automation_EnqueueClusterOperation_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(automation.EnqueueClusterOperationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -99,13 +99,13 @@ func _Automation_EnqueueClusterOperation_Handler(srv interface{}, ctx context.Co
 		Server:     srv,
 		FullMethod: "/automationservice.Automation/EnqueueClusterOperation",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(AutomationServer).EnqueueClusterOperation(ctx, req.(*automation.EnqueueClusterOperationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Automation_GetClusterOperationDetails_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Automation_GetClusterOperationDetails_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(automation.GetClusterOperationDetailsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -117,7 +117,7 @@ func _Automation_GetClusterOperationDetails_Handler(srv interface{}, ctx context
 		Server:     srv,
 		FullMethod: "/automationservice.Automation/GetClusterOperationDetails",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(AutomationServer).GetClusterOperationDetails(ctx, req.(*automation.GetClusterOperationDetailsRequest))
 	}
 	return interceptor(ctx, in, info, handler)

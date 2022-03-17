@@ -687,7 +687,7 @@ func RegisterQueryServer(s grpc.ServiceRegistrar, srv QueryServer) {
 	s.RegisterService(&Query_ServiceDesc, srv)
 }
 
-func _Query_Execute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Query_Execute_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(query.ExecuteRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -699,13 +699,13 @@ func _Query_Execute_Handler(srv interface{}, ctx context.Context, dec func(inter
 		Server:     srv,
 		FullMethod: "/queryservice.Query/Execute",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(QueryServer).Execute(ctx, req.(*query.ExecuteRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_StreamExecute_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Query_StreamExecute_Handler(srv any, stream grpc.ServerStream) error {
 	m := new(query.StreamExecuteRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -726,7 +726,7 @@ func (x *queryStreamExecuteServer) Send(m *query.StreamExecuteResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Query_Begin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Query_Begin_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(query.BeginRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -738,13 +738,13 @@ func _Query_Begin_Handler(srv interface{}, ctx context.Context, dec func(interfa
 		Server:     srv,
 		FullMethod: "/queryservice.Query/Begin",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(QueryServer).Begin(ctx, req.(*query.BeginRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_Commit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Query_Commit_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(query.CommitRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -756,13 +756,13 @@ func _Query_Commit_Handler(srv interface{}, ctx context.Context, dec func(interf
 		Server:     srv,
 		FullMethod: "/queryservice.Query/Commit",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(QueryServer).Commit(ctx, req.(*query.CommitRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_Rollback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Query_Rollback_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(query.RollbackRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -774,13 +774,13 @@ func _Query_Rollback_Handler(srv interface{}, ctx context.Context, dec func(inte
 		Server:     srv,
 		FullMethod: "/queryservice.Query/Rollback",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(QueryServer).Rollback(ctx, req.(*query.RollbackRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_Prepare_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Query_Prepare_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(query.PrepareRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -792,13 +792,13 @@ func _Query_Prepare_Handler(srv interface{}, ctx context.Context, dec func(inter
 		Server:     srv,
 		FullMethod: "/queryservice.Query/Prepare",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(QueryServer).Prepare(ctx, req.(*query.PrepareRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_CommitPrepared_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Query_CommitPrepared_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(query.CommitPreparedRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -810,13 +810,13 @@ func _Query_CommitPrepared_Handler(srv interface{}, ctx context.Context, dec fun
 		Server:     srv,
 		FullMethod: "/queryservice.Query/CommitPrepared",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(QueryServer).CommitPrepared(ctx, req.(*query.CommitPreparedRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_RollbackPrepared_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Query_RollbackPrepared_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(query.RollbackPreparedRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -828,13 +828,13 @@ func _Query_RollbackPrepared_Handler(srv interface{}, ctx context.Context, dec f
 		Server:     srv,
 		FullMethod: "/queryservice.Query/RollbackPrepared",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(QueryServer).RollbackPrepared(ctx, req.(*query.RollbackPreparedRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_CreateTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Query_CreateTransaction_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(query.CreateTransactionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -846,13 +846,13 @@ func _Query_CreateTransaction_Handler(srv interface{}, ctx context.Context, dec 
 		Server:     srv,
 		FullMethod: "/queryservice.Query/CreateTransaction",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(QueryServer).CreateTransaction(ctx, req.(*query.CreateTransactionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_StartCommit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Query_StartCommit_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(query.StartCommitRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -864,13 +864,13 @@ func _Query_StartCommit_Handler(srv interface{}, ctx context.Context, dec func(i
 		Server:     srv,
 		FullMethod: "/queryservice.Query/StartCommit",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(QueryServer).StartCommit(ctx, req.(*query.StartCommitRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_SetRollback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Query_SetRollback_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(query.SetRollbackRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -882,13 +882,13 @@ func _Query_SetRollback_Handler(srv interface{}, ctx context.Context, dec func(i
 		Server:     srv,
 		FullMethod: "/queryservice.Query/SetRollback",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(QueryServer).SetRollback(ctx, req.(*query.SetRollbackRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_ConcludeTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Query_ConcludeTransaction_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(query.ConcludeTransactionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -900,13 +900,13 @@ func _Query_ConcludeTransaction_Handler(srv interface{}, ctx context.Context, de
 		Server:     srv,
 		FullMethod: "/queryservice.Query/ConcludeTransaction",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(QueryServer).ConcludeTransaction(ctx, req.(*query.ConcludeTransactionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_ReadTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Query_ReadTransaction_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(query.ReadTransactionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -918,13 +918,13 @@ func _Query_ReadTransaction_Handler(srv interface{}, ctx context.Context, dec fu
 		Server:     srv,
 		FullMethod: "/queryservice.Query/ReadTransaction",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(QueryServer).ReadTransaction(ctx, req.(*query.ReadTransactionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_BeginExecute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Query_BeginExecute_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(query.BeginExecuteRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -936,13 +936,13 @@ func _Query_BeginExecute_Handler(srv interface{}, ctx context.Context, dec func(
 		Server:     srv,
 		FullMethod: "/queryservice.Query/BeginExecute",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(QueryServer).BeginExecute(ctx, req.(*query.BeginExecuteRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_BeginStreamExecute_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Query_BeginStreamExecute_Handler(srv any, stream grpc.ServerStream) error {
 	m := new(query.BeginStreamExecuteRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -963,7 +963,7 @@ func (x *queryBeginStreamExecuteServer) Send(m *query.BeginStreamExecuteResponse
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Query_MessageStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Query_MessageStream_Handler(srv any, stream grpc.ServerStream) error {
 	m := new(query.MessageStreamRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -984,7 +984,7 @@ func (x *queryMessageStreamServer) Send(m *query.MessageStreamResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Query_MessageAck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Query_MessageAck_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(query.MessageAckRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -996,13 +996,13 @@ func _Query_MessageAck_Handler(srv interface{}, ctx context.Context, dec func(in
 		Server:     srv,
 		FullMethod: "/queryservice.Query/MessageAck",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(QueryServer).MessageAck(ctx, req.(*query.MessageAckRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_ReserveExecute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Query_ReserveExecute_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(query.ReserveExecuteRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1014,13 +1014,13 @@ func _Query_ReserveExecute_Handler(srv interface{}, ctx context.Context, dec fun
 		Server:     srv,
 		FullMethod: "/queryservice.Query/ReserveExecute",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(QueryServer).ReserveExecute(ctx, req.(*query.ReserveExecuteRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_ReserveBeginExecute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Query_ReserveBeginExecute_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(query.ReserveBeginExecuteRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1032,13 +1032,13 @@ func _Query_ReserveBeginExecute_Handler(srv interface{}, ctx context.Context, de
 		Server:     srv,
 		FullMethod: "/queryservice.Query/ReserveBeginExecute",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(QueryServer).ReserveBeginExecute(ctx, req.(*query.ReserveBeginExecuteRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_ReserveStreamExecute_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Query_ReserveStreamExecute_Handler(srv any, stream grpc.ServerStream) error {
 	m := new(query.ReserveStreamExecuteRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -1059,7 +1059,7 @@ func (x *queryReserveStreamExecuteServer) Send(m *query.ReserveStreamExecuteResp
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Query_ReserveBeginStreamExecute_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Query_ReserveBeginStreamExecute_Handler(srv any, stream grpc.ServerStream) error {
 	m := new(query.ReserveBeginStreamExecuteRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -1080,7 +1080,7 @@ func (x *queryReserveBeginStreamExecuteServer) Send(m *query.ReserveBeginStreamE
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Query_Release_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Query_Release_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(query.ReleaseRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -1092,13 +1092,13 @@ func _Query_Release_Handler(srv interface{}, ctx context.Context, dec func(inter
 		Server:     srv,
 		FullMethod: "/queryservice.Query/Release",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(QueryServer).Release(ctx, req.(*query.ReleaseRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_StreamHealth_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Query_StreamHealth_Handler(srv any, stream grpc.ServerStream) error {
 	m := new(query.StreamHealthRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -1119,7 +1119,7 @@ func (x *queryStreamHealthServer) Send(m *query.StreamHealthResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Query_VStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Query_VStream_Handler(srv any, stream grpc.ServerStream) error {
 	m := new(binlogdata.VStreamRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -1140,7 +1140,7 @@ func (x *queryVStreamServer) Send(m *binlogdata.VStreamResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Query_VStreamRows_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Query_VStreamRows_Handler(srv any, stream grpc.ServerStream) error {
 	m := new(binlogdata.VStreamRowsRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -1161,7 +1161,7 @@ func (x *queryVStreamRowsServer) Send(m *binlogdata.VStreamRowsResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Query_VStreamResults_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Query_VStreamResults_Handler(srv any, stream grpc.ServerStream) error {
 	m := new(binlogdata.VStreamResultsRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err

@@ -83,7 +83,7 @@ var file_throttlerservice_proto_rawDesc = []byte{
 	0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
-var file_throttlerservice_proto_goTypes = []interface{}{
+var file_throttlerservice_proto_goTypes = []any{
 	(*throttlerdata.MaxRatesRequest)(nil),             // 0: throttlerdata.MaxRatesRequest
 	(*throttlerdata.SetMaxRateRequest)(nil),           // 1: throttlerdata.SetMaxRateRequest
 	(*throttlerdata.GetConfigurationRequest)(nil),     // 2: throttlerdata.GetConfigurationRequest

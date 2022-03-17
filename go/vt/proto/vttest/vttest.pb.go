@@ -349,7 +349,7 @@ func file_vttest_proto_rawDescGZIP() []byte {
 }
 
 var file_vttest_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
-var file_vttest_proto_goTypes = []interface{}{
+var file_vttest_proto_goTypes = []any{
 	(*Shard)(nil),                // 0: vttest.Shard
 	(*Keyspace)(nil),             // 1: vttest.Keyspace
 	(*VTTestTopology)(nil),       // 2: vttest.VTTestTopology
@@ -372,7 +372,7 @@ func file_vttest_proto_init() {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_vttest_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_vttest_proto_msgTypes[0].Exporter = func(v any, i int) any {
 			switch v := v.(*Shard); i {
 			case 0:
 				return &v.state
@@ -384,7 +384,7 @@ func file_vttest_proto_init() {
 				return nil
 			}
 		}
-		file_vttest_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_vttest_proto_msgTypes[1].Exporter = func(v any, i int) any {
 			switch v := v.(*Keyspace); i {
 			case 0:
 				return &v.state
@@ -396,7 +396,7 @@ func file_vttest_proto_init() {
 				return nil
 			}
 		}
-		file_vttest_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+		file_vttest_proto_msgTypes[2].Exporter = func(v any, i int) any {
 			switch v := v.(*VTTestTopology); i {
 			case 0:
 				return &v.state

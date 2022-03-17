@@ -115,7 +115,7 @@ func (f *Filter) Inputs() []Primitive {
 }
 
 func (f *Filter) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Predicate": sqlparser.String(f.ASTPredicate),
 	}
 

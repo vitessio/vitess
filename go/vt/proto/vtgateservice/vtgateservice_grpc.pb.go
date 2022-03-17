@@ -237,7 +237,7 @@ func RegisterVitessServer(s grpc.ServiceRegistrar, srv VitessServer) {
 	s.RegisterService(&Vitess_ServiceDesc, srv)
 }
 
-func _Vitess_Execute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vitess_Execute_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtgate.ExecuteRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -249,13 +249,13 @@ func _Vitess_Execute_Handler(srv interface{}, ctx context.Context, dec func(inte
 		Server:     srv,
 		FullMethod: "/vtgateservice.Vitess/Execute",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VitessServer).Execute(ctx, req.(*vtgate.ExecuteRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vitess_ExecuteBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vitess_ExecuteBatch_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtgate.ExecuteBatchRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -267,13 +267,13 @@ func _Vitess_ExecuteBatch_Handler(srv interface{}, ctx context.Context, dec func
 		Server:     srv,
 		FullMethod: "/vtgateservice.Vitess/ExecuteBatch",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VitessServer).ExecuteBatch(ctx, req.(*vtgate.ExecuteBatchRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vitess_StreamExecute_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Vitess_StreamExecute_Handler(srv any, stream grpc.ServerStream) error {
 	m := new(vtgate.StreamExecuteRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -294,7 +294,7 @@ func (x *vitessStreamExecuteServer) Send(m *vtgate.StreamExecuteResponse) error 
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Vitess_ResolveTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vitess_ResolveTransaction_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtgate.ResolveTransactionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -306,13 +306,13 @@ func _Vitess_ResolveTransaction_Handler(srv interface{}, ctx context.Context, de
 		Server:     srv,
 		FullMethod: "/vtgateservice.Vitess/ResolveTransaction",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VitessServer).ResolveTransaction(ctx, req.(*vtgate.ResolveTransactionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vitess_VStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Vitess_VStream_Handler(srv any, stream grpc.ServerStream) error {
 	m := new(vtgate.VStreamRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
@@ -333,7 +333,7 @@ func (x *vitessVStreamServer) Send(m *vtgate.VStreamResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Vitess_Prepare_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vitess_Prepare_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtgate.PrepareRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -345,13 +345,13 @@ func _Vitess_Prepare_Handler(srv interface{}, ctx context.Context, dec func(inte
 		Server:     srv,
 		FullMethod: "/vtgateservice.Vitess/Prepare",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VitessServer).Prepare(ctx, req.(*vtgate.PrepareRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vitess_CloseSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Vitess_CloseSession_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(vtgate.CloseSessionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -363,7 +363,7 @@ func _Vitess_CloseSession_Handler(srv interface{}, ctx context.Context, dec func
 		Server:     srv,
 		FullMethod: "/vtgateservice.Vitess/CloseSession",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(VitessServer).CloseSession(ctx, req.(*vtgate.CloseSessionRequest))
 	}
 	return interceptor(ctx, in, info, handler)

@@ -39,7 +39,7 @@ import (
 )
 
 type testcase struct {
-	input  interface{}
+	input  any
 	output [][]string
 }
 
@@ -2115,7 +2115,7 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, p
 	log.Infof("Last line of runCases")
 }
 
-func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan []*binlogdatapb.VEvent, output [][]string) {
+func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlogdatapb.VEvent, output [][]string) {
 	timer := time.NewTimer(1 * time.Minute)
 	defer timer.Stop()
 	for _, wantset := range output {

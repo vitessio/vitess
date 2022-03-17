@@ -430,7 +430,7 @@ func file_replicationdata_proto_rawDescGZIP() []byte {
 
 var file_replicationdata_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_replicationdata_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
-var file_replicationdata_proto_goTypes = []interface{}{
+var file_replicationdata_proto_goTypes = []any{
 	(StopReplicationMode)(0),      // 0: replicationdata.StopReplicationMode
 	(*Status)(nil),                // 1: replicationdata.Status
 	(*StopReplicationStatus)(nil), // 2: replicationdata.StopReplicationStatus
@@ -452,7 +452,7 @@ func file_replicationdata_proto_init() {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_replicationdata_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_replicationdata_proto_msgTypes[0].Exporter = func(v any, i int) any {
 			switch v := v.(*Status); i {
 			case 0:
 				return &v.state
@@ -464,7 +464,7 @@ func file_replicationdata_proto_init() {
 				return nil
 			}
 		}
-		file_replicationdata_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_replicationdata_proto_msgTypes[1].Exporter = func(v any, i int) any {
 			switch v := v.(*StopReplicationStatus); i {
 			case 0:
 				return &v.state
@@ -476,7 +476,7 @@ func file_replicationdata_proto_init() {
 				return nil
 			}
 		}
-		file_replicationdata_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+		file_replicationdata_proto_msgTypes[2].Exporter = func(v any, i int) any {
 			switch v := v.(*PrimaryStatus); i {
 			case 0:
 				return &v.state

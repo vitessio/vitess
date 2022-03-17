@@ -32,7 +32,7 @@ import (
 // a Value, used for arithmetic operations.
 var zeroBytes = []byte("0")
 
-func dataOutOfRangeError(v1, v2 interface{}, typ, sign string) error {
+func dataOutOfRangeError(v1, v2 any, typ, sign string) error {
 	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in '(%v %s %v)'", typ, v1, sign, v2)
 }
 

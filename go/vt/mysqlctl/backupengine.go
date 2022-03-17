@@ -154,7 +154,7 @@ func GetBackupManifest(ctx context.Context, backup backupstorage.BackupHandle) (
 }
 
 // getBackupManifestInto fetches and decodes a MANIFEST file into the specified object.
-func getBackupManifestInto(ctx context.Context, backup backupstorage.BackupHandle, outManifest interface{}) error {
+func getBackupManifestInto(ctx context.Context, backup backupstorage.BackupHandle, outManifest any) error {
 	file, err := backup.ReadFile(ctx, backupManifestFileName)
 	if err != nil {
 		return vterrors.Wrap(err, "can't read MANIFEST")

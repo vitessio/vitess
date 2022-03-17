@@ -495,7 +495,7 @@ var file_vtctlservice_proto_rawDesc = []byte{
 	0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
-var file_vtctlservice_proto_goTypes = []interface{}{
+var file_vtctlservice_proto_goTypes = []any{
 	(*vtctldata.ExecuteVtctlCommandRequest)(nil),         // 0: vtctldata.ExecuteVtctlCommandRequest
 	(*vtctldata.AddCellInfoRequest)(nil),                 // 1: vtctldata.AddCellInfoRequest
 	(*vtctldata.AddCellsAliasRequest)(nil),               // 2: vtctldata.AddCellsAliasRequest

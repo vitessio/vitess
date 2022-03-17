@@ -123,7 +123,7 @@ func (client *{{ $.Type }}) {{ .Name }}(ctx context.Context, {{ .Param.Name }} {
 }
 {{ end }}`
 
-var tmpl = template.Must(template.New("vtctldclient-generator").Funcs(map[string]interface{}{
+var tmpl = template.Must(template.New("vtctldclient-generator").Funcs(map[string]any{
 	"streamAdapterName": func(s string) string {
 		if len(s) == 0 {
 			return s

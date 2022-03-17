@@ -59,7 +59,7 @@ var file_vtworkerservice_proto_rawDesc = []byte{
 	0x63, 0x65, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
-var file_vtworkerservice_proto_goTypes = []interface{}{
+var file_vtworkerservice_proto_goTypes = []any{
 	(*vtworkerdata.ExecuteVtworkerCommandRequest)(nil),  // 0: vtworkerdata.ExecuteVtworkerCommandRequest
 	(*vtworkerdata.ExecuteVtworkerCommandResponse)(nil), // 1: vtworkerdata.ExecuteVtworkerCommandResponse
 }

@@ -1948,7 +1948,7 @@ func encodeVarint(dAtA []byte, offset int, v uint64) int {
 }
 
 var vtprotoPool_VStreamRowsResponse = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return &VStreamRowsResponse{}
 	},
 }

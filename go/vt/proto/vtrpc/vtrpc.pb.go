@@ -422,7 +422,7 @@ func file_vtrpc_proto_rawDescGZIP() []byte {
 
 var file_vtrpc_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_vtrpc_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_vtrpc_proto_goTypes = []interface{}{
+var file_vtrpc_proto_goTypes = []any{
 	(Code)(0),        // 0: vtrpc.Code
 	(*CallerID)(nil), // 1: vtrpc.CallerID
 	(*RPCError)(nil), // 2: vtrpc.RPCError
@@ -442,7 +442,7 @@ func file_vtrpc_proto_init() {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_vtrpc_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_vtrpc_proto_msgTypes[0].Exporter = func(v any, i int) any {
 			switch v := v.(*CallerID); i {
 			case 0:
 				return &v.state
@@ -454,7 +454,7 @@ func file_vtrpc_proto_init() {
 				return nil
 			}
 		}
-		file_vtrpc_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_vtrpc_proto_msgTypes[1].Exporter = func(v any, i int) any {
 			switch v := v.(*RPCError); i {
 			case 0:
 				return &v.state

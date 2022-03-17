@@ -10776,7 +10776,7 @@ func file_vtctldata_proto_rawDescGZIP() []byte {
 
 var file_vtctldata_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_vtctldata_proto_msgTypes = make([]protoimpl.MessageInfo, 177)
-var file_vtctldata_proto_goTypes = []interface{}{
+var file_vtctldata_proto_goTypes = []any{
 	(MaterializationIntent)(0),                   // 0: vtctldata.MaterializationIntent
 	(*ExecuteVtctlCommandRequest)(nil),           // 1: vtctldata.ExecuteVtctlCommandRequest
 	(*ExecuteVtctlCommandResponse)(nil),          // 2: vtctldata.ExecuteVtctlCommandResponse
@@ -11135,7 +11135,7 @@ func file_vtctldata_proto_init() {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_vtctldata_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[0].Exporter = func(v any, i int) any {
 			switch v := v.(*ExecuteVtctlCommandRequest); i {
 			case 0:
 				return &v.state
@@ -11147,7 +11147,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[1].Exporter = func(v any, i int) any {
 			switch v := v.(*ExecuteVtctlCommandResponse); i {
 			case 0:
 				return &v.state
@@ -11159,7 +11159,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[2].Exporter = func(v any, i int) any {
 			switch v := v.(*TableMaterializeSettings); i {
 			case 0:
 				return &v.state
@@ -11171,7 +11171,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[3].Exporter = func(v any, i int) any {
 			switch v := v.(*MaterializeSettings); i {
 			case 0:
 				return &v.state
@@ -11183,7 +11183,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[4].Exporter = func(v any, i int) any {
 			switch v := v.(*Keyspace); i {
 			case 0:
 				return &v.state
@@ -11195,7 +11195,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[5].Exporter = func(v any, i int) any {
 			switch v := v.(*Shard); i {
 			case 0:
 				return &v.state
@@ -11207,7 +11207,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[6].Exporter = func(v any, i int) any {
 			switch v := v.(*Workflow); i {
 			case 0:
 				return &v.state
@@ -11219,7 +11219,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[7].Exporter = func(v any, i int) any {
 			switch v := v.(*AddCellInfoRequest); i {
 			case 0:
 				return &v.state
@@ -11231,7 +11231,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[8].Exporter = func(v any, i int) any {
 			switch v := v.(*AddCellInfoResponse); i {
 			case 0:
 				return &v.state
@@ -11243,7 +11243,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[9].Exporter = func(v any, i int) any {
 			switch v := v.(*AddCellsAliasRequest); i {
 			case 0:
 				return &v.state
@@ -11255,7 +11255,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[10].Exporter = func(v any, i int) any {
 			switch v := v.(*AddCellsAliasResponse); i {
 			case 0:
 				return &v.state
@@ -11267,7 +11267,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[11].Exporter = func(v any, i int) any {
 			switch v := v.(*ApplyRoutingRulesRequest); i {
 			case 0:
 				return &v.state
@@ -11279,7 +11279,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[12].Exporter = func(v any, i int) any {
 			switch v := v.(*ApplyRoutingRulesResponse); i {
 			case 0:
 				return &v.state
@@ -11291,7 +11291,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[13].Exporter = func(v any, i int) any {
 			switch v := v.(*ApplySchemaRequest); i {
 			case 0:
 				return &v.state
@@ -11303,7 +11303,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[14].Exporter = func(v any, i int) any {
 			switch v := v.(*ApplySchemaResponse); i {
 			case 0:
 				return &v.state
@@ -11315,7 +11315,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[15].Exporter = func(v any, i int) any {
 			switch v := v.(*ApplyVSchemaRequest); i {
 			case 0:
 				return &v.state
@@ -11327,7 +11327,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[16].Exporter = func(v any, i int) any {
 			switch v := v.(*ApplyVSchemaResponse); i {
 			case 0:
 				return &v.state
@@ -11339,7 +11339,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[17].Exporter = func(v any, i int) any {
 			switch v := v.(*BackupRequest); i {
 			case 0:
 				return &v.state
@@ -11351,7 +11351,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[18].Exporter = func(v any, i int) any {
 			switch v := v.(*BackupResponse); i {
 			case 0:
 				return &v.state
@@ -11363,7 +11363,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[19].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[19].Exporter = func(v any, i int) any {
 			switch v := v.(*BackupShardRequest); i {
 			case 0:
 				return &v.state
@@ -11375,7 +11375,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[20].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[20].Exporter = func(v any, i int) any {
 			switch v := v.(*ChangeTabletTypeRequest); i {
 			case 0:
 				return &v.state
@@ -11387,7 +11387,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[21].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[21].Exporter = func(v any, i int) any {
 			switch v := v.(*ChangeTabletTypeResponse); i {
 			case 0:
 				return &v.state
@@ -11399,7 +11399,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[22].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[22].Exporter = func(v any, i int) any {
 			switch v := v.(*CreateKeyspaceRequest); i {
 			case 0:
 				return &v.state
@@ -11411,7 +11411,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[23].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[23].Exporter = func(v any, i int) any {
 			switch v := v.(*CreateKeyspaceResponse); i {
 			case 0:
 				return &v.state
@@ -11423,7 +11423,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[24].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[24].Exporter = func(v any, i int) any {
 			switch v := v.(*CreateShardRequest); i {
 			case 0:
 				return &v.state
@@ -11435,7 +11435,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[25].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[25].Exporter = func(v any, i int) any {
 			switch v := v.(*CreateShardResponse); i {
 			case 0:
 				return &v.state
@@ -11447,7 +11447,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[26].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[26].Exporter = func(v any, i int) any {
 			switch v := v.(*DeleteCellInfoRequest); i {
 			case 0:
 				return &v.state
@@ -11459,7 +11459,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[27].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[27].Exporter = func(v any, i int) any {
 			switch v := v.(*DeleteCellInfoResponse); i {
 			case 0:
 				return &v.state
@@ -11471,7 +11471,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[28].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[28].Exporter = func(v any, i int) any {
 			switch v := v.(*DeleteCellsAliasRequest); i {
 			case 0:
 				return &v.state
@@ -11483,7 +11483,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[29].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[29].Exporter = func(v any, i int) any {
 			switch v := v.(*DeleteCellsAliasResponse); i {
 			case 0:
 				return &v.state
@@ -11495,7 +11495,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[30].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[30].Exporter = func(v any, i int) any {
 			switch v := v.(*DeleteKeyspaceRequest); i {
 			case 0:
 				return &v.state
@@ -11507,7 +11507,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[31].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[31].Exporter = func(v any, i int) any {
 			switch v := v.(*DeleteKeyspaceResponse); i {
 			case 0:
 				return &v.state
@@ -11519,7 +11519,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[32].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[32].Exporter = func(v any, i int) any {
 			switch v := v.(*DeleteShardsRequest); i {
 			case 0:
 				return &v.state
@@ -11531,7 +11531,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[33].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[33].Exporter = func(v any, i int) any {
 			switch v := v.(*DeleteShardsResponse); i {
 			case 0:
 				return &v.state
@@ -11543,7 +11543,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[34].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[34].Exporter = func(v any, i int) any {
 			switch v := v.(*DeleteSrvVSchemaRequest); i {
 			case 0:
 				return &v.state
@@ -11555,7 +11555,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[35].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[35].Exporter = func(v any, i int) any {
 			switch v := v.(*DeleteSrvVSchemaResponse); i {
 			case 0:
 				return &v.state
@@ -11567,7 +11567,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[36].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[36].Exporter = func(v any, i int) any {
 			switch v := v.(*DeleteTabletsRequest); i {
 			case 0:
 				return &v.state
@@ -11579,7 +11579,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[37].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[37].Exporter = func(v any, i int) any {
 			switch v := v.(*DeleteTabletsResponse); i {
 			case 0:
 				return &v.state
@@ -11591,7 +11591,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[38].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[38].Exporter = func(v any, i int) any {
 			switch v := v.(*EmergencyReparentShardRequest); i {
 			case 0:
 				return &v.state
@@ -11603,7 +11603,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[39].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[39].Exporter = func(v any, i int) any {
 			switch v := v.(*EmergencyReparentShardResponse); i {
 			case 0:
 				return &v.state
@@ -11615,7 +11615,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[40].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[40].Exporter = func(v any, i int) any {
 			switch v := v.(*ExecuteFetchAsAppRequest); i {
 			case 0:
 				return &v.state
@@ -11627,7 +11627,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[41].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[41].Exporter = func(v any, i int) any {
 			switch v := v.(*ExecuteFetchAsAppResponse); i {
 			case 0:
 				return &v.state
@@ -11639,7 +11639,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[42].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[42].Exporter = func(v any, i int) any {
 			switch v := v.(*ExecuteFetchAsDBARequest); i {
 			case 0:
 				return &v.state
@@ -11651,7 +11651,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[43].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[43].Exporter = func(v any, i int) any {
 			switch v := v.(*ExecuteFetchAsDBAResponse); i {
 			case 0:
 				return &v.state
@@ -11663,7 +11663,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[44].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[44].Exporter = func(v any, i int) any {
 			switch v := v.(*ExecuteHookRequest); i {
 			case 0:
 				return &v.state
@@ -11675,7 +11675,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[45].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[45].Exporter = func(v any, i int) any {
 			switch v := v.(*ExecuteHookResponse); i {
 			case 0:
 				return &v.state
@@ -11687,7 +11687,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[46].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[46].Exporter = func(v any, i int) any {
 			switch v := v.(*FindAllShardsInKeyspaceRequest); i {
 			case 0:
 				return &v.state
@@ -11699,7 +11699,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[47].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[47].Exporter = func(v any, i int) any {
 			switch v := v.(*FindAllShardsInKeyspaceResponse); i {
 			case 0:
 				return &v.state
@@ -11711,7 +11711,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[48].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[48].Exporter = func(v any, i int) any {
 			switch v := v.(*GetBackupsRequest); i {
 			case 0:
 				return &v.state
@@ -11723,7 +11723,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[49].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[49].Exporter = func(v any, i int) any {
 			switch v := v.(*GetBackupsResponse); i {
 			case 0:
 				return &v.state
@@ -11735,7 +11735,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[50].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[50].Exporter = func(v any, i int) any {
 			switch v := v.(*GetCellInfoRequest); i {
 			case 0:
 				return &v.state
@@ -11747,7 +11747,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[51].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[51].Exporter = func(v any, i int) any {
 			switch v := v.(*GetCellInfoResponse); i {
 			case 0:
 				return &v.state
@@ -11759,7 +11759,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[52].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[52].Exporter = func(v any, i int) any {
 			switch v := v.(*GetCellInfoNamesRequest); i {
 			case 0:
 				return &v.state
@@ -11771,7 +11771,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[53].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[53].Exporter = func(v any, i int) any {
 			switch v := v.(*GetCellInfoNamesResponse); i {
 			case 0:
 				return &v.state
@@ -11783,7 +11783,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[54].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[54].Exporter = func(v any, i int) any {
 			switch v := v.(*GetCellsAliasesRequest); i {
 			case 0:
 				return &v.state
@@ -11795,7 +11795,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[55].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[55].Exporter = func(v any, i int) any {
 			switch v := v.(*GetCellsAliasesResponse); i {
 			case 0:
 				return &v.state
@@ -11807,7 +11807,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[56].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[56].Exporter = func(v any, i int) any {
 			switch v := v.(*GetKeyspacesRequest); i {
 			case 0:
 				return &v.state
@@ -11819,7 +11819,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[57].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[57].Exporter = func(v any, i int) any {
 			switch v := v.(*GetKeyspacesResponse); i {
 			case 0:
 				return &v.state
@@ -11831,7 +11831,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[58].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[58].Exporter = func(v any, i int) any {
 			switch v := v.(*GetKeyspaceRequest); i {
 			case 0:
 				return &v.state
@@ -11843,7 +11843,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[59].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[59].Exporter = func(v any, i int) any {
 			switch v := v.(*GetKeyspaceResponse); i {
 			case 0:
 				return &v.state
@@ -11855,7 +11855,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[60].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[60].Exporter = func(v any, i int) any {
 			switch v := v.(*GetRoutingRulesRequest); i {
 			case 0:
 				return &v.state
@@ -11867,7 +11867,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[61].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[61].Exporter = func(v any, i int) any {
 			switch v := v.(*GetRoutingRulesResponse); i {
 			case 0:
 				return &v.state
@@ -11879,7 +11879,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[62].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[62].Exporter = func(v any, i int) any {
 			switch v := v.(*GetSchemaRequest); i {
 			case 0:
 				return &v.state
@@ -11891,7 +11891,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[63].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[63].Exporter = func(v any, i int) any {
 			switch v := v.(*GetSchemaResponse); i {
 			case 0:
 				return &v.state
@@ -11903,7 +11903,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[64].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[64].Exporter = func(v any, i int) any {
 			switch v := v.(*GetShardRequest); i {
 			case 0:
 				return &v.state
@@ -11915,7 +11915,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[65].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[65].Exporter = func(v any, i int) any {
 			switch v := v.(*GetShardResponse); i {
 			case 0:
 				return &v.state
@@ -11927,7 +11927,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[66].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[66].Exporter = func(v any, i int) any {
 			switch v := v.(*GetSrvKeyspaceNamesRequest); i {
 			case 0:
 				return &v.state
@@ -11939,7 +11939,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[67].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[67].Exporter = func(v any, i int) any {
 			switch v := v.(*GetSrvKeyspaceNamesResponse); i {
 			case 0:
 				return &v.state
@@ -11951,7 +11951,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[68].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[68].Exporter = func(v any, i int) any {
 			switch v := v.(*GetSrvKeyspacesRequest); i {
 			case 0:
 				return &v.state
@@ -11963,7 +11963,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[69].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[69].Exporter = func(v any, i int) any {
 			switch v := v.(*GetSrvKeyspacesResponse); i {
 			case 0:
 				return &v.state
@@ -11975,7 +11975,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[70].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[70].Exporter = func(v any, i int) any {
 			switch v := v.(*GetSrvVSchemaRequest); i {
 			case 0:
 				return &v.state
@@ -11987,7 +11987,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[71].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[71].Exporter = func(v any, i int) any {
 			switch v := v.(*GetSrvVSchemaResponse); i {
 			case 0:
 				return &v.state
@@ -11999,7 +11999,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[72].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[72].Exporter = func(v any, i int) any {
 			switch v := v.(*GetSrvVSchemasRequest); i {
 			case 0:
 				return &v.state
@@ -12011,7 +12011,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[73].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[73].Exporter = func(v any, i int) any {
 			switch v := v.(*GetSrvVSchemasResponse); i {
 			case 0:
 				return &v.state
@@ -12023,7 +12023,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[74].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[74].Exporter = func(v any, i int) any {
 			switch v := v.(*GetTabletRequest); i {
 			case 0:
 				return &v.state
@@ -12035,7 +12035,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[75].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[75].Exporter = func(v any, i int) any {
 			switch v := v.(*GetTabletResponse); i {
 			case 0:
 				return &v.state
@@ -12047,7 +12047,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[76].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[76].Exporter = func(v any, i int) any {
 			switch v := v.(*GetTabletsRequest); i {
 			case 0:
 				return &v.state
@@ -12059,7 +12059,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[77].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[77].Exporter = func(v any, i int) any {
 			switch v := v.(*GetTabletsResponse); i {
 			case 0:
 				return &v.state
@@ -12071,7 +12071,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[78].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[78].Exporter = func(v any, i int) any {
 			switch v := v.(*GetVSchemaRequest); i {
 			case 0:
 				return &v.state
@@ -12083,7 +12083,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[79].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[79].Exporter = func(v any, i int) any {
 			switch v := v.(*GetVersionRequest); i {
 			case 0:
 				return &v.state
@@ -12095,7 +12095,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[80].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[80].Exporter = func(v any, i int) any {
 			switch v := v.(*GetVersionResponse); i {
 			case 0:
 				return &v.state
@@ -12107,7 +12107,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[81].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[81].Exporter = func(v any, i int) any {
 			switch v := v.(*GetVSchemaResponse); i {
 			case 0:
 				return &v.state
@@ -12119,7 +12119,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[82].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[82].Exporter = func(v any, i int) any {
 			switch v := v.(*GetWorkflowsRequest); i {
 			case 0:
 				return &v.state
@@ -12131,7 +12131,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[83].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[83].Exporter = func(v any, i int) any {
 			switch v := v.(*GetWorkflowsResponse); i {
 			case 0:
 				return &v.state
@@ -12143,7 +12143,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[84].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[84].Exporter = func(v any, i int) any {
 			switch v := v.(*InitShardPrimaryRequest); i {
 			case 0:
 				return &v.state
@@ -12155,7 +12155,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[85].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[85].Exporter = func(v any, i int) any {
 			switch v := v.(*InitShardPrimaryResponse); i {
 			case 0:
 				return &v.state
@@ -12167,7 +12167,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[86].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[86].Exporter = func(v any, i int) any {
 			switch v := v.(*PingTabletRequest); i {
 			case 0:
 				return &v.state
@@ -12179,7 +12179,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[87].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[87].Exporter = func(v any, i int) any {
 			switch v := v.(*PingTabletResponse); i {
 			case 0:
 				return &v.state
@@ -12191,7 +12191,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[88].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[88].Exporter = func(v any, i int) any {
 			switch v := v.(*PlannedReparentShardRequest); i {
 			case 0:
 				return &v.state
@@ -12203,7 +12203,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[89].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[89].Exporter = func(v any, i int) any {
 			switch v := v.(*PlannedReparentShardResponse); i {
 			case 0:
 				return &v.state
@@ -12215,7 +12215,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[90].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[90].Exporter = func(v any, i int) any {
 			switch v := v.(*RebuildKeyspaceGraphRequest); i {
 			case 0:
 				return &v.state
@@ -12227,7 +12227,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[91].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[91].Exporter = func(v any, i int) any {
 			switch v := v.(*RebuildKeyspaceGraphResponse); i {
 			case 0:
 				return &v.state
@@ -12239,7 +12239,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[92].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[92].Exporter = func(v any, i int) any {
 			switch v := v.(*RebuildVSchemaGraphRequest); i {
 			case 0:
 				return &v.state
@@ -12251,7 +12251,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[93].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[93].Exporter = func(v any, i int) any {
 			switch v := v.(*RebuildVSchemaGraphResponse); i {
 			case 0:
 				return &v.state
@@ -12263,7 +12263,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[94].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[94].Exporter = func(v any, i int) any {
 			switch v := v.(*RefreshStateRequest); i {
 			case 0:
 				return &v.state
@@ -12275,7 +12275,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[95].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[95].Exporter = func(v any, i int) any {
 			switch v := v.(*RefreshStateResponse); i {
 			case 0:
 				return &v.state
@@ -12287,7 +12287,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[96].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[96].Exporter = func(v any, i int) any {
 			switch v := v.(*RefreshStateByShardRequest); i {
 			case 0:
 				return &v.state
@@ -12299,7 +12299,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[97].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[97].Exporter = func(v any, i int) any {
 			switch v := v.(*RefreshStateByShardResponse); i {
 			case 0:
 				return &v.state
@@ -12311,7 +12311,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[98].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[98].Exporter = func(v any, i int) any {
 			switch v := v.(*ReloadSchemaRequest); i {
 			case 0:
 				return &v.state
@@ -12323,7 +12323,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[99].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[99].Exporter = func(v any, i int) any {
 			switch v := v.(*ReloadSchemaResponse); i {
 			case 0:
 				return &v.state
@@ -12335,7 +12335,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[100].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[100].Exporter = func(v any, i int) any {
 			switch v := v.(*ReloadSchemaKeyspaceRequest); i {
 			case 0:
 				return &v.state
@@ -12347,7 +12347,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[101].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[101].Exporter = func(v any, i int) any {
 			switch v := v.(*ReloadSchemaKeyspaceResponse); i {
 			case 0:
 				return &v.state
@@ -12359,7 +12359,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[102].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[102].Exporter = func(v any, i int) any {
 			switch v := v.(*ReloadSchemaShardRequest); i {
 			case 0:
 				return &v.state
@@ -12371,7 +12371,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[103].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[103].Exporter = func(v any, i int) any {
 			switch v := v.(*ReloadSchemaShardResponse); i {
 			case 0:
 				return &v.state
@@ -12383,7 +12383,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[104].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[104].Exporter = func(v any, i int) any {
 			switch v := v.(*RemoveBackupRequest); i {
 			case 0:
 				return &v.state
@@ -12395,7 +12395,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[105].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[105].Exporter = func(v any, i int) any {
 			switch v := v.(*RemoveBackupResponse); i {
 			case 0:
 				return &v.state
@@ -12407,7 +12407,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[106].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[106].Exporter = func(v any, i int) any {
 			switch v := v.(*RemoveKeyspaceCellRequest); i {
 			case 0:
 				return &v.state
@@ -12419,7 +12419,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[107].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[107].Exporter = func(v any, i int) any {
 			switch v := v.(*RemoveKeyspaceCellResponse); i {
 			case 0:
 				return &v.state
@@ -12431,7 +12431,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[108].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[108].Exporter = func(v any, i int) any {
 			switch v := v.(*RemoveShardCellRequest); i {
 			case 0:
 				return &v.state
@@ -12443,7 +12443,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[109].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[109].Exporter = func(v any, i int) any {
 			switch v := v.(*RemoveShardCellResponse); i {
 			case 0:
 				return &v.state
@@ -12455,7 +12455,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[110].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[110].Exporter = func(v any, i int) any {
 			switch v := v.(*ReparentTabletRequest); i {
 			case 0:
 				return &v.state
@@ -12467,7 +12467,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[111].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[111].Exporter = func(v any, i int) any {
 			switch v := v.(*ReparentTabletResponse); i {
 			case 0:
 				return &v.state
@@ -12479,7 +12479,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[112].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[112].Exporter = func(v any, i int) any {
 			switch v := v.(*RestoreFromBackupRequest); i {
 			case 0:
 				return &v.state
@@ -12491,7 +12491,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[113].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[113].Exporter = func(v any, i int) any {
 			switch v := v.(*RestoreFromBackupResponse); i {
 			case 0:
 				return &v.state
@@ -12503,7 +12503,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[114].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[114].Exporter = func(v any, i int) any {
 			switch v := v.(*RunHealthCheckRequest); i {
 			case 0:
 				return &v.state
@@ -12515,7 +12515,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[115].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[115].Exporter = func(v any, i int) any {
 			switch v := v.(*RunHealthCheckResponse); i {
 			case 0:
 				return &v.state
@@ -12527,7 +12527,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[116].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[116].Exporter = func(v any, i int) any {
 			switch v := v.(*SetKeyspaceServedFromRequest); i {
 			case 0:
 				return &v.state
@@ -12539,7 +12539,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[117].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[117].Exporter = func(v any, i int) any {
 			switch v := v.(*SetKeyspaceServedFromResponse); i {
 			case 0:
 				return &v.state
@@ -12551,7 +12551,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[118].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[118].Exporter = func(v any, i int) any {
 			switch v := v.(*SetKeyspaceShardingInfoRequest); i {
 			case 0:
 				return &v.state
@@ -12563,7 +12563,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[119].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[119].Exporter = func(v any, i int) any {
 			switch v := v.(*SetKeyspaceShardingInfoResponse); i {
 			case 0:
 				return &v.state
@@ -12575,7 +12575,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[120].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[120].Exporter = func(v any, i int) any {
 			switch v := v.(*SetShardIsPrimaryServingRequest); i {
 			case 0:
 				return &v.state
@@ -12587,7 +12587,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[121].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[121].Exporter = func(v any, i int) any {
 			switch v := v.(*SetShardIsPrimaryServingResponse); i {
 			case 0:
 				return &v.state
@@ -12599,7 +12599,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[122].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[122].Exporter = func(v any, i int) any {
 			switch v := v.(*SetShardTabletControlRequest); i {
 			case 0:
 				return &v.state
@@ -12611,7 +12611,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[123].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[123].Exporter = func(v any, i int) any {
 			switch v := v.(*SetShardTabletControlResponse); i {
 			case 0:
 				return &v.state
@@ -12623,7 +12623,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[124].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[124].Exporter = func(v any, i int) any {
 			switch v := v.(*SetWritableRequest); i {
 			case 0:
 				return &v.state
@@ -12635,7 +12635,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[125].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[125].Exporter = func(v any, i int) any {
 			switch v := v.(*SetWritableResponse); i {
 			case 0:
 				return &v.state
@@ -12647,7 +12647,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[126].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[126].Exporter = func(v any, i int) any {
 			switch v := v.(*ShardReplicationFixRequest); i {
 			case 0:
 				return &v.state
@@ -12659,7 +12659,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[127].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[127].Exporter = func(v any, i int) any {
 			switch v := v.(*ShardReplicationFixResponse); i {
 			case 0:
 				return &v.state
@@ -12671,7 +12671,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[128].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[128].Exporter = func(v any, i int) any {
 			switch v := v.(*ShardReplicationPositionsRequest); i {
 			case 0:
 				return &v.state
@@ -12683,7 +12683,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[129].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[129].Exporter = func(v any, i int) any {
 			switch v := v.(*ShardReplicationPositionsResponse); i {
 			case 0:
 				return &v.state
@@ -12695,7 +12695,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[130].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[130].Exporter = func(v any, i int) any {
 			switch v := v.(*SleepTabletRequest); i {
 			case 0:
 				return &v.state
@@ -12707,7 +12707,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[131].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[131].Exporter = func(v any, i int) any {
 			switch v := v.(*SleepTabletResponse); i {
 			case 0:
 				return &v.state
@@ -12719,7 +12719,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[132].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[132].Exporter = func(v any, i int) any {
 			switch v := v.(*SourceShardAddRequest); i {
 			case 0:
 				return &v.state
@@ -12731,7 +12731,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[133].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[133].Exporter = func(v any, i int) any {
 			switch v := v.(*SourceShardAddResponse); i {
 			case 0:
 				return &v.state
@@ -12743,7 +12743,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[134].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[134].Exporter = func(v any, i int) any {
 			switch v := v.(*SourceShardDeleteRequest); i {
 			case 0:
 				return &v.state
@@ -12755,7 +12755,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[135].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[135].Exporter = func(v any, i int) any {
 			switch v := v.(*SourceShardDeleteResponse); i {
 			case 0:
 				return &v.state
@@ -12767,7 +12767,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[136].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[136].Exporter = func(v any, i int) any {
 			switch v := v.(*StartReplicationRequest); i {
 			case 0:
 				return &v.state
@@ -12779,7 +12779,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[137].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[137].Exporter = func(v any, i int) any {
 			switch v := v.(*StartReplicationResponse); i {
 			case 0:
 				return &v.state
@@ -12791,7 +12791,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[138].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[138].Exporter = func(v any, i int) any {
 			switch v := v.(*StopReplicationRequest); i {
 			case 0:
 				return &v.state
@@ -12803,7 +12803,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[139].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[139].Exporter = func(v any, i int) any {
 			switch v := v.(*StopReplicationResponse); i {
 			case 0:
 				return &v.state
@@ -12815,7 +12815,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[140].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[140].Exporter = func(v any, i int) any {
 			switch v := v.(*TabletExternallyReparentedRequest); i {
 			case 0:
 				return &v.state
@@ -12827,7 +12827,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[141].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[141].Exporter = func(v any, i int) any {
 			switch v := v.(*TabletExternallyReparentedResponse); i {
 			case 0:
 				return &v.state
@@ -12839,7 +12839,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[142].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[142].Exporter = func(v any, i int) any {
 			switch v := v.(*UpdateCellInfoRequest); i {
 			case 0:
 				return &v.state
@@ -12851,7 +12851,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[143].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[143].Exporter = func(v any, i int) any {
 			switch v := v.(*UpdateCellInfoResponse); i {
 			case 0:
 				return &v.state
@@ -12863,7 +12863,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[144].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[144].Exporter = func(v any, i int) any {
 			switch v := v.(*UpdateCellsAliasRequest); i {
 			case 0:
 				return &v.state
@@ -12875,7 +12875,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[145].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[145].Exporter = func(v any, i int) any {
 			switch v := v.(*UpdateCellsAliasResponse); i {
 			case 0:
 				return &v.state
@@ -12887,7 +12887,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[146].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[146].Exporter = func(v any, i int) any {
 			switch v := v.(*ValidateRequest); i {
 			case 0:
 				return &v.state
@@ -12899,7 +12899,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[147].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[147].Exporter = func(v any, i int) any {
 			switch v := v.(*ValidateResponse); i {
 			case 0:
 				return &v.state
@@ -12911,7 +12911,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[148].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[148].Exporter = func(v any, i int) any {
 			switch v := v.(*ValidateKeyspaceRequest); i {
 			case 0:
 				return &v.state
@@ -12923,7 +12923,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[149].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[149].Exporter = func(v any, i int) any {
 			switch v := v.(*ValidateKeyspaceResponse); i {
 			case 0:
 				return &v.state
@@ -12935,7 +12935,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[150].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[150].Exporter = func(v any, i int) any {
 			switch v := v.(*ValidateSchemaKeyspaceRequest); i {
 			case 0:
 				return &v.state
@@ -12947,7 +12947,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[151].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[151].Exporter = func(v any, i int) any {
 			switch v := v.(*ValidateSchemaKeyspaceResponse); i {
 			case 0:
 				return &v.state
@@ -12959,7 +12959,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[152].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[152].Exporter = func(v any, i int) any {
 			switch v := v.(*ValidateShardRequest); i {
 			case 0:
 				return &v.state
@@ -12971,7 +12971,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[153].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[153].Exporter = func(v any, i int) any {
 			switch v := v.(*ValidateShardResponse); i {
 			case 0:
 				return &v.state
@@ -12983,7 +12983,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[154].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[154].Exporter = func(v any, i int) any {
 			switch v := v.(*ValidateVersionKeyspaceRequest); i {
 			case 0:
 				return &v.state
@@ -12995,7 +12995,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[155].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[155].Exporter = func(v any, i int) any {
 			switch v := v.(*ValidateVersionKeyspaceResponse); i {
 			case 0:
 				return &v.state
@@ -13007,7 +13007,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[156].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[156].Exporter = func(v any, i int) any {
 			switch v := v.(*ValidateVSchemaRequest); i {
 			case 0:
 				return &v.state
@@ -13019,7 +13019,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[157].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[157].Exporter = func(v any, i int) any {
 			switch v := v.(*ValidateVSchemaResponse); i {
 			case 0:
 				return &v.state
@@ -13031,7 +13031,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[159].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[159].Exporter = func(v any, i int) any {
 			switch v := v.(*Workflow_ReplicationLocation); i {
 			case 0:
 				return &v.state
@@ -13043,7 +13043,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[160].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[160].Exporter = func(v any, i int) any {
 			switch v := v.(*Workflow_ShardStream); i {
 			case 0:
 				return &v.state
@@ -13055,7 +13055,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[161].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[161].Exporter = func(v any, i int) any {
 			switch v := v.(*Workflow_Stream); i {
 			case 0:
 				return &v.state
@@ -13067,7 +13067,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[162].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[162].Exporter = func(v any, i int) any {
 			switch v := v.(*Workflow_Stream_CopyState); i {
 			case 0:
 				return &v.state
@@ -13079,7 +13079,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[163].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[163].Exporter = func(v any, i int) any {
 			switch v := v.(*Workflow_Stream_Log); i {
 			case 0:
 				return &v.state
@@ -13091,7 +13091,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[167].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[167].Exporter = func(v any, i int) any {
 			switch v := v.(*GetSrvKeyspaceNamesResponse_NameList); i {
 			case 0:
 				return &v.state

@@ -84,7 +84,7 @@ var file_vtgateservice_proto_rawDesc = []byte{
 	0x65, 0x73, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
-var file_vtgateservice_proto_goTypes = []interface{}{
+var file_vtgateservice_proto_goTypes = []any{
 	(*vtgate.ExecuteRequest)(nil),             // 0: vtgate.ExecuteRequest
 	(*vtgate.ExecuteBatchRequest)(nil),        // 1: vtgate.ExecuteBatchRequest
 	(*vtgate.StreamExecuteRequest)(nil),       // 2: vtgate.StreamExecuteRequest

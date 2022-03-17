@@ -94,7 +94,7 @@ func RegisterVtworkerServer(s grpc.ServiceRegistrar, srv VtworkerServer) {
 	s.RegisterService(&Vtworker_ServiceDesc, srv)
 }
 
-func _Vtworker_ExecuteVtworkerCommand_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Vtworker_ExecuteVtworkerCommand_Handler(srv any, stream grpc.ServerStream) error {
 	m := new(vtworkerdata.ExecuteVtworkerCommandRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err

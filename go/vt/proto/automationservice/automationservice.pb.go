@@ -66,7 +66,7 @@ var file_automationservice_proto_rawDesc = []byte{
 	0x76, 0x69, 0x63, 0x65, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
-var file_automationservice_proto_goTypes = []interface{}{
+var file_automationservice_proto_goTypes = []any{
 	(*automation.EnqueueClusterOperationRequest)(nil),     // 0: automation.EnqueueClusterOperationRequest
 	(*automation.GetClusterOperationDetailsRequest)(nil),  // 1: automation.GetClusterOperationDetailsRequest
 	(*automation.EnqueueClusterOperationResponse)(nil),    // 2: automation.EnqueueClusterOperationResponse

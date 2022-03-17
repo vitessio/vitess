@@ -1869,7 +1869,7 @@ func file_vtgate_proto_rawDescGZIP() []byte {
 
 var file_vtgate_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_vtgate_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
-var file_vtgate_proto_goTypes = []interface{}{
+var file_vtgate_proto_goTypes = []any{
 	(TransactionMode)(0),               // 0: vtgate.TransactionMode
 	(CommitOrder)(0),                   // 1: vtgate.CommitOrder
 	(*Session)(nil),                    // 2: vtgate.Session
@@ -1973,7 +1973,7 @@ func file_vtgate_proto_init() {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_vtgate_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_vtgate_proto_msgTypes[0].Exporter = func(v any, i int) any {
 			switch v := v.(*Session); i {
 			case 0:
 				return &v.state
@@ -1985,7 +1985,7 @@ func file_vtgate_proto_init() {
 				return nil
 			}
 		}
-		file_vtgate_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_vtgate_proto_msgTypes[1].Exporter = func(v any, i int) any {
 			switch v := v.(*ReadAfterWrite); i {
 			case 0:
 				return &v.state
@@ -1997,7 +1997,7 @@ func file_vtgate_proto_init() {
 				return nil
 			}
 		}
-		file_vtgate_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+		file_vtgate_proto_msgTypes[2].Exporter = func(v any, i int) any {
 			switch v := v.(*ExecuteRequest); i {
 			case 0:
 				return &v.state
@@ -2009,7 +2009,7 @@ func file_vtgate_proto_init() {
 				return nil
 			}
 		}
-		file_vtgate_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+		file_vtgate_proto_msgTypes[3].Exporter = func(v any, i int) any {
 			switch v := v.(*ExecuteResponse); i {
 			case 0:
 				return &v.state
@@ -2021,7 +2021,7 @@ func file_vtgate_proto_init() {
 				return nil
 			}
 		}
-		file_vtgate_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+		file_vtgate_proto_msgTypes[4].Exporter = func(v any, i int) any {
 			switch v := v.(*ExecuteBatchRequest); i {
 			case 0:
 				return &v.state
@@ -2033,7 +2033,7 @@ func file_vtgate_proto_init() {
 				return nil
 			}
 		}
-		file_vtgate_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+		file_vtgate_proto_msgTypes[5].Exporter = func(v any, i int) any {
 			switch v := v.(*ExecuteBatchResponse); i {
 			case 0:
 				return &v.state
@@ -2045,7 +2045,7 @@ func file_vtgate_proto_init() {
 				return nil
 			}
 		}
-		file_vtgate_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+		file_vtgate_proto_msgTypes[6].Exporter = func(v any, i int) any {
 			switch v := v.(*StreamExecuteRequest); i {
 			case 0:
 				return &v.state
@@ -2057,7 +2057,7 @@ func file_vtgate_proto_init() {
 				return nil
 			}
 		}
-		file_vtgate_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+		file_vtgate_proto_msgTypes[7].Exporter = func(v any, i int) any {
 			switch v := v.(*StreamExecuteResponse); i {
 			case 0:
 				return &v.state
@@ -2069,7 +2069,7 @@ func file_vtgate_proto_init() {
 				return nil
 			}
 		}
-		file_vtgate_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+		file_vtgate_proto_msgTypes[8].Exporter = func(v any, i int) any {
 			switch v := v.(*ResolveTransactionRequest); i {
 			case 0:
 				return &v.state
@@ -2081,7 +2081,7 @@ func file_vtgate_proto_init() {
 				return nil
 			}
 		}
-		file_vtgate_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+		file_vtgate_proto_msgTypes[9].Exporter = func(v any, i int) any {
 			switch v := v.(*ResolveTransactionResponse); i {
 			case 0:
 				return &v.state
@@ -2093,7 +2093,7 @@ func file_vtgate_proto_init() {
 				return nil
 			}
 		}
-		file_vtgate_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+		file_vtgate_proto_msgTypes[10].Exporter = func(v any, i int) any {
 			switch v := v.(*VStreamFlags); i {
 			case 0:
 				return &v.state
@@ -2105,7 +2105,7 @@ func file_vtgate_proto_init() {
 				return nil
 			}
 		}
-		file_vtgate_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
+		file_vtgate_proto_msgTypes[11].Exporter = func(v any, i int) any {
 			switch v := v.(*VStreamRequest); i {
 			case 0:
 				return &v.state
@@ -2117,7 +2117,7 @@ func file_vtgate_proto_init() {
 				return nil
 			}
 		}
-		file_vtgate_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+		file_vtgate_proto_msgTypes[12].Exporter = func(v any, i int) any {
 			switch v := v.(*VStreamResponse); i {
 			case 0:
 				return &v.state
@@ -2129,7 +2129,7 @@ func file_vtgate_proto_init() {
 				return nil
 			}
 		}
-		file_vtgate_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
+		file_vtgate_proto_msgTypes[13].Exporter = func(v any, i int) any {
 			switch v := v.(*PrepareRequest); i {
 			case 0:
 				return &v.state
@@ -2141,7 +2141,7 @@ func file_vtgate_proto_init() {
 				return nil
 			}
 		}
-		file_vtgate_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+		file_vtgate_proto_msgTypes[14].Exporter = func(v any, i int) any {
 			switch v := v.(*PrepareResponse); i {
 			case 0:
 				return &v.state
@@ -2153,7 +2153,7 @@ func file_vtgate_proto_init() {
 				return nil
 			}
 		}
-		file_vtgate_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
+		file_vtgate_proto_msgTypes[15].Exporter = func(v any, i int) any {
 			switch v := v.(*CloseSessionRequest); i {
 			case 0:
 				return &v.state
@@ -2165,7 +2165,7 @@ func file_vtgate_proto_init() {
 				return nil
 			}
 		}
-		file_vtgate_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
+		file_vtgate_proto_msgTypes[16].Exporter = func(v any, i int) any {
 			switch v := v.(*CloseSessionResponse); i {
 			case 0:
 				return &v.state
@@ -2177,7 +2177,7 @@ func file_vtgate_proto_init() {
 				return nil
 			}
 		}
-		file_vtgate_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
+		file_vtgate_proto_msgTypes[17].Exporter = func(v any, i int) any {
 			switch v := v.(*Session_ShardSession); i {
 			case 0:
 				return &v.state

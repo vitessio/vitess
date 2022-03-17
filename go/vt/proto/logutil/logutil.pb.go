@@ -212,7 +212,7 @@ func file_logutil_proto_rawDescGZIP() []byte {
 
 var file_logutil_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_logutil_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
-var file_logutil_proto_goTypes = []interface{}{
+var file_logutil_proto_goTypes = []any{
 	(Level)(0),          // 0: logutil.Level
 	(*Event)(nil),       // 1: logutil.Event
 	(*vttime.Time)(nil), // 2: vttime.Time
@@ -233,7 +233,7 @@ func file_logutil_proto_init() {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_logutil_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_logutil_proto_msgTypes[0].Exporter = func(v any, i int) any {
 			switch v := v.(*Event); i {
 			case 0:
 				return &v.state

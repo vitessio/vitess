@@ -46,7 +46,7 @@ func (m *MockReshardingWrangler) CopySchemaShardFromShard(ctx context.Context, t
 }
 
 // CopySchemaShardFromShard indicates an expected call of CopySchemaShardFromShard.
-func (mr *MockReshardingWranglerMockRecorder) CopySchemaShardFromShard(ctx, tables, excludeTables, includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, waitReplicasTimeout, skipVerify interface{}) *gomock.Call {
+func (mr *MockReshardingWranglerMockRecorder) CopySchemaShardFromShard(ctx, tables, excludeTables, includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, waitReplicasTimeout, skipVerify any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopySchemaShardFromShard", reflect.TypeOf((*MockReshardingWrangler)(nil).CopySchemaShardFromShard), ctx, tables, excludeTables, includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, waitReplicasTimeout, skipVerify)
 }
@@ -60,7 +60,7 @@ func (m *MockReshardingWrangler) MigrateServedTypes(ctx context.Context, keyspac
 }
 
 // MigrateServedTypes indicates an expected call of MigrateServedTypes.
-func (mr *MockReshardingWranglerMockRecorder) MigrateServedTypes(ctx, keyspace, shard, cells, servedType, reverse, skipReFreshState, filteredReplicationWaitTime, reverseReplication interface{}) *gomock.Call {
+func (mr *MockReshardingWranglerMockRecorder) MigrateServedTypes(ctx, keyspace, shard, cells, servedType, reverse, skipReFreshState, filteredReplicationWaitTime, reverseReplication any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateServedTypes", reflect.TypeOf((*MockReshardingWrangler)(nil).MigrateServedTypes), ctx, keyspace, shard, cells, servedType, reverse, skipReFreshState, filteredReplicationWaitTime, reverseReplication)
 }
@@ -74,7 +74,7 @@ func (m *MockReshardingWrangler) WaitForFilteredReplication(ctx context.Context,
 }
 
 // WaitForFilteredReplication indicates an expected call of WaitForFilteredReplication.
-func (mr *MockReshardingWranglerMockRecorder) WaitForFilteredReplication(ctx, keyspace, shard, maxDelay interface{}) *gomock.Call {
+func (mr *MockReshardingWranglerMockRecorder) WaitForFilteredReplication(ctx, keyspace, shard, maxDelay any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForFilteredReplication", reflect.TypeOf((*MockReshardingWrangler)(nil).WaitForFilteredReplication), ctx, keyspace, shard, maxDelay)
 }

@@ -61,7 +61,7 @@ func TestAutocommitUpdateLookup(t *testing.T) {
 	_, err := autocommitExec(executor, "update music set a=2 where id = 2")
 	require.NoError(t, err)
 
-	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(2)})
+	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 
 	assertQueries(t, sbclookup, []*querypb.BoundQuery{{
@@ -150,7 +150,7 @@ func TestAutocommitDeleteLookup(t *testing.T) {
 
 	_, err := autocommitExec(executor, "delete from music where id = 1")
 	require.NoError(t, err)
-	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(1)})
+	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewInt64(1)})
 	require.NoError(t, err)
 
 	assertQueries(t, sbclookup, []*querypb.BoundQuery{{

@@ -64,7 +64,7 @@ var file_binlogservice_proto_rawDesc = []byte{
 	0x33,
 }
 
-var file_binlogservice_proto_goTypes = []interface{}{
+var file_binlogservice_proto_goTypes = []any{
 	(*binlogdata.StreamKeyRangeRequest)(nil),  // 0: binlogdata.StreamKeyRangeRequest
 	(*binlogdata.StreamTablesRequest)(nil),    // 1: binlogdata.StreamTablesRequest
 	(*binlogdata.StreamKeyRangeResponse)(nil), // 2: binlogdata.StreamKeyRangeResponse

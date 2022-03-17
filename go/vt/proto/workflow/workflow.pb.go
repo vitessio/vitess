@@ -503,7 +503,7 @@ func file_workflow_proto_rawDescGZIP() []byte {
 
 var file_workflow_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_workflow_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
-var file_workflow_proto_goTypes = []interface{}{
+var file_workflow_proto_goTypes = []any{
 	(WorkflowState)(0),         // 0: workflow.WorkflowState
 	(TaskState)(0),             // 1: workflow.TaskState
 	(*Workflow)(nil),           // 2: workflow.Workflow
@@ -533,7 +533,7 @@ func file_workflow_proto_init() {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_workflow_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_workflow_proto_msgTypes[0].Exporter = func(v any, i int) any {
 			switch v := v.(*Workflow); i {
 			case 0:
 				return &v.state
@@ -545,7 +545,7 @@ func file_workflow_proto_init() {
 				return nil
 			}
 		}
-		file_workflow_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_workflow_proto_msgTypes[1].Exporter = func(v any, i int) any {
 			switch v := v.(*WorkflowCheckpoint); i {
 			case 0:
 				return &v.state
@@ -557,7 +557,7 @@ func file_workflow_proto_init() {
 				return nil
 			}
 		}
-		file_workflow_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+		file_workflow_proto_msgTypes[2].Exporter = func(v any, i int) any {
 			switch v := v.(*Task); i {
 			case 0:
 				return &v.state

@@ -122,7 +122,7 @@ func RegisterMysqlCtlServer(s grpc.ServiceRegistrar, srv MysqlCtlServer) {
 	s.RegisterService(&MysqlCtl_ServiceDesc, srv)
 }
 
-func _MysqlCtl_Start_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _MysqlCtl_Start_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(StartRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -134,13 +134,13 @@ func _MysqlCtl_Start_Handler(srv interface{}, ctx context.Context, dec func(inte
 		Server:     srv,
 		FullMethod: "/mysqlctl.MysqlCtl/Start",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(MysqlCtlServer).Start(ctx, req.(*StartRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MysqlCtl_Shutdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _MysqlCtl_Shutdown_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(ShutdownRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -152,13 +152,13 @@ func _MysqlCtl_Shutdown_Handler(srv interface{}, ctx context.Context, dec func(i
 		Server:     srv,
 		FullMethod: "/mysqlctl.MysqlCtl/Shutdown",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(MysqlCtlServer).Shutdown(ctx, req.(*ShutdownRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MysqlCtl_RunMysqlUpgrade_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _MysqlCtl_RunMysqlUpgrade_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(RunMysqlUpgradeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -170,13 +170,13 @@ func _MysqlCtl_RunMysqlUpgrade_Handler(srv interface{}, ctx context.Context, dec
 		Server:     srv,
 		FullMethod: "/mysqlctl.MysqlCtl/RunMysqlUpgrade",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(MysqlCtlServer).RunMysqlUpgrade(ctx, req.(*RunMysqlUpgradeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MysqlCtl_ReinitConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _MysqlCtl_ReinitConfig_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(ReinitConfigRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -188,13 +188,13 @@ func _MysqlCtl_ReinitConfig_Handler(srv interface{}, ctx context.Context, dec fu
 		Server:     srv,
 		FullMethod: "/mysqlctl.MysqlCtl/ReinitConfig",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(MysqlCtlServer).ReinitConfig(ctx, req.(*ReinitConfigRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MysqlCtl_RefreshConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _MysqlCtl_RefreshConfig_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(RefreshConfigRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -206,7 +206,7 @@ func _MysqlCtl_RefreshConfig_Handler(srv interface{}, ctx context.Context, dec f
 		Server:     srv,
 		FullMethod: "/mysqlctl.MysqlCtl/RefreshConfig",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(MysqlCtlServer).RefreshConfig(ctx, req.(*RefreshConfigRequest))
 	}
 	return interceptor(ctx, in, info, handler)

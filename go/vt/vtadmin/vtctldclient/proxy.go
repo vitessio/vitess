@@ -171,17 +171,17 @@ func (vtctld *ClientProxy) Close() error {
 }
 
 // Debug implements debug.Debuggable for ClientProxy.
-func (vtctld *ClientProxy) Debug() map[string]interface{} {
+func (vtctld *ClientProxy) Debug() map[string]any {
 	vtctld.m.Lock()
 	defer vtctld.m.Unlock()
 
-	m := map[string]interface{}{
+	m := map[string]any{
 		"host":         vtctld.host,
 		"is_connected": !vtctld.closed,
 	}
 
 	if vtctld.creds != nil {
-		m["credentials"] = map[string]interface{}{
+		m["credentials"] = map[string]any{
 			"source":   vtctld.cfg.CredentialsPath,
 			"username": vtctld.creds.Username,
 			"password": debug.SanitizeString(vtctld.creds.Password),

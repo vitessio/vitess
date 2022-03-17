@@ -203,7 +203,7 @@ func file_tableacl_proto_rawDescGZIP() []byte {
 }
 
 var file_tableacl_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_tableacl_proto_goTypes = []interface{}{
+var file_tableacl_proto_goTypes = []any{
 	(*TableGroupSpec)(nil), // 0: tableacl.TableGroupSpec
 	(*Config)(nil),         // 1: tableacl.Config
 }
@@ -222,7 +222,7 @@ func file_tableacl_proto_init() {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_tableacl_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_tableacl_proto_msgTypes[0].Exporter = func(v any, i int) any {
 			switch v := v.(*TableGroupSpec); i {
 			case 0:
 				return &v.state
@@ -234,7 +234,7 @@ func file_tableacl_proto_init() {
 				return nil
 			}
 		}
-		file_tableacl_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_tableacl_proto_msgTypes[1].Exporter = func(v any, i int) any {
 			switch v := v.(*Config); i {
 			case 0:
 				return &v.state

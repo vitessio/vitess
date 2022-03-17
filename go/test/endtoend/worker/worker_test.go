@@ -373,7 +373,7 @@ func runSplitDiff(t *testing.T, keyspaceShard string) {
 
 func pollForVars(t *testing.T, mssg string) {
 	startTime := time.Now()
-	var resultMap map[string]interface{}
+	var resultMap map[string]any
 	var err error
 	var workerState string
 	for {
@@ -390,7 +390,7 @@ func pollForVars(t *testing.T, mssg string) {
 
 func pollForVarsWorkerRetryCount(t *testing.T, count int) {
 	startTime := time.Now()
-	var resultMap map[string]interface{}
+	var resultMap map[string]any
 	var err error
 	var workerRetryCountInt int
 	for {

@@ -175,7 +175,7 @@ func (e *Exporter) HandleFunc(url string, f func(w http.ResponseWriter, r *http.
 
 // AddStatusPart adds a status part to the status page. If Exporter has a name,
 // the part is added to a url named /name/debug/status. Otherwise, it's /debug/status.
-func (e *Exporter) AddStatusPart(banner, frag string, f func() interface{}) {
+func (e *Exporter) AddStatusPart(banner, frag string, f func() any) {
 	if e.name == "" {
 		AddStatusPart(banner, frag, f)
 		return

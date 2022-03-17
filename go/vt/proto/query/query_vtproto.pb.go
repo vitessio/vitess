@@ -4037,7 +4037,7 @@ func encodeVarint(dAtA []byte, offset int, v uint64) int {
 }
 
 var vtprotoPool_Row = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return &Row{}
 	},
 }

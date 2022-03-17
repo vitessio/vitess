@@ -30,7 +30,7 @@ import (
 )
 
 type testPlanner struct {
-	panic       interface{}
+	panic       any
 	err         error
 	res         engine.Primitive
 	messWithAST func(sqlparser.Statement)

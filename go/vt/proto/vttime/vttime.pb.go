@@ -180,7 +180,7 @@ func file_vttime_proto_rawDescGZIP() []byte {
 }
 
 var file_vttime_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_vttime_proto_goTypes = []interface{}{
+var file_vttime_proto_goTypes = []any{
 	(*Time)(nil),     // 0: vttime.Time
 	(*Duration)(nil), // 1: vttime.Duration
 }
@@ -198,7 +198,7 @@ func file_vttime_proto_init() {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_vttime_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_vttime_proto_msgTypes[0].Exporter = func(v any, i int) any {
 			switch v := v.(*Time); i {
 			case 0:
 				return &v.state
@@ -210,7 +210,7 @@ func file_vttime_proto_init() {
 				return nil
 			}
 		}
-		file_vttime_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_vttime_proto_msgTypes[1].Exporter = func(v any, i int) any {
 			switch v := v.(*Duration); i {
 			case 0:
 				return &v.state

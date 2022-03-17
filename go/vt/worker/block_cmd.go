@@ -65,13 +65,13 @@ func commandBlock(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	return worker, nil
 }
 
-func interactiveBlock(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
+func interactiveBlock(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]any, error) {
 	if err := r.ParseForm(); err != nil {
 		return nil, nil, nil, vterrors.Wrap(err, "cannot parse form")
 	}
 
 	if submit := r.FormValue("submit"); submit == "" {
-		result := make(map[string]interface{})
+		result := make(map[string]any)
 		return nil, blockTemplate, result, nil
 	}
 
