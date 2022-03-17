@@ -19,11 +19,12 @@ package sqlparser
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"unicode"
+
 	"github.com/dolthub/vitess/go/bytes2"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/vterrors"
-	"io"
-	"unicode"
 )
 
 const (
@@ -615,15 +616,13 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		tok, val := specialComment.Scan()
 		if tok != 0 {
 			// Copy over position from specialComment and add offset
-			// TODO (James): Causing problems in CI, specifically sysbench. Comment out for now
 			tkn.Position = tkn.specialPosOffset + specialComment.Position
 			// return the specialComment scan result as the result
 			return tok, val
 		}
 		// leave specialComment scan mode after all stream consumed.
 		tkn.specialComment = nil
-		// restore Position to what it used to be before offsets
-		tkn.Position = tkn.OldPosition
+		// TODO: restoring tkn.Position here to what it was before using tkn.specialPosOffset fixes sever issue, but then the SubStatementPositionEnd is wrong
 	}
 	if tkn.potentialAccountName {
 		defer func() {
@@ -1067,7 +1066,6 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 		if tkn.lastChar == eofChar {
 			return LEX_ERROR, buffer.Bytes()
 		}
-
 		tkn.consumeNext(buffer)
 
 		// Already found special comment starting point
@@ -1099,8 +1097,12 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 	_, sql := ExtractMysqlComment(buffer.String())
 	tkn.specialComment = NewStringTokenizer(sql)
 	// Save current position of Tokenizer for later
-	tkn.OldPosition = tkn.Position
-	return tkn.Scan()
+	oldPosition := tkn.OldPosition
+	// Recurse on subquery
+	typ, val := tkn.Scan()
+	// restore Position to what it used to be before offsets
+	tkn.OldPosition = oldPosition
+	return typ, val
 }
 
 func (tkn *Tokenizer) consumeNext(buffer *bytes2.Buffer) {
