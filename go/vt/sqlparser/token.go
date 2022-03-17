@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"io"
-	"unicode"
 )
 
 const (
@@ -48,7 +47,6 @@ type Tokenizer struct {
 	nesting              int
 	multi                bool
 	specialComment       *Tokenizer
-	specialPosOffset     int
 	potentialAccountName bool
 
 	// If true, the parser should collaborate to set `stopped` on this
@@ -614,9 +612,6 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		specialComment := tkn.specialComment
 		tok, val := specialComment.Scan()
 		if tok != 0 {
-			// Copy over position from specialComment and add offset
-			tkn.Position = tkn.specialPosOffset + specialComment.Position
-			// return the specialComment scan result as the result
 			return tok, val
 		}
 		// leave specialComment scan mode after all stream consumed.
@@ -666,10 +661,8 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 			return typ, res
 		}
 		// LEX_ERROR is returned from scanNumber iff we see an unexpected character, so try to parse as an identifier
-		ch = tkn.lastChar // Save last character
-		tkn.next()        // Move onto next character (as to not repeat symbol)
-		typ1, res1 := tkn.scanIdentifier(byte(ch), false)
-		return typ1, append(res, res1...) // Concatenate the two partial symbols
+		typ1, res1 := tkn.scanIdentifier(byte(tkn.lastChar), false)
+		return typ1, append(res, res1[1:]...) // Concatenate the two partial symbols
 	case ch == ':':
 		return tkn.scanBindVar()
 	case ch == ';':
@@ -707,7 +700,11 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 			return VALUE_ARG, buf.Bytes()
 		case '.':
 			if isDigit(tkn.lastChar) {
-				return tkn.scanNumber(true)
+				typ, res := tkn.scanNumber(true)
+				if typ != LEX_ERROR {
+					return typ, res
+				}
+				// TODO: save res
 			}
 			return int(ch), nil
 		case '/':
@@ -1058,9 +1055,6 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 	buffer := &bytes2.Buffer{}
 	buffer.WriteString("/*!")
 	tkn.next()
-	tkn.specialPosOffset = tkn.Position
-	foundStartPos := false
-	digitCount := 0
 	for {
 		if tkn.lastChar == '*' {
 			tkn.consumeNext(buffer)
@@ -1073,34 +1067,7 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 		if tkn.lastChar == eofChar {
 			return LEX_ERROR, buffer.Bytes()
 		}
-
 		tkn.consumeNext(buffer)
-
-		// Already found special comment starting point
-		if foundStartPos {
-			continue
-		}
-
-		// Haven't reached character count
-		if digitCount < 5 {
-			if isDigit(tkn.lastChar) {
-				// Increase digit count
-				digitCount++
-				continue
-			} else {
-				// Provided less than 5 digits, but force this to move on
-				digitCount = 5
-			}
-		}
-
-		// If no longer counting digits, ignore spaces until first non-space character
-		if unicode.IsSpace(rune(tkn.lastChar)) {
-			continue
-		}
-
-		// Found start of subexpression
-		tkn.specialPosOffset = tkn.Position - 1
-		foundStartPos = true
 	}
 	_, sql := ExtractMysqlComment(buffer.String())
 	tkn.specialComment = NewStringTokenizer(sql)

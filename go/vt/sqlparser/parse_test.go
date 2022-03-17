@@ -2457,8 +2457,28 @@ func TestValid(t *testing.T) {
 	}
 }
 
-func TestParsingColumnsStartingWithNumbers(t *testing.T) {
+func TestTmp(t *testing.T) {
 	tests := []parseTest{
+		{
+			input:  "insert into 1a.2b values (1)",
+			output: "insert into `1a`.b values (1)",
+		},
+	}
+	for _, tcase := range tests {
+		runParseTestCase(t, tcase)
+	}
+}
+
+func TestParsingIdentifiersStartingWithNumbers(t *testing.T) {
+	tests := []parseTest{
+		{
+			input:  "create database 1a",
+			output: "create database 1a",
+		},
+		{
+			input:  "create table 1a (i int)",
+			output: "create table `1a` (\n\ti int\n)",
+		},
 		{
 			input:  "create table t (1a int)",
 			output: "create table t (\n\t`1a` int\n)",
@@ -2486,6 +2506,10 @@ func TestParsingColumnsStartingWithNumbers(t *testing.T) {
 		{
 			input:  "insert into t (1a) values (1)",
 			output: "insert into t(`1a`) values (1)",
+		},
+		{
+			input:  "insert into a2.ab values (1)",
+			output: "insert into a2.ab values (1)",
 		},
 		{
 			input:  "select 0xH from t",
@@ -2743,15 +2767,6 @@ func TestCreateViewSelectPosition(t *testing.T) {
 	}, {
 		query: "create view a as select /* comment */ 2 + 2 from dual",
 		sel:   "select /* comment */ 2 + 2 from dual",
-	}, {
-		query: "/*! create view a as select 2 from dual */",
-		sel:   "select 2 from dual",
-	}, {
-		query: "/*!12345 create view a as select 2 from dual */",
-		sel:   "select 2 from dual",
-	}, {
-		query: "/*!50001 CREATE VIEW `some_view` as SELECT 1 AS `x`*/",
-		sel:   "SELECT 1 AS `x`",
 	}}
 	for _, tcase := range cases {
 		tree, err := Parse(tcase.query)
