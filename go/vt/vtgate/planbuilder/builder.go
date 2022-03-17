@@ -101,7 +101,7 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 	if err != nil {
 		return nil, err
 	}
-	result, err := sqlparser.RewriteAST(stmt, keyspace, sqlparser.SQLSelectLimitUnset, "", nil)
+	result, err := sqlparser.RewriteAST(stmt, keyspace, sqlparser.SQLSelectLimitUnset, "", nil, nil)
 	if err != nil {
 		return nil, err
 	}

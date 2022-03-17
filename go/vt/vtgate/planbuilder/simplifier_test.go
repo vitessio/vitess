@@ -43,7 +43,7 @@ func TestSimplifyBuggyQuery(t *testing.T) {
 	}
 	stmt, reserved, err := sqlparser.Parse2(query)
 	require.NoError(t, err)
-	rewritten, _ := sqlparser.RewriteAST(sqlparser.CloneStatement(stmt), vschema.currentDb(), sqlparser.SQLSelectLimitUnset, "", nil)
+	rewritten, _ := sqlparser.RewriteAST(sqlparser.CloneStatement(stmt), vschema.currentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil)
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 
 	simplified := simplifier.SimplifyStatement(
@@ -65,7 +65,7 @@ func TestSimplifyPanic(t *testing.T) {
 	}
 	stmt, reserved, err := sqlparser.Parse2(query)
 	require.NoError(t, err)
-	rewritten, _ := sqlparser.RewriteAST(sqlparser.CloneStatement(stmt), vschema.currentDb(), sqlparser.SQLSelectLimitUnset, "", nil)
+	rewritten, _ := sqlparser.RewriteAST(sqlparser.CloneStatement(stmt), vschema.currentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil)
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 
 	simplified := simplifier.SimplifyStatement(
@@ -95,7 +95,7 @@ func TestUnsupportedFile(t *testing.T) {
 				t.Skip()
 				return
 			}
-			rewritten, err := sqlparser.RewriteAST(stmt, vschema.currentDb(), sqlparser.SQLSelectLimitUnset, "", nil)
+			rewritten, err := sqlparser.RewriteAST(stmt, vschema.currentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil)
 			if err != nil {
 				t.Skip()
 			}
@@ -129,7 +129,7 @@ func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *
 	if err != nil {
 		panic(err)
 	}
-	rewritten, _ := sqlparser.RewriteAST(stmt, vschema.currentDb(), sqlparser.SQLSelectLimitUnset, "", nil)
+	rewritten, _ := sqlparser.RewriteAST(stmt, vschema.currentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil)
 	ast := rewritten.AST
 	_, expected := BuildFromStmt(query, ast, reservedVars, vschema, rewritten.BindVarNeeds, true, true)
 	if expected == nil {

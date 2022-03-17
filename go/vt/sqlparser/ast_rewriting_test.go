@@ -278,6 +278,9 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2 having count(*) > 3)",
 		expected: "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2 having count(*) > 3 limit 1)",
 	}, {
+		in:       "SELECT id, name, salary FROM user_details",
+		expected: "SELECT id, name, salary FROM (select user.id, user.name, user_extra.salary from user join user_extra where user.id = user_extra.user_id) as user_details",
+	}, {
 		in:                          "SHOW VARIABLES",
 		expected:                    "SHOW VARIABLES",
 		autocommit:                  true,
@@ -321,7 +324,14 @@ func TestRewrites(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, "", nil) // passing `ks` just to test that no rewriting happens as it is not system schema
+			result, err := RewriteAST(
+				stmt,
+				"ks", // passing `ks` just to test that no rewriting happens as it is not system schema
+				SQLSelectLimitUnset,
+				"",
+				nil,
+				&fakeViews{},
+			)
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
@@ -352,6 +362,19 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.socket, result.NeedsSysVar(sysvars.Socket.Name), "should need :__vtsocket")
 		})
 	}
+}
+
+type fakeViews struct{}
+
+func (*fakeViews) FindView(ks, tblName string) *CreateView {
+	if tblName != "user_details" {
+		return nil
+	}
+	statement, err := Parse("CREATE VIEW user_details AS select user.id, user.name, user_extra.salary from user join user_extra where user.id = user_extra.user_id")
+	if err != nil {
+		return nil
+	}
+	return statement.(*CreateView)
 }
 
 func TestRewritesWithSetVarComment(in *testing.T) {
@@ -395,7 +418,7 @@ func TestRewritesWithSetVarComment(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, tc.setVarComment, nil)
+			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, tc.setVarComment, nil, &fakeViews{})
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
@@ -422,7 +445,7 @@ func TestRewritesSysVar(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, "", tc.sysVar)
+			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, "", tc.sysVar, &fakeViews{})
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
@@ -472,7 +495,7 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "sys", SQLSelectLimitUnset, "", nil)
+			result, err := RewriteAST(stmt, "sys", SQLSelectLimitUnset, "", nil, &fakeViews{})
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
