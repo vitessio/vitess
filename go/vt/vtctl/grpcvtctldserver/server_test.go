@@ -8951,6 +8951,60 @@ func TestSetWritable(t *testing.T) {
 	}
 }
 
+func TestShardReplicationAdd(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ts := memorytopo.NewServer("zone1")
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	tablets := []*topodatapb.Tablet{
+		{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			Keyspace: "ks",
+			Shard:    "-",
+		},
+		{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			Keyspace: "ks",
+			Shard:    "-",
+		},
+	}
+	testutil.AddTablets(ctx, t, ts, nil, tablets...)
+
+	_, err := vtctld.ShardReplicationAdd(ctx, &vtctldatapb.ShardReplicationAddRequest{
+		Keyspace: "ks",
+		Shard:    "-",
+		TabletAlias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  404,
+		},
+	})
+	assert.NoError(t, err)
+
+	resp, err := vtctld.ShardReplicationFix(ctx, &vtctldatapb.ShardReplicationFixRequest{
+		Keyspace: "ks",
+		Shard:    "-",
+		Cell:     "zone1",
+	})
+	require.NoError(t, err, "ShardReplicationFix failed")
+	utils.MustMatch(t, &topodatapb.ShardReplicationError{
+		TabletAlias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  404,
+		},
+		Type: topodatapb.ShardReplicationError_NOT_FOUND,
+	}, resp.Error)
+}
+
 func TestShardReplicationPositions(t *testing.T) {
 	t.Parallel()
 
@@ -9222,6 +9276,56 @@ func TestShardReplicationPositions(t *testing.T) {
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
+}
+
+func TestShardReplicationRemove(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ts := memorytopo.NewServer("zone1")
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	tablets := []*topodatapb.Tablet{
+		{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			Keyspace: "ks",
+			Shard:    "-",
+		},
+		{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			Keyspace: "ks",
+			Shard:    "-",
+		},
+	}
+	testutil.AddTablets(ctx, t, ts, nil, tablets...)
+
+	_, err := vtctld.ShardReplicationRemove(ctx, &vtctldatapb.ShardReplicationRemoveRequest{
+		Keyspace: "ks",
+		Shard:    "-",
+		TabletAlias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  101,
+		},
+	})
+	assert.NoError(t, err)
+
+	sri, err := ts.GetShardReplication(ctx, "zone1", "ks", "-")
+	require.NoError(t, err, "GetShardReplication failed")
+
+	utils.MustMatch(t, sri.Nodes, []*topodatapb.ShardReplication_Node{{
+		TabletAlias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+	}})
 }
 
 func TestSourceShardAdd(t *testing.T) {

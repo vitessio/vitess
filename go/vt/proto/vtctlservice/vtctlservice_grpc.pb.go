@@ -317,6 +317,10 @@ type VtctldClient interface {
 	SetShardTabletControl(ctx context.Context, in *vtctldata.SetShardTabletControlRequest, opts ...grpc.CallOption) (*vtctldata.SetShardTabletControlResponse, error)
 	// SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
 	SetWritable(ctx context.Context, in *vtctldata.SetWritableRequest, opts ...grpc.CallOption) (*vtctldata.SetWritableResponse, error)
+	// ShardReplicationAdd adds an entry to a topodata.ShardReplication object.
+	//
+	// It is a low-level function and should generally not be called.
+	ShardReplicationAdd(ctx context.Context, in *vtctldata.ShardReplicationAddRequest, opts ...grpc.CallOption) (*vtctldata.ShardReplicationAddResponse, error)
 	// ShardReplicationFix walks the replication graph for a shard in a cell and
 	// attempts to fix the first problem encountered, returning information about
 	// the problem fixed, if any.
@@ -327,6 +331,11 @@ type VtctldClient interface {
 	// ShardReplicationPositions will return non-error, and include valid results
 	// for the reachable tablets.
 	ShardReplicationPositions(ctx context.Context, in *vtctldata.ShardReplicationPositionsRequest, opts ...grpc.CallOption) (*vtctldata.ShardReplicationPositionsResponse, error)
+	// ShardReplicationRemove removes an entry from a topodata.ShardReplication
+	// object.
+	//
+	// It is a low-level function and should generally not be called.
+	ShardReplicationRemove(ctx context.Context, in *vtctldata.ShardReplicationRemoveRequest, opts ...grpc.CallOption) (*vtctldata.ShardReplicationRemoveResponse, error)
 	// SleepTablet blocks the aciton queue on the specified tablet for the
 	// specified duration.
 	//
@@ -995,6 +1004,15 @@ func (c *vtctldClient) SetWritable(ctx context.Context, in *vtctldata.SetWritabl
 	return out, nil
 }
 
+func (c *vtctldClient) ShardReplicationAdd(ctx context.Context, in *vtctldata.ShardReplicationAddRequest, opts ...grpc.CallOption) (*vtctldata.ShardReplicationAddResponse, error) {
+	out := new(vtctldata.ShardReplicationAddResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ShardReplicationAdd", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) ShardReplicationFix(ctx context.Context, in *vtctldata.ShardReplicationFixRequest, opts ...grpc.CallOption) (*vtctldata.ShardReplicationFixResponse, error) {
 	out := new(vtctldata.ShardReplicationFixResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ShardReplicationFix", in, out, opts...)
@@ -1007,6 +1025,15 @@ func (c *vtctldClient) ShardReplicationFix(ctx context.Context, in *vtctldata.Sh
 func (c *vtctldClient) ShardReplicationPositions(ctx context.Context, in *vtctldata.ShardReplicationPositionsRequest, opts ...grpc.CallOption) (*vtctldata.ShardReplicationPositionsResponse, error) {
 	out := new(vtctldata.ShardReplicationPositionsResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ShardReplicationPositions", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ShardReplicationRemove(ctx context.Context, in *vtctldata.ShardReplicationRemoveRequest, opts ...grpc.CallOption) (*vtctldata.ShardReplicationRemoveResponse, error) {
+	out := new(vtctldata.ShardReplicationRemoveResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ShardReplicationRemove", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1328,6 +1355,10 @@ type VtctldServer interface {
 	SetShardTabletControl(context.Context, *vtctldata.SetShardTabletControlRequest) (*vtctldata.SetShardTabletControlResponse, error)
 	// SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
 	SetWritable(context.Context, *vtctldata.SetWritableRequest) (*vtctldata.SetWritableResponse, error)
+	// ShardReplicationAdd adds an entry to a topodata.ShardReplication object.
+	//
+	// It is a low-level function and should generally not be called.
+	ShardReplicationAdd(context.Context, *vtctldata.ShardReplicationAddRequest) (*vtctldata.ShardReplicationAddResponse, error)
 	// ShardReplicationFix walks the replication graph for a shard in a cell and
 	// attempts to fix the first problem encountered, returning information about
 	// the problem fixed, if any.
@@ -1338,6 +1369,11 @@ type VtctldServer interface {
 	// ShardReplicationPositions will return non-error, and include valid results
 	// for the reachable tablets.
 	ShardReplicationPositions(context.Context, *vtctldata.ShardReplicationPositionsRequest) (*vtctldata.ShardReplicationPositionsResponse, error)
+	// ShardReplicationRemove removes an entry from a topodata.ShardReplication
+	// object.
+	//
+	// It is a low-level function and should generally not be called.
+	ShardReplicationRemove(context.Context, *vtctldata.ShardReplicationRemoveRequest) (*vtctldata.ShardReplicationRemoveResponse, error)
 	// SleepTablet blocks the aciton queue on the specified tablet for the
 	// specified duration.
 	//
@@ -1574,11 +1610,17 @@ func (UnimplementedVtctldServer) SetShardTabletControl(context.Context, *vtctlda
 func (UnimplementedVtctldServer) SetWritable(context.Context, *vtctldata.SetWritableRequest) (*vtctldata.SetWritableResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetWritable not implemented")
 }
+func (UnimplementedVtctldServer) ShardReplicationAdd(context.Context, *vtctldata.ShardReplicationAddRequest) (*vtctldata.ShardReplicationAddResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ShardReplicationAdd not implemented")
+}
 func (UnimplementedVtctldServer) ShardReplicationFix(context.Context, *vtctldata.ShardReplicationFixRequest) (*vtctldata.ShardReplicationFixResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ShardReplicationFix not implemented")
 }
 func (UnimplementedVtctldServer) ShardReplicationPositions(context.Context, *vtctldata.ShardReplicationPositionsRequest) (*vtctldata.ShardReplicationPositionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ShardReplicationPositions not implemented")
+}
+func (UnimplementedVtctldServer) ShardReplicationRemove(context.Context, *vtctldata.ShardReplicationRemoveRequest) (*vtctldata.ShardReplicationRemoveResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ShardReplicationRemove not implemented")
 }
 func (UnimplementedVtctldServer) SleepTablet(context.Context, *vtctldata.SleepTabletRequest) (*vtctldata.SleepTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SleepTablet not implemented")
@@ -2724,6 +2766,24 @@ func _Vtctld_SetWritable_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_ShardReplicationAdd_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ShardReplicationAddRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ShardReplicationAdd(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ShardReplicationAdd",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ShardReplicationAdd(ctx, req.(*vtctldata.ShardReplicationAddRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_ShardReplicationFix_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.ShardReplicationFixRequest)
 	if err := dec(in); err != nil {
@@ -2756,6 +2816,24 @@ func _Vtctld_ShardReplicationPositions_Handler(srv interface{}, ctx context.Cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).ShardReplicationPositions(ctx, req.(*vtctldata.ShardReplicationPositionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ShardReplicationRemove_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ShardReplicationRemoveRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ShardReplicationRemove(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ShardReplicationRemove",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ShardReplicationRemove(ctx, req.(*vtctldata.ShardReplicationRemoveRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3248,12 +3326,20 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_SetWritable_Handler,
 		},
 		{
+			MethodName: "ShardReplicationAdd",
+			Handler:    _Vtctld_ShardReplicationAdd_Handler,
+		},
+		{
 			MethodName: "ShardReplicationFix",
 			Handler:    _Vtctld_ShardReplicationFix_Handler,
 		},
 		{
 			MethodName: "ShardReplicationPositions",
 			Handler:    _Vtctld_ShardReplicationPositions_Handler,
+		},
+		{
+			MethodName: "ShardReplicationRemove",
+			Handler:    _Vtctld_ShardReplicationRemove_Handler,
 		},
 		{
 			MethodName: "SleepTablet",
