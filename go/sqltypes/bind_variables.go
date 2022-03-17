@@ -50,7 +50,7 @@ func ProtoToValue(v *querypb.Value) Value {
 	return MakeTrusted(v.Type, v.Value)
 }
 
-// BuildBindVariables builds a map[string]*querypb.BindVariable from a map[string]interface{}.
+// BuildBindVariables builds a map[string]*querypb.BindVariable from a map[string]any
 func BuildBindVariables(in map[string]any) (map[string]*querypb.BindVariable, error) {
 	if len(in) == 0 {
 		return nil, nil

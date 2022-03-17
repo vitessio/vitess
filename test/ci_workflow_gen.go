@@ -356,7 +356,7 @@ func setupTestDockerFile(test *selfHostedTest) error {
 	return nil
 }
 
-func writeFileFromTemplate(templateFile, path string, test interface{}) error {
+func writeFileFromTemplate(templateFile, path string, test any) error {
 	tpl, err := template.ParseFiles(templateFile)
 	if err != nil {
 		return fmt.Errorf("Error: %s\n", err)

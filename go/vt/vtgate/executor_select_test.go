@@ -1285,7 +1285,7 @@ func TestSelectIN(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
 
 	// In is a bind variable list, that will end up on two shards.
-	// This is using an []interface{} for the bind variable list.
+	// This is using []any for the bind variable list.
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	_, err = executorExec(executor, "select id from user where id in ::vals", map[string]*querypb.BindVariable{

@@ -70,7 +70,7 @@ be called when a value of type MyEvent is dispatched:
 
 In addition, listener functions that accept an interface type will be called
 for any dispatched value that implements the specified interface. A listener
-that accepts interface{} will be called for every event type. Listeners can also
+that accepts `any` will be called for every event type. Listeners can also
 accept pointer types, but they will only be called if the dispatch site calls
 Dispatch() on a pointer.
 */

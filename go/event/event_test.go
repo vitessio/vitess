@@ -93,10 +93,10 @@ func TestEmptyInterfaceListener(t *testing.T) {
 
 	triggered := false
 	AddListener(func(any) { triggered = true })
-	Dispatch("this should match interface{}")
+	Dispatch("this should match any")
 
 	if !triggered {
-		t.Errorf("interface{} listener failed to trigger")
+		t.Errorf("any listener failed to trigger")
 	}
 }
 
