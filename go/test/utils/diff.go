@@ -33,7 +33,7 @@ import (
 // Top declaration:
 //
 // var mustMatch = testutils.MustMatchFn(
-// 	[]interface{}{  // types with unexported fields
+// 	[]any{  // types with unexported fields
 // 		type1{},
 // 		type2{},
 // 		...
