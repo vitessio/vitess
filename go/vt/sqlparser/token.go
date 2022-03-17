@@ -47,6 +47,7 @@ type Tokenizer struct {
 	nesting              int
 	multi                bool
 	specialComment       *Tokenizer
+	partialIdentifier    []byte
 	potentialAccountName bool
 
 	// If true, the parser should collaborate to set `stopped` on this
@@ -644,7 +645,14 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 				return tkn.scanBitLiteral()
 			}
 		}
-		return tkn.scanIdentifier(byte(ch), false)
+		typ, res := tkn.scanIdentifier(byte(ch), false)
+		if tkn.partialIdentifier != nil {
+			// prepend partialIdentifier to result
+			res = append(tkn.partialIdentifier, res...)
+			// remove remaining partialIdentifier for now
+			tkn.partialIdentifier = nil
+		}
+		return typ, res
 	case ch == '@':
 		tkn.next()
 		if tkn.potentialAccountName {
@@ -661,6 +669,12 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 			return typ, res
 		}
 		// LEX_ERROR is returned from scanNumber iff we see an unexpected character, so try to parse as an identifier
+		// Additionally, if we saw a decimal at any point, throw the LEX_ERROR we received before
+		for _, c := range res {
+			if c == '.' {
+				return typ, res
+			}
+		}
 		typ1, res1 := tkn.scanIdentifier(byte(tkn.lastChar), false)
 		return typ1, append(res, res1[1:]...) // Concatenate the two partial symbols
 	case ch == ':':
@@ -704,7 +718,8 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 				if typ != LEX_ERROR {
 					return typ, res
 				}
-				// TODO: save res
+				// Save result to be concatenated to result
+				tkn.partialIdentifier = res[1:] // ignore decimal point
 			}
 			return int(ch), nil
 		case '/':
