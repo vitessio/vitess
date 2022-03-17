@@ -101,7 +101,7 @@ func initializeCluster(t *testing.T) (int, error) {
 	err = encryption.ExecuteVttlstestCommand("--root", certDirectory, "CreateSignedCert", "--", "--common_name", "Mysql Server", "--serial", "01", "server")
 	require.NoError(t, err)
 
-	err = encryption.ExecuteVttlstestCommand("-root", certDirectory, "CreateSignedCert", "--", "--common_name", "Mysql Client", "--serial", "02", "client")
+	err = encryption.ExecuteVttlstestCommand("--root", certDirectory, "CreateSignedCert", "--", "--common_name", "Mysql Client", "--serial", "02", "client")
 	require.NoError(t, err)
 
 	extraMyCnf := path.Join(certDirectory, "secure.cnf")
