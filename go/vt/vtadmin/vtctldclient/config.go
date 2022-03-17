@@ -64,7 +64,7 @@ func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string)
 func (c *Config) Parse(args []string) error {
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
 
-	fs.DurationVar(&c.ConnectivityTimeout, "grpc-connectivity-timeout", 2*time.Second, "The maximum duration to wait for a vtctld gRPC connection to be established.")
+	fs.DurationVar(&c.ConnectivityTimeout, "grpc-connectivity-timeout", 2*time.Second, "The maximum duration to wait for a gRPC connection to be established to the vtctld.")
 
 	credentialsTmplStr := fs.String("credentials-path-tmpl", "",
 		"Go template used to specify a path to a credentials file, which is a json file containing "+

@@ -144,7 +144,6 @@ func TestRedial(t *testing.T) {
 
 	// Remove the shut down vtctld from VTAdmin's service discovery (clumsily).
 	// Otherwise, when redialing, we may redial the vtctld that we just shut down.
-	// FIXME make this nicer
 	disco.Clear()
 	disco.AddTaggedVtctlds(nil, &vtadminpb.Vtctld{
 		Hostname: nextAddr,
@@ -153,7 +152,7 @@ func TestRedial(t *testing.T) {
 	// Force an ungraceful shutdown of the gRPC server to which we're connected
 	currentVtctld.Stop()
 
-	// Wait for the client connection to shut down. If we redial too quickly,
+	// Wait for the client connection to shut down. (If we redial too quickly,
 	// we get into a race condition with gRPC's internal retry logic.
 	// (Using WaitForReady here _does_ expose more function internals than is ideal for a unit test,
 	// but it's far less flaky than using time.Sleep.)
@@ -165,7 +164,7 @@ func TestRedial(t *testing.T) {
 		}
 	}
 
-	// Finally, check that dial + establish a connection to the remaining vtctld.
+	// Finally, check that we discover, dial + establish a new connection to the remaining vtctld.
 	err = proxy.Dial(context.Background())
 	assert.NoError(t, err)
 	assert.Equal(t, nextAddr, proxy.host)
