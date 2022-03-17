@@ -666,7 +666,17 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 		return nil, err
 	}
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "", sqlparser.SQLSelectLimitUnset, "", nil)
+	rewrittenAST, err := sqlparser.PrepareAST(
+		stmt,
+		reservedVars,
+		nil,
+		false,
+		"",
+		sqlparser.SQLSelectLimitUnset,
+		"",
+		nil,
+		nil,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1355,6 +1365,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 			qo.getSelectLimit(),
 			setVarComment,
 			vcursor.safeSession.SystemVariables,
+			nil,
 		)
 		if err != nil {
 			return nil, err

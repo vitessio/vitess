@@ -53,6 +53,10 @@ type ReservedVars struct {
 	sqNext       int64
 }
 
+type VSchemaViews interface {
+	FindView(keyspace, name string) *CreateView
+}
+
 // ReserveAll tries to reserve all the given variable names. If they're all available,
 // they are reserved and the function returns true. Otherwise the function returns false.
 func (r *ReservedVars) ReserveAll(names ...string) bool {
@@ -203,6 +207,7 @@ func PrepareAST(
 	selectLimit int,
 	setVarComment string,
 	sysVars map[string]string,
+	views VSchemaViews,
 ) (*RewriteASTResult, error) {
 	if parameterize {
 		err := Normalize(in, reservedVars, bindVars)
@@ -210,13 +215,20 @@ func PrepareAST(
 			return nil, err
 		}
 	}
-	return RewriteAST(in, keyspace, selectLimit, setVarComment, sysVars)
+	return RewriteAST(in, keyspace, selectLimit, setVarComment, sysVars, views)
 }
 
 // RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries.
 // SET_VAR comments are also added to the AST if required.
-func RewriteAST(in Statement, keyspace string, selectLimit int, setVarComment string, sysVars map[string]string) (*RewriteASTResult, error) {
-	er := newASTRewriter(keyspace, selectLimit, setVarComment, sysVars)
+func RewriteAST(
+	in Statement,
+	keyspace string,
+	selectLimit int,
+	setVarComment string,
+	sysVars map[string]string,
+	views VSchemaViews,
+) (*RewriteASTResult, error) {
+	er := newASTRewriter(keyspace, selectLimit, setVarComment, sysVars, views)
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
 	setRewriter := &setNormalizer{}
 	result := Rewrite(in, er.rewrite, setRewriter.rewriteSetComingUp)
@@ -267,37 +279,39 @@ type astRewriter struct {
 	selectLimit   int
 	setVarComment string
 	sysVars       map[string]string
+	views         VSchemaViews
 }
 
-func newASTRewriter(keyspace string, selectLimit int, setVarComment string, sysVars map[string]string) *astRewriter {
+func newASTRewriter(keyspace string, selectLimit int, setVarComment string, sysVars map[string]string, views VSchemaViews) *astRewriter {
 	return &astRewriter{
 		bindVars:      &BindVarNeeds{},
 		keyspace:      keyspace,
 		selectLimit:   selectLimit,
 		setVarComment: setVarComment,
 		sysVars:       sysVars,
+		views:         views,
 	}
 }
 
 const (
-	//LastInsertIDName is a reserved bind var name for last_insert_id()
+	// LastInsertIDName is a reserved bind var name for last_insert_id()
 	LastInsertIDName = "__lastInsertId"
 
-	//DBVarName is a reserved bind var name for database()
+	// DBVarName is a reserved bind var name for database()
 	DBVarName = "__vtdbname"
 
-	//FoundRowsName is a reserved bind var name for found_rows()
+	// FoundRowsName is a reserved bind var name for found_rows()
 	FoundRowsName = "__vtfrows"
 
-	//RowCountName is a reserved bind var name for row_count()
+	// RowCountName is a reserved bind var name for row_count()
 	RowCountName = "__vtrcount"
 
-	//UserDefinedVariableName is what we prepend bind var names for user defined variables
+	// UserDefinedVariableName is what we prepend bind var names for user defined variables
 	UserDefinedVariableName = "__vtudv"
 )
 
 func (er *astRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, error) {
-	inner := newASTRewriter(er.keyspace, er.selectLimit, er.setVarComment, er.sysVars)
+	inner := newASTRewriter(er.keyspace, er.selectLimit, er.setVarComment, er.sysVars, er.views)
 	inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
 	tmp := Rewrite(node.Expr, inner.rewrite, nil)
 	newExpr, ok := tmp.(Expr)
@@ -310,17 +324,13 @@ func (er *astRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, err
 
 func (er *astRewriter) rewrite(cursor *Cursor) bool {
 	// Add SET_VAR comment to this node if it supports it and is needed
-	if supportOptimizerHint, supportsOptimizerHint := cursor.Node().(SupportOptimizerHint); supportsOptimizerHint && er.setVarComment != "" {
-		newComments, err := supportOptimizerHint.GetComments().AddQueryHint(er.setVarComment)
-		if err != nil {
-			er.err = err
-			return false
-		}
-		supportOptimizerHint.SetComments(newComments)
+	err := er.addQueryHintIfPossible(cursor)
+	if err != nil {
+		er.err = err
+		return false
 	}
 
 	switch node := cursor.Node().(type) {
-	// select last_insert_id() -> select :__lastInsertId as `last_insert_id()`
 	case *Select:
 		for _, col := range node.SelectExprs {
 			_, hasStar := col.(*StarExpr)
@@ -332,6 +342,7 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 			if ok && aliasedExpr.As.IsEmpty() {
 				buf := NewTrackedBuffer(nil)
 				aliasedExpr.Expr.Format(buf)
+				// select last_insert_id() -> select :__lastInsertId as `last_insert_id()`
 				innerBindVarNeeds, err := er.rewriteAliasedExpr(aliasedExpr)
 				if err != nil {
 					er.err = err
@@ -383,21 +394,34 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 			cursor.Replace(inner)
 		}
 	case *AliasedTableExpr:
-		if !SystemSchema(er.keyspace) {
-			break
-		}
 		aliasTableName, ok := node.Expr.(TableName)
 		if !ok {
-			return true
-		}
-		// Qualifier should not be added to dual table
-		if aliasTableName.Name.String() == "dual" {
 			break
 		}
-		if er.keyspace != "" && aliasTableName.Qualifier.IsEmpty() {
-			aliasTableName.Qualifier = NewTableIdent(er.keyspace)
-			node.Expr = aliasTableName
-			cursor.Replace(node)
+		// Qualifier should not be added to dual table
+		tblName := aliasTableName.Name.String()
+		if tblName == "dual" {
+			break
+		}
+		if SystemSchema(er.keyspace) {
+			if er.keyspace != "" && aliasTableName.Qualifier.IsEmpty() {
+				aliasTableName.Qualifier = NewTableIdent(er.keyspace)
+				node.Expr = aliasTableName
+				cursor.Replace(node)
+			}
+			break
+		}
+		if er.views == nil {
+			break
+		}
+		view := er.views.FindView(er.keyspace, tblName)
+		if view != nil {
+			node.Expr = &DerivedTable{
+				Select: CloneSelectStatement(view.Select),
+			}
+			if node.As.IsEmpty() {
+				node.As = NewTableIdent(tblName)
+			}
 		}
 	case *ShowBasic:
 		if node.Command == VariableGlobal || node.Command == VariableSession {
@@ -408,6 +432,17 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 		}
 	}
 	return true
+}
+
+func (er *astRewriter) addQueryHintIfPossible(cursor *Cursor) error {
+	if supportOptimizerHint, supportsOptimizerHint := cursor.Node().(SupportOptimizerHint); supportsOptimizerHint && er.setVarComment != "" {
+		newComments, err := supportOptimizerHint.GetComments().AddQueryHint(er.setVarComment)
+		if err != nil {
+			return err
+		}
+		supportOptimizerHint.SetComments(newComments)
+	}
+	return nil
 }
 
 func inverseOp(i ComparisonExprOperator) (bool, ComparisonExprOperator) {
