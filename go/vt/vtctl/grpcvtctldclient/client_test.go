@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
@@ -90,7 +89,7 @@ func TestGetKeyspace(t *testing.T) {
 
 	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
 		expected := &vtctldatapb.GetKeyspaceResponse{
-			Keyspace: &vtctldata.Keyspace{
+			Keyspace: &vtctldatapb.Keyspace{
 				Name: "testkeyspace",
 				Keyspace: &topodatapb.Keyspace{
 					ShardingColumnName: "col1",
