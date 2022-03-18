@@ -135,7 +135,7 @@ func TestVSchemaTrackerKeyspaceReInit(t *testing.T) {
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 
 	// get the vschema prior to the restarts
-	var originalResults interface{}
+	var originalResults any
 	readVSchema(t, &clusterInstance.VtgateProcess, &originalResults)
 	assert.NotNil(t, originalResults)
 
@@ -148,14 +148,14 @@ func TestVSchemaTrackerKeyspaceReInit(t *testing.T) {
 		err = clusterInstance.WaitForTabletsToHealthyInVtgate()
 		require.NoError(t, err)
 		time.Sleep(time.Duration(signalInterval*2) * time.Second)
-		var newResults interface{}
+		var newResults any
 		readVSchema(t, &clusterInstance.VtgateProcess, &newResults)
 		assert.Equal(t, originalResults, newResults)
 		newResults = nil
 	}
 }
 
-func readVSchema(t *testing.T, vtgate *cluster.VtgateProcess, results *interface{}) {
+func readVSchema(t *testing.T, vtgate *cluster.VtgateProcess, results *any) {
 	httpClient := &http.Client{Timeout: 5 * time.Second}
 	resp, err := httpClient.Get(vtgate.VSchemaURL)
 	require.Nil(t, err)

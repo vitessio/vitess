@@ -445,7 +445,7 @@ func (agent *SQLAgentImpl) FetchApplierGTIDSet(instanceKey *inst.InstanceKey) (m
 }
 
 // execInstance executes a given query on the given MySQL discovery instance
-func execInstance(instanceKey *inst.InstanceKey, query string, args ...interface{}) error {
+func execInstance(instanceKey *inst.InstanceKey, query string, args ...any) error {
 	if err := verifyInstance(instanceKey); err != nil {
 		return err
 	}
@@ -459,7 +459,7 @@ func execInstance(instanceKey *inst.InstanceKey, query string, args ...interface
 }
 
 // execInstanceWithTopo executes a given query on the given MySQL topology instance
-func execInstanceWithTopo(instanceKey *inst.InstanceKey, query string, args ...interface{}) error {
+func execInstanceWithTopo(instanceKey *inst.InstanceKey, query string, args ...any) error {
 	if err := verifyInstance(instanceKey); err != nil {
 		return err
 	}

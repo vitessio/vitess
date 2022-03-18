@@ -346,7 +346,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 }
 
 func (route *Route) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Query":      route.Query,
 		"Table":      route.TableName,
 		"FieldQuery": route.FieldQuery,
@@ -424,6 +424,6 @@ func getQueries(query string, bvs []map[string]*querypb.BindVariable) []*querypb
 	return queries
 }
 
-func orderByToString(in interface{}) string {
+func orderByToString(in any) string {
 	return in.(OrderByParams).String()
 }

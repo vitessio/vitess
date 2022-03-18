@@ -81,11 +81,11 @@ func TestTopoCustomRule(t *testing.T) {
 	// Verify that query is working
 	result, err := vtctlExec("select id, value from t1", rTablet.Alias)
 	require.NoError(t, err)
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	err = json.Unmarshal([]byte(result), &resultMap)
 	require.NoError(t, err)
 
-	rowsAffected := resultMap["rows"].([]interface{})
+	rowsAffected := resultMap["rows"].([]any)
 	assert.EqualValues(t, 2, len(rowsAffected))
 
 	// Now update the topocustomrule file.

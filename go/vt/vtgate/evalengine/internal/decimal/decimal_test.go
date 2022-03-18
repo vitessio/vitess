@@ -373,7 +373,7 @@ func TestRequireFromString(t *testing.T) {
 func TestRequireFromStringErrs(t *testing.T) {
 	s := "qwert"
 	var d Decimal
-	var err interface{}
+	var err any
 
 	func(d Decimal) {
 		defer func() {

@@ -3378,7 +3378,7 @@ func create(s string) *bufio.Writer {
 //
 // write out error comment
 //
-func lerrorf(lineno int, s string, v ...interface{}) {
+func lerrorf(lineno int, s string, v ...any) {
 	nerrors++
 	fmt.Fprintf(stderr, s, v...)
 	fmt.Fprintf(stderr, ": %v:%v\n", infile, lineno)
@@ -3388,7 +3388,7 @@ func lerrorf(lineno int, s string, v ...interface{}) {
 	}
 }
 
-func errorf(s string, v ...interface{}) {
+func errorf(s string, v ...any) {
 	lerrorf(lineno, s, v...)
 }
 

@@ -56,7 +56,7 @@ func Cluster(api API) http.HandlerFunc {
 func Clusters(api API) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		clusters := api.Clusters()
-		m := make(map[string]map[string]interface{}, len(clusters))
+		m := make(map[string]map[string]any, len(clusters))
 		for _, c := range clusters {
 			m[c.ID] = c.Debug()
 		}

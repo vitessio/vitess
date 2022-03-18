@@ -486,18 +486,18 @@ func merge(
 	return result, curDistincts, nil
 }
 
-func aggregateParamsToString(in interface{}) string {
+func aggregateParamsToString(in any) string {
 	return in.(*AggregateParams).String()
 }
 
-func groupByParamsToString(i interface{}) string {
+func groupByParamsToString(i any) string {
 	return i.(*GroupByParams).String()
 }
 
 func (oa *OrderedAggregate) description() PrimitiveDescription {
 	aggregates := GenericJoin(oa.Aggregates, aggregateParamsToString)
 	groupBy := GenericJoin(oa.GroupByKeys, groupByParamsToString)
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Aggregates": aggregates,
 		"GroupBy":    groupBy,
 	}

@@ -171,7 +171,7 @@ func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*qu
 }
 
 func (ps *PulloutSubquery) description() PrimitiveDescription {
-	other := map[string]interface{}{}
+	other := map[string]any{}
 	var pulloutVars []string
 	if ps.HasValues != "" {
 		pulloutVars = append(pulloutVars, ps.HasValues)

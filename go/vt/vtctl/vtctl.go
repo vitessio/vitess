@@ -4118,7 +4118,7 @@ func commandPanic(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 }
 
 // printJSON will print the JSON version of the structure to the logger.
-func printJSON(logger logutil.Logger, val interface{}) error {
+func printJSON(logger logutil.Logger, val any) error {
 	data, err := MarshalJSON(val)
 	if err != nil {
 		return fmt.Errorf("cannot marshal data: %v", err)
@@ -4140,7 +4140,7 @@ func printJSON(logger logutil.Logger, val interface{}) error {
 //
 // TODO(mberlin): Switch "EnumAsInts" to "false" once the frontend is
 //                updated and mixed types will use jsonpb as well.
-func MarshalJSON(obj interface{}) (data []byte, err error) {
+func MarshalJSON(obj any) (data []byte, err error) {
 	switch obj := obj.(type) {
 	case proto.Message:
 		// Note: We also end up in this case if "obj" is NOT a proto.Message but

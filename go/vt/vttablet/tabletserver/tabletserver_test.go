@@ -1341,8 +1341,8 @@ func TestHandleExecUnknownError(t *testing.T) {
 
 type testLogger struct {
 	logs        []string
-	savedInfof  func(format string, args ...interface{})
-	savedErrorf func(format string, args ...interface{})
+	savedInfof  func(format string, args ...any)
+	savedErrorf func(format string, args ...any)
 }
 
 func newTestLogger() *testLogger {
@@ -1360,13 +1360,13 @@ func (tl *testLogger) Close() {
 	log.Errorf = tl.savedErrorf
 }
 
-func (tl *testLogger) recordInfof(format string, args ...interface{}) {
+func (tl *testLogger) recordInfof(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	tl.logs = append(tl.logs, msg)
 	tl.savedInfof(msg)
 }
 
-func (tl *testLogger) recordErrorf(format string, args ...interface{}) {
+func (tl *testLogger) recordErrorf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	tl.logs = append(tl.logs, msg)
 	tl.savedErrorf(msg)

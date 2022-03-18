@@ -45,14 +45,14 @@ type watchEntry struct {
 
 	watchStartingChan chan struct{}
 
-	value     interface{}
+	value     any
 	lastError error
 
 	lastValueTime time.Time
 	lastErrorCtx  context.Context
 	lastErrorTime time.Time
 
-	listeners []func(interface{}, error) bool
+	listeners []func(any, error) bool
 }
 
 type resilientWatcher struct {
@@ -84,7 +84,7 @@ func (w *resilientWatcher) getEntry(wkey fmt.Stringer) *watchEntry {
 	return entry
 }
 
-func (w *resilientWatcher) getValue(ctx context.Context, wkey fmt.Stringer) (interface{}, error) {
+func (w *resilientWatcher) getValue(ctx context.Context, wkey fmt.Stringer) (any, error) {
 	entry := w.getEntry(wkey)
 
 	entry.mutex.Lock()
@@ -92,7 +92,7 @@ func (w *resilientWatcher) getValue(ctx context.Context, wkey fmt.Stringer) (int
 	return entry.currentValueLocked(ctx)
 }
 
-func (entry *watchEntry) addListener(ctx context.Context, callback func(interface{}, error) bool) {
+func (entry *watchEntry) addListener(ctx context.Context, callback func(any, error) bool) {
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
@@ -115,7 +115,7 @@ func (entry *watchEntry) ensureWatchingLocked(ctx context.Context) {
 	}
 }
 
-func (entry *watchEntry) currentValueLocked(ctx context.Context) (interface{}, error) {
+func (entry *watchEntry) currentValueLocked(ctx context.Context) (any, error) {
 	entry.rw.counts.Add(queryCategory, 1)
 
 	if entry.watchState == watchStateRunning {
@@ -147,7 +147,7 @@ func (entry *watchEntry) currentValueLocked(ctx context.Context) (interface{}, e
 	return nil, entry.lastError
 }
 
-func (entry *watchEntry) update(ctx context.Context, value interface{}, err error, init bool) {
+func (entry *watchEntry) update(ctx context.Context, value any, err error, init bool) {
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
@@ -167,7 +167,7 @@ func (entry *watchEntry) update(ctx context.Context, value interface{}, err erro
 	}
 }
 
-func (entry *watchEntry) onValueLocked(value interface{}) {
+func (entry *watchEntry) onValueLocked(value any) {
 	entry.watchState = watchStateRunning
 	if entry.watchStartingChan != nil {
 		close(entry.watchStartingChan)

@@ -151,5 +151,5 @@ type RPCTM interface {
 
 	// HandleRPCPanic is to be called in a defer statement in each
 	// RPC input point.
-	HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error)
+	HandleRPCPanic(ctx context.Context, name string, args, reply any, verbose bool, err *error)
 }

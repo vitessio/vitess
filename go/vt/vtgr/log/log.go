@@ -24,7 +24,7 @@ func (logger *Logger) Info(msg string) {
 }
 
 // Infof formats arguments like fmt.Printf.
-func (logger *Logger) Infof(format string, args ...interface{}) {
+func (logger *Logger) Infof(format string, args ...any) {
 	log.InfoDepth(1, logger.annotate(fmt.Sprintf(format, args...)))
 }
 
@@ -34,7 +34,7 @@ func (logger *Logger) Warning(msg string) {
 }
 
 // Warningf formats arguments like fmt.Printf.
-func (logger *Logger) Warningf(format string, args ...interface{}) {
+func (logger *Logger) Warningf(format string, args ...any) {
 	log.WarningDepth(1, logger.annotate(fmt.Sprintf(format, args...)))
 }
 
@@ -44,7 +44,7 @@ func (logger *Logger) Error(msg string) {
 }
 
 // Errorf formats arguments like fmt.Printf.
-func (logger *Logger) Errorf(format string, args ...interface{}) {
+func (logger *Logger) Errorf(format string, args ...any) {
 	log.ErrorDepth(1, logger.annotate(fmt.Sprintf(format, args...)))
 }
 

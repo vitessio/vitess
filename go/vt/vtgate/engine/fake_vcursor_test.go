@@ -154,7 +154,7 @@ func (t *noopVCursor) ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.Boun
 func (t *noopVCursor) NeedsReservedConn() {
 }
 
-func (t *noopVCursor) SetUDV(key string, value interface{}) error {
+func (t *noopVCursor) SetUDV(key string, value any) error {
 	panic("implement me")
 }
 
@@ -354,7 +354,7 @@ func (f *loggingVCursor) LookupRowLockShardSession() vtgatepb.CommitOrder {
 	panic("implement me")
 }
 
-func (f *loggingVCursor) SetUDV(key string, value interface{}) error {
+func (f *loggingVCursor) SetUDV(key string, value any) error {
 	f.log = append(f.log, fmt.Sprintf("UDV set with (%s,%v)", key, value))
 	return nil
 }

@@ -431,13 +431,13 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 		err string
 	}{{
 		in:  "set @FOO = 'bar'",
-		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"}), Autocommit: true},
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []any{"bar"}), Autocommit: true},
 	}, {
 		in:  "set @foo = 2",
-		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{2}), Autocommit: true},
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []any{2}), Autocommit: true},
 	}, {
 		in:  "set @foo = 2.1, @bar = 'baz'",
-		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []interface{}{sqltypes.DecimalFloat(2.1), "baz"}), Autocommit: true},
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []any{sqltypes.DecimalFloat(2.1), "baz"}), Autocommit: true},
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
@@ -474,7 +474,7 @@ func TestSetUDVFromTabletInput(t *testing.T) {
 	utils.MustMatch(t, want, primarySession.UserDefinedVariables, "")
 }
 
-func createMap(keys []string, values []interface{}) map[string]*querypb.BindVariable {
+func createMap(keys []string, values []any) map[string]*querypb.BindVariable {
 	result := make(map[string]*querypb.BindVariable)
 	for i, key := range keys {
 		variable, err := sqltypes.BuildBindVariable(values[i])
