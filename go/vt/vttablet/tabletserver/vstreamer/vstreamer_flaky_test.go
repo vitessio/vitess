@@ -717,7 +717,6 @@ func TestSavepoint(t *testing.T) {
 			`begin`,
 			`type:FIELD field_event:{table_name:"stream1" fields:{name:"id" type:INT32 table:"stream1" org_table:"stream1" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"stream1" org_table:"stream1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
 			`type:ROW row_event:{table_name:"stream1" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			"type:SAVEPOINT statement:\"SAVEPOINT `a`\"",
 			`type:ROW row_event:{table_name:"stream1" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"} after:{lengths:1 lengths:3 values:"1bbb"}}}`,
 			`gtid`,
 			`commit`,
@@ -786,9 +785,7 @@ func TestSavepointWithFilter(t *testing.T) {
 		}, {
 			`begin`,
 			`type:FIELD field_event:{table_name:"stream2" fields:{name:"id" type:INT32 table:"stream2" org_table:"stream2" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"stream2" org_table:"stream2" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-			"type:SAVEPOINT statement:\"SAVEPOINT `a`\"",
 			`type:ROW row_event:{table_name:"stream2" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			"type:SAVEPOINT statement:\"SAVEPOINT `b`\"",
 			`type:ROW row_event:{table_name:"stream2" row_changes:{after:{lengths:1 lengths:3 values:"2aaa"}}}`,
 			`gtid`,
 			`commit`,
