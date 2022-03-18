@@ -46,7 +46,11 @@ func statementSeen(yylex interface{}) {
 }
 
 func yyPosition(yylex interface{}) int {
-  return yylex.(*Tokenizer).Position
+  tkner := yylex.(*Tokenizer)
+  if tkner.specialComment != nil {
+    return tkner.specialPosOffset + tkner.specialComment.Position
+  }
+  return tkner.Position
 }
 
 func yyOldPosition(yylex interface{}) int {

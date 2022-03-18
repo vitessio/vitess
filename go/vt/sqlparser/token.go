@@ -616,13 +616,12 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		tok, val := specialComment.Scan()
 		if tok != 0 {
 			// Copy over position from specialComment and add offset; this corrects ddl.SubStatementPositionStart and ddl.SubStatementPositionEnd
-			tkn.Position = tkn.specialPosOffset + specialComment.Position
+			//tkn.Position = tkn.specialPosOffset + specialComment.Position
 			// return the specialComment scan result as the result
 			return tok, val
 		}
 		// leave specialComment scan mode after all stream consumed.
 		tkn.specialComment = nil
-		return 0, nil // TODO: this probably doesn't work with tkn.multi
 	}
 	if tkn.potentialAccountName {
 		defer func() {
@@ -1096,8 +1095,6 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 	}
 	_, sql := ExtractMysqlComment(buffer.String())
 	tkn.specialComment = NewStringTokenizer(sql)
-	// Save current position of Tokenizer for later
-	tkn.OldPosition = tkn.Position
 	// Recurse on subquery
 	return tkn.Scan()
 }
