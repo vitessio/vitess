@@ -18,7 +18,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.17
+        go-version: 1.18
 
     - name: Set up python
       uses: actions/setup-python@v2
@@ -44,7 +44,7 @@ jobs:
         go mod download
 
         # install JUnit report formatter
-        go get -u github.com/vitessio/go-junit-report@HEAD
+        go install github.com/jstemmer/go-junit-report@latest
 
         {{if .InstallXtraBackup}}
 
@@ -93,4 +93,3 @@ jobs:
         # print test output
         cat output.txt
       if: always()
-
