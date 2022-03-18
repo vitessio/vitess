@@ -2493,6 +2493,9 @@ func TestNotWorkingIdentifiersStartingWithNumbers(t *testing.T) {
 		{
 			input:  "insert into 1a.2b values (1)",
 			output: "insert into `1a`.`2b` values (1)",
+		}, {
+			input:  "insert into 1a.2b(3c) values (1)",
+			output: "insert into `1a`.`2b`(`3c`) values (1)",
 		},
 	}
 	for _, tcase := range tests {
@@ -2538,10 +2541,6 @@ func TestParsingIdentifiersStartingWithNumbers(t *testing.T) {
 		{
 			input:  "insert into t (1a) values (1)",
 			output: "insert into t(`1a`) values (1)",
-		},
-		{
-			input:  "insert into 1a.2b(3c) values (1)",
-			output: "insert into `1a`.`2b`(`3c`) values (1)",
 		},
 		{
 			input:  "select 0xH from t",
