@@ -194,6 +194,7 @@ var keywords = map[string]int{
 	"desc":                     DESC,
 	"describe":                 DESCRIBE,
 	"deterministic":            DETERMINISTIC,
+	"disable":                  DISABLE,
 	"distinct":                 DISTINCT,
 	"distinctrow":              UNUSED,
 	"div":                      DIV,
@@ -203,7 +204,9 @@ var keywords = map[string]int{
 	"each":                     EACH,
 	"else":                     ELSE,
 	"elseif":                   ELSEIF,
+	"enable":                   ENABLE,
 	"enclosed":                 ENCLOSED,
+	"encryption":               ENCRYPTION,
 	"end":                      END,
 	"enforced":                 ENFORCED,
 	"engine":                   ENGINE,
@@ -613,6 +616,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		specialComment := tkn.specialComment
 		tok, val := specialComment.Scan()
 		if tok != 0 {
+			// return the specialComment scan result as the result
 			return tok, val
 		}
 		// leave specialComment scan mode after all stream consumed.

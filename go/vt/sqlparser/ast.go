@@ -1356,14 +1356,20 @@ func (node *Set) walkSubtree(visit Visit) error {
 	)
 }
 
+type CharsetAndCollate struct {
+	Type string //Charset = true, Collate = false
+	Value string
+	IsDefault bool
+}
+
+
 // DBDDL represents a CREATE, DROP database statement.
 type DBDDL struct {
 	Action      string
 	DBName      string
 	IfNotExists bool
 	IfExists    bool
-	Collate     string
-	Charset     string
+	CharsetCollate  []*CharsetAndCollate
 }
 
 // Format formats the node.
@@ -1374,7 +1380,17 @@ func (node *DBDDL) Format(buf *TrackedBuffer) {
 		if node.IfNotExists {
 			exists = " if not exists"
 		}
-		buf.WriteString(fmt.Sprintf("%s database%s %s", node.Action, exists, node.DBName))
+		charsetCollateStr := ""
+		for _, obj := range node.CharsetCollate {
+			typeStr := strings.ToLower(obj.Type)
+			charsetDef := ""
+			if obj.IsDefault {
+				charsetDef = " default"
+			}
+			charsetCollateStr += fmt.Sprintf("%s %s %s", charsetDef, typeStr, obj.Value)
+		}
+
+		buf.WriteString(fmt.Sprintf("%s database%s %s%s", node.Action, exists, node.DBName, charsetCollateStr))
 	case DropStr:
 		exists := ""
 		if node.IfExists {
@@ -2253,8 +2269,8 @@ type IndexSpec struct {
 }
 
 func (idx *IndexSpec) Format(buf *TrackedBuffer) {
-	switch idx.Action {
-	case "create", "CREATE":
+	switch strings.ToLower(idx.Action) {
+	case "create":
 		buf.Myprintf("add ")
 		if idx.Type != "" {
 			if idx.Type == PrimaryStr {
@@ -2299,14 +2315,18 @@ func (idx *IndexSpec) Format(buf *TrackedBuffer) {
 				buf.Myprintf(" %v", opt.Value)
 			}
 		}
-	case "drop", "DROP":
+	case "drop":
 		if idx.Type == PrimaryStr {
 			buf.Myprintf("drop primary key")
 		} else {
 			buf.Myprintf("drop index %s", idx.ToName.val)
 		}
-	case "rename", "RENAME":
+	case "rename":
 		buf.Myprintf("rename index %s to %s", idx.FromName.val, idx.ToName.val)
+	case "disable":
+		buf.Myprintf("disable keys")
+	case "enable":
+		buf.Myprintf("enable keys")
 	}
 }
 
