@@ -715,7 +715,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 					return typ, res
 				}
 			}
-			// TODO:
+			// TODO: it will skip the digits of you qualified table ¯\_(ツ)_/¯
 			return int(ch), nil
 		case '/':
 			switch tkn.lastChar {
