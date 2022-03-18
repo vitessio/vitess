@@ -129,7 +129,10 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 
 		// close before reopen. this is safe to call on an already-closed client.
 		if err := vtctld.Close(); err != nil {
-			return fmt.Errorf("error closing possibly-stale connection before re-dialing: %w", err)
+			// Even if the client connection does not shut down cleanly, we don't want to block
+			// Dial from discovering a new vtctld. This makes VTAdmin's dialer more resilient,
+			// but, as a caveat, it _can_ potentially leak improperly-closed gRPC connections.
+			log.Errorf("error closing possibly-stale connection before re-dialing: %w", err)
 		}
 	}
 
@@ -190,11 +193,15 @@ func (vtctld *ClientProxy) Close() error {
 	}
 
 	err := vtctld.VtctldClient.Close()
+
+	// Mark the vtctld connection as "closed" from the proxy side even if
+	// the client connection does not shut down cleanly. This makes VTAdmin's dialer more resilient,
+	// but, as a caveat, it _can_ potentially leak improperly-closed gRPC connections.
+	vtctld.closed = true
+
 	if err != nil {
 		return err
 	}
-
-	vtctld.closed = true
 
 	return nil
 }
