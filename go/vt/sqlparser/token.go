@@ -47,7 +47,6 @@ type Tokenizer struct {
 	nesting              int
 	multi                bool
 	specialComment       *Tokenizer
-	partialIdentifier    []byte
 	potentialAccountName bool
 
 	// If true, the parser should collaborate to set `stopped` on this
@@ -649,14 +648,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 				return tkn.scanBitLiteral()
 			}
 		}
-		typ, res := tkn.scanIdentifier(byte(ch), false)
-		if tkn.partialIdentifier != nil {
-			// prepend partialIdentifier to result
-			res = append(tkn.partialIdentifier, res...)
-			// remove remaining partialIdentifier for now
-			tkn.partialIdentifier = nil
-		}
-		return typ, res
+		return tkn.scanIdentifier(byte(ch), false)
 	case ch == '@':
 		tkn.next()
 		if tkn.potentialAccountName {
@@ -722,9 +714,8 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 				if typ != LEX_ERROR {
 					return typ, res
 				}
-				// Save result to be concatenated to result
-				tkn.partialIdentifier = res[1:] // ignore decimal point
 			}
+			// TODO:
 			return int(ch), nil
 		case '/':
 			switch tkn.lastChar {

@@ -2486,14 +2486,17 @@ func TestValid(t *testing.T) {
 		runParseTestCase(t, tcase)
 	}
 }
-func TestTmp(t *testing.T) {
+
+// Specifically, can't handle qualified table names
+func TestNotWorkingIdentifiersStartingWithNumbers(t *testing.T) {
 	tests := []parseTest{
 		{
-			input:  "insert into t values (1.a)",
-			output: "create database 1a",
+			input:  "insert into 1a.2b values (1)",
+			output: "insert into `1a`.`2b` values (1)",
 		},
 	}
 	for _, tcase := range tests {
+		t.Skip()
 		runParseTestCase(t, tcase)
 	}
 }
