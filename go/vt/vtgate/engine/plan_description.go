@@ -38,7 +38,7 @@ type PrimitiveDescription struct {
 	// TargetTabletType specifies an explicit target destination tablet type
 	// this is only used in conjunction with TargetDestination
 	TargetTabletType topodatapb.TabletType
-	Other            map[string]interface{}
+	Other            map[string]any
 	Inputs           []PrimitiveDescription
 }
 
@@ -91,7 +91,7 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func addMap(input map[string]interface{}, buf *bytes.Buffer) error {
+func addMap(input map[string]any, buf *bytes.Buffer) error {
 	var mk []string
 	for k, v := range input {
 		if v == "" || v == nil || v == 0 {
@@ -109,7 +109,7 @@ func addMap(input map[string]interface{}, buf *bytes.Buffer) error {
 	return nil
 }
 
-func marshalAdd(prepend string, buf *bytes.Buffer, name string, obj interface{}) error {
+func marshalAdd(prepend string, buf *bytes.Buffer, name string, obj any) error {
 	buf.WriteString(prepend + `"` + name + `":`)
 	b, err := json.Marshal(obj)
 	if err != nil {
@@ -145,7 +145,7 @@ func orderedStringIntMap(in map[string]int) orderedMap {
 
 type keyVal struct {
 	key string
-	val interface{}
+	val any
 }
 
 // Define an ordered, sortable map

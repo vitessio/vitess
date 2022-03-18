@@ -41,7 +41,7 @@ func (js openTracingSpan) Finish() {
 }
 
 // Annotate will add information to an existing span
-func (js openTracingSpan) Annotate(key string, value interface{}) {
+func (js openTracingSpan) Annotate(key string, value any) {
 	js.otSpan.SetTag(key, value)
 }
 

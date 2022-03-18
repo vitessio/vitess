@@ -775,6 +775,6 @@ type StatsHistoryRecord struct {
 }
 
 // IsDuplicate implements history.Deduplicable
-func (r *StatsHistoryRecord) IsDuplicate(other interface{}) bool {
+func (r *StatsHistoryRecord) IsDuplicate(other any) bool {
 	return false
 }

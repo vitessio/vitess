@@ -229,7 +229,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	// check for shards
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("FindAllShardsInKeyspace", keyspaceName)
 	require.NoError(t, err)
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	err = json.Unmarshal([]byte(result), &resultMap)
 	require.NoError(t, err)
 	assert.Equal(t, 4, len(resultMap), "No of shards should be 4")

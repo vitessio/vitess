@@ -898,7 +898,7 @@ func insertVarOffset(rowNum, colOffset int) string {
 }
 
 func (ins *Insert) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Query":                ins.Query,
 		"TableName":            ins.GetTableName(),
 		"MultiShardAutocommit": ins.MultiShardAutocommit,

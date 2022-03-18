@@ -1075,7 +1075,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 }
 
 // readInstancesByCondition is a generic function to read instances from the backend database
-func readInstancesByCondition(condition string, args []interface{}, sort string) ([](*Instance), error) {
+func readInstancesByCondition(condition string, args []any, sort string) ([](*Instance), error) {
 	readFunc := func() ([](*Instance), error) {
 		instances := [](*Instance){}
 
@@ -2255,7 +2255,7 @@ func mkInsertOdku(table string, columns []string, values []string, nrRows int, i
 	return q.String(), nil
 }
 
-func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bool, updateLastSeen bool) (string, []interface{}, error) {
+func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bool, updateLastSeen bool) (string, []any, error) {
 	if len(instances) == 0 {
 		return "", nil, nil
 	}
@@ -2357,7 +2357,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		values = append(values, "NOW()")
 	}
 
-	var args []interface{}
+	var args []any
 	for _, instance := range instances {
 		// number of columns minus 2 as last_checked and last_attempted_check
 		// updated with NOW()

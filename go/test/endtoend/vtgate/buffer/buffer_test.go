@@ -298,7 +298,7 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 	durationMs := 0
 	bufferingStops := 0
 	if resp.StatusCode == 200 {
-		resultMap := make(map[string]interface{})
+		resultMap := make(map[string]any)
 		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
 		if err != nil {
@@ -330,7 +330,7 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 	clusterInstance.Teardown()
 }
 
-func getVarFromVtgate(t *testing.T, label string, param string, resultMap map[string]interface{}) int {
+func getVarFromVtgate(t *testing.T, label string, param string, resultMap map[string]any) int {
 	paramVal := 0
 	var err error
 	object := reflect.ValueOf(resultMap[param])

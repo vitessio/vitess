@@ -212,7 +212,7 @@ func getVindexPredicate(ctx *plancontext.PlanningContext, op *physical.Route) sq
 }
 
 func getAllTableNames(op *physical.Route) ([]string, error) {
-	tableNameMap := map[string]interface{}{}
+	tableNameMap := map[string]any{}
 	err := physical.VisitOperators(op, func(op abstract.PhysicalOperator) (bool, error) {
 		tbl, isTbl := op.(*physical.Table)
 		var name string

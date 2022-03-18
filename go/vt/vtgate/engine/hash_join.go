@@ -239,7 +239,7 @@ func (hj *HashJoin) Inputs() []Primitive {
 
 // description implements the Primitive interface
 func (hj *HashJoin) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"TableName":         hj.GetTableName(),
 		"JoinColumnIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(hj.Cols)), ","), "[]"),
 		"Predicate":         sqlparser.String(hj.ASTPred),

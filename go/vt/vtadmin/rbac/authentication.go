@@ -56,7 +56,7 @@ type Authenticator interface {
 // If the authenticator returns an error, the overall streaming rpc returns an
 // UNAUTHENTICATED error.
 func AuthenticationStreamInterceptor(authn Authenticator) grpc.StreamServerInterceptor {
-	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		actor, err := authn.Authenticate(ss.Context())
 		if err != nil {
 			return vterrors.Errorf(vtrpc.Code_UNAUTHENTICATED, "%s", err)
@@ -76,7 +76,7 @@ func AuthenticationStreamInterceptor(authn Authenticator) grpc.StreamServerInter
 // If the authenticator returns an error, the overall unary rpc returns an
 // UNAUTHENTICATED error.
 func AuthenticationUnaryInterceptor(authn Authenticator) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 		actor, err := authn.Authenticate(ctx)
 		if err != nil {
 			return nil, vterrors.Errorf(vtrpc.Code_UNAUTHENTICATED, "%s", err)
