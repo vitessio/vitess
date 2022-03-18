@@ -28,18 +28,18 @@ func TestPolicy(t *testing.T) {
 	defer func() {
 		require.Nil(t, recover())
 	}()
-	newPolicy(100, 10)
+	newPolicy[int](100, 10)
 }
 
 func TestPolicyMetrics(t *testing.T) {
-	p := newDefaultPolicy(100, 10)
+	p := newDefaultPolicy[int](100, 10)
 	p.CollectMetrics(newMetrics())
 	require.NotNil(t, p.metrics)
 	require.NotNil(t, p.evict.metrics)
 }
 
 func TestPolicyProcessItems(t *testing.T) {
-	p := newDefaultPolicy(100, 10)
+	p := newDefaultPolicy[int](100, 10)
 	p.itemsCh <- []uint64{1, 2, 2}
 	time.Sleep(wait)
 	p.Lock()
@@ -56,7 +56,7 @@ func TestPolicyProcessItems(t *testing.T) {
 }
 
 func TestPolicyPush(t *testing.T) {
-	p := newDefaultPolicy(100, 10)
+	p := newDefaultPolicy[int](100, 10)
 	require.True(t, p.Push([]uint64{}))
 
 	keepCount := 0
@@ -69,7 +69,7 @@ func TestPolicyPush(t *testing.T) {
 }
 
 func TestPolicyAdd(t *testing.T) {
-	p := newDefaultPolicy(1000, 100)
+	p := newDefaultPolicy[int](1000, 100)
 	if victims, added := p.Add(1, 101); victims != nil || added {
 		t.Fatal("can't add an item bigger than entire cache")
 	}
@@ -98,14 +98,14 @@ func TestPolicyAdd(t *testing.T) {
 }
 
 func TestPolicyHas(t *testing.T) {
-	p := newDefaultPolicy(100, 10)
+	p := newDefaultPolicy[int](100, 10)
 	p.Add(1, 1)
 	require.True(t, p.Has(1))
 	require.False(t, p.Has(2))
 }
 
 func TestPolicyDel(t *testing.T) {
-	p := newDefaultPolicy(100, 10)
+	p := newDefaultPolicy[int](100, 10)
 	p.Add(1, 1)
 	p.Del(1)
 	p.Del(2)
@@ -114,13 +114,13 @@ func TestPolicyDel(t *testing.T) {
 }
 
 func TestPolicyCap(t *testing.T) {
-	p := newDefaultPolicy(100, 10)
+	p := newDefaultPolicy[int](100, 10)
 	p.Add(1, 1)
 	require.Equal(t, int64(9), p.MaxCost()-p.Used())
 }
 
 func TestPolicyUpdate(t *testing.T) {
-	p := newDefaultPolicy(100, 10)
+	p := newDefaultPolicy[int](100, 10)
 	p.Add(1, 1)
 	p.Update(1, 2)
 	p.Lock()
@@ -129,14 +129,14 @@ func TestPolicyUpdate(t *testing.T) {
 }
 
 func TestPolicyCost(t *testing.T) {
-	p := newDefaultPolicy(100, 10)
+	p := newDefaultPolicy[int](100, 10)
 	p.Add(1, 2)
 	require.Equal(t, int64(2), p.Cost(1))
 	require.Equal(t, int64(-1), p.Cost(2))
 }
 
 func TestPolicyClear(t *testing.T) {
-	p := newDefaultPolicy(100, 10)
+	p := newDefaultPolicy[int](100, 10)
 	p.Add(1, 1)
 	p.Add(2, 2)
 	p.Add(3, 3)
@@ -152,20 +152,20 @@ func TestPolicyClose(t *testing.T) {
 		require.NotNil(t, recover())
 	}()
 
-	p := newDefaultPolicy(100, 10)
+	p := newDefaultPolicy[int](100, 10)
 	p.Add(1, 1)
 	p.Close()
 	p.itemsCh <- []uint64{1}
 }
 
 func TestPushAfterClose(t *testing.T) {
-	p := newDefaultPolicy(100, 10)
+	p := newDefaultPolicy[int](100, 10)
 	p.Close()
 	require.False(t, p.Push([]uint64{1, 2}))
 }
 
 func TestAddAfterClose(t *testing.T) {
-	p := newDefaultPolicy(100, 10)
+	p := newDefaultPolicy[int](100, 10)
 	p.Close()
 	p.Add(1, 1)
 }

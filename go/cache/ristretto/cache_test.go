@@ -33,7 +33,7 @@ var wait = time.Millisecond * 10
 
 func TestCacheKeyToHash(t *testing.T) {
 	keyToHashCount := 0
-	c, err := NewCache(&Config{
+	c, err := NewCache(&Config[int]{
 		NumCounters:        10,
 		MaxCost:            1000,
 		BufferItems:        64,
@@ -63,7 +63,7 @@ func TestCacheMaxCost(t *testing.T) {
 		}
 		return string(k)
 	}
-	c, err := NewCache(&Config{
+	c, err := NewCache(&Config[string]{
 		NumCounters: 12960, // 36^2 * 10
 		MaxCost:     1e6,   // 1mb
 		BufferItems: 64,
@@ -106,7 +106,7 @@ func TestCacheMaxCost(t *testing.T) {
 }
 
 func TestUpdateMaxCost(t *testing.T) {
-	c, err := NewCache(&Config{
+	c, err := NewCache(&Config[int]{
 		NumCounters: 10,
 		MaxCost:     10,
 		BufferItems: 64,
@@ -132,25 +132,25 @@ func TestUpdateMaxCost(t *testing.T) {
 }
 
 func TestNewCache(t *testing.T) {
-	_, err := NewCache(&Config{
+	_, err := NewCache(&Config[int]{
 		NumCounters: 0,
 	})
 	require.Error(t, err)
 
-	_, err = NewCache(&Config{
+	_, err = NewCache(&Config[int]{
 		NumCounters: 100,
 		MaxCost:     0,
 	})
 	require.Error(t, err)
 
-	_, err = NewCache(&Config{
+	_, err = NewCache(&Config[int]{
 		NumCounters: 100,
 		MaxCost:     10,
 		BufferItems: 0,
 	})
 	require.Error(t, err)
 
-	c, err := NewCache(&Config{
+	c, err := NewCache(&Config[int]{
 		NumCounters: 100,
 		MaxCost:     10,
 		BufferItems: 64,
@@ -161,7 +161,7 @@ func TestNewCache(t *testing.T) {
 }
 
 func TestNilCache(t *testing.T) {
-	var c *Cache
+	var c *Cache[int]
 	val, ok := c.Get("1")
 	require.False(t, ok)
 	require.Nil(t, val)
@@ -173,11 +173,11 @@ func TestNilCache(t *testing.T) {
 }
 
 func TestMultipleClose(t *testing.T) {
-	var c *Cache
+	var c *Cache[int]
 	c.Close()
 
 	var err error
-	c, err = NewCache(&Config{
+	c, err = NewCache(&Config[int]{
 		NumCounters: 100,
 		MaxCost:     10,
 		BufferItems: 64,
@@ -189,7 +189,7 @@ func TestMultipleClose(t *testing.T) {
 }
 
 func TestSetAfterClose(t *testing.T) {
-	c, err := newTestCache()
+	c, err := newTestCache[int]()
 	require.NoError(t, err)
 	require.NotNil(t, c)
 
@@ -198,7 +198,7 @@ func TestSetAfterClose(t *testing.T) {
 }
 
 func TestClearAfterClose(t *testing.T) {
-	c, err := newTestCache()
+	c, err := newTestCache[int]()
 	require.NoError(t, err)
 	require.NotNil(t, c)
 
@@ -207,7 +207,7 @@ func TestClearAfterClose(t *testing.T) {
 }
 
 func TestGetAfterClose(t *testing.T) {
-	c, err := newTestCache()
+	c, err := newTestCache[int]()
 	require.NoError(t, err)
 	require.NotNil(t, c)
 
@@ -219,7 +219,7 @@ func TestGetAfterClose(t *testing.T) {
 }
 
 func TestDelAfterClose(t *testing.T) {
-	c, err := newTestCache()
+	c, err := newTestCache[int]()
 	require.NoError(t, err)
 	require.NotNil(t, c)
 
@@ -232,15 +232,15 @@ func TestDelAfterClose(t *testing.T) {
 func TestCacheProcessItems(t *testing.T) {
 	m := &sync.Mutex{}
 	evicted := make(map[uint64]struct{})
-	c, err := NewCache(&Config{
+	c, err := NewCache(&Config[int]{
 		NumCounters:        100,
 		MaxCost:            10,
 		BufferItems:        64,
 		IgnoreInternalCost: true,
-		Cost: func(value any) int64 {
-			return int64(value.(int))
+		Cost: func(value int) int64 {
+			return int64(value)
 		},
-		OnEvict: func(item *Item) {
+		OnEvict: func(item *Item[int]) {
 			m.Lock()
 			defer m.Unlock()
 			evicted[item.Key] = struct{}{}
@@ -252,7 +252,7 @@ func TestCacheProcessItems(t *testing.T) {
 	var conflict uint64
 
 	key, conflict = defaultStringHash("1")
-	c.setBuf <- &Item{
+	c.setBuf <- &Item[int]{
 		flag:     itemNew,
 		Key:      key,
 		Conflict: conflict,
@@ -264,7 +264,7 @@ func TestCacheProcessItems(t *testing.T) {
 	require.Equal(t, int64(1), c.policy.Cost(key))
 
 	key, conflict = defaultStringHash("1")
-	c.setBuf <- &Item{
+	c.setBuf <- &Item[int]{
 		flag:     itemUpdate,
 		Key:      key,
 		Conflict: conflict,
@@ -275,7 +275,7 @@ func TestCacheProcessItems(t *testing.T) {
 	require.Equal(t, int64(2), c.policy.Cost(key))
 
 	key, conflict = defaultStringHash("1")
-	c.setBuf <- &Item{
+	c.setBuf <- &Item[int]{
 		flag:     itemDelete,
 		Key:      key,
 		Conflict: conflict,
@@ -288,7 +288,7 @@ func TestCacheProcessItems(t *testing.T) {
 	require.False(t, c.policy.Has(1))
 
 	key, conflict = defaultStringHash("2")
-	c.setBuf <- &Item{
+	c.setBuf <- &Item[int]{
 		flag:     itemNew,
 		Key:      key,
 		Conflict: conflict,
@@ -296,7 +296,7 @@ func TestCacheProcessItems(t *testing.T) {
 		Cost:     3,
 	}
 	key, conflict = defaultStringHash("3")
-	c.setBuf <- &Item{
+	c.setBuf <- &Item[int]{
 		flag:     itemNew,
 		Key:      key,
 		Conflict: conflict,
@@ -304,7 +304,7 @@ func TestCacheProcessItems(t *testing.T) {
 		Cost:     3,
 	}
 	key, conflict = defaultStringHash("4")
-	c.setBuf <- &Item{
+	c.setBuf <- &Item[int]{
 		flag:     itemNew,
 		Key:      key,
 		Conflict: conflict,
@@ -312,7 +312,7 @@ func TestCacheProcessItems(t *testing.T) {
 		Cost:     3,
 	}
 	key, conflict = defaultStringHash("5")
-	c.setBuf <- &Item{
+	c.setBuf <- &Item[int]{
 		flag:     itemNew,
 		Key:      key,
 		Conflict: conflict,
@@ -328,11 +328,11 @@ func TestCacheProcessItems(t *testing.T) {
 		require.NotNil(t, recover())
 	}()
 	c.Close()
-	c.setBuf <- &Item{flag: itemNew}
+	c.setBuf <- &Item[int]{flag: itemNew}
 }
 
 func TestCacheGet(t *testing.T) {
-	c, err := NewCache(&Config{
+	c, err := NewCache(&Config[int]{
 		NumCounters:        100,
 		MaxCost:            10,
 		BufferItems:        64,
@@ -342,7 +342,7 @@ func TestCacheGet(t *testing.T) {
 	require.NoError(t, err)
 
 	key, conflict := defaultStringHash("1")
-	i := Item{
+	i := Item[int]{
 		Key:      key,
 		Conflict: conflict,
 		Value:    1,
@@ -366,7 +366,7 @@ func TestCacheGet(t *testing.T) {
 }
 
 // retrySet calls SetWithCost until the item is accepted by the cache.
-func retrySet(t *testing.T, c *Cache, key string, value int, cost int64) {
+func retrySet(t *testing.T, c *Cache[int], key string, value int, cost int64) {
 	for {
 		if set := c.SetWithCost(key, value, cost); !set {
 			time.Sleep(wait)
@@ -377,13 +377,13 @@ func retrySet(t *testing.T, c *Cache, key string, value int, cost int64) {
 		val, ok := c.Get(key)
 		require.True(t, ok)
 		require.NotNil(t, val)
-		require.Equal(t, value, val.(int))
+		require.Equal(t, value, val)
 		return
 	}
 }
 
 func TestCacheSet(t *testing.T) {
-	c, err := NewCache(&Config{
+	c, err := NewCache(&Config[int]{
 		NumCounters:        100,
 		MaxCost:            10,
 		IgnoreInternalCost: true,
@@ -397,12 +397,12 @@ func TestCacheSet(t *testing.T) {
 	c.SetWithCost("1", 2, 2)
 	val, ok := c.store.Get(defaultStringHash("1"))
 	require.True(t, ok)
-	require.Equal(t, 2, val.(int))
+	require.Equal(t, 2, val)
 
 	c.stop <- struct{}{}
 	for i := 0; i < setBufSize; i++ {
 		key, conflict := defaultStringHash("1")
-		c.setBuf <- &Item{
+		c.setBuf <- &Item[int]{
 			flag:     itemUpdate,
 			Key:      key,
 			Conflict: conflict,
@@ -420,7 +420,7 @@ func TestCacheSet(t *testing.T) {
 }
 
 func TestCacheInternalCost(t *testing.T) {
-	c, err := NewCache(&Config{
+	c, err := NewCache(&Config[int]{
 		NumCounters: 100,
 		MaxCost:     10,
 		BufferItems: 64,
@@ -437,7 +437,7 @@ func TestCacheInternalCost(t *testing.T) {
 }
 
 func TestCacheDel(t *testing.T) {
-	c, err := NewCache(&Config{
+	c, err := NewCache(&Config[int]{
 		NumCounters: 100,
 		MaxCost:     10,
 		BufferItems: 64,
@@ -462,7 +462,7 @@ func TestCacheDel(t *testing.T) {
 }
 
 func TestCacheClear(t *testing.T) {
-	c, err := NewCache(&Config{
+	c, err := NewCache(&Config[int]{
 		NumCounters:        100,
 		MaxCost:            10,
 		IgnoreInternalCost: true,
@@ -488,7 +488,7 @@ func TestCacheClear(t *testing.T) {
 }
 
 func TestCacheMetrics(t *testing.T) {
-	c, err := NewCache(&Config{
+	c, err := NewCache(&Config[int]{
 		NumCounters:        100,
 		MaxCost:            10,
 		IgnoreInternalCost: true,
@@ -587,7 +587,7 @@ func TestMetricsString(t *testing.T) {
 }
 
 func TestCacheMetricsClear(t *testing.T) {
-	c, err := NewCache(&Config{
+	c, err := NewCache(&Config[int]{
 		NumCounters: 100,
 		MaxCost:     10,
 		BufferItems: 64,
@@ -625,8 +625,7 @@ func TestDropUpdates(t *testing.T) {
 		lastEvictedSet := int64(-1)
 
 		var err error
-		handler := func(_ any, value any) {
-			v := value.(string)
+		handler := func(_ any, v string) {
 			lastEvictedSet, err = strconv.ParseInt(string(v), 10, 32)
 			require.NoError(t, err)
 
@@ -643,15 +642,13 @@ func TestDropUpdates(t *testing.T) {
 		// update on a key.
 		setBufSize = 10
 
-		c, err := NewCache(&Config{
+		c, err := NewCache(&Config[string]{
 			NumCounters: 100,
 			MaxCost:     10,
 			BufferItems: 64,
 			Metrics:     true,
-			OnEvict: func(item *Item) {
-				if item.Value != nil {
-					handler(nil, item.Value)
-				}
+			OnEvict: func(item *Item[string]) {
+				handler(nil, item.Value)
 			},
 		})
 		require.NoError(t, err)
@@ -668,7 +665,7 @@ func TestDropUpdates(t *testing.T) {
 		// Wait for all the items to be processed.
 		c.Wait()
 		// This will cause eviction from the cache.
-		require.True(t, c.SetWithCost("1", nil, 10))
+		require.True(t, c.SetWithCost("1", "", 10))
 		c.Close()
 	}
 
@@ -678,8 +675,8 @@ func TestDropUpdates(t *testing.T) {
 	}
 }
 
-func newTestCache() (*Cache, error) {
-	return NewCache(&Config{
+func newTestCache[I any]() (*Cache[I], error) {
+	return NewCache(&Config[I]{
 		NumCounters: 100,
 		MaxCost:     10,
 		BufferItems: 64,
