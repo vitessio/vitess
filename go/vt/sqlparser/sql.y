@@ -149,6 +149,8 @@ func yyOldPosition(yylex interface{}) int {
   procedureParams []ProcedureParam
   characteristic Characteristic
   characteristics []Characteristic
+  charsetCollate *CharsetAndCollate
+  charsetCollates []*CharsetAndCollate
   Fields *Fields
   Lines	*Lines
   EnclosedBy *EnclosedBy
@@ -230,7 +232,7 @@ func yyOldPosition(yylex interface{}) int {
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER TRIGGERS FUNCTION
 %token <bytes> STATUS VARIABLES WARNINGS ERRORS KILL CONNECTION
-%token <bytes> SEQUENCE
+%token <bytes> SEQUENCE ENABLE DISABLE
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
 %token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY TEMPORARY
 
@@ -272,6 +274,7 @@ func yyOldPosition(yylex interface{}) int {
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
+%token <bytes> ENCRYPTION
 
 // Functions
 %token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURRENT_USER
@@ -417,6 +420,9 @@ func yyOldPosition(yylex interface{}) int {
 %type <sqlVal> length_opt column_comment ignore_number_opt
 %type <optVal> column_default on_update
 %type <str> charset_opt collate_opt
+%type <boolean> default_keyword_opt
+%type <charsetCollate> charset_default_opt collate_default_opt encryption_default_opt
+%type <charsetCollates> creation_option creation_option_opt
 %type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolVal> auto_increment local_opt optionally_opt
@@ -843,21 +849,21 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, View: $5.ToViewName(), ViewExpr: $8, SubStatementPositionStart: $7, SubStatementPositionEnd: $9 - 1, OrReplace: true}
   }
-| CREATE DATABASE not_exists_opt ID
+| CREATE DATABASE not_exists_opt ID creation_option_opt
   {
     var ne bool
     if $3 != 0 {
       ne = true
     }
-   $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne}
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne, CharsetCollate: $5}
   }
-| CREATE SCHEMA not_exists_opt ID
+| CREATE SCHEMA not_exists_opt ID creation_option_opt
   {
     var ne bool
     if $3 != 0 {
       ne = true
     }
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne}
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne, CharsetCollate: $5}
   }
 | CREATE definer_opt TRIGGER ID trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position trigger_body lexer_position
   {
@@ -2560,6 +2566,84 @@ collate_opt:
     $$ = string($2)
   }
 
+default_keyword_opt:
+  {
+    $$ = false
+  }
+| DEFAULT
+  {
+    $$ = true
+  }
+
+creation_option_opt:
+  {
+    $$ = nil
+  }
+| creation_option
+  {
+    $$ = $1
+  }
+
+creation_option:
+  charset_default_opt
+  {
+    $$ = []*CharsetAndCollate{$1}
+  }
+| collate_default_opt
+  {
+    $$ = []*CharsetAndCollate{$1}
+  }
+| encryption_default_opt
+  {
+    $$ = []*CharsetAndCollate{$1}
+  }
+| creation_option collate_default_opt
+  {
+    $$ = append($1,$2)
+  }
+| creation_option charset_default_opt
+  {
+    $$ = append($1,$2)
+  }
+| creation_option encryption_default_opt
+  {
+    $$ = append($1,$2)
+  }
+
+charset_default_opt:
+  default_keyword_opt CHARACTER SET equal_opt ID
+  {
+    $$ = &CharsetAndCollate{Type: string($2) + " " + string($3), Value: string($5), IsDefault: $1}
+  }
+| default_keyword_opt CHARACTER SET equal_opt BINARY
+  {
+    $$ = &CharsetAndCollate{Type: string($2) + " " + string($3), Value: string($5), IsDefault: $1}
+  }
+| default_keyword_opt CHARSET equal_opt ID
+  {
+    $$ = &CharsetAndCollate{Type: string($2), Value: string($4), IsDefault: $1}
+  }
+| default_keyword_opt CHARSET equal_opt BINARY
+  {
+    $$ = &CharsetAndCollate{Type: string($2), Value: string($4), IsDefault: $1}
+  }
+
+collate_default_opt:
+  default_keyword_opt COLLATE equal_opt ID
+  {
+    $$ = &CharsetAndCollate{Type: string($2), Value: string($4), IsDefault: $1}
+  }
+| default_keyword_opt COLLATE equal_opt BINARY
+  {
+    $$ = &CharsetAndCollate{Type: string($2), Value: string($4), IsDefault: $1}
+  }
+
+encryption_default_opt:
+  default_keyword_opt ENCRYPTION equal_opt STRING
+  {
+    $$ = &CharsetAndCollate{Type: string($2), Value: string($4), IsDefault: $1}
+  }
+
 column_key:
   PRIMARY KEY
   {
@@ -3151,6 +3235,14 @@ alter_table_statement_part:
     ddl := &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: CreateStr}}
     ddl.IndexSpec = &IndexSpec{Action: CreateStr, Using: NewColIdent(""), ToName: NewColIdent($2), Type: PrimaryStr, Columns: $6, Options: $8}
     $$ = ddl
+  }
+| DISABLE KEYS
+  {
+    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: string($1)}}
+  }
+| ENABLE KEYS
+  {
+    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: string($1)}}
   }
 
 column_order_opt:
@@ -6041,9 +6133,12 @@ non_reserved_keyword:
 | DEFINER
 | DEFINITION
 | DESCRIPTION
+| DISABLE
 | DOUBLE
 | DUPLICATE
 | EACH
+| ENABLE
+| ENCRYPTION
 | ENFORCED
 | ENGINE
 | ENGINES

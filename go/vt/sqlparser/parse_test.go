@@ -1213,6 +1213,12 @@ var (
 			input:  "alter table a drop id",
 			output: "alter table a drop column id",
 		}, {
+			input:  "alter table a disable keys",
+			output: "alter table a disable keys",
+		}, {
+			input:  "alter table a enable keys",
+			output: "alter table a enable keys",
+		}, {
 			input:  "create table a (\n\t`a` int\n)",
 			output: "create table a (\n\ta int\n)",
 		}, {
@@ -1236,6 +1242,9 @@ var (
 			output: "create temporary table if not exists a (\n\ta int\n)",
 		}, {
 			input:  "create index a on b (id)",
+			output: "alter table b add index a (id)",
+		}, {
+			input:  "CREATE INDEX a ON b (id)",
 			output: "alter table b add index a (id)",
 		}, {
 			input:  "create index a on b (foo(6) desc, foo asc)",
@@ -2363,6 +2372,33 @@ var (
 		}, {
 			input:  "SELECT * FROM information_schema.processlist",
 			output: "select * from information_schema.`processlist`",
+		}, {
+			input:  "CREATE DATABASE `dolt_testing` DEFAULT CHARACTER SET latin1",
+			output: "create database dolt_testing default character set latin1",
+		}, {
+			input:  "CREATE DATABASE `dolt_testing` DEFAULT CHARACTER SET=latin1",
+			output: "create database dolt_testing default character set latin1",
+		}, {
+			input:  "CREATE DATABASE `dolt_testing` DEFAULT CHARSET latin1",
+			output: "create database dolt_testing default charset latin1",
+		}, {
+			input:  "CREATE DATABASE `dolt_testing` DEFAULT COLLATE latin1_general_ci",
+			output: "create database dolt_testing default collate latin1_general_ci",
+		}, {
+			input:  "CREATE DATABASE `dolt_testing` COLLATE latin1_general_ci CHARACTER SET latin1",
+			output: "create database dolt_testing collate latin1_general_ci character set latin1",
+		}, {
+			input:  "CREATE DATABASE `dolt_testing` DEFAULT COLLATE cp1257_lithuanian_ci",
+			output: "create database dolt_testing default collate cp1257_lithuanian_ci",
+		}, {
+			input:  "CREATE DATABASE `dolt_testing` DEFAULT CHARACTER SET latin1 DEFAULT COLLATE latin1_general_ci",
+			output: "create database dolt_testing default character set latin1 default collate latin1_general_ci",
+		}, {
+			input:  "CREATE DATABASE IF NOT EXISTS `test` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT ENCRYPTION='N'",
+			output: "create database if not exists test default character set utf8mb4 collate utf8mb4_0900_ai_ci default encryption N",
+		}, {
+			input:  "CREATE DATABASE `somedb` CHARACTER SET binary CHARSET binary COLLATE binary collate binary encryption 'n' encryption 'n'",
+			output: "create database somedb character set binary charset binary collate binary collate binary encryption n encryption n",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
