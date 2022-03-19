@@ -1135,7 +1135,6 @@ func CloneRefOfJSONUtilityExpr(n *JSONUtilityExpr) *JSONUtilityExpr {
 	out := *n
 	out.Name = CloneColIdent(n.Name)
 	out.StringArg = CloneExpr(n.StringArg)
-	out.Column = CloneRefOfColName(n.Column)
 	return &out
 }
 

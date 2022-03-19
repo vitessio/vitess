@@ -2669,11 +2669,6 @@ func (a *application) rewriteRefOfJSONUtilityExpr(parent SQLNode, node *JSONUtil
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfColName(node, node.Column, func(newNode, parent SQLNode) {
-		parent.(*JSONUtilityExpr).Column = newNode.(*ColName)
-	}) {
-		return false
-	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent

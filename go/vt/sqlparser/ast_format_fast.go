@@ -1741,13 +1741,9 @@ func (node *ValuesFuncExpr) formatFast(buf *TrackedBuffer) {
 func (node *JSONUtilityExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.Name.Lowered())
 	buf.WriteByte('(')
-	if node.Column != nil {
-		buf.printExpr(node, node.Column, true)
-		buf.WriteByte(')')
-	} else {
-		buf.printExpr(node, node.StringArg, true)
-		buf.WriteByte(')')
-	}
+	buf.printExpr(node, node.StringArg, true)
+	buf.WriteByte(')')
+
 }
 
 // formatFast formats the node.

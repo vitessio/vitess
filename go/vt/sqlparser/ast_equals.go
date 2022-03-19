@@ -1937,8 +1937,7 @@ func EqualsRefOfJSONUtilityExpr(a, b *JSONUtilityExpr) bool {
 		return false
 	}
 	return EqualsColIdent(a.Name, b.Name) &&
-		EqualsExpr(a.StringArg, b.StringArg) &&
-		EqualsRefOfColName(a.Column, b.Column)
+		EqualsExpr(a.StringArg, b.StringArg)
 }
 
 // EqualsRefOfJoinCondition does deep equals between the two objects.

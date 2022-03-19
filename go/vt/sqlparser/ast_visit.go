@@ -1409,9 +1409,6 @@ func VisitRefOfJSONUtilityExpr(in *JSONUtilityExpr, f Visit) error {
 	if err := VisitExpr(in.StringArg, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfColName(in.Column, f); err != nil {
-		return err
-	}
 	return nil
 }
 func VisitRefOfJoinCondition(in *JoinCondition, f Visit) error {

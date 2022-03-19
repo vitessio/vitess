@@ -2212,7 +2212,6 @@ type (
 	JSONUtilityExpr struct {
 		Name      ColIdent
 		StringArg Expr
-		Column    *ColName
 	}
 )
 

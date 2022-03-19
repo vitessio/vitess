@@ -1391,8 +1391,6 @@ func (cached *JSONUtilityExpr) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.StringArg.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Column *vitess.io/vitess/go/vt/sqlparser.ColName
-	size += cached.Column.CachedSize(true)
 	return size
 }
 func (cached *JoinCondition) CachedSize(alloc bool) int64 {
