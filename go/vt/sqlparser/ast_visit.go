@@ -172,6 +172,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfIsExpr(in, f)
 	case IsolationLevel:
 		return VisitIsolationLevel(in, f)
+	case *JSONAttributesExpr:
+		return VisitRefOfJSONAttributesExpr(in, f)
 	case *JoinCondition:
 		return VisitRefOfJoinCondition(in, f)
 	case *JoinTableExpr:
@@ -1394,6 +1396,24 @@ func VisitRefOfIsExpr(in *IsExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Left, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJSONAttributesExpr(in *JSONAttributesExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.JSONDoc, f); err != nil {
+		return err
+	}
+	if err := VisitColIdent(in.PathIdentifier, f); err != nil {
 		return err
 	}
 	return nil
@@ -2666,6 +2686,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
+	case *JSONAttributesExpr:
+		return VisitRefOfJSONAttributesExpr(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *SubstrExpr:
@@ -2830,6 +2852,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfIntroducerExpr(in, f)
 	case *IsExpr:
 		return VisitRefOfIsExpr(in, f)
+	case *JSONAttributesExpr:
+		return VisitRefOfJSONAttributesExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:

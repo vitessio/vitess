@@ -2225,6 +2225,15 @@ type (
 
 	// Offset is another AST type that is used during planning and never produced by the parser
 	Offset int
+
+	// JSONAttributesExpr represents the argument and function for functions returning JSON value attributes
+	// More information available on https://dev.mysql.com/doc/refman/8.0/en/json-attribute-functions.html
+	JSONAttributesExpr struct {
+		Name           ColIdent
+		JSONDoc        Expr
+		Path           string
+		PathIdentifier ColIdent
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2265,6 +2274,7 @@ func (*Default) iExpr()              {}
 func (*ExtractedSubquery) iExpr()    {}
 func (*TrimFuncExpr) iExpr()         {}
 func (Offset) iExpr()                {}
+func (*JSONAttributesExpr) iExpr()   {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()             {}
@@ -2279,6 +2289,7 @@ func (*SubstrExpr) iCallable()           {}
 func (*ConvertUsingExpr) iCallable()     {}
 func (*MatchExpr) iCallable()            {}
 func (*GroupConcatExpr) iCallable()      {}
+func (*JSONAttributesExpr) iCallable()   {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

@@ -260,7 +260,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> TIME TIMESTAMP DATETIME YEAR
 %token <str> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
 %token <str> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
-%token <str> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON ENUM
+%token <str> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON JSON_DEPTH JSON_TYPE JSON_LENGTH JSON_VALID ENUM
 %token <str> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
 %token <str> ASCII UNICODE // used in CONVERT/CAST types
 
@@ -419,7 +419,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <boolean> exists_opt not_exists_opt enforced_opt temp_opt full_opt
 %type <empty> to_opt
 %type <str> reserved_keyword non_reserved_keyword
-%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
+%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt json_attribute_function_name
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt
 %type <empty> as_opt work_opt savepoint_opt
@@ -4759,6 +4759,36 @@ UTC_DATE func_paren_opt
 | TRIM openb expression FROM expression closeb
   {
     $$ = &TrimFuncExpr{TrimArg:$3, StringArg: $5}
+  }
+| json_attribute_function_name openb expression closeb
+  {
+    $$ = &JSONAttributesExpr{Name:$1, JSONDoc:$3}
+  }
+| JSON_LENGTH openb expression closeb
+  {
+    $$ = &JSONAttributesExpr{Name:NewColIdent($1), JSONDoc:$3 }
+  }
+| JSON_LENGTH openb expression ',' STRING closeb
+  {
+    $$ = &JSONAttributesExpr{Name:NewColIdent($1), JSONDoc:$3, Path: $5 }
+  }
+| JSON_LENGTH openb expression ',' AT_ID closeb
+  {
+    $$ = &JSONAttributesExpr{Name:NewColIdent($1), JSONDoc:$3, PathIdentifier: NewColIdentWithAt(string($5), SingleAt) }
+  }
+
+json_attribute_function_name:
+  JSON_DEPTH
+  {
+    $$ = NewColIdent($1)
+  }
+| JSON_TYPE
+  {
+    $$ = NewColIdent($1)
+  }
+| JSON_VALID
+  {
+    $$ = NewColIdent($1)
   }
 
 interval:

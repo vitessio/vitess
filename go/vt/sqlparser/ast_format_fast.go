@@ -2518,3 +2518,19 @@ func (node Offset) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(strconv.Itoa(int(node)))
 	buf.WriteString("]")
 }
+
+// formatFast formats the node
+func (node *JSONAttributesExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Name.Lowered())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.JSONDoc, true)
+	if node.Path != "" {
+		buf.WriteString(", ")
+		buf.WriteString(node.Path)
+	}
+	if !node.PathIdentifier.IsEmpty() {
+		buf.WriteString(", ")
+		node.PathIdentifier.formatFast(buf)
+	}
+	buf.WriteString(")")
+}

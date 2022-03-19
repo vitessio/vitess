@@ -1927,3 +1927,16 @@ func (node Offset) Format(buf *TrackedBuffer) {
 	buf.WriteString(strconv.Itoa(int(node)))
 	buf.WriteString("]")
 }
+
+// Format formats the node
+func (node *JSONAttributesExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(", node.Name.Lowered())
+	buf.astPrintf(node, "%v", node.JSONDoc)
+	if node.Path != "" {
+		buf.astPrintf(node, ", %s", node.Path)
+	}
+	if !node.PathIdentifier.IsEmpty() {
+		buf.astPrintf(node, ", %v", node.PathIdentifier)
+	}
+	buf.WriteString(")")
+}
