@@ -283,9 +283,10 @@ define build_docker_image
 	chmod -R o=rx *;
 
 	if grep -q arm64 <<< ${2}; then \
-		# arm64/aarch64 build, use docker cross build
+		echo "Building docker using arm64 buildx"; \
 		docker buildx build --platform linux/arm64 -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
 	else \
+		echo "Building docker using straight docker build"; \
 		docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
 	fi
 endef
