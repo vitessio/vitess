@@ -43,13 +43,14 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -202,13 +203,13 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 	}
 
 	clusterInstance.VtGateExtraArgs = []string{
-		"-enable_buffer",
+		"--enable_buffer",
 		// Long timeout in case failover is slow.
-		"-buffer_window", "10m",
-		"-buffer_max_failover_duration", "10m",
-		"-buffer_min_time_between_failovers", "20m",
+		"--buffer_window", "10m",
+		"--buffer_max_failover_duration", "10m",
+		"--buffer_min_time_between_failovers", "20m",
 		// Use legacy gateway. tabletgateway test is at go/test/endtoend/tabletgateway/buffer/buffer_test.go
-		"-gateway_implementation", "discoverygateway",
+		"--gateway_implementation", "discoverygateway",
 	}
 
 	// Start vtgate
@@ -221,13 +222,6 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 	}
 	rand.Seed(time.Now().UnixNano())
 	return clusterInstance, 0
-}
-
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.Nil(t, err)
-	return qr
 }
 
 func TestBufferInternalReparenting(t *testing.T) {
@@ -250,10 +244,10 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 	defer conn.Close()
 
 	// Insert two rows for the later threads (critical read, update).
-	exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", criticalReadRowID, "'critical read'"))
-	exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", updateRowID, "'update'"))
+	utils.Exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", criticalReadRowID, "'critical read'"))
+	utils.Exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", updateRowID, "'update'"))
 
-	//Start both threads.
+	// Start both threads.
 	readThreadInstance := &threadParams{writable: false, quit: false, rpcs: 0, errors: 0, notifyAfterNSuccessfulRpcs: 0, rpcsSoFar: 0, executeFunction: readExecute, waitForNotification: make(chan bool)}
 	wg.Add(1)
 	go readThreadInstance.threadRun()
@@ -273,12 +267,12 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 	updateThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
 
 	if isExternalParent {
-		externalReparenting(ctx, t, clusterInstance)
+		externalReparenting(t, clusterInstance)
 	} else {
 		//reparent call
-		if err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
+		if err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard",
 			fmt.Sprintf("%s/%s", keyspaceUnshardedName, "0"),
-			"-new_primary", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias); err != nil {
+			"--new_primary", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias); err != nil {
 			log.Errorf("clusterInstance.VtctlclientProcess.ExecuteCommand(\"PlannedRepare... caused an error : %v", err)
 		}
 	}
@@ -353,7 +347,7 @@ func getVarFromVtgate(t *testing.T, label string, param string, resultMap map[st
 	return paramVal
 }
 
-func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
+func externalReparenting(t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
 	start := time.Now()
 
 	// Demote Query

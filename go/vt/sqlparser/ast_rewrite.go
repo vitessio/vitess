@@ -108,6 +108,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfCreateView(parent, node, replacer)
 	case *CurTimeFuncExpr:
 		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
+	case *DeallocateStmt:
+		return a.rewriteRefOfDeallocateStmt(parent, node, replacer)
 	case *Default:
 		return a.rewriteRefOfDefault(parent, node, replacer)
 	case *Definer:
@@ -126,6 +128,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfDropTable(parent, node, replacer)
 	case *DropView:
 		return a.rewriteRefOfDropView(parent, node, replacer)
+	case *ExecuteStmt:
+		return a.rewriteRefOfExecuteStmt(parent, node, replacer)
 	case *ExistsExpr:
 		return a.rewriteRefOfExistsExpr(parent, node, replacer)
 	case *ExplainStmt:
@@ -152,8 +156,10 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case *IndexDefinition:
 		return a.rewriteRefOfIndexDefinition(parent, node, replacer)
-	case *IndexHints:
-		return a.rewriteRefOfIndexHints(parent, node, replacer)
+	case *IndexHint:
+		return a.rewriteRefOfIndexHint(parent, node, replacer)
+	case IndexHints:
+		return a.rewriteIndexHints(parent, node, replacer)
 	case *IndexInfo:
 		return a.rewriteRefOfIndexInfo(parent, node, replacer)
 	case *Insert:
@@ -194,6 +200,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfNotExpr(parent, node, replacer)
 	case *NullVal:
 		return a.rewriteRefOfNullVal(parent, node, replacer)
+	case Offset:
+		return a.rewriteOffset(parent, node, replacer)
 	case OnDup:
 		return a.rewriteOnDup(parent, node, replacer)
 	case *OptLike:
@@ -222,6 +230,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfPartitionValueRange(parent, node, replacer)
 	case Partitions:
 		return a.rewritePartitions(parent, node, replacer)
+	case *PrepareStmt:
+		return a.rewriteRefOfPrepareStmt(parent, node, replacer)
 	case ReferenceAction:
 		return a.rewriteReferenceAction(parent, node, replacer)
 	case *ReferenceDefinition:
@@ -296,6 +306,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfTablespaceOperation(parent, node, replacer)
 	case *TimestampFuncExpr:
 		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
+	case *TrimFuncExpr:
+		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
 	case *TruncateTable:
 		return a.rewriteRefOfTruncateTable(parent, node, replacer)
 	case *UnaryExpr:
@@ -490,8 +502,8 @@ func (a *application) rewriteRefOfAliasedTableExpr(parent SQLNode, node *Aliased
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfIndexHints(node, node.Hints, func(newNode, parent SQLNode) {
-		parent.(*AliasedTableExpr).Hints = newNode.(*IndexHints)
+	if !a.rewriteIndexHints(node, node.Hints, func(newNode, parent SQLNode) {
+		parent.(*AliasedTableExpr).Hints = newNode.(IndexHints)
 	}) {
 		return false
 	}
@@ -1635,6 +1647,38 @@ func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeF
 	}
 	return true
 }
+func (a *application) rewriteRefOfDeallocateStmt(parent SQLNode, node *DeallocateStmt, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*DeallocateStmt).Comments = newNode.(Comments)
+	}) {
+		return false
+	}
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*DeallocateStmt).Name = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfDefault(parent SQLNode, node *Default, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1909,6 +1953,43 @@ func (a *application) rewriteRefOfDropView(parent SQLNode, node *DropView, repla
 	}
 	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*DropView).Comments = newNode.(Comments)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*ExecuteStmt).Name = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*ExecuteStmt).Comments = newNode.(Comments)
+	}) {
+		return false
+	}
+	if !a.rewriteColumns(node, node.Arguments, func(newNode, parent SQLNode) {
+		parent.(*ExecuteStmt).Arguments = newNode.(Columns)
 	}) {
 		return false
 	}
@@ -2335,7 +2416,7 @@ func (a *application) rewriteRefOfIndexDefinition(parent SQLNode, node *IndexDef
 	}
 	return true
 }
-func (a *application) rewriteRefOfIndexHints(parent SQLNode, node *IndexHints, replacer replacerFunc) bool {
+func (a *application) rewriteRefOfIndexHint(parent SQLNode, node *IndexHint, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}
@@ -2350,7 +2431,44 @@ func (a *application) rewriteRefOfIndexHints(parent SQLNode, node *IndexHints, r
 	for x, el := range node.Indexes {
 		if !a.rewriteColIdent(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(*IndexHints).Indexes[idx] = newNode.(ColIdent)
+				parent.(*IndexHint).Indexes[idx] = newNode.(ColIdent)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteIndexHints(parent SQLNode, node IndexHints, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(IndexHints)
+			a.cur.revisit = false
+			return a.rewriteIndexHints(parent, node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	for x, el := range node {
+		if !a.rewriteRefOfIndexHint(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(IndexHints)[idx] = newNode.(*IndexHint)
 			}
 		}(x)) {
 			return false
@@ -3333,6 +3451,43 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 		}(x)) {
 			return false
 		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*PrepareStmt).Name = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*PrepareStmt).Comments = newNode.(Comments)
+	}) {
+		return false
+	}
+	if !a.rewriteColIdent(node, node.StatementIdentifier, func(newNode, parent SQLNode) {
+		parent.(*PrepareStmt).StatementIdentifier = newNode.(ColIdent)
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4515,6 +4670,38 @@ func (a *application) rewriteRefOfTimestampFuncExpr(parent SQLNode, node *Timest
 	}
 	return true
 }
+func (a *application) rewriteRefOfTrimFuncExpr(parent SQLNode, node *TrimFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.TrimArg, func(newNode, parent SQLNode) {
+		parent.(*TrimFuncExpr).TrimArg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.StringArg, func(newNode, parent SQLNode) {
+		parent.(*TrimFuncExpr).StringArg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfTruncateTable(parent SQLNode, node *TruncateTable, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5260,6 +5447,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *TimestampFuncExpr:
 		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
+	case *TrimFuncExpr:
+		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
 	case *ValuesFuncExpr:
 		return a.rewriteRefOfValuesFuncExpr(parent, node, replacer)
 	case *WeightStringFuncExpr:
@@ -5426,6 +5615,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfNotExpr(parent, node, replacer)
 	case *NullVal:
 		return a.rewriteRefOfNullVal(parent, node, replacer)
+	case Offset:
+		return a.rewriteOffset(parent, node, replacer)
 	case *OrExpr:
 		return a.rewriteRefOfOrExpr(parent, node, replacer)
 	case *Subquery:
@@ -5434,6 +5625,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *TimestampFuncExpr:
 		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
+	case *TrimFuncExpr:
+		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
 	case *UnaryExpr:
 		return a.rewriteRefOfUnaryExpr(parent, node, replacer)
 	case ValTuple:
@@ -5552,6 +5745,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfCreateTable(parent, node, replacer)
 	case *CreateView:
 		return a.rewriteRefOfCreateView(parent, node, replacer)
+	case *DeallocateStmt:
+		return a.rewriteRefOfDeallocateStmt(parent, node, replacer)
 	case *Delete:
 		return a.rewriteRefOfDelete(parent, node, replacer)
 	case *DropDatabase:
@@ -5560,6 +5755,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfDropTable(parent, node, replacer)
 	case *DropView:
 		return a.rewriteRefOfDropView(parent, node, replacer)
+	case *ExecuteStmt:
+		return a.rewriteRefOfExecuteStmt(parent, node, replacer)
 	case *ExplainStmt:
 		return a.rewriteRefOfExplainStmt(parent, node, replacer)
 	case *ExplainTab:
@@ -5576,6 +5773,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfOtherAdmin(parent, node, replacer)
 	case *OtherRead:
 		return a.rewriteRefOfOtherRead(parent, node, replacer)
+	case *PrepareStmt:
+		return a.rewriteRefOfPrepareStmt(parent, node, replacer)
 	case *Release:
 		return a.rewriteRefOfRelease(parent, node, replacer)
 	case *RenameTable:
@@ -5739,6 +5938,27 @@ func (a *application) rewriteIsolationLevel(parent SQLNode, node IsolationLevel,
 	return true
 }
 func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer replacerFunc) bool {
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteOffset(parent SQLNode, node Offset, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent

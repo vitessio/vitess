@@ -237,7 +237,7 @@ func (cached *ExpressionEnv) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field BindVars map[string]*vitess.io/vitess/go/vt/proto/query.BindVariable
 	if cached.BindVars != nil {
@@ -259,6 +259,13 @@ func (cached *ExpressionEnv) CachedSize(alloc bool) int64 {
 		size += hack.RuntimeAllocSize(int64(cap(cached.Row)) * int64(32))
 		for _, elem := range cached.Row {
 			size += elem.CachedSize(false)
+		}
+	}
+	// field Fields []*vitess.io/vitess/go/vt/proto/query.Field
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Fields)) * int64(8))
+		for _, elem := range cached.Fields {
+			size += elem.CachedSize(true)
 		}
 	}
 	return size

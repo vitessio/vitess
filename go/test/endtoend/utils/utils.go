@@ -20,13 +20,14 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/utils"
 )
 
 func AssertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
@@ -35,7 +36,7 @@ func AssertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	got := fmt.Sprintf("%v", qr.Rows)
 	diff := cmp.Diff(expected, got)
 	if diff != "" {
-		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
+		t.Errorf("Query: %s (-want +got):\n%s\nGot:%s", query, diff, got)
 	}
 }
 
@@ -43,7 +44,7 @@ func AssertContainsError(t *testing.T, conn *mysql.Conn, query, expected string)
 	t.Helper()
 	_, err := ExecAllowError(t, conn, query)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), expected, "actual error: %s", err.Error())
+	assert.Contains(t, err.Error(), expected, "actual error: %s", err.Error())
 }
 
 func AssertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string) {

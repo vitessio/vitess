@@ -199,12 +199,9 @@ type Conn struct {
 	// See https://dev.mysql.com/doc/internals/en/semi-sync-binlog-event.html
 	ExpectSemiSyncIndicator bool
 
-	// ReturnQueryInfo sets whether the *Result objects from queries performed by this
-	// connection should include the 'info' field that MySQL usually returns. This 'info'
-	// field usually contains a human-readable text description of the executed query
-	// for informative purposes. It has no programmatic value. Returning this field is
-	// disabled by default.
-	ReturnQueryInfo bool
+	// enableQueryInfo controls whether we parse the INFO field in QUERY_OK packets
+	// See: ConnParams.EnableQueryInfo
+	enableQueryInfo bool
 }
 
 // splitStatementFunciton is the function that is used to split the statement in case of a multi-statement query.
@@ -1457,7 +1454,7 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 
 	// info
 	info, _ := data.readLenEncInfo()
-	if c.ReturnQueryInfo {
+	if c.enableQueryInfo {
 		packetOK.info = info
 	}
 

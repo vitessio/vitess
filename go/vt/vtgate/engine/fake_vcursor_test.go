@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -276,10 +275,6 @@ func (t *noopVCursor) ResolveDestinationsMultiCol(keyspace string, ids [][]sqlty
 	panic("unimplemented")
 }
 
-func (t *noopVCursor) SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error {
-	panic("unimplemented")
-}
-
 func (t *noopVCursor) GetDBDDLPluginName() string {
 	panic("unimplemented")
 }
@@ -318,6 +313,9 @@ type loggingVCursor struct {
 	inReservedConn  bool
 	systemVariables map[string]string
 	disableSetVar   bool
+
+	// map different shards to keyspaces in the test.
+	ksShardMap map[string][]string
 }
 
 type tableRoutes struct {
@@ -446,11 +444,6 @@ func (f *loggingVCursor) AutocommitApproval() bool {
 	return true
 }
 
-func (f *loggingVCursor) SubmitOnlineDDL(onlineDDL *schema.OnlineDDL) error {
-	f.log = append(f.log, fmt.Sprintf("SubmitOnlineDDL: %s", onlineDDL.ToString()))
-	return nil
-}
-
 func (f *loggingVCursor) ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("ExecuteStandalone %s %v %s %s", query, printBindVars(bindvars), rs.Target.Keyspace, rs.Target.Shard))
 	return f.nextResult()
@@ -482,6 +475,12 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 
 		switch d := destination.(type) {
 		case key.DestinationAllShards:
+			if f.ksShardMap != nil {
+				if ksShards, exists := f.ksShardMap[keyspace]; exists {
+					shards = ksShards
+					break
+				}
+			}
 			shards = f.shards
 		case key.DestinationKeyRange:
 			shards = f.shardForKsid

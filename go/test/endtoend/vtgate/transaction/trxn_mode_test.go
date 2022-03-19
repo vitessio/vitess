@@ -23,9 +23,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/test/endtoend/utils"
 
-	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -106,9 +106,9 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtgateGrpcPort = clusterInstance.GetAndReservePort()
 		// Set extra tablet args for twopc
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-twopc_enable",
-			"-twopc_coordinator_address", fmt.Sprintf("localhost:%d", clusterInstance.VtgateGrpcPort),
-			"-twopc_abandon_age", "3600",
+			"--twopc_enable",
+			"--twopc_coordinator_address", fmt.Sprintf("localhost:%d", clusterInstance.VtgateGrpcPort),
+			"--twopc_abandon_age", "3600",
 		}
 
 		// Start topo server
@@ -127,7 +127,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Starting Vtgate in SINGLE transaction mode
-		clusterInstance.VtGateExtraArgs = []string{"-transaction_mode", "SINGLE"}
+		clusterInstance.VtGateExtraArgs = []string{"--transaction_mode", "SINGLE"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1, err
 		}
@@ -164,7 +164,7 @@ func TestTransactionModes(t *testing.T) {
 	require.Contains(t, err.Error(), want)
 
 	// Enable TWOPC transaction mode
-	clusterInstance.VtGateExtraArgs = []string{"-transaction_mode", "TWOPC"}
+	clusterInstance.VtGateExtraArgs = []string{"--transaction_mode", "TWOPC"}
 
 	// Restart VtGate
 	require.NoError(t, clusterInstance.RestartVtgate())

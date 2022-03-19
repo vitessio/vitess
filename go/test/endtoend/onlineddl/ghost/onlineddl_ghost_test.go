@@ -157,71 +157,27 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
-			"-schema_change_dir", schemaChangeDirectory,
-			"-schema_change_controller", "local",
-			"-schema_change_check_interval", "1",
-			"-online_ddl_check_interval", "3s",
+			"--schema_change_dir", schemaChangeDirectory,
+			"--schema_change_controller", "local",
+			"--schema_change_check_interval", "1",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-enable-lag-throttler",
-			"-throttle_threshold", "1s",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
-			"-migration_check_interval", "5s",
-			"-gh-ost-path", os.Getenv("VITESS_ENDTOEND_GH_OST_PATH"), // leave env variable empty/unset to get the default behavior. Override in Mac.
+			"--enable-lag-throttler",
+			"--throttle_threshold", "1s",
+			"--heartbeat_enable",
+			"--heartbeat_interval", "250ms",
+			"--migration_check_interval", "5s",
+			"--gh-ost-path", os.Getenv("VITESS_ENDTOEND_GH_OST_PATH"), // leave env variable empty/unset to get the default behavior. Override in Mac.
 		}
 		clusterInstance.VtGateExtraArgs = []string{
-			"-ddl_strategy", "gh-ost",
-		}
-
-		primaryTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
-		replicaTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
-
-		tableACLConfigJSON := path.Join("/tmp", "table_acl_config.json")
-		f, _ := os.Create(tableACLConfigJSON)
-		vtStaticACLJSON := `{
-	"table_groups":
-	[
-	    {
-	        "name": "vitess user groups",
-	        "table_names_or_prefixes":
-	        [
-	            "%"
-	        ],
-	        "readers":
-	        [
-	            "vitess-reader",
-	            "vitess-writer",
-	            "vitess-admin"
-	        ],
-	        "writers":
-	        [
-	            "vitess-writer",
-	            "vitess-writer-only",
-	            "vitess-admin"
-	        ],
-	        "admins":
-	        [
-	            "vitess-admin"
-	        ]
-	    }
-	]
-}`
-		f.WriteString(vtStaticACLJSON)
-		f.Close()
-
-		// start the tablets
-		for _, tablet := range []cluster.Vttablet{primaryTablet, replicaTablet} {
-			tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, "-table-acl-config", tableACLConfigJSON, "-queryserver-config-strict-table-acl")
-			tablet.VttabletProcess.Setup()
+			"--ddl_strategy", "gh-ost",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
 			return 1, err
 		}
 
-		// Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name:    keyspaceName,
 			VSchema: vSchema,
@@ -425,7 +381,7 @@ func testWithInitialSchema(t *testing.T) {
 }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
-func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string, callerId string) (uuid string) {
+func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string, callerID string) (uuid string) {
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
 	sqlQuery := fmt.Sprintf(alterStatement, tableName)
 	if executeStrategy == "vtgate" {
@@ -435,7 +391,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, CallerId: callerId})
+		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, CallerId: callerID})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)

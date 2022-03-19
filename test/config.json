@@ -714,6 +714,15 @@
 			"RetryMax": 2,
 			"Tags": ["upgrade_downgrade_query_serving"]
 		},
+		"vtgate_queries_insert": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/insert"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 2,
+			"Tags": []
+		},
 		"vtgate_buffer": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/buffer"],
@@ -1017,7 +1026,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "23",
-			"RetryMax": 1,
+			"RetryMax": 3,
 			"Tags": [
 				"worker_test"
 			]

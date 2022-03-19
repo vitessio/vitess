@@ -542,19 +542,21 @@ func TestAction(t *testing.T) {
 		Trailing: "other trailing comments",
 	}
 
-	action, desc := qrs.GetAction("123", "user1", bv, mc)
+	action, cancelCtx, desc := qrs.GetAction("123", "user1", bv, mc)
 	assert.Equalf(t, action, QRFail, "expected fail, got %v", action)
 	assert.Equalf(t, desc, "rule 1", "want rule 1, got %s", desc)
+	assert.Nil(t, cancelCtx)
 
-	action, desc = qrs.GetAction("1234", "user", bv, mc)
+	action, cancelCtx, desc = qrs.GetAction("1234", "user", bv, mc)
 	assert.Equalf(t, action, QRFailRetry, "want fail_retry, got: %s", action)
 	assert.Equalf(t, desc, "rule 2", "want rule 2, got %s", desc)
+	assert.Nil(t, cancelCtx)
 
-	action, _ = qrs.GetAction("1234", "user1", bv, mc)
+	action, _, _ = qrs.GetAction("1234", "user1", bv, mc)
 	assert.Equalf(t, action, QRContinue, "want continue, got %s", action)
 
 	bv["a"] = sqltypes.Uint64BindVariable(1)
-	action, desc = qrs.GetAction("1234", "user1", bv, mc)
+	action, _, desc = qrs.GetAction("1234", "user1", bv, mc)
 	assert.Equalf(t, action, QRFail, "want fail, got %s", action)
 	assert.Equalf(t, desc, "rule 3", "want rule 3, got %s", desc)
 
@@ -567,7 +569,7 @@ func TestAction(t *testing.T) {
 	newQrs := qrs.Copy()
 	newQrs.Add(qr4)
 
-	action, desc = newQrs.GetAction("1234", "user1", bv, mc)
+	action, _, desc = newQrs.GetAction("1234", "user1", bv, mc)
 	assert.Equalf(t, action, QRFail, "want fail, got %s", action)
 	assert.Equalf(t, desc, "rule 4", "want rule 4, got %s", desc)
 
@@ -576,7 +578,7 @@ func TestAction(t *testing.T) {
 
 	newQrs = qrs.Copy()
 	newQrs.Add(qr5)
-	action, desc = newQrs.GetAction("1234", "user1", bv, mc)
+	action, _, desc = newQrs.GetAction("1234", "user1", bv, mc)
 	assert.Equalf(t, action, QRFail, "want fail, got %s", action)
 	assert.Equalf(t, desc, "rule 5", "want rule 5, got %s", desc)
 }

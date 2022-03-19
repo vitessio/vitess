@@ -88,7 +88,7 @@ func (cached *AliasedTableExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(112)
 	}
 	// field Expr vitess.io/vitess/go/vt/sqlparser.SimpleTableExpr
 	if cc, ok := cached.Expr.(cachedObject); ok {
@@ -103,8 +103,13 @@ func (cached *AliasedTableExpr) CachedSize(alloc bool) int64 {
 	}
 	// field As vitess.io/vitess/go/vt/sqlparser.TableIdent
 	size += cached.As.CachedSize(false)
-	// field Hints *vitess.io/vitess/go/vt/sqlparser.IndexHints
-	size += cached.Hints.CachedSize(true)
+	// field Hints vitess.io/vitess/go/vt/sqlparser.IndexHints
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Hints)) * int64(8))
+		for _, elem := range cached.Hints {
+			size += elem.CachedSize(true)
+		}
+	}
 	// field Columns vitess.io/vitess/go/vt/sqlparser.Columns
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(40))
@@ -784,6 +789,25 @@ func (cached *CurTimeFuncExpr) CachedSize(alloc bool) int64 {
 	size += cached.Fsp.CachedSize(true)
 	return size
 }
+func (cached *DeallocateStmt) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(80)
+	}
+	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
+		for _, elem := range cached.Comments {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
+	return size
+}
 func (cached *Default) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -964,6 +988,32 @@ func (cached *DropView) CachedSize(alloc bool) int64 {
 		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
 		for _, elem := range cached.Comments {
 			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
+	return size
+}
+func (cached *ExecuteStmt) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(96)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
+	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
+		for _, elem := range cached.Comments {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
+	// field Arguments vitess.io/vitess/go/vt/sqlparser.Columns
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Arguments)) * int64(40))
+		for _, elem := range cached.Arguments {
+			size += elem.CachedSize(false)
 		}
 	}
 	return size
@@ -1188,7 +1238,7 @@ func (cached *IndexDefinition) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *IndexHints) CachedSize(alloc bool) int64 {
+func (cached *IndexHint) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
@@ -1685,6 +1735,29 @@ func (cached *PartitionValueRange) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
+	return size
+}
+func (cached *PrepareStmt) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(128)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
+	// field Statement string
+	size += hack.RuntimeAllocSize(int64(len(cached.Statement)))
+	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
+		for _, elem := range cached.Comments {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
+	// field StatementIdentifier vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.StatementIdentifier.CachedSize(false)
 	return size
 }
 func (cached *ReferenceDefinition) CachedSize(alloc bool) int64 {
@@ -2329,6 +2402,24 @@ func (cached *TimestampFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	// field Unit string
 	size += hack.RuntimeAllocSize(int64(len(cached.Unit)))
+	return size
+}
+func (cached *TrimFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field TrimArg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.TrimArg.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field StringArg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.StringArg.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *TruncateTable) CachedSize(alloc bool) int64 {

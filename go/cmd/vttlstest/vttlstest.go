@@ -19,26 +19,29 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
+	"io"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/tlstest"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var doc = `
 vttlstest is a tool for generating test certificates and keys for TLS tests.
 
 To create a toplevel CA, use:
-  $ vttlstest -root /tmp CreateCA
+  $ vttlstest --root /tmp CreateCA
 
 To create an intermediate or leaf CA, use:
-  $ vttlstest -root /tmp CreateSignedCert servers
-  $ vttlstest -root /tmp CreateSignedCert -parent servers server
+  $ vttlstest --root /tmp CreateSignedCert servers
+  $ vttlstest --root /tmp CreateSignedCert --parent servers server
 
 To get help on a command, use:
-  $ vttlstest <command> -help
+  $ vttlstest <command> --help
 `
 
 type cmdFunc func(subFlags *flag.FlagSet, args []string)
@@ -110,13 +113,11 @@ func cmdCreateSignedCert(subFlags *flag.FlagSet, args []string) {
 func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage of %v:\n", os.Args[0])
-		flag.PrintDefaults()
-		fmt.Fprint(os.Stderr, doc)
-	}
-	flag.Parse()
-	args := flag.Args()
+	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
+		Preface: func(w io.Writer) { fmt.Fprint(w, doc) },
+	})
+	_flag.Parse()
+	args := _flag.Args()
 	if len(args) == 0 {
 		flag.Usage()
 		exit.Return(1)

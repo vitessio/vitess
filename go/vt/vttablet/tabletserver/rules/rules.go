@@ -18,6 +18,7 @@ package rules
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -36,6 +37,10 @@ import (
 )
 
 //-----------------------------------------------
+
+const (
+	bufferedTableRuleName = "buffered_table"
+)
 
 // Rules is used to store and execute rules for the tabletserver.
 type Rules struct {
@@ -172,13 +177,13 @@ func (qrs *Rules) GetAction(
 	user string,
 	bindVars map[string]*querypb.BindVariable,
 	marginComments sqlparser.MarginComments,
-) (action Action, desc string) {
+) (action Action, cancelCtx context.Context, desc string) {
 	for _, qr := range qrs.rules {
 		if act := qr.GetAction(ip, user, bindVars, marginComments); act != QRContinue {
-			return act, qr.Description
+			return act, qr.cancelCtx, qr.Description
 		}
 	}
-	return QRContinue, ""
+	return QRContinue, nil, ""
 }
 
 //-----------------------------------------------
@@ -211,6 +216,9 @@ type Rule struct {
 
 	// Action to be performed on trigger
 	act Action
+
+	// a rule can be dynamically cancelled. This function determines whether it is cancelled
+	cancelCtx context.Context
 }
 
 type namedRegexp struct {
@@ -235,6 +243,12 @@ func (nr namedRegexp) Equal(other namedRegexp) bool {
 func NewQueryRule(description, name string, act Action) (qr *Rule) {
 	// We ignore act because there's only one action right now
 	return &Rule{Description: description, Name: name, act: act}
+}
+
+// NewBufferedTableQueryRule creates a new buffer Rule.
+func NewBufferedTableQueryRule(cancelCtx context.Context, tableName string, description string) (qr *Rule) {
+	// We ignore act because there's only one action right now
+	return &Rule{cancelCtx: cancelCtx, Description: description, Name: bufferedTableRuleName, tableNames: []string{tableName}, act: QRBuffer}
 }
 
 // Equal returns true if other is equal to this Rule, otherwise false.
@@ -266,6 +280,7 @@ func (qr *Rule) Copy() (newqr *Rule) {
 		leadingComment:  qr.leadingComment,
 		trailingComment: qr.trailingComment,
 		act:             qr.act,
+		cancelCtx:       qr.cancelCtx,
 	}
 	if qr.plans != nil {
 		newqr.plans = make([]planbuilder.PlanType, len(qr.plans))
@@ -462,6 +477,16 @@ func (qr *Rule) GetAction(
 	bindVars map[string]*querypb.BindVariable,
 	marginComments sqlparser.MarginComments,
 ) Action {
+	if qr.cancelCtx != nil {
+		select {
+		case <-qr.cancelCtx.Done():
+			// rule was cancelled. Nothing else to check
+			return QRContinue
+		default:
+			// rule will be cancelled in the future. Until then, it applies!
+			// proceed to evaluate rules
+		}
+	}
 	if !reMatch(qr.leadingComment.Regexp, marginComments.Leading) {
 		return QRContinue
 	}
@@ -537,6 +562,7 @@ const (
 	QRContinue = Action(iota)
 	QRFail
 	QRFailRetry
+	QRBuffer
 )
 
 // MarshalJSON marshals to JSON.
@@ -548,6 +574,8 @@ func (act Action) MarshalJSON() ([]byte, error) {
 		str = "FAIL"
 	case QRFailRetry:
 		str = "FAIL_RETRY"
+	case QRBuffer:
+		str = "BUFFER"
 	default:
 		str = "INVALID"
 	}
@@ -918,6 +946,8 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *Rule, err error) {
 				qr.act = QRFail
 			case "FAIL_RETRY":
 				qr.act = QRFailRetry
+			case "BUFFER":
+				qr.act = QRBuffer
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid Action %s", sv)
 			}

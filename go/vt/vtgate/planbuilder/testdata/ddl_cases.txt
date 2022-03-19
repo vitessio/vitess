@@ -439,7 +439,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "Query": "create table function_default (\n\tx varchar(25) default (TRIM(' check '))\n)"
+    "Query": "create table function_default (\n\tx varchar(25) default (trim(' check '))\n)"
   }
 }
 Gen4 plan same as above

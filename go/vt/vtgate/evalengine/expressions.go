@@ -36,8 +36,11 @@ type (
 	// evaluates in, such as the current row and bindvars
 	ExpressionEnv struct {
 		BindVars         map[string]*querypb.BindVariable
-		Row              []sqltypes.Value
 		DefaultCollation collations.ID
+
+		// Row and Fields should line up
+		Row    []sqltypes.Value
+		Fields []*querypb.Field
 	}
 
 	// Expr is the interface that all evaluating expressions must implement
@@ -520,12 +523,18 @@ func (t TupleExpr) typeof(*ExpressionEnv) (sqltypes.Type, flag) {
 }
 
 func (c *Column) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
-	value := env.Row[c.Offset]
-	tt := value.Type()
-	switch tt {
-	case sqltypes.Null:
-		return tt, flagNullable | flagNull
-	default:
-		return tt, 0
+	// we'll try to do the best possible with the information we have
+	if c.Offset < len(env.Row) {
+		value := env.Row[c.Offset]
+		if value.IsNull() {
+			return sqltypes.Null, flagNull | flagNullable
+		}
+		return value.Type(), flag(0)
 	}
+
+	if c.Offset < len(env.Fields) {
+		return env.Fields[c.Offset].Type, flagNullable
+	}
+
+	panic("Column missing both data and field")
 }

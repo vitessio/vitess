@@ -2,7 +2,6 @@ This page lists all active maintainers and their areas of expertise. This can be
 
 The following is the full list, alphabetically ordered.
 
-* Alkin Tezuysal ([askdba](https://github.com/askdba)) alkin@planetscale.com
 * Andres Taylor ([systay](https://github.com/systay)) andres@planetscale.com
 * Andrew Mason ([amason](https://github.com/ajm188)) andrew@planetscale.com
 * Anthony Yeh ([enisoc](https://github.com/enisoc)) enisoc@enisoc.dev
@@ -27,7 +26,7 @@ The following is the full list, alphabetically ordered.
 ## Areas of expertise
 
 ### General Vitess
-sougou, deepthi, demmer, rafael, dweitzman, tirsen, askdba, enisoc
+sougou, deepthi, demmer, rafael, dweitzman, tirsen, enisoc
 
 ### Builds
 dkhenry, shlomi-noach, ajm188, vmg, GuptaManan100

@@ -87,16 +87,16 @@ func TestMigrate(t *testing.T) {
 	ksWorkflow := "product.e1"
 
 	t.Run("mount external cluster", func(t *testing.T) {
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "-type=vitess", "-topo_type=etcd2",
-			fmt.Sprintf("-topo_server=localhost:%d", extVc.ClusterConfig.topoPort), "-topo_root=/vitess/global", "ext1"); err != nil {
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "--", "--type=vitess", "--topo_type=etcd2",
+			fmt.Sprintf("--topo_server=localhost:%d", extVc.ClusterConfig.topoPort), "--topo_root=/vitess/global", "ext1"); err != nil {
 			t.Fatalf("Mount command failed with %+v : %s\n", err, output)
 		}
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "-type=vitess", "-list"); err != nil {
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "--", "--type=vitess", "--list"); err != nil {
 			t.Fatalf("Mount command failed with %+v : %s\n", err, output)
 		}
 		expected = "ext1\n"
 		require.Equal(t, expected, output)
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "-type=vitess", "-show", "ext1"); err != nil {
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "--", "--type=vitess", "--show", "ext1"); err != nil {
 			t.Fatalf("Mount command failed with %+v : %s\n", err, output)
 		}
 		expected = `{"ClusterName":"ext1","topo_config":{"topo_type":"etcd2","server":"localhost:12379","root":"/vitess/global"}}` + "\n"
@@ -104,7 +104,7 @@ func TestMigrate(t *testing.T) {
 	})
 
 	t.Run("migrate from external cluster", func(t *testing.T) {
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "-all", "-cells=extcell1",
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "--", "--all", "--cells=extcell1",
 			"-source=ext1.rating", "create", ksWorkflow); err != nil {
 			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
 		}
@@ -128,7 +128,7 @@ func TestMigrate(t *testing.T) {
 	t.Run("cancel migrate workflow", func(t *testing.T) {
 		execVtgateQuery(t, vtgateConn, "product", "drop table review,rating")
 
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "-all", "-auto_start=false", "-cells=extcell1",
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "--", "--all", "--auto_start=false", "--cells=extcell1",
 			"-source=ext1.rating", "create", ksWorkflow); err != nil {
 			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
 		}
@@ -148,17 +148,17 @@ func TestMigrate(t *testing.T) {
 		require.False(t, found)
 	})
 	t.Run("unmount external cluster", func(t *testing.T) {
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "-type=vitess", "-unmount", "ext1"); err != nil {
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "--", "--type=vitess", "--unmount", "ext1"); err != nil {
 			t.Fatalf("Mount command failed with %+v : %s\n", err, output)
 		}
 
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "-type=vitess", "-list"); err != nil {
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "--", "--type=vitess", "--list"); err != nil {
 			t.Fatalf("Mount command failed with %+v : %s\n", err, output)
 		}
 		expected = "\n"
 		require.Equal(t, expected, output)
 
-		output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "-type=vitess", "-show", "ext1")
+		output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "--", "--type=vitess", "--show", "ext1")
 		require.Errorf(t, err, "there is no vitess cluster named ext1")
 	})
 }

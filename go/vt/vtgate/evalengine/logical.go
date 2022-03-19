@@ -127,7 +127,7 @@ func (left boolean) xor(right boolean) boolean {
 func (n *NotExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	var inner EvalResult
 	inner.init(env, n.Inner)
-	out.setBoolean(inner.truthy().not())
+	out.setBoolean(inner.isTruthy().not())
 }
 
 func (n *NotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
@@ -142,7 +142,7 @@ func (l *LogicalExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	if left.typeof() == sqltypes.Tuple || right.typeof() == sqltypes.Tuple {
 		panic("did not typecheck tuples")
 	}
-	out.setBoolean(l.op(left.truthy(), right.truthy()))
+	out.setBoolean(l.op(left.isTruthy(), right.isTruthy()))
 }
 
 func (l *LogicalExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {

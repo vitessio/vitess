@@ -17,6 +17,7 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"sort"
@@ -27,8 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
 
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/log"
@@ -266,15 +265,60 @@ func ResolveTables(ctx context.Context, mysqld MysqlDaemon, dbName string, table
 	return result, nil
 }
 
-// GetColumns returns the columns of table.
-func (mysqld *Mysqld) GetColumns(ctx context.Context, dbName, table string) ([]*querypb.Field, []string, error) {
-	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+const (
+	GetColumnNamesQuery = `SELECT COLUMN_NAME as column_name
+		FROM INFORMATION_SCHEMA.COLUMNS
+		WHERE TABLE_SCHEMA = %s AND TABLE_NAME = '%s'
+		ORDER BY ORDINAL_POSITION`
+	GetFieldsQuery = "SELECT %s FROM %s WHERE 1 != 1"
+)
+
+func GetColumnsList(dbName, tableName string, exec func(string, int, bool) (*sqltypes.Result, error)) (string, error) {
+	var dbName2 string
+	if dbName == "" {
+		dbName2 = "database()"
+	} else {
+		dbName2 = fmt.Sprintf("'%s'", dbName)
+	}
+	query := fmt.Sprintf(GetColumnNamesQuery, dbName2, sqlescape.UnescapeID(tableName))
+	qr, err := exec(query, -1, true)
+	if err != nil {
+		return "", err
+	}
+	if qr == nil || len(qr.Rows) == 0 {
+		err = fmt.Errorf("unable to get columns for table %s.%s using query %s", dbName, tableName, query)
+		log.Errorf("%s", fmt.Errorf("unable to get columns for table %s.%s using query %s", dbName, tableName, query))
+		return "", err
+	}
+	selectColumns := ""
+
+	for _, row := range qr.Named().Rows {
+		col := row["column_name"].ToString()
+		if col == "" {
+			continue
+		}
+		if selectColumns != "" {
+			selectColumns += ", "
+		}
+		selectColumns += sqlescape.EscapeID(col)
+	}
+	return selectColumns, nil
+}
+
+func GetColumns(dbName, table string, exec func(string, int, bool) (*sqltypes.Result, error)) ([]*querypb.Field, []string, error) {
+	selectColumns, err := GetColumnsList(dbName, table, exec)
 	if err != nil {
 		return nil, nil, err
 	}
-	defer conn.Recycle()
-
-	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM %s.%s WHERE 1=0", sqlescape.EscapeID(dbName), sqlescape.EscapeID(table)), 0, true)
+	if selectColumns == "" {
+		selectColumns = "*"
+	}
+	tableSpec := sqlescape.EscapeID(sqlescape.UnescapeID(table))
+	if dbName != "" {
+		tableSpec = fmt.Sprintf("%s.%s", sqlescape.EscapeID(sqlescape.UnescapeID(dbName)), tableSpec)
+	}
+	query := fmt.Sprintf(GetFieldsQuery, selectColumns, tableSpec)
+	qr, err := exec(query, 0, true)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -284,7 +328,16 @@ func (mysqld *Mysqld) GetColumns(ctx context.Context, dbName, table string) ([]*
 		columns[i] = field.Name
 	}
 	return qr.Fields, columns, nil
+}
 
+// GetColumns returns the columns of table.
+func (mysqld *Mysqld) GetColumns(ctx context.Context, dbName, table string) ([]*querypb.Field, []string, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer conn.Recycle()
+	return GetColumns(dbName, table, conn.ExecuteFetch)
 }
 
 // GetPrimaryKeyColumns returns the primary key columns of table.
@@ -309,16 +362,13 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
 		return nil, err
 	}
 	// sql uses column name aliases to guarantee lower case sensitivity.
-	sql := fmt.Sprintf(`
-		SELECT
-			table_name AS table_name,
-			ordinal_position AS ordinal_position,
-			column_name AS column_name
-		FROM information_schema.key_column_usage
-		WHERE table_schema = '%s'
-			AND table_name IN %s
-			AND constraint_name='PRIMARY'
-		ORDER BY table_name, ordinal_position`, dbName, tableList)
+	sql := `SELECT table_name as table_name, ordinal_position as ordinal_position, COLUMN_NAME as column_name
+		FROM INFORMATION_SCHEMA.COLUMNS
+		WHERE TABLE_SCHEMA = '%s'
+		AND TABLE_NAME IN %s
+		AND COLUMN_KEY = 'PRI'
+		ORDER BY table_name, ordinal_position;`
+	sql = fmt.Sprintf(sql, dbName, tableList)
 	qr, err := conn.ExecuteFetch(sql, len(tables)*100, true)
 	if err != nil {
 		return nil, err

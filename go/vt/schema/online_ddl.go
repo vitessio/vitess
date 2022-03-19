@@ -17,7 +17,6 @@ limitations under the License.
 package schema
 
 import (
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -29,7 +28,6 @@ import (
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -133,19 +131,6 @@ func FromJSON(bytes []byte) (*OnlineDDL, error) {
 	return onlineDDL, err
 }
 
-// ReadTopo reads a OnlineDDL object from given topo connection
-func ReadTopo(ctx context.Context, conn topo.Conn, entryPath string) (*OnlineDDL, error) {
-	bytes, _, err := conn.Get(ctx, entryPath)
-	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "ReadTopo Get %s error: %s", entryPath, err.Error())
-	}
-	onlineDDL, err := FromJSON(bytes)
-	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "ReadTopo unmarshal %s error: %s", entryPath, err.Error())
-	}
-	return onlineDDL, nil
-}
-
 // ParseOnlineDDLStatement parses the given SQL into a statement and returns the action type of the DDL statement, or error
 // if the statement is not a DDL
 func ParseOnlineDDLStatement(sql string) (ddlStmt sqlparser.DDLStatement, action sqlparser.DDLAction, err error) {
@@ -240,19 +225,16 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 		encodeDirective := func(directive string) string {
 			return strconv.Quote(hex.EncodeToString([]byte(directive)))
 		}
-		var comments sqlparser.Comments
-		if ddlStrategySetting.IsSkipTopo() {
-			comments = sqlparser.Comments{
-				fmt.Sprintf(`/*vt+ uuid=%s context=%s table=%s strategy=%s options=%s */`,
-					encodeDirective(onlineDDLUUID),
-					encodeDirective(migrationContext),
-					encodeDirective(table),
-					encodeDirective(string(ddlStrategySetting.Strategy)),
-					encodeDirective(ddlStrategySetting.Options),
-				)}
-			if uuid, err := legacyParseRevertUUID(sql); err == nil {
-				sql = fmt.Sprintf("revert vitess_migration '%s'", uuid)
-			}
+		comments := sqlparser.Comments{
+			fmt.Sprintf(`/*vt+ uuid=%s context=%s table=%s strategy=%s options=%s */`,
+				encodeDirective(onlineDDLUUID),
+				encodeDirective(migrationContext),
+				encodeDirective(table),
+				encodeDirective(string(ddlStrategySetting.Strategy)),
+				encodeDirective(ddlStrategySetting.Options),
+			)}
+		if uuid, err := legacyParseRevertUUID(sql); err == nil {
+			sql = fmt.Sprintf("revert vitess_migration '%s'", uuid)
 		}
 
 		stmt, err := sqlparser.Parse(sql)
@@ -471,22 +453,6 @@ func (onlineDDL *OnlineDDL) GetRevertUUID() (uuid string, err error) {
 // ToString returns a simple string representation of this instance
 func (onlineDDL *OnlineDDL) ToString() string {
 	return fmt.Sprintf("OnlineDDL: keyspace=%s, table=%s, sql=%s", onlineDDL.Keyspace, onlineDDL.Table, onlineDDL.SQL)
-}
-
-// WriteTopo writes this online DDL to given topo connection, based on basePath and and this DDL's UUID
-func (onlineDDL *OnlineDDL) WriteTopo(ctx context.Context, conn topo.Conn, basePath string) error {
-	if onlineDDL.UUID == "" {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "onlineDDL UUID not found; keyspace=%s, sql=%s", onlineDDL.Keyspace, onlineDDL.SQL)
-	}
-	bytes, err := onlineDDL.ToJSON()
-	if err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "onlineDDL marshall error:%s, keyspace=%s, sql=%s", err.Error(), onlineDDL.Keyspace, onlineDDL.SQL)
-	}
-	_, err = conn.Create(ctx, fmt.Sprintf("%s/%s", basePath, onlineDDL.UUID), bytes)
-	if err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "onlineDDL topo create error:%s, keyspace=%s, sql=%s", err.Error(), onlineDDL.Keyspace, onlineDDL.SQL)
-	}
-	return nil
 }
 
 // GetGCUUID gets this OnlineDDL UUID in GC UUID format

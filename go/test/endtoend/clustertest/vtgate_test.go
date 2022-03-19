@@ -27,10 +27,11 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -42,9 +43,9 @@ func TestVtgateProcess(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	exec(t, conn, "insert into customer(id, email) values(1,'email1')")
-	_ = exec(t, conn, "begin")
-	qr := exec(t, conn, "select id, email from customer")
+	utils.Exec(t, conn, "insert into customer(id, email) values(1,'email1')")
+	_ = utils.Exec(t, conn, "begin")
+	qr := utils.Exec(t, conn, "select id, email from customer")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("email1")]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
@@ -108,11 +109,4 @@ func isPrimaryTabletPresent(tablets map[string]interface{}) bool {
 		}
 	}
 	return false
-}
-
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.Nil(t, err)
-	return qr
 }

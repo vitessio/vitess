@@ -61,7 +61,7 @@ type builtinHex struct{}
 
 func (builtinHex) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	tohex := &args[0]
-	if tohex.null() {
+	if tohex.isNull() {
 		result.setNull()
 	}
 

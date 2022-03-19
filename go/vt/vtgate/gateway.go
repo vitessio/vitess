@@ -23,7 +23,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -35,15 +34,13 @@ import (
 // a query targeted to a keyspace/shard/tablet_type and send it off.
 
 var (
-	_ = flag.String("gateway_implementation", "", "Deprecated. Only tabletgateway is now supported, discoverygateway is no longer available")
-	// We cannot reference tabletGatewayImplementation directly because it is const
-	defaultGatewayImplementation = tabletGatewayImplementation
-	GatewayImplementation        = &defaultGatewayImplementation
-	bufferImplementation         = flag.String("buffer_implementation", "keyspace_events", "Allowed values: healthcheck (legacy implementation), keyspace_events (default)")
-	initialTabletTimeout         = flag.Duration("gateway_initial_tablet_timeout", 30*time.Second, "At startup, the gateway will wait up to that duration to get one tablet per keyspace/shard/tablettype")
-	// RetryCount is the number of times a query will be retried on error
+	// Deprecated GatewayImplementation allows you to choose which gateway to use for vtgate routing. Defaults to tabletgateway, other option is discoverygateway
+	_                    = flag.String("gateway_implementation", "tabletgateway", "Deprecated. The only available gateway_implementation is tabletgateway")
+	bufferImplementation = flag.String("buffer_implementation", "keyspace_events", "Allowed values: healthcheck (legacy implementation), keyspace_events (default)")
+	initialTabletTimeout = flag.Duration("gateway_initial_tablet_timeout", 30*time.Second, "At startup, the gateway will wait up to that duration to get one tablet per keyspace/shard/tablettype")
+	// retryCount is the number of times a query will be retried on error
 	// Make this unexported after DiscoveryGateway is deprecated
-	RetryCount = flag.Int("retry-count", 2, "retry count")
+	retryCount = flag.Int("retry-count", 2, "retry count")
 )
 
 // A Gateway is the query processing module for each shard,
@@ -73,28 +70,6 @@ type Gateway interface {
 
 	// TabletByAlias returns a QueryService
 	QueryServiceByAlias(alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error)
-}
-
-// Creator is the factory method which can create the actual gateway object.
-type Creator func(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, retryCount int) Gateway
-
-var creators = make(map[string]Creator)
-
-// RegisterGatewayCreator registers a Creator with given name.
-func RegisterGatewayCreator(name string, gc Creator) {
-	if _, ok := creators[name]; ok {
-		log.Fatalf("Gateway %s already exists", name)
-	}
-	creators[name] = gc
-}
-
-// GatewayCreator returns the Creator specified by the gateway_implementation flag.
-func GatewayCreator() Creator {
-	gc, ok := creators[*GatewayImplementation]
-	if !ok {
-		log.Exitf("No gateway registered as %s", *GatewayImplementation)
-	}
-	return gc
 }
 
 // WaitForTablets is a helper method to wait for the provided tablets,

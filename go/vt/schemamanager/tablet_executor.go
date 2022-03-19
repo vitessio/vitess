@@ -361,28 +361,6 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	return &execResult
 }
 
-// executeOnlineDDL submits an online DDL request; this runs on topo, not on tablets, and is a quick operation.
-func (exec *TabletExecutor) executeOnlineDDL(
-	ctx context.Context, execResult *ExecuteResult, onlineDDL *schema.OnlineDDL,
-) {
-	if exec.ddlStrategySetting == nil || exec.ddlStrategySetting.Strategy.IsDirect() {
-		execResult.ExecutorErr = "Not an online DDL strategy"
-		return
-	}
-	conn, err := exec.ts.ConnForCell(ctx, topo.GlobalCell)
-	if err != nil {
-		execResult.ExecutorErr = fmt.Sprintf("online DDL ConnForCell error:%s", err.Error())
-		return
-	}
-	err = onlineDDL.WriteTopo(ctx, conn, schema.MigrationRequestsPath())
-	if err != nil {
-		execResult.ExecutorErr = err.Error()
-	}
-	execResult.UUIDs = append(execResult.UUIDs, onlineDDL.UUID)
-	exec.logger.Infof("UUID=%+v", onlineDDL.UUID)
-	exec.logger.Printf("%s\n", onlineDDL.UUID)
-}
-
 // executeOnAllTablets runs a query on all tablets, synchronously. This can be a long running operation.
 func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult *ExecuteResult, sql string, viaQueryService bool) {
 	var wg sync.WaitGroup

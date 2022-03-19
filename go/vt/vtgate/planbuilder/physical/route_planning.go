@@ -876,7 +876,6 @@ func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser
 	node = node.Clone().(*ApplyJoin)
 	var rhsPreds []sqlparser.Expr
 	var lhsPreds []sqlparser.Expr
-	var lhsColumns []*sqlparser.ColName
 	var lhsVarsName []string
 	for _, expr := range exprs {
 		// We find the dependencies for the given expression and if they are solved entirely by one
@@ -902,12 +901,12 @@ func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser
 		if err != nil {
 			return nil, err
 		}
-		lhsColumns = append(lhsColumns, cols...)
+		node.LHSColumns = append(node.LHSColumns, cols...)
 		lhsVarsName = append(lhsVarsName, bvName...)
 		rhsPreds = append(rhsPreds, predicate)
 	}
-	if lhsColumns != nil && lhsVarsName != nil {
-		newNode, offsets, err := PushOutputColumns(ctx, node.LHS, lhsColumns...)
+	if node.LHSColumns != nil && lhsVarsName != nil {
+		newNode, offsets, err := PushOutputColumns(ctx, node.LHS, node.LHSColumns...)
 		if err != nil {
 			return nil, err
 		}

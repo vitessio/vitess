@@ -150,6 +150,13 @@ func main() {
 		// Create topo server. We use a 'memorytopo' implementation.
 		ts = memorytopo.NewServer(tpb.Cells...)
 	}
+
+	// attempt to load any routing rules specified by tpb
+	if err := vtcombo.InitRoutingRules(context.Background(), ts, tpb.GetRoutingRules()); err != nil {
+		log.Errorf("Failed to load routing rules: %v", err)
+		exit.Return(1)
+	}
+
 	servenv.Init()
 	tabletenv.Init()
 
@@ -239,7 +246,8 @@ func main() {
 	vtgate.QueryLogHandler = "/debug/vtgate/querylog"
 	vtgate.QueryLogzHandler = "/debug/vtgate/querylogz"
 	vtgate.QueryzHandler = "/debug/vtgate/queryz"
-	vtg := vtgate.Init(context.Background(), resilientServer, tpb.Cells[0], tabletTypesToWait)
+	// pass nil for healthcheck, it will get created
+	vtg := vtgate.Init(context.Background(), nil, resilientServer, tpb.Cells[0], tabletTypesToWait)
 
 	// vtctld configuration and init
 	err = vtctld.InitVtctld(ts)

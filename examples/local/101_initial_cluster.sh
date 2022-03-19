@@ -24,6 +24,8 @@ if [ "${TOPO}" = "zk2" ]; then
 	CELL=zone1 ./scripts/zk-up.sh
 elif [ "${TOPO}" = "k8s" ]; then
 	CELL=zone1 ./scripts/k3s-up.sh
+elif [ "${TOPO}" = "consul" ]; then
+	CELL=zone1 ./scripts/consul-up.sh
 else
 	CELL=zone1 ./scripts/etcd-up.sh
 fi
@@ -41,10 +43,10 @@ done
 vtctldclient PlannedReparentShard commerce/0 --new-primary zone1-100
 
 # create the schema
-vtctlclient ApplySchema -sql-file create_commerce_schema.sql commerce
+vtctldclient ApplySchema --sql-file create_commerce_schema.sql commerce
 
 # create the vschema
-vtctlclient ApplyVSchema -vschema_file vschema_commerce_initial.json commerce
+vtctldclient ApplyVSchema --vschema-file vschema_commerce_initial.json commerce
 
 # start vtgate
 CELL=zone1 ./scripts/vtgate-up.sh

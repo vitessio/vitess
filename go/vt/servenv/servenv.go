@@ -48,6 +48,9 @@ import (
 
 	// register the proper init and shutdown hooks for logging
 	_ "vitess.io/vitess/go/vt/logutil"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -229,14 +232,14 @@ func RunDefault() {
 // ParseFlags initializes flags and handles the common case when no positional
 // arguments are expected.
 func ParseFlags(cmd string) {
-	flag.Parse()
+	_flag.Parse()
 
 	if *Version {
 		AppVersion.Print()
 		os.Exit(0)
 	}
 
-	args := flag.Args()
+	args := _flag.Args()
 	if len(args) > 0 {
 		flag.Usage()
 		log.Exitf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " "))
@@ -245,14 +248,14 @@ func ParseFlags(cmd string) {
 
 // ParseFlagsWithArgs initializes flags and returns the positional arguments
 func ParseFlagsWithArgs(cmd string) []string {
-	flag.Parse()
+	_flag.Parse()
 
 	if *Version {
 		AppVersion.Print()
 		os.Exit(0)
 	}
 
-	args := flag.Args()
+	args := _flag.Args()
 	if len(args) == 0 {
 		log.Exitf("%s expected at least one positional argument", cmd)
 	}

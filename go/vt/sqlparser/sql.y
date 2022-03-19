@@ -81,7 +81,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 
   ins           *Insert
   colName       *ColName
-  indexHints    *IndexHints
+  indexHint    *IndexHint
+  indexHints    IndexHints
+  indexHintForType IndexHintForType
   literal        *Literal
   subquery      *Subquery
   derivedTable  *DerivedTable
@@ -117,6 +119,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   constraintDefinition *ConstraintDefinition
   revertMigration *RevertMigration
   alterMigration  *AlterMigration
+  trimType        TrimType
 
   whens         []*When
   columnDefinitions []*ColumnDefinition
@@ -192,6 +195,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 %token <str> VIRTUAL STORED
+%token <str> BOTH LEADING TRAILING
 
 %left EMPTY_FROM_CLAUSE
 %right INTO
@@ -234,11 +238,11 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
 
 // DDL Tokens
-%token <str> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY
+%token <str> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY DEALLOCATE
 %token <str> REVERT
 %token <str> SCHEMA TABLE INDEX VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
 %token <str> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
-%token <str> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE
+%token <str> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE PREPARE EXECUTE
 %token <str> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <str> VINDEX VINDEXES DIRECTORY NAME UPGRADE
 %token <str> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
@@ -282,6 +286,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> GROUP_CONCAT SEPARATOR
 %token <str> TIMESTAMPADD TIMESTAMPDIFF
 %token <str> WEIGHT_STRING
+%token <str> LTRIM RTRIM TRIM
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -316,6 +321,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <statement> command
 %type <selStmt> query_expression_parens query_expression query_expression_body select_statement query_primary select_stmt_with_into
 %type <statement> explain_statement explainable_statement
+%type <statement> prepare_statement
+%type <statement> execute_statement deallocate_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <with> with_clause_opt with_clause
@@ -339,6 +346,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <strs> comment_opt comment_list
 %type <str> wild_opt check_option_opt cascade_or_local_opt restrict_or_cascade_opt
 %type <explainType> explain_format_opt
+%type <trimType> trim_type
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
 %type <partitionOption> partitions_options_opt partitions_options_beginning
@@ -361,7 +369,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <joinType> inner_join outer_join straight_join natural_join
 %type <tableName> table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name
-%type <indexHints> index_hint_list
+%type <indexHint> index_hint
+%type <indexHintForType> index_hint_for_opt
+%type <indexHints> index_hint_list index_hint_list_opt
 %type <expr> where_expression_opt
 %type <boolVal> boolean_value
 %type <comparisonExprOperator> compare
@@ -390,7 +400,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> locking_clause
-%type <columns> ins_column_list column_list column_list_opt index_list
+%type <columns> ins_column_list column_list at_id_list column_list_opt index_list execute_statement_list_opt
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
@@ -508,6 +518,9 @@ command:
 | unlock_statement
 | call_statement
 | revert_statement
+| prepare_statement
+| execute_statement
+| deallocate_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -3783,6 +3796,41 @@ distinct_opt:
     $$ = true
   }
 
+prepare_statement:
+  PREPARE comment_opt sql_id FROM STRING
+  {
+    $$ = &PrepareStmt{Name:$3, Comments: $2, Statement:$5}
+  }
+| PREPARE comment_opt sql_id FROM AT_ID
+  {
+    $$ = &PrepareStmt{Name:$3, Comments: $2, StatementIdentifier: NewColIdentWithAt(string($5), SingleAt)}
+  }
+
+execute_statement:
+  EXECUTE comment_opt sql_id execute_statement_list_opt
+  {
+    $$ = &ExecuteStmt{Name:$3, Comments: $2, Arguments: $4}
+  }
+
+execute_statement_list_opt:
+  {
+    $$ = nil
+  }
+| USING at_id_list
+  {
+    $$ = $2
+  }
+
+deallocate_statement:
+  DEALLOCATE comment_opt PREPARE sql_id
+  {
+    $$ = &DeallocateStmt{Type:DeallocateType, Comments: $2, Name:$4}
+  }
+| DROP comment_opt PREPARE sql_id
+  {
+    $$ = &DeallocateStmt{Type: DropType, Comments: $2, Name: $4}
+  }
+
 select_expression_list_opt:
   {
     $$ = nil
@@ -3941,11 +3989,11 @@ derived_table:
   }
 
 aliased_table_name:
-table_name as_opt_id index_hint_list
+table_name as_opt_id index_hint_list_opt
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
   }
-| table_name PARTITION openb partition_list closeb as_opt_id index_hint_list
+| table_name PARTITION openb partition_list closeb as_opt_id index_hint_list_opt
   {
     $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
   }
@@ -3967,6 +4015,16 @@ column_list:
 | column_list ',' sql_id
   {
     $$ = append($$, $3)
+  }
+
+at_id_list:
+  AT_ID
+  {
+    $$ = Columns{NewColIdentWithAt(string($1), SingleAt)}
+  }
+| column_list ',' AT_ID
+  {
+    $$ = append($$, NewColIdentWithAt(string($3), SingleAt))
   }
 
 index_list:
@@ -4143,26 +4201,60 @@ table_id '.' '*'
     $$ = TableName{Name: $1}
   }
 
-index_hint_list:
+index_hint_list_opt:
   {
     $$ = nil
   }
-| USE INDEX openb index_list closeb
+| index_hint_list
   {
-    $$ = &IndexHints{Type: UseOp, Indexes: $4}
+    $$ = $1
   }
-| USE INDEX openb closeb
+
+index_hint_list:
+index_hint
   {
-    $$ = &IndexHints{Type: UseOp}
+    $$ = IndexHints{$1}
   }
-| IGNORE INDEX openb index_list closeb
+| index_hint_list index_hint
   {
-    $$ = &IndexHints{Type: IgnoreOp, Indexes: $4}
+    $$ = append($1,$2)
   }
-| FORCE INDEX openb index_list closeb
+
+index_hint:
+  USE index_or_key index_hint_for_opt openb index_list closeb
   {
-    $$ = &IndexHints{Type: ForceOp, Indexes: $4}
+    $$ = &IndexHint{Type: UseOp, ForType:$3, Indexes: $5}
   }
+| USE index_or_key index_hint_for_opt openb closeb
+  {
+    $$ = &IndexHint{Type: UseOp, ForType: $3}
+  }
+| IGNORE index_or_key index_hint_for_opt openb index_list closeb
+  {
+    $$ = &IndexHint{Type: IgnoreOp, ForType: $3, Indexes: $5}
+  }
+| FORCE index_or_key index_hint_for_opt openb index_list closeb
+  {
+    $$ = &IndexHint{Type: ForceOp, ForType: $3, Indexes: $5}
+  }
+
+index_hint_for_opt:
+  {
+    $$ = NoForType
+  }
+| FOR JOIN
+  {
+    $$ = JoinForType
+  }
+| FOR ORDER BY
+  {
+    $$ = OrderByForType
+  }
+| FOR GROUP BY
+  {
+    $$ = GroupByForType
+  }
+
 
 where_expression_opt:
   {
@@ -4421,6 +4513,19 @@ function_call_keyword
 	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: NewStrLiteral($3)}
   }
 
+trim_type:
+  BOTH
+  {
+    $$ = BothTrimType
+  }
+| LEADING
+  {
+    $$ = LeadingTrimType
+  }
+| TRAILING
+  {
+    $$ = TrailingTrimType
+  }
 
 default_opt:
   /* empty */
@@ -4634,6 +4739,26 @@ UTC_DATE func_paren_opt
 | WEIGHT_STRING openb expression convert_type_weight_string closeb
   {
     $$ = &WeightStringFuncExpr{Expr: $3, As: $4}
+  }
+| LTRIM openb expression closeb
+  {
+    $$ = &TrimFuncExpr{TrimFuncType:LTrimType, StringArg: $3}
+  }
+| RTRIM openb expression closeb
+  {
+    $$ = &TrimFuncExpr{TrimFuncType:RTrimType, StringArg: $3}
+  }
+| TRIM openb trim_type expression_opt FROM expression closeb
+  {
+    $$ = &TrimFuncExpr{Type:$3, TrimArg:$4, StringArg: $6}
+  }
+| TRIM openb expression closeb
+  {
+    $$ = &TrimFuncExpr{StringArg: $3}
+  }
+| TRIM openb expression FROM expression closeb
+  {
+    $$ = &TrimFuncExpr{TrimArg:$3, StringArg: $5}
   }
 
 interval:
@@ -5635,6 +5760,7 @@ reserved_keyword:
 | ASC
 | BETWEEN
 | BINARY
+| BOTH
 | BY
 | CASE
 | CALL
@@ -5697,6 +5823,7 @@ reserved_keyword:
 | LAST_VALUE
 | LATERAL
 | LEAD
+| LEADING
 | LEFT
 | LIKE
 | LIMIT
@@ -5751,6 +5878,7 @@ reserved_keyword:
 | TIMESTAMPADD
 | TIMESTAMPDIFF
 | TO
+| TRAILING
 | TRUE
 | UNION
 | UNIQUE
@@ -5822,6 +5950,7 @@ non_reserved_keyword:
 | DATA
 | DATE
 | DATETIME
+| DEALLOCATE
 | DECIMAL_TYPE
 | DELAY_KEY_WRITE
 | DEFINER
@@ -5850,6 +5979,7 @@ non_reserved_keyword:
 | EXCHANGE
 | EXCLUDE
 | EXCLUSIVE
+| EXECUTE
 | EXPANSION
 | EXPORT
 | EXTENDED
@@ -5902,6 +6032,7 @@ non_reserved_keyword:
 | LOGS
 | LONGBLOB
 | LONGTEXT
+| LTRIM
 | MANIFEST
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
@@ -5952,6 +6083,7 @@ non_reserved_keyword:
 | PERSIST
 | PERSIST_ONLY
 | PRECEDING
+| PREPARE
 | PRIVILEGE_CHECKS_USER
 | PRIVILEGES
 | PROCESS
@@ -5983,6 +6115,7 @@ non_reserved_keyword:
 | ROLE
 | ROLLBACK
 | ROW_FORMAT
+| RTRIM
 | S3
 | SECONDARY
 | SECONDARY_ENGINE
@@ -6028,6 +6161,7 @@ non_reserved_keyword:
 | TREE
 | TRIGGER
 | TRIGGERS
+| TRIM
 | TRUNCATE
 | UNBOUNDED
 | UNCOMMITTED

@@ -23,6 +23,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"sort"
@@ -40,6 +41,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -52,9 +56,9 @@ in the form of :v1, :v2, etc.
 
 Examples:
 
-  $ vtclient -server vtgate:15991 "SELECT * FROM messages"
+  $ vtclient --server vtgate:15991 "SELECT * FROM messages"
 
-  $ vtclient -server vtgate:15991 -target '@primary' -bind_variables '[ 12345, 1, "msg 12345" ]' "INSERT INTO messages (page,time_created_ns,message) VALUES (:v1, :v2, :v3)"
+  $ vtclient --server vtgate:15991 --target '@primary' --bind_variables '[ 12345, 1, "msg 12345" ]' "INSERT INTO messages (page,time_created_ns,message) VALUES (:v1, :v2, :v3)"
 
 `
 	server        = flag.String("server", "", "vtgate server to connect to")
@@ -76,11 +80,9 @@ var (
 )
 
 func init() {
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-		flag.PrintDefaults()
-		fmt.Fprint(os.Stderr, usage)
-	}
+	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
+		Epilogue: func(w io.Writer) { fmt.Fprint(w, usage) },
+	})
 }
 
 type bindvars []interface{}
@@ -145,8 +147,8 @@ func main() {
 }
 
 func run() (*results, error) {
-	flag.Parse()
-	args := flag.Args()
+	_flag.Parse()
+	args := _flag.Args()
 
 	if len(args) == 0 {
 		flag.Usage()

@@ -53,7 +53,7 @@ func (c *ConvertExpr) unsupported() {
 
 func (c *ConvertExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	result.init(env, c.Inner)
-	if result.null() {
+	if result.isNull() {
 		result.resolve()
 		return
 	}
@@ -137,7 +137,7 @@ func (c *ConvertExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 
 func (c *ConvertUsingExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	result.init(env, c.Inner)
-	if result.null() {
+	if result.isNull() {
 		result.resolve()
 	} else {
 		result.makeTextualAndConvert(c.Collation)

@@ -718,13 +718,90 @@ func TestSavepoint(t *testing.T) {
 			`type:FIELD field_event:{table_name:"stream1" fields:{name:"id" type:INT32 table:"stream1" org_table:"stream1" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"stream1" org_table:"stream1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
 			`type:ROW row_event:{table_name:"stream1" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
 			"type:SAVEPOINT statement:\"SAVEPOINT `a`\"",
-			"type:SAVEPOINT statement:\"SAVEPOINT `b`\"",
 			`type:ROW row_event:{table_name:"stream1" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"} after:{lengths:1 lengths:3 values:"1bbb"}}}`,
 			`gtid`,
 			`commit`,
 		}},
 	}}
 	runCases(t, nil, testcases, "current", nil)
+}
+
+func TestSavepointWithFilter(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table stream1(id int, val varbinary(128), primary key(id))",
+		"create table stream2(id int, val varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table stream1",
+		"drop table stream2",
+	})
+	engine.se.Reload(context.Background())
+	testcases := []testcase{{
+		input: []string{
+			"begin",
+			"insert into stream1 values (1, 'aaa')",
+			"savepoint a",
+			"insert into stream1 values (2, 'aaa')",
+			"savepoint b",
+			"insert into stream1 values (3, 'aaa')",
+			"savepoint c",
+			"insert into stream1 values (4, 'aaa')",
+			"savepoint d",
+			"commit",
+
+			"begin",
+			"insert into stream1 values (5, 'aaa')",
+			"savepoint d",
+			"insert into stream1 values (6, 'aaa')",
+			"savepoint c",
+			"insert into stream1 values (7, 'aaa')",
+			"savepoint b",
+			"insert into stream1 values (8, 'aaa')",
+			"savepoint a",
+			"commit",
+
+			"begin",
+			"insert into stream1 values (9, 'aaa')",
+			"savepoint a",
+			"insert into stream2 values (1, 'aaa')",
+			"savepoint b",
+			"insert into stream1 values (10, 'aaa')",
+			"savepoint c",
+			"insert into stream2 values (2, 'aaa')",
+			"savepoint d",
+			"commit",
+		},
+		output: [][]string{{
+			`begin`,
+			`gtid`,
+			`commit`,
+		}, {
+			`begin`,
+			`gtid`,
+			`commit`,
+		}, {
+			`begin`,
+			`type:FIELD field_event:{table_name:"stream2" fields:{name:"id" type:INT32 table:"stream2" org_table:"stream2" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"stream2" org_table:"stream2" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
+			"type:SAVEPOINT statement:\"SAVEPOINT `a`\"",
+			`type:ROW row_event:{table_name:"stream2" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
+			"type:SAVEPOINT statement:\"SAVEPOINT `b`\"",
+			`type:ROW row_event:{table_name:"stream2" row_changes:{after:{lengths:1 lengths:3 values:"2aaa"}}}`,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "stream2",
+			Filter: "select * from stream2",
+		}},
+	}
+	runCases(t, filter, testcases, "current", nil)
 }
 
 func TestStatements(t *testing.T) {

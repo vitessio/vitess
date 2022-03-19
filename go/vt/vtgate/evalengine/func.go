@@ -72,7 +72,7 @@ type builtinCoalesce struct{}
 
 func (builtinCoalesce) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	for _, arg := range args {
-		if !arg.null() {
+		if !arg.isNull() {
 			*result = arg
 			result.resolve()
 			return
@@ -107,7 +107,7 @@ func getMultiComparisonFunc(args []EvalResult) multiComparisonFunc {
 
 	for i := range args {
 		arg := &args[i]
-		if arg.null() {
+		if arg.isNull() {
 			return func(args []EvalResult, result *EvalResult, cmp int) {
 				result.setNull()
 			}
@@ -349,7 +349,7 @@ func builtinIsNullRewrite(args []Expr, lookup TranslationLookup) (Expr, error) {
 	return &IsExpr{
 		UnaryExpr: UnaryExpr{args[0]},
 		Op:        sqlparser.IsNullOp,
-		Check:     func(er *EvalResult) bool { return er.null() },
+		Check:     func(er *EvalResult) bool { return er.isNull() },
 	}, nil
 }
 
@@ -359,12 +359,12 @@ func (builtinBitCount) call(_ *ExpressionEnv, args []EvalResult, result *EvalRes
 	var count int
 	inarg := &args[0]
 
-	if inarg.null() {
+	if inarg.isNull() {
 		result.setNull()
 		return
 	}
 
-	if inarg.bitwiseBinaryString() {
+	if inarg.isBitwiseBinaryString() {
 		binary := inarg.bytes()
 		for _, b := range binary {
 			count += bits.OnesCount8(b)

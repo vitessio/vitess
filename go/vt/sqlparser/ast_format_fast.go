@@ -19,6 +19,7 @@ package sqlparser
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -1189,6 +1190,44 @@ func (node *ExplainTab) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *PrepareStmt) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("prepare ")
+	node.Comments.formatFast(buf)
+	node.Name.formatFast(buf)
+	buf.WriteString(" from ")
+	if node.Statement != "" {
+		buf.WriteString(node.Statement)
+	} else {
+		node.StatementIdentifier.formatFast(buf)
+	}
+}
+
+// formatFast formats the node.
+func (node *ExecuteStmt) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("execute ")
+	node.Comments.formatFast(buf)
+	node.Name.formatFast(buf)
+	if len(node.Arguments) > 0 {
+		buf.WriteString(" using ")
+	}
+	var prefix string
+	for _, n := range node.Arguments {
+		buf.WriteString(prefix)
+		n.formatFast(buf)
+		prefix = ", "
+	}
+}
+
+// formatFast formats the node.
+func (node *DeallocateStmt) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Type.ToString())
+	buf.WriteByte(' ')
+	node.Comments.formatFast(buf)
+	buf.WriteString("prepare ")
+	node.Name.formatFast(buf)
+}
+
+// formatFast formats the node.
 func (node *CallProc) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("call ")
 	node.Name.formatFast(buf)
@@ -1360,10 +1399,22 @@ func (node *JoinTableExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *IndexHints) formatFast(buf *TrackedBuffer) {
+func (node IndexHints) formatFast(buf *TrackedBuffer) {
+	for _, n := range node {
+		n.formatFast(buf)
+	}
+}
+
+// formatFast formats the node.
+func (node *IndexHint) formatFast(buf *TrackedBuffer) {
 	buf.WriteByte(' ')
 	buf.WriteString(node.Type.ToString())
 	buf.WriteString("index ")
+	if node.ForType != NoForType {
+		buf.WriteString("for ")
+		buf.WriteString(node.ForType.ToString())
+		buf.WriteByte(' ')
+	}
 	if len(node.Indexes) == 0 {
 		buf.WriteString("()")
 	} else {
@@ -1598,6 +1649,26 @@ func (node *ExtractFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(" from ")
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
+func (node *TrimFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.TrimFuncType.ToString())
+	buf.WriteByte('(')
+	if node.Type.ToString() != "" {
+		buf.WriteString(node.Type.ToString())
+		buf.WriteByte(' ')
+	}
+	if node.TrimArg != nil {
+		buf.printExpr(node, node.TrimArg, true)
+		buf.WriteByte(' ')
+	}
+
+	if (node.Type.ToString() != "") || (node.TrimArg != nil) {
+		buf.WriteString("from ")
+	}
+	buf.printExpr(node, node.StringArg, true)
+	buf.WriteString(")")
 }
 
 // formatFast formats the node.
@@ -2439,4 +2510,11 @@ func (node *RenameTable) formatFast(buf *TrackedBuffer) {
 // show up like argument comparisons
 func (node *ExtractedSubquery) formatFast(buf *TrackedBuffer) {
 	node.alternative.Format(buf)
+}
+
+// formatFast formats the node.
+func (node Offset) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("[")
+	buf.WriteString(strconv.Itoa(int(node)))
+	buf.WriteString("]")
 }

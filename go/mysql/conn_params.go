@@ -54,6 +54,13 @@ type ConnParams struct {
 	// The following is only set to force the client to connect without
 	// using CapabilityClientDeprecateEOF
 	DisableClientDeprecateEOF bool
+
+	// EnableQueryInfo sets whether the results from queries performed by this
+	// connection should include the 'info' field that MySQL usually returns. This 'info'
+	// field usually contains a human-readable text description of the executed query
+	// for informative purposes. It has no programmatic value. Returning this field is
+	// disabled by default.
+	EnableQueryInfo bool
 }
 
 // EnableSSL will set the right flag on the parameters.

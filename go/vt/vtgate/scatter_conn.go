@@ -54,7 +54,6 @@ type ScatterConn struct {
 	tabletCallErrorCount *stats.CountersWithMultiLabels
 	txConn               *TxConn
 	gateway              Gateway
-	legacyHealthCheck    discovery.LegacyHealthCheck
 }
 
 // shardActionFunc defines the contract for a shard action
@@ -74,27 +73,6 @@ type shardActionFunc func(rs *srvtopo.ResolvedShard, i int) error
 // the results and errors for the caller.
 type shardActionTransactionFunc func(rs *srvtopo.ResolvedShard, i int, shardActionInfo *shardActionInfo) (*shardActionInfo, error)
 
-// NewLegacyScatterConn creates a new ScatterConn.
-func NewLegacyScatterConn(statsName string, txConn *TxConn, gw Gateway, hc discovery.LegacyHealthCheck) *ScatterConn {
-	tabletCallErrorCountStatsName := ""
-	if statsName != "" {
-		tabletCallErrorCountStatsName = statsName + "ErrorCount"
-	}
-	return &ScatterConn{
-		timings: stats.NewMultiTimings(
-			statsName,
-			"Scatter connection timings",
-			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
-		tabletCallErrorCount: stats.NewCountersWithMultiLabels(
-			tabletCallErrorCountStatsName,
-			"Error count from tablet calls in scatter conns",
-			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
-		txConn:            txConn,
-		gateway:           gw,
-		legacyHealthCheck: hc,
-	}
-}
-
 // NewScatterConn creates a new ScatterConn.
 func NewScatterConn(statsName string, txConn *TxConn, gw *TabletGateway) *ScatterConn {
 	// this only works with TabletGateway
@@ -113,8 +91,6 @@ func NewScatterConn(statsName string, txConn *TxConn, gw *TabletGateway) *Scatte
 			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		txConn:  txConn,
 		gateway: gw,
-		// gateway has a reference to healthCheck so we don't need this any more
-		legacyHealthCheck: nil,
 	}
 }
 
@@ -298,12 +274,7 @@ func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSe
 }
 
 func getQueryService(rs *srvtopo.ResolvedShard, info *shardActionInfo) (queryservice.QueryService, error) {
-	_, usingLegacyGw := rs.Gateway.(*DiscoveryGateway)
-	if usingLegacyGw &&
-		(info.actionNeeded == reserve || info.actionNeeded == reserveBegin) {
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "reserved connections are not supported on old gen gateway")
-	}
-	if usingLegacyGw || info.alias == nil {
+	if info.alias == nil {
 		return rs.Gateway, nil
 	}
 	return rs.Gateway.QueryServiceByAlias(info.alias, rs.Target)
@@ -528,20 +499,8 @@ func (stc *ScatterConn) GetGatewayCacheStatus() TabletCacheStatusList {
 	return stc.gateway.CacheStatus()
 }
 
-// GetLegacyHealthCheckCacheStatus returns a displayable version of the HealthCheck cache.
-func (stc *ScatterConn) GetLegacyHealthCheckCacheStatus() discovery.LegacyTabletsCacheStatusList {
-	if stc.legacyHealthCheck != nil {
-		return stc.legacyHealthCheck.CacheStatus()
-	}
-	return nil
-}
-
 // GetHealthCheckCacheStatus returns a displayable version of the HealthCheck cache.
 func (stc *ScatterConn) GetHealthCheckCacheStatus() discovery.TabletsCacheStatusList {
-	if UsingLegacyGateway() {
-		panic("this should never be called")
-	}
-
 	return stc.gateway.TabletsCacheStatus()
 }
 

@@ -17,4 +17,4 @@
 # this script migrates primary traffic for the customer keyspace to the
 # new primary tablet
 
-vtctlclient -server localhost:15999 MigrateServedFrom customer/0 primary
+vtctlclient --server localhost:15999 MigrateServedFrom customer/0 primary

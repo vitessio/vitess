@@ -878,10 +878,8 @@ func (node *Select) AddWhere(expr Expr) {
 		}
 		return
 	}
-	node.Where.Expr = &AndExpr{
-		Left:  node.Where.Expr,
-		Right: expr,
-	}
+	exprs := SplitAndExpression(nil, node.Where.Expr)
+	node.Where.Expr = AndExpressions(append(exprs, expr)...)
 }
 
 // AddHaving adds the boolean expression to the
@@ -898,6 +896,17 @@ func (node *Select) AddHaving(expr Expr) {
 		Left:  node.Having.Expr,
 		Right: expr,
 	}
+}
+
+// AddGroupBy adds a grouping expression, unless it's already present
+func (node *Select) AddGroupBy(expr Expr) {
+	for _, gb := range node.GroupBy {
+		if EqualsExpr(gb, expr) {
+			// group by columns are sets - duplicates don't add anything, so we can just skip these
+			return
+		}
+	}
+	node.GroupBy = append(node.GroupBy, expr)
 }
 
 // AddWhere adds the boolean expression to the
@@ -1256,7 +1265,7 @@ func (dir OrderDirection) ToString() string {
 }
 
 // ToString returns the type as a string
-func (ty IndexHintsType) ToString() string {
+func (ty IndexHintType) ToString() string {
 	switch ty {
 	case UseOp:
 		return UseStr
@@ -1265,7 +1274,65 @@ func (ty IndexHintsType) ToString() string {
 	case ForceOp:
 		return ForceStr
 	default:
-		return "Unknown IndexHintsType"
+		return "Unknown IndexHintType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty DeallocateStmtType) ToString() string {
+	switch ty {
+	case DeallocateType:
+		return DeallocateStr
+	case DropType:
+		return DropStr
+	default:
+		return "Unknown Deallocate Statement Type"
+	}
+}
+
+// ToString returns the type as a string
+func (ty IndexHintForType) ToString() string {
+	switch ty {
+	case NoForType:
+		return ""
+	case JoinForType:
+		return JoinForStr
+	case GroupByForType:
+		return GroupByForStr
+	case OrderByForType:
+		return OrderByForStr
+	default:
+		return "Unknown IndexHintForType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty TrimFuncType) ToString() string {
+	switch ty {
+	case NormalTrimType:
+		return NormalTrimStr
+	case LTrimType:
+		return LTrimStr
+	case RTrimType:
+		return RTrimStr
+	default:
+		return "Unknown TrimFuncType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty TrimType) ToString() string {
+	switch ty {
+	case NoTrimType:
+		return ""
+	case BothTrimType:
+		return BothTrimStr
+	case LeadingTrimType:
+		return LeadingTrimStr
+	case TrailingTrimType:
+		return TrailingTrimStr
+	default:
+		return "Unknown TrimType"
 	}
 }
 
@@ -1616,7 +1683,7 @@ func (es *ExtractedSubquery) GetHasValuesArg() string {
 func (es *ExtractedSubquery) updateAlternative() {
 	switch original := es.Original.(type) {
 	case *ExistsExpr:
-		es.alternative = NewArgument(es.argName)
+		es.alternative = NewArgument(es.hasValuesArg)
 	case *Subquery:
 		es.alternative = NewArgument(es.argName)
 	case *ComparisonExpr:

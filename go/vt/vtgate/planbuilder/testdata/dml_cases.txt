@@ -754,15 +754,20 @@ Gen4 plan same as above
   "Original": "insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(user_id)",
   "Instructions": {
     "OperatorType": "Insert",
-    "Variant": "ShardedIgnore",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "TargetTabletType": "PRIMARY",
+    "InsertIgnore": true,
     "MultiShardAutocommit": false,
     "Query": "insert into music(user_id, id) values (:_user_id_0, :_id_0) on duplicate key update user_id = values(user_id)",
-    "TableName": "music"
+    "TableName": "music",
+    "VindexValues": {
+      "music_user_map": "INT64(2)",
+      "user_index": "INT64(1)"
+    }
   }
 }
 Gen4 plan same as above
@@ -774,15 +779,20 @@ Gen4 plan same as above
   "Original": "insert into music(user_id, id) values (1, 2), (3,4) on duplicate key update user_id = values(user_id)",
   "Instructions": {
     "OperatorType": "Insert",
-    "Variant": "ShardedIgnore",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "TargetTabletType": "PRIMARY",
+    "InsertIgnore": true,
     "MultiShardAutocommit": false,
     "Query": "insert into music(user_id, id) values (:_user_id_0, :_id_0), (:_user_id_1, :_id_1) on duplicate key update user_id = values(user_id)",
-    "TableName": "music"
+    "TableName": "music",
+    "VindexValues": {
+      "music_user_map": "INT64(2), INT64(4)",
+      "user_index": "INT64(1), INT64(3)"
+    }
   }
 }
 Gen4 plan same as above
@@ -801,7 +811,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "insert into unsharded select id from unsharded_auto",
+    "Query": "insert into unsharded select id from unsharded_auto for update",
     "TableName": "unsharded"
   }
 }
@@ -821,7 +831,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "insert into unsharded select id from unsharded join unsharded_auto",
+    "Query": "insert into unsharded select id from unsharded join unsharded_auto for update",
     "TableName": "unsharded"
   }
 }
@@ -962,7 +972,12 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(id, val, `Name`, Costly) values (:_Id_0, 1, :_Name_0, :_Costly_0)",
-    "TableName": "user"
+    "TableName": "user",
+    "VindexValues": {
+      "costly_map": "NULL",
+      "name_user_map": "NULL",
+      "user_index": ":__seq0"
+    }
   }
 }
 Gen4 plan same as above
@@ -982,7 +997,12 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
-    "TableName": "user"
+    "TableName": "user",
+    "VindexValues": {
+      "costly_map": "NULL",
+      "name_user_map": "NULL",
+      "user_index": ":__seq0"
+    }
   }
 }
 Gen4 plan same as above
@@ -1007,7 +1027,10 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, 2, 3)",
-    "TableName": "authoritative"
+    "TableName": "authoritative",
+    "VindexValues": {
+      "user_index": "INT64(1)"
+    }
   }
 }
 Gen4 plan same as above
@@ -1027,7 +1050,12 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
-    "TableName": "user"
+    "TableName": "user",
+    "VindexValues": {
+      "costly_map": "NULL",
+      "name_user_map": "NULL",
+      "user_index": ":__seq0"
+    }
   }
 }
 Gen4 plan same as above
@@ -1047,7 +1075,12 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
-    "TableName": "user"
+    "TableName": "user",
+    "VindexValues": {
+      "costly_map": "NULL",
+      "name_user_map": "NULL",
+      "user_index": ":__seq0"
+    }
   }
 }
 Gen4 plan same as above
@@ -1059,15 +1092,21 @@ Gen4 plan same as above
   "Original": "insert ignore into user(id) values (1)",
   "Instructions": {
     "OperatorType": "Insert",
-    "Variant": "ShardedIgnore",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "TargetTabletType": "PRIMARY",
+    "InsertIgnore": true,
     "MultiShardAutocommit": false,
     "Query": "insert ignore into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
-    "TableName": "user"
+    "TableName": "user",
+    "VindexValues": {
+      "costly_map": "NULL",
+      "name_user_map": "NULL",
+      "user_index": ":__seq0"
+    }
   }
 }
 Gen4 plan same as above
@@ -1079,15 +1118,21 @@ Gen4 plan same as above
   "Original": "insert into user(id) values(1) on duplicate key update col = 2",
   "Instructions": {
     "OperatorType": "Insert",
-    "Variant": "ShardedIgnore",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "TargetTabletType": "PRIMARY",
+    "InsertIgnore": true,
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0) on duplicate key update col = 2",
-    "TableName": "user"
+    "TableName": "user",
+    "VindexValues": {
+      "costly_map": "NULL",
+      "name_user_map": "NULL",
+      "user_index": ":__seq0"
+    }
   }
 }
 Gen4 plan same as above
@@ -1107,7 +1152,12 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
-    "TableName": "user"
+    "TableName": "user",
+    "VindexValues": {
+      "costly_map": "NULL",
+      "name_user_map": "NULL",
+      "user_index": ":__seq0"
+    }
   }
 }
 Gen4 plan same as above
@@ -1127,7 +1177,12 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(nonid, id, `Name`, Costly) values (2, :_Id_0, :_Name_0, :_Costly_0)",
-    "TableName": "user"
+    "TableName": "user",
+    "VindexValues": {
+      "costly_map": "NULL",
+      "name_user_map": "NULL",
+      "user_index": ":__seq0"
+    }
   }
 }
 Gen4 plan same as above
@@ -1147,7 +1202,12 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(id, nonid, `Name`, Costly) values (:_Id_0, 2, :_Name_0, :_Costly_0)",
-    "TableName": "user"
+    "TableName": "user",
+    "VindexValues": {
+      "costly_map": "NULL",
+      "name_user_map": "NULL",
+      "user_index": ":__seq0"
+    }
   }
 }
 Gen4 plan same as above
@@ -1167,7 +1227,12 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(nonid, id, `Name`, Costly) values (true, :_Id_0, :_Name_0, :_Costly_0)",
-    "TableName": "user"
+    "TableName": "user",
+    "VindexValues": {
+      "costly_map": "NULL",
+      "name_user_map": "NULL",
+      "user_index": ":__seq0"
+    }
   }
 }
 Gen4 plan same as above
@@ -1187,7 +1252,12 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(nonid, `name`, id, Costly) values (2, :_Name_0, :_Id_0, :_Costly_0)",
-    "TableName": "user"
+    "TableName": "user",
+    "VindexValues": {
+      "costly_map": "NULL",
+      "name_user_map": "VARCHAR(\"foo\")",
+      "user_index": ":__seq0"
+    }
   }
 }
 Gen4 plan same as above
@@ -1207,7 +1277,10 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id_0)",
-    "TableName": "user_extra"
+    "TableName": "user_extra",
+    "VindexValues": {
+      "user_index": "NULL"
+    }
   }
 }
 Gen4 plan same as above
@@ -1227,7 +1300,10 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `weird``name`(`a``b*c`, `b*c`) values (:_a_b_c_0, 2)",
-    "TableName": "weird`name"
+    "TableName": "weird`name",
+    "VindexValues": {
+      "user_index": "INT64(1)"
+    }
   }
 }
 Gen4 plan same as above
@@ -1246,7 +1322,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "insert into unsharded select 1 from dual union select 1 from dual",
+    "Query": "insert into unsharded select 1 from dual union select 1 from dual for update",
     "TableName": "unsharded"
   }
 }
@@ -1267,7 +1343,10 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id_0)",
-    "TableName": "user_extra"
+    "TableName": "user_extra",
+    "VindexValues": {
+      "user_index": "NULL"
+    }
   }
 }
 Gen4 plan same as above
@@ -1287,14 +1366,18 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into music_extra(music_id, user_id) values (:_music_id_0, :_user_id_0)",
-    "TableName": "music_extra"
+    "TableName": "music_extra",
+    "VindexValues": {
+      "music_user_map": "INT64(1)",
+      "user_index": "DECIMAL(18446744073709551616)"
+    }
   }
 }
 Gen4 plan same as above
 
 # insert invalid index value
 "insert into music_extra(music_id, user_id) values(1, id)"
-"could not compute value for vindex or auto-inc column: column access not supported here"
+"column access not supported here"
 Gen4 plan same as above
 
 # insert invalid table
@@ -1317,7 +1400,12 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
-    "TableName": "user"
+    "TableName": "user",
+    "VindexValues": {
+      "costly_map": "NULL, NULL",
+      "name_user_map": "NULL, NULL",
+      "user_index": ":__seq0, :__seq1"
+    }
   }
 }
 Gen4 plan same as above
@@ -1338,7 +1426,12 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
     "QueryTimeout": 1,
-    "TableName": "user"
+    "TableName": "user",
+    "VindexValues": {
+      "costly_map": "NULL, NULL",
+      "name_user_map": "NULL, NULL",
+      "user_index": ":__seq0, :__seq1"
+    }
   }
 }
 Gen4 plan same as above
@@ -1358,7 +1451,12 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": true,
     "Query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
-    "TableName": "user"
+    "TableName": "user",
+    "VindexValues": {
+      "costly_map": "NULL, NULL",
+      "name_user_map": "NULL, NULL",
+      "user_index": ":__seq0, :__seq1"
+    }
   }
 }
 Gen4 plan same as above
@@ -1402,7 +1500,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "replace into unsharded select id from unsharded_auto",
+    "Query": "replace into unsharded select id from unsharded_auto for update",
     "TableName": "unsharded"
   }
 }
@@ -1508,7 +1606,12 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a_0, :_column_b_0, :_column_c_0, :_kid_0)",
-    "TableName": "multicolvin"
+    "TableName": "multicolvin",
+    "VindexValues": {
+      "cola_map": "INT64(1)",
+      "colb_colc_map": "INT64(2), INT64(3)",
+      "kid_index": "INT64(4)"
+    }
   }
 }
 Gen4 plan same as above
@@ -1528,7 +1631,11 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into overlap_vindex(kid, column_a, column_b) values (:_kid_0, :_column_a_0, 3)",
-    "TableName": "overlap_vindex"
+    "TableName": "overlap_vindex",
+    "VindexValues": {
+      "cola_kid_map": "INT64(2), INT64(1)",
+      "kid_index": "INT64(1)"
+    }
   }
 }
 Gen4 plan same as above
@@ -1548,7 +1655,12 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a_0, :_column_b_0, :_column_c_0, :_kid_0), (:_column_a_1, :_column_b_1, :_column_c_1, :_kid_1)",
-    "TableName": "multicolvin"
+    "TableName": "multicolvin",
+    "VindexValues": {
+      "cola_map": "INT64(1), INT64(5)",
+      "colb_colc_map": "INT64(2), INT64(6), INT64(3), INT64(7)",
+      "kid_index": "INT64(4), INT64(8)"
+    }
   }
 }
 Gen4 plan same as above
@@ -2487,11 +2599,11 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select user_id from user_privacy_consents where user_id = 1)",
+    "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select user_id from user_privacy_consents where user_id = 1) for update",
     "TableName": "user_privacy_consents"
   }
 }
-Gen4 plan same as above
+Gen4 error: unsupported: unable to split predicates to derived table: not :__sq_has_values1
 
 # Delete on backfilling unique lookup vindex should be a scatter
 "delete from zlookup_unique.t1 where c2 = 20"
@@ -3184,6 +3296,402 @@ Gen4 plan same as above
       "INT64(2)"
     ],
     "Vindex": "multicolIdx"
+  }
+}
+Gen4 plan same as above
+
+# insert using select with simple table.
+"insert into music(id, user_id) select * from user"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into music(id, user_id) select * from user",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "TableName": "music",
+    "VindexOffsetFromSelect": {
+      "music_user_map": "[0]",
+      "user_index": "[1]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from `user` where 1 != 1",
+        "Query": "select * from `user` for update",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# insert using select with more columns in insert
+"insert into music(id, user_id) select 1"
+"Column count doesn't match value count at row 1"
+Gen4 plan same as above
+
+# insert using select with more columns in select
+"insert into music(id, user_id) select id, count(user_id), sum(user_id) from user group by id"
+"Column count doesn't match value count at row 1"
+Gen4 plan same as above
+
+# insert using select with more columns in select after accounting for star column
+"insert into music(id, user_id) select id, *, 2 from user"
+"Column count doesn't match value count at row 1"
+Gen4 plan same as above
+
+# insert using select with auto-inc column using vitess sequence, sequence column not present
+"insert into user_extra(user_id) select id from user"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user_extra(user_id) select id from user",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:1",
+    "MultiShardAutocommit": false,
+    "TableName": "user_extra",
+    "VindexOffsetFromSelect": {
+      "user_index": "[0]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` for update",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# insert using select with auto-inc column using vitess sequence, sequence column present
+"insert into user_extra(id, user_id) select null, id from user"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user_extra(id, user_id) select null, id from user",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:2",
+    "MultiShardAutocommit": false,
+    "TableName": "user_extra",
+    "VindexOffsetFromSelect": {
+      "user_index": "[1]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select null, id from `user` where 1 != 1",
+        "Query": "select null, id from `user` for update",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# sharded insert from select
+"insert into user(id) select 1 from dual"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user(id) select 1 from dual",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:0",
+    "MultiShardAutocommit": false,
+    "TableName": "user",
+    "VindexOffsetFromSelect": {
+      "costly_map": "[-1]",
+      "name_user_map": "[-1]",
+      "user_index": "[0]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "INT64(1) as 1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# insert using select with sharding column is autoinc and not present in the insert column query
+"insert into user(pattern) SELECT 1"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user(pattern) SELECT 1",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:1",
+    "MultiShardAutocommit": false,
+    "TableName": "user",
+    "VindexOffsetFromSelect": {
+      "costly_map": "[-1]",
+      "name_user_map": "[-1]",
+      "user_index": "[1]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "INT64(1) as 1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# insert using select with sharding column is not an autoinc and not present in the insert column query
+"insert into user_extra(pattern) SELECT 1"
+"insert query does not have sharding column 'user_id' in the column list"
+Gen4 plan same as above
+
+# sharded same keyspace
+"insert into user_extra(user_id, col) select col1, col2 from user"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user_extra(user_id, col) select col1, col2 from user",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:2",
+    "MultiShardAutocommit": false,
+    "TableName": "user_extra",
+    "VindexOffsetFromSelect": {
+      "user_index": "[0]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2 from `user` where 1 != 1",
+        "Query": "select col1, col2 from `user` for update",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# unsharded same keyspace
+"insert into unsharded(col) select col from unsharded_auto"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into unsharded(col) select col from unsharded_auto",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "insert into unsharded(col) select col from unsharded_auto for update",
+    "TableName": "unsharded"
+  }
+}
+Gen4 plan same as above
+
+# sharded different keyspace
+"insert into user_extra(user_id, col) select col1, col2 from t1"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user_extra(user_id, col) select col1, col2 from t1",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:2",
+    "MultiShardAutocommit": false,
+    "TableName": "user_extra",
+    "VindexOffsetFromSelect": {
+      "user_index": "[0]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "zlookup_unique",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2 from t1 where 1 != 1",
+        "Query": "select col1, col2 from t1 for update",
+        "Table": "t1"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# sharded insert table, unsharded select table
+"insert into user_extra(user_id, col) select col1, col2 from unsharded_tab"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user_extra(user_id, col) select col1, col2 from unsharded_tab",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:2",
+    "MultiShardAutocommit": false,
+    "TableName": "user_extra",
+    "VindexOffsetFromSelect": {
+      "user_index": "[0]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main_2",
+          "Sharded": false
+        },
+        "FieldQuery": "select col1, col2 from unsharded_tab where 1 != 1",
+        "Query": "select col1, col2 from unsharded_tab for update",
+        "Table": "unsharded_tab"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# unsharded different keyspace
+"insert into unsharded(col) select col from unsharded_tab"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into unsharded(col) select col from unsharded_tab",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "TableName": "unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main_2",
+          "Sharded": false
+        },
+        "FieldQuery": "select col from unsharded_tab where 1 != 1",
+        "Query": "select col from unsharded_tab for update",
+        "Table": "unsharded_tab"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# unsharded insert table, sharded select table
+"insert into unsharded(col) select col from t1"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into unsharded(col) select col from t1",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "TableName": "unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "zlookup_unique",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from t1 where 1 != 1",
+        "Query": "select col from t1 for update",
+        "Table": "t1"
+      }
+    ]
   }
 }
 Gen4 plan same as above

@@ -140,17 +140,17 @@ func translateIsExpr(left sqlparser.Expr, op sqlparser.IsExprOperator, lookup Tr
 
 	switch op {
 	case sqlparser.IsNullOp:
-		check = func(er *EvalResult) bool { return er.null() }
+		check = func(er *EvalResult) bool { return er.isNull() }
 	case sqlparser.IsNotNullOp:
-		check = func(er *EvalResult) bool { return !er.null() }
+		check = func(er *EvalResult) bool { return !er.isNull() }
 	case sqlparser.IsTrueOp:
-		check = func(er *EvalResult) bool { return er.truthy() == boolTrue }
+		check = func(er *EvalResult) bool { return er.isTruthy() == boolTrue }
 	case sqlparser.IsNotTrueOp:
-		check = func(er *EvalResult) bool { return er.truthy() != boolTrue }
+		check = func(er *EvalResult) bool { return er.isTruthy() != boolTrue }
 	case sqlparser.IsFalseOp:
-		check = func(er *EvalResult) bool { return er.truthy() == boolFalse }
+		check = func(er *EvalResult) bool { return er.isTruthy() == boolFalse }
 	case sqlparser.IsNotFalseOp:
-		check = func(er *EvalResult) bool { return er.truthy() != boolFalse }
+		check = func(er *EvalResult) bool { return er.isTruthy() != boolFalse }
 	}
 
 	return &IsExpr{
@@ -502,6 +502,8 @@ func translateExpr(e sqlparser.Expr, lookup TranslationLookup) (Expr, error) {
 		return NewLiteralInt(0), nil
 	case *sqlparser.ColName:
 		return translateColName(node, lookup)
+	case sqlparser.Offset:
+		return NewColumn(int(node), getCollation(node, lookup)), nil
 	case *sqlparser.ComparisonExpr:
 		return translateComparisonExpr(node.Operator, node.Left, node.Right, lookup)
 	case sqlparser.Argument:

@@ -557,6 +557,9 @@ const (
 	// SSWrongNumberOfColumns is related to columns error
 	SSWrongNumberOfColumns = "21000"
 
+	// SSWrongValueCountOnRow is related to columns count mismatch error
+	SSWrongValueCountOnRow = "21S01"
+
 	// SSDataTooLong is ER_DATA_TOO_LONG
 	SSDataTooLong = "22001"
 
@@ -676,4 +679,34 @@ func IsSchemaApplyError(err error) bool {
 		return true
 	}
 	return false
+}
+
+type ReplicationState int
+
+const (
+	ReplicationStateUnknown ReplicationState = iota
+	ReplicationStateStopped
+	ReplicationStateConnecting
+	ReplicationStateRunning
+)
+
+// ReplicationStatusToState converts a value you have for the IO thread(s) or SQL
+// thread(s) or Group Replication applier thread(s) from MySQL or intermediate
+// layers to a mysql.ReplicationState.
+// on,yes,true == ReplicationStateRunning
+// off,no,false == ReplicationStateStopped
+// connecting == ReplicationStateConnecting
+// anything else == ReplicationStateUnknown
+func ReplicationStatusToState(s string) ReplicationState {
+	// Group Replication uses ON instead of Yes
+	switch strings.ToLower(s) {
+	case "yes", "on", "true":
+		return ReplicationStateRunning
+	case "no", "off", "false":
+		return ReplicationStateStopped
+	case "connecting":
+		return ReplicationStateConnecting
+	default:
+		return ReplicationStateUnknown
+	}
 }

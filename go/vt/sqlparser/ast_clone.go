@@ -109,6 +109,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfCreateView(in)
 	case *CurTimeFuncExpr:
 		return CloneRefOfCurTimeFuncExpr(in)
+	case *DeallocateStmt:
+		return CloneRefOfDeallocateStmt(in)
 	case *Default:
 		return CloneRefOfDefault(in)
 	case *Definer:
@@ -127,6 +129,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfDropTable(in)
 	case *DropView:
 		return CloneRefOfDropView(in)
+	case *ExecuteStmt:
+		return CloneRefOfExecuteStmt(in)
 	case *ExistsExpr:
 		return CloneRefOfExistsExpr(in)
 	case *ExplainStmt:
@@ -153,8 +157,10 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfGroupConcatExpr(in)
 	case *IndexDefinition:
 		return CloneRefOfIndexDefinition(in)
-	case *IndexHints:
-		return CloneRefOfIndexHints(in)
+	case *IndexHint:
+		return CloneRefOfIndexHint(in)
+	case IndexHints:
+		return CloneIndexHints(in)
 	case *IndexInfo:
 		return CloneRefOfIndexInfo(in)
 	case *Insert:
@@ -195,6 +201,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfNotExpr(in)
 	case *NullVal:
 		return CloneRefOfNullVal(in)
+	case Offset:
+		return in
 	case OnDup:
 		return CloneOnDup(in)
 	case *OptLike:
@@ -223,6 +231,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPartitionValueRange(in)
 	case Partitions:
 		return ClonePartitions(in)
+	case *PrepareStmt:
+		return CloneRefOfPrepareStmt(in)
 	case ReferenceAction:
 		return in
 	case *ReferenceDefinition:
@@ -297,6 +307,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfTablespaceOperation(in)
 	case *TimestampFuncExpr:
 		return CloneRefOfTimestampFuncExpr(in)
+	case *TrimFuncExpr:
+		return CloneRefOfTrimFuncExpr(in)
 	case *TruncateTable:
 		return CloneRefOfTruncateTable(in)
 	case *UnaryExpr:
@@ -394,7 +406,7 @@ func CloneRefOfAliasedTableExpr(n *AliasedTableExpr) *AliasedTableExpr {
 	out.Expr = CloneSimpleTableExpr(n.Expr)
 	out.Partitions = ClonePartitions(n.Partitions)
 	out.As = CloneTableIdent(n.As)
-	out.Hints = CloneRefOfIndexHints(n.Hints)
+	out.Hints = CloneIndexHints(n.Hints)
 	out.Columns = CloneColumns(n.Columns)
 	return &out
 }
@@ -773,6 +785,17 @@ func CloneRefOfCurTimeFuncExpr(n *CurTimeFuncExpr) *CurTimeFuncExpr {
 	return &out
 }
 
+// CloneRefOfDeallocateStmt creates a deep clone of the input.
+func CloneRefOfDeallocateStmt(n *DeallocateStmt) *DeallocateStmt {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Comments = CloneComments(n.Comments)
+	out.Name = CloneColIdent(n.Name)
+	return &out
+}
+
 // CloneRefOfDefault creates a deep clone of the input.
 func CloneRefOfDefault(n *Default) *Default {
 	if n == nil {
@@ -868,6 +891,18 @@ func CloneRefOfDropView(n *DropView) *DropView {
 	out := *n
 	out.FromTables = CloneTableNames(n.FromTables)
 	out.Comments = CloneComments(n.Comments)
+	return &out
+}
+
+// CloneRefOfExecuteStmt creates a deep clone of the input.
+func CloneRefOfExecuteStmt(n *ExecuteStmt) *ExecuteStmt {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneColIdent(n.Name)
+	out.Comments = CloneComments(n.Comments)
+	out.Arguments = CloneColumns(n.Arguments)
 	return &out
 }
 
@@ -1016,14 +1051,26 @@ func CloneRefOfIndexDefinition(n *IndexDefinition) *IndexDefinition {
 	return &out
 }
 
-// CloneRefOfIndexHints creates a deep clone of the input.
-func CloneRefOfIndexHints(n *IndexHints) *IndexHints {
+// CloneRefOfIndexHint creates a deep clone of the input.
+func CloneRefOfIndexHint(n *IndexHint) *IndexHint {
 	if n == nil {
 		return nil
 	}
 	out := *n
 	out.Indexes = CloneSliceOfColIdent(n.Indexes)
 	return &out
+}
+
+// CloneIndexHints creates a deep clone of the input.
+func CloneIndexHints(n IndexHints) IndexHints {
+	if n == nil {
+		return nil
+	}
+	res := make(IndexHints, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneRefOfIndexHint(x))
+	}
+	return res
 }
 
 // CloneRefOfIndexInfo creates a deep clone of the input.
@@ -1363,6 +1410,18 @@ func ClonePartitions(n Partitions) Partitions {
 		res = append(res, CloneColIdent(x))
 	}
 	return res
+}
+
+// CloneRefOfPrepareStmt creates a deep clone of the input.
+func CloneRefOfPrepareStmt(n *PrepareStmt) *PrepareStmt {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneColIdent(n.Name)
+	out.Comments = CloneComments(n.Comments)
+	out.StatementIdentifier = CloneColIdent(n.StatementIdentifier)
+	return &out
 }
 
 // CloneRefOfReferenceDefinition creates a deep clone of the input.
@@ -1748,6 +1807,17 @@ func CloneRefOfTimestampFuncExpr(n *TimestampFuncExpr) *TimestampFuncExpr {
 	return &out
 }
 
+// CloneRefOfTrimFuncExpr creates a deep clone of the input.
+func CloneRefOfTrimFuncExpr(n *TrimFuncExpr) *TrimFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.TrimArg = CloneExpr(n.TrimArg)
+	out.StringArg = CloneExpr(n.StringArg)
+	return &out
+}
+
 // CloneRefOfTruncateTable creates a deep clone of the input.
 func CloneRefOfTruncateTable(n *TruncateTable) *TruncateTable {
 	if n == nil {
@@ -2042,6 +2112,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfSubstrExpr(in)
 	case *TimestampFuncExpr:
 		return CloneRefOfTimestampFuncExpr(in)
+	case *TrimFuncExpr:
+		return CloneRefOfTrimFuncExpr(in)
 	case *ValuesFuncExpr:
 		return CloneRefOfValuesFuncExpr(in)
 	case *WeightStringFuncExpr:
@@ -2222,6 +2294,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfNotExpr(in)
 	case *NullVal:
 		return CloneRefOfNullVal(in)
+	case Offset:
+		return in
 	case *OrExpr:
 		return CloneRefOfOrExpr(in)
 	case *Subquery:
@@ -2230,6 +2304,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfSubstrExpr(in)
 	case *TimestampFuncExpr:
 		return CloneRefOfTimestampFuncExpr(in)
+	case *TrimFuncExpr:
+		return CloneRefOfTrimFuncExpr(in)
 	case *UnaryExpr:
 		return CloneRefOfUnaryExpr(in)
 	case ValTuple:
@@ -2360,6 +2436,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfCreateTable(in)
 	case *CreateView:
 		return CloneRefOfCreateView(in)
+	case *DeallocateStmt:
+		return CloneRefOfDeallocateStmt(in)
 	case *Delete:
 		return CloneRefOfDelete(in)
 	case *DropDatabase:
@@ -2368,6 +2446,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfDropTable(in)
 	case *DropView:
 		return CloneRefOfDropView(in)
+	case *ExecuteStmt:
+		return CloneRefOfExecuteStmt(in)
 	case *ExplainStmt:
 		return CloneRefOfExplainStmt(in)
 	case *ExplainTab:
@@ -2384,6 +2464,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfOtherAdmin(in)
 	case *OtherRead:
 		return CloneRefOfOtherRead(in)
+	case *PrepareStmt:
+		return CloneRefOfPrepareStmt(in)
 	case *Release:
 		return CloneRefOfRelease(in)
 	case *RenameTable:

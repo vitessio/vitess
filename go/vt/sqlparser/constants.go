@@ -53,6 +53,7 @@ const (
 	// DDL strings.
 	CreateStr           = "create"
 	AlterStr            = "alter"
+	DeallocateStr       = "deallocate"
 	DropStr             = "drop"
 	RenameStr           = "rename"
 	TruncateStr         = "truncate"
@@ -112,6 +113,11 @@ const (
 	UseStr    = "use "
 	IgnoreStr = "ignore "
 	ForceStr  = "force "
+
+	// Index hints For types.
+	JoinForStr    = "join"
+	GroupByForStr = "group by"
+	OrderByForStr = "order by"
 
 	// Where.Type
 	WhereStr  = "where"
@@ -289,6 +295,16 @@ const (
 	ForeignKeyTypeStr = "foreign key"
 	NormalKeyTypeStr  = "key"
 
+	// TrimType strings
+	BothTrimStr     = "both"
+	LeadingTrimStr  = "leading"
+	TrailingTrimStr = "trailing"
+
+	// TrimFuncType strings
+	NormalTrimStr = "trim"
+	LTrimStr      = "ltrim"
+	RTrimStr      = "rtrim"
+
 	// LockOptionType strings
 	NoneTypeStr      = "none"
 	SharedTypeStr    = "shared"
@@ -371,6 +387,21 @@ const (
 	NoLock Lock = iota
 	ForUpdateLock
 	ShareModeLock
+)
+
+// Constants for Enum Type - TrimType
+const (
+	NoTrimType TrimType = iota
+	BothTrimType
+	LeadingTrimType
+	TrailingTrimType
+)
+
+// Constants for Enum Type - TrimFuncType
+const (
+	NormalTrimType TrimFuncType = iota
+	LTrimType
+	RTrimType
 )
 
 // Constants for Enum Type - WhereType
@@ -458,11 +489,19 @@ const (
 	DescOrder
 )
 
-// Constant for Enum Type - IndexHintsType
+// Constant for Enum Type - IndexHintType
 const (
-	UseOp IndexHintsType = iota
+	UseOp IndexHintType = iota
 	IgnoreOp
 	ForceOp
+)
+
+// Constant for Enum Type - IndexHintForType
+const (
+	NoForType IndexHintForType = iota
+	JoinForType
+	GroupByForType
+	OrderByForType
 )
 
 // Constant for Enum Type - PartitionSpecAction
@@ -513,6 +552,12 @@ const (
 	IntoOutfile SelectIntoType = iota
 	IntoOutfileS3
 	IntoDumpfile
+)
+
+// Constant for Enum Type - DeallocateStmtType
+const (
+	DeallocateType DeallocateStmtType = iota
+	DropType
 )
 
 // Constant for Enum Type - CollateAndCharsetType

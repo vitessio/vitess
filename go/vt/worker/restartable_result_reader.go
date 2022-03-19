@@ -17,7 +17,6 @@ limitations under the License.
 package worker
 
 import (
-	"bytes"
 	"io"
 	"strings"
 	"time"
@@ -333,7 +332,7 @@ func (r *RestartableResultReader) generateQuery() {
 	if r.lastRow == nil {
 		// Initial query.
 		if !r.chunk.start.IsNull() {
-			var b bytes.Buffer
+			var b strings.Builder
 			sqlescape.WriteEscapeID(&b, r.td.PrimaryKeyColumns[0])
 			b.WriteString(">=")
 			r.chunk.start.EncodeSQL(&b)
@@ -351,7 +350,7 @@ func (r *RestartableResultReader) generateQuery() {
 
 	// end value.
 	if !r.chunk.end.IsNull() {
-		var b bytes.Buffer
+		var b strings.Builder
 		sqlescape.WriteEscapeID(&b, r.td.PrimaryKeyColumns[0])
 		b.WriteString("<")
 		r.chunk.end.EncodeSQL(&b)
@@ -392,14 +391,14 @@ func greaterThanTupleWhereClause(columns []string, row []sqltypes.Value) []strin
 
 	// Additional clause on the first column for multi-columns.
 	if len(columns) > 1 {
-		var b bytes.Buffer
+		var b strings.Builder
 		sqlescape.WriteEscapeID(&b, columns[0])
 		b.WriteString(">=")
 		row[0].EncodeSQL(&b)
 		clauses = append(clauses, b.String())
 	}
 
-	var b bytes.Buffer
+	var b strings.Builder
 	// List of columns.
 	if len(columns) > 1 {
 		b.WriteByte('(')
