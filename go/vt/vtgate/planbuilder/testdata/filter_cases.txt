@@ -690,7 +690,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_col": 0
     },
@@ -735,7 +735,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_col": 0
     },
@@ -802,7 +802,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_col": 0
     },
@@ -847,7 +847,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_col": 0
     },
@@ -884,7 +884,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_col": 0
     },
@@ -1081,7 +1081,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_id": 0
     },
@@ -1118,7 +1118,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "JoinVars": {
       "unsharded_id": 0
     },
@@ -1185,7 +1185,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_extra_col": 0
     },
@@ -1226,7 +1226,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_extra_col": 0
     },
@@ -1270,7 +1270,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_extra_col": 0
     },
@@ -1311,7 +1311,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_extra_col": 0
     },
@@ -1355,7 +1355,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
@@ -1393,7 +1393,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
@@ -1434,7 +1434,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_extra_col": 0
     },
@@ -1475,7 +1475,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_extra_col": 0
     },
@@ -2989,7 +2989,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "JoinVars": {
       "user_id": 0
     },
@@ -3044,7 +3044,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "JoinVars": {
       "user_id": 0
     },
@@ -3081,7 +3081,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_extra_col": 0
     },
@@ -3144,7 +3144,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2",
+    "JoinColumnIndexes": "L:1",
     "JoinVars": {
       "user_col": 0
     },
@@ -3200,7 +3200,7 @@ Gen4 plan same as above
           {
             "OperatorType": "Join",
             "Variant": "LeftJoin",
-            "JoinColumnIndexes": "1,-2",
+            "JoinColumnIndexes": "R:0,L:1",
             "JoinVars": {
               "user_col": 0
             },

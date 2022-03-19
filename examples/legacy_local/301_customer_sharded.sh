@@ -20,7 +20,7 @@
 # it also changes the customer vschema from unsharded to sharded and
 # sets up the necessary vindexes
 
-vtctlclient -server localhost:15999 ApplySchema -sql-file create_commerce_seq.sql commerce
-vtctlclient -server localhost:15999 ApplyVSchema -vschema_file vschema_commerce_seq.json commerce
-vtctlclient -server localhost:15999 ApplySchema -sql-file create_customer_sharded.sql customer
-vtctlclient -server localhost:15999 ApplyVSchema -vschema_file vschema_customer_sharded.json customer
+vtctlclient --server localhost:15999 ApplySchema -- --sql-file create_commerce_seq.sql commerce
+vtctlclient --server localhost:15999 ApplyVSchema -- --vschema_file vschema_commerce_seq.json commerce
+vtctlclient --server localhost:15999 ApplySchema -- --sql-file create_customer_sharded.sql customer
+vtctlclient --server localhost:15999 ApplyVSchema -- --vschema_file vschema_customer_sharded.json customer

@@ -202,6 +202,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfNotExpr(parent, node, replacer)
 	case *NullVal:
 		return a.rewriteRefOfNullVal(parent, node, replacer)
+	case Offset:
+		return a.rewriteOffset(parent, node, replacer)
 	case OnDup:
 		return a.rewriteOnDup(parent, node, replacer)
 	case *OptLike:
@@ -306,6 +308,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfTablespaceOperation(parent, node, replacer)
 	case *TimestampFuncExpr:
 		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
+	case *TrimFuncExpr:
+		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
 	case *TruncateTable:
 		return a.rewriteRefOfTruncateTable(parent, node, replacer)
 	case *UnaryExpr:
@@ -4700,6 +4704,38 @@ func (a *application) rewriteRefOfTimestampFuncExpr(parent SQLNode, node *Timest
 	}
 	return true
 }
+func (a *application) rewriteRefOfTrimFuncExpr(parent SQLNode, node *TrimFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.TrimArg, func(newNode, parent SQLNode) {
+		parent.(*TrimFuncExpr).TrimArg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.StringArg, func(newNode, parent SQLNode) {
+		parent.(*TrimFuncExpr).StringArg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfTruncateTable(parent SQLNode, node *TruncateTable, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5447,6 +5483,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *TimestampFuncExpr:
 		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
+	case *TrimFuncExpr:
+		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
 	case *ValuesFuncExpr:
 		return a.rewriteRefOfValuesFuncExpr(parent, node, replacer)
 	case *WeightStringFuncExpr:
@@ -5615,6 +5653,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfNotExpr(parent, node, replacer)
 	case *NullVal:
 		return a.rewriteRefOfNullVal(parent, node, replacer)
+	case Offset:
+		return a.rewriteOffset(parent, node, replacer)
 	case *OrExpr:
 		return a.rewriteRefOfOrExpr(parent, node, replacer)
 	case *Subquery:
@@ -5623,6 +5663,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *TimestampFuncExpr:
 		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
+	case *TrimFuncExpr:
+		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
 	case *UnaryExpr:
 		return a.rewriteRefOfUnaryExpr(parent, node, replacer)
 	case ValTuple:
@@ -5934,6 +5976,27 @@ func (a *application) rewriteIsolationLevel(parent SQLNode, node IsolationLevel,
 	return true
 }
 func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer replacerFunc) bool {
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteOffset(parent SQLNode, node Offset, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent

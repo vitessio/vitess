@@ -19,6 +19,7 @@ package sqlparser
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -1651,6 +1652,26 @@ func (node *ExtractFuncExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *TrimFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.TrimFuncType.ToString())
+	buf.WriteByte('(')
+	if node.Type.ToString() != "" {
+		buf.WriteString(node.Type.ToString())
+		buf.WriteByte(' ')
+	}
+	if node.TrimArg != nil {
+		buf.printExpr(node, node.TrimArg, true)
+		buf.WriteByte(' ')
+	}
+
+	if (node.Type.ToString() != "") || (node.TrimArg != nil) {
+		buf.WriteString("from ")
+	}
+	buf.printExpr(node, node.StringArg, true)
+	buf.WriteString(")")
+}
+
+// formatFast formats the node.
 func (node *WeightStringFuncExpr) formatFast(buf *TrackedBuffer) {
 	if node.As != nil {
 		buf.WriteString("weight_string(")
@@ -2498,4 +2519,11 @@ func (node *RenameTable) formatFast(buf *TrackedBuffer) {
 // show up like argument comparisons
 func (node *ExtractedSubquery) formatFast(buf *TrackedBuffer) {
 	node.alternative.Format(buf)
+}
+
+// formatFast formats the node.
+func (node Offset) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("[")
+	buf.WriteString(strconv.Itoa(int(node)))
+	buf.WriteString("]")
 }

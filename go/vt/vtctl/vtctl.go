@@ -604,6 +604,30 @@ var commands = []commandGroup{
 				help:   "Triggers a panic on the server side, to test the handling.",
 				hidden: true,
 			},
+			{
+				name: "LegacyVtctlCommand",
+				method: func(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+					subFlags.Usage = func() {
+						fmt.Fprintln(subFlags.Output(), "Runs the vtctl request through the legacy vtctlclient program syntax (default).")
+					}
+
+					return subFlags.Parse(args)
+				},
+				params: "<command> [args...]",
+				help:   "Runs the vtctl request through the legacy vtctlclient program syntax (default).",
+			},
+			{
+				name: "VtctldCommand",
+				method: func(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+					subFlags.Usage = func() {
+						fmt.Fprintln(subFlags.Output(), "Runs the vtctl request through the new vtctldclient program syntax. This will become the default in a future version of Vitess.")
+					}
+
+					return subFlags.Parse(args)
+				},
+				params: "<command> [args ...]",
+				help:   "Runs the vtctl request through the new vtctldclient program syntax. This will become the default in a future version of Vitess.",
+			},
 		},
 	},
 	{
@@ -1763,7 +1787,13 @@ func commandShardReplicationAdd(ctx context.Context, wr *wrangler.Wrangler, subF
 	if err != nil {
 		return err
 	}
-	return topo.UpdateShardReplicationRecord(ctx, wr.TopoServer(), keyspace, shard, tabletAlias)
+
+	_, err = wr.VtctldServer().ShardReplicationAdd(ctx, &vtctldatapb.ShardReplicationAddRequest{
+		TabletAlias: tabletAlias,
+		Keyspace:    keyspace,
+		Shard:       shard,
+	})
+	return err
 }
 
 func commandShardReplicationRemove(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1782,7 +1812,13 @@ func commandShardReplicationRemove(ctx context.Context, wr *wrangler.Wrangler, s
 	if err != nil {
 		return err
 	}
-	return topo.RemoveShardReplicationRecord(ctx, wr.TopoServer(), tabletAlias.Cell, keyspace, shard, tabletAlias)
+
+	_, err = wr.VtctldServer().ShardReplicationRemove(ctx, &vtctldatapb.ShardReplicationRemoveRequest{
+		TabletAlias: tabletAlias,
+		Keyspace:    keyspace,
+		Shard:       shard,
+	})
+	return err
 }
 
 func commandShardReplicationFix(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1798,7 +1834,8 @@ func commandShardReplicationFix(ctx context.Context, wr *wrangler.Wrangler, subF
 	if err != nil {
 		return err
 	}
-	return topo.FixShardReplication(ctx, wr.TopoServer(), wr.Logger(), cell, keyspace, shard)
+	_, err = topo.FixShardReplication(ctx, wr.TopoServer(), wr.Logger(), cell, keyspace, shard)
+	return err
 }
 
 func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2226,6 +2263,7 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 
 	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
 	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
+	dropConstraints := subFlags.Bool("drop_constraints", false, "If true, tables in the target keyspace will be created without constraints.")
 	_ = subFlags.Bool("v1", true, "")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -2251,7 +2289,7 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	target := subFlags.Arg(1)
 	tableSpecs := subFlags.Arg(2)
 	return wr.MoveTables(ctx, *workflow, source, target, tableSpecs, *cells, *tabletTypes, *allTables,
-		*excludes, *autoStart, *stopAfterCopy, "")
+		*excludes, *autoStart, *stopAfterCopy, "", *dropConstraints)
 }
 
 // VReplicationWorkflowAction defines subcommands passed to vtctl for movetables or reshard

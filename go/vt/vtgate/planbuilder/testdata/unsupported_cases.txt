@@ -472,11 +472,6 @@ Gen4 error: unsupported: in scatter query: aggregation function 'avg'
 "generating order by clause: ambiguous symbol reference: a"
 Gen4 plan same as above
 
-# Aggregates and joins
-"select count(*) from user join user_extra"
-"unsupported: cross-shard query with aggregates"
-Gen4 plan same as above
-
 # TODO this should be planned without using OA and MS
 "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(u.name) = 3"
 "unsupported: cross-shard query with aggregates"
@@ -484,48 +479,6 @@ Gen4 error: cannot push projections in ordered aggregates
 
 "select (select 1 from user u having count(ue.col) > 10) from user_extra ue"
 "symbol ue.col not found in subquery"
-Gen4 error: cannot push projections in ordered aggregates
-
-# aggregation filtering by having on a route with no group by
-"select 1 from user having count(id) = 10"
-{
-  "QueryType": "SELECT",
-  "Original": "select 1 from user having count(id) = 10",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "Scatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select 1 from `user` where 1 != 1",
-    "Query": "select 1 from `user` having count(id) = 10",
-    "Table": "`user`"
-  }
-}
-Gen4 error: cannot push projections in ordered aggregates
-
-# aggregation filtering by having on a route with no group by with non-unique vindex filter
-"select 1 from user having count(id) = 10 and name = 'a'"
-{
-  "QueryType": "SELECT",
-  "Original": "select 1 from user having count(id) = 10 and name = 'a'",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "Equal",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select 1 from `user` where 1 != 1",
-    "Query": "select 1 from `user` having count(id) = 10 and `name` = 'a'",
-    "Table": "`user`",
-    "Values": [
-      "VARCHAR(\"a\")"
-    ],
-    "Vindex": "name_user_map"
-  }
-}
 Gen4 error: cannot push projections in ordered aggregates
 
 # subquery of information_schema with itself and star expression in outer select
@@ -554,25 +507,6 @@ Gen4 plan same as above
 "can't do ORDER BY on top of UNION"
 Gen4 error: Column 'id' in field list is ambiguous
 
-# Column aliases in Derived Table
-"select id2 from (select id from user) as x (id2)"
-"unsupported: column aliases in derived table"
-{
-  "QueryType": "SELECT",
-  "Original": "select id2 from (select id from user) as x (id2)",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "Scatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id2 from (select id from `user` where 1 != 1) as x(id2) where 1 != 1",
-    "Query": "select id2 from (select id from `user`) as x(id2)",
-    "Table": "`user`"
-  }
-}
-
 # unsupported with clause in delete statement
 "with x as (select * from user) delete from x"
 "unsupported: with expression in delete statement"
@@ -593,16 +527,6 @@ Gen4 plan same as above
 "unsupported: with expression in union statement"
 Gen4 plan same as above
 
-# Aggregate on join
-"select user.a, count(*) from user join user_extra group by user.a"
-"unsupported: cross-shard query with aggregates"
-Gen4 plan same as above
-
-# Aggregate on other table in join
-"select user.a, count(user_extra.a) from user join user_extra group by user.a"
-"unsupported: cross-shard query with aggregates"
-Gen4 plan same as above
-
 # scatter aggregate with complex select list (can't build order by)
 "select distinct a+1 from user"
 "generating order by clause: cannot reference a complex expression"
@@ -611,7 +535,7 @@ Gen4 error: unsupported: in scatter query: complex order by expression: a + 1
 # aggregation on union
 "select sum(col) from (select col from user union all select col from unsharded) t"
 "unsupported: cross-shard query with aggregates"
-Gen4 error: unsupported: aggregation on unions
+Gen4 error: using aggregation on top of a *planbuilder.simpleProjection plan is not yet supported
 
 # systable union query in derived table with constraint on outside (without star projection)
 "select id from (select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `id` = 'primary'"

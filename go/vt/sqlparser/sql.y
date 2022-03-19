@@ -119,6 +119,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   constraintDefinition *ConstraintDefinition
   revertMigration *RevertMigration
   alterMigration  *AlterMigration
+  trimType        TrimType
 
   whens         []*When
   columnDefinitions []*ColumnDefinition
@@ -195,6 +196,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 %token <str> VIRTUAL STORED
+%token <str> BOTH LEADING TRAILING
 
 %left EMPTY_FROM_CLAUSE
 %right INTO
@@ -285,6 +287,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> GROUP_CONCAT SEPARATOR
 %token <str> TIMESTAMPADD TIMESTAMPDIFF
 %token <str> WEIGHT_STRING
+%token <str> LTRIM RTRIM TRIM
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -344,6 +347,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <strs> comment_opt comment_list
 %type <str> wild_opt check_option_opt cascade_or_local_opt restrict_or_cascade_opt
 %type <explainType> explain_format_opt
+%type <trimType> trim_type
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
 %type <partitionOption> partitions_options_opt partitions_options_beginning
@@ -4510,6 +4514,19 @@ function_call_keyword
 	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: NewStrLiteral($3)}
   }
 
+trim_type:
+  BOTH
+  {
+    $$ = BothTrimType
+  }
+| LEADING
+  {
+    $$ = LeadingTrimType
+  }
+| TRAILING
+  {
+    $$ = TrailingTrimType
+  }
 
 default_opt:
   /* empty */
@@ -4728,6 +4745,26 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONUtilityExpr{Name: $1, StringArg: $3}
   }
+| LTRIM openb expression closeb
+  {
+    $$ = &TrimFuncExpr{TrimFuncType:LTrimType, StringArg: $3}
+  }
+| RTRIM openb expression closeb
+  {
+    $$ = &TrimFuncExpr{TrimFuncType:RTrimType, StringArg: $3}
+  }
+| TRIM openb trim_type expression_opt FROM expression closeb
+  {
+    $$ = &TrimFuncExpr{Type:$3, TrimArg:$4, StringArg: $6}
+  }
+| TRIM openb expression closeb
+  {
+    $$ = &TrimFuncExpr{StringArg: $3}
+  }
+| TRIM openb expression FROM expression closeb
+  {
+    $$ = &TrimFuncExpr{TrimArg:$3, StringArg: $5}
+  }
 
 json_utility_name:
 JSON_PRETTY
@@ -4742,6 +4779,7 @@ JSON_PRETTY
   {
     $$ = NewColIdent($1)
   }
+
 
 interval:
  interval_time_stamp
@@ -5742,6 +5780,7 @@ reserved_keyword:
 | ASC
 | BETWEEN
 | BINARY
+| BOTH
 | BY
 | CASE
 | CALL
@@ -5804,6 +5843,7 @@ reserved_keyword:
 | LAST_VALUE
 | LATERAL
 | LEAD
+| LEADING
 | LEFT
 | LIKE
 | LIMIT
@@ -5858,6 +5898,7 @@ reserved_keyword:
 | TIMESTAMPADD
 | TIMESTAMPDIFF
 | TO
+| TRAILING
 | TRUE
 | UNION
 | UNIQUE
@@ -6011,6 +6052,7 @@ non_reserved_keyword:
 | LOGS
 | LONGBLOB
 | LONGTEXT
+| LTRIM
 | MANIFEST
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
@@ -6093,6 +6135,7 @@ non_reserved_keyword:
 | ROLE
 | ROLLBACK
 | ROW_FORMAT
+| RTRIM
 | S3
 | SECONDARY
 | SECONDARY_ENGINE
@@ -6138,6 +6181,7 @@ non_reserved_keyword:
 | TREE
 | TRIGGER
 | TRIGGERS
+| TRIM
 | TRUNCATE
 | UNBOUNDED
 | UNCOMMITTED

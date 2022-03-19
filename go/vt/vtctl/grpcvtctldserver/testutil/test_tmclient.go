@@ -150,6 +150,20 @@ type TabletManagerClient struct {
 		Error  error
 	}
 	// keyed by tablet alias.
+	ExecuteFetchAsAppDelays map[string]time.Duration
+	// keyed by tablet alias.
+	ExecuteFetchAsAppResults map[string]struct {
+		Response *querypb.QueryResult
+		Error    error
+	}
+	// keyed by tablet alias.
+	ExecuteFetchAsDbaDelays map[string]time.Duration
+	// keyed by tablet alias.
+	ExecuteFetchAsDbaResults map[string]struct {
+		Response *querypb.QueryResult
+		Error    error
+	}
+	// keyed by tablet alias.
 	ExecuteHookDelays map[string]time.Duration
 	// keyed by tablet alias.
 	ExecuteHookResults map[string]struct {
@@ -213,6 +227,12 @@ type TabletManagerClient struct {
 	ReplicationStatusResults map[string]struct {
 		Position *replicationdatapb.Status
 		Error    error
+	}
+	RestoreFromBackupResults map[string]struct {
+		Events        []*logutilpb.Event
+		EventInterval time.Duration
+		EventJitter   time.Duration
+		ErrorAfter    time.Duration
 	}
 	// keyed by tablet alias
 	RunHealthCheckDelays map[string]time.Duration
@@ -411,6 +431,54 @@ func (fake *TabletManagerClient) DemotePrimary(ctx context.Context, tablet *topo
 	}
 
 	return nil, assert.AnError
+}
+
+// ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int) (*querypb.QueryResult, error) {
+	if fake.ExecuteFetchAsAppResults == nil {
+		return nil, fmt.Errorf("%w: no ExecuteFetchAsApp results on fake TabletManagerClient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if fake.ExecuteFetchAsAppDelays != nil {
+		if delay, ok := fake.ExecuteFetchAsAppDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+	if result, ok := fake.ExecuteFetchAsAppResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no ExecuteFetchAsApp result set for tablet %s", assert.AnError, key)
+}
+
+// ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+	if fake.ExecuteFetchAsDbaResults == nil {
+		return nil, fmt.Errorf("%w: no ExecuteFetchAsDba results on fake TabletManagerClient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if fake.ExecuteFetchAsDbaDelays != nil {
+		if delay, ok := fake.ExecuteFetchAsDbaDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+	if result, ok := fake.ExecuteFetchAsDbaResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no ExecuteFetchAsDba result set for tablet %s", assert.AnError, key)
 }
 
 // ExecuteHook is part of the tmclient.TabletManagerClient interface.
@@ -703,6 +771,100 @@ func (fake *TabletManagerClient) ReplicationStatus(ctx context.Context, tablet *
 	}
 
 	return nil, assert.AnError
+}
+
+type backupRestoreStreamAdapter struct {
+	*grpcshim.BidiStream
+	ch chan *logutilpb.Event
+}
+
+func (stream *backupRestoreStreamAdapter) Recv() (*logutilpb.Event, error) {
+	select {
+	case <-stream.Context().Done():
+		return nil, stream.Context().Err()
+	case err := <-stream.ErrCh:
+		return nil, err
+	case msg := <-stream.ch:
+		return msg, nil
+	case <-stream.Closed():
+		return nil, stream.CloseErr()
+	}
+}
+
+func (stream *backupRestoreStreamAdapter) Send(msg *logutilpb.Event) error {
+	select {
+	case <-stream.Context().Done():
+		return stream.Context().Err()
+	case <-stream.Closed():
+		return grpcshim.ErrStreamClosed
+	case stream.ch <- msg:
+		return nil
+	}
+}
+
+// RestoreFromBackup is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet, backupTime time.Time) (logutil.EventStream, error) {
+	key := topoproto.TabletAliasString(tablet.Alias)
+	testdata, ok := fake.RestoreFromBackupResults[key]
+	if !ok {
+		return nil, fmt.Errorf("no RestoreFromBackup fake result set for %s", key)
+	}
+
+	stream := &backupRestoreStreamAdapter{
+		BidiStream: grpcshim.NewBidiStream(ctx),
+		ch:         make(chan *logutilpb.Event, len(testdata.Events)),
+	}
+	go func() {
+		if testdata.EventInterval == 0 {
+			testdata.EventInterval = 10 * time.Millisecond
+			log.Warningf("testutil.TabletManagerClient.RestoreFromBackup faked with no event interval for %s, defaulting to %s", key, testdata.EventInterval)
+		}
+
+		if testdata.EventJitter == 0 {
+			testdata.EventJitter = time.Millisecond
+			log.Warningf("testutil.TabletManagerClient.RestoreFromBackup faked with no event jitter for %s, defaulting to %s", key, testdata.EventJitter)
+		}
+
+		errCtx, errCancel := context.WithCancel(context.Background())
+		switch testdata.ErrorAfter {
+		case 0:
+			// no error to send, cancel the error context immediately
+			errCancel()
+		default:
+			go func() {
+				timer := time.NewTimer(testdata.ErrorAfter)
+				defer func() { // Stop the timer and drain the channel.
+					if !timer.Stop() {
+						<-timer.C
+					}
+				}()
+				defer errCancel()
+
+				<-timer.C
+				stream.ErrCh <- fmt.Errorf("error triggered after %s", testdata.ErrorAfter)
+			}()
+		}
+
+		ticker := timer.NewRandTicker(testdata.EventInterval, testdata.EventJitter)
+
+		defer ticker.Stop()
+		defer stream.CloseWithError(nil)
+
+		for _, event := range testdata.Events {
+			stream.ch <- event
+			<-ticker.C
+		}
+
+		// Wait for the error goroutine to finish. Note that if ErrorAfter
+		// is zero, we never start the goroutine and cancel this context
+		// immediately.
+		//
+		// The reason for this select is so that the error goroutine does
+		// not attempt to send to stream.errCh after the call to CloseSend().
+		<-errCtx.Done()
+	}()
+
+	return stream, nil
 }
 
 // RunHealthCheck is part of the tmclient.TabletManagerClient interface.

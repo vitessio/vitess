@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -1243,6 +1244,23 @@ func (node *ExtractFuncExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *TrimFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(", node.TrimFuncType.ToString())
+	if node.Type.ToString() != "" {
+		buf.astPrintf(node, "%s ", node.Type.ToString())
+	}
+	if node.TrimArg != nil {
+		buf.astPrintf(node, "%v ", node.TrimArg)
+	}
+
+	if (node.Type.ToString() != "") || (node.TrimArg != nil) {
+		buf.WriteString("from ")
+	}
+	buf.astPrintf(node, "%v", node.StringArg)
+	buf.WriteString(")")
+}
+
+// Format formats the node.
 func (node *WeightStringFuncExpr) Format(buf *TrackedBuffer) {
 	if node.As != nil {
 		buf.astPrintf(node, "weight_string(%v as %v)", node.Expr, node.As)
@@ -1908,4 +1926,11 @@ func (node *RenameTable) Format(buf *TrackedBuffer) {
 // show up like argument comparisons
 func (node *ExtractedSubquery) Format(buf *TrackedBuffer) {
 	node.alternative.Format(buf)
+}
+
+// Format formats the node.
+func (node Offset) Format(buf *TrackedBuffer) {
+	buf.WriteString("[")
+	buf.WriteString(strconv.Itoa(int(node)))
+	buf.WriteString("]")
 }

@@ -25,8 +25,8 @@ for i in 200 201 202; do
  CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
 done
 
-vtctlclient -server localhost:15999 InitShardPrimary -force customer/0 zone1-200
-vtctlclient -server localhost:15999 CopySchemaShard -tables customer,corder commerce/0 customer/0
-vtctlclient -server localhost:15999 ApplyVSchema -vschema_file vschema_commerce_vsplit.json commerce
-vtctlclient -server localhost:15999 ApplyVSchema -vschema_file vschema_customer_vsplit.json customer
+vtctlclient --server localhost:15999 InitShardPrimary -- --force customer/0 zone1-200
+vtctlclient --server localhost:15999 CopySchemaShard -- --tables customer,corder commerce/0 customer/0
+vtctlclient --server localhost:15999 ApplyVSchema -- --vschema_file vschema_commerce_vsplit.json commerce
+vtctlclient --server localhost:15999 ApplyVSchema -- --vschema_file vschema_customer_vsplit.json customer
 

@@ -697,8 +697,8 @@ END
 INPUT
 select concat(':',trim(' m '),':',trim(BOTH FROM ' y '),':',trim('*' FROM '*s*'),':');
 END
-ERROR
-syntax error at position 49 near 'FROM'
+OUTPUT
+select concat(':', trim(' m '), ':', trim(both from ' y '), ':', trim('*' from '*s*'), ':') from dual
 END
 INPUT
 select ceiling(cast(-2 as unsigned)), ceiling(18446744073709551614), ceiling(-2);
@@ -1333,8 +1333,8 @@ END
 INPUT
 select trim(c1 from '�'),trim('�' from c1) from t1;
 END
-ERROR
-syntax error at position 20 near 'from'
+OUTPUT
+select trim(c1 from '�'), trim('�' from c1) from t1
 END
 INPUT
 select extract(DAY_MICROSECOND FROM "1999-01-02 10:11:12.000123");
@@ -1987,8 +1987,8 @@ END
 INPUT
 select ltrim("a"),rtrim("a"),trim(BOTH "" from "a"),trim(BOTH " " from "a");
 END
-ERROR
-syntax error at position 47 near 'from'
+OUTPUT
+select ltrim('a'), rtrim('a'), trim(both '' from 'a'), trim(both ' ' from 'a') from dual
 END
 INPUT
 select repeat("a",0),repeat("ab",5+5),repeat("ab",-1),reverse(NULL);
@@ -2797,8 +2797,8 @@ END
 INPUT
 select collation(trim(BOTH _latin2' ' FROM _latin2'a')), coercibility(trim(BOTH _latin2'a' FROM _latin2'a'));
 END
-ERROR
-syntax error at position 35 near '_latin2'
+OUTPUT
+select collation(trim(both _latin2 ' ' from _latin2 'a')), coercibility(trim(both _latin2 'a' from _latin2 'a')) from dual
 END
 INPUT
 select hex(weight_string(ch)) w, name from t1 order by ch;
@@ -3361,8 +3361,8 @@ END
 INPUT
 select trim(trailing NULL from 'xyz') as "must_be_null";
 END
-ERROR
-syntax error at position 26 near 'NULL'
+OUTPUT
+select trim(trailing null from 'xyz') as must_be_null from dual
 END
 INPUT
 select 0<=>0.0, 0.0<=>0E0, 0E0<=>"0", 10.0<=>1E1, 10<=>10.0, 10<=>1E1;
@@ -4789,8 +4789,8 @@ END
 INPUT
 select trim(leading NULL from 'kate') as "must_be_null";
 END
-ERROR
-syntax error at position 25 near 'NULL'
+OUTPUT
+select trim(leading null from 'kate') as must_be_null from dual
 END
 INPUT
 select min(f4),max(f4) from t1;
@@ -5143,8 +5143,8 @@ END
 INPUT
 select trim(trailing 'foo' from 'foo');
 END
-ERROR
-syntax error at position 32 near 'from'
+OUTPUT
+select trim(trailing 'foo' from 'foo') from dual
 END
 INPUT
 select from (t1 natural join t2) natural left join (t3 natural join t4);
@@ -11377,8 +11377,8 @@ END
 INPUT
 select concat(':',trim(LEADING '.*' FROM '.*my'),':',trim(TRAILING '.*' FROM 'sql.*.*'),':');
 END
-ERROR
-syntax error at position 41 near 'FROM'
+OUTPUT
+select concat(':', trim(leading '.*' from '.*my'), ':', trim(trailing '.*' from 'sql.*.*'), ':') from dual
 END
 INPUT
 select max(t1.a2) from t1 left outer join t2 on t1.a1=10;
@@ -13075,8 +13075,8 @@ END
 INPUT
 select collation(trim(LEADING _latin2' ' FROM _latin2'a')), coercibility(trim(LEADING _latin2'a' FROM _latin2'a'));
 END
-ERROR
-syntax error at position 38 near '_latin2'
+OUTPUT
+select collation(trim(leading _latin2 ' ' from _latin2 'a')), coercibility(trim(leading _latin2 'a' from _latin2 'a')) from dual
 END
 INPUT
 select from t1 AS m LEFT JOIN t2 AS c1 ON m.c1id = c1.id AND c1.active = 'Yes' LEFT JOIN t3 AS c2 ON m.c2id = c2.id AND c2.active = 'Yes' WHERE m.pid=1 AND (c1.id IS NOT NULL OR c2.id IS NOT NULL);
@@ -14563,8 +14563,8 @@ END
 INPUT
 select concat(':',trim(LEADING FROM ' left'),':',trim(TRAILING FROM ' right '),':');
 END
-ERROR
-syntax error at position 36 near 'FROM'
+OUTPUT
+select concat(':', trim(leading from ' left'), ':', trim(trailing from ' right '), ':') from dual
 END
 INPUT
 select ST_AsText(ST_PolygonFromText('POLYGON((10 10,20 10,20 20,10 20, 10 10))'));
@@ -18337,8 +18337,8 @@ END
 INPUT
 select concat(':',trim(BOTH 'ab' FROM 'ababmyabab'),':',trim(BOTH '*' FROM '***sql'),':');
 END
-ERROR
-syntax error at position 38 near 'FROM'
+OUTPUT
+select concat(':', trim(both 'ab' from 'ababmyabab'), ':', trim(both '*' from '***sql'), ':') from dual
 END
 INPUT
 select date_add(date,INTERVAL 1 YEAR) from t1;
@@ -19147,14 +19147,14 @@ END
 INPUT
 select trim(null from 'kate') as "must_be_null";
 END
-ERROR
-syntax error at position 22 near 'from'
+OUTPUT
+ select trim(null from 'kate') as must_be_null from dual
 END
 INPUT
 select domain from t1 where concat('@', trim(leading '.' from concat('.', domain))) = '@hello.de';
 END
-ERROR
-syntax error at position 62 near 'from'
+OUTPUT
+select domain from t1 where concat('@', trim(leading '.' from concat('.', domain))) = '@hello.de'
 END
 INPUT
 select @topic4_id:= 10104;
@@ -21007,8 +21007,8 @@ END
 INPUT
 select collation(trim(TRAILING _latin2' ' FROM _latin2'a')), coercibility(trim(TRAILING _latin2'a' FROM _latin2'a'));
 END
-ERROR
-syntax error at position 39 near '_latin2'
+OUTPUT
+select collation(trim(trailing _latin2 ' ' from _latin2 'a')), coercibility(trim(trailing _latin2 'a' from _latin2 'a')) from dual
 END
 INPUT
 select left('hello', -4294967296);
@@ -21091,8 +21091,8 @@ END
 INPUT
 select TRIM("foo" FROM "foo"), TRIM("foo" FROM "foook"), TRIM("foo" FROM "okfoo");
 END
-ERROR
-syntax error at position 23 near 'FROM'
+OUTPUT
+select trim('foo' from 'foo'), trim('foo' from 'foook'), trim('foo' from 'okfoo') from dual
 END
 INPUT
 select var_samp(s) as 'null', var_pop(s) as '0' from bug22555;
@@ -21115,8 +21115,8 @@ END
 INPUT
 select concat(':',trim(leading from ' left '),':',trim(trailing from ' right '),':');
 END
-ERROR
-syntax error at position 36 near 'from'
+OUTPUT
+select concat(':', trim(leading from ' left '), ':', trim(trailing from ' right '), ':') from dual
 END
 INPUT
 select DATE_ADD('20071108', INTERVAL 1 DAY);
@@ -21373,8 +21373,8 @@ END
 INPUT
 select trim(leading 'foo' from 'foo');
 END
-ERROR
-syntax error at position 31 near 'from'
+OUTPUT
+select trim(leading 'foo' from 'foo') from dual
 END
 INPUT
 select distinct id, IFNULL(dsc, '-') from t1;
@@ -21517,8 +21517,8 @@ END
 INPUT
 select trim('xyz' from null) as "must_be_null";
 END
-ERROR
-syntax error at position 23 near 'from'
+OUTPUT
+select trim('xyz' from null) as must_be_null from dual
 END
 INPUT
 select a.*, count(b.id) as c from t2 a left join t3 b on a.id=b.order_id group by a.id, a.description having (a.description is not null) and (c=0);
@@ -22813,8 +22813,8 @@ END
 INPUT
 select domain from t1 where concat('@', trim(leading '.' from concat('.', domain))) = '@test.de';
 END
-ERROR
-syntax error at position 62 near 'from'
+OUTPUT
+select domain from t1 where concat('@', trim(leading '.' from concat('.', domain))) = '@test.de'
 END
 INPUT
 select from t1 natural left join (t4 natural join t5) where t4.y > 7;

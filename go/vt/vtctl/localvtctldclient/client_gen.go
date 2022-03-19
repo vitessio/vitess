@@ -105,6 +105,57 @@ func (client *localVtctldClient) Backup(ctx context.Context, in *vtctldatapb.Bac
 	return stream, nil
 }
 
+type backupShardStreamAdapter struct {
+	*grpcshim.BidiStream
+	ch chan *vtctldatapb.BackupResponse
+}
+
+func (stream *backupShardStreamAdapter) Recv() (*vtctldatapb.BackupResponse, error) {
+	select {
+	case <-stream.Context().Done():
+		return nil, stream.Context().Err()
+	case <-stream.Closed():
+		// Stream has been closed for future sends. If there are messages that
+		// have already been sent, receive them until there are no more. After
+		// all sent messages have been received, Recv will return the CloseErr.
+		select {
+		case msg := <-stream.ch:
+			return msg, nil
+		default:
+			return nil, stream.CloseErr()
+		}
+	case err := <-stream.ErrCh:
+		return nil, err
+	case msg := <-stream.ch:
+		return msg, nil
+	}
+}
+
+func (stream *backupShardStreamAdapter) Send(msg *vtctldatapb.BackupResponse) error {
+	select {
+	case <-stream.Context().Done():
+		return stream.Context().Err()
+	case <-stream.Closed():
+		return grpcshim.ErrStreamClosed
+	case stream.ch <- msg:
+		return nil
+	}
+}
+
+// BackupShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) BackupShard(ctx context.Context, in *vtctldatapb.BackupShardRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_BackupShardClient, error) {
+	stream := &backupShardStreamAdapter{
+		BidiStream: grpcshim.NewBidiStream(ctx),
+		ch:         make(chan *vtctldatapb.BackupResponse, 1),
+	}
+	go func() {
+		err := client.s.BackupShard(in, stream)
+		stream.CloseWithError(err)
+	}()
+
+	return stream, nil
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ChangeTabletType(ctx context.Context, in *vtctldatapb.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	return client.s.ChangeTabletType(ctx, in)
@@ -153,6 +204,16 @@ func (client *localVtctldClient) DeleteTablets(ctx context.Context, in *vtctldat
 // EmergencyReparentShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) EmergencyReparentShard(ctx context.Context, in *vtctldatapb.EmergencyReparentShardRequest, opts ...grpc.CallOption) (*vtctldatapb.EmergencyReparentShardResponse, error) {
 	return client.s.EmergencyReparentShard(ctx, in)
+}
+
+// ExecuteFetchAsApp is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ExecuteFetchAsApp(ctx context.Context, in *vtctldatapb.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteFetchAsAppResponse, error) {
+	return client.s.ExecuteFetchAsApp(ctx, in)
+}
+
+// ExecuteFetchAsDBA is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ExecuteFetchAsDBA(ctx context.Context, in *vtctldatapb.ExecuteFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteFetchAsDBAResponse, error) {
+	return client.s.ExecuteFetchAsDBA(ctx, in)
 }
 
 // ExecuteHook is part of the vtctlservicepb.VtctldClient interface.
@@ -305,6 +366,11 @@ func (client *localVtctldClient) ReloadSchemaShard(ctx context.Context, in *vtct
 	return client.s.ReloadSchemaShard(ctx, in)
 }
 
+// RemoveBackup is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) RemoveBackup(ctx context.Context, in *vtctldatapb.RemoveBackupRequest, opts ...grpc.CallOption) (*vtctldatapb.RemoveBackupResponse, error) {
+	return client.s.RemoveBackup(ctx, in)
+}
+
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) RemoveKeyspaceCell(ctx context.Context, in *vtctldatapb.RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*vtctldatapb.RemoveKeyspaceCellResponse, error) {
 	return client.s.RemoveKeyspaceCell(ctx, in)
@@ -318,6 +384,57 @@ func (client *localVtctldClient) RemoveShardCell(ctx context.Context, in *vtctld
 // ReparentTablet is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ReparentTablet(ctx context.Context, in *vtctldatapb.ReparentTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.ReparentTabletResponse, error) {
 	return client.s.ReparentTablet(ctx, in)
+}
+
+type restoreFromBackupStreamAdapter struct {
+	*grpcshim.BidiStream
+	ch chan *vtctldatapb.RestoreFromBackupResponse
+}
+
+func (stream *restoreFromBackupStreamAdapter) Recv() (*vtctldatapb.RestoreFromBackupResponse, error) {
+	select {
+	case <-stream.Context().Done():
+		return nil, stream.Context().Err()
+	case <-stream.Closed():
+		// Stream has been closed for future sends. If there are messages that
+		// have already been sent, receive them until there are no more. After
+		// all sent messages have been received, Recv will return the CloseErr.
+		select {
+		case msg := <-stream.ch:
+			return msg, nil
+		default:
+			return nil, stream.CloseErr()
+		}
+	case err := <-stream.ErrCh:
+		return nil, err
+	case msg := <-stream.ch:
+		return msg, nil
+	}
+}
+
+func (stream *restoreFromBackupStreamAdapter) Send(msg *vtctldatapb.RestoreFromBackupResponse) error {
+	select {
+	case <-stream.Context().Done():
+		return stream.Context().Err()
+	case <-stream.Closed():
+		return grpcshim.ErrStreamClosed
+	case stream.ch <- msg:
+		return nil
+	}
+}
+
+// RestoreFromBackup is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) RestoreFromBackup(ctx context.Context, in *vtctldatapb.RestoreFromBackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_RestoreFromBackupClient, error) {
+	stream := &restoreFromBackupStreamAdapter{
+		BidiStream: grpcshim.NewBidiStream(ctx),
+		ch:         make(chan *vtctldatapb.RestoreFromBackupResponse, 1),
+	}
+	go func() {
+		err := client.s.RestoreFromBackup(in, stream)
+		stream.CloseWithError(err)
+	}()
+
+	return stream, nil
 }
 
 // RunHealthCheck is part of the vtctlservicepb.VtctldClient interface.
@@ -350,14 +467,39 @@ func (client *localVtctldClient) SetWritable(ctx context.Context, in *vtctldatap
 	return client.s.SetWritable(ctx, in)
 }
 
+// ShardReplicationAdd is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ShardReplicationAdd(ctx context.Context, in *vtctldatapb.ShardReplicationAddRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationAddResponse, error) {
+	return client.s.ShardReplicationAdd(ctx, in)
+}
+
+// ShardReplicationFix is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ShardReplicationFix(ctx context.Context, in *vtctldatapb.ShardReplicationFixRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationFixResponse, error) {
+	return client.s.ShardReplicationFix(ctx, in)
+}
+
 // ShardReplicationPositions is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ShardReplicationPositions(ctx context.Context, in *vtctldatapb.ShardReplicationPositionsRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
 	return client.s.ShardReplicationPositions(ctx, in)
 }
 
+// ShardReplicationRemove is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ShardReplicationRemove(ctx context.Context, in *vtctldatapb.ShardReplicationRemoveRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationRemoveResponse, error) {
+	return client.s.ShardReplicationRemove(ctx, in)
+}
+
 // SleepTablet is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) SleepTablet(ctx context.Context, in *vtctldatapb.SleepTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.SleepTabletResponse, error) {
 	return client.s.SleepTablet(ctx, in)
+}
+
+// SourceShardAdd is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SourceShardAdd(ctx context.Context, in *vtctldatapb.SourceShardAddRequest, opts ...grpc.CallOption) (*vtctldatapb.SourceShardAddResponse, error) {
+	return client.s.SourceShardAdd(ctx, in)
+}
+
+// SourceShardDelete is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SourceShardDelete(ctx context.Context, in *vtctldatapb.SourceShardDeleteRequest, opts ...grpc.CallOption) (*vtctldatapb.SourceShardDeleteResponse, error) {
+	return client.s.SourceShardDelete(ctx, in)
 }
 
 // StartReplication is part of the vtctlservicepb.VtctldClient interface.

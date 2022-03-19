@@ -2332,6 +2332,36 @@ var (
 	}, {
 		input:  "SELECT JSON_STORAGE_FREE(@j)",
 		output: "select json_storage_free(@j) from dual",
+	}, {
+		input:  "SELECT LTRIM('abc')",
+		output: "select ltrim('abc') from dual",
+	}, {
+		input:  "SELECT RTRIM('abc')",
+		output: "select rtrim('abc') from dual",
+	}, {
+		input:  "SELECT TRIM('  abc  ')",
+		output: "select trim('  abc  ') from dual",
+	}, {
+		input:  "SELECT TRIM('aa' FROM 'aabccaaa')",
+		output: "select trim('aa' from 'aabccaaa') from dual",
+	}, {
+		input:  "SELECT TRIM(LEADING FROM 'aabccaaa')",
+		output: "select trim(leading from 'aabccaaa') from dual",
+	}, {
+		input:  "SELECT TRIM(TRAILING FROM 'abca')",
+		output: "select trim(trailing from 'abca') from dual",
+	}, {
+		input:  "SELECT TRIM(BOTH FROM 'abc')",
+		output: "select trim(both from 'abc') from dual",
+	}, {
+		input:  "SELECT TRIM(LEADING 'a' FROM 'abc')",
+		output: "select trim(leading 'a' from 'abc') from dual",
+	}, {
+		input:  "SELECT TRIM(TRAILING 'a' FROM 'abc')",
+		output: "select trim(trailing 'a' from 'abc') from dual",
+	}, {
+		input:  "SELECT TRIM(BOTH 'a' FROM 'abc')",
+		output: "select trim(both 'a' from 'abc') from dual",
 	}}
 )
 
@@ -2763,8 +2793,8 @@ func TestKeywords(t *testing.T) {
 		input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
 		output: "select /* share and mode as cols */ `share`, `mode` from t where `share` = 'foo'",
 	}, {
-		input:  "select /* unused keywords as cols */ `write`, varying from t where trailing = 'foo'",
-		output: "select /* unused keywords as cols */ `write`, `varying` from t where `trailing` = 'foo'",
+		input:  "select /* unused keywords as cols */ `write`, varying from t where `trailing` = 'foo' and `leading` = 'foo' and `both` = 'foo'",
+		output: "select /* unused keywords as cols */ `write`, `varying` from t where `trailing` = 'foo' and `leading` = 'foo' and `both` = 'foo'",
 	}, {
 		input:  "select status from t",
 		output: "select `status` from t",

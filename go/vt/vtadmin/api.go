@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/pprof"
+	"net/url"
 	stdsort "sort"
 	"strings"
 	"sync"
@@ -236,33 +237,36 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	clusterCookie, err := r.Cookie("cluster")
 
 	if err == nil {
-		decoded, err := base64.StdEncoding.DecodeString(clusterCookie.Value)
+		urlDecoded, err := url.QueryUnescape(clusterCookie.Value)
 		if err == nil {
-			var clusterJSON DynamicClusterJSON
-			err = json.Unmarshal(decoded, &clusterJSON)
+			decoded, err := base64.StdEncoding.DecodeString(urlDecoded)
 			if err == nil {
-				clusterID := clusterJSON.ClusterName
-				c, err := cluster.Config{
-					ID:            clusterID,
-					Name:          clusterID,
-					DiscoveryImpl: "dynamic",
-					DiscoveryFlagsByImpl: cluster.FlagsByImpl{
-						"dynamic": map[string]string{
-							"discovery": string(decoded),
-						},
-					},
-				}.Cluster()
+				var clusterJSON DynamicClusterJSON
+				err = json.Unmarshal(decoded, &clusterJSON)
 				if err == nil {
-					api.clusterMap[clusterID] = c
-					api.clusters = append(api.clusters, c)
-					err = api.clusterCache.Add(clusterID, c, 24*time.Hour)
-					if err != nil {
-						log.Infof("could not add dynamic cluster %s to cluster cache: %+v", clusterID, err)
+					clusterID := clusterJSON.ClusterName
+					c, err := cluster.Config{
+						ID:            clusterID,
+						Name:          clusterID,
+						DiscoveryImpl: "dynamic",
+						DiscoveryFlagsByImpl: cluster.FlagsByImpl{
+							"dynamic": map[string]string{
+								"discovery": string(decoded),
+							},
+						},
+					}.Cluster()
+					if err == nil {
+						api.clusterMap[clusterID] = c
+						api.clusters = append(api.clusters, c)
+						err = api.clusterCache.Add(clusterID, c, 24*time.Hour)
+						if err != nil {
+							log.Infof("could not add dynamic cluster %s to cluster cache: %+v", clusterID, err)
+						}
 					}
+					selectedCluster := api.clusterMap[clusterID]
+					dynamicAPI.clusters = []*cluster.Cluster{selectedCluster}
+					dynamicAPI.clusterMap = map[string]*cluster.Cluster{clusterID: selectedCluster}
 				}
-				selectedCluster := api.clusterMap[clusterID]
-				dynamicAPI.clusters = []*cluster.Cluster{selectedCluster}
-				dynamicAPI.clusterMap = map[string]*cluster.Cluster{clusterID: selectedCluster}
 			}
 		}
 	}
