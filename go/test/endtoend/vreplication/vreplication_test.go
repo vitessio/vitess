@@ -227,9 +227,6 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
-	t.Run("ensure _vt.vreplication table is created", func(t *testing.T) {
-		ensureVTSchemaIsUpToDate(t)
-	})
 	insertInitialData(t)
 	t.Run("VStreamFrom", func(t *testing.T) {
 		testVStreamFrom(t, "product", 2)
