@@ -35,6 +35,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/withddl"
+
 	"google.golang.org/protobuf/proto"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -1028,6 +1030,12 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		if err != nil {
 			return err
 		}
+
+		e.initVreplicationDDLOnce.Do(func() {
+			// Ensure vreplication schema is up-to-date by invoking a query with non-existing columns.
+			// This will make vreplication run through its WithDDL schema changes.
+			_, _ = tmClient.VReplicationExec(ctx, tablet.Tablet, withddl.QueryToTriggerWithDDL)
+		})
 
 		// reload schema before migration
 		if err := tmClient.ReloadSchema(ctx, tablet.Tablet, ""); err != nil {
@@ -3012,7 +3020,7 @@ func (e *Executor) vreplicationExec(ctx context.Context, tmClient tmclient.Table
 	e.initVreplicationDDLOnce.Do(func() {
 		// Ensure vreplication schema is up-to-date by invoking a query with non-existing columns.
 		// This will make vreplication run through its WithDDL schema changes.
-		_, _ = tmClient.VReplicationExec(ctx, tablet, sqlImpossibleSelectVreplication)
+		_, _ = tmClient.VReplicationExec(ctx, tablet, withddl.QueryToTriggerWithDDL)
 	})
 	return tmClient.VReplicationExec(ctx, tablet, query)
 }
