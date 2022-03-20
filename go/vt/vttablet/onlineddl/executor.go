@@ -1031,12 +1031,6 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 			return err
 		}
 
-		e.initVreplicationDDLOnce.Do(func() {
-			// Ensure vreplication schema is up-to-date by invoking a query with non-existing columns.
-			// This will make vreplication run through its WithDDL schema changes.
-			_, _ = tmClient.VReplicationExec(ctx, tablet.Tablet, withddl.QueryToTriggerWithDDL)
-		})
-
 		// reload schema before migration
 		if err := tmClient.ReloadSchema(ctx, tablet.Tablet, ""); err != nil {
 			return err
