@@ -2297,11 +2297,11 @@ var (
 		input:  "create table unused_reserved_keywords (dense_rank bigint, lead VARCHAR(255), percent_rank decimal(3, 0), row TINYINT, rows CHAR(10), constraint PK_project PRIMARY KEY (dense_rank))",
 		output: "create table unused_reserved_keywords (\n\t`dense_rank` bigint,\n\t`lead` VARCHAR(255),\n\t`percent_rank` decimal(3,0),\n\t`row` TINYINT,\n\t`rows` CHAR(10),\n\tconstraint PK_project PRIMARY KEY (`dense_rank`)\n)",
 	}, {
-		input:  "SELECT JSON_PRETTY(`{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}`)",
-		output: "select json_pretty(`{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}`) from dual",
+		input:  `SELECT JSON_PRETTY('{"a":"10","b":"15","x":"25"}')`,
+		output: `select json_pretty('{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
 	}, {
-		input:  "SELECT JSON_PRETTY(N'{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}')",
-		output: "select json_pretty(N'{\\\"a\\\":\\\"10\\\",\\\"b\\\":\\\"15\\\",\\\"x\\\":\\\"25\\\"}') from dual",
+		input:  `SELECT JSON_PRETTY(N'{"a":"10","b":"15","x":"25"}')`,
+		output: `select json_pretty(N'{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
 	}, {
 		input:  "SELECT jcol, JSON_PRETTY(jcol) from jtable",
 		output: "select jcol, json_pretty(jcol) from jtable",
@@ -2312,11 +2312,11 @@ var (
 		input:  "SELECT jcol, JSON_STORAGE_SIZE(jcol) AS Size FROM jtable",
 		output: "select jcol, json_storage_size(jcol) as Size from jtable",
 	}, {
-		input:  "SELECT jcol, JSON_STORAGE_SIZE(N'{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') AS Size FROM jtable",
-		output: "select jcol, json_storage_size(N'{\\\"a\\\":\\\"10\\\",\\\"b\\\":\\\"15\\\",\\\"x\\\":\\\"25\\\"}') as Size from jtable",
+		input:  `SELECT jcol, JSON_STORAGE_SIZE(N'{"a":"10","b":"15","x":"25"}') AS Size FROM jtable`,
+		output: `select jcol, json_storage_size(N'{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') as Size from jtable`,
 	}, {
-		input:  "SELECT JSON_STORAGE_SIZE(`[100, \"sakila\", [1, 3, 5], 425.05]`) AS A, JSON_STORAGE_SIZE(`{\"a\": 1000, \"b\": \"a\", \"c\": \"[1, 3, 5, 7]\"}`) AS B, JSON_STORAGE_SIZE(`{\"a\": 1000, \"b\": \"wxyz\", \"c\": \"[1, 3, 5, 7]\"}`) AS C,JSON_STORAGE_SIZE(`[100, \"json\", [[10, 20, 30], 3, 5], 425.05]`) AS D",
-		output: "select json_storage_size(`[100, \"sakila\", [1, 3, 5], 425.05]`) as A, json_storage_size(`{\"a\": 1000, \"b\": \"a\", \"c\": \"[1, 3, 5, 7]\"}`) as B, json_storage_size(`{\"a\": 1000, \"b\": \"wxyz\", \"c\": \"[1, 3, 5, 7]\"}`) as C, json_storage_size(`[100, \"json\", [[10, 20, 30], 3, 5], 425.05]`) as D from dual",
+		input:  `SELECT JSON_STORAGE_SIZE('[100, "sakila", [1, 3, 5], 425.05]') AS A, JSON_STORAGE_SIZE('{"a": 1000, "b": "a", "c": "[1, 3, 5, 7]"}') AS B, JSON_STORAGE_SIZE('{"a": 1000, "b": "wxyz", "c": "[1, 3, 5, 7]"}') AS C,JSON_STORAGE_SIZE('[100, "json", [[10, 20, 30], 3, 5], 425.05]') AS D`,
+		output: `select json_storage_size('[100, \"sakila\", [1, 3, 5], 425.05]') as A, json_storage_size('{\"a\": 1000, \"b\": \"a\", \"c\": \"[1, 3, 5, 7]\"}') as B, json_storage_size('{\"a\": 1000, \"b\": \"wxyz\", \"c\": \"[1, 3, 5, 7]\"}') as C, json_storage_size('[100, \"json\", [[10, 20, 30], 3, 5], 425.05]') as D from dual`,
 	}, {
 		input:  "SELECT JSON_STORAGE_SIZE(@j)",
 		output: "select json_storage_size(@j) from dual",
@@ -2324,11 +2324,11 @@ var (
 		input:  "SELECT JSON_STORAGE_FREE(jcol) FROM jtable",
 		output: "select json_storage_free(jcol) from jtable",
 	}, {
-		input:  "SELECT JSON_STORAGE_FREE(`{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}`)",
-		output: "select json_storage_free(`{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}`) from dual",
+		input:  `SELECT JSON_STORAGE_FREE('{"a":"10","b":"15","x":"25"}')`,
+		output: `select json_storage_free('{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
 	}, {
-		input:  "SELECT JSON_STORAGE_FREE(N'{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}')",
-		output: "select json_storage_free(N'{\\\"a\\\":\\\"10\\\",\\\"b\\\":\\\"15\\\",\\\"x\\\":\\\"25\\\"}') from dual",
+		input:  `SELECT JSON_STORAGE_FREE(N'{"a":"10","b":"15","x":"25"}')`,
+		output: `select json_storage_free(N'{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
 	}, {
 		input:  "SELECT JSON_STORAGE_FREE(@j)",
 		output: "select json_storage_free(@j) from dual",
