@@ -84,6 +84,9 @@ type FakeMysqlDaemon struct {
 	// StartReplicationError is used by StartReplication
 	StartReplicationError error
 
+	// PromoteLag is the time for which Promote will stall
+	PromoteLag time.Duration
+
 	// PrimaryStatusError is used by PrimaryStatus
 	PrimaryStatusError error
 
@@ -416,6 +419,9 @@ func (fmd *FakeMysqlDaemon) WaitSourcePos(_ context.Context, pos mysql.Position)
 
 // Promote is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) Promote(hookExtraEnv map[string]string) (mysql.Position, error) {
+	if fmd.PromoteLag > 0 {
+		time.Sleep(fmd.PromoteLag)
+	}
 	if fmd.PromoteError != nil {
 		return mysql.Position{}, fmd.PromoteError
 	}
