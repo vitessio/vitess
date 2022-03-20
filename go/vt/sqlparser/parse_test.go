@@ -2327,26 +2327,26 @@ var (
 		input:  "SELECT TRIM(BOTH 'a' FROM 'abc')",
 		output: "select trim(both 'a' from 'abc') from dual",
 	}, {
-		input:  "SELECT JSON_DEPTH('{}'), JSON_DEPTH('[]'), JSON_DEPTH('true')",
-		output: "select json_depth('{}'), json_depth('[]'), json_depth('true') from dual",
+		input:  `SELECT JSON_DEPTH('{}'), JSON_DEPTH('[]'), JSON_DEPTH('true')`,
+		output: `select json_depth('{}'), json_depth('[]'), json_depth('true') from dual`,
 	}, {
-		input:  "SELECT JSON_LENGTH(`{\"a\": 1, \"b\": {\"c\": 30}}`)",
-		output: "select json_length(`{\"a\": 1, \"b\": {\"c\": 30}}`) from dual",
+		input:  `SELECT JSON_LENGTH('{"a": 1, "b": {"c": 30}}')`,
+		output: `select json_length('{\"a\": 1, \"b\": {\"c\": 30}}') from dual`,
 	}, {
-		input:  "SELECT JSON_LENGTH(`{\"a\": 1, \"b\": {\"c\": 30}}`, '$.b');",
-		output: "select json_length(`{\"a\": 1, \"b\": {\"c\": 30}}`, $.b) from dual",
+		input:  `SELECT JSON_LENGTH('{"a": 1, "b": {"c": 30}}', '$.b');`,
+		output: `select json_length('{\"a\": 1, \"b\": {\"c\": 30}}', $.b) from dual`,
 	}, {
-		input:  "SELECT JSON_LENGTH(`{\"a\": 1, \"b\": {\"c\": 30}}`, @j);",
-		output: "select json_length(`{\"a\": 1, \"b\": {\"c\": 30}}`) from dual",
+		input:  `SELECT JSON_LENGTH('{\"a\": 1, \"b\": {\"c\": 30}}', @j);`,
+		output: `select json_length('{\"a\": 1, \"b\": {\"c\": 30}}', @j) from dual`,
 	}, {
 		input:  "SELECT JSON_TYPE(@j)",
 		output: "select json_type(@j) from dual",
 	}, {
-		input:  "SELECT JSON_TYPE(JSON_EXTRACT(@j, '$.a[0]'))",
-		output: "select json_type(JSON_EXTRACT(@j, '$.a[0]')) from dual",
+		input:  `SELECT JSON_TYPE(JSON_EXTRACT(@j, '$.a[0]'))`,
+		output: `select json_type(JSON_EXTRACT(@j, '$.a[0]')) from dual`,
 	}, {
-		input:  "SELECT JSON_VALID(`{\"a\": 1}`)",
-		output: "select json_valid(`{\"a\": 1}`) from dual",
+		input:  `SELECT JSON_VALID('{\"a\": 1}')`,
+		output: `select json_valid('{\"a\": 1}') from dual`,
 	}, {
 		input:  "SELECT JSON_VALID(@j)",
 		output: "select json_valid(@j) from dual",
