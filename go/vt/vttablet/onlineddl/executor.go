@@ -330,69 +330,51 @@ func (e *Executor) allowConcurrentMigration(onlineDDL *schema.OnlineDDL) bool {
 	case sqlparser.CreateDDLAction, sqlparser.DropDDLAction:
 		// CREATE TABLE, DROP TABLE are allowed to run concurrently.
 		return true
+	// case sqlparser.AlterDDLAction:
+	// 	// ALTER is only allowed concurrent execution if this is a Vitess migration
+	// 	strategy := onlineDDL.StrategySetting().Strategy
+	// 	return strategy == schema.DDLStrategyOnline || strategy == schema.DDLStrategyVitess
 	case sqlparser.RevertDDLAction:
 		// REVERT is allowed to run concurrently.
-		// Reminder that REVERT is supported for CREATE, DROP and for 'online' ALTER, but never for
+		// Reminder that REVERT is supported for CREATE, DROP and for 'vitess' ALTER, but never for
 		// 'gh-ost' or 'pt-osc' ALTERs
 		return true
 	}
 	return false
 }
 
-// isAnyNonConcurrentMigrationRunning sees if there's any migration running right now
-// that does not have -allow-concurrent.
-// such a running migration will for example prevent a new non-concurrent migration from running.
-func (e *Executor) isAnyNonConcurrentMigrationRunning() bool {
-	nonConcurrentMigrationFound := false
-
-	e.ownedRunningMigrations.Range(func(_, val interface{}) bool {
-		onlineDDL, ok := val.(*schema.OnlineDDL)
-		if !ok {
-			return true
-		}
-		if !e.allowConcurrentMigration(onlineDDL) {
-			// The migratoin may have declared itself to be --allow-concurrent, but our scheduler
-			// reserves the right to say "no, you're NOT in fact allowed to run concurrently"
-			// (as example, think a `gh-ost` ALTER migration that says --allow-concurrent)
-			nonConcurrentMigrationFound = true
-			return false // stop iteration, no need to review other migrations
-		}
+func (e *Executor) proposedMigrationConflictsWithRunningMigration(runningMigration, proposedMigration *schema.OnlineDDL) bool {
+	if runningMigration.Table == proposedMigration.Table {
+		// migrations operate on same table
 		return true
-	})
-
-	return nonConcurrentMigrationFound
-}
-
-// isAnyMigrationRunningOnTable sees if there's any migration running right now
-// operating on given table.
-func (e *Executor) isAnyMigrationRunningOnTable(tableName string) bool {
-	sameTableMigrationFound := false
-	e.ownedRunningMigrations.Range(func(_, val interface{}) bool {
-		onlineDDL, ok := val.(*schema.OnlineDDL)
-		if !ok {
-			return true
-		}
-		if onlineDDL.Table == tableName {
-			sameTableMigrationFound = true
-			return false // stop iteration, no need to review other migrations
-		}
+	}
+	// if !proposedMigration.StrategySetting().IsAllowConcurrent() && !runningMigration.StrategySetting().IsAllowConcurrent() {
+	// 	// Neither allow concurrency
+	// 	return false
+	// }
+	if !e.allowConcurrentMigration(runningMigration) && !e.allowConcurrentMigration(proposedMigration) {
+		// neither allowed concurrently
 		return true
-	})
-	return sameTableMigrationFound
+	}
+	return false
 }
 
 // isAnyConflictingMigrationRunning checks if there's any running migration that conflicts with the
 // given migration, such that they can't both run concurrently.
 func (e *Executor) isAnyConflictingMigrationRunning(onlineDDL *schema.OnlineDDL) bool {
-
-	if e.isAnyNonConcurrentMigrationRunning() && !e.allowConcurrentMigration(onlineDDL) {
+	conflictFound := false
+	e.ownedRunningMigrations.Range(func(_, val interface{}) bool {
+		runningMigration, ok := val.(*schema.OnlineDDL)
+		if !ok {
+			return true
+		}
+		if e.proposedMigrationConflictsWithRunningMigration(runningMigration, onlineDDL) {
+			conflictFound = true
+			return false // stop iteration, no need to review other migrations
+		}
 		return true
-	}
-	if e.isAnyMigrationRunningOnTable(onlineDDL.Table) {
-		return true
-	}
-
-	return false
+	})
+	return conflictFound
 }
 
 func (e *Executor) ghostPanicFlagFileName(uuid string) string {
@@ -1530,6 +1512,7 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 		Options:          row["options"].ToString(),
 		Status:           schema.OnlineDDLStatus(row["migration_status"].ToString()),
 		Retries:          row.AsInt64("retries", 0),
+		ReadyToComplete:  row.AsInt64("ready_to_complete", 0),
 		TabletAlias:      row["tablet"].ToString(),
 		MigrationContext: row["migration_context"].ToString(),
 	}
@@ -3442,8 +3425,19 @@ func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid stri
 	if err != nil {
 		return err
 	}
-	_, err = e.execQuery(ctx, query)
-	return err
+	if _, err := e.execQuery(ctx, query); err != nil {
+		return err
+	}
+	if val, ok := e.ownedRunningMigrations.Load(uuid); ok {
+		if runningMigration, ok := val.(*schema.OnlineDDL); ok {
+			var storeValue int64
+			if isReady {
+				storeValue = 1
+			}
+			atomic.StoreInt64(&runningMigration.ReadyToComplete, storeValue)
+		}
+	}
+	return nil
 }
 
 func (e *Executor) updateMigrationStowawayTable(ctx context.Context, uuid string, tableName string) error {
