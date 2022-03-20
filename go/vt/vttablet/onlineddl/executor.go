@@ -317,30 +317,31 @@ func (e *Executor) triggerNextCheckInterval() {
 // allowConcurrentMigration checks if the given migration is allowed to run concurrently.
 // First, the migration itself must declare --allow-concurrent. But then, there's also some
 // restrictions on which migrations exactly are allowed such concurrency.
-func (e *Executor) allowConcurrentMigration(onlineDDL *schema.OnlineDDL) bool {
+func (e *Executor) allowConcurrentMigration(onlineDDL *schema.OnlineDDL) (action sqlparser.DDLAction, allowConcurrnet bool) {
 	if !onlineDDL.StrategySetting().IsAllowConcurrent() {
-		return false
+		return action, false
 	}
 
-	action, err := onlineDDL.GetAction()
+	var err error
+	action, err = onlineDDL.GetAction()
 	if err != nil {
-		return false
+		return action, false
 	}
 	switch action {
 	case sqlparser.CreateDDLAction, sqlparser.DropDDLAction:
 		// CREATE TABLE, DROP TABLE are allowed to run concurrently.
-		return true
-	// case sqlparser.AlterDDLAction:
-	// 	// ALTER is only allowed concurrent execution if this is a Vitess migration
-	// 	strategy := onlineDDL.StrategySetting().Strategy
-	// 	return strategy == schema.DDLStrategyOnline || strategy == schema.DDLStrategyVitess
+		return action, true
+	case sqlparser.AlterDDLAction:
+		// ALTER is only allowed concurrent execution if this is a Vitess migration
+		strategy := onlineDDL.StrategySetting().Strategy
+		return action, (strategy == schema.DDLStrategyOnline || strategy == schema.DDLStrategyVitess)
 	case sqlparser.RevertDDLAction:
 		// REVERT is allowed to run concurrently.
 		// Reminder that REVERT is supported for CREATE, DROP and for 'vitess' ALTER, but never for
 		// 'gh-ost' or 'pt-osc' ALTERs
-		return true
+		return action, true
 	}
-	return false
+	return action, false
 }
 
 func (e *Executor) proposedMigrationConflictsWithRunningMigration(runningMigration, proposedMigration *schema.OnlineDDL) bool {
@@ -352,9 +353,18 @@ func (e *Executor) proposedMigrationConflictsWithRunningMigration(runningMigrati
 	// 	// Neither allow concurrency
 	// 	return false
 	// }
-	if !e.allowConcurrentMigration(runningMigration) && !e.allowConcurrentMigration(proposedMigration) {
+	_, isRunningMigrationAllowConcurrent := e.allowConcurrentMigration(runningMigration)
+	proposedMigrationAction, isProposedMigrationAllowConcurrent := e.allowConcurrentMigration(proposedMigration)
+	if !isRunningMigrationAllowConcurrent && !isProposedMigrationAllowConcurrent {
 		// neither allowed concurrently
 		return true
+	}
+	if proposedMigrationAction == sqlparser.AlterDDLAction {
+		// A new ALTER migration conflicts with an existing migration if th eexisting migration is still not ready to complete.
+		// Specifically, if the running migration is an ALTER, and is still busy with copying rows (copy_state), then
+		// we consider the two to be conflicting. But, if the running migration is done copying rows, and is now only
+		// applying binary logs, and is up-to-date, then we consider a new ALTER migration to be non-conflicting.
+		return atomic.LoadInt64(&runningMigration.ReadyToComplete) == 0
 	}
 	return false
 }
@@ -3557,6 +3567,7 @@ func (e *Executor) SubmitMigration(
 	revertedUUID, _ := onlineDDL.GetRevertUUID() // Empty value if the migration is not actually a REVERT. Safe to ignore error.
 
 	retainArtifactsSeconds := int64((*retainOnlineDDLTables).Seconds())
+	_, allowConcurrentMigration := e.allowConcurrentMigration(onlineDDL)
 	query, err := sqlparser.ParseAndBind(sqlInsertMigration,
 		sqltypes.StringBindVariable(onlineDDL.UUID),
 		sqltypes.StringBindVariable(e.keyspace),
@@ -3572,7 +3583,7 @@ func (e *Executor) SubmitMigration(
 		sqltypes.StringBindVariable(e.TabletAliasString()),
 		sqltypes.Int64BindVariable(retainArtifactsSeconds),
 		sqltypes.BoolBindVariable(onlineDDL.StrategySetting().IsPostponeCompletion()),
-		sqltypes.BoolBindVariable(e.allowConcurrentMigration(onlineDDL)),
+		sqltypes.BoolBindVariable(allowConcurrentMigration),
 		sqltypes.StringBindVariable(revertedUUID),
 		sqltypes.BoolBindVariable(onlineDDL.IsView()),
 	)
