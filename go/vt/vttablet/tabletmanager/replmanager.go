@@ -65,6 +65,8 @@ func newReplManager(ctx context.Context, tm *TabletManager, interval time.Durati
 	}
 }
 
+// SetTabletType starts/stops the replication manager ticks based on the tablet type provided.
+// It stops the ticks if the tablet type is not a replica type, starts the ticks otherwise.
 func (rm *replManager) SetTabletType(tabletType topodatapb.TabletType) {
 	if *mysqlctl.DisableActiveReparents {
 		return
