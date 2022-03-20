@@ -644,7 +644,7 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) err
 		return err
 	}
 	// silently skip error; stopping the stream is just a graceful act; later deleting it is more important
-	_, _ = tmClient.VReplicationExec(ctx, tablet.Tablet, query)
+	_, _ = e.vreplicationExec(ctx, tmClient, tablet.Tablet, query)
 
 	if err := e.deleteVReplicationEntry(ctx, uuid); err != nil {
 		return err
@@ -786,7 +786,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		return err
 	}
 	// Stop vreplication
-	if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, binlogplayer.StopVReplication(uint32(s.id), "stopped for online DDL cutover")); err != nil {
+	if _, err := e.vreplicationExec(ctx, tmClient, tablet.Tablet, binlogplayer.StopVReplication(uint32(s.id), "stopped for online DDL cutover")); err != nil {
 		return err
 	}
 
@@ -1029,12 +1029,6 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 			return err
 		}
 
-		e.initVreplicationDDLOnce.Do(func() {
-			// Ensure vreplication schema is up-to-date by invoking a query with non-existing columns.
-			// This will make vreplication run through its WithDDL schema changes.
-			_, _ = tmClient.VReplicationExec(ctx, tablet.Tablet, sqlImpossibleSelectVreplication)
-		})
-
 		// reload schema before migration
 		if err := tmClient.ReloadSchema(ctx, tablet.Tablet, ""); err != nil {
 			return err
@@ -1045,7 +1039,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		if err != nil {
 			return err
 		}
-		if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, insertVReplicationQuery); err != nil {
+		if _, err := e.vreplicationExec(ctx, tmClient, tablet.Tablet, insertVReplicationQuery); err != nil {
 			return err
 		}
 		// start stream!
@@ -1053,7 +1047,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		if err != nil {
 			return err
 		}
-		if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, startVReplicationQuery); err != nil {
+		if _, err := e.vreplicationExec(ctx, tmClient, tablet.Tablet, startVReplicationQuery); err != nil {
 			return err
 		}
 	}
@@ -3013,6 +3007,16 @@ func (e *Executor) retryTabletFailureMigrations(ctx context.Context) error {
 	return err
 }
 
+// vreplicationExec runs a vreplication query, and makes sure to initialize vreplication
+func (e *Executor) vreplicationExec(ctx context.Context, tmClient tmclient.TabletManagerClient, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
+	e.initVreplicationDDLOnce.Do(func() {
+		// Ensure vreplication schema is up-to-date by invoking a query with non-existing columns.
+		// This will make vreplication run through its WithDDL schema changes.
+		_, _ = tmClient.VReplicationExec(ctx, tablet, sqlImpossibleSelectVreplication)
+	})
+	return tmClient.VReplicationExec(ctx, tablet, query)
+}
+
 // deleteVReplicationEntry cleans up a _vt.vreplication entry; this function is called as part of
 // migration termination and as part of artifact cleanup
 func (e *Executor) deleteVReplicationEntry(ctx context.Context, uuid string) error {
@@ -3029,7 +3033,7 @@ func (e *Executor) deleteVReplicationEntry(ctx context.Context, uuid string) err
 		return err
 	}
 
-	if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, query); err != nil {
+	if _, err := e.vreplicationExec(ctx, tmClient, tablet.Tablet, query); err != nil {
 		return err
 	}
 	return nil
