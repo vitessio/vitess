@@ -135,12 +135,12 @@ type unitTest struct {
 type clusterTest struct {
 	Name, Shard, Platform        string
 	MakeTools, InstallXtraBackup bool
-	Ubuntu20                     bool
+	Ubuntu20, Docker             bool
 }
 
 type selfHostedTest struct {
 	Name, Platform, Dockerfile, Shard, ImageName, directoryName string
-	MakeTools, InstallXtraBackup                                bool
+	MakeTools, InstallXtraBackup, Docker                        bool
 }
 
 func mergeBlankLines(buf *bytes.Buffer) string {
@@ -256,6 +256,7 @@ func generateSelfHostedClusterWorkflows() error {
 		for _, mysql80Cluster := range mysql80Clusters {
 			if mysql80Cluster == cluster {
 				test.Platform = "mysql80"
+				test.Docker = true
 				break
 			}
 		}
@@ -302,6 +303,10 @@ func generateClusterWorkflows(list []string, tpl string) {
 				test.Platform = "mysql80"
 				break
 			}
+		}
+		// Default to using docker for vreplication tests with Ubuntu 20.20 / MySQL 8.0
+		if strings.HasPrefix(cluster, "vreplication") {
+			test.Docker = true
 		}
 
 		path := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
