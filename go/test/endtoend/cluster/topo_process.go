@@ -130,8 +130,8 @@ func (topo *TopoProcess) SetupZookeeper(cluster *LocalProcessCluster) (err error
 
 	topo.proc = exec.Command(
 		topo.Binary,
-		"-log_dir", topo.LogDirectory,
-		"-zk.cfg", fmt.Sprintf("1@%v:%s", host, topo.ZKPorts),
+		"--log_dir", topo.LogDirectory,
+		"--zk.cfg", fmt.Sprintf("1@%v:%s", host, topo.ZKPorts),
 		"init",
 	)
 
@@ -251,8 +251,8 @@ func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 		}
 		topo.proc = exec.Command(
 			topo.Binary,
-			"-log_dir", topo.LogDirectory,
-			"-zk.cfg", fmt.Sprintf("1@%v:%s", topo.Host, topo.ZKPorts),
+			"--log_dir", topo.LogDirectory,
+			"--zk.cfg", fmt.Sprintf("1@%v:%s", topo.Host, topo.ZKPorts),
 			cmd,
 		)
 
