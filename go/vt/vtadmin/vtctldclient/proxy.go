@@ -110,8 +110,6 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 
 			if err := vtctld.VtctldClient.WaitForReady(waitCtx); err == nil {
 				// Our cached connection is still open and ready, so we're good to go.
-				log.Infof("Using cached connection to vtctld %s\n", vtctld.host)
-
 				span.Annotate("is_noop", true)
 				span.Annotate("vtctld_host", vtctld.host)
 
@@ -124,7 +122,6 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 			// discover a new vtctld, and establish a new connection.
 		}
 
-		log.Infof("Closing stale connection to vtctld %s\n", vtctld.host)
 		span.Annotate("is_stale", true)
 
 		// close before reopen. this is safe to call on an already-closed client.
@@ -136,7 +133,6 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 		}
 	}
 
-	log.Infof("Discovering vtctld to dial...\n")
 	addr, err := vtctld.discovery.DiscoverVtctldAddr(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("error discovering vtctld to dial: %w", err)
@@ -156,13 +152,11 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 		opts = append(opts, grpc.WithPerRPCCredentials(vtctld.creds))
 	}
 
-	log.Infof("Discovered vtctld %s; attempting to establish gRPC connection...\n", addr)
 	client, err := vtctld.DialFunc(addr, grpcclient.FailFast(false), opts...)
 	if err != nil {
 		return err
 	}
 
-	log.Infof("Established gRPC connection to vtctld %s; waiting to transition to READY...\n", addr)
 	waitCtx, waitCancel := context.WithTimeout(ctx, vtctld.cfg.ConnectivityTimeout)
 	defer waitCancel()
 
