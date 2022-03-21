@@ -27,16 +27,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/sharding"
 	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/topodata"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -258,10 +259,10 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.NoError(t, err)
 
 	// check srv keyspace
-	expectedPartitions := map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name, shard2.Name}
-	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name, shard2.Name}
-	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard1.Name, shard2.Name}
+	expectedPartitions := map[topodatapb.TabletType][]string{}
+	expectedPartitions[topodatapb.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name, shard2.Name}
+	expectedPartitions[topodatapb.TabletType_REPLICA] = []string{shard0.Name, shard1.Name, shard2.Name}
+	expectedPartitions[topodatapb.TabletType_RDONLY] = []string{shard0.Name, shard1.Name, shard2.Name}
 	sharding.CheckSrvKeyspace(t, cell, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
 
 	// we need to create the schema, and the worker will do data copying
@@ -269,7 +270,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		shard0.Rdonly().Alias, fmt.Sprintf("%s/%s", keyspaceName, shard3.Name))
 	require.NoError(t, err)
 
-	// Run vtworker as daemon for the following SplitClone commands. -use_v3_resharding_mode default is true
+	// Run vtworker as daemon for the following SplitClone commands. --use_v3_resharding_mode default is true
 	err = clusterInstance.StartVtworker(cell, "--command_display_interval", "10ms")
 	require.NoError(t, err)
 
@@ -426,10 +427,10 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.NoError(t, err)
 
 	// check srv keyspace
-	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name, shard2.Name}
-	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard3.Name, shard2.Name}
-	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name, shard2.Name}
+	expectedPartitions = map[topodatapb.TabletType][]string{}
+	expectedPartitions[topodatapb.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name, shard2.Name}
+	expectedPartitions[topodatapb.TabletType_RDONLY] = []string{shard3.Name, shard2.Name}
+	expectedPartitions[topodatapb.TabletType_REPLICA] = []string{shard0.Name, shard1.Name, shard2.Name}
 	sharding.CheckSrvKeyspace(t, cell, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
 
 	sharding.CheckTabletQueryService(t, *shard0Rdonly, "NOT_SERVING", true, *clusterInstance)
@@ -440,10 +441,10 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		"MigrateServedTypes", shard3Ks, "replica")
 	require.NoError(t, err)
 
-	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name, shard2.Name}
-	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard3.Name, shard2.Name}
-	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard3.Name, shard2.Name}
+	expectedPartitions = map[topodatapb.TabletType][]string{}
+	expectedPartitions[topodatapb.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name, shard2.Name}
+	expectedPartitions[topodatapb.TabletType_RDONLY] = []string{shard3.Name, shard2.Name}
+	expectedPartitions[topodatapb.TabletType_REPLICA] = []string{shard3.Name, shard2.Name}
 	sharding.CheckSrvKeyspace(t, cell, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
 
 	// now serve from the split shards
@@ -451,10 +452,10 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		"MigrateServedTypes", shard3Ks, "primary")
 	require.NoError(t, err)
 
-	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard3.Name, shard2.Name}
-	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard3.Name, shard2.Name}
-	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard3.Name, shard2.Name}
+	expectedPartitions = map[topodatapb.TabletType][]string{}
+	expectedPartitions[topodatapb.TabletType_PRIMARY] = []string{shard3.Name, shard2.Name}
+	expectedPartitions[topodatapb.TabletType_RDONLY] = []string{shard3.Name, shard2.Name}
+	expectedPartitions[topodatapb.TabletType_REPLICA] = []string{shard3.Name, shard2.Name}
 	sharding.CheckSrvKeyspace(t, cell, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
 
 	sharding.CheckTabletQueryService(t, *shard0Primary, "NOT_SERVING", true, *clusterInstance)
