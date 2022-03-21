@@ -71,6 +71,8 @@ type VtctldClient struct {
 // incorrectly.
 var _ vtctldclient.VtctldClient = (*VtctldClient)(nil)
 
+func (fake *VtctldClient) WaitForReady(ctx context.Context) error { return nil }
+
 // CreateKeyspace is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) CreateKeyspace(ctx context.Context, req *vtctldatapb.CreateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.CreateKeyspaceResponse, error) {
 	if fake.CreateKeyspaceShouldErr {
