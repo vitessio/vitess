@@ -27,9 +27,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/buger/jsonparser"
+	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -122,6 +124,16 @@ func testBasicVreplicationWorkflow(t *testing.T) {
 	defer func() { defaultReplicas = 1 }()
 
 	defer vc.TearDown(t)
+
+	// To test vstreamer source throttling for the MoveTables operation
+	maxSourceTrxHistory := 1
+	maxSourceRplLag := 1
+	transactionTimeout := 60
+	extraVTTabletArgs = []string{
+		fmt.Sprintf("--vreplication_copy_phase_max_trx_history=%d", maxSourceTrxHistory),
+		fmt.Sprintf("--vreplication_copy_phase_max_repl_lag=%d", maxSourceRplLag),
+		fmt.Sprintf("--queryserver-config-transaction-timeout=%d", transactionTimeout),
+	}
 
 	defaultCell = vc.Cells[defaultCellName]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
@@ -363,10 +375,18 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 
 		tables := "customer,Lead,Lead-1,db_order_test"
-		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
-
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
 		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
+
+		// Confirm that the initial copy table phase does not proceed until the source tablet(s)
+		// have an InnoDB History List length that is less than specified in the tablet's config.
+		// We update rows in a table not part of the MoveTables operation so that we're not blocking
+		// on the LOCK TABLE call but rather the InnoDB History List length.
+		trxConn := createSourceInnoDBRowHistory(t, sourceKs)
+		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
+		verifySourceTabletThrottling(t, targetKs, workflow)
+		deleteSourceInnoDBRowHistory(t, trxConn)
+		trxConn.Close()
 
 		catchup(t, customerTab1, workflow, "MoveTables")
 		catchup(t, customerTab2, workflow, "MoveTables")
@@ -501,6 +521,47 @@ func validateRollupReplicates(t *testing.T) {
 		validateQuery(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
 			`[[VARCHAR("total") INT32(5)]]`)
 	})
+}
+
+func verifySourceTabletThrottling(t *testing.T, targetKS, workflow string) {
+	tDuration := time.Duration(30 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
+	timer := time.NewTimer(tDuration)
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKS, workflow)
+	for {
+		select {
+		case <-ticker.C:
+			output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
+			require.NoError(t, err)
+			// If the source keyspace is sharded, we may not have data to copy from each shard, so
+			// we check for the state being Copying or the LastPK being empty
+			result := gjson.Get(output, "ShardStatuses")
+			result.ForEach(func(tabletId, tabletStreams gjson.Result) bool { // for each source tablet
+				tabletStreams.ForEach(func(streamId, streamInfos gjson.Result) bool { // for each stream
+					if streamId.String() == "PrimaryReplicationStatuses" {
+						streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
+							state := attributeValue.Get("State").String()
+							copyState := attributeValue.Get("CopyState")
+							copyState.ForEach(func(key, val gjson.Result) bool { // for each table
+								table := val.Get("Table").String()
+								lastPK := val.Get("LastPK").String()
+								if state != "Copying" && lastPK != "" {
+									// The stream has been running and copied some rows!
+									require.FailNowf(t, "Unexpected running workflow stream", "Initial copy phase for the MoveTables workflow %s started in less than %d seconds when it should have been waiting. State: %s ; Table: %s ; LastPK: %s", ksWorkflow, int(tDuration.Seconds()), state, table, lastPK)
+								}
+								return true // end table loop
+							})
+							return true // end attribute loop
+						})
+					}
+					return true // end stream loop
+				})
+				return true // end tablet loop
+			})
+		case <-timer.C:
+			return
+		}
+	}
 }
 
 func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias string) {
@@ -1073,4 +1134,22 @@ func dropSourcesDryRun(t *testing.T, ksWorkflow string, renameTables bool, dryRu
 func dropSources(t *testing.T, ksWorkflow string) {
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput("DropSources", ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("DropSources Error: %s: %s", err, output))
+}
+
+// createInnoDBRowHistory generates at least maxSourceTrxHistory rollback segment entries.
+// This allows us to confirm two behaviors:
+//  1. MoveTables blocks on starting its first copy phase until we rollback
+//  2. All other workflows continue to work w/o issue with this MVCC history in place
+// Returns a db connection used for the transaction which you can use for follow-up
+// work, such as rolling it back directly or using the deleteSourceInnoDBRowHistory call.
+func createSourceInnoDBRowHistory(t *testing.T, sourceKS string) *mysql.Conn {
+	dbConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	execQuery(t, dbConn, "use "+sourceKS)
+	execQuery(t, dbConn, "start transaction")
+	execQuery(t, dbConn, "update product set pid = pid+1000")
+	return dbConn
+}
+
+func deleteSourceInnoDBRowHistory(t *testing.T, dbConn *mysql.Conn) {
+	execQuery(t, dbConn, "rollback")
 }

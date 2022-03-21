@@ -595,12 +595,12 @@ func (uvs *uvstreamer) getReplicationLag() int64 {
 	}
 	defer conn.Close()
 
-	res, err := conn.ExecuteFetch(replicaLagQuery, 1, false)
+	res, err := conn.ExecuteFetch(replicaLagQuery, 1, true)
 	if err != nil || len(res.Rows) != 1 || res.Rows[0] == nil {
 		return lagSecs
 	}
-	row := res.Named().Rows[0]
-	return row.AsInt64("seconds_behind_master", -1)
+	row := res.Named().Row()
+	return row.AsInt64("Seconds_Behind_Master", -1)
 }
 
 // getSourceEndpoint returns the host:port value for the vstreamer (MySQL) instance
