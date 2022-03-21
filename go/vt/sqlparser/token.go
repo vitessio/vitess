@@ -710,12 +710,8 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 			return VALUE_ARG, buf.Bytes()
 		case '.':
 			if isDigit(tkn.lastChar) {
-				typ, res := tkn.scanNumber(true)
-				if typ != LEX_ERROR {
-					return typ, res
-				}
+				return tkn.scanNumber(true)
 			}
-			// TODO: it will skip the digits of your qualified table ¯\_(ツ)_/¯
 			return int(ch), nil
 		case '/':
 			switch tkn.lastChar {

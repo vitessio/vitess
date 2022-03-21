@@ -2487,10 +2487,13 @@ func TestValid(t *testing.T) {
 	}
 }
 
-// Specifically, can't handle qualified table names
+// Will throw syntax errors, but shouldn't
 func TestNotWorkingIdentifiersStartingWithNumbers(t *testing.T) {
 	tests := []parseTest{
 		{
+			input:  "insert into mydb.2b values (1)",
+			output: "insert into mydb.`2b` values (1)",
+		}, {
 			input:  "insert into 1a.2b values (1)",
 			output: "insert into `1a`.`2b` values (1)",
 		}, {
