@@ -97,6 +97,23 @@ useful after a MoveTables has finished to remove serving restrictions.`,
 		Args:                  cobra.ExactArgs(2),
 		RunE:                  commandSetShardTabletControl,
 	}
+	// ShardReplicationAdd makse a ShardReplicationAdd gRPC request to a vtctld.
+	ShardReplicationAdd = &cobra.Command{
+		Use:                   "ShardReplicationAdd <keyspace/shard> <tablet alias>",
+		Short:                 "Adds an entry to the replication graph in the given cell.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandShardReplicationAdd,
+		Hidden:                true,
+	}
+	// ShardReplicationFix makes a ShardReplicationFix gRPC request to a vtctld.
+	ShardReplicationFix = &cobra.Command{
+		Use:                   "ShardReplicationFix <cell> <keyspace/shard>",
+		Short:                 "Walks through a ShardReplication object and fixes the first error encountered.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandShardReplicationFix,
+	}
 	// ShardReplicationPositions makes a ShardReplicationPositions gRPC request
 	// to a vtctld.
 	ShardReplicationPositions = &cobra.Command{
@@ -106,6 +123,15 @@ Output is sorted by tablet type, then replication position.
 Use ctrl-C to interrupt the command and see partial results if needed.`,
 		Args: cobra.ExactArgs(1),
 		RunE: commandShardReplicationPositions,
+	}
+	// ShardReplicationRemove makse a ShardReplicationRemove gRPC request to a vtctld.
+	ShardReplicationRemove = &cobra.Command{
+		Use:                   "ShardReplicationRemove <keyspace/shard> <tablet alias>",
+		Short:                 "Removes an entry from the replication graph in the given cell.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandShardReplicationRemove,
+		Hidden:                true,
 	}
 	// SourceShardAdd makes a SourceShardAdd gRPC request to a vtctld.
 	SourceShardAdd = &cobra.Command{
@@ -319,6 +345,55 @@ func commandSetShardTabletControl(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandShardReplicationAdd(cmd *cobra.Command, args []string) error {
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	tabletAlias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(1))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	_, err = client.ShardReplicationAdd(commandCtx, &vtctldatapb.ShardReplicationAddRequest{
+		Keyspace:    keyspace,
+		Shard:       shard,
+		TabletAlias: tabletAlias,
+	})
+	return err
+}
+
+func commandShardReplicationFix(cmd *cobra.Command, args []string) error {
+	cell := cmd.Flags().Arg(0)
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(1))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.ShardReplicationFix(commandCtx, &vtctldatapb.ShardReplicationFixRequest{
+		Keyspace: keyspace,
+		Shard:    shard,
+		Cell:     cell,
+	})
+	if err != nil {
+		return err
+	}
+
+	switch resp.Error {
+	case nil:
+		fmt.Println("All nodes in the replication graph are valid.")
+	default:
+		fmt.Printf("%s has been fixed for %s.\n", topoproto.ShardReplicationErrorTypeString(resp.Error.Type), topoproto.TabletAliasString(resp.Error.TabletAlias))
+	}
+
+	return nil
+}
+
 func commandShardReplicationPositions(cmd *cobra.Command, args []string) error {
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
 	if err != nil {
@@ -349,6 +424,27 @@ func commandShardReplicationPositions(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func commandShardReplicationRemove(cmd *cobra.Command, args []string) error {
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	tabletAlias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(1))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	_, err = client.ShardReplicationRemove(commandCtx, &vtctldatapb.ShardReplicationRemoveRequest{
+		Keyspace:    keyspace,
+		Shard:       shard,
+		TabletAlias: tabletAlias,
+	})
+	return err
 }
 
 var sourceShardAddOptions = struct {
@@ -470,7 +566,10 @@ func init() {
 	SetShardTabletControl.Flags().BoolVar(&setShardTabletControlOptions.DisableQueryService, "disable-query-service", false, "Sets the DisableQueryService flag in the specified cells. This flag requires --denied-tables and --remove to be unset; if either is set, this flag is ignored.")
 	Root.AddCommand(SetShardTabletControl)
 
+	Root.AddCommand(ShardReplicationAdd)
+	Root.AddCommand(ShardReplicationFix)
 	Root.AddCommand(ShardReplicationPositions)
+	Root.AddCommand(ShardReplicationRemove)
 
 	SourceShardAdd.Flags().StringVar(&sourceShardAddOptions.KeyRangeStr, "key-range", "", "Key range to use for the SourceShard")
 	SourceShardAdd.Flags().StringSliceVar(&sourceShardAddOptions.Tables, "tables", nil, "Comma-separated lists of tables to replicate (for MoveTables). Each table name is either an exact match, or a regular expression of the form \"/regexp/\".")

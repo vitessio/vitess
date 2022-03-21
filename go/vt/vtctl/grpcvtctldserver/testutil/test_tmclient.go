@@ -150,6 +150,20 @@ type TabletManagerClient struct {
 		Error  error
 	}
 	// keyed by tablet alias.
+	ExecuteFetchAsAppDelays map[string]time.Duration
+	// keyed by tablet alias.
+	ExecuteFetchAsAppResults map[string]struct {
+		Response *querypb.QueryResult
+		Error    error
+	}
+	// keyed by tablet alias.
+	ExecuteFetchAsDbaDelays map[string]time.Duration
+	// keyed by tablet alias.
+	ExecuteFetchAsDbaResults map[string]struct {
+		Response *querypb.QueryResult
+		Error    error
+	}
+	// keyed by tablet alias.
 	ExecuteHookDelays map[string]time.Duration
 	// keyed by tablet alias.
 	ExecuteHookResults map[string]struct {
@@ -417,6 +431,54 @@ func (fake *TabletManagerClient) DemotePrimary(ctx context.Context, tablet *topo
 	}
 
 	return nil, assert.AnError
+}
+
+// ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int) (*querypb.QueryResult, error) {
+	if fake.ExecuteFetchAsAppResults == nil {
+		return nil, fmt.Errorf("%w: no ExecuteFetchAsApp results on fake TabletManagerClient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if fake.ExecuteFetchAsAppDelays != nil {
+		if delay, ok := fake.ExecuteFetchAsAppDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+	if result, ok := fake.ExecuteFetchAsAppResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no ExecuteFetchAsApp result set for tablet %s", assert.AnError, key)
+}
+
+// ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+	if fake.ExecuteFetchAsDbaResults == nil {
+		return nil, fmt.Errorf("%w: no ExecuteFetchAsDba results on fake TabletManagerClient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if fake.ExecuteFetchAsDbaDelays != nil {
+		if delay, ok := fake.ExecuteFetchAsDbaDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+	if result, ok := fake.ExecuteFetchAsDbaResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no ExecuteFetchAsDba result set for tablet %s", assert.AnError, key)
 }
 
 // ExecuteHook is part of the tmclient.TabletManagerClient interface.

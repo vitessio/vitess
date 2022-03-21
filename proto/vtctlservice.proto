@@ -86,6 +86,10 @@ service Vtctld {
   // EmergencyReparentShard reparents the shard to the new primary. It assumes
   // the old primary is dead or otherwise not responding.
   rpc EmergencyReparentShard(vtctldata.EmergencyReparentShardRequest) returns (vtctldata.EmergencyReparentShardResponse) {};
+  // ExecuteFetchAsApp executes a SQL query on the remote tablet as the App user.
+  rpc ExecuteFetchAsApp(vtctldata.ExecuteFetchAsAppRequest) returns (vtctldata.ExecuteFetchAsAppResponse) {};
+  // ExecuteFetchAsDBA executes a SQL query on the remote tablet as the DBA user.
+  rpc ExecuteFetchAsDBA(vtctldata.ExecuteFetchAsDBARequest) returns (vtctldata.ExecuteFetchAsDBAResponse) {};
   // ExecuteHook runs the hook on the tablet.
   rpc ExecuteHook(vtctldata.ExecuteHookRequest) returns (vtctldata.ExecuteHookResponse);
   // FindAllShardsInKeyspace returns a map of shard names to shard references
@@ -212,12 +216,25 @@ service Vtctld {
   rpc SetShardTabletControl(vtctldata.SetShardTabletControlRequest) returns (vtctldata.SetShardTabletControlResponse) {};
   // SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
   rpc SetWritable(vtctldata.SetWritableRequest) returns (vtctldata.SetWritableResponse) {};
+  // ShardReplicationAdd adds an entry to a topodata.ShardReplication object.
+  //
+  // It is a low-level function and should generally not be called.
+  rpc ShardReplicationAdd(vtctldata.ShardReplicationAddRequest) returns (vtctldata.ShardReplicationAddResponse) {};
+  // ShardReplicationFix walks the replication graph for a shard in a cell and
+  // attempts to fix the first problem encountered, returning information about
+  // the problem fixed, if any.
+  rpc ShardReplicationFix(vtctldata.ShardReplicationFixRequest) returns (vtctldata.ShardReplicationFixResponse) {};
   // ShardReplicationPositions returns the replication position of each tablet
   // in a shard. This RPC makes a best-effort to return partial results. For
   // example, if one tablet in the shard graph is unreachable, then
   // ShardReplicationPositions will return non-error, and include valid results
   // for the reachable tablets.
   rpc ShardReplicationPositions(vtctldata.ShardReplicationPositionsRequest) returns (vtctldata.ShardReplicationPositionsResponse) {};
+  // ShardReplicationRemove removes an entry from a topodata.ShardReplication
+  // object.
+  //
+  // It is a low-level function and should generally not be called.
+  rpc ShardReplicationRemove(vtctldata.ShardReplicationRemoveRequest) returns (vtctldata.ShardReplicationRemoveResponse) {};
   // SleepTablet blocks the aciton queue on the specified tablet for the
   // specified duration.
   //

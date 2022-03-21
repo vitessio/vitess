@@ -25,9 +25,9 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/olekukonko/tablewriter"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -452,32 +452,5 @@ func (lw loggerWriter) Write(p []byte) (int, error) {
 
 // printQueryResult will pretty-print a QueryResult to the logger.
 func printQueryResult(writer io.Writer, qr *sqltypes.Result) {
-	if qr == nil {
-		return
-	}
-	if len(qr.Rows) == 0 {
-		return
-	}
-
-	table := tablewriter.NewWriter(writer)
-	table.SetAutoFormatHeaders(false)
-
-	// Make header.
-	header := make([]string, 0, len(qr.Fields))
-	for _, field := range qr.Fields {
-		header = append(header, field.Name)
-	}
-	table.SetHeader(header)
-
-	// Add rows.
-	for _, row := range qr.Rows {
-		vals := make([]string, 0, len(row))
-		for _, val := range row {
-			vals = append(vals, val.ToString())
-		}
-		table.Append(vals)
-	}
-
-	// Print table.
-	table.Render()
+	cli.WriteQueryResultTable(writer, qr)
 }
