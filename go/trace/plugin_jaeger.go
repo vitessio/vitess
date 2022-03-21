@@ -92,7 +92,7 @@ func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error
 	if samplingType.IsSet() {
 		cfg.Sampler.Type = samplingType.Get()
 	} else if cfg.Sampler.Type == "" {
-		log.Infof("-tracing-sampler-type was not set, and JAEGER_SAMPLER_TYPE was not set, defaulting to const sampler")
+		log.Infof("--tracing-sampler-type was not set, and JAEGER_SAMPLER_TYPE was not set, defaulting to const sampler")
 		cfg.Sampler.Type = jaeger.SamplerTypeConst
 	}
 
@@ -102,7 +102,7 @@ func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error
 	if *enableLogging {
 		opts = append(opts, config.Logger(&traceLogger{}))
 	} else if cfg.Reporter.LogSpans {
-		log.Warningf("JAEGER_REPORTER_LOG_SPANS was set, but -tracing-enable-logging was not; spans will not be logged")
+		log.Warningf("JAEGER_REPORTER_LOG_SPANS was set, but --tracing-enable-logging was not; spans will not be logged")
 	}
 
 	tracer, closer, err := cfg.NewTracer(opts...)
