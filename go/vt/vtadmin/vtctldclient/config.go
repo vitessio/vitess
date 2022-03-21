@@ -41,6 +41,8 @@ type Config struct {
 	ConnectivityTimeout time.Duration
 }
 
+var defaultConnectivityTimeout = 2 * time.Second
+
 // Parse returns a new config with the given cluster and discovery, after
 // attempting to parse the command-line pflags into that Config. See
 // (*Config).Parse() for more details.
@@ -64,7 +66,7 @@ func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string)
 func (c *Config) Parse(args []string) error {
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
 
-	fs.DurationVar(&c.ConnectivityTimeout, "grpc-connectivity-timeout", 2*time.Second, "The maximum duration to wait for a gRPC connection to be established to the vtctld.")
+	fs.DurationVar(&c.ConnectivityTimeout, "grpc-connectivity-timeout", defaultConnectivityTimeout, "The maximum duration to wait for a gRPC connection to be established to the vtctld.")
 
 	credentialsTmplStr := fs.String("credentials-path-tmpl", "",
 		"Go template used to specify a path to a credentials file, which is a json file containing "+
