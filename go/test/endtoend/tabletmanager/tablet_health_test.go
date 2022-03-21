@@ -26,15 +26,14 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -156,7 +155,7 @@ func TestHealthCheck(t *testing.T) {
 
 	// stop the replica's source mysqld instance to break replication
 	// and test that the replica tablet becomes unhealthy and non-serving after crossing
-	// the tablet's -unhealthy_threshold and the gateway's -discovery_low_replication_lag
+	// the tablet's --unhealthy_threshold and the gateway's --discovery_low_replication_lag
 	err = primaryTablet.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 
