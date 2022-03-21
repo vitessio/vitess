@@ -3,7 +3,6 @@ package vreplication
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
@@ -503,10 +502,8 @@ func (vc *VitessCluster) AddShards(t testing.TB, cells []*Cell, keyspace *Keyspa
 
 			for ind, proc := range dbProcesses {
 				log.Infof("Waiting for mysql process for tablet %s", tablets[ind].Name)
-				output, err := proc.CombinedOutput()
-				if err != nil {
-					logs, _ := ioutil.ReadFile(tablets[ind].DbServer.LogDirectory + "/mysqlctl.INFO")
-					t.Fatalf("%v :: Unable to start mysql server for %v ; Cmd: %s ; Output: %s ; Logs: %v", err, tablets[ind].Vttablet, proc.String(), output, logs)
+				if err := proc.Wait(); err != nil {
+					t.Fatalf("%v :: Unable to start mysql server for %v", err, tablets[ind].Vttablet)
 				}
 			}
 			for ind, tablet := range tablets {
