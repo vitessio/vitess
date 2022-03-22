@@ -104,15 +104,14 @@ var (
 		"vreplication_across_db_versions",
 		"vreplication_multicell",
 		"vreplication_cellalias",
+		"vreplication_basic",
+		"vreplication_v2",
 		"vtorc",
 		"schemadiff_vrepl",
 	}
 
 	clusterSelfHostedList []string
-	clusterDockerList     = []string{
-		"vreplication_basic",
-		"vreplication_v2",
-	}
+	clusterDockerList     = []string{}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
 	clustersRequiringXtraBackup = append(clusterList, clusterSelfHostedList...)
@@ -305,7 +304,6 @@ func generateClusterWorkflows(list []string, tpl string) {
 			}
 		}
 		if strings.HasPrefix(cluster, "vreplication") {
-			//	test.Docker = true
 			test.LimitResourceUsage = true
 		}
 

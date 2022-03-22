@@ -92,7 +92,11 @@ jobs:
         set -x
 
         {{if .LimitResourceUsage}}
-        cat <<-EOF>>./config/mycnf/{{.Platform}}.cnf
+        # Increase our local ephemeral port range as we could exhaust this
+        sudo sysctl -w net.ipv4.ip_local_port_range="22768 61999"
+        # Increase our open file descriptor limit as we could hit this
+        ulimit -n 65536
+        cat <<-EOF>>./config/mycnf/mysql80.cnf
         innodb_buffer_pool_dump_at_shutdown=OFF
         innodb_buffer_pool_in_core_file=OFF
         innodb_buffer_pool_load_at_startup=OFF
