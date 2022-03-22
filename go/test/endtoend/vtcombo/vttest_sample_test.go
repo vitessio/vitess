@@ -237,7 +237,7 @@ func insertManyRows(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateCo
 }
 
 func assertTabletsPresent(t *testing.T) {
-	tmpCmd := exec.Command("vtctlclient", "-vtctl_client_protocol", "grpc", "-server", grpcAddress, "-stderrthreshold", "0", "ListAllTablets", "test")
+	tmpCmd := exec.Command("vtctlclient", "--vtctl_client_protocol", "grpc", "--server", grpcAddress, "--stderrthreshold", "0", "ListAllTablets", "--", "test")
 
 	log.Infof("Running vtctlclient with command: %v", tmpCmd.Args)
 
