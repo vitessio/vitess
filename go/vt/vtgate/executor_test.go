@@ -1612,7 +1612,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	}
 }
 
-func assertCacheSize[I any](t *testing.T, c cache.Cache[I], expected int) {
+func assertCacheSize[I cache.Cacheable](t *testing.T, c cache.Cache[I], expected int) {
 	t.Helper()
 	var size int
 	c.ForEach(func(_ I) bool {

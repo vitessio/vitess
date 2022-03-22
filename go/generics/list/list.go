@@ -17,6 +17,7 @@
 package list
 
 // Element is an element of a linked list.
+// nolint
 type Element[I any] struct {
 	// Next and previous pointers in the doubly-linked list of elements.
 	// To simplify the implementation, internally a list l is implemented
@@ -50,9 +51,10 @@ func (e *Element[I]) Prev() *Element[I] {
 
 // List represents a doubly linked list.
 // The zero value for List is an empty list ready to use.
+//nolint
 type List[I any] struct {
 	root Element[I] // sentinel list element, only &root, root.prev, and root.next are used
-	len  int     // current list length excluding (this) sentinel element
+	len  int        // current list length excluding (this) sentinel element
 }
 
 // Init initializes or clears list l.
@@ -105,7 +107,7 @@ func (l *List[I]) insert(e, at *Element[I]) *Element[I] {
 }
 
 // insertValue is a convenience wrapper for insert(&Element{Value: v}, at).
-func (l *List[I]) insertValue(v I, at *Element[I]) *Element[I]{
+func (l *List[I]) insertValue(v I, at *Element[I]) *Element[I] {
 	return l.insert(&Element[I]{Value: v}, at)
 }
 

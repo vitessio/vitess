@@ -45,6 +45,10 @@ issues:
       - errcheck
       - goimports
 
+    - path: '^go/cache/'
+      linters:
+        - structcheck
+
     ### BEGIN: errcheck exclusion rules. Each rule should be considered
     #   a TODO for removal after adding error checks to that package/file/etc,
     #   except where otherwise noted.
