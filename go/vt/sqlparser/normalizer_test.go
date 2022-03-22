@@ -128,7 +128,7 @@ func TestNormalize(t *testing.T) {
 		outstmt: "update a set v1 = :bv1 where v2 in ::bv2",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.Int64BindVariable(5),
-			"bv2": sqltypes.TestBindVariable([]interface{}{1, 4, 5}),
+			"bv2": sqltypes.TestBindVariable([]any{1, 4, 5}),
 		},
 	}, {
 		// Hex number values should work for selects
@@ -220,14 +220,14 @@ func TestNormalize(t *testing.T) {
 		in:      "select * from t where v1 in (1, '2')",
 		outstmt: "select * from t where v1 in ::bv1",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.TestBindVariable([]interface{}{1, "2"}),
+			"bv1": sqltypes.TestBindVariable([]any{1, "2"}),
 		},
 	}, {
 		// NOT IN clause
 		in:      "select * from t where v1 not in (1, '2')",
 		outstmt: "select * from t where v1 not in ::bv1",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.TestBindVariable([]interface{}{1, "2"}),
+			"bv1": sqltypes.TestBindVariable([]any{1, "2"}),
 		},
 	}, {
 		// Do not normalize cast/convert types

@@ -74,7 +74,7 @@ func verifyVtgateVariables(t *testing.T, url string) {
 	require.NoError(t, err)
 	require.Equal(t, 200, resp.StatusCode, "Vtgate api url response not found")
 
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	respByte, _ := io.ReadAll(resp.Body)
 	err = json.Unmarshal(respByte, &resultMap)
 	require.NoError(t, err)
@@ -216,8 +216,8 @@ func TestReplicaTransactions(t *testing.T) {
 	assert.Equal(t, `[[INT64(1) VARCHAR("email1")] [INT64(2) VARCHAR("email2")]]`, fmt.Sprintf("%v", qr4.Rows), "we are not able to reconnect after restart")
 }
 
-func getMapFromJSON(JSON map[string]interface{}, key string) map[string]interface{} {
-	result := make(map[string]interface{})
+func getMapFromJSON(JSON map[string]any, key string) map[string]any {
+	result := make(map[string]any)
 	object := reflect.ValueOf(JSON[key])
 	if object.Kind() == reflect.Map {
 		for _, key := range object.MapKeys() {
@@ -228,7 +228,7 @@ func getMapFromJSON(JSON map[string]interface{}, key string) map[string]interfac
 	return result
 }
 
-func isPrimaryTabletPresent(tablets map[string]interface{}) bool {
+func isPrimaryTabletPresent(tablets map[string]any) bool {
 	for key := range tablets {
 		if strings.Contains(key, "primary") {
 			return true

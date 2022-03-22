@@ -88,7 +88,7 @@ func (wi *Instance) InitStatusHandling() {
 		stopTime := wi.lastRunStopTime
 		wi.currentWorkerMutex.Unlock()
 
-		data := make(map[string]interface{})
+		data := make(map[string]any)
 		if wrk != nil {
 			status := template.HTML("Current worker:<br>\n") + wrk.StatusAsHTML()
 			if ctx == nil {
@@ -109,7 +109,7 @@ func (wi *Instance) InitStatusHandling() {
 	})
 
 	// add the section in status that does auto-refresh of status div
-	servenv.AddStatusPart("Worker Status", workerStatusPartHTML, func() interface{} {
+	servenv.AddStatusPart("Worker Status", workerStatusPartHTML, func() any {
 		return nil
 	})
 

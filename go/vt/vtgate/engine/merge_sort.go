@@ -209,7 +209,7 @@ func (ms *MergeSort) getStreamingFields(handles []*streamHandle, callback func(*
 }
 
 func (ms *MergeSort) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"OrderBy": ms.OrderBy,
 	}
 	return PrimitiveDescription{
@@ -321,12 +321,12 @@ func (sh *scatterHeap) Swap(i, j int) {
 }
 
 // Push satisfies heap.Interface.
-func (sh *scatterHeap) Push(x interface{}) {
+func (sh *scatterHeap) Push(x any) {
 	sh.rows = append(sh.rows, x.(streamRow))
 }
 
 // Pop satisfies heap.Interface.
-func (sh *scatterHeap) Pop() interface{} {
+func (sh *scatterHeap) Pop() any {
 	n := len(sh.rows)
 	x := sh.rows[n-1]
 	sh.rows = sh.rows[:n-1]

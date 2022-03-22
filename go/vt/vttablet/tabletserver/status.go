@@ -205,7 +205,7 @@ google.setOnLoadCallback(drawQPSChart);
 type queryserviceStatus struct {
 	Latest     *historyRecord
 	Details    []*kv
-	History    []interface{}
+	History    []any
 	CurrentQPS float64
 }
 
@@ -217,8 +217,8 @@ type kv struct {
 
 // AddStatusHeader registers a standlone header for the status page.
 func (tsv *TabletServer) AddStatusHeader() {
-	tsv.exporter.AddStatusPart("Tablet Server", headerTemplate, func() interface{} {
-		return map[string]interface{}{
+	tsv.exporter.AddStatusPart("Tablet Server", headerTemplate, func() any {
+		return map[string]any{
 			"Alias":  tsv.exporter.Name(),
 			"Prefix": tsv.exporter.URLPrefix(),
 			"Target": tsv.sm.Target(),
@@ -232,7 +232,7 @@ func (tsv *TabletServer) AddStatusPart() {
 	degradedThreshold.Set(tsv.config.Healthcheck.DegradedThresholdSeconds.Get())
 	unhealthyThreshold.Set(tsv.config.Healthcheck.UnhealthyThresholdSeconds.Get())
 
-	tsv.exporter.AddStatusPart("Health", queryserviceStatusTemplate, func() interface{} {
+	tsv.exporter.AddStatusPart("Health", queryserviceStatusTemplate, func() any {
 		status := queryserviceStatus{
 			History: tsv.hs.history.Records(),
 		}
@@ -308,7 +308,7 @@ func (r *historyRecord) TabletType() string {
 }
 
 // IsDuplicate implements history.Deduplicable
-func (r *historyRecord) IsDuplicate(other interface{}) bool {
+func (r *historyRecord) IsDuplicate(other any) bool {
 	rother, ok := other.(*historyRecord)
 	if !ok {
 		return false

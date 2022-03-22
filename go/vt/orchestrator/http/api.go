@@ -83,7 +83,7 @@ func (apiResponseCode *APIResponseCode) HTTPStatus() int {
 type APIResponse struct {
 	Code    APIResponseCode
 	Message string
-	Details interface{}
+	Details any
 }
 
 func Respond(r render.Render, apiResponse *APIResponse) {
@@ -2411,7 +2411,7 @@ func (httpAPI *API) RegisterCandidate(params martini.Params, r render.Render, re
 
 // AutomatedRecoveryFilters retuens list of clusters which are configured with automated recovery
 func (httpAPI *API) AutomatedRecoveryFilters(params martini.Params, r render.Render, req *http.Request) {
-	automatedRecoveryMap := make(map[string]interface{})
+	automatedRecoveryMap := make(map[string]any)
 	automatedRecoveryMap["RecoverPrimaryClusterFilters"] = config.Config.RecoverPrimaryClusterFilters
 	automatedRecoveryMap["RecoverIntermediatePrimaryClusterFilters"] = config.Config.RecoverIntermediatePrimaryClusterFilters
 	automatedRecoveryMap["RecoveryIgnoreHostnameFilters"] = config.Config.RecoveryIgnoreHostnameFilters

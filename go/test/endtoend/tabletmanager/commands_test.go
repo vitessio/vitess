@@ -124,11 +124,11 @@ func TestTabletCommands(t *testing.T) {
 }
 
 func assertExcludeFields(t *testing.T, qr string) {
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	err := json.Unmarshal([]byte(qr), &resultMap)
 	require.Nil(t, err)
 
-	rows := resultMap["rows"].([]interface{})
+	rows := resultMap["rows"].([]any)
 	assert.Equal(t, 2, len(rows))
 
 	fields := resultMap["fields"]
@@ -136,7 +136,7 @@ func assertExcludeFields(t *testing.T, qr string) {
 }
 
 func assertExecuteFetch(t *testing.T, qr string) {
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	err := json.Unmarshal([]byte(qr), &resultMap)
 	require.Nil(t, err)
 
@@ -196,7 +196,7 @@ func runHookAndAssert(t *testing.T, params []string, expectedStatus string, expe
 	} else {
 		require.Nil(t, err)
 
-		resultMap := make(map[string]interface{})
+		resultMap := make(map[string]any)
 		err = json.Unmarshal([]byte(hr), &resultMap)
 		require.Nil(t, err)
 
@@ -247,7 +247,7 @@ func TestGetSchema(t *testing.T) {
 }
 
 func assertNodeCount(t *testing.T, result string, want int) {
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	err := json.Unmarshal([]byte(result), &resultMap)
 	require.Nil(t, err)
 

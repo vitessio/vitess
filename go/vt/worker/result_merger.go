@@ -295,13 +295,13 @@ func (h nextRowHeap) Swap(i, j int) {
 
 // Push adds x as element Len().
 // It is part of the container/heap.Interface interface.
-func (h *nextRowHeap) Push(x interface{}) {
+func (h *nextRowHeap) Push(x any) {
 	h.nextRowByInputs = append(h.nextRowByInputs, x.(*nextRow))
 }
 
 // Push removes and returns element Len()-1.
 // It is part of the container/heap.Interface interface.
-func (h *nextRowHeap) Pop() interface{} {
+func (h *nextRowHeap) Pop() any {
 	old := h.nextRowByInputs
 	n := len(old)
 	x := old[n-1]

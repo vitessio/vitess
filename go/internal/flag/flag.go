@@ -95,7 +95,7 @@ const (
 )
 
 // Check and warn on any single-dash flags.
-func warnOnSingleDashLongFlags(fs *goflag.FlagSet, argv []string, warningf func(msg string, args ...interface{})) {
+func warnOnSingleDashLongFlags(fs *goflag.FlagSet, argv []string, warningf func(msg string, args ...any)) {
 	fs.Visit(func(f *goflag.Flag) {
 		// Boolean flags with single-character names are okay to use the
 		// single-dash form. I don't _think_ we have any of these, but I'm being
@@ -113,7 +113,7 @@ func warnOnSingleDashLongFlags(fs *goflag.FlagSet, argv []string, warningf func(
 }
 
 // Check and warn for any mixed posarg / dashed-arg on the CLI.
-func warnOnMixedPositionalAndFlagArguments(posargs []string, warningf func(msg string, args ...interface{})) {
+func warnOnMixedPositionalAndFlagArguments(posargs []string, warningf func(msg string, args ...any)) {
 	for _, arg := range posargs {
 		if arg == "--" {
 			break

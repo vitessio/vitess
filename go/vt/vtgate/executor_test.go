@@ -1615,7 +1615,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 func assertCacheSize(t *testing.T, c cache.Cache, expected int) {
 	t.Helper()
 	var size int
-	c.ForEach(func(_ interface{}) bool {
+	c.ForEach(func(_ any) bool {
 		size++
 		return true
 	})
@@ -1930,7 +1930,7 @@ func TestDebugVSchema(t *testing.T) {
 
 	executor, _, _, _ := createExecutorEnv()
 	executor.ServeHTTP(resp, req)
-	v := make(map[string]interface{})
+	v := make(map[string]any)
 	if err := json.Unmarshal(resp.Body.Bytes(), &v); err != nil {
 		t.Fatalf("Unmarshal on %s failed: %v", resp.Body.String(), err)
 	}

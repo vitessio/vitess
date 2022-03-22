@@ -656,8 +656,8 @@ func testNonZeroDuration(t *testing.T, what, d string) {
 	}
 }
 
-func getQueryLog(logChan chan interface{}) *LogStats {
-	var log interface{}
+func getQueryLog(logChan chan any) *LogStats {
+	var log any
 
 	select {
 	case log = <-logChan:
@@ -674,13 +674,13 @@ func getQueryLog(logChan chan interface{}) *LogStats {
 // is a repeat query.
 var testPlannedQueries = map[string]bool{}
 
-func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql string, shardQueries int) *LogStats {
+func testQueryLog(t *testing.T, logChan chan any, method, stmtType, sql string, shardQueries int) *LogStats {
 	t.Helper()
 
 	return testQueryLogWithSavepoint(t, logChan, method, stmtType, sql, shardQueries, false /* checkSavepoint */)
 }
 
-func testQueryLogWithSavepoint(t *testing.T, logChan chan interface{}, method, stmtType, sql string, shardQueries int, checkSavepoint bool) *LogStats {
+func testQueryLogWithSavepoint(t *testing.T, logChan chan any, method, stmtType, sql string, shardQueries int, checkSavepoint bool) *LogStats {
 	t.Helper()
 
 	var logStats *LogStats

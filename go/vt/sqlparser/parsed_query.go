@@ -205,7 +205,7 @@ func FetchBindVar(name string, bindVariables map[string]*querypb.BindVariable) (
 // Example:
 //   query, err := ParseAndBind("select * from tbl where name=%a", sqltypes.StringBindVariable("it's me"))
 func ParseAndBind(in string, binds ...*querypb.BindVariable) (query string, err error) {
-	vars := make([]interface{}, len(binds))
+	vars := make([]any, len(binds))
 	for i := range binds {
 		vars[i] = fmt.Sprintf(":var%d", i)
 	}

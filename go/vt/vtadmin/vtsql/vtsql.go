@@ -250,8 +250,8 @@ func (vtgate *VTGateProxy) Close() error {
 }
 
 // Debug implements debug.Debuggable for VTGateProxy.
-func (vtgate *VTGateProxy) Debug() map[string]interface{} {
-	m := map[string]interface{}{
+func (vtgate *VTGateProxy) Debug() map[string]any {
+	m := map[string]any{
 		"host":         vtgate.host,
 		"is_connected": (vtgate.conn != nil),
 	}
@@ -262,7 +262,7 @@ func (vtgate *VTGateProxy) Debug() map[string]interface{} {
 	}
 
 	if vtgate.creds != nil {
-		cmap := map[string]interface{}{
+		cmap := map[string]any{
 			"source":         vtgate.cfg.CredentialsPath,
 			"immediate_user": vtgate.creds.GetUsername(),
 			"effective_user": vtgate.creds.GetEffectiveUsername(),

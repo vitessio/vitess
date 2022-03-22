@@ -31,7 +31,7 @@ var carriageReturn = []byte("\n")
 // Unmarshal wraps json.Unmarshal, but returns errors that
 // also mention the line number. This function is not very
 // efficient and should not be used for high QPS operations.
-func Unmarshal(data []byte, v interface{}) error {
+func Unmarshal(data []byte, v any) error {
 	if pb, ok := v.(proto.Message); ok {
 		return annotate(data, protojson.Unmarshal(data, pb))
 	}

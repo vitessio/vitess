@@ -85,10 +85,10 @@ type TestCase struct {
 	Result [][]string
 
 	// RowsAffected affected can be nil or an int.
-	RowsAffected interface{}
+	RowsAffected any
 
 	// 	RowsReturned affected can be nil or an int.
-	RowsReturned interface{}
+	RowsReturned any
 
 	// Rewritten specifies how the query should have be rewritten.
 	Rewritten []string
@@ -101,10 +101,10 @@ type TestCase struct {
 	// cache stats for that table. If the stat values are nil, then
 	// the check is skipped.
 	Table         string
-	Hits          interface{}
-	Misses        interface{}
-	Absent        interface{}
-	Invalidations interface{}
+	Hits          any
+	Misses        any
+	Absent        any
+	Invalidations any
 }
 
 // Benchmark executes the test case and discards the results without verifying them
