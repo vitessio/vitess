@@ -218,6 +218,11 @@ func isParentSelect(cursor *sqlparser.Cursor) bool {
 	return isSelect
 }
 
+func isParentSelectStatement(cursor *sqlparser.Cursor) bool {
+	_, isSelect := cursor.Parent().(sqlparser.SelectStatement)
+	return isSelect
+}
+
 type originable interface {
 	tableSetFor(t *sqlparser.AliasedTableExpr) TableSet
 	depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ *Type)
