@@ -842,12 +842,33 @@ func testRowCount(t *testing.T, executor *Executor, wantRowCount int64) {
 }
 
 func TestSelectLastInsertIdInUnion(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
-	sql := "select last_insert_id() as id union select id from user"
-	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "text type with an unknown/unsupported collation cannot be hashed")
+	primarySession.LastInsertId = 52
+
+	result1 := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+		},
+		InsertID: 0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(52),
+		}},
+	}}
+	sbc1.SetResults(result1)
+
+	sql := "select last_insert_id() as id union select last_insert_id() as id"
+	got, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(52),
+		}},
+	}
+	utils.MustMatch(t, wantResult, got, "mismatch")
 }
 
 func TestSelectLastInsertIdInWhere(t *testing.T) {
