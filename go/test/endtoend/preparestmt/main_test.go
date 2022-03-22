@@ -199,8 +199,6 @@ func TestMain(m *testing.M) {
 		}
 
 		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// set the gateway and other params we want to use
-		vtgateInstance.GatewayImplementation = "tabletgateway"
 		vtgateInstance.MySQLAuthServerImpl = "static"
 		// add extra arguments
 		vtgateInstance.ExtraArgs = []string{

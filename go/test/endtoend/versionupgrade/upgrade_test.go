@@ -111,8 +111,6 @@ func TestMain(m *testing.M) {
 		// setting the planner version to 0, so the vtgate binary's default is used
 		clusterInstance.VtGatePlannerVersion = 0
 		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// set the gateway we want to use
-		vtgateInstance.GatewayImplementation = "tabletgateway"
 		// Start vtgate
 		if err := vtgateInstance.Setup(); err != nil {
 			return 1, err

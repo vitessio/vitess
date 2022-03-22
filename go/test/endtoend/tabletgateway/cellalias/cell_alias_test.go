@@ -258,7 +258,6 @@ func TestAlias(t *testing.T) {
 	vtgateInstance := localCluster.NewVtgateInstance()
 	vtgateInstance.CellsToWatch = allCells
 	vtgateInstance.TabletTypesToWait = "PRIMARY,REPLICA"
-	vtgateInstance.GatewayImplementation = "tabletgateway"
 	err = vtgateInstance.Setup()
 	require.Nil(t, err)
 
