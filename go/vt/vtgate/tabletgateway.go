@@ -199,8 +199,7 @@ func (gw *TabletGateway) WaitForTablets(tabletTypesToWait []topodatapb.TabletTyp
 	if err != nil {
 		return err
 	}
-	err = gw.hc.WaitForAllServingTablets(ctx, targets)
-	return err
+	return gw.hc.WaitForAllServingTablets(ctx, targets)
 }
 
 // Close shuts down underlying connections.
@@ -385,13 +384,13 @@ func (gw *TabletGateway) shuffleTablets(cell string, tablets []*discovery.Tablet
 		}
 	}
 
-	//shuffle in same cell tablets
+	// shuffle in same cell tablets
 	for i := sameCellMax; i > 0; i-- {
 		swap := rand.Intn(i + 1)
 		tablets[i], tablets[swap] = tablets[swap], tablets[i]
 	}
 
-	//shuffle in diff cell tablets
+	// shuffle in diff cell tablets
 	for i, diffCellMin := length-1, sameCellMax+1; i > diffCellMin; i-- {
 		swap := rand.Intn(i-sameCellMax) + diffCellMin
 		tablets[i], tablets[swap] = tablets[swap], tablets[i]
