@@ -996,7 +996,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_multicell",
-			"RetryMax": 2,
+			"RetryMax": 0,
 			"Tags": []
 		},
 		"vreplication_cellalias": {
@@ -1005,7 +1005,16 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
-			"RetryMax": 2,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"vreplication_partialmovetables": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "PartialMoveTables"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_partialmovetables",
+			"RetryMax": 0,
 			"Tags": []
 		},
 		"vreplication_basic": {

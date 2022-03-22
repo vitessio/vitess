@@ -55,7 +55,7 @@ const (
 
 	// An empty string will cause the default non platform specific template
 	// to be used.
-	clusterTestTemplateFormatStr = "templates/cluster_endtoend_test%s.tpl"
+	clusterTestTemplate = "templates/cluster_endtoend_test%s.tpl"
 
 	unitTestSelfHostedTemplate    = "templates/unit_test_self_hosted.tpl"
 	unitTestSelfHostedDatabases   = ""
@@ -110,10 +110,10 @@ var (
 		"vtgate_topo_etcd",
 		"vtgate_transaction",
 		"vtgate_unsharded",
-		"vtgate_vindex_heavy",
+		"vtgate_vindex_heavy", //p
 		"vtgate_vschema",
-		"vtgate_queries",
-		"vtgate_schema_tracker",
+		"vtgate_queries",        //p
+		"vtgate_schema_tracker", //p
 		"xb_recovery",
 		"mysql80",
 		"vreplication_across_db_versions",
@@ -121,6 +121,7 @@ var (
 		"vreplication_cellalias",
 		"vreplication_basic",
 		"vreplication_v2",
+		"vreplication_partialmovetables",
 		"vtorc",
 		"vtorc_8.0",
 		"schemadiff_vrepl",
@@ -142,6 +143,11 @@ var (
 		"vtgate_topo_consul",
 		"tabletmanager_consul",
 	}
+	clustersTestingPartialKeyspace = []string{
+		"vtgate_general_heavy",
+		"vtgate_transaction",
+		"vtgate_queries",
+	}
 )
 
 type unitTest struct {
@@ -154,6 +160,7 @@ type clusterTest struct {
 	MakeTools, InstallXtraBackup bool
 	Ubuntu20, Docker             bool
 	LimitResourceUsage           bool
+	PartialKeyspace              bool
 }
 
 type selfHostedTest struct {
@@ -176,9 +183,9 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 	case clusterName == "tabletmanager_tablegc":
 		return allMySQLVersions
 	case clusterName == "mysql80":
-		return []mysqlVersion{mysql80}
+		return mysql80OnlyVersions
 	case clusterName == "vtorc_8.0":
-		return []mysqlVersion{mysql80}
+		return mysql80OnlyVersions
 	case clusterName == "vreplication_across_db_versions":
 		return []mysqlVersion{mysql80}
 	case clusterName == "xb_backup":
@@ -213,7 +220,7 @@ func mergeBlankLines(buf *bytes.Buffer) string {
 
 func main() {
 	generateUnitTestWorkflows()
-	generateClusterWorkflows(clusterList, clusterTestTemplateFormatStr)
+	generateClusterWorkflows(clusterList, clusterTestTemplate)
 	generateClusterWorkflows(clusterDockerList, clusterTestDockerTemplate)
 
 	// tests that will use self-hosted runners
@@ -363,17 +370,32 @@ func generateClusterWorkflows(list []string, tpl string) {
 				mysqlVersionIndicator = "_" + string(mysqlVersion)
 				test.Name = test.Name + " " + string(mysqlVersion)
 			}
-			test.FileName = fmt.Sprintf("cluster_endtoend_%s%s.yml", cluster, mysqlVersionIndicator)
-			path := fmt.Sprintf("%s/%s", workflowConfigDir, test.FileName)
-			template := tpl
-			if test.Platform != "" {
-				template = fmt.Sprintf(tpl, "_"+test.Platform)
-			} else if strings.Contains(template, "%s") {
-				template = fmt.Sprintf(tpl, "")
+			var partialKeyspace bool
+			for _, cluster1 := range canonnizeList(clustersTestingPartialKeyspace) {
+				if cluster1 == cluster {
+					partialKeyspace = true
+				}
 			}
-			err := writeFileFromTemplate(template, path, test)
+
+			workflowPath := fmt.Sprintf("%s/cluster_endtoend_%s%s.yml", workflowConfigDir, cluster, mysqlVersionIndicator)
+			templateFileName := tpl
+			if test.Platform != "" {
+				templateFileName = fmt.Sprintf(tpl, "_"+test.Platform)
+			} else if strings.Contains(templateFileName, "%s") {
+				templateFileName = fmt.Sprintf(tpl, "")
+			}
+			err := writeFileFromTemplate(templateFileName, workflowPath, test)
 			if err != nil {
 				log.Print(err)
+			}
+			if partialKeyspace {
+				test.PartialKeyspace = partialKeyspace
+				test.Name = test.Name + " (partial keyspace)"
+				workflowPath = strings.Replace(workflowPath, ".yml", "_partial_keyspace.yml", 1)
+				err := writeFileFromTemplate(templateFileName, workflowPath, test)
+				if err != nil {
+					log.Print(err)
+				}
 			}
 		}
 	}
@@ -433,8 +455,12 @@ func writeFileFromTemplate(templateFile, path string, test any) error {
 	if err != nil {
 		return fmt.Errorf("Error creating file: %s\n", err)
 	}
-	f.WriteString("# DO NOT MODIFY: THIS FILE IS GENERATED USING \"make generate_ci_workflows\"\n\n")
-	f.WriteString(mergeBlankLines(buf))
+	if _, err := f.WriteString("# DO NOT MODIFY: THIS FILE IS GENERATED USING \"make generate_ci_workflows\"\n\n"); err != nil {
+		return err
+	}
+	if _, err := f.WriteString(mergeBlankLines(buf)); err != nil {
+		return err
+	}
 	fmt.Printf("Generated %s\n", path)
 	return nil
 }

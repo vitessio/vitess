@@ -470,7 +470,7 @@ func (vr *vreplicator) setSQLMode(ctx context.Context) (func(), error) {
 	if err != nil {
 		return resetFunc, err
 	}
-	if settings.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) {
+	if settings.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_OnlineDDL) {
 		vreplicationSQLMode = StrictSQLMode
 	}
 
@@ -495,7 +495,7 @@ func (vr *vreplicator) setSQLMode(ctx context.Context) (func(), error) {
 //     migrations as well as gh-ost migrations.
 func (vr *vreplicator) throttlerAppName() string {
 	names := []string{vr.WorkflowName, throttlerVReplicationAppName}
-	if vr.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) {
+	if vr.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_OnlineDDL) {
 		names = append(names, throttlerOnlineDDLAppName)
 	}
 	return strings.Join(names, ":")

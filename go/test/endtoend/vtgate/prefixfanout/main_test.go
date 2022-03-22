@@ -158,12 +158,10 @@ func TestMain(m *testing.M) {
 }
 
 func TestCFCPrefixQueryNoHash(t *testing.T) {
+	//t.Skip("partial keyspace")
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
+	vtParams := clusterInstance.GetVTParams(sKs)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -193,19 +191,17 @@ func TestCFCPrefixQueryNoHash(t *testing.T) {
 	// fan out to all when there is no prefix
 	qr = utils.Exec(t, conn, "select c2 from t1 where c1 like '%A' order by c2")
 	assert.Equal(t, 4, len(qr.Rows))
-	fmt.Printf("%v", qr.Rows)
 	for i, r := range qr.Rows {
 		assert.Equal(t, fmt.Sprintf("shard-%d", i), r[0].ToString())
 	}
 }
 
 func TestCFCPrefixQueryWithHash(t *testing.T) {
+	//t.Skip("partial keyspace")
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
+	vtParams := clusterInstance.GetVTParams(sKsMD5)
+
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -245,12 +241,11 @@ func TestCFCPrefixQueryWithHash(t *testing.T) {
 }
 
 func TestCFCInsert(t *testing.T) {
+	//t.Skip("partial keyspace")
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
+
+	vtParams := clusterInstance.GetVTParams(sKs)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()

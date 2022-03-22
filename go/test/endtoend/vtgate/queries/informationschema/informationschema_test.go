@@ -57,6 +57,9 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 }
 
 func TestDbNameOverride(t *testing.T) {
+	if clusterInstance.HasPartialKeyspaces {
+		t.Skip("partial keyspace")
+	}
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -68,6 +71,9 @@ func TestDbNameOverride(t *testing.T) {
 }
 
 func TestInformationSchemaQuery(t *testing.T) {
+	if clusterInstance.HasPartialKeyspaces {
+		t.Skip("partial keyspace")
+	}
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -140,6 +146,9 @@ func TestUseSystemSchema(t *testing.T) {
 }
 
 func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
+	if clusterInstance.HasPartialKeyspaces {
+		t.Skip("partial keyspace")
+	}
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -173,6 +182,9 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 }
 
 func TestMultipleSchemaPredicates(t *testing.T) {
+	if clusterInstance.HasPartialKeyspaces {
+		t.Skip("partial keyspace")
+	}
 	mcmp, closer := start(t)
 	defer closer()
 

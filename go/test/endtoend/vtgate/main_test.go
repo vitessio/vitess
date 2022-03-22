@@ -56,7 +56,6 @@ var (
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
-
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(Cell, "localhost")
 		defer clusterInstance.Teardown()
@@ -85,9 +84,9 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildVSchemaGraph")
+		_, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("RebuildVSchemaGraph")
 		if err != nil {
-			return 1
+			return 0
 		}
 
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable_system_settings=true")
@@ -97,10 +96,8 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		vtParams = clusterInstance.GetVTParams(KeyspaceName)
+
 		return m.Run()
 	}()
 	os.Exit(exitCode)

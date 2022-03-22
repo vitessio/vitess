@@ -18,8 +18,10 @@ package vreplication
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -67,7 +69,7 @@ func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) erro
 	return nil
 }
 
-func createMoveTablesWorkflow(t *testing.T, tables string) error {
+func createMoveTablesWorkflow(t *testing.T, tables string) {
 	if tables == "" {
 		tables = tablesToMove
 	}
@@ -78,7 +80,6 @@ func createMoveTablesWorkflow(t *testing.T, tables string) error {
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
 	vdiff1(t, ksWorkflow, "")
-	return nil
 }
 
 func tstWorkflowAction(t *testing.T, action, tabletTypes, cells string) error {
@@ -103,6 +104,9 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	case workflowActionCreate:
 		if currentWorkflowType == wrangler.MoveTablesWorkflow {
 			args = append(args, "--source", sourceKs, "--tables", tables)
+			if sourceShards != "" {
+				args = append(args, "--source_shards", sourceShards)
+			}
 		} else {
 			args = append(args, "--source_shards", sourceShards, "--target_shards", targetShards)
 		}
@@ -252,6 +256,97 @@ func TestBasicV2Workflows(t *testing.T) {
 	testMoveTablesV2Workflow(t)
 	testReshardV2Workflow(t)
 	log.Flush()
+}
+
+// TestPartialMoveTables tests partial move tables by moving just one shard 80- from customer to customer2
+func TestPartialMoveTables(t *testing.T) {
+	defaultRdonly = 1
+	origExtraVTGateArgs := extraVTGateArgs
+	extraVTGateArgs = append(extraVTGateArgs, "--enable_shard_routing")
+	defer func() {
+		defaultRdonly = 0
+		extraVTGateArgs = origExtraVTGateArgs
+	}()
+	vc = setupCluster(t)
+	defer vtgateConn.Close()
+	defer vc.TearDown(t)
+	setupCustomerKeyspace(t)
+
+	createMoveTablesWorkflow(t, "customer")
+
+	setupCustomer2Keyspace(t)
+
+	currentWorkflowType = wrangler.MoveTablesWorkflow
+	wfName := "partial"
+	moveToKs := "customer2"
+	shard := "80-"
+	ksWf := fmt.Sprintf("%s.%s", moveToKs, wfName)
+	err := tstWorkflowExec(t, defaultCellName, wfName, targetKs, moveToKs,
+		"customer", workflowActionCreate, "", shard, "")
+	require.NoError(t, err)
+	targetTab1 = vc.getPrimaryTablet(t, moveToKs, shard)
+	catchup(t, targetTab1, wfName, "Partial MoveTables Customer to Customer2")
+	time.Sleep(1 * time.Second)
+	vdiff1(t, ksWf, "")
+
+	expectedShardRoutingRules := `{"rules":[{"from_keyspace":"customer","to_keyspace":"customer2","shard":"80-"}]}`
+	applyShardRoutingRules(t, expectedShardRoutingRules)
+
+	waitForRowCount(t, vtgateConn, "customer", "customer", 3)      //customer: all shards
+	waitForRowCount(t, vtgateConn, "customer2", "customer", 3)     //customer: all shards
+	waitForRowCount(t, vtgateConn, "customer2:80-", "customer", 2) // customer2: 80-
+
+	waitForQueryResult(t, vtgateConn, "customer:80-", "select name from customer where cid = 3", `[[VARBINARY("ringo")]]`)
+	// updates customer2:80-
+	execVtgateQuery(t, vtgateConn, "customer2:80-", "update customer set name = 'Ringo Starr' where cid = 3")
+	// uses customer: all shards, not route
+	waitForQueryResult(t, vtgateConn, "customer", "select name from customer where cid = 3", `[[VARBINARY("ringo")]]`)
+	// uses route to customer2:80-
+	waitForQueryResult(t, vtgateConn, "customer:80-", "select name from customer where cid = 3", `[[VARBINARY("Ringo Starr")]]`)
+
+	// remove manually applied shard routing rules, these should be set by SwitchTraffic
+	emptyRules := `{"rules":[]}`
+	applyShardRoutingRules(t, emptyRules)
+	require.Equal(t, emptyRules, getShardRoutingRules(t))
+
+	// switch all traffic
+	require.NoError(t, tstWorkflowExec(t, "", wfName, "", moveToKs, "", workflowActionSwitchTraffic, "", "", ""))
+	require.Equal(t, expectedShardRoutingRules, getShardRoutingRules(t))
+
+	waitForQueryResult(t, vtgateConn, "customer:80-", "select name from customer where cid = 3", `[[VARBINARY("Ringo Starr")]]`)
+	execVtgateQuery(t, vtgateConn, "customer2:80-", "update customer set name = 'Squaro Planett' where cid = 3")
+	waitForQueryResult(t, vtgateConn, "customer:80-", "select name from customer where cid = 3", `[[VARBINARY("Squaro Planett")]]`)
+
+	// cannot Complete a partial move tables at the moment because it will find that all traffic has (obviously) not been switched
+	// we need to cleanup using Workflow delete
+	err = tstWorkflowExec(t, "", wfName, "", moveToKs, "", workflowActionComplete, "", "", "")
+	require.Error(t, err)
+	require.Equal(t, expectedShardRoutingRules, getShardRoutingRules(t))
+
+	_, err = vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWf, "delete")
+	require.NoError(t, err)
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWf, "show")
+	require.Error(t, err)
+	require.Contains(t, output, "no streams found")
+
+}
+
+func applyShardRoutingRules(t *testing.T, rules string) {
+	output, err := osExec(t, "vtctldclient", []string{"--server", fmt.Sprintf("localhost:%d", vc.Vtctld.GrpcPort), "ApplyShardRoutingRules", "--rules", rules})
+	log.Infof("ApplyShardRoutingRules err: %+v, output: %+v", err, output)
+	require.Nilf(t, err, output)
+	require.NotNil(t, output)
+}
+
+func getShardRoutingRules(t *testing.T) string {
+	output, err := osExec(t, "vtctldclient", []string{"--server", fmt.Sprintf("localhost:%d", vc.Vtctld.GrpcPort), "GetShardRoutingRules"})
+	log.Infof("GetShardRoutingRules err: %+v, output: %+v", err, output)
+	require.Nilf(t, err, output)
+	require.NotNil(t, output)
+	re := regexp.MustCompile(`[\n\s]+`)
+	output = re.ReplaceAllString(output, "")
+	output = strings.TrimSpace(output)
+	return output
 }
 
 /*
@@ -595,6 +690,19 @@ func setupCustomerKeyspace(t *testing.T) {
 	targetTab2 = custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
 	targetReplicaTab1 = custKs.Shards["-80"].Tablets["zone1-201"].Vttablet
 	targetRdonlyTab1 = custKs.Shards["-80"].Tablets["zone1-202"].Vttablet
+}
+
+func setupCustomer2Keyspace(t *testing.T) {
+	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, "customer2", "-80,80-",
+		customerVSchema, customerSchema, 0, 0, 1200, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "-80"), 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "80-"), 1); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestSwitchReadsWritesInAnyOrder(t *testing.T) {

@@ -712,6 +712,14 @@ func (vw *vschemaWrapper) currentDb() string {
 	return ksName
 }
 
+func (vw *vschemaWrapper) FindRoutedShard(keyspace, shard string) (string, error) {
+	return "", nil
+}
+
+func escapeNewLines(in string) string {
+	return strings.ReplaceAll(in, "\n", "\\n")
+}
+
 func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, render bool) {
 	t.Run(filename, func(t *testing.T) {
 		expected := &strings.Builder{}

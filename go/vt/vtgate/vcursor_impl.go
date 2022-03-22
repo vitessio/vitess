@@ -576,12 +576,51 @@ func (vc *vcursorImpl) setRollbackOnPartialExecIfRequired(atleastOneSuccess bool
 	}
 }
 
+// fixupPartiallyMovedShards checks if any of the shards in the route has a ShardRoutingRule (true when a keyspace
+// is in the middle of being moved to another keyspace using MoveTables moving one shard at a time
+func (vc *vcursorImpl) fixupPartiallyMovedShards(rss []*srvtopo.ResolvedShard) ([]*srvtopo.ResolvedShard, error) {
+	if vc.vschema.ShardRoutingRules == nil {
+		return rss, nil
+	}
+	for ind, rs := range rss {
+		targetKeyspace, err := vc.FindRoutedShard(rs.Target.Keyspace, rs.Target.Shard)
+		if err != nil {
+			return nil, err
+		}
+		if targetKeyspace == rs.Target.Keyspace {
+			continue
+		}
+		rss[ind] = rs.WithKeyspace(targetKeyspace)
+	}
+	return rss, nil
+}
+
 func (vc *vcursorImpl) ResolveDestinations(ctx context.Context, keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
-	return vc.resolver.ResolveDestinations(ctx, keyspace, vc.tabletType, ids, destinations)
+	rss, values, err := vc.resolver.ResolveDestinations(ctx, keyspace, vc.tabletType, ids, destinations)
+	if err != nil {
+		return nil, nil, err
+	}
+	if *EnableShardRouting {
+		rss, err = vc.fixupPartiallyMovedShards(rss)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return rss, values, err
 }
 
 func (vc *vcursorImpl) ResolveDestinationsMultiCol(ctx context.Context, keyspace string, ids [][]sqltypes.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error) {
-	return vc.resolver.ResolveDestinationsMultiCol(ctx, keyspace, vc.tabletType, ids, destinations)
+	rss, values, err := vc.resolver.ResolveDestinationsMultiCol(ctx, keyspace, vc.tabletType, ids, destinations)
+	if err != nil {
+		return nil, nil, err
+	}
+	if *EnableShardRouting {
+		rss, err = vc.fixupPartiallyMovedShards(rss)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return rss, values, err
 }
 
 func (vc *vcursorImpl) Session() engine.SessionActions {
@@ -1000,4 +1039,7 @@ func (vc *vcursorImpl) VtExplainLogging() {
 
 func (vc *vcursorImpl) GetVTExplainLogs() []engine.ExecuteEntry {
 	return vc.safeSession.logging.GetLogs()
+}
+func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (string, error) {
+	return vc.vschema.FindRoutedShard(keyspace, shard)
 }

@@ -971,7 +971,6 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 	if e.VSchema() == nil {
 		return nil, errors.New("vschema not initialized")
 	}
-
 	stmt, reserved, err := sqlparser.Parse2(sql)
 	if err != nil {
 		return nil, err

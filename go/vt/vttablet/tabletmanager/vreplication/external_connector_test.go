@@ -194,7 +194,7 @@ func getExpectedVreplicationQueries(t *testing.T, pos string) []string {
 }
 
 func startExternalVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string) (cancelr func()) {
-	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb)
+	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)

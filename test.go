@@ -92,6 +92,7 @@ var (
 	follow           = flag.Bool("follow", false, "print test output as it runs, instead of waiting to see if it passes or fails")
 	parallel         = flag.Int("parallel", 1, "number of tests to run in parallel")
 	skipBuild        = flag.Bool("skip-build", false, "skip running 'make build'. Assumes pre-existing binaries exist")
+	partialKeyspace  = flag.Bool("partial-keyspace", false, "add a second keyspace for sharded tests and mark first shard as moved to this keyspace in the shard routing rules")
 
 	remoteStats = flag.String("remote-stats", "", "url to send remote stats")
 )
@@ -175,6 +176,9 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		} else {
 			testCmd = []string{"test/" + t.File, "-v", "--skip-build", "--keep-logs"}
 			testCmd = append(testCmd, t.Args...)
+		}
+		if *partialKeyspace {
+			testCmd = append(testCmd, "-partial-keyspace")
 		}
 		testCmd = append(testCmd, extraArgs...)
 		if *docker {
