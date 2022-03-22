@@ -271,17 +271,6 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 
 }
 
-func waitTillAllTabletsAreHealthyInVtgate(t *testing.T, vtgateInstance cluster.VtgateProcess, shards ...string) {
-	for _, shard := range shards {
-		err := vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shard), 1)
-		require.NoError(t, err)
-		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), 1)
-		require.NoError(t, err)
-		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard), 1)
-		require.NoError(t, err)
-	}
-}
-
 func testQueriesOnTabletType(t *testing.T, tabletType string, vtgateGrpcPort int, shouldFail bool) {
 	output, err := localCluster.VtctlProcess.ExecuteCommandWithOutput("VtGateExecute", "--", "--json",
 		"--server", fmt.Sprintf("%s:%d", localCluster.Hostname, vtgateGrpcPort),
