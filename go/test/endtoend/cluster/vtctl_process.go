@@ -47,7 +47,7 @@ func (vtctl *VtctlProcess) AddCellInfo(Cell string) (err error) {
 		"--topo_global_root", vtctl.TopoGlobalRoot,
 	)
 	if *isCoverage {
-		tmpProcess.Args = append(tmpProcess.Args, "-test.coverprofile="+getCoveragePath("vtctl-addcell.out"))
+		tmpProcess.Args = append(tmpProcess.Args, "--test.coverprofile="+getCoveragePath("vtctl-addcell.out"))
 	}
 	tmpProcess.Args = append(tmpProcess.Args,
 		"AddCellInfo", "--",

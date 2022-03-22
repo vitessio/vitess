@@ -1507,8 +1507,8 @@ func (c *Cluster) findTablets(ctx context.Context, filter func(*vtadminpb.Tablet
 }
 
 // Debug returns a map of debug information for a cluster.
-func (c *Cluster) Debug() map[string]interface{} {
-	m := map[string]interface{}{
+func (c *Cluster) Debug() map[string]any {
+	m := map[string]any{
 		"cluster": c.ToProto(),
 		"config":  c.cfg,
 		"pools": map[string]json.RawMessage{

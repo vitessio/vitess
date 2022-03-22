@@ -388,7 +388,7 @@ func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 	}
 
 handleError:
-	query := map[string]interface{}{
+	query := map[string]any{
 		"Sql":           sql,
 		"BindVariables": bindVariables,
 		"Session":       session,
@@ -452,7 +452,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 			})
 	}
 	if err != nil {
-		query := map[string]interface{}{
+		query := map[string]any{
 			"Sql":           sql,
 			"BindVariables": bindVariables,
 			"Session":       session,
@@ -492,7 +492,7 @@ func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql s
 	}
 
 handleError:
-	query := map[string]interface{}{
+	query := map[string]any{
 		"Sql":           sql,
 		"BindVariables": bindVariables,
 		"Session":       session,
@@ -516,14 +516,14 @@ func (vtg *VTGate) VSchemaStats() *VSchemaStats {
 	return vtg.executor.VSchemaStats()
 }
 
-func truncateErrorStrings(data map[string]interface{}) map[string]interface{} {
-	ret := map[string]interface{}{}
+func truncateErrorStrings(data map[string]any) map[string]any {
+	ret := map[string]any{}
 	if *terseErrors {
 		// request might have PII information. Return an empty map
 		return ret
 	}
 	for key, val := range data {
-		mapVal, ok := val.(map[string]interface{})
+		mapVal, ok := val.(map[string]any)
 		if ok {
 			ret[key] = truncateErrorStrings(mapVal)
 		} else {
@@ -534,7 +534,7 @@ func truncateErrorStrings(data map[string]interface{}) map[string]interface{} {
 	return ret
 }
 
-func recordAndAnnotateError(err error, statsKey []string, request map[string]interface{}, logger *logutil.ThrottledLogger) error {
+func recordAndAnnotateError(err error, statsKey []string, request map[string]any, logger *logutil.ThrottledLogger) error {
 	ec := vterrors.Code(err)
 	fullKey := []string{
 		statsKey[0],

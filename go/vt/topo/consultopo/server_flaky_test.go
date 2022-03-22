@@ -59,7 +59,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 
 	// Create the JSON config, save it.
 	port := testfiles.GoVtTopoConsultopoPort
-	config := map[string]interface{}{
+	config := map[string]any{
 		"ports": map[string]int{
 			"dns":      port,
 			"http":     port + 1,

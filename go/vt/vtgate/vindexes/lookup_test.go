@@ -173,7 +173,7 @@ func TestLookupNonUniqueMap(t *testing.T) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
 
-	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	wantqueries := []*querypb.BoundQuery{{
 		Sql: "select fromc, toc from t where fromc in ::fromc",
@@ -222,7 +222,7 @@ func TestLookupNonUniqueMapAutocommit(t *testing.T) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
 
-	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	wantqueries := []*querypb.BoundQuery{{
 		Sql: "select fromc, toc from t where fromc in ::fromc",

@@ -73,7 +73,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 
 	_, memberInformer := cache.NewIndexerInformer(listwatch, &vtv1beta1.VitessTopoNode{}, 0,
 		cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
+			AddFunc: func(obj any) {
 				vtn := obj.(*vtv1beta1.VitessTopoNode)
 				out, err := unpackValue([]byte(vtn.Data.Value))
 				if err != nil {
@@ -86,7 +86,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 					}
 				}
 			},
-			UpdateFunc: func(oldObj, newObj interface{}) {
+			UpdateFunc: func(oldObj, newObj any) {
 				vtn := newObj.(*vtv1beta1.VitessTopoNode)
 				out, err := unpackValue([]byte(vtn.Data.Value))
 				if err != nil {
@@ -99,7 +99,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 					}
 				}
 			},
-			DeleteFunc: func(obj interface{}) {
+			DeleteFunc: func(obj any) {
 				vtn := obj.(*vtv1beta1.VitessTopoNode)
 				changes <- &topo.WatchData{Err: topo.NewError(topo.NoNode, vtn.Name)}
 				close(gracefulShutdown)

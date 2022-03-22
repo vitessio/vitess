@@ -278,7 +278,7 @@ func GRPCCheckServiceMap(name string) bool {
 	return CheckServiceMap("grpc", name)
 }
 
-func authenticatingStreamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func authenticatingStreamInterceptor(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	newCtx, err := authPlugin.Authenticate(stream.Context(), info.FullMethod)
 
 	if err != nil {
@@ -290,7 +290,7 @@ func authenticatingStreamInterceptor(srv interface{}, stream grpc.ServerStream, 
 	return handler(srv, wrapped)
 }
 
-func authenticatingUnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func authenticatingUnaryInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	newCtx, err := authPlugin.Authenticate(ctx, info.FullMethod)
 	if err != nil {
 		return nil, err

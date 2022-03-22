@@ -312,7 +312,7 @@ func validateManifestFile(t *testing.T, backupLocation string) {
 	// reading manifest
 	data, err := os.ReadFile(backupLocation + "/MANIFEST")
 	require.Nilf(t, err, "error while reading MANIFEST %v", err)
-	manifest := make(map[string]interface{})
+	manifest := make(map[string]any)
 
 	// parsing manifest
 	err = json.Unmarshal(data, &manifest)
@@ -326,7 +326,7 @@ func validateManifestFile(t *testing.T, backupLocation string) {
 
 	// validate backup files
 	fielEntries := manifest["FileEntries"]
-	fileArr, ok := fielEntries.([]interface{})
+	fileArr, ok := fielEntries.([]any)
 	require.True(t, ok)
 	for i := range fileArr {
 		f, err := os.Open(fmt.Sprintf("%s/%d", backupLocation, i))

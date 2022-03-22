@@ -64,7 +64,7 @@ func TestBlockedLoadKeyspace(t *testing.T) {
 	err = clusterInstance.StartTopo()
 	require.NoError(t, err)
 
-	// Start keyspace without the -queryserver-config-schema-change-signal flag
+	// Start keyspace without the --queryserver-config-schema-change-signal flag
 	keyspace := &cluster.Keyspace{
 		Name:      keyspaceName,
 		SchemaSQL: sqlSchema,

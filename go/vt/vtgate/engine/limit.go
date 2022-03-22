@@ -197,7 +197,7 @@ func getIntFrom(env *evalengine.ExpressionEnv, expr evalengine.Expr) (int, error
 }
 
 func (l *Limit) description() PrimitiveDescription {
-	other := map[string]interface{}{}
+	other := map[string]any{}
 
 	if l.Count != nil {
 		other["Count"] = evalengine.FormatExpr(l.Count)

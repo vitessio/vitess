@@ -517,7 +517,7 @@ func getClientCount(vttablet *cluster.Vttablet) int {
 		return 0
 	}
 
-	v, ok := msg.(map[string]interface{})
+	v, ok := msg.(map[string]any)
 	if !ok {
 		return 0
 	}
@@ -536,13 +536,13 @@ func getClientCount(vttablet *cluster.Vttablet) int {
 }
 
 // getVar read debug vars from the vttablet.
-func getVar(vttablet *cluster.Vttablet) (map[string]interface{}, error) {
+func getVar(vttablet *cluster.Vttablet) (map[string]any, error) {
 	resp, err := http.Get(fmt.Sprintf("http://%s:%d/debug/vars", vttablet.VttabletProcess.TabletHostname, vttablet.HTTPPort))
 	if err != nil {
 		return nil, err
 	}
 	if resp.StatusCode == 200 {
-		resultMap := make(map[string]interface{})
+		resultMap := make(map[string]any)
 		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
 		return resultMap, err

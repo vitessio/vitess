@@ -493,11 +493,11 @@ func buildMultiColumnVindexValues(shardsValues [][][]sqltypes.Value) [][][]*quer
 		// cols = 2
 		cols := len(shardValues[0])
 		shardIds := make([][]*querypb.Value, cols)
-		colValSeen := make([]map[string]interface{}, cols)
+		colValSeen := make([]map[string]any, cols)
 		for _, values := range shardValues {
 			for colIdx, value := range values {
 				if colValSeen[colIdx] == nil {
-					colValSeen[colIdx] = map[string]interface{}{}
+					colValSeen[colIdx] = map[string]any{}
 				}
 				if _, found := colValSeen[colIdx][value.String()]; found {
 					continue
@@ -527,7 +527,7 @@ func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) 
 	return shardVars
 }
 
-func shardVarsMultiCol(bv map[string]*querypb.BindVariable, mapVals [][][]*querypb.Value, isSingleVal map[int]interface{}) []map[string]*querypb.BindVariable {
+func shardVarsMultiCol(bv map[string]*querypb.BindVariable, mapVals [][][]*querypb.Value, isSingleVal map[int]any) []map[string]*querypb.BindVariable {
 	shardVars := make([]map[string]*querypb.BindVariable, len(mapVals))
 	for i, shardVals := range mapVals {
 		newbv := make(map[string]*querypb.BindVariable, len(bv)+len(shardVals)-len(isSingleVal))
@@ -549,11 +549,11 @@ func shardVarsMultiCol(bv map[string]*querypb.BindVariable, mapVals [][][]*query
 	return shardVars
 }
 
-func generateRowColValues(vcursor VCursor, bindVars map[string]*querypb.BindVariable, values []evalengine.Expr) ([][]sqltypes.Value, map[int]interface{}, error) {
+func generateRowColValues(vcursor VCursor, bindVars map[string]*querypb.BindVariable, values []evalengine.Expr) ([][]sqltypes.Value, map[int]any, error) {
 	// gather values from all the column in the vindex
 	var multiColValues [][]sqltypes.Value
 	var lv []sqltypes.Value
-	isSingleVal := map[int]interface{}{}
+	isSingleVal := map[int]any{}
 	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	for colIdx, rvalue := range values {
 		result, err := env.Evaluate(rvalue)

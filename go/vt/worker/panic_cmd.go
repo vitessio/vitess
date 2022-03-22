@@ -36,7 +36,7 @@ func commandPanic(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	return worker, nil
 }
 
-func interactivePanic(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
+func interactivePanic(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]any, error) {
 	wrk, err := NewPanicWorker(wr)
 	if err != nil {
 		return nil, nil, nil, vterrors.Wrap(err, "Could not create Panic worker")

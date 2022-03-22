@@ -470,7 +470,7 @@ func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, reques
 	}
 
 	response.Header().Set("Content-Type", "text/plain")
-	qe.plans.ForEach(func(value interface{}) bool {
+	qe.plans.ForEach(func(value any) bool {
 		plan := value.(*TabletPlan)
 		response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(plan.Original))))
 		if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
@@ -490,7 +490,7 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 	}
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	var qstats []perQueryStats
-	qe.plans.ForEach(func(value interface{}) bool {
+	qe.plans.ForEach(func(value any) bool {
 		plan := value.(*TabletPlan)
 
 		var pqstats perQueryStats

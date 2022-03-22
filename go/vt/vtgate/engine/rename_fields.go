@@ -117,7 +117,7 @@ func (r *RenameFields) Inputs() []Primitive {
 func (r *RenameFields) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "RenameFields",
-		Other: map[string]interface{}{
+		Other: map[string]any{
 			"Indices": r.Indices,
 			"Columns": r.Cols,
 		},

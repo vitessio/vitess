@@ -2053,7 +2053,7 @@ type (
 		// It's a placeholder for analyzers to store
 		// additional data, typically info about which
 		// table or column this node references.
-		Metadata  interface{}
+		Metadata  any
 		Name      ColIdent
 		Qualifier TableName
 	}

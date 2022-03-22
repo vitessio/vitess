@@ -19,6 +19,9 @@ package wrangler
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -137,13 +140,13 @@ func TestCanSwitch(t *testing.T) {
 		name                  string
 		state                 string
 		streamLag, allowedLag int64 /* seconds */
-		expectedReason        string
+		expectedReason        *regexp.Regexp
 	}
 
 	testCases := []testCase{
-		{"In Copy Phase", "Copying", 0, 0, cannotSwitchCopyIncomplete},
-		{"High Lag", "Running", 6, 5, cannotSwitchHighLag},
-		{"Acceptable Lag", "Running", 4, 5, ""},
+		{"In Copy Phase", "Copying", 0, 0, regexp.MustCompile(cannotSwitchCopyIncomplete)},
+		{"High Lag", "Running", 6, 5, regexp.MustCompile(strings.ReplaceAll(cannotSwitchHighLag, "%d", "(\\d+)"))},
+		{"Acceptable Lag", "Running", 4, 5, nil},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -151,11 +154,30 @@ func TestCanSwitch(t *testing.T) {
 			p.MaxAllowedTransactionLagSeconds = tc.allowedLag
 			reason, err := wf.canSwitch("ks2", workflowName)
 			require.NoError(t, err)
-			expected := ""
-			if reason != "" {
-				expected = fmt.Sprintf(tc.expectedReason, tc.streamLag, tc.allowedLag)
+
+			if tc.expectedReason != nil {
+				require.Regexp(t, tc.expectedReason, reason)
+
+				m := tc.expectedReason.FindStringSubmatch(reason)
+				switch tc.expectedReason.NumSubexp() {
+				case 0:
+					// cannotSwitchCopyIncomplete, nothing else to do
+				case 2:
+					// cannotSwitchHighLag, assert streamLag > allowedLag
+					curLag, err := strconv.ParseInt(m[1], 10, 64)
+					require.NoError(t, err, "could not parse current lag %s as int", m[1])
+
+					allowedLag, err := strconv.ParseInt(m[2], 10, 64)
+					require.NoError(t, err, "could not parse allowed lag %s as int", m[2])
+
+					require.Greater(t, curLag, allowedLag, "current lag %d should be strictly greater than allowed lag %d (from reason %q)", curLag, allowedLag, reason)
+				default:
+					// unexpected regexp, fail loudly
+					require.Fail(t, "unknown reason regexp %s -- did you add a new test case?", tc.expectedReason)
+				}
+			} else {
+				require.Empty(t, reason, "should be able to switch, but cannot because %s", reason)
 			}
-			require.Contains(t, expected, reason)
 		})
 	}
 }

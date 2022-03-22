@@ -142,7 +142,7 @@ func queryzHandler(e *Executor, w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	e.plans.ForEach(func(value interface{}) bool {
+	e.plans.ForEach(func(value any) bool {
 		plan := value.(*engine.Plan)
 		Value := &queryzRow{
 			Query: logz.Wrappable(sqlparser.TruncateForUI(plan.Original)),

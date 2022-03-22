@@ -34,7 +34,7 @@ func TestVttabletProcess(t *testing.T) {
 	firstTabletPort := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].HTTPPort
 	testURL(t, fmt.Sprintf("http://localhost:%d/debug/vars/", firstTabletPort), "tablet debug var url")
 	resp, _ := http.Get(fmt.Sprintf("http://localhost:%d/debug/vars", firstTabletPort))
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	respByte, _ := io.ReadAll(resp.Body)
 	err := json.Unmarshal(respByte, &resultMap)
 	if err != nil {

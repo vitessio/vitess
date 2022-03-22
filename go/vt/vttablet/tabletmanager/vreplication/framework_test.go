@@ -435,7 +435,7 @@ func expectDeleteQueries(t *testing.T) {
 	})
 }
 
-func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan interface{}) {
+func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan any) {
 	t.Helper()
 	defer vrLogStatsLogger.Unsubscribe(logCh)
 	failed := false
