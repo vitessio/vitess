@@ -2683,11 +2683,11 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		return
 	}
 	if node.Type == CreateTriggerStr {
-		buf.Myprintf("show create procedure %v", node.Table)
+		buf.Myprintf("show create trigger %v", node.Table)
 		return
 	}
 	if node.Type == CreateProcedureStr {
-		buf.Myprintf("show create trigger %v", node.Table)
+		buf.Myprintf("show create procedure %v", node.Table)
 		return
 	}
 	if node.Type == "processlist" {
