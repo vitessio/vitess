@@ -41,7 +41,7 @@ type Config struct {
 	ConnectivityTimeout time.Duration
 }
 
-var defaultConnectivityTimeout = 2 * time.Second
+const defaultConnectivityTimeout = 2 * time.Second
 
 // Parse returns a new config with the given cluster and discovery, after
 // attempting to parse the command-line pflags into that Config. See
