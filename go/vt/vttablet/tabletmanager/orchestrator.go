@@ -144,7 +144,7 @@ func (orc *orcClient) InActiveShardRecovery(tablet *topodatapb.Tablet) (bool, er
 		return false, fmt.Errorf("error calling Orchestrator API: %v", err)
 	}
 
-	var r []map[string]interface{}
+	var r []map[string]any
 
 	if err := json.Unmarshal(resp, &r); err != nil {
 		return false, fmt.Errorf("error parsing JSON response from Orchestrator: %v; response: %q", err, string(resp))

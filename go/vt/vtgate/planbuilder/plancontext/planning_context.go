@@ -32,7 +32,7 @@ type PlanningContext struct {
 	// if we assume that tblB is on the RHS of the join. This last predicate in the WHERE clause is added to the
 	// map below
 	JoinPredicates map[sqlparser.Expr][]sqlparser.Expr
-	SkipPredicates map[sqlparser.Expr]interface{}
+	SkipPredicates map[sqlparser.Expr]any
 	PlannerVersion querypb.ExecuteOptions_PlannerVersion
 }
 
@@ -42,7 +42,7 @@ func NewPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantic
 		SemTable:       semTable,
 		VSchema:        vschema,
 		JoinPredicates: map[sqlparser.Expr][]sqlparser.Expr{},
-		SkipPredicates: map[sqlparser.Expr]interface{}{},
+		SkipPredicates: map[sqlparser.Expr]any{},
 		PlannerVersion: version,
 	}
 	return ctx

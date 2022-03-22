@@ -47,7 +47,7 @@ func NewVitessTopoNodeLister(indexer cache.Indexer) VitessTopoNodeLister {
 
 // List lists all VitessTopoNodes in the indexer.
 func (s *vitessTopoNodeLister) List(selector labels.Selector) (ret []*v1beta1.VitessTopoNode, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	err = cache.ListAll(s.indexer, selector, func(m any) {
 		ret = append(ret, m.(*v1beta1.VitessTopoNode))
 	})
 	return ret, err
@@ -76,7 +76,7 @@ type vitessTopoNodeNamespaceLister struct {
 
 // List lists all VitessTopoNodes in the indexer for a given namespace.
 func (s vitessTopoNodeNamespaceLister) List(selector labels.Selector) (ret []*v1beta1.VitessTopoNode, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
+	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m any) {
 		ret = append(ret, m.(*v1beta1.VitessTopoNode))
 	})
 	return ret, err

@@ -921,7 +921,7 @@ func (scw *SplitCloneWorker) getCounters(state StatusWorkerState) ([]*stats.Coun
 	}
 }
 
-func (scw *SplitCloneWorker) startExecutor(ctx context.Context, wg *sync.WaitGroup, keyspace, shard string, insertChannel chan string, threadID int, processError func(string, ...interface{})) {
+func (scw *SplitCloneWorker) startExecutor(ctx context.Context, wg *sync.WaitGroup, keyspace, shard string, insertChannel chan string, threadID int, processError func(string, ...any)) {
 	defer wg.Done()
 	t := scw.getThrottler(keyspace, shard)
 	//defer t.ThreadFinished(threadID)
@@ -1020,7 +1020,7 @@ func (scw *SplitCloneWorker) getDestinationResultReader(ctx context.Context, td 
 	return resultReader, err
 }
 
-func (scw *SplitCloneWorker) cloneAChunk(ctx context.Context, td *tabletmanagerdatapb.TableDefinition, tableIndex int, chunk chunk, processError func(string, ...interface{}), state StatusWorkerState, tableStatusList *tableStatusList, keyResolver keyspaceIDResolver, start time.Time, insertChannels []chan string, txID int64, statsCounters []*stats.CountersWithSingleLabel) {
+func (scw *SplitCloneWorker) cloneAChunk(ctx context.Context, td *tabletmanagerdatapb.TableDefinition, tableIndex int, chunk chunk, processError func(string, ...any), state StatusWorkerState, tableStatusList *tableStatusList, keyResolver keyspaceIDResolver, start time.Time, insertChannels []chan string, txID int64, statsCounters []*stats.CountersWithSingleLabel) {
 	errPrefix := fmt.Sprintf("table=%v chunk=%v", td.Name, chunk)
 
 	var err error
@@ -1085,7 +1085,7 @@ type workUnit struct {
 }
 
 func (scw *SplitCloneWorker) startCloningData(ctx context.Context, state StatusWorkerState, sourceSchemaDefinition *tabletmanagerdatapb.SchemaDefinition,
-	processError func(string, ...interface{}), firstSourceTablet *topodatapb.Tablet, tableStatusList *tableStatusList,
+	processError func(string, ...any), firstSourceTablet *topodatapb.Tablet, tableStatusList *tableStatusList,
 	start time.Time, statsCounters []*stats.CountersWithSingleLabel, insertChannels []chan string, wg *sync.WaitGroup) error {
 
 	workPipeline := make(chan workUnit, 10) // We'll use a small buffer so producers do not run too far ahead of consumers
@@ -1180,7 +1180,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 
 	ctx, cancelCopy := context.WithCancel(ctx)
 	defer cancelCopy()
-	processError := func(format string, args ...interface{}) {
+	processError := func(format string, args ...any) {
 		// in theory we could have two threads see firstError as null and both write to the variable
 		// that should not cause any problems though - canceling and logging is concurrently safe,
 		// and overwriting the variable will not cause any problems

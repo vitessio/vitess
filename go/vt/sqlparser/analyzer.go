@@ -457,7 +457,7 @@ func IsLockingFunc(node Expr) bool {
 	return false
 }
 
-var lockingFunctions = map[string]interface{}{
+var lockingFunctions = map[string]any{
 	"get_lock":          nil,
 	"is_free_lock":      nil,
 	"is_used_lock":      nil,

@@ -63,7 +63,7 @@ func (buf *TrackedBuffer) WriteNode(node SQLNode) *TrackedBuffer {
 // The name must be something other than the usual Printf() to avoid "go vet"
 // warnings due to our custom format specifiers.
 // *** THIS METHOD SHOULD NOT BE USED FROM ast.go. USE astPrintf INSTEAD ***
-func (buf *TrackedBuffer) Myprintf(format string, values ...interface{}) {
+func (buf *TrackedBuffer) Myprintf(format string, values ...any) {
 	buf.astPrintf(nil, format, values...)
 }
 
@@ -83,7 +83,7 @@ func (buf *TrackedBuffer) printExpr(currentExpr Expr, expr Expr, left bool) {
 }
 
 // astPrintf is for internal use by the ast structs
-func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values ...interface{}) {
+func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values ...any) {
 	currentExpr, checkParens := currentNode.(Expr)
 	if checkParens {
 		// expressions that have Precedence Syntactic will never need parens
@@ -153,7 +153,7 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 	}
 }
 
-func getExpressionForParensEval(checkParens bool, value interface{}) Expr {
+func getExpressionForParensEval(checkParens bool, value any) Expr {
 	if checkParens {
 		expr, isExpr := value.(Expr)
 		if isExpr {
@@ -236,7 +236,7 @@ func (buf *TrackedBuffer) HasBindVars() bool {
 }
 
 // BuildParsedQuery builds a ParsedQuery from the input.
-func BuildParsedQuery(in string, vars ...interface{}) *ParsedQuery {
+func BuildParsedQuery(in string, vars ...any) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
 	buf.Myprintf(in, vars...)
 	return buf.ParsedQuery()

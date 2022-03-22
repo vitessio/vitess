@@ -118,7 +118,7 @@ func New(name string, opts Options) *Server {
 		unaryInterceptors = append(unaryInterceptors, otgrpc.UnaryServerInterceptor(otgrpc.WithTracer(tracer)))
 	}
 
-	recoveryHandler := grpc_recovery.WithRecoveryHandler(func(p interface{}) (err error) {
+	recoveryHandler := grpc_recovery.WithRecoveryHandler(func(p any) (err error) {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "panic triggered: %v", p)
 	})
 

@@ -320,7 +320,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	// check for shards
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("FindAllShardsInKeyspace", keyspaceName)
 	require.Nil(t, err)
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	err = json.Unmarshal([]byte(result), &resultMap)
 	require.Nil(t, err)
 	assert.Equal(t, 4, len(resultMap), "No of shards should be 4")

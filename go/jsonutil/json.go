@@ -24,7 +24,7 @@ import (
 
 // MarshalNoEscape is the same functionality as json.Marshal but
 // with HTML escaping disabled
-func MarshalNoEscape(v interface{}) ([]byte, error) {
+func MarshalNoEscape(v any) ([]byte, error) {
 	buf := bytes.Buffer{}
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
@@ -37,7 +37,7 @@ func MarshalNoEscape(v interface{}) ([]byte, error) {
 
 // MarshalIndentNoEscape is the same functionality as json.MarshalIndent but with HTML escaping
 // disabled
-func MarshalIndentNoEscape(v interface{}, prefix, indent string) ([]byte, error) {
+func MarshalIndentNoEscape(v any, prefix, indent string) ([]byte, error) {
 	buf := bytes.Buffer{}
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)

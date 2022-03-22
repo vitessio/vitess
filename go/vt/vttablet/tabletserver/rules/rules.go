@@ -127,7 +127,7 @@ func (qrs *Rules) Delete(name string) (qr *Rule) {
 
 // UnmarshalJSON unmarshals Rules.
 func (qrs *Rules) UnmarshalJSON(data []byte) (err error) {
-	var rulesInfo []map[string]interface{}
+	var rulesInfo []map[string]any
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
 	err = dec.Decode(&rulesInfo)
@@ -406,7 +406,7 @@ func makeExact(pattern string) string {
 // int64    ==, !=, <, >=, >, <=                   whole numbers
 // string   ==, !=, <, >=, >, <=, MATCH, NOMATCH   []byte, string
 // whole numbers can be: int, int8, int16, int32, int64, uint64
-func (qr *Rule) AddBindVarCond(name string, onAbsent, onMismatch bool, op Operator, value interface{}) error {
+func (qr *Rule) AddBindVarCond(name string, onAbsent, onMismatch bool, op Operator, value any) error {
 	var converted bvcValue
 	if op == QRNoOp {
 		qr.bindVarConds = append(qr.bindVarConds, BindVarCond{name, onAbsent, onMismatch, op, nil})
@@ -859,11 +859,11 @@ func MapStrOperator(strop string) (op Operator, err error) {
 }
 
 // BuildQueryRule builds a query rule from a ruleInfo.
-func BuildQueryRule(ruleInfo map[string]interface{}) (qr *Rule, err error) {
+func BuildQueryRule(ruleInfo map[string]any) (qr *Rule, err error) {
 	qr = NewQueryRule("", "", QRFail)
 	for k, v := range ruleInfo {
 		var sv string
-		var lv []interface{}
+		var lv []any
 		var ok bool
 		switch k {
 		case "Name", "Description", "RequestIP", "User", "Query", "Action", "LeadingComment", "TrailingComment":
@@ -872,7 +872,7 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *Rule, err error) {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "want string for %s", k)
 			}
 		case "Plans", "BindVarConds", "TableNames":
-			lv, ok = v.([]interface{})
+			lv, ok = v.([]any)
 			if !ok {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "want list for %s", k)
 			}
@@ -956,14 +956,14 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *Rule, err error) {
 	return qr, nil
 }
 
-func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch bool, op Operator, value interface{}, err error) {
-	bvcinfo, ok := bvc.(map[string]interface{})
+func buildBindVarCondition(bvc any) (name string, onAbsent, onMismatch bool, op Operator, value any, err error) {
+	bvcinfo, ok := bvc.(map[string]any)
 	if !ok {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "want json object for bind var conditions")
 		return
 	}
 
-	var v interface{}
+	var v any
 	v, ok = bvcinfo["Name"]
 	if !ok {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Name missing in BindVarConds")
@@ -1048,7 +1048,7 @@ func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch b
 	return
 }
 
-func safeEncode(b *bytes.Buffer, prefix string, v interface{}) {
+func safeEncode(b *bytes.Buffer, prefix string, v any) {
 	enc := json.NewEncoder(b)
 	_, _ = b.WriteString(prefix)
 	if err := enc.Encode(v); err != nil {

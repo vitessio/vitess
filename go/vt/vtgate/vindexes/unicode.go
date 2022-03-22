@@ -75,7 +75,7 @@ type pooledCollator struct {
 
 var collatorPool = sync.Pool{New: newPooledCollator}
 
-func newPooledCollator() interface{} {
+func newPooledCollator() any {
 	// Ref: http://www.unicode.org/reports/tr10/#Introduction.
 	// Unicode seems to define a universal (or default) order.
 	// But various locales have conflicting order,

@@ -21,7 +21,7 @@ import "time"
 // Debuggable is an optional interface that different vtadmin subcomponents can
 // implement to provide information to debug endpoints.
 type Debuggable interface {
-	Debug() map[string]interface{}
+	Debug() map[string]any
 }
 
 const sanitized = "********"
