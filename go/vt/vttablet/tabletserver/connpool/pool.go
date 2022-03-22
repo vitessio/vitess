@@ -141,17 +141,25 @@ func (cp *Pool) getLogWaitCallback() func(time.Time) {
 // Close will close the pool and wait for connections to be returned before
 // exiting.
 func (cp *Pool) Close() {
+	log.Infof("connpool - started execution of Close")
 	p := cp.pool()
+	log.Infof("connpool - found the pool")
 	if p == nil {
+		log.Infof("connpool - pool is empty")
 		return
 	}
 	// We should not hold the lock while calling Close
 	// because it waits for connections to be returned.
+	log.Infof("connpool - calling close on the pool")
 	p.Close()
+	log.Infof("connpool - acquiring lock")
 	cp.mu.Lock()
+	log.Infof("connpool - acquired lock")
 	cp.connections = nil
 	cp.mu.Unlock()
+	log.Infof("connpool - closing dbaPool")
 	cp.dbaPool.Close()
+	log.Infof("connpool - finished execution of Close")
 }
 
 // Get returns a connection.

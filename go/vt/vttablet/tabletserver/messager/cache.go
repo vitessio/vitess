@@ -20,6 +20,8 @@ import (
 	"container/heap"
 	"sync"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -111,11 +113,14 @@ func (mc *cache) IsEmpty() bool {
 
 // Clear clears the cache.
 func (mc *cache) Clear() {
+	log.Infof("messager cache - Clearing cache. Acquiring my lock")
 	mc.mu.Lock()
+	log.Infof("messager cache - acquired lock")
 	defer mc.mu.Unlock()
 	mc.sendQueue = nil
 	mc.inQueue = make(map[string]*MessageRow)
 	mc.inFlight = make(map[string]bool)
+	log.Infof("messager cache - cache cleared")
 }
 
 // Add adds a MessageRow to the cache. It returns
