@@ -96,7 +96,7 @@ information. Based on this data, it can find the best tablet to use.
 
 ## Regions, cross-cell targeting
 
-At first, the discoveryGateway was routing queries the following way:
+At first, the gateway was routing queries the following way:
 
 * For primary queries, just find the primary tablet, whichever cell it's in, and
   send the query to it. This was meant to handle cross-cell primary fail-over.
