@@ -2487,6 +2487,74 @@ func TestValid(t *testing.T) {
 	}
 }
 
+// Will throw syntax errors, but shouldn't
+func TestNotWorkingIdentifiersStartingWithNumbers(t *testing.T) {
+	tests := []parseTest{
+		{
+			input:  "insert into mydb.2b values (1)",
+			output: "insert into mydb.`2b` values (1)",
+		}, {
+			input:  "insert into 1a.2b values (1)",
+			output: "insert into `1a`.`2b` values (1)",
+		}, {
+			input:  "insert into 1a.2b(3c) values (1)",
+			output: "insert into `1a`.`2b`(`3c`) values (1)",
+		},
+	}
+	for _, tcase := range tests {
+		t.Skip()
+		runParseTestCase(t, tcase)
+	}
+}
+
+func TestParsingIdentifiersStartingWithNumbers(t *testing.T) {
+	tests := []parseTest{
+		{
+			input:  "create database 1a",
+			output: "create database 1a",
+		},
+		{
+			input:  "create table 1a (i int)",
+			output: "create table `1a` (\n\ti int\n)",
+		},
+		{
+			input:  "create table t (1a int)",
+			output: "create table t (\n\t`1a` int\n)",
+		},
+		{
+			input:  "create table t (123456a int)",
+			output: "create table t (\n\t`123456a` int\n)",
+		},
+		{
+			input:  "create table t (1a int primary key, 2b int)",
+			output: "create table t (\n\t`1a` int primary key,\n\t`2b` int\n)",
+		},
+		{
+			input:  "alter table t add column 1a int",
+			output: "alter table t add column (\n\t`1a` int\n)",
+		},
+		{
+			input:  "alter table t drop column 1a",
+			output: "alter table t drop column `1a`",
+		},
+		{
+			input:  "update t set 1a = 5",
+			output: "update t set 1a = 5",
+		},
+		{
+			input:  "insert into t (1a) values (1)",
+			output: "insert into t(`1a`) values (1)",
+		},
+		{
+			input:  "select 0xH from t",
+			output: "select `0xH` from t",
+		},
+	}
+	for _, tcase := range tests {
+		runParseTestCase(t, tcase)
+	}
+}
+
 func TestParseOne(t *testing.T) {
 	type tc struct {
 		input     string
@@ -4213,9 +4281,6 @@ var (
 		input:  "select : from t",
 		output: "syntax error at position 9 near ':'",
 	}, {
-		input:  "select 0xH from t",
-		output: "syntax error at position 10 near '0x'",
-	}, {
 		input:  "select x'78 from t",
 		output: "syntax error at position 12 near '78'",
 	}, {
@@ -4446,6 +4511,45 @@ var (
 	}, {
 		input:  "show session status like asd",
 		output: "syntax error at position 29 near 'asd'",
+	}, {
+		input:  "create table 1 (i int)",
+		output: "syntax error at position 15 near '1'",
+	}, {
+		input:  "create table t (1 int)",
+		output: "syntax error at position 18 near '1'",
+	}, {
+		input:  "update 1 set x = 1",
+		output: "syntax error at position 9 near '1'",
+	}, {
+		input:  "update t set 1 = 1",
+		output: "syntax error at position 15 near '1'",
+	}, {
+		input:  "alter table 1 add column (i int)",
+		output: "syntax error at position 14 near '1'",
+	}, {
+		input:  "alter table t add column (1 int)",
+		output: "syntax error at position 28 near '1'",
+	}, {
+		input:  "alter table t drop column 1",
+		output: "syntax error at position 28 near '1'",
+	}, {
+		input:  "insert into 1 (i, j) values (1)",
+		output: "syntax error at position 14 near '1'",
+	}, {
+		input:  "insert into t (1, j) values (1)",
+		output: "syntax error at position 17 near '1'",
+	}, {
+		input:  "insert into t (i, 1) values (1)",
+		output: "syntax error at position 20 near '1'",
+	}, {
+		input:  "insert into t values (1.a)",
+		output: "syntax error at position 25 near '1.'",
+	}, {
+		input:  "insert into t values (1.1a)",
+		output: "syntax error at position 26 near '1.1'",
+	}, {
+		input:  "insert into t values (1234.1a)",
+		output: "syntax error at position 29 near '1234.1'",
 	},
 	}
 )

@@ -665,7 +665,19 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		}
 		return tkn.scanIdentifier(byte(ch), isDbSystemVariable)
 	case isDigit(ch):
-		return tkn.scanNumber(false)
+		typ, res := tkn.scanNumber(false)
+		if typ != LEX_ERROR {
+			return typ, res
+		}
+		// LEX_ERROR is returned from scanNumber iff we see an unexpected character, so try to parse as an identifier
+		// Additionally, if we saw a decimal at any point, throw the LEX_ERROR we received before
+		for _, c := range res {
+			if c == '.' {
+				return typ, res
+			}
+		}
+		typ1, res1 := tkn.scanIdentifier(byte(tkn.lastChar), false)
+		return typ1, append(res, res1[1:]...) // Concatenate the two partial symbols
 	case ch == ':':
 		return tkn.scanBindVar()
 	case ch == ';':
