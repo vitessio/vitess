@@ -136,6 +136,7 @@ type clusterTest struct {
 	Name, Shard, Platform        string
 	MakeTools, InstallXtraBackup bool
 	Ubuntu20, Docker             bool
+	LimitResourceUsage           bool
 }
 
 type selfHostedTest struct {
@@ -303,10 +304,10 @@ func generateClusterWorkflows(list []string, tpl string) {
 				break
 			}
 		}
-		// Default to using docker for vreplication tests with Ubuntu 20.20 / MySQL 8.0
-		//if strings.HasPrefix(cluster, "vreplication") {
-		//	test.Docker = true
-		//}
+		if strings.HasPrefix(cluster, "vreplication") {
+			//	test.Docker = true
+			test.LimitResourceUsage = true
+		}
 
 		path := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
 		template := tpl
