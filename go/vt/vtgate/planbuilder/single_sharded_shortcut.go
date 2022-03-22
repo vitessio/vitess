@@ -61,10 +61,14 @@ func unshardedShortcut(stmt sqlparser.SelectStatement, ks *vindexes.Keyspace, se
 }
 
 func getTableNames(semTable *semantics.SemTable) ([]string, error) {
-	tableNameMap := map[string]interface{}{}
+	tableNameMap := map[string]any{}
 
 	for _, tableInfo := range semTable.Tables {
 		tblObj := tableInfo.GetVindexTable()
+		if tblObj == nil {
+			// probably a derived table
+			continue
+		}
 		var name string
 		if tableInfo.IsInfSchema() {
 			name = "tableName"

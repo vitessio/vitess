@@ -70,7 +70,7 @@ func init() {
 	})
 }
 
-func vrlogStatsHandler(ch chan interface{}, w http.ResponseWriter, r *http.Request) {
+func vrlogStatsHandler(ch chan any, w http.ResponseWriter, r *http.Request) {
 	timeout, limit := parseTimeoutLimitParams(r)
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()

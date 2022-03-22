@@ -165,7 +165,7 @@ func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, 
 	refreshTablets(tablets, query, args, loader, forceRefresh)
 }
 
-func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []interface{}, loader func(instanceKey *inst.InstanceKey), forceRefresh bool) {
+func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []any, loader func(instanceKey *inst.InstanceKey), forceRefresh bool) {
 	// Discover new tablets.
 	// TODO(sougou): enhance this to work with multi-schema,
 	// where each instanceKey can have multiple tablets.

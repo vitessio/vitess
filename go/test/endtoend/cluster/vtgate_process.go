@@ -155,7 +155,7 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 		return false
 	}
 	if resp.StatusCode == 200 {
-		resultMap := make(map[string]interface{})
+		resultMap := make(map[string]any)
 		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
 		if err != nil {
@@ -255,8 +255,8 @@ func VtgateProcessInstance(
 }
 
 // GetVars returns map of vars
-func (vtgate *VtgateProcess) GetVars() (map[string]interface{}, error) {
-	resultMap := make(map[string]interface{})
+func (vtgate *VtgateProcess) GetVars() (map[string]any, error) {
+	resultMap := make(map[string]any)
 	resp, err := http.Get(vtgate.VerifyURL)
 	if err != nil {
 		return nil, fmt.Errorf("error getting response from %s", vtgate.VerifyURL)

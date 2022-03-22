@@ -42,13 +42,13 @@ var (
 	vschemaFileFlag    = flag.String("vschema-file", "", "Identifies the VTGate routing schema file")
 	ksShardMapFlag     = flag.String("ks-shard-map", "", "JSON map of keyspace name -> shard name -> ShardReference object. The inner map is the same as the output of FindAllShardsInKeyspace")
 	ksShardMapFileFlag = flag.String("ks-shard-map-file", "", "File containing json blob of keyspace name -> shard name -> ShardReference object")
-	numShards          = flag.Int("shards", 2, "Number of shards per keyspace. Passing -ks-shard-map/-ks-shard-map-file causes this flag to be ignored.")
+	numShards          = flag.Int("shards", 2, "Number of shards per keyspace. Passing --ks-shard-map/--ks-shard-map-file causes this flag to be ignored.")
 	executionMode      = flag.String("execution-mode", "multi", "The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc")
 	replicationMode    = flag.String("replication-mode", "ROW", "The replication mode to simulate -- must be set to either ROW or STATEMENT")
 	normalize          = flag.Bool("normalize", false, "Whether to enable vtgate normalization")
 	outputMode         = flag.String("output-mode", "text", "Output in human-friendly text or json")
 	dbName             = flag.String("dbname", "", "Optional database target to override normal routing")
-	plannerVersionStr  = flag.String("planner-version", "V3", "Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4")
+	plannerVersionStr  = flag.String("planner-version", "gen4", "Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4")
 
 	// vtexplainFlags lists all the flags that should show in usage
 	vtexplainFlags = []string{

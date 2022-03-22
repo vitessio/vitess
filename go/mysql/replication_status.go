@@ -37,8 +37,10 @@ type ReplicationStatus struct {
 	FilePosition          Position
 	FileRelayLogPosition  Position
 	SourceServerID        uint
-	IOThreadRunning       bool
-	SQLThreadRunning      bool
+	IOState               ReplicationState
+	LastIOError           string
+	SQLState              ReplicationState
+	LastSQLError          string
 	ReplicationLagSeconds uint
 	ReplicationLagUnknown bool
 	SourceHost            string
@@ -47,10 +49,28 @@ type ReplicationStatus struct {
 	SourceUUID            SID
 }
 
-// ReplicationRunning returns true iff both the IO and SQL threads are
-// running.
-func (s *ReplicationStatus) ReplicationRunning() bool {
-	return s.IOThreadRunning && s.SQLThreadRunning
+// Running returns true if both the IO and SQL threads are running.
+func (s *ReplicationStatus) Running() bool {
+	return s.IOState == ReplicationStateRunning && s.SQLState == ReplicationStateRunning
+}
+
+// Healthy returns true if both the SQL IO components are healthy
+func (s *ReplicationStatus) Healthy() bool {
+	return s.SQLHealthy() && s.IOHealthy()
+}
+
+// IOHealthy returns true if the IO thread is running OR, the
+// IO thread is connecting AND there's no IO error from the last
+// attempt to connect to the source.
+func (s *ReplicationStatus) IOHealthy() bool {
+	return s.IOState == ReplicationStateRunning ||
+		(s.IOState == ReplicationStateConnecting && s.LastIOError == "")
+}
+
+// SQLHealthy returns true if the SQLState is running.
+// For consistency and to support altering this calculation in the future.
+func (s *ReplicationStatus) SQLHealthy() bool {
+	return s.SQLState == ReplicationStateRunning
 }
 
 // ReplicationStatusToProto translates a Status to proto3.
@@ -61,13 +81,15 @@ func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 		FilePosition:          EncodePosition(s.FilePosition),
 		FileRelayLogPosition:  EncodePosition(s.FileRelayLogPosition),
 		SourceServerId:        uint32(s.SourceServerID),
-		IoThreadRunning:       s.IOThreadRunning,
-		SqlThreadRunning:      s.SQLThreadRunning,
 		ReplicationLagSeconds: uint32(s.ReplicationLagSeconds),
 		SourceHost:            s.SourceHost,
 		SourcePort:            int32(s.SourcePort),
 		ConnectRetry:          int32(s.ConnectRetry),
 		SourceUuid:            s.SourceUUID.String(),
+		IoState:               int32(s.IOState),
+		LastIoError:           s.LastIOError,
+		SqlState:              int32(s.SQLState),
+		LastSqlError:          s.LastSQLError,
 	}
 }
 
@@ -102,13 +124,15 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 		FilePosition:          filePos,
 		FileRelayLogPosition:  fileRelayPos,
 		SourceServerID:        uint(s.SourceServerId),
-		IOThreadRunning:       s.IoThreadRunning,
-		SQLThreadRunning:      s.SqlThreadRunning,
 		ReplicationLagSeconds: uint(s.ReplicationLagSeconds),
 		SourceHost:            s.SourceHost,
 		SourcePort:            int(s.SourcePort),
 		ConnectRetry:          int(s.ConnectRetry),
 		SourceUUID:            sid,
+		IOState:               ReplicationState(s.IoState),
+		LastIOError:           s.LastIoError,
+		SQLState:              ReplicationState(s.SqlState),
+		LastSQLError:          s.LastSqlError,
 	}
 }
 

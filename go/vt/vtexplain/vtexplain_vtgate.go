@@ -209,7 +209,7 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error
 	}
 
 	var plans []*engine.Plan
-	planCache.ForEach(func(value interface{}) bool {
+	planCache.ForEach(func(value any) bool {
 		plan := value.(*engine.Plan)
 		plan.ExecTime = 0
 		plans = append(plans, plan)

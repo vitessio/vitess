@@ -643,7 +643,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		// Abort on any other non-nil error.
 		return err
 	}
-	if status.IOThreadRunning || status.SQLThreadRunning {
+	if status.IOHealthy() || status.SQLHealthy() {
 		wasReplicating = true
 		shouldbeReplicating = true
 	}
@@ -756,7 +756,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	before := mysql.ReplicationStatusToProto(rs)
 
 	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
-		if !rs.IOThreadRunning {
+		if !rs.IOHealthy() {
 			return StopReplicationAndGetStatusResponse{
 				HybridStatus: before,
 				Status: &replicationdatapb.StopReplicationStatus{
@@ -773,7 +773,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 			}, vterrors.Wrap(err, "stop io thread failed")
 		}
 	} else {
-		if !rs.IOThreadRunning && !rs.SQLThreadRunning {
+		if !rs.Healthy() {
 			// no replication is running, just return what we got
 			return StopReplicationAndGetStatusResponse{
 				HybridStatus: before,
@@ -836,6 +836,17 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 		return "", err
 	}
 	defer tm.unlock()
+
+	// SetTabletType only stops the replication manager ticks since we are going to promote this tablet
+	// to primary. We should do this before making any changes to MySQL, otherwise any replication manager
+	// tick would change the replication source, etc settings back.
+	tm.replManager.SetTabletType(topodatapb.TabletType_PRIMARY)
+	defer func() {
+		// If PromoteReplica was successful, then this would be a no-op, since we have already stopped
+		// the replication manager ticks. But, in case we are unsuccessful, we must restart the ticks
+		// so, we call SetTabletType as a deferred call.
+		tm.replManager.SetTabletType(tm.Tablet().Type)
+	}()
 
 	// If Orchestrator is configured then also tell it we're promoting a tablet so it needs to be in maintenance mode
 	// Do this in the background, as it's best-effort.
@@ -935,7 +946,7 @@ func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletT
 		// Replication is not configured, nothing to do.
 		return nil
 	}
-	if !status.IOThreadRunning {
+	if !status.IOHealthy() {
 		// IO thread is not running, nothing to do.
 		return nil
 	}

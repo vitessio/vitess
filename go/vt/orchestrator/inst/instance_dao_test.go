@@ -107,7 +107,7 @@ func TestMkInsertOdkuThree(t *testing.T) {
 	test.S(t).ExpectEquals(stripSpaces(fmtArgs(args3)), stripSpaces(a3))
 }
 
-func fmtArgs(args []interface{}) string {
+func fmtArgs(args []any) string {
 	b := &bytes.Buffer{}
 	for _, a := range args {
 		fmt.Fprint(b, a)

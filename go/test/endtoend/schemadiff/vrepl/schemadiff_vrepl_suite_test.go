@@ -26,16 +26,15 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/schemadiff"
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/onlineddl"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/onlineddl"
+	"vitess.io/vitess/go/vt/schemadiff"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 var (
@@ -82,17 +81,17 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
-			"-schema_change_dir", schemaChangeDirectory,
-			"-schema_change_controller", "local",
-			"-schema_change_check_interval", "1",
+			"--schema_change_dir", schemaChangeDirectory,
+			"--schema_change_controller", "local",
+			"--schema_change_check_interval", "1",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-enable-lag-throttler",
-			"-throttle_threshold", "1s",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
-			"-migration_check_interval", "5s",
+			"--enable-lag-throttler",
+			"--throttle_threshold", "1s",
+			"--heartbeat_enable",
+			"--heartbeat_interval", "250ms",
+			"--migration_check_interval", "5s",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {

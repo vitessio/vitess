@@ -258,9 +258,9 @@ func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.
 }
 
 func (jn *Join) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"TableName":         jn.GetTableName(),
-		"JoinColumnIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(jn.Cols)), ","), "[]"),
+		"JoinColumnIndexes": jn.joinColsDescription(),
 	}
 	if len(jn.Vars) > 0 {
 		other["JoinVars"] = orderedStringIntMap(jn.Vars)
@@ -270,4 +270,17 @@ func (jn *Join) description() PrimitiveDescription {
 		Variant:      jn.Opcode.String(),
 		Other:        other,
 	}
+}
+
+func (jn *Join) joinColsDescription() string {
+	var joinCols []string
+	for _, col := range jn.Cols {
+		if col < 0 {
+			joinCols = append(joinCols, fmt.Sprintf("L:%d", -col-1))
+		} else {
+			joinCols = append(joinCols, fmt.Sprintf("R:%d", col-1))
+		}
+	}
+	joinColTxt := strings.Join(joinCols, ",")
+	return joinColTxt
 }

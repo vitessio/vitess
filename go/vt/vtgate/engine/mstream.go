@@ -83,6 +83,6 @@ func (m *MStream) description() PrimitiveDescription {
 		Keyspace:          m.Keyspace,
 		TargetDestination: m.TargetDestination,
 
-		Other: map[string]interface{}{"Table": m.TableName},
+		Other: map[string]any{"Table": m.TableName},
 	}
 }

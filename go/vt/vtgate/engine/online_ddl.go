@@ -50,7 +50,7 @@ func (v *OnlineDDL) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "OnlineDDL",
 		Keyspace:     v.Keyspace,
-		Other: map[string]interface{}{
+		Other: map[string]any{
 			"query": v.SQL,
 		},
 	}

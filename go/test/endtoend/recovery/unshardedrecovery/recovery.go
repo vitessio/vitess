@@ -25,16 +25,14 @@ import (
 	"path"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/recovery"
-	"vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
-
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/recovery"
+	"vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
 var (
@@ -52,13 +50,13 @@ var (
 	dbCredentialFile string
 	shardName        = "0"
 	commonTabletArg  = []string{
-		"-vreplication_healthcheck_topology_refresh", "1s",
-		"-vreplication_healthcheck_retry_delay", "1s",
-		"-vreplication_retry_delay", "1s",
-		"-degraded_threshold", "5s",
-		"-lock_tables_timeout", "5s",
-		"-watch_replication_stream",
-		"-serving_state_grace_period", "1s"}
+		"--vreplication_healthcheck_topology_refresh", "1s",
+		"--vreplication_healthcheck_retry_delay", "1s",
+		"--vreplication_retry_delay", "1s",
+		"--degraded_threshold", "5s",
+		"--lock_tables_timeout", "5s",
+		"--watch_replication_stream",
+		"--serving_state_grace_period", "1s"}
 	recoveryKS1  = "recovery_ks1"
 	recoveryKS2  = "recovery_ks2"
 	vtInsertTest = `create table vt_insert_test (
@@ -82,7 +80,7 @@ func TestMainImpl(m *testing.M) {
 		localCluster = cluster.NewCluster(cell, hostname)
 		defer localCluster.Teardown()
 
-		localCluster.VtctldExtraArgs = append(localCluster.VtctldExtraArgs, "-durability_policy=semi_sync")
+		localCluster.VtctldExtraArgs = append(localCluster.VtctldExtraArgs, "--durability_policy=semi_sync")
 		// Start topo server
 		err := localCluster.StartTopo()
 		if err != nil {
@@ -107,8 +105,8 @@ SET GLOBAL old_alter_table = ON;
 		sql = sql + oldAlterTableMode
 		os.WriteFile(newInitDBFile, []byte(sql), 0666)
 
-		extraArgs := []string{"-db-credentials-file", dbCredentialFile}
-		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
+		extraArgs := []string{"--db-credentials-file", dbCredentialFile}
+		commonTabletArg = append(commonTabletArg, "--db-credentials-file", dbCredentialFile)
 
 		shard := cluster.Shard{
 			Name: shardName,

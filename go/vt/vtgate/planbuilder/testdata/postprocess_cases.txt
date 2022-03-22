@@ -45,7 +45,7 @@ Gen4 error: Column 'col1' in field list is ambiguous
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -79,7 +79,7 @@ Gen4 error: Column 'col1' in field list is ambiguous
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -116,7 +116,7 @@ Gen4 error: Column 'col1' in field list is ambiguous
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,-2,1",
+    "JoinColumnIndexes": "L:0,L:1,R:0",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -150,7 +150,7 @@ Gen4 error: Column 'col1' in field list is ambiguous
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,-2,1",
+    "JoinColumnIndexes": "L:0,L:1,R:0",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -644,7 +644,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,-2,1",
+    "JoinColumnIndexes": "L:0,L:1,R:0",
     "JoinVars": {
       "user_id": 2
     },
@@ -689,7 +689,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2,-3,1",
+    "JoinColumnIndexes": "L:1,L:2,R:0",
     "JoinVars": {
       "user_id": 0
     },
@@ -737,7 +737,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,-2,1",
+    "JoinColumnIndexes": "L:0,L:1,R:0",
     "JoinVars": {
       "user_id": 2
     },
@@ -782,7 +782,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2,-3,1",
+    "JoinColumnIndexes": "L:1,L:2,R:0",
     "JoinVars": {
       "user_id": 0
     },
@@ -831,7 +831,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,-2,1",
+    "JoinColumnIndexes": "L:0,L:1,R:0",
     "JoinVars": {
       "user_id": 2
     },
@@ -876,7 +876,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2,-3,1",
+    "JoinColumnIndexes": "L:1,L:2,R:0",
     "JoinVars": {
       "user_id": 0
     },
@@ -1019,7 +1019,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,-2,1",
+    "JoinColumnIndexes": "L:0,L:1,R:0",
     "JoinVars": {
       "user_id": 2
     },
@@ -1064,7 +1064,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2,-3,1",
+    "JoinColumnIndexes": "L:1,L:2,R:0",
     "JoinVars": {
       "user_id": 0
     },
@@ -1221,7 +1221,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "JoinVars": {
       "u_col": 1
     },
@@ -1258,7 +1258,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2,1",
+    "JoinColumnIndexes": "L:1,R:0",
     "JoinVars": {
       "u_col": 0
     },
@@ -1516,7 +1516,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1",
+        "JoinColumnIndexes": "L:0",
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -1763,7 +1763,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -1799,7 +1799,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -2019,7 +2019,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,-1",
+    "JoinColumnIndexes": "L:0,L:0",
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -2086,7 +2086,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1",
+        "JoinColumnIndexes": "L:0",
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -2128,7 +2128,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2",
+        "JoinColumnIndexes": "L:0,L:1",
         "TableName": "`user`_user_extra",
         "Inputs": [
           {

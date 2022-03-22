@@ -82,7 +82,7 @@ var (
 	// Put set-passthrough under a flag.
 	sysVarSetEnabled = flag.Bool("enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
 	setVarEnabled    = flag.Bool("enable_set_var", true, "This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections")
-	plannerVersion   = flag.String("planner_version", "v3", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the new gen4 planner and falls back to the V3 planner if the gen4 fails. All Gen4 versions should be considered experimental!")
+	plannerVersion   = flag.String("planner_version", "gen4", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
 
 	// lockHeartbeatTime is used to set the next heartbeat time.
 	lockHeartbeatTime = flag.Duration("lock_heartbeat_time", 5*time.Second, "If there is lock function used. This will keep the lock connection active by using this heartbeat")
@@ -388,7 +388,7 @@ func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 	}
 
 handleError:
-	query := map[string]interface{}{
+	query := map[string]any{
 		"Sql":           sql,
 		"BindVariables": bindVariables,
 		"Session":       session,
@@ -452,7 +452,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 			})
 	}
 	if err != nil {
-		query := map[string]interface{}{
+		query := map[string]any{
 			"Sql":           sql,
 			"BindVariables": bindVariables,
 			"Session":       session,
@@ -492,7 +492,7 @@ func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql s
 	}
 
 handleError:
-	query := map[string]interface{}{
+	query := map[string]any{
 		"Sql":           sql,
 		"BindVariables": bindVariables,
 		"Session":       session,
@@ -516,14 +516,14 @@ func (vtg *VTGate) VSchemaStats() *VSchemaStats {
 	return vtg.executor.VSchemaStats()
 }
 
-func truncateErrorStrings(data map[string]interface{}) map[string]interface{} {
-	ret := map[string]interface{}{}
+func truncateErrorStrings(data map[string]any) map[string]any {
+	ret := map[string]any{}
 	if *terseErrors {
 		// request might have PII information. Return an empty map
 		return ret
 	}
 	for key, val := range data {
-		mapVal, ok := val.(map[string]interface{})
+		mapVal, ok := val.(map[string]any)
 		if ok {
 			ret[key] = truncateErrorStrings(mapVal)
 		} else {
@@ -534,7 +534,7 @@ func truncateErrorStrings(data map[string]interface{}) map[string]interface{} {
 	return ret
 }
 
-func recordAndAnnotateError(err error, statsKey []string, request map[string]interface{}, logger *logutil.ThrottledLogger) error {
+func recordAndAnnotateError(err error, statsKey []string, request map[string]any, logger *logutil.ThrottledLogger) error {
 	ec := vterrors.Code(err)
 	fullKey := []string{
 		statsKey[0],

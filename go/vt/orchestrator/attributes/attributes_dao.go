@@ -46,7 +46,7 @@ func SetHostAttributes(hostname string, attributeName string, attributeValue str
 	return err
 }
 
-func getHostAttributesByClause(whereClause string, args []interface{}) ([]HostAttributes, error) {
+func getHostAttributesByClause(whereClause string, args []any) ([]HostAttributes, error) {
 	var res []HostAttributes
 	query := fmt.Sprintf(`
 		select

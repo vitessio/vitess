@@ -47,7 +47,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 	// It is not safe to take backups from tablet in this state
 	currentTablet := tm.Tablet()
 	if !allowPrimary && currentTablet.Type == topodatapb.TabletType_PRIMARY {
-		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with -allow_primary")
+		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 	}
 	engine, err := mysqlctl.GetBackupEngine()
 	if err != nil {
@@ -59,7 +59,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 		return err
 	}
 	if !allowPrimary && tablet.Type == topodatapb.TabletType_PRIMARY {
-		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with -allow_primary")
+		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 	}
 
 	// prevent concurrent backups, and record stats

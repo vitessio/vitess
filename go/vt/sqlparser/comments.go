@@ -201,7 +201,7 @@ const commentDirectivePreamble = "/*vt+"
 
 // CommentDirectives is the parsed representation for execution directives
 // conveyed in query comments
-type CommentDirectives map[string]interface{}
+type CommentDirectives map[string]any
 
 // ExtractCommentDirectives parses the comment list for any execution directives
 // of the form:
@@ -214,7 +214,7 @@ func ExtractCommentDirectives(comments Comments) CommentDirectives {
 		return nil
 	}
 
-	var vals map[string]interface{}
+	var vals map[string]any
 
 	for _, commentStr := range comments {
 		if commentStr[0:5] != commentDirectivePreamble {
@@ -222,7 +222,7 @@ func ExtractCommentDirectives(comments Comments) CommentDirectives {
 		}
 
 		if vals == nil {
-			vals = make(map[string]interface{})
+			vals = make(map[string]any)
 		}
 
 		// Split on whitespace and ignore the first and last directive

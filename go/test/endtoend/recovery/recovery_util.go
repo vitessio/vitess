@@ -36,10 +36,10 @@ var (
 	UseXb = false
 	// XbArgs are the arguments for specifying xtrabackup.
 	XbArgs = []string{
-		"-backup_engine_implementation", "xtrabackup",
-		"-xtrabackup_stream_mode=xbstream",
-		"-xtrabackup_user=vt_dba",
-		"-xtrabackup_backup_flags", fmt.Sprintf("--password=%s", dbPassword),
+		"--backup_engine_implementation", "xtrabackup",
+		"--xtrabackup_stream_mode=xbstream",
+		"--xtrabackup_user=vt_dba",
+		"--xtrabackup_backup_flags", fmt.Sprintf("--password=%s", dbPassword),
 	}
 )
 
@@ -60,21 +60,21 @@ func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tabl
 	if err != nil {
 		tm := time.Now().UTC()
 		tm.Format(time.RFC3339)
-		_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput("CreateKeyspace",
-			"-keyspace_type=SNAPSHOT", "-base_keyspace="+keyspaceName,
-			"-snapshot_time", tm.Format(time.RFC3339), restoreKSName)
+		_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput("CreateKeyspace", "--",
+			"--keyspace_type=SNAPSHOT", "--base_keyspace="+keyspaceName,
+			"--snapshot_time", tm.Format(time.RFC3339), restoreKSName)
 		require.Nil(t, err)
 	}
 
 	if UseXb {
 		replicaTabletArgs = append(replicaTabletArgs, XbArgs...)
 	}
-	replicaTabletArgs = append(replicaTabletArgs, "-disable_active_reparents",
-		"-enable_replication_reporter=false",
-		"-init_tablet_type", "replica",
-		"-init_keyspace", restoreKSName,
-		"-init_shard", shardName,
-		"-init_db_name_override", "vt_"+keyspaceName,
+	replicaTabletArgs = append(replicaTabletArgs, "--disable_active_reparents",
+		"--enable_replication_reporter=false",
+		"--init_tablet_type", "replica",
+		"--init_keyspace", restoreKSName,
+		"--init_shard", shardName,
+		"--init_db_name_override", "vt_"+keyspaceName,
 	)
 	tablet.VttabletProcess.SupportsBackup = true
 	tablet.VttabletProcess.ExtraArgs = replicaTabletArgs

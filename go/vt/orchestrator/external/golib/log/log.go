@@ -126,12 +126,12 @@ func SetSyslogLevel(logLevel LogLevel) {
 }
 
 // logFormattedEntry nicely formats and emits a log entry
-func logFormattedEntry(logLevel LogLevel, message string, args ...interface{}) string {
+func logFormattedEntry(logLevel LogLevel, message string, args ...any) string {
 	return logDepth(logLevel, 0, message, args...)
 }
 
 // logFormattedEntry nicely formats and emits a log entry
-func logDepth(logLevel LogLevel, depth int, message string, args ...interface{}) string {
+func logDepth(logLevel LogLevel, depth int, message string, args ...any) string {
 	if logLevel > globalLogLevel {
 		return ""
 	}
@@ -192,7 +192,7 @@ func callerPos(depth int) (string, int) {
 }
 
 // logEntry emits a formatted log entry
-func logEntry(logLevel LogLevel, message string, args ...interface{}) string {
+func logEntry(logLevel LogLevel, message string, args ...any) string {
 	entryString := message
 	for _, s := range args {
 		entryString += fmt.Sprintf(" %s", s)
@@ -214,44 +214,44 @@ func logErrorEntry(logLevel LogLevel, err error) error {
 	return err
 }
 
-func Debug(message string, args ...interface{}) string {
+func Debug(message string, args ...any) string {
 	return logEntry(DEBUG, message, args...)
 }
 
-func Debugf(message string, args ...interface{}) string {
+func Debugf(message string, args ...any) string {
 	return logFormattedEntry(DEBUG, message, args...)
 }
 
-func Info(message string, args ...interface{}) string {
+func Info(message string, args ...any) string {
 	log.Infof(message, args...)
 	return fmt.Sprintf(message, args...)
 }
 
-func Infof(message string, args ...interface{}) string {
+func Infof(message string, args ...any) string {
 	return logFormattedEntry(INFO, message, args...)
 }
 
-func Notice(message string, args ...interface{}) string {
+func Notice(message string, args ...any) string {
 	return logEntry(NOTICE, message, args...)
 }
 
-func Noticef(message string, args ...interface{}) string {
+func Noticef(message string, args ...any) string {
 	return logFormattedEntry(NOTICE, message, args...)
 }
 
-func Warning(message string, args ...interface{}) error {
+func Warning(message string, args ...any) error {
 	return errors.New(logEntry(WARNING, message, args...))
 }
 
-func Warningf(message string, args ...interface{}) error {
+func Warningf(message string, args ...any) error {
 	return errors.New(logFormattedEntry(WARNING, message, args...))
 }
 
-func Error(message string, args ...interface{}) error {
+func Error(message string, args ...any) error {
 	return errors.New(logEntry(ERROR, message, args...))
 }
 
-func Errorf(message string, args ...interface{}) error {
+func Errorf(message string, args ...any) error {
 	log.Infof(message, args...)
 	return fmt.Errorf(message, args...)
 }
@@ -260,11 +260,11 @@ func Errore(err error) error {
 	return logErrorEntry(ERROR, err)
 }
 
-func Critical(message string, args ...interface{}) error {
+func Critical(message string, args ...any) error {
 	return errors.New(logEntry(CRITICAL, message, args...))
 }
 
-func Criticalf(message string, args ...interface{}) error {
+func Criticalf(message string, args ...any) error {
 	return errors.New(logFormattedEntry(CRITICAL, message, args...))
 }
 
@@ -273,14 +273,14 @@ func Criticale(err error) error {
 }
 
 // Fatal emits a FATAL level entry and exists the program
-func Fatal(message string, args ...interface{}) error {
+func Fatal(message string, args ...any) error {
 	logEntry(FATAL, message, args...)
 	os.Exit(1)
 	return errors.New(logEntry(CRITICAL, message, args...))
 }
 
 // Fatalf emits a FATAL level entry and exists the program
-func Fatalf(message string, args ...interface{}) error {
+func Fatalf(message string, args ...any) error {
 	logFormattedEntry(FATAL, message, args...)
 	os.Exit(1)
 	return errors.New(logFormattedEntry(CRITICAL, message, args...))

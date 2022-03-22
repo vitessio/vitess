@@ -18,12 +18,13 @@ package vtctl
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"time"
 
+	"google.golang.org/grpc"
+
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -31,7 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -84,12 +85,27 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
 
-	return execBackup(ctx, wr, tabletInfo.Tablet, *concurrency, *allowPrimary)
+	return wr.VtctldServer().Backup(&vtctldatapb.BackupRequest{
+		TabletAlias:  tabletAlias,
+		Concurrency:  uint64(*concurrency),
+		AllowPrimary: *allowPrimary,
+	}, &backupEventStreamLogger{logger: wr.Logger(), ctx: ctx})
+}
+
+// backupEventStreamLogger takes backup events from the vtctldserver and emits
+// them via logutil.LogEvent, preserving legacy behavior.
+type backupEventStreamLogger struct {
+	grpc.ServerStream
+	logger logutil.Logger
+	ctx    context.Context
+}
+
+func (b *backupEventStreamLogger) Context() context.Context { return b.ctx }
+
+func (b *backupEventStreamLogger) Send(resp *vtctldatapb.BackupResponse) error {
+	logutil.LogEvent(b.logger, resp.Event)
+	return nil
 }
 
 func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -108,85 +124,12 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 
-	tablets, stats, err := wr.ShardReplicationStatuses(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
-
-	var tabletForBackup *topodatapb.Tablet
-	var secondsBehind uint32
-
-	for i := range tablets {
-		// find a replica, rdonly or spare tablet type to run the backup on
-		switch tablets[i].Type {
-		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE:
-		default:
-			continue
-		}
-		// choose the first tablet as the baseline
-		if tabletForBackup == nil {
-			tabletForBackup = tablets[i].Tablet
-			secondsBehind = stats[i].ReplicationLagSeconds
-			continue
-		}
-
-		// choose a new tablet if it is more up to date
-		if stats[i].ReplicationLagSeconds < secondsBehind {
-			tabletForBackup = tablets[i].Tablet
-			secondsBehind = stats[i].ReplicationLagSeconds
-		}
-	}
-
-	// if no other tablet is available and allowPrimary is set to true
-	if tabletForBackup == nil && *allowPrimary {
-	ChooseTablet:
-		for i := range tablets {
-			switch tablets[i].Type {
-			case topodatapb.TabletType_PRIMARY:
-				tabletForBackup = tablets[i].Tablet
-				secondsBehind = 0 //nolint
-				break ChooseTablet
-			default:
-				continue
-			}
-		}
-	}
-
-	if tabletForBackup == nil {
-		return errors.New("no tablet available for backup")
-	}
-
-	return execBackup(ctx, wr, tabletForBackup, *concurrency, *allowPrimary)
-}
-
-// execBackup is shared by Backup and BackupShard
-func execBackup(ctx context.Context, wr *wrangler.Wrangler, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool) error {
-	stream, err := wr.TabletManagerClient().Backup(ctx, tablet, concurrency, allowPrimary)
-	if err != nil {
-		return err
-	}
-	for {
-		e, err := stream.Recv()
-		switch err {
-		case nil:
-			logutil.LogEvent(wr.Logger(), e)
-		case io.EOF:
-			// Do not do anything for primary tablets and when active reparenting is disabled
-			if *mysqlctl.DisableActiveReparents || tablet.Type == topodatapb.TabletType_PRIMARY {
-				return nil
-			}
-			// Otherwise we find the correct primary tablet and set the replication source,
-			// since the primary could have changed while we executed the backup which can
-			// also affect whether we want to send semi sync acks or not.
-			tabletInfo, err := wr.TopoServer().GetTablet(ctx, tablet.Alias)
-			if err != nil {
-				return err
-			}
-			return wr.SetReplicationSource(ctx, tabletInfo.Tablet)
-		default:
-			return err
-		}
-	}
+	return wr.VtctldServer().BackupShard(&vtctldatapb.BackupShardRequest{
+		Keyspace:     keyspace,
+		Shard:        shard,
+		Concurrency:  uint64(*concurrency),
+		AllowPrimary: *allowPrimary,
+	}, &backupEventStreamLogger{logger: wr.Logger(), ctx: ctx})
 }
 
 func commandListBackups(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -230,15 +173,29 @@ func commandRemoveBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
-	bucket := fmt.Sprintf("%v/%v", keyspace, shard)
 	name := subFlags.Arg(1)
 
-	bs, err := backupstorage.GetBackupStorage()
-	if err != nil {
-		return err
-	}
-	defer bs.Close()
-	return bs.RemoveBackup(ctx, bucket, name)
+	_, err = wr.VtctldServer().RemoveBackup(ctx, &vtctldatapb.RemoveBackupRequest{
+		Keyspace: keyspace,
+		Shard:    shard,
+		Name:     name,
+	})
+	return err
+}
+
+// backupRestoreEventStreamLogger takes backup restore events from the
+// vtctldserver and emits them via logutil.LogEvent, preserving legacy behavior.
+type backupRestoreEventStreamLogger struct {
+	grpc.ServerStream
+	logger logutil.Logger
+	ctx    context.Context
+}
+
+func (b *backupRestoreEventStreamLogger) Context() context.Context { return b.ctx }
+
+func (b *backupRestoreEventStreamLogger) Send(resp *vtctldatapb.RestoreFromBackupResponse) error {
+	logutil.LogEvent(b.logger, resp.Event)
+	return nil
 }
 
 func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -266,34 +223,14 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
+
+	req := &vtctldatapb.RestoreFromBackupRequest{
+		TabletAlias: tabletAlias,
 	}
-	stream, err := wr.TabletManagerClient().RestoreFromBackup(ctx, tabletInfo.Tablet, backupTime)
-	if err != nil {
-		return err
+
+	if !backupTime.IsZero() {
+		req.BackupTime = protoutil.TimeToProto(backupTime)
 	}
-	for {
-		e, err := stream.Recv()
-		switch err {
-		case nil:
-			logutil.LogEvent(wr.Logger(), e)
-		case io.EOF:
-			// Do not do anything when active reparenting is disabled
-			if *mysqlctl.DisableActiveReparents {
-				return nil
-			}
-			// Otherwise we find the correct primary tablet and set the replication source,
-			// since the primary could have changed while we restored which can
-			// also affect whether we want to send semi sync acks or not.
-			tabletInfo, err = wr.TopoServer().GetTablet(ctx, tabletAlias)
-			if err != nil {
-				return err
-			}
-			return wr.SetReplicationSource(ctx, tabletInfo.Tablet)
-		default:
-			return err
-		}
-	}
+
+	return wr.VtctldServer().RestoreFromBackup(req, &backupRestoreEventStreamLogger{logger: wr.Logger(), ctx: ctx})
 }
