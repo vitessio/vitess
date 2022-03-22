@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 5
     if: github.repository == 'vitessio/vitess'
     name: Get the Upgrade Downgrade pull request label
-    runs-on: ubuntu-latest
+    runs-on: single-self-hosted
     outputs:
       hasLabel: ${{ steps.check_label.outputs.hasLabel }}
 
@@ -27,7 +27,7 @@ jobs:
   get_latest_release:
     if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'true')
     name: Get latest release
-    runs-on: ubuntu-latest
+    runs-on: single-self-hosted
     needs:
       - get_upgrade_downgrade_label
     outputs:
@@ -51,7 +51,7 @@ jobs:
     timeout-minutes: 40
     if: always() && (needs.get_latest_release.result == 'success')
     name: Run Upgrade Downgrade Test Backup Manual
-    runs-on: ubuntu-latest
+    runs-on: single-self-hosted
     needs:
       - get_upgrade_downgrade_label
       - get_latest_release
