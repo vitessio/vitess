@@ -1583,6 +1583,9 @@ func (node *Subquery) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *DerivedTable) formatFast(buf *TrackedBuffer) {
+	if node.Lateral {
+		buf.WriteString("lateral ")
+	}
 	buf.WriteByte('(')
 	node.Select.formatFast(buf)
 	buf.WriteByte(')')
