@@ -2560,9 +2560,6 @@ func (node *JtColumnDefinition) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		node.JtPath.Type.formatFast(buf)
 		buf.WriteByte(' ')
-		//if node.JtPath.Collate != "" {
-		//	buf.astPrintf(node, "%s %s ", keywordStrings[COLLATE], node.JtPath.Collate)
-		//}
 		if node.JtPath.JtColExists {
 			buf.WriteString("exists ")
 		}

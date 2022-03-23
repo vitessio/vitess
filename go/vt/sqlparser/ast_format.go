@@ -1950,9 +1950,6 @@ func (node *JtColumnDefinition) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "\t%v\n)", node.JtNestedPath.Columns[sz-1])
 	} else if node.JtPath != nil {
 		buf.astPrintf(node, "%v %v ", node.JtPath.Name, node.JtPath.Type)
-		//if node.JtPath.Collate != "" {
-		//	buf.astPrintf(node, "%s %s ", keywordStrings[COLLATE], node.JtPath.Collate)
-		//}
 		if node.JtPath.JtColExists {
 			buf.astPrintf(node, "exists ")
 		}
