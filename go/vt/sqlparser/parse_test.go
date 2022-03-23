@@ -2339,8 +2339,8 @@ var (
 		input:  "SELECT JSON_ARRAY(BIN(11))",
 		output: "select json_array(BIN(11)) from dual",
 	}, {
-		input:  "SELECT JSON_ARRAY(1, \"abc\", NULL, TRUE, CURTIME());",
-		output: "select json_array(1, 'abc', null, true, CURTIME()) from dual",
+		input:  `SELECT JSON_ARRAY(1, "abc", NULL, TRUE, CURTIME());`,
+		output: `select json_array(1, 'abc', null, true, CURTIME()) from dual`,
 	}, {
 		input:  "SELECT JSON_OBJECT(1,2)",
 		output: "select json_object(1, 2) from dual",
@@ -2360,8 +2360,8 @@ var (
 		input:  "SELECT JSON_QUOTE(BIN(11))",
 		output: "select json_quote(BIN(11)) from dual",
 	}, {
-		input:  "SELECT JSON_QUOTE('null'), JSON_QUOTE('\"null\"');\n",
-		output: "select json_quote('null'), json_quote('\\\"null\\\"') from dual",
+		input:  `SELECT JSON_QUOTE('null'), JSON_QUOTE('"null"')`,
+		output: `select json_quote('null'), json_quote('\"null\"') from dual`,
 	}, {
 		input:  "select t1.a, dt.a from t1, lateral (select t1.a+t2.a as a from t2) dt",
 		output: "select t1.a, dt.a from t1, lateral (select t1.a + t2.a as a from t2) as dt",
