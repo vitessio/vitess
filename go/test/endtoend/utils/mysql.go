@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
 
-func NewMySQL(cluster *cluster.LocalProcessCluster, ksName string) (mysql.ConnParams, func(), error) {
+func NewMySQL(cluster *cluster.LocalProcessCluster, ksName string, schemaSQL string) (mysql.ConnParams, func(), error) {
 	mysqlDir, err := createMySQLDir()
 	if err != nil {
 		return mysql.ConnParams{}, nil, err
@@ -55,6 +55,12 @@ func NewMySQL(cluster *cluster.LocalProcessCluster, ksName string) (mysql.ConnPa
 		Uname:      "root",
 		DbName:     ksName,
 	}
+
+	err = prepareMySQLWithSchema(err, params, schemaSQL)
+	if err != nil {
+		return mysql.ConnParams{}, nil, err
+	}
+
 	return params, func() {
 		ctx := context.Background()
 		_ = mysqld.Teardown(ctx, mycnf, true)
@@ -94,6 +100,19 @@ func initMysqld(mysqld *mysqlctl.Mysqld, mycnf *mysqlctl.Mycnf, initSQLFile stri
 
 	ctx := context.Background()
 	err = mysqld.Init(ctx, mycnf, initSQLFile)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func prepareMySQLWithSchema(err error, params mysql.ConnParams, sql string) error {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &params)
+	if err != nil {
+		return err
+	}
+	_, err = conn.ExecuteFetch(sql, 1, false)
 	if err != nil {
 		return err
 	}

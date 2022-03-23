@@ -33,12 +33,12 @@ var (
 	mysqlParams     mysql.ConnParams
 	keyspaceName    = "ks"
 	cell            = "test"
-	// 	SchemaSQL       = `create table t1(
-	// 	id1 bigint,
-	// 	id2 bigint,
-	// 	id3 bigint,
-	// 	primary key(id1)
-	// ) Engine=InnoDB;`
+	schemaSQL       = `create table t1(
+		id1 bigint,
+		id2 bigint,
+		id3 bigint,
+		primary key(id1)
+	) Engine=InnoDB;`
 )
 
 func TestMain(m *testing.M) {
@@ -47,7 +47,7 @@ func TestMain(m *testing.M) {
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(cell, "localhost")
 
-		conn, closer, err := NewMySQL(clusterInstance, keyspaceName)
+		conn, closer, err := NewMySQL(clusterInstance, keyspaceName, schemaSQL)
 		if err != nil {
 			fmt.Println(err)
 			return 1
@@ -65,5 +65,7 @@ func TestCreateMySQL(t *testing.T) {
 	require.NoError(t, err)
 
 	AssertMatches(t, conn, "show databases;", `[[VARCHAR("information_schema")] [VARCHAR("ks")] [VARCHAR("mysql")] [VARCHAR("performance_schema")] [VARCHAR("sys")]]`)
-	AssertMatches(t, conn, "show tables;", `[]`)
+	AssertMatches(t, conn, "show tables;", `[[VARCHAR("t1")]]`)
+	Exec(t, conn, "insert into t1(id1, id2, id3) values (1, 1, 1), (2, 2, 2), (3, 3, 3)")
+	AssertMatches(t, conn, "select * from t1;", `[[INT64(1) INT64(1) INT64(1)] [INT64(2) INT64(2) INT64(2)] [INT64(3) INT64(3) INT64(3)]]`)
 }
