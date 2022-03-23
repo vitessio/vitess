@@ -40,6 +40,16 @@ func AssertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	}
 }
 
+func AssertMatchesCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query, expected string) {
+	t.Helper()
+	qr := ExecCompareMySQL(t, vtConn, mysqlConn, query)
+	got := fmt.Sprintf("%v", qr.Rows)
+	diff := cmp.Diff(expected, got)
+	if diff != "" {
+		t.Errorf("Query: %s (-want +got):\n%s\nGot:%s", query, diff, got)
+	}
+}
+
 func AssertContainsError(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	_, err := ExecAllowError(t, conn, query)
@@ -90,6 +100,17 @@ func Exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err, "for query: "+query)
 	return qr
+}
+
+func ExecCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query string) *sqltypes.Result {
+	t.Helper()
+	vtQr, err := vtConn.ExecuteFetch(query, 1000, true)
+	require.NoError(t, err, "for query: "+query)
+
+	mysqlQr, err := mysqlConn.ExecuteFetch(query, 1000, true)
+	require.NoError(t, err, "for query: "+query)
+	compareVitessAndMySQLResults(t, query, vtQr, mysqlQr)
+	return vtQr
 }
 
 func ExecAllowError(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {

@@ -21,6 +21,10 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"testing"
+
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -117,4 +121,31 @@ func prepareMySQLWithSchema(err error, params mysql.ConnParams, sql string) erro
 		return err
 	}
 	return nil
+}
+
+func compareVitessAndMySQLResults(t *testing.T, query string, vtQr *sqltypes.Result, mysqlQr *sqltypes.Result) {
+	stmt, err := sqlparser.Parse(query)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	orderBy := false
+	if selStmt, isSelStmt := stmt.(sqlparser.SelectStatement); isSelStmt {
+		sel := sqlparser.GetFirstSelect(selStmt)
+		orderBy = sel.OrderBy != nil
+	}
+
+	if orderBy && sqltypes.ResultsEqual([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr}) ||
+		sqltypes.ResultsEqualUnordered([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr}) {
+		return
+	}
+	errStr := "Query (" + query + ") results mismatched.\nVitess Results:\n"
+	for _, row := range vtQr.Rows {
+		errStr += fmt.Sprintf("%s\n", row)
+	}
+	errStr += "MySQL Results:\n"
+	for _, row := range mysqlQr.Rows {
+		errStr += fmt.Sprintf("%s\n", row)
+	}
+	t.Error(errStr)
 }
