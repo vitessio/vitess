@@ -70,6 +70,7 @@ func TestDial(t *testing.T) {
 		Discovery:           disco,
 		ConnectivityTimeout: defaultConnectivityTimeout,
 	})
+	defer proxy.Close() // prevents grpc-core from logging a bunch of "connection errors" after deferred listener.Close() above.
 
 	// We don't have a vtctld host until we call Dial
 	require.Empty(t, proxy.host)
