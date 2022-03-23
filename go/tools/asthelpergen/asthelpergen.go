@@ -320,7 +320,7 @@ func printableTypeName(t types.Type) string {
 	case *types.Named:
 		return t.Obj().Name()
 	case *types.Basic:
-		return strings.Title(t.Name())
+		return strings.Title(t.Name()) //nolint
 	case *types.Interface:
 		return t.String()
 	default:

@@ -543,12 +543,12 @@ func (db *LocalCluster) Query(sql, dbname string, limit int) (*sqltypes.Result, 
 // JSONConfig returns a key/value object with the configuration
 // settings for the local cluster. It should be serialized with
 // `json.Marshal`
-func (db *LocalCluster) JSONConfig() interface{} {
+func (db *LocalCluster) JSONConfig() any {
 	if db.OnlyMySQL {
 		return db.mysql.Params("")
 	}
 
-	config := map[string]interface{}{
+	config := map[string]any{
 		"port":               db.vt.Port,
 		"socket":             db.mysql.UnixSocket(),
 		"vtcombo_mysql_port": db.Env.PortForProtocol("vtcombo_mysql_port", ""),
@@ -569,7 +569,7 @@ func (db *LocalCluster) GrpcPort() int {
 
 func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
-	args := []string{"ApplyVSchema", "-sql", migration, keyspace}
+	args := []string{"ApplyVSchema", "--sql", migration, keyspace}
 	fmt.Printf("Applying vschema %v", args)
 	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
 		log.Info(e)
@@ -580,7 +580,7 @@ func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
 
 func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
-	args := []string{"ReloadSchemaKeyspace", "-include_primary=true", keyspace}
+	args := []string{"ReloadSchemaKeyspace", "--include_primary=true", keyspace}
 	fmt.Printf("Reloading keyspace schema %v", args)
 
 	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {

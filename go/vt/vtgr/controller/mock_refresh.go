@@ -45,7 +45,7 @@ func (m *MockGRTopo) GetShard(ctx context.Context, keyspace, shard string) (*top
 }
 
 // GetShard indicates an expected call of GetShard.
-func (mr *MockGRTopoMockRecorder) GetShard(ctx, keyspace, shard interface{}) *gomock.Call {
+func (mr *MockGRTopoMockRecorder) GetShard(ctx, keyspace, shard any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetShard", reflect.TypeOf((*MockGRTopo)(nil).GetShard), ctx, keyspace, shard)
 }
@@ -60,7 +60,7 @@ func (m *MockGRTopo) GetShardNames(ctx context.Context, keyspace string) ([]stri
 }
 
 // GetShardNames indicates an expected call of GetShardNames.
-func (mr *MockGRTopoMockRecorder) GetShardNames(ctx, keyspace interface{}) *gomock.Call {
+func (mr *MockGRTopoMockRecorder) GetShardNames(ctx, keyspace any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetShardNames", reflect.TypeOf((*MockGRTopo)(nil).GetShardNames), ctx, keyspace)
 }
@@ -75,7 +75,7 @@ func (m *MockGRTopo) GetTabletMapForShardByCell(ctx context.Context, keyspace, s
 }
 
 // GetTabletMapForShardByCell indicates an expected call of GetTabletMapForShardByCell.
-func (mr *MockGRTopoMockRecorder) GetTabletMapForShardByCell(ctx, keyspace, shard, cells interface{}) *gomock.Call {
+func (mr *MockGRTopoMockRecorder) GetTabletMapForShardByCell(ctx, keyspace, shard, cells any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTabletMapForShardByCell", reflect.TypeOf((*MockGRTopo)(nil).GetTabletMapForShardByCell), ctx, keyspace, shard, cells)
 }
@@ -91,7 +91,7 @@ func (m *MockGRTopo) LockShard(ctx context.Context, keyspace, shard, action stri
 }
 
 // LockShard indicates an expected call of LockShard.
-func (mr *MockGRTopoMockRecorder) LockShard(ctx, keyspace, shard, action interface{}) *gomock.Call {
+func (mr *MockGRTopoMockRecorder) LockShard(ctx, keyspace, shard, action any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockShard", reflect.TypeOf((*MockGRTopo)(nil).LockShard), ctx, keyspace, shard, action)
 }
@@ -128,7 +128,7 @@ func (m *MockGRTmcClient) ChangeType(ctx context.Context, tablet *topodata.Table
 }
 
 // ChangeType indicates an expected call of ChangeType.
-func (mr *MockGRTmcClientMockRecorder) ChangeType(ctx, tablet, dbType interface{}) *gomock.Call {
+func (mr *MockGRTmcClientMockRecorder) ChangeType(ctx, tablet, dbType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChangeType", reflect.TypeOf((*MockGRTmcClient)(nil).ChangeType), ctx, tablet, dbType)
 }
@@ -142,7 +142,7 @@ func (m *MockGRTmcClient) Ping(ctx context.Context, tablet *topodata.Tablet) err
 }
 
 // Ping indicates an expected call of Ping.
-func (mr *MockGRTmcClientMockRecorder) Ping(ctx, tablet interface{}) *gomock.Call {
+func (mr *MockGRTmcClientMockRecorder) Ping(ctx, tablet any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ping", reflect.TypeOf((*MockGRTmcClient)(nil).Ping), ctx, tablet)
 }

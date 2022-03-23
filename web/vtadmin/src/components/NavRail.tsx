@@ -17,10 +17,10 @@ import * as React from 'react';
 import { Link, NavLink } from 'react-router-dom';
 
 import style from './NavRail.module.scss';
-import logo from '../img/vitess-icon-color.svg';
 import { useClusters, useGates, useKeyspaces, useSchemas, useTablets, useVtctlds, useWorkflows } from '../hooks/api';
 import { Icon, Icons } from './Icon';
 import { getTableDefinitions } from '../util/tableDefinitions';
+import VitessLogo from './VitessLogo';
 
 export const NavRail = () => {
     const { data: clusters = [] } = useClusters();
@@ -36,7 +36,7 @@ export const NavRail = () => {
     return (
         <div className={style.container}>
             <Link className={style.logoContainer} to="/">
-                <img alt="Vitess logo" className="h-16 mx-auto" src={logo} height={40}></img>
+                <VitessLogo className="h-[40px]" />
             </Link>
 
             <div className={style.navLinks}>

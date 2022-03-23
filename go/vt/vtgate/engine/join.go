@@ -258,7 +258,7 @@ func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.
 }
 
 func (jn *Join) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"TableName":         jn.GetTableName(),
 		"JoinColumnIndexes": jn.joinColsDescription(),
 	}

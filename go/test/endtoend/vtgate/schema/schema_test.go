@@ -266,7 +266,7 @@ func testCopySchemaShardWithDifferentDB(t *testing.T, shard int) {
 	schema, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetSchema", tabletAlias)
 	require.Nil(t, err)
 
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	err = json.Unmarshal([]byte(schema), &resultMap)
 	require.Nil(t, err)
 	dbSchema := reflect.ValueOf(resultMap["database_schema"])

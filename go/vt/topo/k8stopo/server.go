@@ -114,7 +114,7 @@ func getKeyParents(key string) []string {
 	return parents
 }
 
-func indexByParent(obj interface{}) ([]string, error) {
+func indexByParent(obj any) ([]string, error) {
 	return getKeyParents(obj.(*vtv1beta1.VitessTopoNode).Data.Key), nil
 }
 

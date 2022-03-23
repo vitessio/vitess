@@ -197,7 +197,7 @@ func (sa *ScalarAggregate) Inputs() []Primitive {
 // description implements the Primitive interface
 func (sa *ScalarAggregate) description() PrimitiveDescription {
 	aggregates := GenericJoin(sa.Aggregates, aggregateParamsToString)
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Aggregates": aggregates,
 	}
 	if sa.TruncateColumnCount > 0 {

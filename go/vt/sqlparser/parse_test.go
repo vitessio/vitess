@@ -2362,6 +2362,12 @@ var (
 	}, {
 		input:  "SELECT JSON_QUOTE('null'), JSON_QUOTE('\"null\"');\n",
 		output: "select json_quote('null'), json_quote('\\\"null\\\"') from dual",
+	}, {
+		input:  "select t1.a, dt.a from t1, lateral (select t1.a+t2.a as a from t2) dt",
+		output: "select t1.a, dt.a from t1, lateral (select t1.a + t2.a as a from t2) as dt",
+	}, {
+		input:  "select b from v1 vq1, lateral (select count(*) from v1 vq2 having vq1.b = 3) dt",
+		output: "select b from v1 as vq1, lateral (select count(*) from v1 as vq2 having vq1.b = 3) as dt",
 	}}
 )
 
@@ -2480,6 +2486,9 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "SELECT JSON_QUOTE()",
 		err:   "syntax error at position 20",
+	}, {
+		input: "select from t1, lateral (with qn as (select t1.a) select (select max(a) from qn)) as dt",
+		err:   "syntax error at position 12 near 'from'",
 	}}
 
 	for _, tcase := range invalidSQL {

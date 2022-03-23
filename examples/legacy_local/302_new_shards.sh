@@ -29,7 +29,7 @@ for i in 400 401 402; do
  SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
 done
 
-vtctlclient -server localhost:15999 InitShardPrimary -force customer/-80 zone1-300
-vtctlclient -server localhost:15999 InitShardPrimary -force customer/80- zone1-400
-vtctlclient -server localhost:15999 CopySchemaShard customer/0 customer/-80
-vtctlclient -server localhost:15999 CopySchemaShard customer/0 customer/80-
+vtctlclient --server localhost:15999 InitShardPrimary -- --force customer/-80 zone1-300
+vtctlclient --server localhost:15999 InitShardPrimary -- --force customer/80- zone1-400
+vtctlclient --server localhost:15999 CopySchemaShard customer/0 customer/-80
+vtctlclient --server localhost:15999 CopySchemaShard customer/0 customer/80-

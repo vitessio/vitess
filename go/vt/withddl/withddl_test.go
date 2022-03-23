@@ -155,7 +155,7 @@ func TestExec(t *testing.T) {
 
 	funcs := []struct {
 		name string
-		f    interface{}
+		f    any
 	}{{
 		name: "f1",
 		f: func(query string) (*sqltypes.Result, error) {

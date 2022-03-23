@@ -228,10 +228,10 @@ func (d *Distinct) Inputs() []Primitive {
 }
 
 func (d *Distinct) description() PrimitiveDescription {
-	var other map[string]interface{}
+	var other map[string]any
 	if d.ColCollations != nil {
 		allUnknown := true
-		other = map[string]interface{}{}
+		other = map[string]any{}
 		var colls []string
 		for _, collation := range d.ColCollations {
 			coll := collations.Local().LookupByID(collation)

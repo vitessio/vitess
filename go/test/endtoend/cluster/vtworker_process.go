@@ -71,7 +71,7 @@ func (vtworker *VtworkerProcess) Setup(cell string) (err error) {
 		"--command_display_interval", "10ms",
 	)
 	if *isCoverage {
-		vtworker.proc.Args = append(vtworker.proc.Args, "--test.coverprofile=vtworker.out", "-test.v")
+		vtworker.proc.Args = append(vtworker.proc.Args, "--test.coverprofile=vtworker.out", "--test.v")
 	}
 	vtworker.proc.Args = append(vtworker.proc.Args, vtworker.ExtraArgs...)
 
@@ -215,8 +215,8 @@ func VtworkerProcessInstance(httpPort int, grpcPort int, topoPort int, hostname 
 }
 
 // GetVars returns map of vars
-func (vtworker *VtworkerProcess) GetVars() (map[string]interface{}, error) {
-	resultMap := make(map[string]interface{})
+func (vtworker *VtworkerProcess) GetVars() (map[string]any, error) {
+	resultMap := make(map[string]any)
 	resp, err := http.Get(vtworker.VerifyURL)
 	if err != nil {
 		return nil, fmt.Errorf("error getting response from %s", vtworker.VerifyURL)

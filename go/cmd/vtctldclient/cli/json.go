@@ -34,7 +34,7 @@ import (
 // either by being a proto message type or by anonymously embedding one, so for
 // other types that may have nested struct fields, we still use the standard Go
 // marshaler, which will result in different formattings.
-func MarshalJSON(obj interface{}) ([]byte, error) {
+func MarshalJSON(obj any) ([]byte, error) {
 	switch obj := obj.(type) {
 	case proto.Message:
 		m := protojson.MarshalOptions{

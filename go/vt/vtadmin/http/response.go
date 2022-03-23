@@ -26,23 +26,23 @@ import (
 
 // JSONResponse represents a generic response object.
 type JSONResponse struct {
-	Result     interface{} `json:"result,omitempty"`
-	Error      *errorBody  `json:"error,omitempty"`
-	Ok         bool        `json:"ok"`
+	Result     any        `json:"result,omitempty"`
+	Error      *errorBody `json:"error,omitempty"`
+	Ok         bool       `json:"ok"`
 	httpStatus int
 }
 
 type errorBody struct {
-	Message string      `json:"message"`
-	Code    string      `json:"code"`
-	Details interface{} `json:"details,omitempty"`
+	Message string `json:"message"`
+	Code    string `json:"code"`
+	Details any    `json:"details,omitempty"`
 }
 
 // NewJSONResponse returns a JSONResponse for the given result and error. If err
 // is non-nil, and implements errors.TypedError, the HTTP status code and
 // message are provided by the error. If not, the code and message fallback to
 // 500 unknown.
-func NewJSONResponse(value interface{}, err error) *JSONResponse {
+func NewJSONResponse(value any, err error) *JSONResponse {
 	if err != nil {
 		switch e := err.(type) {
 		case errors.TypedError:

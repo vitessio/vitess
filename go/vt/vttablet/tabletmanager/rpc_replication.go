@@ -837,6 +837,17 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 	}
 	defer tm.unlock()
 
+	// SetTabletType only stops the replication manager ticks since we are going to promote this tablet
+	// to primary. We should do this before making any changes to MySQL, otherwise any replication manager
+	// tick would change the replication source, etc settings back.
+	tm.replManager.SetTabletType(topodatapb.TabletType_PRIMARY)
+	defer func() {
+		// If PromoteReplica was successful, then this would be a no-op, since we have already stopped
+		// the replication manager ticks. But, in case we are unsuccessful, we must restart the ticks
+		// so, we call SetTabletType as a deferred call.
+		tm.replManager.SetTabletType(tm.Tablet().Type)
+	}()
+
 	// If Orchestrator is configured then also tell it we're promoting a tablet so it needs to be in maintenance mode
 	// Do this in the background, as it's best-effort.
 	go func() {

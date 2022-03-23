@@ -194,7 +194,7 @@ func keyspacesWithOverlappingShards(ctx context.Context, wr *wrangler.Wrangler) 
 	return result, nil
 }
 
-func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
+func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]any, error) {
 	if err := r.ParseForm(); err != nil {
 		return nil, nil, nil, vterrors.Wrap(err, "cannot parse form")
 	}
@@ -204,7 +204,7 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 	if keyspace == "" || shard == "" {
 		// display the list of possible splits to choose from
 		// (just find all the overlapping guys)
-		result := make(map[string]interface{})
+		result := make(map[string]any)
 		choices, err := keyspacesWithOverlappingShards(ctx, wr)
 		if err != nil {
 			result["Error"] = err.Error()
@@ -217,7 +217,7 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 	sourceReaderCountStr := r.FormValue("sourceReaderCount")
 	if sourceReaderCountStr == "" {
 		// display the input form
-		result := make(map[string]interface{})
+		result := make(map[string]any)
 		result["Keyspace"] = keyspace
 		result["Shard"] = shard
 		result["DefaultOnline"] = defaultOnline

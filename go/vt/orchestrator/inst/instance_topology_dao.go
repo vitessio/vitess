@@ -47,7 +47,7 @@ const (
 )
 
 // ExecInstance executes a given query on the given MySQL topology instance
-func ExecInstance(instanceKey *InstanceKey, query string, args ...interface{}) (sql.Result, error) {
+func ExecInstance(instanceKey *InstanceKey, query string, args ...any) (sql.Result, error) {
 	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func ExecuteOnTopology(f func()) {
 }
 
 // ScanInstanceRow executes a read-a-single-row query on a given MySQL topology instance
-func ScanInstanceRow(instanceKey *InstanceKey, query string, dest ...interface{}) error {
+func ScanInstanceRow(instanceKey *InstanceKey, query string, dest ...any) error {
 	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return err

@@ -121,7 +121,7 @@ type (
 
 		SetTarget(target string) error
 
-		SetUDV(key string, value interface{}) error
+		SetUDV(key string, value any) error
 
 		SetSysVar(name string, expr string)
 

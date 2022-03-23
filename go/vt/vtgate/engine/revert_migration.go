@@ -48,7 +48,7 @@ func (v *RevertMigration) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "RevertMigration",
 		Keyspace:     v.Keyspace,
-		Other: map[string]interface{}{
+		Other: map[string]any{
 			"query": v.Query,
 		},
 	}

@@ -59,8 +59,8 @@ func TestNormalizeAllFields(t *testing.T) {
 	assert.True(t, found, "correctly normalized record not found in planner cache")
 }
 
-func getPlanCache(vtgateHostPort string) ([]map[string]interface{}, error) {
-	var results []map[string]interface{}
+func getPlanCache(vtgateHostPort string) ([]map[string]any, error) {
+	var results []map[string]any
 	client := http.Client{
 		Timeout: 10 * time.Second,
 	}

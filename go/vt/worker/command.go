@@ -40,7 +40,7 @@ import (
 type Command struct {
 	Name        string
 	Method      func(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error)
-	Interactive func(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error)
+	Interactive func(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]any, error)
 	Params      string
 	Help        string // if help is empty, won't list the command
 }

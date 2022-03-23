@@ -37,7 +37,7 @@ func TestUnmarshal(t *testing.T) {
 		err: "",
 	}}
 	for _, tcase := range tcases {
-		out := make(map[string]interface{})
+		out := make(map[string]any)
 		err := Unmarshal([]byte(tcase.in), &out)
 		got := ""
 		if err != nil {

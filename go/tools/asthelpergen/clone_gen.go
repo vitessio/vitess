@@ -62,7 +62,7 @@ func (c *cloneGen) readValueOfType(t types.Type, expr jen.Code, spi generatorSPI
 	case *types.Basic:
 		return expr
 	case *types.Interface:
-		if types.TypeString(t, noQualifier) == "interface{}" {
+		if types.TypeString(t, noQualifier) == "any" {
 			// these fields have to be taken care of manually
 			return expr
 		}

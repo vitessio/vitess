@@ -566,11 +566,11 @@ func (vw *vschemaWrapper) TargetString() string {
 	return "targetString"
 }
 
-func (vw *vschemaWrapper) WarnUnshardedOnly(_ string, _ ...interface{}) {
+func (vw *vschemaWrapper) WarnUnshardedOnly(_ string, _ ...any) {
 
 }
 
-func (vw *vschemaWrapper) ErrorIfShardedF(keyspace *vindexes.Keyspace, _, errFmt string, params ...interface{}) error {
+func (vw *vschemaWrapper) ErrorIfShardedF(keyspace *vindexes.Keyspace, _, errFmt string, params ...any) error {
 	if keyspace.Sharded {
 		return fmt.Errorf(errFmt, params...)
 	}

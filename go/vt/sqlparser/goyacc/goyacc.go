@@ -1087,7 +1087,7 @@ func typeinfo() {
 	fmt.Fprintf(ftable, "type %sSymType struct {", prefix)
 	for _, tt := range gotypes {
 		if tt.union {
-			fmt.Fprintf(ftable, "\n\tunion interface{}")
+			fmt.Fprintf(ftable, "\n\tunion any")
 			break
 		}
 	}
@@ -3378,7 +3378,7 @@ func create(s string) *bufio.Writer {
 //
 // write out error comment
 //
-func lerrorf(lineno int, s string, v ...interface{}) {
+func lerrorf(lineno int, s string, v ...any) {
 	nerrors++
 	fmt.Fprintf(stderr, s, v...)
 	fmt.Fprintf(stderr, ": %v:%v\n", infile, lineno)
@@ -3388,7 +3388,7 @@ func lerrorf(lineno int, s string, v ...interface{}) {
 	}
 }
 
-func errorf(s string, v ...interface{}) {
+func errorf(s string, v ...any) {
 	lerrorf(lineno, s, v...)
 }
 
@@ -3425,7 +3425,7 @@ var yaccpar string // will be processed version of yaccpartext: s/$$/prefix/g
 var yaccpartext = `
 /*	parser for yacc output	*/
 
-func $$Iaddr(v interface{}) __yyunsafe__.Pointer {
+func $$Iaddr(v any) __yyunsafe__.Pointer {
 	type h struct {
 		t __yyunsafe__.Pointer
 		p __yyunsafe__.Pointer

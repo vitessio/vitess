@@ -116,7 +116,7 @@ func New(code vtrpcpb.Code, message string) error {
 // Errorf formats according to a format specifier and returns the string
 // as a value that satisfies error.
 // Errorf also records the stack trace at the point it was called.
-func Errorf(code vtrpcpb.Code, format string, args ...interface{}) error {
+func Errorf(code vtrpcpb.Code, format string, args ...any) error {
 	return &fundamental{
 		msg:   fmt.Sprintf(format, args...),
 		code:  code,
@@ -127,7 +127,7 @@ func Errorf(code vtrpcpb.Code, format string, args ...interface{}) error {
 // NewErrorf formats according to a format specifier and returns the string
 // as a value that satisfies error.
 // NewErrorf also records the stack trace at the point it was called.
-func NewErrorf(code vtrpcpb.Code, state State, format string, args ...interface{}) error {
+func NewErrorf(code vtrpcpb.Code, state State, format string, args ...any) error {
 	return &fundamental{
 		msg:   fmt.Sprintf(format, args...),
 		code:  code,
@@ -223,7 +223,7 @@ func Wrap(err error, message string) error {
 // Wrapf returns an error annotating err with a stack trace
 // at the point Wrapf is call, and the format specifier.
 // If err is nil, Wrapf returns nil.
-func Wrapf(err error, format string, args ...interface{}) error {
+func Wrapf(err error, format string, args ...any) error {
 	if err == nil {
 		return nil
 	}

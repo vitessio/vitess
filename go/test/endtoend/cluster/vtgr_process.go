@@ -43,10 +43,10 @@ type VtgrProcess struct {
 // Start starts vtgr process with required arguements
 func (vtgr *VtgrProcess) Start(alias string) (err error) {
 	/* minimal command line arguments:
-	$ vtgr -topo_implementation etcd2 \
-	-topo_global_server_address localhost:2379 \
-	-topo_global_root /vitess/global \
-	-clusters_to_watch ks/0
+	$ vtgr --topo_implementation etcd2 \
+	--topo_global_server_address localhost:2379 \
+	--topo_global_root /vitess/global \
+	--clusters_to_watch ks/0
 	*/
 	vtgr.proc = exec.Command(
 		vtgr.Binary,

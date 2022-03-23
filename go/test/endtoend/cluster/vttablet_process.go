@@ -173,13 +173,13 @@ func (vttablet *VttabletProcess) GetStatus() string {
 }
 
 // GetVars gets the debug vars as map
-func (vttablet *VttabletProcess) GetVars() map[string]interface{} {
+func (vttablet *VttabletProcess) GetVars() map[string]any {
 	resp, err := http.Get(vttablet.VerifyURL)
 	if err != nil {
 		return nil
 	}
 	if resp.StatusCode == 200 {
-		resultMap := make(map[string]interface{})
+		resultMap := make(map[string]any)
 		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
 		if err != nil {

@@ -290,7 +290,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	if err := ts.DeleteTablet(context.Background(), tablet.Alias); err != nil {
 		t.Fatalf("DeleteTablet failed: %v", err)
 	}
-	if err := topo.FixShardReplication(context.Background(), ts, logger, "aa", "keyspace", "shard"); err != nil {
+	if _, err := topo.FixShardReplication(context.Background(), ts, logger, "aa", "keyspace", "shard"); err != nil {
 		t.Fatalf("FixShardReplication failed: %v", err)
 	}
 	tw.loadTablets()
@@ -315,7 +315,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	if err := ts.DeleteTablet(context.Background(), tablet2.Alias); err != nil {
 		t.Fatalf("DeleteTablet failed: %v", err)
 	}
-	if err := topo.FixShardReplication(context.Background(), ts, logger, "aa", "keyspace", "shard"); err != nil {
+	if _, err := topo.FixShardReplication(context.Background(), ts, logger, "aa", "keyspace", "shard"); err != nil {
 		t.Fatalf("FixShardReplication failed: %v", err)
 	}
 	tw.loadTablets()
