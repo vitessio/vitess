@@ -82,6 +82,7 @@ const (
 	// in effect on the source when it was created:
 	//   https://github.com/mysql/mysql-server/blob/3290a66c89eb1625a7058e0ef732432b6952b435/client/mysqldump.cc#L795-L818
 	SQLMode          = "NO_AUTO_VALUE_ON_ZERO"
+	StrictSQLMode    = "STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO"
 	setSQLModeQueryf = `SET @@session.sql_mode='%s'`
 )
 
@@ -175,7 +176,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	// Manage SQL_MODE in the same way that mysqldump does.
 	// Save the original sql_mode, set it to a permissive mode,
 	// and then reset it back to the original value at the end.
-	resetFunc, err := vr.setSQLMode()
+	resetFunc, err := vr.setSQLMode(ctx)
 	defer resetFunc()
 	if err != nil {
 		return err
@@ -429,7 +430,7 @@ func (vr *vreplicator) resetFKCheckAfterCopy() error {
 	return err
 }
 
-func (vr *vreplicator) setSQLMode() (func(), error) {
+func (vr *vreplicator) setSQLMode(ctx context.Context) (func(), error) {
 	resetFunc := func() {}
 	// First save the original SQL mode if we have not already done so
 	if vr.originalSQLMode == "" {
@@ -450,13 +451,20 @@ func (vr *vreplicator) setSQLMode() (func(), error) {
 			log.Warningf("could not reset sql_mode on target using %s: %v", query, err)
 		}
 	}
+	vreplicationSQLMode := SQLMode
+	settings, _, err := vr.readSettings(ctx)
+	if err != nil {
+		return resetFunc, err
+	}
+	if settings.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) {
+		vreplicationSQLMode = StrictSQLMode
+	}
 
 	// Now set it to a permissive mode that will allow us to recreate
 	// any database object that exists on the source in full on the
 	// target
-	query := fmt.Sprintf(setSQLModeQueryf, SQLMode)
-	_, err := vr.dbClient.Execute(query)
-	if err != nil {
+	query := fmt.Sprintf(setSQLModeQueryf, vreplicationSQLMode)
+	if _, err := vr.dbClient.Execute(query); err != nil {
 		return resetFunc, fmt.Errorf("could not set the permissive sql_mode on target using %s: %v", query, err)
 	}
 
