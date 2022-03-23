@@ -380,6 +380,9 @@ func (rb *route) MergeSubquery(pb *primitiveBuilder, inner *route) bool {
 			case engine.DBA, engine.Reference:
 				rb.eroute.SysTableTableSchema = append(rb.eroute.SysTableTableSchema, inner.eroute.SysTableTableSchema...)
 				for k, v := range inner.eroute.SysTableTableName {
+					if rb.eroute.SysTableTableName == nil {
+						rb.eroute.SysTableTableName = map[string]evalengine.Expr{}
+					}
 					rb.eroute.SysTableTableName[k] = v
 				}
 				rb.eroute.Opcode = engine.DBA
