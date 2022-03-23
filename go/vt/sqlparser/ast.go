@@ -24,6 +24,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/vterrors"
@@ -117,6 +118,7 @@ func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
 		return nil, ErrEmpty
 	}
 	captureSelectExpressions(sql, tokenizer)
+	adjustSubstatementPositions(sql, tokenizer)
 	return tokenizer.ParseTree, nil
 }
 
@@ -135,6 +137,24 @@ func captureSelectExpressions(sql string, tokenizer *Tokenizer) {
 			}
 			return true, nil
 		})
+	}
+}
+
+// For DDL statements that capture the position of a sub-statement (create view and others), we need to adjust these
+// indexes if they occurred inside a MySQL special comment (/*! */) because we inappropriately capture the comment
+// ending characters in such cases.
+func adjustSubstatementPositions(sql string, tokenizer *Tokenizer) {
+	if ddl, ok := tokenizer.ParseTree.(*DDL); ok {
+		if ddl.SpecialCommentMode && ddl.SubStatementPositionStart > 0 &&
+			ddl.SubStatementPositionEnd > ddl.SubStatementPositionStart {
+			sub := sql[ddl.SubStatementPositionStart:ddl.SubStatementPositionEnd]
+
+			// Find the ending comment position, then backtrack until we find a non-space character.
+			// That's the actual end of the substatement.
+			endCommentIdx := strings.LastIndex(sub, "*/") - 1
+			for ; endCommentIdx > 0 && unicode.IsSpace(rune(sub[endCommentIdx])); endCommentIdx-- {}
+			ddl.SubStatementPositionEnd = ddl.SubStatementPositionStart + endCommentIdx + 1
+		}
 	}
 }
 
@@ -1526,6 +1546,9 @@ type DDL struct {
 
 	// This exposes the start and end index of the string that makes up the sub statement of the query given.
 	// Meaning is specific to the different kinds of statements with sub statements, e.g. views, trigger definitions.
+	// For statements defined within a MySQL special comment (/*! */), we have to fudge the offset a bit because we won't
+	// get the final lexer position token until after the comment close.
+	SpecialCommentMode bool
 	SubStatementPositionStart int
 	SubStatementPositionEnd   int
 

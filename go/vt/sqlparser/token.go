@@ -613,19 +613,21 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 	}
 
 	if tkn.specialComment != nil {
+		//fmt.Println("about to scan special comment")
 		// Enter specialComment scan mode.
 		// for scanning such kind of comment: /*! MySQL-specific code */
 		specialComment := tkn.specialComment
 		tok, val := specialComment.Scan()
 		if tok != 0 {
-			// Copy over position from specialComment and add offset; this corrects ddl.SubStatementPositionStart and ddl.SubStatementPositionEnd
-			//tkn.Position = tkn.specialPosOffset + specialComment.Position
 			// return the specialComment scan result as the result
 			return tok, val
 		}
+
 		// leave specialComment scan mode after all stream consumed.
 		tkn.specialComment = nil
 	}
+
+	//fmt.Println("scanning non-special comment")
 	if tkn.potentialAccountName {
 		defer func() {
 			tkn.potentialAccountName = false
@@ -1063,10 +1065,13 @@ func (tkn *Tokenizer) scanCommentType2() (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
+	//fmt.Println("scanMySQLSpecificComment")
+
 	buffer := &bytes2.Buffer{}
 	buffer.WriteString("/*!")
 	tkn.next()
 	foundStartPos := false
+	startOffset := 0
 	digitCount := 0
 	for {
 		if tkn.lastChar == '*' {
@@ -1105,12 +1110,16 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 		}
 
 		// Found start of subexpression
-		tkn.specialPosOffset = tkn.Position - 1
+		startOffset = tkn.Position - 1
 		foundStartPos = true
 	}
 	_, sql := ExtractMysqlComment(buffer.String())
+	//fmt.Printf("sql comment is %s\n", sql)
+
 	tkn.specialComment = NewStringTokenizer(sql)
-	// Recurse on subquery
+	tkn.specialComment.Position = startOffset
+
+	//fmt.Println("about to call scan")
 	return tkn.Scan()
 }
 

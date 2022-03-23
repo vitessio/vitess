@@ -2819,7 +2819,7 @@ func TestTmp(t *testing.T) {
 		}
 		ddl, ok := tree.(*DDL)
 		if !ok {
-			t.Errorf("Expected DDL when parsing (%q)", tcase.query)
+			t.Fatalf("Expected DDL when parsing (%q)", tcase.query)
 		}
 		sel := tcase.query[ddl.SubStatementPositionStart:ddl.SubStatementPositionEnd]
 		if sel != tcase.sel {
@@ -2842,6 +2842,12 @@ func TestCreateViewSelectPosition(t *testing.T) {
 		query: "/*! create view a as select 2 from dual */",
 		sel:   "select 2 from dual",
 	}, {
+		query: "/*! create view a as select 2 from dual */  ",
+		sel:   "select 2 from dual",
+	}, {
+		query: "/*! create view a as select 2 from  dual    */  ",
+		sel:   "select 2 from  dual",
+	}, {
 		query: "/*!12345 create view a as select 2 from dual */",
 		sel:   "select 2 from dual",
 	}, {
@@ -2852,18 +2858,23 @@ func TestCreateViewSelectPosition(t *testing.T) {
 	// TODO (James): will pass when I fix that CI sysbench thing
 
 	for _, tcase := range cases {
-		tree, err := Parse(tcase.query)
-		if err != nil {
-			t.Errorf("Parse(%q) err: %v", tcase.query, err)
-		}
-		ddl, ok := tree.(*DDL)
-		if !ok {
-			t.Errorf("Expected DDL when parsing (%q)", tcase.query)
-		}
-		sel := tcase.query[ddl.SubStatementPositionStart:ddl.SubStatementPositionEnd]
-		if sel != tcase.sel {
-			t.Errorf("expected select to be %q, got %q", tcase.sel, sel)
-		}
+		t.Run(tcase.query, func(t *testing.T) {
+			tree, err := Parse(tcase.query)
+			if err != nil {
+				t.Errorf("Parse(%q) err: %v", tcase.query, err)
+			}
+			ddl, ok := tree.(*DDL)
+			if !ok {
+				t.Errorf("Expected DDL when parsing (%q)", tcase.query)
+			}
+			if ddl.SubStatementPositionStart > ddl.SubStatementPositionEnd {
+				t.FailNow()
+			}
+			sel := tcase.query[ddl.SubStatementPositionStart:ddl.SubStatementPositionEnd]
+			if sel != tcase.sel {
+				t.Errorf("expected select to be %q, got %q", tcase.sel, sel)
+			}
+		})
 	}
 }
 

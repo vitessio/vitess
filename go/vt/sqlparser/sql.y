@@ -18,6 +18,7 @@ limitations under the License.
 package sqlparser
 
 import "fmt"
+//import "runtime/debug"
 
 func setParseTree(yylex interface{}, stmt Statement) {
   yylex.(*Tokenizer).ParseTree = stmt
@@ -46,15 +47,20 @@ func statementSeen(yylex interface{}) {
 }
 
 func yyPosition(yylex interface{}) int {
-  tkner := yylex.(*Tokenizer)
-  if tkner.specialComment != nil {
-    return tkner.specialPosOffset + tkner.specialComment.Position
+  tkn := yylex.(*Tokenizer)
+  if tkn.specialComment != nil {
+    return tkn.specialComment.Position
   }
-  return tkner.Position
+  return tkn.Position
 }
 
 func yyOldPosition(yylex interface{}) int {
   return yylex.(*Tokenizer).OldPosition
+}
+
+func yySpecialCommentMode(yylex interface{}) bool {
+  tkn := yylex.(*Tokenizer)
+  return tkn.specialComment != nil
 }
 
 %}
@@ -385,6 +391,7 @@ func yyOldPosition(yylex interface{}) int {
 %type <frameExtent> frame_extent
 %type <frameBound> frame_bound
 %type <int> lexer_position lexer_old_position
+%type <boolean> special_comment_mode
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
@@ -817,6 +824,11 @@ lexer_old_position:
     $$ = yyOldPosition(yylex)
   }
 
+special_comment_mode:
+  {
+    $$ = yySpecialCommentMode(yylex)
+  }
+
 create_statement:
   create_table_prefix table_spec
   {
@@ -841,9 +853,9 @@ create_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $7, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $4, Using: $5, Type: $2, Columns: $9, Options: $11}}
   }
-| CREATE VIEW table_name AS lexer_position select_statement lexer_position
+| CREATE VIEW table_name AS lexer_position special_comment_mode select_statement lexer_position
   {
-    $$ = &DDL{Action: CreateStr, View: $3.ToViewName(), ViewExpr: $6, SubStatementPositionStart: $5, SubStatementPositionEnd: $7 - 1}
+    $$ = &DDL{Action: CreateStr, View: $3.ToViewName(), ViewExpr: $7, SpecialCommentMode: $6, SubStatementPositionStart: $5, SubStatementPositionEnd: $8 - 1}
   }
 | CREATE OR REPLACE VIEW table_name AS lexer_position select_statement lexer_position
   {
