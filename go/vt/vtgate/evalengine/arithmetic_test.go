@@ -713,7 +713,7 @@ func TestToFloat64(t *testing.T) {
 func TestToNative(t *testing.T) {
 	testcases := []struct {
 		in  sqltypes.Value
-		out interface{}
+		out any
 	}{{
 		in:  NULL,
 		out: nil,
@@ -1377,7 +1377,7 @@ func makeNativeInt64(v int64) sqltypes.Value {
 }
 
 func BenchmarkAddGoInterface(b *testing.B) {
-	var v1, v2 interface{}
+	var v1, v2 any
 	v1 = int64(1)
 	v2 = int64(2)
 	for i := 0; i < b.N; i++ {

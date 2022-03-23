@@ -25,7 +25,7 @@ import (
 type storeItem struct {
 	key      uint64
 	conflict uint64
-	value    interface{}
+	value    any
 }
 
 // store is the interface fulfilled by all hash map implementations in this
@@ -36,20 +36,20 @@ type storeItem struct {
 // Every store is safe for concurrent usage.
 type store interface {
 	// Get returns the value associated with the key parameter.
-	Get(uint64, uint64) (interface{}, bool)
+	Get(uint64, uint64) (any, bool)
 	// Set adds the key-value pair to the Map or updates the value if it's
 	// already present. The key-value pair is passed as a pointer to an
 	// item object.
 	Set(*Item)
 	// Del deletes the key-value pair from the Map.
-	Del(uint64, uint64) (uint64, interface{})
+	Del(uint64, uint64) (uint64, any)
 	// Update attempts to update the key with a new value and returns true if
 	// successful.
-	Update(*Item) (interface{}, bool)
+	Update(*Item) (any, bool)
 	// Clear clears all contents of the store.
 	Clear(onEvict itemCallback)
 	// ForEach yields all the values in the store
-	ForEach(forEach func(interface{}) bool)
+	ForEach(forEach func(any) bool)
 	// Len returns the number of entries in the store
 	Len() int
 }
@@ -75,7 +75,7 @@ func newShardedMap() *shardedMap {
 	return sm
 }
 
-func (sm *shardedMap) Get(key, conflict uint64) (interface{}, bool) {
+func (sm *shardedMap) Get(key, conflict uint64) (any, bool) {
 	return sm.shards[key%numShards].get(key, conflict)
 }
 
@@ -88,15 +88,15 @@ func (sm *shardedMap) Set(i *Item) {
 	sm.shards[i.Key%numShards].Set(i)
 }
 
-func (sm *shardedMap) Del(key, conflict uint64) (uint64, interface{}) {
+func (sm *shardedMap) Del(key, conflict uint64) (uint64, any) {
 	return sm.shards[key%numShards].Del(key, conflict)
 }
 
-func (sm *shardedMap) Update(newItem *Item) (interface{}, bool) {
+func (sm *shardedMap) Update(newItem *Item) (any, bool) {
 	return sm.shards[newItem.Key%numShards].Update(newItem)
 }
 
-func (sm *shardedMap) ForEach(forEach func(interface{}) bool) {
+func (sm *shardedMap) ForEach(forEach func(any) bool) {
 	for _, shard := range sm.shards {
 		if !shard.foreach(forEach) {
 			break
@@ -129,7 +129,7 @@ func newLockedMap() *lockedMap {
 	}
 }
 
-func (m *lockedMap) get(key, conflict uint64) (interface{}, bool) {
+func (m *lockedMap) get(key, conflict uint64) (any, bool) {
 	m.RLock()
 	item, ok := m.data[key]
 	m.RUnlock()
@@ -167,7 +167,7 @@ func (m *lockedMap) Set(i *Item) {
 	}
 }
 
-func (m *lockedMap) Del(key, conflict uint64) (uint64, interface{}) {
+func (m *lockedMap) Del(key, conflict uint64) (uint64, any) {
 	m.Lock()
 	item, ok := m.data[key]
 	if !ok {
@@ -184,7 +184,7 @@ func (m *lockedMap) Del(key, conflict uint64) (uint64, interface{}) {
 	return item.conflict, item.value
 }
 
-func (m *lockedMap) Update(newItem *Item) (interface{}, bool) {
+func (m *lockedMap) Update(newItem *Item) (any, bool) {
 	m.Lock()
 	item, ok := m.data[newItem.Key]
 	if !ok {
@@ -228,7 +228,7 @@ func (m *lockedMap) Clear(onEvict itemCallback) {
 	m.Unlock()
 }
 
-func (m *lockedMap) foreach(forEach func(interface{}) bool) bool {
+func (m *lockedMap) foreach(forEach func(any) bool) bool {
 	m.RLock()
 	defer m.RUnlock()
 	for _, si := range m.data {

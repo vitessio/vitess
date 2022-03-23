@@ -108,7 +108,7 @@ func (g *Generator) Fail(err string) {
 	os.Exit(1)
 }
 
-func (g *Generator) printArray(iface interface{}) {
+func (g *Generator) printArray(iface any) {
 	switch ary := iface.(type) {
 	case Array8:
 		g.WriteString("[...]uint8{")
@@ -156,7 +156,7 @@ func (g *Generator) UsePackage(pkg Package) {
 	g.imported[pkg] = false
 }
 
-func (g *Generator) printAtom(v interface{}) {
+func (g *Generator) printAtom(v any) {
 	switch v := v.(type) {
 	case string:
 		g.WriteString(v)
@@ -199,7 +199,7 @@ func (pkg Package) Name() string {
 	return path.Base(string(pkg))
 }
 
-func (g *Generator) P(str ...interface{}) {
+func (g *Generator) P(str ...any) {
 	for _, v := range str {
 		g.printAtom(v)
 	}

@@ -20,8 +20,8 @@ package v1beta1
 
 // VitessTopoNodeListerExpansion allows custom methods to be added to
 // VitessTopoNodeLister.
-type VitessTopoNodeListerExpansion interface{}
+type VitessTopoNodeListerExpansion any
 
 // VitessTopoNodeNamespaceListerExpansion allows custom methods to be added to
 // VitessTopoNodeNamespaceLister.
-type VitessTopoNodeNamespaceListerExpansion interface{}
+type VitessTopoNodeNamespaceListerExpansion any

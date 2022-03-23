@@ -2350,6 +2350,12 @@ var (
 	}, {
 		input:  "SELECT *\n  FROM\n JSON_TABLE(\n '[{\"x\":2,\"y\":\"8\"},{\"x\":\"3\",\"y\":\"7\"},{\"x\":\"4\",\"y\":6}]',\n \"$[1]\" COLUMNS(\n xval VARCHAR(100) PATH \"$.x\",\n yval VARCHAR(100) PATH \"$.y\"\n)\n) AS  jt1;",
 		output: "select * from json_table('[{\\\"x\\\":2,\\\"y\\\":\\\"8\\\"},{\\\"x\\\":\\\"3\\\",\\\"y\\\":\\\"7\\\"},{\\\"x\\\":\\\"4\\\",\\\"y\\\":6}]', '$[1]' columns(\n\txval VARCHAR(100) path '$.x' ,\n\tyval VARCHAR(100) path '$.y' \n\t)\n) as jt1",
+	}, {
+		input:  "select t1.a, dt.a from t1, lateral (select t1.a+t2.a as a from t2) dt",
+		output: "select t1.a, dt.a from t1, lateral (select t1.a + t2.a as a from t2) as dt",
+	}, {
+		input:  "select b from v1 vq1, lateral (select count(*) from v1 vq2 having vq1.b = 3) dt",
+		output: "select b from v1 as vq1, lateral (select count(*) from v1 as vq2 having vq1.b = 3) as dt",
 	}}
 )
 
@@ -2453,6 +2459,9 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "select 1, next value from seq",
 		err:   "syntax error",
+	}, {
+		input: "select from t1, lateral (with qn as (select t1.a) select (select max(a) from qn)) as dt",
+		err:   "syntax error at position 12 near 'from'",
 	}}
 
 	for _, tcase := range invalidSQL {

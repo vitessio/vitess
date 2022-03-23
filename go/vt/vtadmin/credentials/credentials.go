@@ -29,7 +29,7 @@ import (
 // provided as the template data. It then loads the contents at the resulting
 // path as a JSON file containing a grpcclient.StaticAuthClientCreds, and
 // returns both the parsed credentials as well as the concrete path used.
-func LoadFromTemplate(tmplStr string, data interface{}) (*grpcclient.StaticAuthClientCreds, string, error) {
+func LoadFromTemplate(tmplStr string, data any) (*grpcclient.StaticAuthClientCreds, string, error) {
 	path, err := renderTemplate(tmplStr, data)
 	if err != nil {
 		return nil, "", err
@@ -43,7 +43,7 @@ func LoadFromTemplate(tmplStr string, data interface{}) (*grpcclient.StaticAuthC
 	return creds, path, nil
 }
 
-func renderTemplate(tmplStr string, data interface{}) (string, error) {
+func renderTemplate(tmplStr string, data any) (string, error) {
 	tmpl, err := template.New("").Parse(tmplStr)
 	if err != nil {
 		return "", err

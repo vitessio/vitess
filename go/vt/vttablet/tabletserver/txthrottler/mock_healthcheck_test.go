@@ -44,7 +44,7 @@ func (m *MockHealthCheck) AddTablet(arg0 *topodata.Tablet, arg1 string) {
 }
 
 // AddTablet indicates an expected call of AddTablet.
-func (mr *MockHealthCheckMockRecorder) AddTablet(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockHealthCheckMockRecorder) AddTablet(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTablet", reflect.TypeOf((*MockHealthCheck)(nil).AddTablet), arg0, arg1)
 }
@@ -86,7 +86,7 @@ func (m *MockHealthCheck) GetConnection(arg0 string) queryservice.QueryService {
 }
 
 // GetConnection indicates an expected call of GetConnection.
-func (mr *MockHealthCheckMockRecorder) GetConnection(arg0 interface{}) *gomock.Call {
+func (mr *MockHealthCheckMockRecorder) GetConnection(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConnection", reflect.TypeOf((*MockHealthCheck)(nil).GetConnection), arg0)
 }
@@ -110,7 +110,7 @@ func (m *MockHealthCheck) RemoveTablet(arg0 *topodata.Tablet) {
 }
 
 // RemoveTablet indicates an expected call of RemoveTablet.
-func (mr *MockHealthCheckMockRecorder) RemoveTablet(arg0 interface{}) *gomock.Call {
+func (mr *MockHealthCheckMockRecorder) RemoveTablet(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveTablet", reflect.TypeOf((*MockHealthCheck)(nil).RemoveTablet), arg0)
 }
@@ -122,7 +122,7 @@ func (m *MockHealthCheck) ReplaceTablet(arg0, arg1 *topodata.Tablet, arg2 string
 }
 
 // ReplaceTablet indicates an expected call of ReplaceTablet.
-func (mr *MockHealthCheckMockRecorder) ReplaceTablet(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockHealthCheckMockRecorder) ReplaceTablet(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplaceTablet", reflect.TypeOf((*MockHealthCheck)(nil).ReplaceTablet), arg0, arg1, arg2)
 }
@@ -134,7 +134,7 @@ func (m *MockHealthCheck) SetListener(arg0 discovery.LegacyHealthCheckStatsListe
 }
 
 // SetListener indicates an expected call of SetListener.
-func (mr *MockHealthCheckMockRecorder) SetListener(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockHealthCheckMockRecorder) SetListener(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetListener", reflect.TypeOf((*MockHealthCheck)(nil).SetListener), arg0, arg1)
 }

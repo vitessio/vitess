@@ -206,6 +206,16 @@ func (client *localVtctldClient) EmergencyReparentShard(ctx context.Context, in 
 	return client.s.EmergencyReparentShard(ctx, in)
 }
 
+// ExecuteFetchAsApp is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ExecuteFetchAsApp(ctx context.Context, in *vtctldatapb.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteFetchAsAppResponse, error) {
+	return client.s.ExecuteFetchAsApp(ctx, in)
+}
+
+// ExecuteFetchAsDBA is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ExecuteFetchAsDBA(ctx context.Context, in *vtctldatapb.ExecuteFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteFetchAsDBAResponse, error) {
+	return client.s.ExecuteFetchAsDBA(ctx, in)
+}
+
 // ExecuteHook is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ExecuteHook(ctx context.Context, in *vtctldatapb.ExecuteHookRequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteHookResponse, error) {
 	return client.s.ExecuteHook(ctx, in)
@@ -457,14 +467,39 @@ func (client *localVtctldClient) SetWritable(ctx context.Context, in *vtctldatap
 	return client.s.SetWritable(ctx, in)
 }
 
+// ShardReplicationAdd is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ShardReplicationAdd(ctx context.Context, in *vtctldatapb.ShardReplicationAddRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationAddResponse, error) {
+	return client.s.ShardReplicationAdd(ctx, in)
+}
+
+// ShardReplicationFix is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ShardReplicationFix(ctx context.Context, in *vtctldatapb.ShardReplicationFixRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationFixResponse, error) {
+	return client.s.ShardReplicationFix(ctx, in)
+}
+
 // ShardReplicationPositions is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ShardReplicationPositions(ctx context.Context, in *vtctldatapb.ShardReplicationPositionsRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
 	return client.s.ShardReplicationPositions(ctx, in)
 }
 
+// ShardReplicationRemove is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ShardReplicationRemove(ctx context.Context, in *vtctldatapb.ShardReplicationRemoveRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationRemoveResponse, error) {
+	return client.s.ShardReplicationRemove(ctx, in)
+}
+
 // SleepTablet is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) SleepTablet(ctx context.Context, in *vtctldatapb.SleepTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.SleepTabletResponse, error) {
 	return client.s.SleepTablet(ctx, in)
+}
+
+// SourceShardAdd is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SourceShardAdd(ctx context.Context, in *vtctldatapb.SourceShardAddRequest, opts ...grpc.CallOption) (*vtctldatapb.SourceShardAddResponse, error) {
+	return client.s.SourceShardAdd(ctx, in)
+}
+
+// SourceShardDelete is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SourceShardDelete(ctx context.Context, in *vtctldatapb.SourceShardDeleteRequest, opts ...grpc.CallOption) (*vtctldatapb.SourceShardDeleteResponse, error) {
+	return client.s.SourceShardDelete(ctx, in)
 }
 
 // StartReplication is part of the vtctlservicepb.VtctldClient interface.

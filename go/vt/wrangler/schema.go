@@ -312,7 +312,7 @@ func (wr *Wrangler) applySQLShard(ctx context.Context, tabletInfo *topo.TabletIn
 }
 
 // fillStringTemplate returns the string template filled
-func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
+func fillStringTemplate(tmpl string, vars any) (string, error) {
 	myTemplate := template.Must(template.New("").Parse(tmpl))
 	data := new(bytes.Buffer)
 	if err := myTemplate.Execute(data, vars); err != nil {

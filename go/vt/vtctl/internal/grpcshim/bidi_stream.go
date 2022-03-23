@@ -169,9 +169,9 @@ var (
 
 // client and server methods
 
-func (bs *BidiStream) Context() context.Context    { return bs.ctx }
-func (bs *BidiStream) RecvMsg(m interface{}) error { return nil }
-func (bs *BidiStream) SendMsg(m interface{}) error { return nil }
+func (bs *BidiStream) Context() context.Context { return bs.ctx }
+func (bs *BidiStream) RecvMsg(m any) error      { return nil }
+func (bs *BidiStream) SendMsg(m any) error      { return nil }
 
 // client methods
 

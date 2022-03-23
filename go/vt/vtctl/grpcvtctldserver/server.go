@@ -909,6 +909,51 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	return resp, err
 }
 
+// ExecuteFetchAsApp is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ExecuteFetchAsApp(ctx context.Context, req *vtctldatapb.ExecuteFetchAsAppRequest) (*vtctldatapb.ExecuteFetchAsAppResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ExecuteFetchAsApp")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("max_rows", req.MaxRows)
+	span.Annotate("use_pool", req.UsePool)
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	qr, err := s.tmc.ExecuteFetchAsApp(ctx, ti.Tablet, req.UsePool, []byte(req.Query), int(req.MaxRows))
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ExecuteFetchAsAppResponse{Result: qr}, nil
+}
+
+// ExecuteFetchAsDBA is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ExecuteFetchAsDBA(ctx context.Context, req *vtctldatapb.ExecuteFetchAsDBARequest) (*vtctldatapb.ExecuteFetchAsDBAResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ExecuteFetchAsDBA")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("max_rows", req.MaxRows)
+	span.Annotate("disable_binlogs", req.DisableBinlogs)
+	span.Annotate("reload_schema", req.ReloadSchema)
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	qr, err := s.tmc.ExecuteFetchAsDba(ctx, ti.Tablet, false, []byte(req.Query), int(req.MaxRows), req.DisableBinlogs, req.ReloadSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ExecuteFetchAsDBAResponse{Result: qr}, nil
+}
+
 // ExecuteHook is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ExecuteHook(ctx context.Context, req *vtctldatapb.ExecuteHookRequest) (*vtctldatapb.ExecuteHookResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ExecuteHook")
@@ -2538,6 +2583,46 @@ func (s *VtctldServer) SetWritable(ctx context.Context, req *vtctldatapb.SetWrit
 	return &vtctldatapb.SetWritableResponse{}, nil
 }
 
+// ShardReplicationAdd is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ShardReplicationAdd(ctx context.Context, req *vtctldatapb.ShardReplicationAddRequest) (*vtctldatapb.ShardReplicationAddResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ShardReplicationAdd")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+
+	if err := topo.UpdateShardReplicationRecord(ctx, s.ts, req.Keyspace, req.Shard, req.TabletAlias); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ShardReplicationAddResponse{}, nil
+}
+
+// ShardReplicationFix is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ShardReplicationFix(ctx context.Context, req *vtctldatapb.ShardReplicationFixRequest) (*vtctldatapb.ShardReplicationFixResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ShardReplicationFix")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("cell", req.Cell)
+
+	problem, err := topo.FixShardReplication(ctx, s.ts, logutil.NewConsoleLogger(), req.Cell, req.Keyspace, req.Shard)
+	if err != nil {
+		return nil, err
+	}
+
+	if problem != nil {
+		span.Annotate("problem_tablet", topoproto.TabletAliasString(problem.TabletAlias))
+		span.Annotate("problem_type", strings.ToLower(topoproto.ShardReplicationErrorTypeString(problem.Type)))
+	}
+
+	return &vtctldatapb.ShardReplicationFixResponse{
+		Error: problem,
+	}, nil
+}
+
 // ShardReplicationPositions is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctldatapb.ShardReplicationPositionsRequest) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ShardReplicationPositions")
@@ -2665,6 +2750,22 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 	}, nil
 }
 
+// ShardReplicationRemove is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ShardReplicationRemove(ctx context.Context, req *vtctldatapb.ShardReplicationRemoveRequest) (*vtctldatapb.ShardReplicationRemoveResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ShardReplicationRemove")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+
+	if err := topo.RemoveShardReplicationRecord(ctx, s.ts, req.TabletAlias.Cell, req.Keyspace, req.Shard, req.TabletAlias); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ShardReplicationRemoveResponse{}, nil
+}
+
 // SleepTablet is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) SleepTablet(ctx context.Context, req *vtctldatapb.SleepTabletRequest) (*vtctldatapb.SleepTabletResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.SleepTablet")
@@ -2692,6 +2793,113 @@ func (s *VtctldServer) SleepTablet(ctx context.Context, req *vtctldatapb.SleepTa
 	}
 
 	return &vtctldatapb.SleepTabletResponse{}, nil
+}
+
+// SourceShardAdd is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SourceShardAdd(ctx context.Context, req *vtctldatapb.SourceShardAddRequest) (*vtctldatapb.SourceShardAddResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SourceShardAdd")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("uid", req.Uid)
+	span.Annotate("source_keyspace", req.SourceKeyspace)
+	span.Annotate("source_shard", req.SourceShard)
+	span.Annotate("keyrange", key.KeyRangeString(req.KeyRange))
+	span.Annotate("tables", strings.Join(req.Tables, ","))
+
+	var (
+		si  *topo.ShardInfo
+		err error
+	)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, fmt.Sprintf("SourceShardAdd(%v)", req.Uid))
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock(&err)
+
+	si, err = s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
+		for _, ss := range si.SourceShards {
+			if ss.Uid == req.Uid {
+				return fmt.Errorf("%w: uid %v is already in use", topo.NewError(topo.NoUpdateNeeded, fmt.Sprintf("%s/%s", req.Keyspace, req.Shard)), req.Uid)
+			}
+		}
+
+		si.SourceShards = append(si.SourceShards, &topodatapb.Shard_SourceShard{
+			Keyspace: req.SourceKeyspace,
+			Shard:    req.SourceShard,
+			Uid:      req.Uid,
+			KeyRange: req.KeyRange,
+			Tables:   req.Tables,
+		})
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.SourceShardAddResponse{}
+	switch si {
+	case nil:
+		// If we return NoUpdateNeeded from ts.UpdateShardFields, then we don't
+		// get a ShardInfo back.
+	default:
+		resp.Shard = si.Shard
+	}
+
+	return resp, err
+}
+
+// SourceShardDelete is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SourceShardDelete(ctx context.Context, req *vtctldatapb.SourceShardDeleteRequest) (*vtctldatapb.SourceShardDeleteResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SourceShardDelete")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("uid", req.Uid)
+
+	var (
+		si  *topo.ShardInfo
+		err error
+	)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, fmt.Sprintf("SourceShardDelete(%v)", req.Uid))
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock(&err)
+
+	si, err = s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
+		var newSourceShards []*topodatapb.Shard_SourceShard
+		for _, ss := range si.SourceShards {
+			if ss.Uid != req.Uid {
+				newSourceShards = append(newSourceShards, ss)
+			}
+		}
+
+		if len(newSourceShards) == len(si.SourceShards) {
+			return fmt.Errorf("%w: no SourceShard with uid %v", topo.NewError(topo.NoUpdateNeeded, fmt.Sprintf("%s/%s", req.Keyspace, req.Shard)), req.Uid)
+		}
+
+		si.SourceShards = newSourceShards
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.SourceShardDeleteResponse{}
+	switch si {
+	case nil:
+		// If we return NoUpdateNeeded from ts.UpdateShardFields, then we don't
+		// get a ShardInfo back.
+	default:
+		resp.Shard = si.Shard
+	}
+
+	return resp, err
 }
 
 // StartReplication is part of the vtctldservicepb.VtctldServer interface.

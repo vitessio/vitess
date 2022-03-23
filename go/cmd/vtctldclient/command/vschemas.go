@@ -32,17 +32,19 @@ import (
 var (
 	// GetVSchema makes a GetVSchema gRPC call to a vtctld.
 	GetVSchema = &cobra.Command{
-		Use:  "GetVSchema keyspace",
-		Args: cobra.ExactArgs(1),
-		RunE: commandGetVSchema,
+		Use:                   "GetVSchema <keyspace>",
+		Short:                 "Prints a JSON representation of a keyspace's topo record.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetVSchema,
 	}
 	// ApplyVSchema makes an ApplyVSchema gRPC call to a vtctld.
 	ApplyVSchema = &cobra.Command{
-		Use:                   "ApplyVSchema {-vschema=<vschema> || -vschema-file=<vschema file> || -sql=<sql> || -sql-file=<sql file>} [-cells=c1,c2,...] [-skip-rebuild] [-dry-run] <keyspace>",
-		Args:                  cobra.ExactArgs(1),
-		DisableFlagsInUseLine: true,
-		RunE:                  commandApplyVSchema,
+		Use:                   "ApplyVSchema {--vschema=<vschema> || --vschema-file=<vschema file> || --sql=<sql> || --sql-file=<sql file>} [--cells=c1,c2,...] [--skip-rebuild] [--dry-run] <keyspace>",
 		Short:                 "Applies the VTGate routing schema to the provided keyspace. Shows the result after application.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandApplyVSchema,
 	}
 )
 
@@ -97,12 +99,12 @@ func commandApplyVSchema(cmd *cobra.Command, args []string) error {
 			schema = []byte(applyVSchemaOptions.VSchema)
 		}
 
-		var vs *vschemapb.Keyspace
-		err = json2.Unmarshal(schema, vs)
+		var vs vschemapb.Keyspace
+		err = json2.Unmarshal(schema, &vs)
 		if err != nil {
 			return err
 		}
-		req.VSchema = vs
+		req.VSchema = &vs
 	}
 
 	cli.FinishedParsing(cmd)

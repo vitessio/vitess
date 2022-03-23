@@ -42,7 +42,7 @@ func (v *AlterVSchema) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "AlterVSchema",
 		Keyspace:     v.Keyspace,
-		Other: map[string]interface{}{
+		Other: map[string]any{
 			"query": sqlparser.String(v.AlterVschemaDDL),
 		},
 	}

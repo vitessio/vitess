@@ -35,7 +35,7 @@ var versionFlagSync sync.Once
 
 // parserPool is a pool for parser objects.
 var parserPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return &yyParserImpl{}
 	},
 }

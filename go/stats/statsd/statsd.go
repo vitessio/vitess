@@ -174,7 +174,7 @@ func (sb StatsBackend) addExpVar(kv expvar.KeyValue) {
 	case expvar.Func:
 		// Export memstats as gauge so that we don't need to call extra ReadMemStats
 		if k == "memstats" {
-			var obj map[string]interface{}
+			var obj map[string]any
 			if err := json.Unmarshal([]byte(v.String()), &obj); err != nil {
 				return
 			}

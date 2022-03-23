@@ -168,7 +168,7 @@ func (prof *profile) mkprofile() io.WriteCloser {
 	var (
 		path string
 		err  error
-		logf = func(format string, args ...interface{}) {}
+		logf = func(format string, args ...any) {}
 	)
 
 	if prof.path != "" {

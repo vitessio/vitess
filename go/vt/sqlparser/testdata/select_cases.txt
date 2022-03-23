@@ -5551,8 +5551,8 @@ END
 INPUT
 select vq1.b,dt.b from v1 vq1, lateral (select vq1.b) dt;
 END
-ERROR
-syntax error at position 41
+OUTPUT
+select vq1.b, dt.b from v1 as vq1, lateral (select vq1.b from dual) as dt
 END
 INPUT
 select right('hello', -1);
@@ -6253,8 +6253,8 @@ END
 INPUT
 select t1.a, f from t1, lateral (select max(t1.a) as f) as dt;
 END
-ERROR
-syntax error at position 34
+OUTPUT
+select t1.a, f from t1, lateral (select max(t1.a) as f from dual) as dt
 END
 INPUT
 select 2 -9223372036854775808 as result;
@@ -6427,8 +6427,8 @@ END
 INPUT
 select t1.a, dt.a from t1, lateral (select t2.a as a from t2 having t1.a) dt;
 END
-ERROR
-syntax error at position 37
+OUTPUT
+select t1.a, dt.a from t1, lateral (select t2.a as a from t2 having t1.a) as dt
 END
 INPUT
 select distinct t1.project_id as project_id, t1.project_name as project_name, t1.client_ptr as client_ptr, t1.comments as comments, sum( t3.amount_received ) + sum( t3.adjustment ) as total_budget from t2 as client_period , t2 as project_period, t3 left join t1 on (t3.project_ptr = t1.project_id and t3.date_received <= '2001-03-22 14:15:09') left join t4 on t4.client_id = t1.client_ptr where 1 and ( client_period.period_type = 'client_table' and client_period.period_key = t4.client_id and ( client_period.start_date <= '2001-03-22 14:15:09' or isnull( client_period.start_date )) and ( client_period.end_date > '2001-03-21 14:15:09' or isnull( client_period.end_date )) ) and ( project_period.period_type = 'project_table' and project_period.period_key = t1.project_id and ( project_period.start_date <= '2001-03-22 14:15:09' or isnull( project_period.start_date )) and ( project_period.end_date > '2001-03-21 14:15:09' or isnull( project_period.end_date )) ) group by client_id, project_id , client_period.period_id , project_period.period_id order by client_name asc, project_name asc;
@@ -9685,8 +9685,8 @@ END
 INPUT
 select b from v1 vq1, lateral (select count(*) from v1 vq2 having vq1.b = 3) dt;
 END
-ERROR
-syntax error at position 32
+OUTPUT
+select b from v1 as vq1, lateral (select count(*) from v1 as vq2 having vq1.b = 3) as dt
 END
 INPUT
 select from t1 where not a between 2 and 3;
@@ -16309,8 +16309,8 @@ END
 INPUT
 select t1.a, dt.a from t1, lateral (select t1.a+t2.a as a from t2) dt;
 END
-ERROR
-syntax error at position 37
+OUTPUT
+select t1.a, dt.a from t1, lateral (select t1.a + t2.a as a from t2) as dt
 END
 INPUT
 select sum(qty) as sqty from t1 group by id having count(id) > 0;
@@ -16681,8 +16681,8 @@ END
 INPUT
 select (select f from lateral (select max(t1.a) as f) as dt) as g from t1;
 END
-ERROR
-syntax error at position 32
+OUTPUT
+select (select f from lateral (select max(t1.a) as f from dual) as dt) as g from t1
 END
 INPUT
 select _latin1'1'=1;

@@ -205,7 +205,7 @@ func NewIntegral(val string) (n Value, err error) {
 // string and []byte.
 // This function is deprecated. Use the type-specific
 // functions instead.
-func InterfaceToValue(goval interface{}) (Value, error) {
+func InterfaceToValue(goval any) (Value, error) {
 	switch goval := goval.(type) {
 	case nil:
 		return NULL, nil
@@ -458,7 +458,7 @@ func (v *Value) UnmarshalJSON(b []byte) error {
 	if len(b) == 0 {
 		return fmt.Errorf("error unmarshaling empty bytes")
 	}
-	var val interface{}
+	var val any
 	var err error
 	switch b[0] {
 	case '-':

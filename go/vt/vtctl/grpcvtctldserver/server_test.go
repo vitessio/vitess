@@ -3517,6 +3517,258 @@ func TestEmergencyReparentShard(t *testing.T) {
 	}
 }
 
+func TestExecuteFetchAsApp(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		tablet    *topodatapb.Tablet
+		tmc       *testutil.TabletManagerClient
+		req       *vtctldatapb.ExecuteFetchAsAppRequest
+		expected  *vtctldatapb.ExecuteFetchAsAppResponse
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ExecuteFetchAsAppResults: map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: &querypb.QueryResult{
+							InsertId: 100,
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.ExecuteFetchAsAppRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Query: "select 1;",
+			},
+			expected: &vtctldatapb.ExecuteFetchAsAppResponse{
+				Result: &querypb.QueryResult{
+					InsertId: 100,
+				},
+			},
+		},
+		{
+			name: "tablet not found",
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ExecuteFetchAsAppResults: map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: &querypb.QueryResult{
+							InsertId: 100,
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.ExecuteFetchAsAppRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  404,
+				},
+				Query: "select 1;",
+			},
+			shouldErr: true,
+		},
+		{
+			name: "query error",
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ExecuteFetchAsAppResults: map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: assert.AnError,
+					},
+				},
+			},
+			req: &vtctldatapb.ExecuteFetchAsAppRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Query: "select 1;",
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			ts := memorytopo.NewServer("zone1")
+			testutil.AddTablet(ctx, t, ts, tt.tablet, nil)
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			resp, err := vtctld.ExecuteFetchAsApp(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestExecuteFetchAsDBA(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		tablet    *topodatapb.Tablet
+		tmc       *testutil.TabletManagerClient
+		req       *vtctldatapb.ExecuteFetchAsDBARequest
+		expected  *vtctldatapb.ExecuteFetchAsDBAResponse
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ExecuteFetchAsDbaResults: map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: &querypb.QueryResult{
+							InsertId: 100,
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.ExecuteFetchAsDBARequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Query: "select 1;",
+			},
+			expected: &vtctldatapb.ExecuteFetchAsDBAResponse{
+				Result: &querypb.QueryResult{
+					InsertId: 100,
+				},
+			},
+		},
+		{
+			name: "tablet not found",
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ExecuteFetchAsDbaResults: map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: &querypb.QueryResult{
+							InsertId: 100,
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.ExecuteFetchAsDBARequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  404,
+				},
+				Query: "select 1;",
+			},
+			shouldErr: true,
+		},
+		{
+			name: "query error",
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ExecuteFetchAsDbaResults: map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: assert.AnError,
+					},
+				},
+			},
+			req: &vtctldatapb.ExecuteFetchAsDBARequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Query: "select 1;",
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			ts := memorytopo.NewServer("zone1")
+			testutil.AddTablet(ctx, t, ts, tt.tablet, nil)
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			resp, err := vtctld.ExecuteFetchAsDBA(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
 func TestExecuteHook(t *testing.T) {
 	t.Parallel()
 
@@ -8699,6 +8951,60 @@ func TestSetWritable(t *testing.T) {
 	}
 }
 
+func TestShardReplicationAdd(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ts := memorytopo.NewServer("zone1")
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	tablets := []*topodatapb.Tablet{
+		{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			Keyspace: "ks",
+			Shard:    "-",
+		},
+		{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			Keyspace: "ks",
+			Shard:    "-",
+		},
+	}
+	testutil.AddTablets(ctx, t, ts, nil, tablets...)
+
+	_, err := vtctld.ShardReplicationAdd(ctx, &vtctldatapb.ShardReplicationAddRequest{
+		Keyspace: "ks",
+		Shard:    "-",
+		TabletAlias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  404,
+		},
+	})
+	assert.NoError(t, err)
+
+	resp, err := vtctld.ShardReplicationFix(ctx, &vtctldatapb.ShardReplicationFixRequest{
+		Keyspace: "ks",
+		Shard:    "-",
+		Cell:     "zone1",
+	})
+	require.NoError(t, err, "ShardReplicationFix failed")
+	utils.MustMatch(t, &topodatapb.ShardReplicationError{
+		TabletAlias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  404,
+		},
+		Type: topodatapb.ShardReplicationError_NOT_FOUND,
+	}, resp.Error)
+}
+
 func TestShardReplicationPositions(t *testing.T) {
 	t.Parallel()
 
@@ -8968,6 +9274,340 @@ func TestShardReplicationPositions(t *testing.T) {
 
 			assert.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestShardReplicationRemove(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ts := memorytopo.NewServer("zone1")
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	tablets := []*topodatapb.Tablet{
+		{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			Keyspace: "ks",
+			Shard:    "-",
+		},
+		{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			Keyspace: "ks",
+			Shard:    "-",
+		},
+	}
+	testutil.AddTablets(ctx, t, ts, nil, tablets...)
+
+	_, err := vtctld.ShardReplicationRemove(ctx, &vtctldatapb.ShardReplicationRemoveRequest{
+		Keyspace: "ks",
+		Shard:    "-",
+		TabletAlias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  101,
+		},
+	})
+	assert.NoError(t, err)
+
+	sri, err := ts.GetShardReplication(ctx, "zone1", "ks", "-")
+	require.NoError(t, err, "GetShardReplication failed")
+
+	utils.MustMatch(t, sri.Nodes, []*topodatapb.ShardReplication_Node{{
+		TabletAlias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+	}})
+}
+
+func TestSourceShardAdd(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		shards       []*vtctldatapb.Shard
+		topoIsLocked bool
+		req          *vtctldatapb.SourceShardAddRequest
+		expected     *vtctldatapb.SourceShardAddResponse
+		shouldErr    bool
+		assertion    func(ctx context.Context, t *testing.T, ts *topo.Server)
+	}{
+		{
+			name: "ok",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "ks",
+					Name:     "-",
+				},
+			},
+			req: &vtctldatapb.SourceShardAddRequest{
+				Keyspace:       "ks",
+				Shard:          "-",
+				Uid:            1,
+				SourceKeyspace: "otherks",
+				SourceShard:    "-80",
+			},
+			expected: &vtctldatapb.SourceShardAddResponse{
+				Shard: &topodatapb.Shard{
+					IsPrimaryServing: true,
+					KeyRange:         &topodatapb.KeyRange{},
+					SourceShards: []*topodatapb.Shard_SourceShard{
+						{
+							Uid:      1,
+							Keyspace: "otherks",
+							Shard:    "-80",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "uid already used",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "ks",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						SourceShards: []*topodatapb.Shard_SourceShard{
+							{
+								Uid:      1,
+								Keyspace: "otherks",
+								Shard:    "-80",
+							},
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.SourceShardAddRequest{
+				Keyspace:       "ks",
+				Shard:          "-",
+				Uid:            1,
+				SourceKeyspace: "otherks",
+				SourceShard:    "80-",
+			},
+			expected: &vtctldatapb.SourceShardAddResponse{},
+			assertion: func(ctx context.Context, t *testing.T, ts *topo.Server) {
+				si, err := ts.GetShard(ctx, "ks", "-")
+				require.NoError(t, err, "failed to get shard ks/-")
+				utils.MustMatch(t, []*topodatapb.Shard_SourceShard{
+					{
+						Uid:      1,
+						Keyspace: "otherks",
+						Shard:    "-80",
+					},
+				}, si.SourceShards, "SourceShards should not have changed")
+			},
+		},
+		{
+			name: "cannot lock keyspace",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "ks",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						SourceShards: []*topodatapb.Shard_SourceShard{
+							{
+								Uid:      1,
+								Keyspace: "otherks",
+								Shard:    "-80",
+							},
+						},
+					},
+				},
+			},
+			topoIsLocked: true,
+			req: &vtctldatapb.SourceShardAddRequest{
+				Keyspace:       "ks",
+				Shard:          "-",
+				Uid:            1,
+				SourceKeyspace: "otherks",
+				SourceShard:    "80-",
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			ts := memorytopo.NewServer("zone1")
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+
+			testutil.AddShards(ctx, t, ts, tt.shards...)
+			if tt.topoIsLocked {
+				lctx, unlock, lerr := ts.LockKeyspace(ctx, tt.req.Keyspace, "test lock")
+				require.NoError(t, lerr, "failed to lock %s for test setup", tt.req.Keyspace)
+
+				defer func() {
+					var err error
+					unlock(&err)
+					assert.NoError(t, err, "failed to unlock %s after test", tt.req.Keyspace)
+				}()
+
+				ctx = lctx
+			}
+
+			resp, err := vtctld.SourceShardAdd(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+			if tt.assertion != nil {
+				func() {
+					t.Helper()
+					tt.assertion(ctx, t, ts)
+				}()
+			}
+		})
+	}
+}
+
+func TestSourceShardDelete(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		shards       []*vtctldatapb.Shard
+		topoIsLocked bool
+		req          *vtctldatapb.SourceShardDeleteRequest
+		expected     *vtctldatapb.SourceShardDeleteResponse
+		shouldErr    bool
+		assertion    func(ctx context.Context, t *testing.T, ts *topo.Server)
+	}{
+		{
+			name: "ok",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "ks",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						SourceShards: []*topodatapb.Shard_SourceShard{
+							{
+								Uid:      1,
+								Keyspace: "otherks",
+								Shard:    "-80",
+							},
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.SourceShardDeleteRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+				Uid:      1,
+			},
+			expected: &vtctldatapb.SourceShardDeleteResponse{
+				Shard: &topodatapb.Shard{},
+			},
+		},
+		{
+			name: "no SourceShard with uid",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "ks",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						SourceShards: []*topodatapb.Shard_SourceShard{
+							{
+								Uid:      1,
+								Keyspace: "otherks",
+								Shard:    "-80",
+							},
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.SourceShardDeleteRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+				Uid:      2,
+			},
+			expected: &vtctldatapb.SourceShardDeleteResponse{},
+			assertion: func(ctx context.Context, t *testing.T, ts *topo.Server) {
+				si, err := ts.GetShard(ctx, "ks", "-")
+				require.NoError(t, err, "failed to get shard ks/-")
+				utils.MustMatch(t, []*topodatapb.Shard_SourceShard{
+					{
+						Uid:      1,
+						Keyspace: "otherks",
+						Shard:    "-80",
+					},
+				}, si.SourceShards, "SourceShards should not have changed")
+			},
+		},
+		{
+			name: "cannot lock keyspace",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "ks",
+					Name:     "-",
+				},
+			},
+			topoIsLocked: true,
+			req: &vtctldatapb.SourceShardDeleteRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+				Uid:      1,
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			ts := memorytopo.NewServer("zone1")
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+
+			testutil.AddShards(ctx, t, ts, tt.shards...)
+			if tt.topoIsLocked {
+				lctx, unlock, lerr := ts.LockKeyspace(ctx, tt.req.Keyspace, "test lock")
+				require.NoError(t, lerr, "failed to lock %s for test setup", tt.req.Keyspace)
+
+				defer func() {
+					var err error
+					unlock(&err)
+					assert.NoError(t, err, "failed to unlock %s after test", tt.req.Keyspace)
+				}()
+
+				ctx = lctx
+			}
+
+			resp, err := vtctld.SourceShardDelete(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+			if tt.assertion != nil {
+				func() {
+					t.Helper()
+					tt.assertion(ctx, t, ts)
+				}()
+			}
 		})
 	}
 }

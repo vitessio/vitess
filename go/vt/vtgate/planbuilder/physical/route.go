@@ -64,7 +64,7 @@ type (
 		Ready  bool
 		Values []evalengine.Expr
 		// columns that we have seen so far. Used only for multi-column vindexes so that we can track how many columns part of the vindex we have seen
-		ColsSeen    map[string]interface{}
+		ColsSeen    map[string]any
 		ValueExprs  []sqlparser.Expr
 		Predicates  []sqlparser.Expr
 		OpCode      engine.Opcode
@@ -370,13 +370,13 @@ func createOption(
 	return &VindexOption{
 		Values:      values,
 		Predicates:  predicates,
-		ColsSeen:    map[string]interface{}{},
+		ColsSeen:    map[string]any{},
 		FoundVindex: vindex,
 	}
 }
 
 func copyOption(orig *VindexOption) *VindexOption {
-	colsSeen := make(map[string]interface{}, len(orig.ColsSeen))
+	colsSeen := make(map[string]any, len(orig.ColsSeen))
 	valueExprs := make([]sqlparser.Expr, len(orig.ValueExprs))
 	values := make([]evalengine.Expr, len(orig.Values))
 	predicates := make([]sqlparser.Expr, len(orig.Predicates))

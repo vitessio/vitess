@@ -37,7 +37,7 @@ type vtprotoMessage interface {
 	UnmarshalVT([]byte) error
 }
 
-func (vtprotoCodec) Marshal(v interface{}) ([]byte, error) {
+func (vtprotoCodec) Marshal(v any) ([]byte, error) {
 	vt, ok := v.(vtprotoMessage)
 	if ok {
 		return vt.MarshalVT()
@@ -50,7 +50,7 @@ func (vtprotoCodec) Marshal(v interface{}) ([]byte, error) {
 	return proto.Marshal(vv)
 }
 
-func (vtprotoCodec) Unmarshal(data []byte, v interface{}) error {
+func (vtprotoCodec) Unmarshal(data []byte, v any) error {
 	vt, ok := v.(vtprotoMessage)
 	if ok {
 		return vt.UnmarshalVT(data)

@@ -111,7 +111,7 @@ func ClearActiveFailureDetections() error {
 
 // clearAcknowledgedFailureDetections clears the "in_active_period" flag for detections
 // that were acknowledged
-func clearAcknowledgedFailureDetections(whereClause string, args []interface{}) error {
+func clearAcknowledgedFailureDetections(whereClause string, args []any) error {
 	query := fmt.Sprintf(`
 			update topology_failure_detection set
 				in_active_period = 0,
@@ -354,7 +354,7 @@ func ExpireBlockedRecoveries() error {
 }
 
 // acknowledgeRecoveries sets acknowledged* details and clears the in_active_period flags from a set of entries
-func acknowledgeRecoveries(owner string, comment string, markEndRecovery bool, whereClause string, args []interface{}) (countAcknowledgedEntries int64, err error) {
+func acknowledgeRecoveries(owner string, comment string, markEndRecovery bool, whereClause string, args []any) (countAcknowledgedEntries int64, err error) {
 	additionalSet := ``
 	if markEndRecovery {
 		additionalSet = `
@@ -496,7 +496,7 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 }
 
 // readRecoveries reads recovery entry/audit entries from topology_recovery
-func readRecoveries(whereCondition string, limit string, args []interface{}) ([]*TopologyRecovery, error) {
+func readRecoveries(whereCondition string, limit string, args []any) ([]*TopologyRecovery, error) {
 	res := []*TopologyRecovery{}
 	query := fmt.Sprintf(`
 		select
@@ -684,7 +684,7 @@ func ReadRecentRecoveries(clusterName string, clusterAlias string, unacknowledge
 }
 
 // readRecoveries reads recovery entry/audit entries from topology_recovery
-func readFailureDetections(whereCondition string, limit string, args []interface{}) ([]*TopologyRecovery, error) {
+func readFailureDetections(whereCondition string, limit string, args []any) ([]*TopologyRecovery, error) {
 	res := []*TopologyRecovery{}
 	query := fmt.Sprintf(`
 		select

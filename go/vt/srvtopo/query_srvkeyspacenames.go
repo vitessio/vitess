@@ -29,7 +29,7 @@ type SrvKeyspaceNamesQuery struct {
 }
 
 func NewSrvKeyspaceNamesQuery(topoServer *topo.Server, counts *stats.CountersWithSingleLabel, cacheRefresh, cacheTTL time.Duration) *SrvKeyspaceNamesQuery {
-	query := func(ctx context.Context, entry *queryEntry) (interface{}, error) {
+	query := func(ctx context.Context, entry *queryEntry) (any, error) {
 		cell := entry.key.(cellName)
 		return topoServer.GetSrvKeyspaceNames(ctx, string(cell))
 	}

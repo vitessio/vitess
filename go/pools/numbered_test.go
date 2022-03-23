@@ -36,7 +36,7 @@ func TestNumberedGeneral(t *testing.T) {
 	err = p.Register(id, id, true)
 	assert.Contains(t, "already present", err.Error())
 
-	var v interface{}
+	var v any
 	v, err = p.Get(id, "test")
 	require.NoError(t, err)
 	assert.Equal(t, id, v.(int64))
@@ -112,10 +112,10 @@ func TestNumberedGetByFilter(t *testing.T) {
 	p.Register(3, 3, true)
 	p.Get(1, "locked")
 
-	vals := p.GetByFilter("filtered", func(v interface{}) bool {
+	vals := p.GetByFilter("filtered", func(v any) bool {
 		return v.(int) <= 2
 	})
-	want := []interface{}{2}
+	want := []any{2}
 	assert.Equal(t, want, vals)
 }
 

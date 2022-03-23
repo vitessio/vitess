@@ -469,21 +469,21 @@ func checkStats(t *testing.T) {
 	resultMap, err := clusterInstance.VtgateProcess.GetVars()
 	require.NoError(t, err)
 	resultVtTabletCall := resultMap["VttabletCall"]
-	resultVtTabletCallMap := resultVtTabletCall.(map[string]interface{})
+	resultVtTabletCallMap := resultVtTabletCall.(map[string]any)
 	resultHistograms := resultVtTabletCallMap["Histograms"]
-	resultHistogramsMap := resultHistograms.(map[string]interface{})
+	resultHistogramsMap := resultHistograms.(map[string]any)
 	resultTablet := resultHistogramsMap["Execute.source_keyspace.0.replica"]
-	resultTableMap := resultTablet.(map[string]interface{})
+	resultTableMap := resultTablet.(map[string]any)
 	resultCountStr := fmt.Sprintf("%v", reflect.ValueOf(resultTableMap["Count"]))
 	assert.Equal(t, "2", resultCountStr, fmt.Sprintf("unexpected value for VttabletCall(Execute.source_keyspace.0.replica) inside %s", resultCountStr))
 
 	// Verify primary reads done by self._check_client_conn_redirection().
 	resultVtgateAPI := resultMap["VtgateApi"]
-	resultVtgateAPIMap := resultVtgateAPI.(map[string]interface{})
+	resultVtgateAPIMap := resultVtgateAPI.(map[string]any)
 	resultAPIHistograms := resultVtgateAPIMap["Histograms"]
-	resultAPIHistogramsMap := resultAPIHistograms.(map[string]interface{})
+	resultAPIHistogramsMap := resultAPIHistograms.(map[string]any)
 	resultTabletDestination := resultAPIHistogramsMap["Execute.destination_keyspace.primary"]
-	resultTabletDestinationMap := resultTabletDestination.(map[string]interface{})
+	resultTabletDestinationMap := resultTabletDestination.(map[string]any)
 	resultCountStrDestination := fmt.Sprintf("%v", reflect.ValueOf(resultTabletDestinationMap["Count"]))
 	assert.Equal(t, "6", resultCountStrDestination, fmt.Sprintf("unexpected value for VtgateApi(Execute.destination_keyspace.primary) inside %s)", resultCountStrDestination))
 

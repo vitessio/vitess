@@ -28,8 +28,9 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/sharding"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -44,15 +45,15 @@ var (
 	dbCredentialFile string
 	vtgateInstances  []*cluster.VtgateProcess
 	commonTabletArg  = []string{
-		"-vreplication_healthcheck_topology_refresh", "1s",
-		"-vreplication_healthcheck_retry_delay", "1s",
-		"-vreplication_retry_delay", "1s",
-		"-degraded_threshold", "5s",
-		"-lock_tables_timeout", "5s",
-		"-watch_replication_stream",
-		"-enable_replication_reporter",
-		"-serving_state_grace_period", "1s",
-		"-binlog_use_v3_resharding_mode=true"}
+		"--vreplication_healthcheck_topology_refresh", "1s",
+		"--vreplication_healthcheck_retry_delay", "1s",
+		"--vreplication_retry_delay", "1s",
+		"--degraded_threshold", "5s",
+		"--lock_tables_timeout", "5s",
+		"--watch_replication_stream",
+		"--enable_replication_reporter",
+		"--serving_state_grace_period", "1s",
+		"--binlog_use_v3_resharding_mode=true"}
 	createTabletTemplate = `
 							create table %s(
 							msg varchar(64),
@@ -387,10 +388,10 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	}
 
 	// Check srv keyspace
-	expectedPartitions := map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard1.Name}
-	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard1.Name}
-	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard1.Name}
+	expectedPartitions := map[topodatapb.TabletType][]string{}
+	expectedPartitions[topodatapb.TabletType_PRIMARY] = []string{shard1.Name}
+	expectedPartitions[topodatapb.TabletType_REPLICA] = []string{shard1.Name}
+	expectedPartitions[topodatapb.TabletType_RDONLY] = []string{shard1.Name}
 	checkSrvKeyspaceForSharding(t, keyspaceName, expectedPartitions)
 
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard", "--",
@@ -522,10 +523,10 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	// now serve rdonly from the split shards
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "rdonly")
 	require.NoError(t, err)
-	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard1.Name}
-	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard1.Name}
-	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard21.Name, shard22.Name}
+	expectedPartitions = map[topodatapb.TabletType][]string{}
+	expectedPartitions[topodatapb.TabletType_PRIMARY] = []string{shard1.Name}
+	expectedPartitions[topodatapb.TabletType_REPLICA] = []string{shard1.Name}
+	expectedPartitions[topodatapb.TabletType_RDONLY] = []string{shard21.Name, shard22.Name}
 	checkSrvKeyspaceForSharding(t, keyspaceName, expectedPartitions)
 
 	_ = shard21.Rdonly().VttabletProcess.WaitForTabletStatus("SERVING")
@@ -540,10 +541,10 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	destinationTablets := []cluster.Vttablet{*shard21.Replica(), *shard22.Replica()}
 
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "replica")
-	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard1.Name}
-	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard21.Name, shard22.Name}
-	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard21.Name, shard22.Name}
+	expectedPartitions = map[topodatapb.TabletType][]string{}
+	expectedPartitions[topodatapb.TabletType_PRIMARY] = []string{shard1.Name}
+	expectedPartitions[topodatapb.TabletType_REPLICA] = []string{shard21.Name, shard22.Name}
+	expectedPartitions[topodatapb.TabletType_RDONLY] = []string{shard21.Name, shard22.Name}
 	checkSrvKeyspaceForSharding(t, keyspaceName, expectedPartitions)
 
 	//move replica back and forth
@@ -553,10 +554,10 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	sharding.CheckTabletQueryService(t, *sourceTablet, "SERVING", false, *ClusterInstance)
 	sharding.CheckTabletQueryServices(t, destinationTablets, "NOT_SERVING", true, *ClusterInstance)
 
-	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard1.Name}
-	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard1.Name}
-	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard21.Name, shard22.Name}
+	expectedPartitions = map[topodatapb.TabletType][]string{}
+	expectedPartitions[topodatapb.TabletType_PRIMARY] = []string{shard1.Name}
+	expectedPartitions[topodatapb.TabletType_REPLICA] = []string{shard1.Name}
+	expectedPartitions[topodatapb.TabletType_RDONLY] = []string{shard21.Name, shard22.Name}
 	checkSrvKeyspaceForSharding(t, keyspaceName, expectedPartitions)
 
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "replica")
@@ -564,18 +565,18 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	// After a forwards migration, queryservice should be disabled on source and enabled on destinations
 	sharding.CheckTabletQueryService(t, *sourceTablet, "NOT_SERVING", true, *ClusterInstance)
 	sharding.CheckTabletQueryServices(t, destinationTablets, "SERVING", false, *ClusterInstance)
-	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard1.Name}
-	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard21.Name, shard22.Name}
-	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard21.Name, shard22.Name}
+	expectedPartitions = map[topodatapb.TabletType][]string{}
+	expectedPartitions[topodatapb.TabletType_PRIMARY] = []string{shard1.Name}
+	expectedPartitions[topodatapb.TabletType_REPLICA] = []string{shard21.Name, shard22.Name}
+	expectedPartitions[topodatapb.TabletType_RDONLY] = []string{shard21.Name, shard22.Name}
 	checkSrvKeyspaceForSharding(t, keyspaceName, expectedPartitions)
 
 	// then serve primary from the split shards
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "primary")
-	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard21.Name, shard22.Name}
-	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard21.Name, shard22.Name}
-	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard21.Name, shard22.Name}
+	expectedPartitions = map[topodatapb.TabletType][]string{}
+	expectedPartitions[topodatapb.TabletType_PRIMARY] = []string{shard21.Name, shard22.Name}
+	expectedPartitions[topodatapb.TabletType_REPLICA] = []string{shard21.Name, shard22.Name}
+	expectedPartitions[topodatapb.TabletType_RDONLY] = []string{shard21.Name, shard22.Name}
 	checkSrvKeyspaceForSharding(t, keyspaceName, expectedPartitions)
 
 	// check the binlog players are gone now
@@ -610,7 +611,7 @@ func KillTabletsInKeyspace(keyspace *cluster.Keyspace) {
 	}
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", shard1.Replica().Alias)
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", shard1.Rdonly().Alias)
-	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", shard1.PrimaryTablet().Alias)
+	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary", shard1.PrimaryTablet().Alias)
 
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspace.Name)
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteShard", keyspace.Name+"/"+shard1.Name)
@@ -625,7 +626,7 @@ func KillVtgateInstances() {
 	}
 }
 
-func checkSrvKeyspaceForSharding(t *testing.T, ksName string, expectedPartitions map[topodata.TabletType][]string) {
+func checkSrvKeyspaceForSharding(t *testing.T, ksName string, expectedPartitions map[topodatapb.TabletType][]string) {
 	sharding.CheckSrvKeyspace(t, cell, ksName, "", 0, expectedPartitions, *ClusterInstance)
 }
 

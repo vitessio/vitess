@@ -219,7 +219,7 @@ func checkLegacyWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	if err := ts.CreateTablet(context.Background(), tablet2); err != nil {
 		t.Fatalf("CreateTablet failed: %v", err)
 	}
-	if err := topo.FixShardReplication(context.Background(), ts, logger, "aa", "keyspace", "shard"); err != nil {
+	if _, err := topo.FixShardReplication(context.Background(), ts, logger, "aa", "keyspace", "shard"); err != nil {
 		t.Fatalf("FixShardReplication failed: %v", err)
 	}
 	tw.loadTablets()
@@ -291,7 +291,7 @@ func checkLegacyWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	if err := ts.DeleteTablet(context.Background(), tablet.Alias); err != nil {
 		t.Fatalf("DeleteTablet failed: %v", err)
 	}
-	if err := topo.FixShardReplication(context.Background(), ts, logger, "aa", "keyspace", "shard"); err != nil {
+	if _, err := topo.FixShardReplication(context.Background(), ts, logger, "aa", "keyspace", "shard"); err != nil {
 		t.Fatalf("FixShardReplication failed: %v", err)
 	}
 	tw.loadTablets()
@@ -316,7 +316,7 @@ func checkLegacyWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	if err := ts.DeleteTablet(context.Background(), tablet2.Alias); err != nil {
 		t.Fatalf("DeleteTablet failed: %v", err)
 	}
-	if err := topo.FixShardReplication(context.Background(), ts, logger, "aa", "keyspace", "shard"); err != nil {
+	if _, err := topo.FixShardReplication(context.Background(), ts, logger, "aa", "keyspace", "shard"); err != nil {
 		t.Fatalf("FixShardReplication failed: %v", err)
 	}
 	tw.loadTablets()

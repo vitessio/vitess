@@ -235,7 +235,7 @@ func (vf *VindexFunc) description() PrimitiveDescription {
 		fields[field.Name] = field.Type.String()
 	}
 
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Fields":  fields,
 		"Columns": vf.Cols,
 		"Value":   evalengine.FormatExpr(vf.Value),
