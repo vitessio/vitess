@@ -1592,7 +1592,8 @@ func EqualsRefOfDerivedTable(a, b *DerivedTable) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsSelectStatement(a.Select, b.Select)
+	return a.Lateral == b.Lateral &&
+		EqualsSelectStatement(a.Select, b.Select)
 }
 
 // EqualsRefOfDropColumn does deep equals between the two objects.

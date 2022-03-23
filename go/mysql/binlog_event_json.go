@@ -48,7 +48,7 @@ https://github.com/noplay/python-mysql-replication/blob/175df28cc8b536a68522ff9b
 //TODO remove once the json refactor is tested live
 var jsonDebug = false
 
-func jlog(tpl string, vals ...interface{}) {
+func jlog(tpl string, vals ...any) {
 	if !jsonDebug {
 		return
 	}

@@ -68,14 +68,14 @@ func commandPing(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, ar
 	return worker, nil
 }
 
-func interactivePing(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
+func interactivePing(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]any, error) {
 	if err := r.ParseForm(); err != nil {
 		return nil, nil, nil, vterrors.Wrap(err, "Cannot parse form")
 	}
 
 	message := r.FormValue("message")
 	if message == "" {
-		result := make(map[string]interface{})
+		result := make(map[string]any)
 		return nil, pingTemplate, result, nil
 	}
 

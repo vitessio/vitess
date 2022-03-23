@@ -88,7 +88,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	}
 
 	// make sure the HTML template works
-	funcs := map[string]interface{}{}
+	funcs := map[string]any{}
 	for k, v := range status.StatusFuncs {
 		funcs[k] = v
 	}

@@ -105,7 +105,7 @@ func TestMigrate(t *testing.T) {
 
 	t.Run("migrate from external cluster", func(t *testing.T) {
 		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "--", "--all", "--cells=extcell1",
-			"-source=ext1.rating", "create", ksWorkflow); err != nil {
+			"--source=ext1.rating", "create", ksWorkflow); err != nil {
 			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
 		}
 		time.Sleep(1 * time.Second) // wait for migrate to run
@@ -129,7 +129,7 @@ func TestMigrate(t *testing.T) {
 		execVtgateQuery(t, vtgateConn, "product", "drop table review,rating")
 
 		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "--", "--all", "--auto_start=false", "--cells=extcell1",
-			"-source=ext1.rating", "create", ksWorkflow); err != nil {
+			"--source=ext1.rating", "create", ksWorkflow); err != nil {
 			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
 		}
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1)

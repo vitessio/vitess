@@ -243,7 +243,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 	return buf.Bytes(), runErr
 }
 
-func (t *Test) logf(format string, v ...interface{}) {
+func (t *Test) logf(format string, v ...any) {
 	if *runCount > 1 {
 		log.Printf("%v.%v[%v/%v]: %v", t.flavor, t.name, t.runIndex+1, *runCount, fmt.Sprintf(format, v...))
 	} else {

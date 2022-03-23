@@ -98,17 +98,17 @@ func (gtid MariadbGTID) Flavor() string {
 }
 
 // SequenceDomain implements GTID.SequenceDomain().
-func (gtid MariadbGTID) SequenceDomain() interface{} {
+func (gtid MariadbGTID) SequenceDomain() any {
 	return gtid.Domain
 }
 
 // SourceServer implements GTID.SourceServer().
-func (gtid MariadbGTID) SourceServer() interface{} {
+func (gtid MariadbGTID) SourceServer() any {
 	return gtid.Server
 }
 
 // SequenceNumber implements GTID.SequenceNumber().
-func (gtid MariadbGTID) SequenceNumber() interface{} {
+func (gtid MariadbGTID) SequenceNumber() any {
 	return gtid.Sequence
 }
 

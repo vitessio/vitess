@@ -112,7 +112,7 @@ func TestMysql56GTIDFlavor(t *testing.T) {
 
 func TestMysql56SequenceDomain(t *testing.T) {
 	input := Mysql56GTID{}
-	if got, want := input.SequenceDomain(), interface{}(nil); got != want {
+	if got, want := input.SequenceDomain(), any(nil); got != want {
 		t.Errorf("%#v.SequenceDomain() = %#v, want %#v", input, got, want)
 	}
 }
@@ -121,7 +121,7 @@ func TestMysql56SourceServer(t *testing.T) {
 	input := Mysql56GTID{
 		Server: SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
 	}
-	want := interface{}(SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15})
+	want := any(SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15})
 	if got := input.SourceServer(); got != want {
 		t.Errorf("%#v.SourceServer() = %#v, want %#v", input, got, want)
 	}
@@ -132,7 +132,7 @@ func TestMysql56SequenceNumber(t *testing.T) {
 		Server:   SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
 		Sequence: 5432,
 	}
-	want := interface{}(int64(5432))
+	want := any(int64(5432))
 	if got := input.SequenceNumber(); got != want {
 		t.Errorf("%#v.SequenceNumber() = %#v, want %#v", input, got, want)
 	}

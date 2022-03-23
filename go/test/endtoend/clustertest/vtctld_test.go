@@ -65,7 +65,7 @@ func testTopoDataAPI(t *testing.T, url string) {
 	require.Nil(t, err)
 	assert.Equal(t, resp.StatusCode, 200)
 
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	respByte, _ := io.ReadAll(resp.Body)
 	err = json.Unmarshal(respByte, &resultMap)
 	require.Nil(t, err)

@@ -76,14 +76,14 @@ func TestGenerateQuery(t *testing.T) {
 			desc:  "tuple *querypb.BindVariable",
 			query: "select * from a where id in ::vals",
 			bindVars: map[string]*querypb.BindVariable{
-				"vals": sqltypes.TestBindVariable([]interface{}{1, "aa"}),
+				"vals": sqltypes.TestBindVariable([]any{1, "aa"}),
 			},
 			output: "select * from a where id in (1, 'aa')",
 		}, {
 			desc:  "list bind vars 0 arguments",
 			query: "select * from a where id in ::vals",
 			bindVars: map[string]*querypb.BindVariable{
-				"vals": sqltypes.TestBindVariable([]interface{}{}),
+				"vals": sqltypes.TestBindVariable([]any{}),
 			},
 			output: "empty list supplied for vals",
 		}, {
@@ -97,7 +97,7 @@ func TestGenerateQuery(t *testing.T) {
 			desc:  "list bind var for non-list",
 			query: "select * from a where id = :vals",
 			bindVars: map[string]*querypb.BindVariable{
-				"vals": sqltypes.TestBindVariable([]interface{}{1}),
+				"vals": sqltypes.TestBindVariable([]any{1}),
 			},
 			output: "unexpected arg type (TUPLE) for non-list key vals",
 		}, {

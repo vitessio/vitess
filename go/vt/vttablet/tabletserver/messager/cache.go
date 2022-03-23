@@ -56,11 +56,11 @@ func (mh messageHeap) Swap(i, j int) {
 	mh[i], mh[j] = mh[j], mh[i]
 }
 
-func (mh *messageHeap) Push(x interface{}) {
+func (mh *messageHeap) Push(x any) {
 	*mh = append(*mh, x.(*MessageRow))
 }
 
-func (mh *messageHeap) Pop() interface{} {
+func (mh *messageHeap) Pop() any {
 	old := *mh
 	n := len(old)
 	x := old[n-1]

@@ -29,7 +29,7 @@ func List() *cobra.Command {
 	listCmd.Run = func(cmd *cobra.Command, args []string) {
 		rules := common.GetRules(configFile)
 
-		var out interface{}
+		var out any
 		if listOptName == "" {
 			if listOptNamesOnly {
 				out = []string{}

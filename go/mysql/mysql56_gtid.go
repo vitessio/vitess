@@ -106,17 +106,17 @@ func (gtid Mysql56GTID) Flavor() string {
 }
 
 // SequenceDomain implements GTID.SequenceDomain().
-func (gtid Mysql56GTID) SequenceDomain() interface{} {
+func (gtid Mysql56GTID) SequenceDomain() any {
 	return nil
 }
 
 // SourceServer implements GTID.SourceServer().
-func (gtid Mysql56GTID) SourceServer() interface{} {
+func (gtid Mysql56GTID) SourceServer() any {
 	return gtid.Server
 }
 
 // SequenceNumber implements GTID.SequenceNumber().
-func (gtid Mysql56GTID) SequenceNumber() interface{} {
+func (gtid Mysql56GTID) SequenceNumber() any {
 	return gtid.Sequence
 }
 

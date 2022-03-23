@@ -25,7 +25,7 @@ import (
 func TestBuildParsedQuery(t *testing.T) {
 	testcases := []struct {
 		in   string
-		args []interface{}
+		args []any
 		out  string
 	}{{
 		in:  "select * from tbl",
@@ -38,7 +38,7 @@ func TestBuildParsedQuery(t *testing.T) {
 		out: "select * from tbl where b = 4 or a = 3",
 	}, {
 		in:   "select * from tbl where name='%s'",
-		args: []interface{}{"xyz"},
+		args: []any{"xyz"},
 		out:  "select * from tbl where name='xyz'",
 	}}
 

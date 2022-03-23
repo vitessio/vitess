@@ -50,7 +50,7 @@ type (
 		ready  bool
 		values []evalengine.Expr
 		// columns that we have seen so far. Used only for multi-column vindexes so that we can track how many columns part of the vindex we have seen
-		colsSeen    map[string]interface{}
+		colsSeen    map[string]any
 		opcode      engine.Opcode
 		foundVindex vindexes.Vindex
 		cost        costDML
@@ -218,7 +218,7 @@ func addVindexOptions(column *sqlparser.ColName, value evalengine.Expr, opcode e
 
 // copyOptionDML is used to copy vindexOptionDML
 func copyOptionDML(orig *vindexOptionDML) *vindexOptionDML {
-	colsSeen := make(map[string]interface{}, len(orig.colsSeen))
+	colsSeen := make(map[string]any, len(orig.colsSeen))
 	values := make([]evalengine.Expr, len(orig.values))
 
 	copy(values, orig.values)
@@ -255,7 +255,7 @@ func createOptionDML(
 
 	return &vindexOptionDML{
 		values:      values,
-		colsSeen:    map[string]interface{}{},
+		colsSeen:    map[string]any{},
 		foundVindex: vindex,
 	}
 }

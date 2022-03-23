@@ -111,7 +111,7 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value, co vtga
 	} else {
 		// for non integral and binary type, fallback to send query per id
 		for _, id := range ids {
-			vars, err := sqltypes.BuildBindVariable([]interface{}{id})
+			vars, err := sqltypes.BuildBindVariable([]any{id})
 			if err != nil {
 				return nil, fmt.Errorf("lookup.Map: %v", err)
 			}

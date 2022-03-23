@@ -103,7 +103,7 @@ func buildVitessTypePlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser
 	return engine.NewRowsPrimitive(rows, fields), nil
 }
 
-func extractQuery(m map[string]interface{}) string {
+func extractQuery(m map[string]any) string {
 	queryObj, ok := m["Query"]
 	if !ok {
 		return ""

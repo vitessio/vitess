@@ -92,7 +92,7 @@ func init() {
 	})
 }
 
-type bindvars map[string]interface{}
+type bindvars map[string]any
 
 func (bv *bindvars) String() string {
 	b, err := json.Marshal(bv)
@@ -122,7 +122,7 @@ func (bv *bindvars) Set(s string) (err error) {
 }
 
 // For internal flag compatibility
-func (bv *bindvars) Get() interface{} {
+func (bv *bindvars) Get() any {
 	return bv
 }
 

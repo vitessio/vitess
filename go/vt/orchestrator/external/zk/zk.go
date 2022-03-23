@@ -80,7 +80,7 @@ func (zook *ZooKeeper) BuildACL(authScheme string, user string, pwd string, acls
 
 type infoLogger struct{}
 
-func (_ infoLogger) Printf(format string, a ...interface{}) {
+func (_ infoLogger) Printf(format string, a ...any) {
 	log.Infof(format, a...)
 }
 

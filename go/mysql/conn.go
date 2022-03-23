@@ -105,7 +105,7 @@ type Conn struct {
 	// ClientData is a place where an application can store any
 	// connection-related data. Mostly used on the server side, to
 	// avoid maps indexed by ConnectionID for instance.
-	ClientData interface{}
+	ClientData any
 
 	// conn is the underlying network connection.
 	// Calling Close() on the Conn will close this connection.
@@ -230,7 +230,7 @@ const (
 var bufPool = bucketpool.New(connBufferSize, MaxPacketSize)
 
 // writersPool is used for pooling bufio.Writer objects.
-var writersPool = sync.Pool{New: func() interface{} { return bufio.NewWriterSize(nil, connBufferSize) }}
+var writersPool = sync.Pool{New: func() any { return bufio.NewWriterSize(nil, connBufferSize) }}
 
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
@@ -801,7 +801,7 @@ func getLenEncInt(i uint64) []byte {
 	return data
 }
 
-func (c *Conn) writeErrorAndLog(errorCode uint16, sqlState string, format string, args ...interface{}) bool {
+func (c *Conn) writeErrorAndLog(errorCode uint16, sqlState string, format string, args ...any) bool {
 	if err := c.writeErrorPacket(errorCode, sqlState, format, args...); err != nil {
 		log.Errorf("Error writing error to %s: %v", c, err)
 		return false
@@ -821,7 +821,7 @@ func (c *Conn) writeErrorPacketFromErrorAndLog(err error) bool {
 // writeErrorPacket writes an error packet.
 // Server -> Client.
 // This method returns a generic error, not a SQLError.
-func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string, args ...interface{}) error {
+func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string, args ...any) error {
 	errorMessage := fmt.Sprintf(format, args...)
 	length := 1 + 2 + 1 + 5 + len(errorMessage)
 	data, pos := c.startEphemeralPacketWithHeader(length)
@@ -1419,7 +1419,7 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 	}
 	packetOK := &PacketOK{}
 
-	fail := func(format string, args ...interface{}) (*PacketOK, error) {
+	fail := func(format string, args ...any) (*PacketOK, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, format, args...)
 	}
 

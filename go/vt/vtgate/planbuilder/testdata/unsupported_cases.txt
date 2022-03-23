@@ -551,3 +551,8 @@ Gen4 plan same as above
 "select user.id from user join user_extra using(id)"
 "unsupported: join with USING(column_list) clause for complex queries"
 Gen4 plan same as above
+
+# lateral derived tables
+"select * from user, lateral (select * from user_extra where user_id = user.id) t"
+"unsupported: lateral derived tables"
+Gen4 plan same as above

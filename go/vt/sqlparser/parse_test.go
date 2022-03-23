@@ -2362,6 +2362,12 @@ var (
 	}, {
 		input:  "SELECT TRIM(BOTH 'a' FROM 'abc')",
 		output: "select trim(both 'a' from 'abc') from dual",
+	}, {
+		input:  "select t1.a, dt.a from t1, lateral (select t1.a+t2.a as a from t2) dt",
+		output: "select t1.a, dt.a from t1, lateral (select t1.a + t2.a as a from t2) as dt",
+	}, {
+		input:  "select b from v1 vq1, lateral (select count(*) from v1 vq2 having vq1.b = 3) dt",
+		output: "select b from v1 as vq1, lateral (select count(*) from v1 as vq2 having vq1.b = 3) as dt",
 	}}
 )
 
@@ -2468,6 +2474,9 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "SELECT jcol, JSON_PRETTY(jcol, jcol) from jtable",
 		err:   "syntax error at position 31",
+	}, {
+		input: "select from t1, lateral (with qn as (select t1.a) select (select max(a) from qn)) as dt",
+		err:   "syntax error at position 12 near 'from'",
 	}}
 
 	for _, tcase := range invalidSQL {
