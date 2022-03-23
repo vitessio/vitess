@@ -47,19 +47,19 @@ var (
 	// Clusters 10, 25 are executed on docker, using the docker_test_cluster 10, 25 workflows.
 	// Hence, they are not listed in the list below.
 	clusterList = []string{
-		"11",
+		"vtctlbackup_sharded_clustertest_heavy",
 		"12",
 		"13",
-		"14",
+		"ers_prs_newfeatures_heavy",
 		"15",
-		"16",
+		"shardedrecovery_stress_verticalsplit_heavy",
 		"17",
 		"18",
 		"19",
 		"20",
 		"21",
 		"22",
-		"23",
+		"worker_vault_heavy",
 		"24",
 		"26",
 		"vstream_failover",
@@ -304,7 +304,7 @@ func generateClusterWorkflows(list []string, tpl string) {
 				break
 			}
 		}
-		if strings.HasPrefix(cluster, "vreplication") {
+		if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
 			test.LimitResourceUsage = true
 		}
 
