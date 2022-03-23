@@ -420,7 +420,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <boolean> exists_opt not_exists_opt enforced_opt temp_opt full_opt
 %type <empty> to_opt
 %type <str> reserved_keyword non_reserved_keyword
-%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt json_utility_name
+%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt
 %type <empty> as_opt work_opt savepoint_opt
@@ -4745,9 +4745,17 @@ UTC_DATE func_paren_opt
   {
     $$ = &WeightStringFuncExpr{Expr: $3, As: $4}
   }
-| json_utility_name openb expression closeb
+| JSON_PRETTY openb expression closeb
   {
-    $$ = &JSONUtilityExpr{Name: $1, StringArg: $3}
+    $$ = &JSONPrettyExpr{JSONVal: $3}
+  }
+| JSON_STORAGE_FREE openb expression closeb
+  {
+    $$ = &JSONStorageFreeExpr{ JSONVal: $3}
+  }
+| JSON_STORAGE_SIZE openb expression closeb
+  {
+    $$ = &JSONStorageSizeExpr{ JSONVal: $3}
   }
 | LTRIM openb expression closeb
   {
@@ -4769,21 +4777,6 @@ UTC_DATE func_paren_opt
   {
     $$ = &TrimFuncExpr{TrimArg:$3, StringArg: $5}
   }
-
-json_utility_name:
-JSON_PRETTY
-  {
-    $$ = NewColIdent($1)
-  }
-| JSON_STORAGE_FREE
-  {
-    $$ = NewColIdent($1)
-  }
-| JSON_STORAGE_SIZE
-  {
-    $$ = NewColIdent($1)
-  }
-
 
 interval:
  interval_time_stamp
@@ -6039,6 +6032,9 @@ non_reserved_keyword:
 | INDEXES
 | ISOLATION
 | JSON
+| JSON_PRETTY
+| JSON_STORAGE_FREE
+| JSON_STORAGE_SIZE
 | KEY_BLOCK_SIZE
 | KEYS
 | KEYSPACES

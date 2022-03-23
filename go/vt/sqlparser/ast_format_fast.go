@@ -1762,10 +1762,25 @@ func (node *ValuesFuncExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node
-func (node *JSONUtilityExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.Name.Lowered())
-	buf.WriteByte('(')
-	buf.printExpr(node, node.StringArg, true)
+func (node *JSONPrettyExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_pretty(")
+	buf.printExpr(node, node.JSONVal, true)
+	buf.WriteByte(')')
+
+}
+
+// formatFast formats the node
+func (node *JSONStorageFreeExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_storage_free(")
+	buf.printExpr(node, node.JSONVal, true)
+	buf.WriteByte(')')
+
+}
+
+// formatFast formats the node
+func (node *JSONStorageSizeExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_storage_size(")
+	buf.printExpr(node, node.JSONVal, true)
 	buf.WriteByte(')')
 
 }

@@ -173,8 +173,12 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfIsExpr(in)
 	case IsolationLevel:
 		return in
-	case *JSONUtilityExpr:
-		return CloneRefOfJSONUtilityExpr(in)
+	case *JSONPrettyExpr:
+		return CloneRefOfJSONPrettyExpr(in)
+	case *JSONStorageFreeExpr:
+		return CloneRefOfJSONStorageFreeExpr(in)
+	case *JSONStorageSizeExpr:
+		return CloneRefOfJSONStorageSizeExpr(in)
 	case *JoinCondition:
 		return CloneRefOfJoinCondition(in)
 	case *JoinTableExpr:
@@ -1131,14 +1135,33 @@ func CloneRefOfIsExpr(n *IsExpr) *IsExpr {
 	return &out
 }
 
-// CloneRefOfJSONUtilityExpr creates a deep clone of the input.
-func CloneRefOfJSONUtilityExpr(n *JSONUtilityExpr) *JSONUtilityExpr {
+// CloneRefOfJSONPrettyExpr creates a deep clone of the input.
+func CloneRefOfJSONPrettyExpr(n *JSONPrettyExpr) *JSONPrettyExpr {
 	if n == nil {
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
-	out.StringArg = CloneExpr(n.StringArg)
+	out.JSONVal = CloneExpr(n.JSONVal)
+	return &out
+}
+
+// CloneRefOfJSONStorageFreeExpr creates a deep clone of the input.
+func CloneRefOfJSONStorageFreeExpr(n *JSONStorageFreeExpr) *JSONStorageFreeExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.JSONVal = CloneExpr(n.JSONVal)
+	return &out
+}
+
+// CloneRefOfJSONStorageSizeExpr creates a deep clone of the input.
+func CloneRefOfJSONStorageSizeExpr(n *JSONStorageSizeExpr) *JSONStorageSizeExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.JSONVal = CloneExpr(n.JSONVal)
 	return &out
 }
 
@@ -2119,8 +2142,12 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
-	case *JSONUtilityExpr:
-		return CloneRefOfJSONUtilityExpr(in)
+	case *JSONPrettyExpr:
+		return CloneRefOfJSONPrettyExpr(in)
+	case *JSONStorageFreeExpr:
+		return CloneRefOfJSONStorageFreeExpr(in)
+	case *JSONStorageSizeExpr:
+		return CloneRefOfJSONStorageSizeExpr(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
 	case *SubstrExpr:
@@ -2299,8 +2326,12 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
 		return CloneRefOfIsExpr(in)
-	case *JSONUtilityExpr:
-		return CloneRefOfJSONUtilityExpr(in)
+	case *JSONPrettyExpr:
+		return CloneRefOfJSONPrettyExpr(in)
+	case *JSONStorageFreeExpr:
+		return CloneRefOfJSONStorageFreeExpr(in)
+	case *JSONStorageSizeExpr:
+		return CloneRefOfJSONStorageSizeExpr(in)
 	case ListArg:
 		return in
 	case *Literal:

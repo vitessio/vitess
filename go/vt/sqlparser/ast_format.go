@@ -1322,9 +1322,20 @@ func (node *ValuesFuncExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node
-func (node *JSONUtilityExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(", node.Name.Lowered())
-	buf.astPrintf(node, "%v)", node.StringArg)
+func (node *JSONPrettyExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_pretty(%v)", node.JSONVal)
+
+}
+
+// Format formats the node
+func (node *JSONStorageFreeExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_storage_free(%v)", node.JSONVal)
+
+}
+
+// Format formats the node
+func (node *JSONStorageSizeExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_storage_size(%v)", node.JSONVal)
 
 }
 
