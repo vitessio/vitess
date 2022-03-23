@@ -164,6 +164,20 @@ func (cached *Distinct) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *DistinctV3) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field Source vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Source.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *Filter) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

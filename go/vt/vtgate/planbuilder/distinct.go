@@ -38,6 +38,10 @@ func newDistinct(source logicalPlan, checkCols []engine.CheckCol) logicalPlan {
 }
 
 func (d *distinct) Primitive() engine.Primitive {
+	if d.checkCols == nil {
+		// If we are missing the checkCols information, we are on the V3 planner and should produce a V3 Distinct
+		return &engine.DistinctV3{Source: d.input.Primitive()}
+	}
 	truncate := false
 	for i, col := range d.checkCols {
 		if col.Idx != i {
