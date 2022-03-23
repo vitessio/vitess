@@ -1153,7 +1153,7 @@ func CloneRefOfJSONObjectExpr(n *JSONObjectExpr) *JSONObjectExpr {
 		return nil
 	}
 	out := *n
-	out.Params = CloneSliceOfJSONObjectParam(n.Params)
+	out.Params = CloneSliceOfRefOfJSONObjectParam(n.Params)
 	return &out
 }
 
@@ -2704,14 +2704,14 @@ func CloneSliceOfRefOfIndexOption(n []*IndexOption) []*IndexOption {
 	return res
 }
 
-// CloneSliceOfJSONObjectParam creates a deep clone of the input.
-func CloneSliceOfJSONObjectParam(n []JSONObjectParam) []JSONObjectParam {
+// CloneSliceOfRefOfJSONObjectParam creates a deep clone of the input.
+func CloneSliceOfRefOfJSONObjectParam(n []*JSONObjectParam) []*JSONObjectParam {
 	if n == nil {
 		return nil
 	}
-	res := make([]JSONObjectParam, 0, len(n))
+	res := make([]*JSONObjectParam, 0, len(n))
 	for _, x := range n {
-		res = append(res, CloneJSONObjectParam(x))
+		res = append(res, CloneRefOfJSONObjectParam(x))
 	}
 	return res
 }

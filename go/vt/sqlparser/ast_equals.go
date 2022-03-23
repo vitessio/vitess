@@ -1978,7 +1978,7 @@ func EqualsRefOfJSONObjectExpr(a, b *JSONObjectExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsSliceOfJSONObjectParam(a.Params, b.Params)
+	return EqualsSliceOfRefOfJSONObjectParam(a.Params, b.Params)
 }
 
 // EqualsJSONObjectParam does deep equals between the two objects.
@@ -4367,13 +4367,13 @@ func EqualsSliceOfRefOfIndexOption(a, b []*IndexOption) bool {
 	return true
 }
 
-// EqualsSliceOfJSONObjectParam does deep equals between the two objects.
-func EqualsSliceOfJSONObjectParam(a, b []JSONObjectParam) bool {
+// EqualsSliceOfRefOfJSONObjectParam does deep equals between the two objects.
+func EqualsSliceOfRefOfJSONObjectParam(a, b []*JSONObjectParam) bool {
 	if len(a) != len(b) {
 		return false
 	}
 	for i := 0; i < len(a); i++ {
-		if !EqualsJSONObjectParam(a[i], b[i]) {
+		if !EqualsRefOfJSONObjectParam(a[i], b[i]) {
 			return false
 		}
 	}

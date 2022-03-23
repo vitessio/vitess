@@ -1426,7 +1426,7 @@ func VisitRefOfJSONObjectExpr(in *JSONObjectExpr, f Visit) error {
 		return err
 	}
 	for _, el := range in.Params {
-		if err := VisitJSONObjectParam(el, f); err != nil {
+		if err := VisitRefOfJSONObjectParam(el, f); err != nil {
 			return err
 		}
 	}

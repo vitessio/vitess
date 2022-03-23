@@ -62,7 +62,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   str           string
   strs          []string
   vindexParam   VindexParam
-  jsonObjectParam JSONObjectParam
+  jsonObjectParam *JSONObjectParam
   colIdent      ColIdent
   joinCondition *JoinCondition
   collateAndCharset CollateAndCharset
@@ -131,7 +131,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   renameTablePairs []*RenameTablePair
   alterOptions	   []AlterOption
   vindexParams  []VindexParam
-  jsonObjectParams []JSONObjectParam
+  jsonObjectParams []*JSONObjectParam
   partDefs      []*PartitionDefinition
   partitionValueRange	*PartitionValueRange
   partSpecs     []*PartitionSpec
@@ -1040,8 +1040,7 @@ json_object_param_opt:
 json_object_param_list:
   json_object_param
   {
-    $$ = make([]JSONObjectParam, 0, 4)
-    $$ = append($$, $1)
+    $$ = []*JSONObjectParam{$1}
   }
 | json_object_param_list ',' json_object_param
   {
@@ -1051,7 +1050,7 @@ json_object_param_list:
 json_object_param:
   expression ',' expression
   {
-    $$ = JSONObjectParam{Key:$1, Value:$3}
+    $$ = &JSONObjectParam{Key:$1, Value:$3}
   }
 
 create_table_prefix:

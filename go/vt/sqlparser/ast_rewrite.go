@@ -2697,9 +2697,9 @@ func (a *application) rewriteRefOfJSONObjectExpr(parent SQLNode, node *JSONObjec
 		}
 	}
 	for x, el := range node.Params {
-		if !a.rewriteJSONObjectParam(node, el, func(idx int) replacerFunc {
+		if !a.rewriteRefOfJSONObjectParam(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(*JSONObjectExpr).Params[idx] = newNode.(JSONObjectParam)
+				parent.(*JSONObjectExpr).Params[idx] = newNode.(*JSONObjectParam)
 			}
 		}(x)) {
 			return false

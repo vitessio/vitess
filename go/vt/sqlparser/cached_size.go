@@ -1404,11 +1404,11 @@ func (cached *JSONObjectExpr) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(24)
 	}
-	// field Params []vitess.io/vitess/go/vt/sqlparser.JSONObjectParam
+	// field Params []*vitess.io/vitess/go/vt/sqlparser.JSONObjectParam
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Params)) * int64(32))
+		size += hack.RuntimeAllocSize(int64(cap(cached.Params)) * int64(8))
 		for _, elem := range cached.Params {
-			size += elem.CachedSize(false)
+			size += elem.CachedSize(true)
 		}
 	}
 	return size
