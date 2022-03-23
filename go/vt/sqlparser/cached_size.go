@@ -1377,6 +1377,42 @@ func (cached *IsExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *JSONSchemaValidFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Schema vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Schema.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Document vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Document.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JSONSchemaValidationReportFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Schema vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Schema.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Document vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Document.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *JoinCondition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

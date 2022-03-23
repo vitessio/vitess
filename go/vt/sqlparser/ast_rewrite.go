@@ -172,6 +172,10 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
 	case IsolationLevel:
 		return a.rewriteIsolationLevel(parent, node, replacer)
+	case *JSONSchemaValidFuncExpr:
+		return a.rewriteRefOfJSONSchemaValidFuncExpr(parent, node, replacer)
+	case *JSONSchemaValidationReportFuncExpr:
+		return a.rewriteRefOfJSONSchemaValidationReportFuncExpr(parent, node, replacer)
 	case *JoinCondition:
 		return a.rewriteRefOfJoinCondition(parent, node, replacer)
 	case *JoinTableExpr:
@@ -2636,6 +2640,70 @@ func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer 
 	}
 	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*IsExpr).Left = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONSchemaValidFuncExpr(parent SQLNode, node *JSONSchemaValidFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Schema, func(newNode, parent SQLNode) {
+		parent.(*JSONSchemaValidFuncExpr).Schema = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Document, func(newNode, parent SQLNode) {
+		parent.(*JSONSchemaValidFuncExpr).Document = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONSchemaValidationReportFuncExpr(parent SQLNode, node *JSONSchemaValidationReportFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Schema, func(newNode, parent SQLNode) {
+		parent.(*JSONSchemaValidationReportFuncExpr).Schema = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Document, func(newNode, parent SQLNode) {
+		parent.(*JSONSchemaValidationReportFuncExpr).Document = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -5441,6 +5509,10 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case *GroupConcatExpr:
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
+	case *JSONSchemaValidFuncExpr:
+		return a.rewriteRefOfJSONSchemaValidFuncExpr(parent, node, replacer)
+	case *JSONSchemaValidationReportFuncExpr:
+		return a.rewriteRefOfJSONSchemaValidationReportFuncExpr(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *SubstrExpr:
@@ -5605,6 +5677,10 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfIntroducerExpr(parent, node, replacer)
 	case *IsExpr:
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
+	case *JSONSchemaValidFuncExpr:
+		return a.rewriteRefOfJSONSchemaValidFuncExpr(parent, node, replacer)
+	case *JSONSchemaValidationReportFuncExpr:
+		return a.rewriteRefOfJSONSchemaValidationReportFuncExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:

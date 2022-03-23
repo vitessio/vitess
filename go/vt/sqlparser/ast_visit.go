@@ -172,6 +172,10 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfIsExpr(in, f)
 	case IsolationLevel:
 		return VisitIsolationLevel(in, f)
+	case *JSONSchemaValidFuncExpr:
+		return VisitRefOfJSONSchemaValidFuncExpr(in, f)
+	case *JSONSchemaValidationReportFuncExpr:
+		return VisitRefOfJSONSchemaValidationReportFuncExpr(in, f)
 	case *JoinCondition:
 		return VisitRefOfJoinCondition(in, f)
 	case *JoinTableExpr:
@@ -1394,6 +1398,36 @@ func VisitRefOfIsExpr(in *IsExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Left, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJSONSchemaValidFuncExpr(in *JSONSchemaValidFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Schema, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Document, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJSONSchemaValidationReportFuncExpr(in *JSONSchemaValidationReportFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Schema, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Document, f); err != nil {
 		return err
 	}
 	return nil
@@ -2666,6 +2700,10 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
+	case *JSONSchemaValidFuncExpr:
+		return VisitRefOfJSONSchemaValidFuncExpr(in, f)
+	case *JSONSchemaValidationReportFuncExpr:
+		return VisitRefOfJSONSchemaValidationReportFuncExpr(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *SubstrExpr:
@@ -2830,6 +2868,10 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfIntroducerExpr(in, f)
 	case *IsExpr:
 		return VisitRefOfIsExpr(in, f)
+	case *JSONSchemaValidFuncExpr:
+		return VisitRefOfJSONSchemaValidFuncExpr(in, f)
+	case *JSONSchemaValidationReportFuncExpr:
+		return VisitRefOfJSONSchemaValidationReportFuncExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:

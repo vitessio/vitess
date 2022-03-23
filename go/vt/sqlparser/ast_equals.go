@@ -476,6 +476,18 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return a == b
+	case *JSONSchemaValidFuncExpr:
+		b, ok := inB.(*JSONSchemaValidFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidFuncExpr(a, b)
+	case *JSONSchemaValidationReportFuncExpr:
+		b, ok := inB.(*JSONSchemaValidationReportFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidationReportFuncExpr(a, b)
 	case *JoinCondition:
 		b, ok := inB.(*JoinCondition)
 		if !ok {
@@ -1935,6 +1947,30 @@ func EqualsRefOfIsExpr(a, b *IsExpr) bool {
 		a.Right == b.Right
 }
 
+// EqualsRefOfJSONSchemaValidFuncExpr does deep equals between the two objects.
+func EqualsRefOfJSONSchemaValidFuncExpr(a, b *JSONSchemaValidFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Schema, b.Schema) &&
+		EqualsExpr(a.Document, b.Document)
+}
+
+// EqualsRefOfJSONSchemaValidationReportFuncExpr does deep equals between the two objects.
+func EqualsRefOfJSONSchemaValidationReportFuncExpr(a, b *JSONSchemaValidationReportFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Schema, b.Schema) &&
+		EqualsExpr(a.Document, b.Document)
+}
+
 // EqualsRefOfJoinCondition does deep equals between the two objects.
 func EqualsRefOfJoinCondition(a, b *JoinCondition) bool {
 	if a == b {
@@ -3165,6 +3201,18 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfGroupConcatExpr(a, b)
+	case *JSONSchemaValidFuncExpr:
+		b, ok := inB.(*JSONSchemaValidFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidFuncExpr(a, b)
+	case *JSONSchemaValidationReportFuncExpr:
+		b, ok := inB.(*JSONSchemaValidationReportFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidationReportFuncExpr(a, b)
 	case *MatchExpr:
 		b, ok := inB.(*MatchExpr)
 		if !ok {
@@ -3552,6 +3600,18 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfIsExpr(a, b)
+	case *JSONSchemaValidFuncExpr:
+		b, ok := inB.(*JSONSchemaValidFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidFuncExpr(a, b)
+	case *JSONSchemaValidationReportFuncExpr:
+		b, ok := inB.(*JSONSchemaValidationReportFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidationReportFuncExpr(a, b)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {

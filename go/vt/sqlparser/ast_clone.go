@@ -173,6 +173,10 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfIsExpr(in)
 	case IsolationLevel:
 		return in
+	case *JSONSchemaValidFuncExpr:
+		return CloneRefOfJSONSchemaValidFuncExpr(in)
+	case *JSONSchemaValidationReportFuncExpr:
+		return CloneRefOfJSONSchemaValidationReportFuncExpr(in)
 	case *JoinCondition:
 		return CloneRefOfJoinCondition(in)
 	case *JoinTableExpr:
@@ -1126,6 +1130,28 @@ func CloneRefOfIsExpr(n *IsExpr) *IsExpr {
 	}
 	out := *n
 	out.Left = CloneExpr(n.Left)
+	return &out
+}
+
+// CloneRefOfJSONSchemaValidFuncExpr creates a deep clone of the input.
+func CloneRefOfJSONSchemaValidFuncExpr(n *JSONSchemaValidFuncExpr) *JSONSchemaValidFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Schema = CloneExpr(n.Schema)
+	out.Document = CloneExpr(n.Document)
+	return &out
+}
+
+// CloneRefOfJSONSchemaValidationReportFuncExpr creates a deep clone of the input.
+func CloneRefOfJSONSchemaValidationReportFuncExpr(n *JSONSchemaValidationReportFuncExpr) *JSONSchemaValidationReportFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Schema = CloneExpr(n.Schema)
+	out.Document = CloneExpr(n.Document)
 	return &out
 }
 
@@ -2106,6 +2132,10 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
+	case *JSONSchemaValidFuncExpr:
+		return CloneRefOfJSONSchemaValidFuncExpr(in)
+	case *JSONSchemaValidationReportFuncExpr:
+		return CloneRefOfJSONSchemaValidationReportFuncExpr(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
 	case *SubstrExpr:
@@ -2284,6 +2314,10 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
 		return CloneRefOfIsExpr(in)
+	case *JSONSchemaValidFuncExpr:
+		return CloneRefOfJSONSchemaValidFuncExpr(in)
+	case *JSONSchemaValidationReportFuncExpr:
+		return CloneRefOfJSONSchemaValidationReportFuncExpr(in)
 	case ListArg:
 		return in
 	case *Literal:

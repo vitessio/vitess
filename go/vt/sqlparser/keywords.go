@@ -317,6 +317,8 @@ var keywords = []keyword{
 	{"invoker", INVOKER},
 	{"join", JOIN},
 	{"json", JSON},
+	{"json_schema_valid", JSON_SCHEMA_VALID},
+	{"json_schema_validation_report", JSON_SCHEMA_VALIDATION_REPORT},
 	{"json_table", UNUSED},
 	{"key", KEY},
 	{"keys", KEYS},
