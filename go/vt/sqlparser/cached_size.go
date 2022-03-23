@@ -1514,14 +1514,12 @@ func (cached *JtPathColDef) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(192)
+		size += int64(176)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
 	size += cached.Name.CachedSize(false)
 	// field Type vitess.io/vitess/go/vt/sqlparser.ColumnType
 	size += cached.Type.CachedSize(false)
-	// field Collate string
-	size += hack.RuntimeAllocSize(int64(len(cached.Collate)))
 	// field Path vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Path.(cachedObject); ok {
 		size += cc.CachedSize(true)

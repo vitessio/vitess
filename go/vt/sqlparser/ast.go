@@ -2256,7 +2256,6 @@ type (
 	JtPathColDef struct {
 		Name            ColIdent
 		Type            ColumnType
-		Collate         string
 		JtColExists     bool
 		Path            Expr
 		EmptyOnResponse *JtOnResponse

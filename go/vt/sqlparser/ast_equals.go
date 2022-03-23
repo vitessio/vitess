@@ -4363,8 +4363,7 @@ func EqualsRefOfJtPathColDef(a, b *JtPathColDef) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Collate == b.Collate &&
-		a.JtColExists == b.JtColExists &&
+	return a.JtColExists == b.JtColExists &&
 		EqualsColIdent(a.Name, b.Name) &&
 		EqualsColumnType(a.Type, b.Type) &&
 		EqualsExpr(a.Path, b.Path) &&
