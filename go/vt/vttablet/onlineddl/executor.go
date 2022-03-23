@@ -2703,6 +2703,7 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		source:               row.AsString("source", ""),
 		pos:                  row.AsString("pos", ""),
 		timeUpdated:          row.AsInt64("time_updated", 0),
+		timeHeartbeat:        row.AsInt64("time_heartbeat", 0),
 		transactionTimestamp: row.AsInt64("transaction_timestamp", 0),
 		state:                row.AsString("state", ""),
 		message:              row.AsString("message", ""),
@@ -2807,7 +2808,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	uuidsFoundRunning := map[string]bool{}
 	for _, row := range r.Named().Rows {
 		uuid := row["migration_uuid"].ToString()
-		onlineDDL, _, err := e.readMigration(ctx, uuid)
+		onlineDDL, migrationRow, err := e.readMigration(ctx, uuid)
 		if err != nil {
 			return countRunnning, cancellable, err
 		}
@@ -2858,7 +2859,10 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					// VReplication migrations are unique in this respect: we are able to complete
 					// a vreplicaiton migration started by another tablet.
 					e.ownedRunningMigrations.Store(uuid, onlineDDL)
-					_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+					if lastVitessLivenessIndicator := migrationRow.AsInt64("vitess_liveness_indicator", 0); lastVitessLivenessIndicator < s.livenessTimeIndicator() {
+						_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+						_ = e.updateVitessLivenessIndicator(ctx, uuid, s.livenessTimeIndicator())
+					}
 					_ = e.updateMigrationTablet(ctx, uuid)
 					_ = e.updateRowsCopied(ctx, uuid, s.rowsCopied)
 					_ = e.updateMigrationProgressByRowsCopied(ctx, uuid, s.rowsCopied)
@@ -3426,6 +3430,18 @@ func (e *Executor) updateRowsCopied(ctx context.Context, uuid string, rowsCopied
 	}
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationRowsCopied,
 		sqltypes.Int64BindVariable(rowsCopied),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateVitessLivenessIndicator(ctx context.Context, uuid string, livenessIndicator int64) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationVitessLivenessIndicator,
+		sqltypes.Int64BindVariable(livenessIndicator),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
