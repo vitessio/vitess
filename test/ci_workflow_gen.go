@@ -105,15 +105,14 @@ var (
 		"vreplication_across_db_versions",
 		"vreplication_multicell",
 		"vreplication_cellalias",
+		"vreplication_basic",
+		"vreplication_v2",
 		"vtorc",
 		"schemadiff_vrepl",
 	}
 
 	clusterSelfHostedList []string
-	clusterDockerList     = []string{
-		"vreplication_basic",
-		"vreplication_v2",
-	}
+	clusterDockerList     = []string{}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
 	clustersRequiringXtraBackup = append(clusterList, clusterSelfHostedList...)
@@ -136,12 +135,13 @@ type unitTest struct {
 type clusterTest struct {
 	Name, Shard, Platform        string
 	MakeTools, InstallXtraBackup bool
-	Ubuntu20                     bool
+	Ubuntu20, Docker             bool
+	LimitResourceUsage           bool
 }
 
 type selfHostedTest struct {
 	Name, Platform, Dockerfile, Shard, ImageName, directoryName string
-	MakeTools, InstallXtraBackup                                bool
+	MakeTools, InstallXtraBackup, Docker                        bool
 }
 
 func mergeBlankLines(buf *bytes.Buffer) string {
@@ -303,6 +303,9 @@ func generateClusterWorkflows(list []string, tpl string) {
 				test.Platform = "mysql80"
 				break
 			}
+		}
+		if strings.HasPrefix(cluster, "vreplication") {
+			test.LimitResourceUsage = true
 		}
 
 		path := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
