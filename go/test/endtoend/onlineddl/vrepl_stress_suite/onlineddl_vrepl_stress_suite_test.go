@@ -369,8 +369,8 @@ var (
 
 const (
 	maxTableRows                  = 4096
-	maxConcurrency                = 20
-	singleConnectionSleepInterval = 2 * time.Millisecond
+	maxConcurrency                = 15
+	singleConnectionSleepInterval = 5 * time.Millisecond
 )
 
 func resetOpOrder() {
