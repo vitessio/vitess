@@ -1025,7 +1025,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/worker"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "23",
+			"Shard": "worker_vault_heavy",
 			"RetryMax": 3,
 			"Tags": [
 				"worker_test"
@@ -1135,7 +1135,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vault"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "23",
+			"Shard": "worker_vault_heavy",
 			"RetryMax": 1,
 			"Tags": []
 		},

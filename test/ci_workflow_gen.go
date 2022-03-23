@@ -59,7 +59,7 @@ var (
 		"20",
 		"21",
 		"22",
-		"23",
+		"worker_vault_heavy",
 		"24",
 		"26",
 		"vstream_failover",
@@ -304,7 +304,7 @@ func generateClusterWorkflows(list []string, tpl string) {
 				break
 			}
 		}
-		if strings.HasPrefix(cluster, "vreplication") {
+		if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
 			test.LimitResourceUsage = true
 		}
 
