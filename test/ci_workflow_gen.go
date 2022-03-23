@@ -88,6 +88,7 @@ var (
 		"vtgate_readafterwrite",
 		"vtgate_reservedconn",
 		"vtgate_schema",
+		"vtgate_tablet_healthcheck_cache",
 		"vtgate_topo",
 		"vtgate_topo_consul",
 		"vtgate_topo_etcd",
