@@ -215,6 +215,15 @@ func (vc *vcursorImpl) ErrorGroupCancellableContext() (*errgroup.Group, func()) 
 	}
 }
 
+// SetContextWithValue implements the VCursor interface.
+func (vc *vcursorImpl) SetContextWithValue(k, v interface{}) func() {
+	origCtx := vc.ctx
+	vc.ctx = context.WithValue(vc.ctx, k, v)
+	return func() {
+		vc.ctx = origCtx
+	}
+}
+
 // RecordWarning stores the given warning in the current session
 func (vc *vcursorImpl) RecordWarning(warning *querypb.QueryWarning) {
 	vc.safeSession.RecordWarning(warning)

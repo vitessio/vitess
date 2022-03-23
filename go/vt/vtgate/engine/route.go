@@ -177,10 +177,18 @@ func (route *Route) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
+const IgnoreReserveTxn = "IGNORE_EXISTING_CONNECTION"
+
 func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	rss, bvs, err := route.findRoute(vcursor, bindVars)
 	if err != nil {
 		return nil, err
+	}
+
+	// Select Next - sequence query does not need to be executed in a dedicated connection (reserved or transaction)
+	if route.Opcode == Next {
+		restoreCtx := vcursor.SetContextWithValue(IgnoreReserveTxn, true)
+		defer restoreCtx()
 	}
 
 	// No route.

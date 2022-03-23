@@ -68,6 +68,10 @@ type (
 		// ErrorGroupCancellableContext updates context that can be cancelled.
 		ErrorGroupCancellableContext() (*errgroup.Group, func())
 
+		// SetContextWithValue updates context with key and value and
+		// provides back function to move back to original context.
+		SetContextWithValue(key, value interface{}) func()
+
 		// V3 functions.
 		Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
 		AutocommitApproval() bool
