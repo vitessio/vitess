@@ -215,6 +215,12 @@ jobs:
         echo "select count(email) from customer;" | mysql 2>&1| grep 6
         echo "select count(sku) from corder;" | mysql 2>&1| grep 6
 
+    - name: Copy the logs to save them
+      if: always()
+      run: |
+        echo "vtdataroot-$GITHUB_SHA-$GITHUB_RUN_ATTEMPT"
+        cp -r vtdataroot ~/savedRuns/vtdataroot-$GITHUB_SHA-$GITHUB_RUN_ATTEMPT
+
     - name: Stop the Vitess cluster
       if: always()
       run: |
