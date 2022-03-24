@@ -1,3 +1,9 @@
+// Package resolver provides a discovery-based resolver for VTAdmin clusters.
+//
+// It uses a discovery.Discovery implementation to dynamically update the set of
+// vtctlds and vtgates in a cluster being used by a grpc.ClientConn, allowing
+// VTAdmin to transparently reconnect to different vtctlds and vtgates both
+// periodically and when hosts are recycled.
 package resolver
 
 import (
