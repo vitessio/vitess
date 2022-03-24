@@ -153,6 +153,7 @@ func (ct *controller) run(ctx context.Context) {
 		if err == nil {
 			return
 		}
+
 		// Sometimes, canceled contexts get wrapped as errors.
 		select {
 		case <-ctx.Done():
@@ -268,7 +269,21 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		defer vsClient.Close(ctx)
 
 		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
-		return vr.Replicate(ctx)
+		err = vr.Replicate(ctx)
+		if isUnrecoverableError(err) {
+			settings, _, errSetting := vr.readSettings(ctx)
+			if errSetting != nil {
+				return err // yes, err and not errSetting.
+			}
+			if settings.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) {
+				// Specific to OnlineDDL, if we encounter an "unrecoverable error", we change the migration state into Error and then we quit the workflow
+				if errSetState := vr.setState(binlogplayer.BlpError, err.Error()); errSetState != nil {
+					return err // yes, err and not errSetState.
+				}
+				return nil // this will cause vreplicate to quit the workflow
+			}
+		}
+		return err
 	}
 	ct.blpStats.ErrorCounts.Add([]string{"Invalid Source"}, 1)
 	return fmt.Errorf("missing source")
