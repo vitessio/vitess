@@ -124,6 +124,7 @@ var (
 	}
 	clustersRequiringMySQL80 = []string{
 		"mysql80",
+		"vtorc",
 		"vreplication_across_db_versions",
 	}
 )
