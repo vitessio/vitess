@@ -113,9 +113,9 @@ func run(cmd *cobra.Command, args []string) {
 
 		rbacConfig = cfg
 	} else if enableRBAC && rbacConfigPath == "" {
-		fatal("[rbac] must pass --rbac-config path when enabling rbac")
+		fatal("must pass --rbac-config path when enabling rbac")
 	} else {
-		fatal("[rbac] must explicitly enable or disable RBAC by passing --no-rbac or --rbac")
+		fatal("must explicitly enable or disable RBAC by passing --no-rbac or --rbac")
 	}
 
 	for i, cfg := range configs {
