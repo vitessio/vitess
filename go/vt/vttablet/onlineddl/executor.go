@@ -1042,6 +1042,15 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		if _, err := e.vreplicationExec(ctx, tmClient, tablet.Tablet, insertVReplicationQuery); err != nil {
 			return err
 		}
+
+		{
+			// temporary hack. todo: this should be done when inserting any _vt.vreplication record across all workflow types
+			query := fmt.Sprintf("update _vt.vreplication set workflow_type = %d where workflow = '%s'",
+				binlogdatapb.VReplicationWorkflowType_ONLINEDDL, v.workflow)
+			if _, err := e.vreplicationExec(ctx, tmClient, tablet.Tablet, query); err != nil {
+				return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", tablet.Tablet, query)
+			}
+		}
 		// start stream!
 		startVReplicationQuery, err := v.generateStartStatement(ctx)
 		if err != nil {
@@ -1553,7 +1562,8 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 	switch onlineDDL.Strategy {
 	case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 		// migration could have started by a different tablet. We need to actively verify if it is running
-		foundRunning, _, _ = e.isVReplMigrationRunning(ctx, onlineDDL.UUID)
+		s, _ := e.readVReplStream(ctx, onlineDDL.UUID, true)
+		foundRunning = (s != nil && s.isRunning())
 		if err := e.terminateVReplMigration(ctx, onlineDDL.UUID); err != nil {
 			return foundRunning, fmt.Errorf("Error terminating migration, vreplication exec error: %+v", err)
 		}
@@ -2776,12 +2786,14 @@ func (e *Executor) isVReplMigrationRunning(ctx context.Context, uuid string) (is
 	if s == nil {
 		return false, s, nil
 	}
-	if strings.Contains(strings.ToLower(s.message), "error") {
-		return false, s, nil
-	}
 	switch s.state {
+	case binlogplayer.BlpError:
+		return false, s, nil
 	case binlogplayer.VReplicationInit, binlogplayer.VReplicationCopying, binlogplayer.BlpRunning:
 		return true, s, nil
+	}
+	if strings.Contains(strings.ToLower(s.message), "error") {
+		return false, s, nil
 	}
 	return false, s, nil
 }
@@ -2836,7 +2848,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 			{
 				// We check the _vt.vreplication table
-				running, s, err := e.isVReplMigrationRunning(ctx, uuid)
+				s, err := e.readVReplStream(ctx, uuid, true)
 				if err != nil {
 					return countRunnning, cancellable, err
 				}
@@ -2844,7 +2856,10 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				if isVreplicationTestSuite {
 					e.triggerNextCheckInterval()
 				}
-				if running {
+				if s != nil && s.isFailed() {
+					cancellable = append(cancellable, newCancellableMigration(uuid, s.message))
+				}
+				if s != nil && s.isRunning() {
 					// This VRepl migration may have started from outside this tablet, so
 					// this executor may not own the migration _yet_. We make sure to own it.
 					// VReplication migrations are unique in this respect: we are able to complete
