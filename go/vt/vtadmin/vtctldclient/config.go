@@ -22,6 +22,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	grpcresolver "google.golang.org/grpc/resolver"
+
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
@@ -41,7 +43,7 @@ type Config struct {
 
 	ConnectivityTimeout time.Duration
 
-	resolver *resolver.Builder
+	resolver grpcresolver.Builder
 }
 
 const defaultConnectivityTimeout = 2 * time.Second
@@ -53,13 +55,16 @@ func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string)
 	cfg := &Config{
 		Cluster:   cluster,
 		Discovery: disco,
-		resolver:  resolver.NewBuilder(cluster.Id, disco),
 	}
 
 	err := cfg.Parse(args)
 	if err != nil {
 		return nil, err
 	}
+
+	cfg.resolver = resolver.NewBuilder(cluster.Id, disco, resolver.Options{
+		ResolveTimeout: time.Second, // TODO: add flag
+	})
 
 	return cfg, nil
 }

@@ -22,12 +22,12 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/resolver"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
-	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldclient"
@@ -67,7 +67,7 @@ type ClientProxy struct {
 	// this should always be grpcvtctldclient.NewWithDialOpts, but it is
 	// exported for testing purposes.
 	DialFunc func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)
-	resolver *resolver.Builder
+	resolver resolver.Builder
 
 	m        sync.Mutex
 	closed   bool

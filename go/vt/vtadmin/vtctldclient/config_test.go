@@ -56,7 +56,7 @@ func TestParse(t *testing.T) {
 			Credentials:         nil,
 			CredentialsPath:     "",
 			ConnectivityTimeout: defaultConnectivityTimeout,
-			resolver:            resolver.NewBuilder("", nil),
+			resolver:            resolver.NewBuilder("", nil, resolver.Options{}),
 		}
 		assert.Equal(t, expected, cfg)
 	})
@@ -95,7 +95,7 @@ func TestParse(t *testing.T) {
 				Credentials:         creds,
 				CredentialsPath:     credsfile.Name(),
 				ConnectivityTimeout: defaultConnectivityTimeout,
-				resolver:            resolver.NewBuilder("", nil),
+				resolver:            resolver.NewBuilder("", nil, resolver.Options{}),
 			}
 
 			assert.Equal(t, expected, cfg)
