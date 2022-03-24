@@ -81,7 +81,7 @@ func TestBuiltinCompressors(t *testing.T) {
 			}
 			compressor.Close()
 
-			decompressor, err := newBuiltinDecompressor(engine, "not used", &compressed, logger)
+			decompressor, err := newBuiltinDecompressor(engine, &compressed, logger)
 			if err != nil {
 				t.Error(err)
 				return

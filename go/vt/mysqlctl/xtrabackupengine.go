@@ -61,13 +61,6 @@ var (
 	// striping mode
 	xtrabackupStripes         = flag.Uint("xtrabackup_stripes", 0, "If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression")
 	xtrabackupStripeBlockSize = flag.Uint("xtrabackup_stripe_block_size", 102400, "Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe")
-	// switch which compressor/decompressor to use
-	builtinCompressor   = flag.String("xtrabackup_builtin_compressor", "pgzip", "which builtin compressor engine to use")
-	builtinDecompressor = flag.String("xtrabackup_builtin_decompressor", "auto", "which builtin decompressor engine to use")
-	// use and external command to decompress the backups
-	externalCompressorCmd   = flag.String("xtrabackup_external_compressor", "", "command with arguments to use when decompressing a backup")
-	externalCompressorExt   = flag.String("xtrabackup_external_compressor_extension", "", "which extension to use when using an external decompressor")
-	externalDecompressorCmd = flag.String("xtrabackup_external_decompressor", "", "command with arguments to use when compressing a backup")
 )
 
 const (
@@ -565,7 +558,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 			if *externalDecompressorCmd != "" {
 				decompressor, err = newExternalDecompressor(ctx, *externalDecompressorCmd, reader, logger)
 			} else {
-				decompressor, err = newBuiltinDecompressor(*builtinDecompressor, extension, reader, logger)
+				decompressor, err = newBuiltinDecompressorFromExtension(extension, *builtinDecompressor, reader, logger)
 			}
 			if err != nil {
 				return vterrors.Wrap(err, "can't create decompressor")

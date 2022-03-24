@@ -38,6 +38,13 @@ import (
 
 var (
 	compressionLevel = flag.Int("compression_level", 1, "What level to pass to the compressor")
+	// switch which compressor/decompressor to use
+	builtinCompressor   = flag.String("builtin_compressor", "pgzip", "which builtin compressor engine to use")
+	builtinDecompressor = flag.String("builtin_decompressor", "auto", "which builtin decompressor engine to use")
+	// use and external command to decompress the backups
+	externalCompressorCmd   = flag.String("external_compressor", "", "command with arguments to use when decompressing a backup")
+	externalCompressorExt   = flag.String("external_compressor_extension", "", "which extension to use when using an external decompressor")
+	externalDecompressorCmd = flag.String("external_decompressor", "", "command with arguments to use when compressing a backup")
 
 	errUnsupportedCompressionEngine    = errors.New("unsupported engine")
 	errUnsupportedCompressionExtension = errors.New("unsupported extension")
@@ -169,9 +176,9 @@ func newExternalDecompressor(ctx context.Context, cmdStr string, reader io.Reade
 	return decompressor, nil
 }
 
-// This returns a reader that will decompress the underlying provided reader and will use the specified supported engine (or
-// try to detect which one to use based on the extension if the default "auto" is used.
-func newBuiltinDecompressor(engine, extension string, reader io.Reader, logger logutil.Logger) (decompressor io.ReadCloser, err error) {
+// This is a wrapper to get the right decompressor (see below) based on the extension of the file.
+func newBuiltinDecompressorFromExtension(extension, engine string, reader io.Reader, logger logutil.Logger) (decompressor io.ReadCloser, err error) {
+	// we only infer the engine from the extension is set to "auto", otherwise we use whatever the user selected
 	if engine == "auto" {
 		logger.Infof("Builtin decompressor set to auto, checking which engine to decompress based on the extension")
 
@@ -183,16 +190,25 @@ func newBuiltinDecompressor(engine, extension string, reader io.Reader, logger l
 		engine = eng
 	}
 
+	return newBuiltinDecompressor(engine, reader, logger)
+}
+
+// This returns a reader that will decompress the underlying provided reader and will use the specified supported engine.
+func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logger) (decompressor io.ReadCloser, err error) {
+	if engine == "pargzip" {
+		logger.Warningf("engine \"pargzip\" doesn't support decompression, using \"pgzip\" instead")
+
+		engine = "pgzip"
+	}
+
 	switch engine {
 	case "pgzip":
 		d, err := pgzip.NewReader(reader)
 		if err != nil {
 			return nil, err
 		}
+
 		decompressor = d
-	case "pargzip":
-		err = errors.New("engine pargzip does not support decompression")
-		return decompressor, err
 	case "lz4":
 		decompressor = ioutil.NopCloser(lz4.NewReader(reader))
 	case "zstd":
