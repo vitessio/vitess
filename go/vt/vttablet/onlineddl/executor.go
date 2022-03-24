@@ -1563,7 +1563,7 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 	case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 		// migration could have started by a different tablet. We need to actively verify if it is running
 		s, _ := e.readVReplStream(ctx, onlineDDL.UUID, true)
-		foundRunning := (s != nil && s.isRunning())
+		foundRunning = (s != nil && s.isRunning())
 		if err := e.terminateVReplMigration(ctx, onlineDDL.UUID); err != nil {
 			return foundRunning, fmt.Errorf("Error terminating migration, vreplication exec error: %+v", err)
 		}
