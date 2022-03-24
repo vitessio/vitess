@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -85,6 +86,7 @@ func TestDial(t *testing.T) {
 		},
 		Discovery:           disco,
 		ConnectivityTimeout: defaultConnectivityTimeout,
+		resolver:            resolver.NewBuilder("test", disco),
 	})
 	defer proxy.Close() // prevents grpc-core from logging a bunch of "connection errors" after deferred listener.Close() above.
 
@@ -135,6 +137,7 @@ func TestRedial(t *testing.T) {
 		},
 		Discovery:           disco,
 		ConnectivityTimeout: defaultConnectivityTimeout,
+		resolver:            resolver.NewBuilder("test", disco),
 	})
 
 	// We don't have a vtctld host until we call Dial
@@ -175,18 +178,23 @@ func TestRedial(t *testing.T) {
 
 	// Force an ungraceful shutdown of the gRPC server to which we're connected
 	currentVtctld.Stop()
+	// TODO: if WaitForReady is going away (which I think our custom resolver obsoletes),
+	// then Sleep is really the only way to ensure that gRPC triggers a redial.
+	// 10ms seems to work consistently on my machine, but we'll work on this before
+	// shipping.
+	time.Sleep(time.Millisecond * 10)
 
 	// Wait for the client connection to shut down. (If we redial too quickly,
 	// we get into a race condition with gRPC's internal retry logic.
 	// (Using WaitForReady here _does_ expose more function internals than is ideal for a unit test,
 	// but it's far less flaky than using time.Sleep.)
-	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		if err = proxy.VtctldClient.WaitForReady(ctx); err != nil {
-			break
-		}
-	}
+	// for {
+	// 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	// 	defer cancel()
+	// 	if err = proxy.VtctldClient.WaitForReady(ctx); err != nil {
+	// 		break
+	// 	}
+	// }
 
 	// Finally, check that we discover, dial + establish a new connection to the remaining vtctld.
 	err = proxy.Dial(context.Background())

@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/credentials"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -39,6 +40,8 @@ type Config struct {
 	Cluster *vtadminpb.Cluster
 
 	ConnectivityTimeout time.Duration
+
+	resolver *resolver.Builder
 }
 
 const defaultConnectivityTimeout = 2 * time.Second
@@ -50,6 +53,7 @@ func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string)
 	cfg := &Config{
 		Cluster:   cluster,
 		Discovery: disco,
+		resolver:  resolver.NewBuilder(cluster.Id, disco),
 	}
 
 	err := cfg.Parse(args)

@@ -18,7 +18,6 @@ package vtctldclient
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -28,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldclient"
@@ -67,6 +67,7 @@ type ClientProxy struct {
 	// this should always be grpcvtctldclient.NewWithDialOpts, but it is
 	// exported for testing purposes.
 	DialFunc func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)
+	resolver *resolver.Builder
 
 	m        sync.Mutex
 	closed   bool
@@ -89,42 +90,56 @@ func New(cfg *Config) *ClientProxy {
 		creds:     cfg.Credentials,
 		discovery: cfg.Discovery,
 		DialFunc:  grpcvtctldclient.NewWithDialOpts,
+		resolver:  cfg.resolver,
 		closed:    true,
 	}
 }
 
 // Dial is part of the Proxy interface.
 func (vtctld *ClientProxy) Dial(ctx context.Context) error {
-	span, ctx := trace.NewSpan(ctx, "VtctldClientProxy.Dial")
+	span, _ := trace.NewSpan(ctx, "VtctldClientProxy.Dial")
 	defer span.Finish()
 
 	vtadminproto.AnnotateClusterSpan(vtctld.cluster, span)
 
 	vtctld.m.Lock()
 	defer vtctld.m.Unlock()
+	//
+	// 	if vtctld.VtctldClient != nil {
+	// 		if !vtctld.closed {
+	// 			waitCtx, waitCancel := context.WithTimeout(ctx, vtctld.cfg.ConnectivityTimeout)
+	// 			defer waitCancel()
+	//
+	// 			if err := vtctld.VtctldClient.WaitForReady(waitCtx); err == nil {
+	// 				// Our cached connection is still open and ready, so we're good to go.
+	// 				span.Annotate("is_noop", true)
+	// 				span.Annotate("vtctld_host", vtctld.host)
+	//
+	// 				vtctld.lastPing = time.Now()
+	//
+	// 				return nil
+	// 			}
+	// 			// If WaitForReady returns an error, that indicates our cached connection
+	// 			// is no longer valid. We fall through to close the cached connection,
+	// 			// discover a new vtctld, and establish a new connection.
+	// 		}
+	//
+	// 		span.Annotate("is_stale", true)
+	//
+	// 		// close before reopen. this is safe to call on an already-closed client.
+	// 		if err := vtctld.Close(); err != nil {
+	// 			// Even if the client connection does not shut down cleanly, we don't want to block
+	// 			// Dial from discovering a new vtctld. This makes VTAdmin's dialer more resilient,
+	// 			// but, as a caveat, it _can_ potentially leak improperly-closed gRPC connections.
+	// 			log.Errorf("error closing possibly-stale connection before re-dialing: %w", err)
+	// 		}
+	// 	}
 
 	if vtctld.VtctldClient != nil {
 		if !vtctld.closed {
-			waitCtx, waitCancel := context.WithTimeout(ctx, vtctld.cfg.ConnectivityTimeout)
-			defer waitCancel()
-
-			if err := vtctld.VtctldClient.WaitForReady(waitCtx); err == nil {
-				// Our cached connection is still open and ready, so we're good to go.
-				span.Annotate("is_noop", true)
-				span.Annotate("vtctld_host", vtctld.host)
-
-				vtctld.lastPing = time.Now()
-
-				return nil
-			}
-			// If WaitForReady returns an error, that indicates our cached connection
-			// is no longer valid. We fall through to close the cached connection,
-			// discover a new vtctld, and establish a new connection.
+			return nil
 		}
 
-		span.Annotate("is_stale", true)
-
-		// close before reopen. this is safe to call on an already-closed client.
 		if err := vtctld.closeLocked(); err != nil {
 			// Even if the client connection does not shut down cleanly, we don't want to block
 			// Dial from discovering a new vtctld. This makes VTAdmin's dialer more resilient,
@@ -133,12 +148,12 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 		}
 	}
 
-	addr, err := vtctld.discovery.DiscoverVtctldAddr(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("error discovering vtctld to dial: %w", err)
-	}
-
-	span.Annotate("vtctld_host", addr)
+	// 	addr, err := vtctld.discovery.DiscoverVtctldAddr(ctx, nil)
+	// 	if err != nil {
+	// 		return fmt.Errorf("error discovering vtctld to dial: %w", err)
+	// 	}
+	//
+	// 	span.Annotate("vtctld_host", addr)
 	span.Annotate("is_using_credentials", vtctld.creds != nil)
 
 	opts := []grpc.DialOption{
@@ -152,26 +167,29 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 		opts = append(opts, grpc.WithPerRPCCredentials(vtctld.creds))
 	}
 
-	client, err := vtctld.DialFunc(addr, grpcclient.FailFast(false), opts...)
+	opts = append(opts, grpc.WithResolvers(vtctld.resolver))
+
+	// TODO: update DialFunc to take ctx as first arg.
+	client, err := vtctld.DialFunc(vtctld.resolver.Scheme()+"://vtctld/", grpcclient.FailFast(false), append(opts, grpc.WithBlock())...)
 	if err != nil {
 		return err
 	}
+	//
+	// 	waitCtx, waitCancel := context.WithTimeout(ctx, vtctld.cfg.ConnectivityTimeout)
+	// 	defer waitCancel()
+	//
+	// 	if err := client.WaitForReady(waitCtx); err != nil {
+	// 		// If the gRPC connection does not transition to a READY state within the context timeout,
+	// 		// then return an error. The onus to redial (or not) is on the caller of the Dial function.
+	// 		// As an enhancement, we could update this Dial function to try redialing the discovered vtctld
+	// 		// a few times with a backoff before giving up.
+	// 		log.Infof("Could not transition to READY state for gRPC connection to %s: %s\n", addr, err.Error())
+	// 		return err
+	// 	}
 
-	waitCtx, waitCancel := context.WithTimeout(ctx, vtctld.cfg.ConnectivityTimeout)
-	defer waitCancel()
-
-	if err := client.WaitForReady(waitCtx); err != nil {
-		// If the gRPC connection does not transition to a READY state within the context timeout,
-		// then return an error. The onus to redial (or not) is on the caller of the Dial function.
-		// As an enhancement, we could update this Dial function to try redialing the discovered vtctld
-		// a few times with a backoff before giving up.
-		log.Infof("Could not transition to READY state for gRPC connection to %s: %s\n", addr, err.Error())
-		return err
-	}
-
-	log.Infof("Established gRPC connection to vtctld %s\n", addr)
+	log.Infof("Established gRPC connection to vtctld\n")
 	vtctld.dialedAt = time.Now()
-	vtctld.host = addr
+	// vtctld.host = addr
 	vtctld.VtctldClient = client
 	vtctld.closed = false
 

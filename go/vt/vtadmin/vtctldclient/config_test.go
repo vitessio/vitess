@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
@@ -46,15 +47,16 @@ func TestParse(t *testing.T) {
 	t.Run("no credentials provided", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, err := Parse(nil, nil, []string{})
+		cfg, err := Parse(&vtadminpb.Cluster{}, nil, []string{})
 		require.NoError(t, err)
 
 		expected := &Config{
-			Cluster:             nil,
+			Cluster:             &vtadminpb.Cluster{},
 			Discovery:           nil,
 			Credentials:         nil,
 			CredentialsPath:     "",
 			ConnectivityTimeout: defaultConnectivityTimeout,
+			resolver:            resolver.NewBuilder("", nil),
 		}
 		assert.Equal(t, expected, cfg)
 	})
@@ -93,6 +95,7 @@ func TestParse(t *testing.T) {
 				Credentials:         creds,
 				CredentialsPath:     credsfile.Name(),
 				ConnectivityTimeout: defaultConnectivityTimeout,
+				resolver:            resolver.NewBuilder("", nil),
 			}
 
 			assert.Equal(t, expected, cfg)
