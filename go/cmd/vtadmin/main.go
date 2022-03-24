@@ -69,7 +69,7 @@ var (
 
 // fatal ensures the tracer is closed and final spans are sent before issuing
 // a log.Fatal call with the given args.
-func fatal(args ...interface{}) {
+func fatal(args ...any) {
 	trace.LogErrorsWhenClosing(traceCloser)
 	log.Fatal(args...)
 }

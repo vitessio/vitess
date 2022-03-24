@@ -76,7 +76,7 @@ func (w *SrvKeyspaceWatcher) GetSrvKeyspace(ctx context.Context, cell, keyspace 
 
 func (w *SrvKeyspaceWatcher) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodata.SrvKeyspace, error) bool) {
 	entry := w.rw.getEntry(&srvKeyspaceKey{cell, keyspace})
-	entry.addListener(ctx, func(v interface{}, err error) bool {
+	entry.addListener(ctx, func(v any, err error) bool {
 		srvkeyspace, _ := v.(*topodata.SrvKeyspace)
 		return callback(srvkeyspace, err)
 	})

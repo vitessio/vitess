@@ -56,7 +56,7 @@ func TestEngineOpen(t *testing.T) {
 	), nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -165,7 +165,7 @@ func TestEngineExec(t *testing.T) {
 	dbClient.ExpectRequest(changeMasterToPrimary, testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -208,7 +208,7 @@ func TestEngineExec(t *testing.T) {
 	dbClient.ExpectRequest(changeMasterToPrimary, testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -509,6 +509,7 @@ func TestCreateDBAndTable(t *testing.T) {
 			"ALTER TABLE _vt.vreplication ADD COLUMN rows_copied.*",
 			"ALTER TABLE _vt.vreplication ADD COLUMN tags.*",
 			"ALTER TABLE _vt.vreplication ADD COLUMN time_heartbeat.*",
+			"ALTER TABLE _vt.vreplication ADD COLUMN workflow_type int NOT NULL DEFAULT 0",
 			"create table if not exists _vt.resharding_journal.*",
 			"create table if not exists _vt.copy_state.*",
 		}
@@ -541,7 +542,7 @@ func TestCreateDBAndTable(t *testing.T) {
 	dbClient.ExpectRequest(changeMasterToPrimary, testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)

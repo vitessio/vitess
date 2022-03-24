@@ -82,7 +82,7 @@ func (qc *QueryCatcher) Next() (*tabletenv.LogStats, error) {
 type eventCatcher struct {
 	start   time.Time
 	logger  *streamlog.StreamLogger
-	in, out chan interface{}
+	in, out chan any
 }
 
 func newEventCatcher(logger *streamlog.StreamLogger) *eventCatcher {
@@ -90,7 +90,7 @@ func newEventCatcher(logger *streamlog.StreamLogger) *eventCatcher {
 		start:  time.Now(),
 		logger: logger,
 		in:     logger.Subscribe("endtoend"),
-		out:    make(chan interface{}, 20),
+		out:    make(chan any, 20),
 	}
 	go func() {
 		for event := range catcher.in {
@@ -113,7 +113,7 @@ func (catcher *eventCatcher) Close() {
 	close(catcher.in)
 }
 
-func (catcher *eventCatcher) next() (interface{}, error) {
+func (catcher *eventCatcher) next() (any, error) {
 	tmr := time.NewTimer(5 * time.Second)
 	defer tmr.Stop()
 	for {

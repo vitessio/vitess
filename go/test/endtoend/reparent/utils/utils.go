@@ -702,7 +702,7 @@ func positionAtLeast(t *testing.T, tablet *cluster.Vttablet, a string, b string)
 }
 
 func assertNodeCount(t *testing.T, result string, want int) {
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	err := json.Unmarshal([]byte(result), &resultMap)
 	require.NoError(t, err)
 

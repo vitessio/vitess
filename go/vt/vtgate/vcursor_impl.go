@@ -586,7 +586,7 @@ func ignoreKeyspace(keyspace string) bool {
 	return keyspace == "" || sqlparser.SystemSchema(keyspace)
 }
 
-func (vc *vcursorImpl) SetUDV(key string, value interface{}) error {
+func (vc *vcursorImpl) SetUDV(key string, value any) error {
 	bindValue, err := sqltypes.BuildBindVariable(value)
 	if err != nil {
 		return err
@@ -781,7 +781,7 @@ func (vc *vcursorImpl) KeyspaceAvailable(ks string) bool {
 }
 
 // ErrorIfShardedF implements the VCursor interface
-func (vc *vcursorImpl) ErrorIfShardedF(ks *vindexes.Keyspace, warn, errFormat string, params ...interface{}) error {
+func (vc *vcursorImpl) ErrorIfShardedF(ks *vindexes.Keyspace, warn, errFormat string, params ...any) error {
 	if ks.Sharded {
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, errFormat, params...)
 	}
@@ -791,7 +791,7 @@ func (vc *vcursorImpl) ErrorIfShardedF(ks *vindexes.Keyspace, warn, errFormat st
 }
 
 // WarnUnshardedOnly implements the VCursor interface
-func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...interface{}) {
+func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...any) {
 	if vc.warnShardedOnly {
 		vc.warnings = append(vc.warnings, &querypb.QueryWarning{
 			Code:    mysql.ERNotSupportedYet,

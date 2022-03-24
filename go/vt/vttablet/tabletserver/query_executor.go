@@ -66,7 +66,7 @@ const (
 	maxQueryBufferDuration = 10 * time.Second
 )
 
-var streamResultPool = sync.Pool{New: func() interface{} {
+var streamResultPool = sync.Pool{New: func() any {
 	return &sqltypes.Result{
 		Rows: make([][]sqltypes.Value, 0, streamRowsSize),
 	}

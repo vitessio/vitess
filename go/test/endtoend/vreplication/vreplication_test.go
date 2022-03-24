@@ -28,20 +28,18 @@ import (
 	"time"
 
 	"github.com/buger/jsonparser"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/utils"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/log"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/wrangler"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 var (
@@ -118,7 +116,9 @@ func testBasicVreplicationWorkflow(t *testing.T) {
 	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", allCells, mainClusterConfig)
 
 	require.NotNil(t, vc)
-	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
+	// Keep the cluster processes minimal to deal with CI resource constraints
+	defaultReplicas = 0
+	defaultRdonly = 0
 	defer func() { defaultReplicas = 1 }()
 
 	defer vc.TearDown(t)
@@ -987,7 +987,7 @@ func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info str
 
 func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string) {
 	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--v1", "--cells="+cell, "--workflow="+workflow,
-		"-tablet_types="+"primary,replica,rdonly", sourceKs, targetKs, tables); err != nil {
+		"--tablet_types="+"primary,replica,rdonly", sourceKs, targetKs, tables); err != nil {
 		t.Fatalf("MoveTables command failed with %+v\n", err)
 	}
 }

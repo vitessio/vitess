@@ -82,13 +82,13 @@ var (
 		}
 	}`
 	commonTabletArg = []string{
-		"-vreplication_healthcheck_topology_refresh", "1s",
-		"-vreplication_healthcheck_retry_delay", "1s",
-		"-vreplication_retry_delay", "1s",
-		"-degraded_threshold", "5s",
-		"-lock_tables_timeout", "5s",
-		"-watch_replication_stream",
-		"-serving_state_grace_period", "1s"}
+		"--vreplication_healthcheck_topology_refresh", "1s",
+		"--vreplication_healthcheck_retry_delay", "1s",
+		"--vreplication_retry_delay", "1s",
+		"--degraded_threshold", "5s",
+		"--lock_tables_timeout", "5s",
+		"--watch_replication_stream",
+		"--serving_state_grace_period", "1s"}
 )
 
 func removeTablets(t *testing.T, tablets []*cluster.Vttablet) {
@@ -108,7 +108,7 @@ func removeTablets(t *testing.T, tablets []*cluster.Vttablet) {
 
 func initializeCluster(t *testing.T) {
 	clusterInstance = cluster.NewCluster(cell, hostname)
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
+	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 
 	// Start topo server
 	err := clusterInstance.StartTopo()
@@ -143,7 +143,7 @@ func initializeCluster(t *testing.T) {
 	shard1.Vttablets = []*cluster.Vttablet{shard1Primary, shard1Replica}
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, commonTabletArg...)
-	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "-restore_from_backup", "-enable_semi_sync")
+	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--restore_from_backup", "--enable_semi_sync")
 
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
 	require.NoError(t, err)
@@ -210,9 +210,9 @@ func insertRow(t *testing.T, id int, productName string, isSlow bool) {
 }
 
 func createRestoreKeyspace(t *testing.T, timeToRecover, restoreKeyspaceName string) {
-	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("CreateKeyspace",
-		"-keyspace_type=SNAPSHOT", "-base_keyspace="+keyspaceName,
-		"-snapshot_time", timeToRecover, restoreKeyspaceName)
+	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("CreateKeyspace", "--",
+		"--keyspace_type=SNAPSHOT", "--base_keyspace="+keyspaceName,
+		"--snapshot_time", timeToRecover, restoreKeyspaceName)
 	log.Info(output)
 	require.NoError(t, err)
 }
@@ -404,10 +404,10 @@ func tlsPerformResharding(t *testing.T) {
 	err := clusterInstance.VtctlclientProcess.ApplyVSchema(keyspaceName, vSchema)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlProcess.ExecuteCommand("InitShardPrimary", "-force", "ks/-80", shard0Primary.Alias)
+	err = clusterInstance.VtctlProcess.ExecuteCommand("InitShardPrimary", "--", "--force", "ks/-80", shard0Primary.Alias)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlProcess.ExecuteCommand("InitShardPrimary", "-force", "ks/80-", shard1Primary.Alias)
+	err = clusterInstance.VtctlProcess.ExecuteCommand("InitShardPrimary", "--", "--force", "ks/80-", shard1Primary.Alias)
 	require.NoError(t, err)
 
 	// we need to create the schema, and the worker will do data copying
@@ -419,10 +419,10 @@ func tlsPerformResharding(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "ks.reshardWorkflow", "0", "-80,80-")
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SwitchReads", "-tablet_type=rdonly", "ks.reshardWorkflow")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SwitchReads", "--", "--tablet_type=rdonly", "ks.reshardWorkflow")
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SwitchReads", "-tablet_type=replica", "ks.reshardWorkflow")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SwitchReads", "--", "--tablet_type=replica", "ks.reshardWorkflow")
 	require.NoError(t, err)
 
 	// then serve primary from the split shards
@@ -436,7 +436,7 @@ func tlsPerformResharding(t *testing.T) {
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
 		require.NoError(t, err)
 	}
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", primary.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary", primary.Alias)
 	require.NoError(t, err)
 
 	// rebuild the serving graph, all mentions of the old shards should be gone
@@ -497,27 +497,27 @@ func tlsLaunchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, tabletForBi
 
 	certDir := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/ssl_%010d", tablet.MysqlctlProcess.TabletUID))
 	tablet.VttabletProcess.ExtraArgs = []string{
-		"-disable_active_reparents",
-		"-enable_replication_reporter=false",
-		"-init_db_name_override", dbName,
-		"-init_tablet_type", "replica",
-		"-init_keyspace", restoreKeyspaceName,
-		"-init_shard", shardName,
-		"-binlog_host", clusterInstance.Hostname,
-		"-binlog_port", fmt.Sprintf("%d", tabletForBinlogs.MySQLPort),
-		"-binlog_user", mysqlUserName,
-		"-binlog_password", mysqlPassword,
-		"-binlog_ssl_ca", certDir + "/ca-cert.pem",
-		"-binlog_ssl_server_name", getCNFromCertPEM(certDir + "/server-001-cert.pem"),
-		"-pitr_gtid_lookup_timeout", lookupTimeout,
-		"-vreplication_healthcheck_topology_refresh", "1s",
-		"-vreplication_healthcheck_retry_delay", "1s",
-		"-vreplication_tablet_type", "replica",
-		"-vreplication_retry_delay", "1s",
-		"-degraded_threshold", "5s",
-		"-lock_tables_timeout", "5s",
-		"-watch_replication_stream",
-		"-serving_state_grace_period", "1s",
+		"--disable_active_reparents",
+		"--enable_replication_reporter=false",
+		"--init_db_name_override", dbName,
+		"--init_tablet_type", "replica",
+		"--init_keyspace", restoreKeyspaceName,
+		"--init_shard", shardName,
+		"--binlog_host", clusterInstance.Hostname,
+		"--binlog_port", fmt.Sprintf("%d", tabletForBinlogs.MySQLPort),
+		"--binlog_user", mysqlUserName,
+		"--binlog_password", mysqlPassword,
+		"--binlog_ssl_ca", certDir + "/ca-cert.pem",
+		"--binlog_ssl_server_name", getCNFromCertPEM(certDir + "/server-001-cert.pem"),
+		"--pitr_gtid_lookup_timeout", lookupTimeout,
+		"--vreplication_healthcheck_topology_refresh", "1s",
+		"--vreplication_healthcheck_retry_delay", "1s",
+		"--vreplication_tablet_type", "replica",
+		"--vreplication_retry_delay", "1s",
+		"--degraded_threshold", "5s",
+		"--lock_tables_timeout", "5s",
+		"--watch_replication_stream",
+		"--serving_state_grace_period", "1s",
 	}
 	tablet.VttabletProcess.ServingStatus = ""
 

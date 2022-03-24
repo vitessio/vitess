@@ -17,6 +17,7 @@ limitations under the License.
 package localvtctldclient
 
 import (
+	"context"
 	"errors"
 	"sync"
 
@@ -36,6 +37,9 @@ type localVtctldClient struct {
 
 // Close is part of the vtctldclient.VtctldClient interface.
 func (client *localVtctldClient) Close() error { return nil }
+
+// WaitForReady is part of the vtctldclient.VtctldClient interface.
+func (client *localVtctldClient) WaitForReady(ctx context.Context) error { return nil }
 
 //go:generate -command localvtctldclient go run ../vtctldclient/codegen
 //go:generate localvtctldclient -targetpkg localvtctldclient -impl localVtctldClient -out client_gen.go -local

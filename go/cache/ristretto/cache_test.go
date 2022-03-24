@@ -237,7 +237,7 @@ func TestCacheProcessItems(t *testing.T) {
 		MaxCost:            10,
 		BufferItems:        64,
 		IgnoreInternalCost: true,
-		Cost: func(value interface{}) int64 {
+		Cost: func(value any) int64 {
 			return int64(value.(int))
 		},
 		OnEvict: func(item *Item) {
@@ -625,7 +625,7 @@ func TestDropUpdates(t *testing.T) {
 		lastEvictedSet := int64(-1)
 
 		var err error
-		handler := func(_ interface{}, value interface{}) {
+		handler := func(_ any, value any) {
 			v := value.(string)
 			lastEvictedSet, err = strconv.ParseInt(string(v), 10, 32)
 			require.NoError(t, err)

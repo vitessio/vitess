@@ -34,7 +34,7 @@ const (
 	jsonContentType = "application/json; charset=utf-8"
 )
 
-func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...interface{}) {
+func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...any) {
 	errMsg := fmt.Sprintf(format, args...)
 	log.Errorf("HTTP error on %v: %v, request: %#v", r.URL.Path, errMsg, r)
 	http.Error(w, errMsg, http.StatusInternalServerError)
@@ -53,7 +53,7 @@ func handleAPI(apiPath string, handlerFunc func(w http.ResponseWriter, r *http.R
 	})
 }
 
-func handleCollection(collection string, getFunc func(*http.Request) (interface{}, error)) {
+func handleCollection(collection string, getFunc func(*http.Request) (any, error)) {
 	handleAPI(collection+"/", func(w http.ResponseWriter, r *http.Request) error {
 		// Get the requested object.
 		obj, err := getFunc(r)
@@ -89,7 +89,7 @@ func getItemPath(url string) string {
 
 func initAPI(hc discovery.HealthCheck) {
 	// Healthcheck real time status per (cell, keyspace, tablet type, metric).
-	handleCollection("health-check", func(r *http.Request) (interface{}, error) {
+	handleCollection("health-check", func(r *http.Request) (any, error) {
 		cacheStatus := hc.CacheStatus()
 
 		itemPath := getItemPath(r.URL.Path)

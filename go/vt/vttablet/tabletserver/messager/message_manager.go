@@ -266,7 +266,7 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, pos
 }
 
 func buildPostponeQuery(name sqlparser.TableIdent, minBackoff, maxBackoff time.Duration) *sqlparser.ParsedQuery {
-	var args []interface{}
+	var args []any
 
 	// since messages are immediately postponed upon sending, we need to add exponential backoff on top
 	// of the ackWaitTime, otherwise messages will be resent too quickly.

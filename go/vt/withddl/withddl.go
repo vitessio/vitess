@@ -62,7 +62,7 @@ func (wd *WithDDL) DDLs() []string {
 // func(query string, maxrows int) (*sqltypes.Result, error)
 // func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
 // func(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
-func (wd *WithDDL) Exec(ctx context.Context, query string, fQuery interface{}, fDDL interface{}) (*sqltypes.Result, error) {
+func (wd *WithDDL) Exec(ctx context.Context, query string, fQuery any, fDDL any) (*sqltypes.Result, error) {
 	execQuery, err := wd.unify(ctx, fQuery)
 	if err != nil {
 		return nil, err
@@ -97,7 +97,7 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, fQuery interface{}, f
 
 // ExecIgnore executes the query using the supplied function.
 // If there are any schema errors, it returns an empty result.
-func (wd *WithDDL) ExecIgnore(ctx context.Context, query string, f interface{}) (*sqltypes.Result, error) {
+func (wd *WithDDL) ExecIgnore(ctx context.Context, query string, f any) (*sqltypes.Result, error) {
 	exec, err := wd.unify(ctx, f)
 	if err != nil {
 		return nil, err
@@ -112,7 +112,7 @@ func (wd *WithDDL) ExecIgnore(ctx context.Context, query string, f interface{}) 
 	return &sqltypes.Result{}, nil
 }
 
-func (wd *WithDDL) unify(ctx context.Context, f interface{}) (func(query string) (*sqltypes.Result, error), error) {
+func (wd *WithDDL) unify(ctx context.Context, f any) (func(query string) (*sqltypes.Result, error), error) {
 	switch f := f.(type) {
 	case func(query string) (*sqltypes.Result, error):
 		return f, nil

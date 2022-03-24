@@ -192,7 +192,7 @@ func TestLargestForm(t *testing.T) {
 	}
 }
 
-func testfile(t *testing.T, name string, out interface{}) {
+func testfile(t *testing.T, name string, out any) {
 	tf, err := os.Open(path.Join("testdata", name))
 	if err != nil {
 		t.Fatal(err)

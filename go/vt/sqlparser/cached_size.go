@@ -893,7 +893,7 @@ func (cached *DerivedTable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(24)
 	}
 	// field Select vitess.io/vitess/go/vt/sqlparser.SelectStatement
 	if cc, ok := cached.Select.(cachedObject); ok {
@@ -1373,6 +1373,48 @@ func (cached *IsExpr) CachedSize(alloc bool) int64 {
 	}
 	// field Left vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Left.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JSONPrettyExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field JSONVal vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONVal.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JSONStorageFreeExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field JSONVal vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONVal.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JSONStorageSizeExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field JSONVal vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONVal.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size

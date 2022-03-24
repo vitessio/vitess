@@ -73,7 +73,7 @@ func TestUpdateEqual(t *testing.T) {
 	sbclookup.SetResults([]*sqltypes.Result{{}})
 	_, err = executorExec(executor, "update music set a=2 where id = 2", nil)
 	require.NoError(t, err)
-	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(2)})
+	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id for update",
@@ -388,7 +388,7 @@ func TestDeleteEqual(t *testing.T) {
 	sbclookup.SetResults([]*sqltypes.Result{{}})
 	_, err = executorExec(executor, "delete from music where id = 1", nil)
 	require.NoError(t, err)
-	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(1)})
+	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewInt64(1)})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id for update",
@@ -496,7 +496,7 @@ func TestUpdateEqualWithMultipleLookupVindex(t *testing.T) {
 			BindVariables: map[string]*querypb.BindVariable{},
 		}}
 
-	vars, _ := sqltypes.BuildBindVariable([]interface{}{
+	vars, _ := sqltypes.BuildBindVariable([]any{
 		sqltypes.NewInt64(1),
 	})
 	lookWant := []*querypb.BoundQuery{{
@@ -548,7 +548,7 @@ func TestUpdateUseHigherCostVindexIfBackfilling(t *testing.T) {
 			BindVariables: map[string]*querypb.BindVariable{},
 		}}
 
-	vars, _ := sqltypes.BuildBindVariable([]interface{}{
+	vars, _ := sqltypes.BuildBindVariable([]any{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 	})
@@ -649,7 +649,7 @@ func TestDeleteEqualWithMultipleLookupVindex(t *testing.T) {
 			BindVariables: map[string]*querypb.BindVariable{},
 		}}
 
-	vars, _ := sqltypes.BuildBindVariable([]interface{}{
+	vars, _ := sqltypes.BuildBindVariable([]any{
 		sqltypes.NewInt64(1),
 	})
 	lookWant := []*querypb.BoundQuery{{
@@ -702,7 +702,7 @@ func TestDeleteUseHigherCostVindexIfBackfilling(t *testing.T) {
 			BindVariables: map[string]*querypb.BindVariable{},
 		}}
 
-	vars, _ := sqltypes.BuildBindVariable([]interface{}{
+	vars, _ := sqltypes.BuildBindVariable([]any{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 	})
@@ -1037,7 +1037,7 @@ func TestInsertShardedIgnore(t *testing.T) {
 	}}
 	assertQueries(t, sbc2, wantQueries)
 
-	vars, err := sqltypes.BuildBindVariable([]interface{}{
+	vars, err := sqltypes.BuildBindVariable([]any{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),
@@ -1113,7 +1113,7 @@ func TestInsertShardedIgnore(t *testing.T) {
 	}
 	assertQueries(t, sbc1, nil)
 	assertQueries(t, sbc2, nil)
-	vars, err = sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(1)})
+	vars, err = sqltypes.BuildBindVariable([]any{sqltypes.NewInt64(1)})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id for update",
@@ -1145,7 +1145,7 @@ func TestInsertOnDupKey(t *testing.T) {
 	}}
 	assertQueries(t, sbc1, wantQueries)
 	assertQueries(t, sbc2, nil)
-	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(1)})
+	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewInt64(1)})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id for update",
@@ -1423,7 +1423,7 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 		},
 	}}
 	assertQueries(t, sbc, wantQueries)
-	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(3)})
+	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewInt64(3)})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id for update",

@@ -157,7 +157,7 @@ func (p *Projection) description() PrimitiveDescription {
 	}
 	return PrimitiveDescription{
 		OperatorType: "Projection",
-		Other: map[string]interface{}{
+		Other: map[string]any{
 			"Expressions": exprs,
 		},
 	}

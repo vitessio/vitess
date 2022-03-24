@@ -158,7 +158,7 @@ func (v *VStream) GetFields(_ VCursor, _ map[string]*querypb.BindVariable) (*sql
 }
 
 func (v *VStream) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Table":    v.TableName,
 		"Limit":    v.Limit,
 		"Position": v.Position,

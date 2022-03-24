@@ -47,19 +47,19 @@ var (
 	// Clusters 10, 25 are executed on docker, using the docker_test_cluster 10, 25 workflows.
 	// Hence, they are not listed in the list below.
 	clusterList = []string{
-		"11",
+		"vtctlbackup_sharded_clustertest_heavy",
 		"12",
 		"13",
-		"14",
+		"ers_prs_newfeatures_heavy",
 		"15",
-		"16",
+		"shardedrecovery_stress_verticalsplit_heavy",
 		"17",
 		"18",
 		"19",
 		"20",
 		"21",
 		"22",
-		"23",
+		"worker_vault_heavy",
 		"24",
 		"26",
 		"vstream_failover",
@@ -88,6 +88,7 @@ var (
 		"vtgate_readafterwrite",
 		"vtgate_reservedconn",
 		"vtgate_schema",
+		"vtgate_tablet_healthcheck_cache",
 		"vtgate_topo",
 		"vtgate_topo_consul",
 		"vtgate_topo_etcd",
@@ -104,15 +105,14 @@ var (
 		"vreplication_across_db_versions",
 		"vreplication_multicell",
 		"vreplication_cellalias",
+		"vreplication_basic",
+		"vreplication_v2",
 		"vtorc",
 		"schemadiff_vrepl",
 	}
 
 	clusterSelfHostedList []string
-	clusterDockerList     = []string{
-		"vreplication_basic",
-		"vreplication_v2",
-	}
+	clusterDockerList     = []string{}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
 	clustersRequiringXtraBackup = append(clusterList, clusterSelfHostedList...)
@@ -135,12 +135,13 @@ type unitTest struct {
 type clusterTest struct {
 	Name, Shard, Platform        string
 	MakeTools, InstallXtraBackup bool
-	Ubuntu20                     bool
+	Ubuntu20, Docker             bool
+	LimitResourceUsage           bool
 }
 
 type selfHostedTest struct {
 	Name, Platform, Dockerfile, Shard, ImageName, directoryName string
-	MakeTools, InstallXtraBackup                                bool
+	MakeTools, InstallXtraBackup, Docker                        bool
 }
 
 func mergeBlankLines(buf *bytes.Buffer) string {
@@ -303,6 +304,9 @@ func generateClusterWorkflows(list []string, tpl string) {
 				break
 			}
 		}
+		if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
+			test.LimitResourceUsage = true
+		}
 
 		path := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
 		template := tpl
@@ -356,7 +360,7 @@ func setupTestDockerFile(test *selfHostedTest) error {
 	return nil
 }
 
-func writeFileFromTemplate(templateFile, path string, test interface{}) error {
+func writeFileFromTemplate(templateFile, path string, test any) error {
 	tpl, err := template.ParseFiles(templateFile)
 	if err != nil {
 		return fmt.Errorf("Error: %s\n", err)

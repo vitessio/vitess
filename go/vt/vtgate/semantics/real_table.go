@@ -101,7 +101,7 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 	if tbl == nil {
 		return nil
 	}
-	nameMap := map[string]interface{}{}
+	nameMap := map[string]any{}
 	cols := make([]ColumnInfo, 0, len(tbl.Columns))
 	for _, col := range tbl.Columns {
 		var collation collations.ID
