@@ -164,9 +164,11 @@ func (c *Config) GetAuthorizer() *Authorizer {
 	return c.authorizer
 }
 
+// DefaultConfig returns a default config that allows all actions on all resources
+// It is mainly used in the case where users explicitly pass --no-rbac flag.
 func DefaultConfig() *Config {
 	log.Info("[rbac]: using default rbac configuration")
-	actions := []string{"get", "create", "delete", "put", "ping"}
+	actions := []string{string(GetAction), string(CreateAction), string(DeleteAction), string(PutAction), string(PingAction)}
 	subjects := []string{"*"}
 	clusters := []string{"*"}
 
