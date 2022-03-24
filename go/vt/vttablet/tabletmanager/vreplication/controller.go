@@ -153,6 +153,10 @@ func (ct *controller) run(ctx context.Context) {
 		if err == nil {
 			return
 		}
+		if isUnrecoverableError(err) {
+			return
+		}
+
 		// Sometimes, canceled contexts get wrapped as errors.
 		select {
 		case <-ctx.Done():
@@ -268,7 +272,11 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		defer vsClient.Close(ctx)
 
 		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
-		return vr.Replicate(ctx)
+		err = vr.Replicate(ctx)
+		if isUnrecoverableError(err) {
+			_ = vr.setState(binlogplayer.BlpError, err.Error())
+		}
+		return err
 	}
 	ct.blpStats.ErrorCounts.Add([]string{"Invalid Source"}, 1)
 	return fmt.Errorf("missing source")
