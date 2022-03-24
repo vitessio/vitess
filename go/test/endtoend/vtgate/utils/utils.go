@@ -19,6 +19,7 @@ package utils
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
@@ -106,5 +107,25 @@ func SkipIfBinaryIsBelowVersion(t *testing.T, majorVersion int, binary string) {
 	}
 	if version < majorVersion {
 		t.Skip("Current version of ", binary, ": v", version, ", expected version >= v", majorVersion)
+	}
+}
+
+// AssertMatchesWithTimeout asserts that the given query produces the expected result.
+// The query will be executed every 'r' duration until it matches the expected result.
+// If after 'd' duration we still did not find the expected result, the test will be marked as failed.
+func AssertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected string, r time.Duration, d time.Duration, failureMsg string) {
+	t.Helper()
+	timeout := time.After(d)
+	diff := "actual and expectation does not match"
+	for len(diff) > 0 {
+		select {
+		case <-timeout:
+			require.Fail(t, failureMsg, diff)
+		case <-time.After(r):
+			qr := Exec(t, conn, query)
+			diff = cmp.Diff(expected,
+				fmt.Sprintf("%v", qr.Rows))
+		}
+
 	}
 }
