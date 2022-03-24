@@ -30,12 +30,12 @@ import (
 // Concatenate Primitive is used to concatenate results from multiple sources.
 var _ Primitive = (*Concatenate)(nil)
 
-//Concatenate specified the parameter for concatenate primitive
+// Concatenate specified the parameter for concatenate primitive
 type Concatenate struct {
 	Sources []Primitive
 }
 
-//RouteType returns a description of the query routing type used by the primitive
+// RouteType returns a description of the query routing type used by the primitive
 func (c *Concatenate) RouteType() string {
 	return "Concatenate"
 }
@@ -103,22 +103,19 @@ func (c *Concatenate) TryExecute(vcursor VCursor, bindVars map[string]*querypb.B
 }
 
 func (c *Concatenate) getFields(res []*sqltypes.Result) ([]*querypb.Field, error) {
-	var resFields []*querypb.Field
+	if len(res) == 0 {
+		return nil, nil
+	}
+	fields := res[0].Fields
 	for _, r := range res {
-		fields := r.Fields
-		if fields == nil {
-			continue
-		}
-		if resFields == nil {
-			resFields = fields
-			continue
-		}
-		err := compareFields(fields, resFields)
-		if err != nil {
-			return nil, err
+		if r.Fields != nil {
+			err := compareFields(fields, r.Fields)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
-	return resFields, nil
+	return fields, nil
 }
 func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
 	results := make([]*sqltypes.Result, len(c.Sources))
@@ -200,6 +197,7 @@ func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 
 // GetFields fetches the field info.
 func (c *Concatenate) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	// TODO: type coercions
 	res, err := c.Sources[0].GetFields(vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -210,15 +208,16 @@ func (c *Concatenate) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bi
 		if err != nil {
 			return nil, err
 		}
-		err = compareFields(result.Fields, res.Fields)
+		err = compareFields(res.Fields, result.Fields)
 		if err != nil {
 			return nil, err
 		}
 	}
+
 	return res, nil
 }
 
-//NeedsTransaction returns whether a transaction is needed for this primitive
+// NeedsTransaction returns whether a transaction is needed for this primitive
 func (c *Concatenate) NeedsTransaction() bool {
 	for _, source := range c.Sources {
 		if source.NeedsTransaction() {
@@ -240,12 +239,6 @@ func (c *Concatenate) description() PrimitiveDescription {
 func compareFields(fields1 []*querypb.Field, fields2 []*querypb.Field) error {
 	if len(fields1) != len(fields2) {
 		return ErrWrongNumberOfColumnsInSelect
-	}
-	for i, field2 := range fields2 {
-		field1 := fields1[i]
-		if field1.Type != field2.Type {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "merging field of different types is not supported, name: (%v, %v) types: (%v, %v)", field1.Name, field2.Name, field1.Type, field2.Type)
-		}
 	}
 	return nil
 }

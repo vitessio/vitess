@@ -59,14 +59,6 @@ func TestConcatenate_NoErrors(t *testing.T) {
 		},
 		expectedResult: r("myid|mycol1|mycol2", "int64|varchar|varbinary", "11|m1|n1", "22|m2|n2", "1|a1|b1", "2|a2|b2", "3|a3|b3", "4|a4|b4"),
 	}, {
-		testName: "mismatch field type",
-		inputs: []*sqltypes.Result{
-			r("id|col1|col2", "int64|varbinary|varbinary", "1|a1|b1", "2|a2|b2"),
-			r("id|col1|col2", "int64|varbinary|varbinary", "1|a1|b1", "2|a2|b2"),
-			r("id|col3|col4", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2"),
-		},
-		expectedError: "merging field of different types is not supported",
-	}, {
 		testName: "input source has different column count",
 		inputs: []*sqltypes.Result{
 			r("id|col1|col2", "int64|varchar|varchar", "1|a1|b1", "2|a2|b2"),
