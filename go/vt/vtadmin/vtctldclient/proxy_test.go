@@ -90,9 +90,6 @@ func TestDial(t *testing.T) {
 	})
 	defer proxy.Close() // prevents grpc-core from logging a bunch of "connection errors" after deferred listener.Close() above.
 
-	// We don't have a vtctld host until we call Dial
-	// require.Empty(t, proxy.host)
-
 	err = proxy.Dial(context.Background())
 	assert.NoError(t, err)
 
@@ -140,9 +137,6 @@ func TestRedial(t *testing.T) {
 		resolver:            resolver.NewBuilder("test", disco, resolver.Options{}),
 	})
 
-	// We don't have a vtctld host until we call Dial
-	// require.Empty(t, proxy.host)
-
 	// Check for a successful connection to whichever vtctld we discover first.
 	err = proxy.Dial(context.Background())
 	assert.NoError(t, err)
@@ -183,18 +177,6 @@ func TestRedial(t *testing.T) {
 	// 10ms seems to work consistently on my machine, but we'll work on this before
 	// shipping.
 	time.Sleep(time.Millisecond * 10)
-
-	// Wait for the client connection to shut down. (If we redial too quickly,
-	// we get into a race condition with gRPC's internal retry logic.
-	// (Using WaitForReady here _does_ expose more function internals than is ideal for a unit test,
-	// but it's far less flaky than using time.Sleep.)
-	// for {
-	// 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	// 	defer cancel()
-	// 	if err = proxy.VtctldClient.WaitForReady(ctx); err != nil {
-	// 		break
-	// 	}
-	// }
 
 	// Finally, check that we discover, dial + establish a new connection to the remaining vtctld.
 	err = proxy.Dial(context.Background())
