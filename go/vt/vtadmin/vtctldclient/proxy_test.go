@@ -26,30 +26,46 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
-	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
+
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
 type fakeVtctld struct {
-	vtctlservicepb.VtctlServer
+	vtctlservicepb.VtctldServer
+	addr string
 }
 
-func initVtctlServer() (net.Listener, *grpc.Server, error) {
+// GetKeyspace is used for tests to detect what addr the VtctldServer is
+// listening on. The addr will always be stored as resp.Keyspace.Name, and the
+// actual request is ignored.
+func (fake *fakeVtctld) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeyspaceRequest) (*vtctldatapb.GetKeyspaceResponse, error) {
+	return &vtctldatapb.GetKeyspaceResponse{
+		Keyspace: &vtctldatapb.Keyspace{
+			Name: fake.addr,
+		},
+	}, nil
+}
+
+func initVtctldServer() (net.Listener, *grpc.Server, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, nil, err
 	}
 
-	vtctld := &fakeVtctld{}
+	vtctld := &fakeVtctld{
+		addr: listener.Addr().String(),
+	}
 	server := grpc.NewServer()
-	vtctlservicepb.RegisterVtctlServer(server, vtctld)
+	vtctlservicepb.RegisterVtctldServer(server, vtctld)
 
 	return listener, server, err
 }
 
 func TestDial(t *testing.T) {
-	listener, server, err := initVtctlServer()
+	listener, server, err := initVtctldServer()
 	require.NoError(t, err)
 
 	defer listener.Close()
@@ -73,18 +89,21 @@ func TestDial(t *testing.T) {
 	defer proxy.Close() // prevents grpc-core from logging a bunch of "connection errors" after deferred listener.Close() above.
 
 	// We don't have a vtctld host until we call Dial
-	require.Empty(t, proxy.host)
+	// require.Empty(t, proxy.host)
 
 	err = proxy.Dial(context.Background())
 	assert.NoError(t, err)
-	assert.Equal(t, listener.Addr().String(), proxy.host)
+
+	resp, err := proxy.GetKeyspace(context.Background(), &vtctldatapb.GetKeyspaceRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, listener.Addr().String(), resp.Keyspace.Name)
 }
 
 // TestRedial tests that vtadmin-api is able to recover from a lost connection to
 // a vtctld by rediscovering and redialing a new one.
 func TestRedial(t *testing.T) {
 	// Initialize vtctld #1
-	listener1, server1, err := initVtctlServer()
+	listener1, server1, err := initVtctldServer()
 	require.NoError(t, err)
 
 	defer listener1.Close()
@@ -93,7 +112,7 @@ func TestRedial(t *testing.T) {
 	defer server1.Stop()
 
 	// Initialize vtctld #2
-	listener2, server2, err := initVtctlServer()
+	listener2, server2, err := initVtctldServer()
 	require.NoError(t, err)
 
 	defer listener2.Close()
@@ -119,7 +138,7 @@ func TestRedial(t *testing.T) {
 	})
 
 	// We don't have a vtctld host until we call Dial
-	require.Empty(t, proxy.host)
+	// require.Empty(t, proxy.host)
 
 	// Check for a successful connection to whichever vtctld we discover first.
 	err = proxy.Dial(context.Background())
@@ -131,7 +150,11 @@ func TestRedial(t *testing.T) {
 	var currentVtctld *grpc.Server
 	var nextAddr string
 
-	switch proxy.host {
+	resp, err := proxy.GetKeyspace(context.Background(), &vtctldatapb.GetKeyspaceRequest{})
+	require.NoError(t, err)
+
+	proxyHost := resp.Keyspace.Name
+	switch proxyHost {
 	case listener1.Addr().String():
 		currentVtctld = server1
 		nextAddr = listener2.Addr().String()
@@ -140,7 +163,7 @@ func TestRedial(t *testing.T) {
 		currentVtctld = server2
 		nextAddr = listener1.Addr().String()
 	default:
-		t.Fatalf("invalid proxy host %s", proxy.host)
+		t.Fatalf("invalid proxy host %s", proxyHost)
 	}
 
 	// Remove the shut down vtctld from VTAdmin's service discovery (clumsily).
@@ -168,5 +191,8 @@ func TestRedial(t *testing.T) {
 	// Finally, check that we discover, dial + establish a new connection to the remaining vtctld.
 	err = proxy.Dial(context.Background())
 	assert.NoError(t, err)
-	assert.Equal(t, nextAddr, proxy.host)
+
+	resp, err = proxy.GetKeyspace(context.Background(), &vtctldatapb.GetKeyspaceRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, nextAddr, resp.Keyspace.Name)
 }
