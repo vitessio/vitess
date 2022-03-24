@@ -30,41 +30,23 @@ import (
 // Distinct Primitive is used to uniqueify results
 var _ Primitive = (*Distinct)(nil)
 
-// Distinct Primitive is used to uniqueify results
-type Distinct struct {
-	Source    Primitive
-	CheckCols []CheckCol
-	Truncate  bool
-}
-
-type CheckCol struct {
-	Col       int
-	WsCol     *int
-	Collation collations.ID
-}
-
-func (cc CheckCol) String() string {
-	coll := collations.Local().LookupByID(cc.Collation)
-	var collation string
-	if coll == nil {
-		collation = ""
-	} else {
-		collation = ": " + coll.Name()
+type (
+	// Distinct Primitive is used to uniqueify results
+	Distinct struct {
+		Source    Primitive
+		CheckCols []CheckCol
+		Truncate  bool
 	}
-
-	var column string
-	if cc.WsCol == nil {
-		column = fmt.Sprintf("%d", cc.Col)
-	} else {
-		column = fmt.Sprintf("(%d:%d)", cc.Col, *cc.WsCol)
+	CheckCol struct {
+		Col       int
+		WsCol     *int
+		Collation collations.ID
 	}
-	return column + collation
-}
-
-type probeTable struct {
-	seenRows  map[evalengine.HashCode][]sqltypes.Row
-	checkCols []CheckCol
-}
+	probeTable struct {
+		seenRows  map[evalengine.HashCode][]sqltypes.Row
+		checkCols []CheckCol
+	}
+)
 
 func (pt *probeTable) exists(inputRow sqltypes.Row) (bool, error) {
 	// the two prime numbers used here (17 and 31) are used to
@@ -84,7 +66,7 @@ func (pt *probeTable) exists(inputRow sqltypes.Row) (bool, error) {
 	// we found something in the map - still need to check all individual values
 	// so we don't just fall for a hash collision
 	for _, existingRow := range existingRows {
-		exists, err := equal(existingRow, inputRow, pt.checkCols)
+		exists, err := pt.equal(existingRow, inputRow)
 		if err != nil {
 			return false, err
 		}
@@ -135,21 +117,38 @@ func (pt *probeTable) hashCodeForRow(inputRow sqltypes.Row) (evalengine.HashCode
 		if i >= len(inputRow) {
 			return 0, vterrors.New(vtrpcpb.Code_INTERNAL, "distinct check colls is larger than its input row")
 		}
-		col := inputRow[i]
+		col := inputRow[checkCol.Col]
 		hashcode, err := evalengine.NullsafeHashcode(col, checkCol.Collation, col.Type())
 		if err != nil {
-			return 0, err
+			if err != evalengine.UnsupportedCollationHashError || checkCol.WsCol == nil {
+				return 0, err
+			}
+			checkCol = checkCol.SwitchToWeighString()
+			pt.checkCols[i] = checkCol
+			hashcode, err = evalengine.NullsafeHashcode(inputRow[checkCol.Col], checkCol.Collation, col.Type())
+			if err != nil {
+				return 0, err
+			}
 		}
 		code = code*31 + hashcode
 	}
 	return code, nil
 }
 
-func equal(a, b []sqltypes.Value, checkCols []CheckCol) (bool, error) {
-	for i, col := range checkCols {
-		cmp, err := evalengine.NullsafeCompare(a[i], b[i], col.Collation)
+func (pt *probeTable) equal(a, b sqltypes.Row) (bool, error) {
+	for i, checkCol := range pt.checkCols {
+		cmp, err := evalengine.NullsafeCompare(a[i], b[i], checkCol.Collation)
 		if err != nil {
-			return false, err
+			_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
+			if !isComparisonErr || checkCol.WsCol == nil {
+				return false, err
+			}
+			checkCol = checkCol.SwitchToWeighString()
+			pt.checkCols[i] = checkCol
+			cmp, err = evalengine.NullsafeCompare(a[i], b[i], checkCol.Collation)
+			if err != nil {
+				return false, err
+			}
 		}
 		if cmp != 0 {
 			return false, nil
@@ -212,7 +211,7 @@ func (d *Distinct) TryStreamExecute(vcursor VCursor, bindVars map[string]*queryp
 				result.Rows = append(result.Rows, row)
 			}
 		}
-		return callback(result)
+		return callback(result.Truncate(len(d.CheckCols)))
 	})
 
 	return err
@@ -266,4 +265,30 @@ func (d *Distinct) description() PrimitiveDescription {
 		Other:        other,
 		OperatorType: "Distinct",
 	}
+}
+
+func (cc CheckCol) SwitchToWeighString() CheckCol {
+	return CheckCol{
+		Col:       *cc.WsCol,
+		WsCol:     nil,
+		Collation: collations.CollationBinaryID,
+	}
+}
+
+func (cc CheckCol) String() string {
+	coll := collations.Local().LookupByID(cc.Collation)
+	var collation string
+	if coll == nil {
+		collation = ""
+	} else {
+		collation = ": " + coll.Name()
+	}
+
+	var column string
+	if cc.WsCol == nil {
+		column = fmt.Sprintf("%d", cc.Col)
+	} else {
+		column = fmt.Sprintf("(%d:%d)", cc.Col, *cc.WsCol)
+	}
+	return column + collation
 }
