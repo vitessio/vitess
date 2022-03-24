@@ -27,6 +27,9 @@ jobs:
 
     - name: Get dependencies
       run: |
+        {{- if .Ubuntu20}}
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+        {{- end}}
         sudo apt-get update
         sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
         sudo service mysql stop
