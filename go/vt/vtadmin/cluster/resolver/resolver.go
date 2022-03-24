@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"google.golang.org/grpc/resolver"
+	grpcresolver "google.golang.org/grpc/resolver"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
@@ -32,7 +32,7 @@ type Options struct {
 // vtgate, based on the Authority field of the target. This means that the addr
 // passed to Dial should have the form "{clusterID}://{vtctld|vtgate}/". Other
 // target Authorities will cause an error.
-func NewBuilder(scheme string, disco discovery.Discovery, opts Options) resolver.Builder {
+func NewBuilder(scheme string, disco discovery.Discovery, opts Options) grpcresolver.Builder {
 	return &builder{
 		scheme: scheme,
 		disco:  disco,
@@ -43,8 +43,14 @@ func NewBuilder(scheme string, disco discovery.Discovery, opts Options) resolver
 // Build is part of the resolver.Builder interface. See the commentary on
 // NewBuilder in this package for more details on this particular
 // implementation.
-func (b *builder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
-	r := &Resolver{
+//
+// Build is called during grpc.Dial and grpc.DialContext, but a grpc ClientConn
+// will not call ResolveNow on the built Resolver until an error occurs or a
+// period of time has elapsed. Therefore, we do a first resolution here before
+// returning our Resolver back to grpc core. Failing to do this means that our
+// first RPC would hang waiting for a resolver update.
+func (b *builder) Build(target grpcresolver.Target, cc grpcresolver.ClientConn, opts grpcresolver.BuildOptions) (grpcresolver.Resolver, error) {
+	r := &resolver{
 		disco:  b.disco,
 		cc:     cc,
 		target: target,
@@ -66,14 +72,14 @@ func (b *builder) Scheme() string {
 	return b.scheme
 }
 
-type Resolver struct {
+type resolver struct {
 	disco  discovery.Discovery
-	cc     resolver.ClientConn
-	target resolver.Target
+	cc     grpcresolver.ClientConn
+	target grpcresolver.Target
 	opts   Options
 }
 
-func (r *Resolver) resolve() {
+func (r *resolver) resolve() {
 	span, ctx := trace.NewSpan(context.Background(), "(vtadmin/cluster/resolver).resolve")
 	defer span.Finish()
 
@@ -88,7 +94,7 @@ func (r *Resolver) resolve() {
 	ctx, cancel := context.WithTimeout(ctx, r.opts.ResolveTimeout)
 	defer cancel()
 
-	var addrs []resolver.Address
+	var addrs []grpcresolver.Address
 	switch r.target.Authority {
 	case "vtctld":
 		vtctlds, err := r.disco.DiscoverVtctlds(ctx, r.opts.DiscoveryTags)
@@ -97,9 +103,9 @@ func (r *Resolver) resolve() {
 			return
 		}
 
-		addrs = make([]resolver.Address, len(vtctlds))
+		addrs = make([]grpcresolver.Address, len(vtctlds))
 		for i, vtctld := range vtctlds {
-			addrs[i] = resolver.Address{
+			addrs[i] = grpcresolver.Address{
 				Addr: vtctld.Hostname,
 			}
 		}
@@ -110,9 +116,9 @@ func (r *Resolver) resolve() {
 			return
 		}
 
-		addrs = make([]resolver.Address, len(vtgates))
+		addrs = make([]grpcresolver.Address, len(vtgates))
 		for i, vtgate := range vtgates {
-			addrs[i] = resolver.Address{
+			addrs[i] = grpcresolver.Address{
 				Addr: vtgate.Hostname,
 			}
 		}
@@ -128,13 +134,17 @@ func (r *Resolver) resolve() {
 
 	log.Infof("%s: found %d %ss (cluster %s)", logPrefix, len(addrs), r.target.Authority, r.target.Scheme)
 
-	if err := r.cc.UpdateState(resolver.State{Addresses: addrs}); err != nil {
+	if err := r.cc.UpdateState(grpcresolver.State{Addresses: addrs}); err != nil {
 		log.Errorf("%s: failed to update addresses for %s (cluster %s)", logPrefix, err, r.target.Scheme)
 	}
 }
 
-func (r *Resolver) ResolveNow(o resolver.ResolveNowOptions) {
+// ResolveNow is part of the resolver.Resolver interface. It is called by grpc
+// ClientConn's when errors occur, as well as periodically to refresh the set of
+// addresses a ClientConn can use for SubConns.
+func (r *resolver) ResolveNow(o grpcresolver.ResolveNowOptions) {
 	r.resolve()
 }
 
-func (r *Resolver) Close() {}
+// Close is part of the resolver.Resolver interface.
+func (r *resolver) Close() {}
