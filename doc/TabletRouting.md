@@ -80,14 +80,14 @@ to. Since it knows the health status of all tablets for a given keyspace / shard
 
 ## Vtgate TabletGateway
 
-An important interface inside vtgate is the TabletGateway. It can send
+An important component inside vtgate is the TabletGateway. It can send
 queries to a tablet by keyspace, shard, and tablet type.
 
 As mentioned previously, the higher levels inside vtgate can resolve queries to
 a keyspace, shard and tablet type. The queries are then passed to the TabletGateway inside vtgate,
 to route them to the right tablet.
 
-The TabletGateway Combines a set of TopologyWatchers (described in the
+TabletGateway combines a set of TopologyWatchers (described in the
 discovery section, one per cell) as a source of tablets, a HealthCheck module
 to watch their health, and a tabletHealthCheck per tablet to collect all the health
 information. Based on this data, it can find the best tablet to use.
