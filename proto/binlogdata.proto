@@ -189,7 +189,10 @@ message Filter {
   // If the value is ERR_ON_MISMATCH (default), then it errors out.
   // If it's BEST_EFFORT, it sends a field event with fake column
   // names as "@1", "@2", etc.
-  FieldEventMode fieldEventMode = 2;
+  FieldEventMode field_event_mode = 2;
+
+  int64 workflow_type = 3;
+  string workflow_name = 4;
 }
 
 // OnDDLAction lists the possible actions for DDLs.
@@ -198,6 +201,16 @@ enum OnDDLAction {
   STOP = 1;
   EXEC = 2;
   EXEC_IGNORE = 3;
+}
+
+// VReplicationWorkflowType define types of vreplication workflows.
+enum VReplicationWorkflowType {
+  MATERIALIZE = 0;
+  MOVETABLES = 1;
+  CREATELOOKUPINDEX = 2;
+  MIGRATE = 3;
+  RESHARD = 4;
+  ONLINEDDL = 5;
 }
 
 // BinlogSource specifies the source  and filter parameters for

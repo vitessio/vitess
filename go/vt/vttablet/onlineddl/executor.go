@@ -1042,6 +1042,15 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		if _, err := e.vreplicationExec(ctx, tmClient, tablet.Tablet, insertVReplicationQuery); err != nil {
 			return err
 		}
+
+		{
+			// temporary hack. todo: this should be done when inserting any _vt.vreplication record across all workflow types
+			query := fmt.Sprintf("update _vt.vreplication set workflow_type = %d where workflow = '%s'",
+				binlogdatapb.VReplicationWorkflowType_ONLINEDDL, v.workflow)
+			if _, err := e.vreplicationExec(ctx, tmClient, tablet.Tablet, query); err != nil {
+				return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", tablet.Tablet, query)
+			}
+		}
 		// start stream!
 		startVReplicationQuery, err := v.generateStartStatement(ctx)
 		if err != nil {
