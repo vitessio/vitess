@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-
 	grpcresolver "google.golang.org/grpc/resolver"
 
 	"vitess.io/vitess/go/vt/grpcclient"
