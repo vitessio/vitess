@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/cluster"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -94,4 +96,15 @@ func Exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 func ExecAllowError(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	t.Helper()
 	return conn.ExecuteFetch(query, 1000, true)
+}
+
+// SkipIfBinaryIsBelowVersion skips the given test if the binary's major version is below majorVersion.
+func SkipIfBinaryIsBelowVersion(t *testing.T, majorVersion int, binary string) {
+	version, err := cluster.GetMajorVersion(binary)
+	if err != nil {
+		return
+	}
+	if version < majorVersion {
+		t.Skip("Current version of ", binary, ": v", version, ", expected version >= v", majorVersion)
+	}
 }

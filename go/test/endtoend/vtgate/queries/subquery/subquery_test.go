@@ -41,8 +41,10 @@ func TestSubqueriesHasValues(t *testing.T) {
 	utils.AssertMatches(t, conn, `SELECT id2 FROM t1 WHERE id1 NOT IN (SELECT id1 FROM t1 WHERE id1 > 10) ORDER BY id2`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)] [INT64(6)]]`)
 }
 
+// Test only supported in >= v14.0.0
 func TestSubqueriesExists(t *testing.T) {
 	defer cluster.PanicHandler(t)
+	utils.SkipIfBinaryIsBelowVersion(t, 14, "vtgate")
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
