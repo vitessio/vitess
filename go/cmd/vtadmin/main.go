@@ -171,8 +171,8 @@ func main() {
 
 	// rbac flags
 	rootCmd.Flags().StringVar(&rbacConfigPath, "rbac-config", "", "path to an RBAC config file. must be set if passing --rbac")
-	rootCmd.Flags().BoolVar(&enableRBAC, "rbac", false, "whether to enable rbac. must be set if not passing --rbac")
-	rootCmd.Flags().BoolVar(&disableRBAC, "no-rbac", false, "whether to disable rbac. must be set if not passing --no-rbac")
+	rootCmd.Flags().BoolVar(&enableRBAC, "rbac", false, "whether to enable RBAC. must be set if not passing --rbac")
+	rootCmd.Flags().BoolVar(&disableRBAC, "no-rbac", false, "whether to disable RBAC. must be set if not passing --no-rbac")
 
 	// glog flags, no better way to do this
 	rootCmd.Flags().AddGoFlag(flag.Lookup("v"))
