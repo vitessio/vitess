@@ -43,6 +43,8 @@ var (
 	defaultClusterConfig cluster.Config
 
 	rbacConfigPath string
+	enableRbac     bool
+	disableRbac    bool
 
 	traceCloser io.Closer = &noopCloser{}
 
@@ -101,13 +103,19 @@ func run(cmd *cobra.Command, args []string) {
 	}
 
 	var rbacConfig *rbac.Config
-	if rbacConfigPath != "" {
+	if !disableRbac && !enableRbac {
+		fatal("must explicitly enable or disable RBAC by passing --no-rbac or --rbac")
+	}
+	if enableRbac && !disableRbac && rbacConfigPath != "" {
 		cfg, err := rbac.LoadConfig(rbacConfigPath)
 		if err != nil {
 			fatal(err)
 		}
 
 		rbacConfig = cfg
+	}
+	if disableRbac && !enableRbac {
+		rbacConfig = rbac.DefaultConfig()
 	}
 
 	for i, cfg := range configs {
@@ -163,6 +171,8 @@ func main() {
 
 	// rbac flags
 	rootCmd.Flags().StringVar(&rbacConfigPath, "rbac-config", "rbac.yaml", "")
+	rootCmd.Flags().BoolVar(&enableRbac, "rbac", false, "whether to enable rbac")
+	rootCmd.Flags().BoolVar(&disableRbac, "no-rbac", false, "whether to disable rbac")
 
 	// glog flags, no better way to do this
 	rootCmd.Flags().AddGoFlag(flag.Lookup("v"))

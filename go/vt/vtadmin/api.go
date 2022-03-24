@@ -225,6 +225,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		api.Handler().ServeHTTP(w, r)
 		return
 	}
+
 	dynamicAPI := &API{
 		clusters:   api.clusters,
 		clusterMap: api.clusterMap,

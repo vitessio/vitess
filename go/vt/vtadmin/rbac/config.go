@@ -163,3 +163,41 @@ func (c *Config) GetAuthenticator() Authenticator {
 func (c *Config) GetAuthorizer() *Authorizer {
 	return c.authorizer
 }
+
+func DefaultConfig() *Config {
+	log.Info("[rbac]: using default rbac configuration")
+	actions := []string{"get", "create", "delete", "put", "ping"}
+	subjects := []string{"*"}
+	clusters := []string{"*"}
+
+	cfg := map[string][]*Rule{
+		"*": {
+			{
+				clusters: sets.NewString(clusters...),
+				actions:  sets.NewString(actions...),
+				subjects: sets.NewString(subjects...),
+			},
+		},
+	}
+
+	return &Config{
+		Rules: []*struct {
+			Resource string
+			Actions  []string
+			Subjects []string
+			Clusters []string
+		}{
+			{
+				Resource: "*",
+				Actions:  actions,
+				Subjects: subjects,
+				Clusters: clusters,
+			},
+		},
+		cfg: cfg,
+		authorizer: &Authorizer{
+			policies: cfg,
+		},
+		authenticator: nil,
+	}
+}
