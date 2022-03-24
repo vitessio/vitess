@@ -27,8 +27,15 @@ jobs:
 
     - name: Get dependencies
       run: |
+        {{- if .Ubuntu20}}
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+        {{- end}}
         sudo apt-get update
+        {{- if .Ubuntu20}}
+        sudo apt-get install -y make unzip g++ etcd curl git wget eatmydata
+        {{- else }}
         sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
+        {{- end}}
         sudo service mysql stop
         sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/

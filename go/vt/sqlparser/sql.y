@@ -2331,9 +2331,9 @@ drop_statement:
   {
     // Change this to an alter statement
     if $3.Lowered() == "primary" {
-      $$ = &AlterTable{Table: $5,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$6...)}
+      $$ = &AlterTable{FullyParsed: true, Table: $5,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$6...)}
     } else {
-      $$ = &AlterTable{Table: $5,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$3}},$6...)}
+      $$ = &AlterTable{FullyParsed: true, Table: $5,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$3}},$6...)}
     }
   }
 | DROP VIEW exists_opt view_name_list restrict_or_cascade_opt
