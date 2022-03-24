@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"google.golang.org/grpc/resolver"
@@ -10,6 +11,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 )
+
+const logPrefix = "[vtadmin.cluster.resolver]"
 
 type builder struct {
 	scheme string
@@ -42,9 +45,16 @@ func NewBuilder(scheme string, disco discovery.Discovery, opts Options) resolver
 // implementation.
 func (b *builder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
 	r := &Resolver{
-		disco: b.disco,
-		cc:    cc,
-		opts:  b.opts,
+		disco:  b.disco,
+		cc:     cc,
+		target: target,
+		opts:   b.opts,
+	}
+
+	switch r.target.Authority {
+	case "vtgate", "vtctld":
+	default:
+		return nil, fmt.Errorf("%s: unsupported authority %s", logPrefix, r.target.Authority)
 	}
 
 	r.resolve()
@@ -57,40 +67,70 @@ func (b *builder) Scheme() string {
 }
 
 type Resolver struct {
-	disco discovery.Discovery
-	cc    resolver.ClientConn
-	opts  Options
+	disco  discovery.Discovery
+	cc     resolver.ClientConn
+	target resolver.Target
+	opts   Options
 }
 
 func (r *Resolver) resolve() {
 	span, ctx := trace.NewSpan(context.Background(), "(vtadmin/cluster/resolver).resolve")
 	defer span.Finish()
 
-	log.Infof("(vtadmin.cluster.Resolver).resolve called")
+	span.Annotate("cluster_id", r.target.Scheme)
 
-	// TODO: apply timeout (via config)
-	// TODO: support tags from cluster configs
-	// TODO: use target.Authority field (in Builder.Build) to switch between
-	//		 vtctld/vtgate and use in package vtsql as well.
+	span.Annotate("scheme", r.target.Scheme)
+	span.Annotate("authority", r.target.Authority)
+	span.Annotate("endpoint", r.target.Endpoint)
+
+	log.Infof("%s: resolving %ss (cluster %s)", logPrefix, r.target.Authority, r.target.Scheme)
+
 	ctx, cancel := context.WithTimeout(ctx, r.opts.ResolveTimeout)
 	defer cancel()
 
-	vtctlds, err := r.disco.DiscoverVtctlds(ctx, nil)
-	if err != nil {
-		log.Errorf("error discovering vtctlds: %s", err)
+	var addrs []resolver.Address
+	switch r.target.Authority {
+	case "vtctld":
+		vtctlds, err := r.disco.DiscoverVtctlds(ctx, r.opts.DiscoveryTags)
+		if err != nil {
+			log.Errorf("%s: failed to discover vtctlds (cluster %s): %s", logPrefix, r.target.Scheme, err)
+			return
+		}
+
+		addrs = make([]resolver.Address, len(vtctlds))
+		for i, vtctld := range vtctlds {
+			addrs[i] = resolver.Address{
+				Addr: vtctld.Hostname,
+			}
+		}
+	case "vtgate":
+		vtgates, err := r.disco.DiscoverVTGates(ctx, r.opts.DiscoveryTags)
+		if err != nil {
+			log.Errorf("%s: failed to discover vtgates (cluster %s): %s", logPrefix, r.target.Scheme, err)
+			return
+		}
+
+		addrs = make([]resolver.Address, len(vtgates))
+		for i, vtgate := range vtgates {
+			addrs[i] = resolver.Address{
+				Addr: vtgate.Hostname,
+			}
+		}
+	default:
+		// TODO: decide if we should just log error or full-blown panic.
+		// this _should_ be impossible, since we checked this in builder.Build()
+	}
+
+	if len(addrs) == 0 {
+		log.Warningf("%s: found no %ss (cluster %s); not updating grpc clientconn state", logPrefix, r.target.Authority, r.target.Scheme)
 		return
 	}
 
-	log.Infof("found %d vtctlds", len(vtctlds))
-	addrs := make([]resolver.Address, len(vtctlds))
-	for i, vtctld := range vtctlds {
-		addrs[i] = resolver.Address{Addr: vtctld.Hostname}
-	}
+	log.Infof("%s: found %d %ss (cluster %s)", logPrefix, len(addrs), r.target.Authority, r.target.Scheme)
 
-	// TODO: check error and log
-	_ = r.cc.UpdateState(resolver.State{
-		Addresses: addrs,
-	})
+	if err := r.cc.UpdateState(resolver.State{Addresses: addrs}); err != nil {
+		log.Errorf("%s: failed to update addresses for %s (cluster %s)", logPrefix, err, r.target.Scheme)
+	}
 }
 
 func (r *Resolver) ResolveNow(o resolver.ResolveNowOptions) {
