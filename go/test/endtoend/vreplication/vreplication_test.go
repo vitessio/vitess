@@ -116,7 +116,9 @@ func testBasicVreplicationWorkflow(t *testing.T) {
 	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", allCells, mainClusterConfig)
 
 	require.NotNil(t, vc)
-	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
+	// Keep the cluster processes minimal to deal with CI resource constraints
+	defaultReplicas = 0
+	defaultRdonly = 0
 	defer func() { defaultReplicas = 1 }()
 
 	defer vc.TearDown(t)
