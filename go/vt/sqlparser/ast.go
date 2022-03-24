@@ -2224,6 +2224,24 @@ type (
 		alternative  Expr // this is what will be used to Format this struct
 	}
 
+	// JSONPrettyExpr represents the function and argument for JSON_PRETTY()
+	// https://dev.mysql.com/doc/refman/8.0/en/json-utility-functions.html#function_json-pretty
+	JSONPrettyExpr struct {
+		JSONVal Expr
+	}
+
+	// JSONStorageFreeExpr represents the function and argument for JSON_STORAGE_FREE()
+	// https://dev.mysql.com/doc/refman/8.0/en/json-utility-functions.html#function_json-storage-free
+	JSONStorageFreeExpr struct {
+		JSONVal Expr
+	}
+
+	// JSONStorageSizeExpr represents the function and argument for JSON_STORAGE_SIZE()
+	// https://dev.mysql.com/doc/refman/8.0/en/json-utility-functions.html#function_json-storage-size
+	JSONStorageSizeExpr struct {
+		JSONVal Expr
+	}
+
 	// Offset is another AST type that is used during planning and never produced by the parser
 	Offset int
 )
@@ -2264,6 +2282,9 @@ func (*MatchExpr) iExpr()            {}
 func (*GroupConcatExpr) iExpr()      {}
 func (*Default) iExpr()              {}
 func (*ExtractedSubquery) iExpr()    {}
+func (*JSONPrettyExpr) iExpr()       {}
+func (*JSONStorageFreeExpr) iExpr()  {}
+func (*JSONStorageSizeExpr) iExpr()  {}
 func (*TrimFuncExpr) iExpr()         {}
 func (Offset) iExpr()                {}
 
@@ -2280,6 +2301,9 @@ func (*SubstrExpr) iCallable()           {}
 func (*ConvertUsingExpr) iCallable()     {}
 func (*MatchExpr) iCallable()            {}
 func (*GroupConcatExpr) iCallable()      {}
+func (*JSONPrettyExpr) iCallable()       {}
+func (*JSONStorageFreeExpr) iCallable()  {}
+func (*JSONStorageSizeExpr) iCallable()  {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.
