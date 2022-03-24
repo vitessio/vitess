@@ -1,0 +1,1 @@
+drop primary key, modify id tinyint signed auto_increment primary key
