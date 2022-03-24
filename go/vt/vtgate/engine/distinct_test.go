@@ -87,7 +87,7 @@ func TestDistinct(t *testing.T) {
 					collID = collations.CollationBinaryID
 				}
 				checkCols = append(checkCols, CheckCol{
-					Idx:       i,
+					Col:       i,
 					Collation: collID,
 				})
 			}

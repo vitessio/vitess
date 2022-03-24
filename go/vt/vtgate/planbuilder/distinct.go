@@ -43,8 +43,8 @@ func (d *distinct) Primitive() engine.Primitive {
 		return &engine.DistinctV3{Source: d.input.Primitive()}
 	}
 	truncate := false
-	for i, col := range d.checkCols {
-		if col.Idx != i {
+	for _, col := range d.checkCols {
+		if col.WsCol != nil {
 			truncate = true
 			break
 		}

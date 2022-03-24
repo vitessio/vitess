@@ -38,8 +38,27 @@ type Distinct struct {
 }
 
 type CheckCol struct {
-	Idx       int
+	Col       int
+	WsCol     *int
 	Collation collations.ID
+}
+
+func (cc CheckCol) String() string {
+	coll := collations.Local().LookupByID(cc.Collation)
+	var collation string
+	if coll == nil {
+		collation = ""
+	} else {
+		collation = ": " + coll.Name()
+	}
+
+	var column string
+	if cc.WsCol == nil {
+		column = fmt.Sprintf("%d", cc.Col)
+	} else {
+		column = fmt.Sprintf("(%d:%d)", cc.Col, *cc.WsCol)
+	}
+	return column + collation
 }
 
 type probeTable struct {
@@ -230,24 +249,16 @@ func (d *Distinct) Inputs() []Primitive {
 }
 
 func (d *Distinct) description() PrimitiveDescription {
-	var other map[string]any
-	if d.CheckCols != nil {
-		allUnknown := true
-		other = map[string]any{}
-		var colls []string
-		for _, checkCol := range d.CheckCols {
-			coll := collations.Local().LookupByID(checkCol.Collation)
-			if coll == nil {
-				colls = append(colls, fmt.Sprintf("%d: UNKNOWN", checkCol.Idx))
-			} else {
-				colls = append(colls, fmt.Sprintf("%d: %s", checkCol.Idx, coll.Name()))
-				allUnknown = false
-			}
-		}
-		if !allUnknown {
-			other["Collations"] = colls
-		}
+	other := map[string]any{}
+
+	var colls []string
+	for _, checkCol := range d.CheckCols {
+		colls = append(colls, checkCol.String())
 	}
+	if colls != nil {
+		other["Collations"] = colls
+	}
+
 	if d.Truncate {
 		other["ResultColumns"] = len(d.CheckCols)
 	}

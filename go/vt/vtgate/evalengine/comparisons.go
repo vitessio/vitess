@@ -146,7 +146,7 @@ func evalResultsAreDateAndNumeric(l, r *EvalResult) bool {
 func compareAsTuples(lVal, rVal *EvalResult) bool {
 	left := lVal.typeof() == sqltypes.Tuple
 	right := rVal.typeof() == sqltypes.Tuple
-	if left && right {
+	if right && left {
 		return true
 	}
 	if left || right {

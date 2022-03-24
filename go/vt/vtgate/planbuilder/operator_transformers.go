@@ -275,7 +275,7 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *physical.Union) (l
 	}
 	if op.Distinct {
 		colls := getCollationsFor(ctx, op)
-		checkCols, err := getCheckColsForUnion(ctx, op, result, colls)
+		checkCols, err := getCheckColsForUnion(ctx, result, colls)
 		if err != nil {
 			return nil, err
 		}
@@ -293,24 +293,27 @@ func getWeightStringForSelectExpr(selectExpr sqlparser.SelectExpr) (*sqlparser.A
 	return &sqlparser.AliasedExpr{Expr: weightStringFor(expr.Expr)}, nil
 }
 
-func getCheckColsForUnion(ctx *plancontext.PlanningContext, op *physical.Union, result logicalPlan, colls []collations.ID) ([]engine.CheckCol, error) {
+func getCheckColsForUnion(ctx *plancontext.PlanningContext, result logicalPlan, colls []collations.ID) ([]engine.CheckCol, error) {
 	checkCols := make([]engine.CheckCol, 0, len(colls))
 	for i, coll := range colls {
+		checkCol := engine.CheckCol{Col: i, Collation: coll}
 		if coll != collations.Unknown {
-			checkCols = append(checkCols, engine.CheckCol{Idx: i, Collation: coll})
+			checkCols = append(checkCols, checkCol)
 			continue
 		}
-		newOffset, err := pushProjectionForDistinct(ctx, result, i)
+		// We might need a weight string - let's push one
+		newOffset, err := pushWeightStringForDistinct(ctx, result, i)
 		if err != nil {
 			return nil, err
 		}
-		checkCols = append(checkCols, engine.CheckCol{Idx: newOffset, Collation: collations.CollationBinaryID})
+		checkCol.WsCol = &newOffset
+		checkCols = append(checkCols, checkCol)
 	}
 	return checkCols, nil
 }
 
-// pushProjectionForDistinct pushes a projection to the plan.
-func pushProjectionForDistinct(ctx *plancontext.PlanningContext, plan logicalPlan, offset int) (newOffset int, err error) {
+// pushWeightStringForDistinct adds a weight_string projection
+func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalPlan, offset int) (newOffset int, err error) {
 	switch node := plan.(type) {
 	case *routeGen4:
 		allSelects := sqlparser.GetAllSelects(node.Select)
@@ -329,7 +332,7 @@ func pushProjectionForDistinct(ctx *plancontext.PlanningContext, plan logicalPla
 		node.eroute.TruncateColumnCount = 0
 	case *concatenateGen4:
 		for _, source := range node.sources {
-			newOffset, err = pushProjectionForDistinct(ctx, source, offset)
+			newOffset, err = pushWeightStringForDistinct(ctx, source, offset)
 			if err != nil {
 				return 0, err
 			}
@@ -345,17 +348,17 @@ func pushProjectionForDistinct(ctx *plancontext.PlanningContext, plan logicalPla
 		deps := ctx.SemTable.RecursiveDeps(aliasedExpr.Expr)
 		switch {
 		case deps.IsSolvedBy(lhsSolves):
-			offset, err = pushProjectionForDistinct(ctx, node.Left, offset)
+			offset, err = pushWeightStringForDistinct(ctx, node.Left, offset)
 			node.Cols = append(node.Cols, -(offset + 1))
 		case deps.IsSolvedBy(rhsSolves):
-			offset, err = pushProjectionForDistinct(ctx, node.Right, offset)
+			offset, err = pushWeightStringForDistinct(ctx, node.Right, offset)
 			node.Cols = append(node.Cols, offset+1)
 		default:
 			return 0, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "cannot push distinct weight string to both sides of the join")
 		}
 		newOffset = len(node.Cols) - 1
 	default:
-		panic("not supported")
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "bug: not supported pushWeightStringForDistinct on %T", plan)
 	}
 	return
 }
