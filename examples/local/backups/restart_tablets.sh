@@ -40,12 +40,22 @@ sleep 5
 # complete before we start InitShardPrimary, otherwise we end up reading the
 # tablet type to RESTORE and do not set semi-sync, which leads to the primary
 # hanging on writes.
+totalTime=300
 for i in 101 201 301; do
-  for _ in $(seq 0 300); do
-   status=$(curl "http://$hostname:15$i/debug/status_details")
-   echo "$status" | grep "REPLICA: Serving" && break
-   sleep 0.1
+  while [ $totalTime -gt 0 ]; do
+    status=$(curl "http://$hostname:15$i/debug/status_details")
+    echo "$status" | grep "REPLICA: Serving" && break
+    totalTime=$((totalTime-1))
+    sleep 0.1
   done
+done
+
+# Check that all the replica tablets have reached REPLICA: Serving state
+for i in 101 201 301; do
+  status=$(curl "http://$hostname:15$i/debug/status_details")
+  echo "$status" | grep "REPLICA: Serving" && continue
+  echo "tablet-$i did not reach REPLICA: Serving state. Exiting due to failure."
+  exit 1
 done
 
 vtctldclient InitShardPrimary --force commerce/0 zone1-100
