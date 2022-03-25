@@ -616,3 +616,14 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# show plugins
+"show plugins"
+{
+  "QueryType": "SHOW",
+  "Original": "show plugins",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+Gen4 plan same as above

@@ -409,7 +409,8 @@ func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, 
 
 	switch stmtType {
 	case sqlparser.StmtSelect, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate,
-		sqlparser.StmtDelete, sqlparser.StmtDDL, sqlparser.StmtUse, sqlparser.StmtExplain, sqlparser.StmtOther, sqlparser.StmtFlush:
+		sqlparser.StmtDelete, sqlparser.StmtDDL, sqlparser.StmtUse, sqlparser.StmtExplain,
+		sqlparser.StmtOther, sqlparser.StmtFlush, sqlparser.StmtComment:
 		return 0, nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] not reachable, should be handled with plan execute")
 	case sqlparser.StmtSet:
 		qr, err := e.handleSet(ctx, sql, logStats)
@@ -417,10 +418,6 @@ func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, 
 	case sqlparser.StmtShow:
 		qr, err := e.handleShow(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 		return sqlparser.StmtShow, qr, err
-	case sqlparser.StmtComment:
-		// Effectively should be done through new plan.
-		// There are some statements which are not planned for special comments.
-		return sqlparser.StmtComment, &sqltypes.Result{}, nil
 	}
 	return 0, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] statement not handled: %s", sql)
 }
@@ -847,20 +844,6 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		rows = append(rows, row)
 		return &sqltypes.Result{
 			Fields: buildVarCharFields("Engine", "Support", "Comment", "Transactions", "XA", "Savepoints"),
-			Rows:   rows,
-		}, nil
-	// for PLUGINS, return InnoDb + mysql_native_password
-	case sqlparser.KeywordString(sqlparser.PLUGINS):
-		rows := make([][]sqltypes.Value, 0, 5)
-		row := buildVarCharRow(
-			"InnoDB",
-			"ACTIVE",
-			"STORAGE ENGINE",
-			"NULL",
-			"GPL")
-		rows = append(rows, row)
-		return &sqltypes.Result{
-			Fields: buildVarCharFields("Name", "Status", "Type", "Library", "License"),
 			Rows:   rows,
 		}, nil
 	case sqlparser.KeywordString(sqlparser.VITESS_SHARDS):
