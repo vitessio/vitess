@@ -165,8 +165,8 @@ func init() {
 	flag.BoolVar(&enableReplicationReporter, "enable_replication_reporter", false, "Use polling to track replication lag.")
 	flag.BoolVar(&currentConfig.EnableOnlineDDL, "queryserver_enable_online_ddl", true, "Enable online DDL.")
 
-	flag.Int64Var(&currentConfig.RowStreamer.MaxTrxHistLen, "vreplication_copy_phase_max_trx_history", 1000000, "The maximum transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
-	flag.Int64Var(&currentConfig.RowStreamer.MaxReplLagSecs, "vreplication_copy_phase_max_repl_lag", 43200, "The maximum replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
+	flag.Int64Var(&currentConfig.RowStreamer.MaxTrxHistLen, "vreplication_copy_phase_max_innodb_history_list_length", 1000000, "The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
+	flag.Int64Var(&currentConfig.RowStreamer.MaxReplLagSecs, "vreplication_copy_phase_max_mysql_replication_lag", 43200, "The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.

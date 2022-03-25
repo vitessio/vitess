@@ -130,8 +130,8 @@ func testBasicVreplicationWorkflow(t *testing.T) {
 	maxSourceRplLag := 1
 	transactionTimeout := 60
 	extraVTTabletArgs = []string{
-		fmt.Sprintf("--vreplication_copy_phase_max_trx_history=%d", maxSourceTrxHistory),
-		fmt.Sprintf("--vreplication_copy_phase_max_repl_lag=%d", maxSourceRplLag),
+		fmt.Sprintf("--vreplication_copy_phase_max_innodb_history_list_length=%d", maxSourceTrxHistory),
+		fmt.Sprintf("--vreplication_copy_phase_max_mysql_replication_lag=%d", maxSourceRplLag),
 		fmt.Sprintf("--queryserver-config-transaction-timeout=%d", transactionTimeout),
 	}
 
