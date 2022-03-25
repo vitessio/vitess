@@ -337,6 +337,7 @@ func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalP
 				return 0, err
 			}
 		}
+		node.noNeedToTypeCheck = append(node.noNeedToTypeCheck, newOffset)
 	case *joinGen4:
 		lhsSolves := node.Left.ContainsTables()
 		rhsSolves := node.Right.ContainsTables()

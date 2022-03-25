@@ -33,6 +33,24 @@ var _ Primitive = (*Concatenate)(nil)
 // Concatenate specified the parameter for concatenate primitive
 type Concatenate struct {
 	Sources []Primitive
+
+	// These column offsets do not need to be typed checked - they usually contain weight_string()
+	// columns that are not going to be returned to the user
+	NoNeedToTypeCheck map[int]any
+}
+
+// NewConcatenate creates a Concatenate primitive. The ignoreCols slice contains the offsets that
+// don't need to have the same type between sources -
+// weight_string() sometimes returns VARBINARY and sometimes VARCHAR
+func NewConcatenate(Sources []Primitive, ignoreCols []int) *Concatenate {
+	ignoreTypes := map[int]any{}
+	for _, ignoreType := range ignoreCols {
+		ignoreTypes[ignoreType] = nil
+	}
+	return &Concatenate{
+		Sources:           Sources,
+		NoNeedToTypeCheck: ignoreTypes,
+	}
 }
 
 // RouteType returns a description of the query routing type used by the primitive
@@ -109,7 +127,7 @@ func (c *Concatenate) getFields(res []*sqltypes.Result) ([]*querypb.Field, error
 	fields := res[0].Fields
 	for _, r := range res {
 		if r.Fields != nil {
-			err := compareFields(fields, r.Fields)
+			err := c.compareFields(fields, r.Fields)
 			if err != nil {
 				return nil, err
 			}
@@ -166,7 +184,7 @@ func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 				}
 				fieldset.Wait()
 				if resultChunk.Fields != nil {
-					err := compareFields(seenFields, resultChunk.Fields)
+					err := c.compareFields(seenFields, resultChunk.Fields)
 					if err != nil {
 						return err
 					}
@@ -208,7 +226,7 @@ func (c *Concatenate) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bi
 		if err != nil {
 			return nil, err
 		}
-		err = compareFields(res.Fields, result.Fields)
+		err = c.compareFields(res.Fields, result.Fields)
 		if err != nil {
 			return nil, err
 		}
@@ -236,9 +254,18 @@ func (c *Concatenate) description() PrimitiveDescription {
 	return PrimitiveDescription{OperatorType: c.RouteType()}
 }
 
-func compareFields(fields1 []*querypb.Field, fields2 []*querypb.Field) error {
+func (c *Concatenate) compareFields(fields1 []*querypb.Field, fields2 []*querypb.Field) error {
 	if len(fields1) != len(fields2) {
 		return ErrWrongNumberOfColumnsInSelect
+	}
+	for i, field1 := range fields1 {
+		if _, found := c.NoNeedToTypeCheck[i]; found {
+			continue
+		}
+		field2 := fields2[i]
+		if field1.Type != field2.Type {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "merging field of different types is not supported, name: (%v, %v) types: (%v, %v)", field1.Name, field2.Name, field1.Type, field2.Type)
+		}
 	}
 	return nil
 }
