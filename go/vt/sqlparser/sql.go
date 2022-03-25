@@ -12014,7 +12014,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3410
 		{
-			yyLOCAL = &Show{&ShowLegacy{Type: string(yyDollar[2].str), Scope: ImplicitScope}}
+			yyLOCAL = &Show{&ShowBasic{Command: Plugins}}
 		}
 		yyVAL.union = yyLOCAL
 	case 634:
