@@ -1200,6 +1200,9 @@ func (node *Subquery) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *DerivedTable) Format(buf *TrackedBuffer) {
+	if node.Lateral {
+		buf.WriteString("lateral ")
+	}
 	buf.astPrintf(node, "(%v)", node.Select)
 }
 
@@ -1316,6 +1319,24 @@ func (node *GroupConcatExpr) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *ValuesFuncExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "values(%v)", node.Name)
+}
+
+// Format formats the node
+func (node *JSONPrettyExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_pretty(%v)", node.JSONVal)
+
+}
+
+// Format formats the node
+func (node *JSONStorageFreeExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_storage_free(%v)", node.JSONVal)
+
+}
+
+// Format formats the node
+func (node *JSONStorageSizeExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_storage_size(%v)", node.JSONVal)
+
 }
 
 // Format formats the node.

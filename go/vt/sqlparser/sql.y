@@ -191,6 +191,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
 %token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
+%token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE
 %token <str> EXTRACT
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
@@ -3985,7 +3986,11 @@ table_factor:
 derived_table:
   openb query_expression closeb
   {
-    $$ = &DerivedTable{$2}
+    $$ = &DerivedTable{Lateral: false, Select: $2}
+  }
+| LATERAL openb query_expression closeb
+  {
+    $$ = &DerivedTable{Lateral: true, Select: $3}
   }
 
 aliased_table_name:
@@ -4739,6 +4744,18 @@ UTC_DATE func_paren_opt
 | WEIGHT_STRING openb expression convert_type_weight_string closeb
   {
     $$ = &WeightStringFuncExpr{Expr: $3, As: $4}
+  }
+| JSON_PRETTY openb expression closeb
+  {
+    $$ = &JSONPrettyExpr{JSONVal: $3}
+  }
+| JSON_STORAGE_FREE openb expression closeb
+  {
+    $$ = &JSONStorageFreeExpr{ JSONVal: $3}
+  }
+| JSON_STORAGE_SIZE openb expression closeb
+  {
+    $$ = &JSONStorageSizeExpr{ JSONVal: $3}
   }
 | LTRIM openb expression closeb
   {
@@ -6015,6 +6032,9 @@ non_reserved_keyword:
 | INDEXES
 | ISOLATION
 | JSON
+| JSON_PRETTY
+| JSON_STORAGE_FREE
+| JSON_STORAGE_SIZE
 | KEY_BLOCK_SIZE
 | KEYS
 | KEYSPACES

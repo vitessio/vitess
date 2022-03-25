@@ -1583,6 +1583,9 @@ func (node *Subquery) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *DerivedTable) formatFast(buf *TrackedBuffer) {
+	if node.Lateral {
+		buf.WriteString("lateral ")
+	}
 	buf.WriteByte('(')
 	node.Select.formatFast(buf)
 	buf.WriteByte(')')
@@ -1756,6 +1759,30 @@ func (node *ValuesFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("values(")
 	buf.printExpr(node, node.Name, true)
 	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *JSONPrettyExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_pretty(")
+	buf.printExpr(node, node.JSONVal, true)
+	buf.WriteByte(')')
+
+}
+
+// formatFast formats the node
+func (node *JSONStorageFreeExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_storage_free(")
+	buf.printExpr(node, node.JSONVal, true)
+	buf.WriteByte(')')
+
+}
+
+// formatFast formats the node
+func (node *JSONStorageSizeExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_storage_size(")
+	buf.printExpr(node, node.JSONVal, true)
+	buf.WriteByte(')')
+
 }
 
 // formatFast formats the node.

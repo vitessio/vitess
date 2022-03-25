@@ -423,6 +423,7 @@ const (
 	ErSPNotVarArg                   = 1414
 	ERInnodbReadOnly                = 1874
 	ERMasterFatalReadingBinlog      = 1236
+	ERNoDefaultForField             = 1364
 
 	// already exists
 	ERTableExists    = 1050
@@ -535,6 +536,7 @@ const (
 	ERQueryInterrupted             = 1317
 	ERTruncatedWrongValueForField  = 1366
 	ERDataTooLong                  = 1406
+	ERWarnDataTruncated            = 1265
 	ERForbidSchemaChange           = 1450
 	ERDataOutOfRange               = 1690
 

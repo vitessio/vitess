@@ -476,6 +476,24 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return a == b
+	case *JSONPrettyExpr:
+		b, ok := inB.(*JSONPrettyExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONPrettyExpr(a, b)
+	case *JSONStorageFreeExpr:
+		b, ok := inB.(*JSONStorageFreeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONStorageFreeExpr(a, b)
+	case *JSONStorageSizeExpr:
+		b, ok := inB.(*JSONStorageSizeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONStorageSizeExpr(a, b)
 	case *JoinCondition:
 		b, ok := inB.(*JoinCondition)
 		if !ok {
@@ -1586,7 +1604,8 @@ func EqualsRefOfDerivedTable(a, b *DerivedTable) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsSelectStatement(a.Select, b.Select)
+	return a.Lateral == b.Lateral &&
+		EqualsSelectStatement(a.Select, b.Select)
 }
 
 // EqualsRefOfDropColumn does deep equals between the two objects.
@@ -1932,6 +1951,39 @@ func EqualsRefOfIsExpr(a, b *IsExpr) bool {
 	}
 	return EqualsExpr(a.Left, b.Left) &&
 		a.Right == b.Right
+}
+
+// EqualsRefOfJSONPrettyExpr does deep equals between the two objects.
+func EqualsRefOfJSONPrettyExpr(a, b *JSONPrettyExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.JSONVal, b.JSONVal)
+}
+
+// EqualsRefOfJSONStorageFreeExpr does deep equals between the two objects.
+func EqualsRefOfJSONStorageFreeExpr(a, b *JSONStorageFreeExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.JSONVal, b.JSONVal)
+}
+
+// EqualsRefOfJSONStorageSizeExpr does deep equals between the two objects.
+func EqualsRefOfJSONStorageSizeExpr(a, b *JSONStorageSizeExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.JSONVal, b.JSONVal)
 }
 
 // EqualsRefOfJoinCondition does deep equals between the two objects.
@@ -3164,6 +3216,24 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfGroupConcatExpr(a, b)
+	case *JSONPrettyExpr:
+		b, ok := inB.(*JSONPrettyExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONPrettyExpr(a, b)
+	case *JSONStorageFreeExpr:
+		b, ok := inB.(*JSONStorageFreeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONStorageFreeExpr(a, b)
+	case *JSONStorageSizeExpr:
+		b, ok := inB.(*JSONStorageSizeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONStorageSizeExpr(a, b)
 	case *MatchExpr:
 		b, ok := inB.(*MatchExpr)
 		if !ok {
@@ -3551,6 +3621,24 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfIsExpr(a, b)
+	case *JSONPrettyExpr:
+		b, ok := inB.(*JSONPrettyExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONPrettyExpr(a, b)
+	case *JSONStorageFreeExpr:
+		b, ok := inB.(*JSONStorageFreeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONStorageFreeExpr(a, b)
+	case *JSONStorageSizeExpr:
+		b, ok := inB.(*JSONStorageSizeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONStorageSizeExpr(a, b)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {
