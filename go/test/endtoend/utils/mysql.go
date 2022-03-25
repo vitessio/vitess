@@ -37,7 +37,7 @@ const (
 	DontCompareResultsOnError
 )
 
-func NewMySQL(cluster *cluster.LocalProcessCluster, ksName string, schemaSQL string) (mysql.ConnParams, func(), error) {
+func NewMySQL(cluster *cluster.LocalProcessCluster, ksName string, schemaSQL ...string) (mysql.ConnParams, func(), error) {
 	mysqlDir, err := createMySQLDir()
 	if err != nil {
 		return mysql.ConnParams{}, nil, err
@@ -66,9 +66,11 @@ func NewMySQL(cluster *cluster.LocalProcessCluster, ksName string, schemaSQL str
 		DbName:     ksName,
 	}
 
-	err = prepareMySQLWithSchema(err, params, schemaSQL)
-	if err != nil {
-		return mysql.ConnParams{}, nil, err
+	for _, sql := range schemaSQL {
+		err = prepareMySQLWithSchema(err, params, sql)
+		if err != nil {
+			return mysql.ConnParams{}, nil, err
+		}
 	}
 
 	return params, func() {
@@ -174,9 +176,6 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtQr *sqltypes.Res
 
 func compareVitessAndMySQLErrors(t *testing.T, vtErr, mysqlErr error, allow bool) {
 	if vtErr != nil && mysqlErr != nil || vtErr == nil && mysqlErr == nil {
-		if vtErr != nil {
-			fmt.Printf("Got an error from Vitess and MySQL:\n\tVitess error: %v\n\tMySQL error: %v\n", vtErr, mysqlErr)
-		}
 		return
 	}
 	out := fmt.Sprintf("Vitess and MySQL are not erroring the same way.\nVitess error: %v\nMySQL error: %v", vtErr, mysqlErr)

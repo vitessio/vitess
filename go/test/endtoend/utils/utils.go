@@ -64,9 +64,23 @@ func AssertContainsError(t *testing.T, conn *mysql.Conn, query, expected string)
 	assert.Contains(t, err.Error(), expected, "actual error: %s", err.Error())
 }
 
+func AssertContainsErrorCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query, expected string) {
+	t.Helper()
+	_, err := ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, query, DontCompareResultsOnError)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), expected, "actual error: %s", err.Error())
+}
+
 func AssertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := Exec(t, conn, query)
+	actual := fmt.Sprintf("%v", qr.Rows)
+	assert.Equal(t, utils.SortString(expected), utils.SortString(actual), "for query: [%s] expected \n%s \nbut actual \n%s", query, expected, actual)
+}
+
+func AssertMatchesNoOrderCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query, expected string) {
+	t.Helper()
+	qr := ExecCompareMySQL(t, vtConn, mysqlConn, query)
 	actual := fmt.Sprintf("%v", qr.Rows)
 	assert.Equal(t, utils.SortString(expected), utils.SortString(actual), "for query: [%s] expected \n%s \nbut actual \n%s", query, expected, actual)
 }
@@ -122,10 +136,10 @@ func ExecCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query string)
 func ExecCompareMySQLWithOptions(t *testing.T, vtConn, mysqlConn *mysql.Conn, query string, options int) *sqltypes.Result {
 	t.Helper()
 	vtQr, err := vtConn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err, "for query: "+query)
+	require.NoError(t, err, "[Vitess Error] for query: "+query)
 
 	mysqlQr, err := mysqlConn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err, "for query: "+query)
+	require.NoError(t, err, "[MySQL Error] for query: "+query)
 	compareVitessAndMySQLResults(t, query, vtQr, mysqlQr, options)
 	return vtQr
 }
