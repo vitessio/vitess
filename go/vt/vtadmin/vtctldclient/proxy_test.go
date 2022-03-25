@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	grpcresolver "google.golang.org/grpc/resolver"
 
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
@@ -98,6 +99,34 @@ func TestDial(t *testing.T) {
 	assert.Equal(t, listener.Addr().String(), resp.Keyspace.Name)
 }
 
+// testResolverBuilder wraps a grpcresolver.Builder to return *testResolvers
+// with a channel to detect calls to ResolveNow in tests.
+type testResolverBuilder struct {
+	grpcresolver.Builder
+	fired chan struct{}
+}
+
+func (b *testResolverBuilder) Build(target grpcresolver.Target, cc grpcresolver.ClientConn, opts grpcresolver.BuildOptions) (grpcresolver.Resolver, error) {
+	r, err := b.Builder.Build(target, cc, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return &testResolver{r, b.fired}, nil
+}
+
+// testResolver wraps a grpcresolver.Resolver to signal when ResolveNow is
+// called in tests.
+type testResolver struct {
+	grpcresolver.Resolver
+	fired chan struct{}
+}
+
+func (r *testResolver) ResolveNow(o grpcresolver.ResolveNowOptions) {
+	r.Resolver.ResolveNow(o)
+	r.fired <- struct{}{}
+}
+
 // TestRedial tests that vtadmin-api is able to recover from a lost connection to
 // a vtctld by rediscovering and redialing a new one.
 func TestRedial(t *testing.T) {
@@ -127,6 +156,7 @@ func TestRedial(t *testing.T) {
 		Hostname: listener2.Addr().String(),
 	})
 
+	reResolveFired := make(chan struct{})
 	proxy := New(&Config{
 		Cluster: &vtadminpb.Cluster{
 			Id:   "test",
@@ -134,7 +164,7 @@ func TestRedial(t *testing.T) {
 		},
 		Discovery:           disco,
 		ConnectivityTimeout: defaultConnectivityTimeout,
-		resolver:            resolver.NewBuilder("test", disco, resolver.Options{}),
+		resolver:            &testResolverBuilder{resolver.NewBuilder("test", disco, resolver.Options{}), reResolveFired},
 	})
 
 	// Check for a successful connection to whichever vtctld we discover first.
@@ -172,11 +202,15 @@ func TestRedial(t *testing.T) {
 
 	// Force an ungraceful shutdown of the gRPC server to which we're connected
 	currentVtctld.Stop()
-	// TODO: if WaitForReady is going away (which I think our custom resolver obsoletes),
-	// then Sleep is really the only way to ensure that gRPC triggers a redial.
-	// 10ms seems to work consistently on my machine, but we'll work on this before
-	// shipping.
-	time.Sleep(time.Millisecond * 10)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	select {
+	case <-reResolveFired:
+	case <-ctx.Done():
+		require.FailNowf(t, "forced shutdown of vtctld should trigger grpc re-resolution", ctx.Err().Error())
+	}
 
 	// Finally, check that we discover, dial + establish a new connection to the remaining vtctld.
 	err = proxy.Dial(context.Background())
