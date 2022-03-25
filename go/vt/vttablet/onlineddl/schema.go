@@ -74,6 +74,7 @@ const (
 	alterSchemaMigrationsTableIsView                   = "ALTER TABLE _vt.schema_migrations add column is_view tinyint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableReadyToComplete          = "ALTER TABLE _vt.schema_migrations add column ready_to_complete tinyint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableStowawayTable            = "ALTER TABLE _vt.schema_migrations add column stowaway_table tinytext NOT NULL"
+	alterSchemaMigrationsTableVreplLivenessIndicator   = "ALTER TABLE _vt.schema_migrations add column vitess_liveness_indicator bigint NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -155,6 +156,11 @@ const (
 	`
 	sqlUpdateMigrationTimestamp = `UPDATE _vt.schema_migrations
 			SET %s=NOW()
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationVitessLivenessIndicator = `UPDATE _vt.schema_migrations
+			SET vitess_liveness_indicator=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -377,6 +383,10 @@ const (
 			retain_artifacts_seconds,
 			is_view,
 			ready_to_complete,
+			reverted_uuid,
+			stowaway_table,
+			rows_copied,
+			vitess_liveness_indicator,
 			postpone_completion
 		FROM _vt.schema_migrations
 		WHERE
@@ -585,4 +595,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableIsView,
 	alterSchemaMigrationsTableReadyToComplete,
 	alterSchemaMigrationsTableStowawayTable,
+	alterSchemaMigrationsTableVreplLivenessIndicator,
 }
