@@ -270,6 +270,7 @@ const (
 	CreateTrStr         = " create trigger"
 	CreateVStr          = " create view"
 	DatabaseStr         = " databases"
+	EnginesStr          = " engines"
 	FunctionCStr        = " function code"
 	FunctionStr         = " function status"
 	GtidExecGlobalStr   = " global gtid_executed"
@@ -597,6 +598,7 @@ const (
 	CreateTr
 	CreateV
 	Database
+	Engines
 	FunctionC
 	Function
 	GtidExecGlobal

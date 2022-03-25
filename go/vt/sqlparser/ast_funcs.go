@@ -1485,6 +1485,8 @@ func (ty ShowCommandType) ToString() string {
 		return CreateVStr
 	case Database:
 		return DatabaseStr
+	case Engines:
+		return EnginesStr
 	case FunctionC:
 		return FunctionCStr
 	case Function:

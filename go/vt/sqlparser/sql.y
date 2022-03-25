@@ -3400,7 +3400,7 @@ show_statement:
   }
 | SHOW ENGINES
   {
-    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
+    $$ = &Show{&ShowBasic{Command: Engines}}
   }
 | SHOW FUNCTION CODE table_name
   {
