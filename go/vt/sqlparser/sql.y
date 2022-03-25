@@ -3408,7 +3408,7 @@ show_statement:
   }
 | SHOW PLUGINS
   {
-    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
+    $$ = &Show{&ShowBasic{Command: Plugins}}
   }
 | SHOW PROCEDURE CODE table_name
   {

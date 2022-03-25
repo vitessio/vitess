@@ -275,6 +275,7 @@ const (
 	GtidExecGlobalStr   = " global gtid_executed"
 	IndexStr            = " indexes"
 	OpenTableStr        = " open tables"
+	PluginsStr          = " plugins"
 	PrivilegeStr        = " privileges"
 	ProcedureCStr       = " procedure code"
 	ProcedureStr        = " procedure status"
@@ -601,6 +602,7 @@ const (
 	GtidExecGlobal
 	Index
 	OpenTable
+	Plugins
 	Privilege
 	ProcedureC
 	Procedure

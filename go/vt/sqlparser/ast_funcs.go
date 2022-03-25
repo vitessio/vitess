@@ -1495,6 +1495,8 @@ func (ty ShowCommandType) ToString() string {
 		return IndexStr
 	case OpenTable:
 		return OpenTableStr
+	case Plugins:
+		return PluginsStr
 	case Privilege:
 		return PrivilegeStr
 	case ProcedureC:
