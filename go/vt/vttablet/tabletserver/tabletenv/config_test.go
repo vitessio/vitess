@@ -84,8 +84,8 @@ oltpReadPool:
   timeoutSeconds: 10
 replicationTracker: {}
 rowstreamer:
-  MaxReplLagSecs: 400
-  maxTrxHistoryLength: 1000
+  maxReplLagSecs: 400
+  maxTrxHistLen: 1000
 txPool: {}
 `
 	assert.Equal(t, wantBytes, string(gotBytes))
@@ -149,8 +149,8 @@ replicationTracker:
   heartbeatIntervalSeconds: 0.25
   mode: disable
 rowstreamer:
-  MaxReplLagSecs: 43200
-  maxTrxHistoryLength: 1000000
+  maxReplLagSecs: 43200
+  maxTrxHistLen: 1000000
 schemaReloadIntervalSeconds: 1800
 signalSchemaChangeReloadIntervalSeconds: 5
 streamBufferSize: 32768

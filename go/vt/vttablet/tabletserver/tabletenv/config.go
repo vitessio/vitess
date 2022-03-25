@@ -355,8 +355,8 @@ type TransactionLimitConfig struct {
 // RowStreamerConfig contains configuration parameters for a vstreamer (source) that is
 // copying the contents of a table to a target
 type RowStreamerConfig struct {
-	MaxTrxHistLen  int64 `json:"maxTrxHistoryLength,omitempty"`
-	MaxReplLagSecs int64 `json:"MaxReplLagSecs,omitempty"`
+	MaxTrxHistLen  int64 `json:"maxTrxHistLen,omitempty"`
+	MaxReplLagSecs int64 `json:"maxReplLagSecs,omitempty"`
 }
 
 // NewCurrentConfig returns a copy of the current config.
