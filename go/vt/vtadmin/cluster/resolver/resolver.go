@@ -134,37 +134,33 @@ func (r *resolver) resolve() {
 	ctx, cancel := context.WithTimeout(ctx, r.opts.ResolveTimeout)
 	defer cancel()
 
-	var addrs []grpcresolver.Address
+	var (
+		addrStrs []string
+		err      error
+	)
 	switch r.target.Authority {
 	case "vtctld":
-		vtctlds, err := r.disco.DiscoverVtctlds(ctx, r.opts.DiscoveryTags)
+		addrStrs, err = r.disco.DiscoverVtctldAddrs(ctx, r.opts.DiscoveryTags)
 		if err != nil {
 			log.Errorf("%s: failed to discover vtctlds (cluster %s): %s", logPrefix, r.target.Scheme, err)
 			return
 		}
-
-		addrs = make([]grpcresolver.Address, len(vtctlds))
-		for i, vtctld := range vtctlds {
-			addrs[i] = grpcresolver.Address{
-				Addr: vtctld.Hostname,
-			}
-		}
 	case "vtgate":
-		vtgates, err := r.disco.DiscoverVTGates(ctx, r.opts.DiscoveryTags)
+		addrStrs, err = r.disco.DiscoverVTGateAddrs(ctx, r.opts.DiscoveryTags)
 		if err != nil {
 			log.Errorf("%s: failed to discover vtgates (cluster %s): %s", logPrefix, r.target.Scheme, err)
 			return
 		}
-
-		addrs = make([]grpcresolver.Address, len(vtgates))
-		for i, vtgate := range vtgates {
-			addrs[i] = grpcresolver.Address{
-				Addr: vtgate.Hostname,
-			}
-		}
 	default:
 		// TODO: decide if we should just log error or full-blown panic.
 		// this _should_ be impossible, since we checked this in builder.Build()
+	}
+
+	addrs := make([]grpcresolver.Address, len(addrStrs))
+	for i, addr := range addrStrs {
+		addrs[i] = grpcresolver.Address{
+			Addr: addr,
+		}
 	}
 
 	if len(addrs) == 0 {
