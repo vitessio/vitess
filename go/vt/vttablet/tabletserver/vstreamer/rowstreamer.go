@@ -204,100 +204,109 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 }
 
 func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
-	log.Infof("Streaming query: %v\n", rs.sendQuery)
-	gtid, err := conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
-	if err != nil {
-		return err
-	}
 
-	// first call the callback with the fields
-	flds, err := conn.Fields()
-	if err != nil {
-		return err
-	}
-	pkfields := make([]*querypb.Field, len(rs.pkColumns))
-	for i, pk := range rs.pkColumns {
-		pkfields[i] = &querypb.Field{
-			Name: flds[pk].Name,
-			Type: flds[pk].Type,
-		}
-	}
-
-	err = send(&binlogdatapb.VStreamRowsResponse{
-		Fields:   rs.plan.fields(),
-		Pkfields: pkfields,
-		Gtid:     gtid,
-	})
-	if err != nil {
-		return fmt.Errorf("stream send error: %v", err)
-	}
-
-	response := &binlogdatapb.VStreamRowsResponse{}
-	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
-	byteCount := 0
+	offset := 0
+	limit := 10000000
+	delta := 10000001
 	for {
-		//log.Infof("StreamResponse for loop iteration starts")
-		select {
-		case <-rs.ctx.Done():
-			log.Infof("Stream ended because of ctx.Done")
-			return fmt.Errorf("stream ended: %v", rs.ctx.Err())
-		default:
-		}
-
-		// check throttler.
-		if !rs.vse.throttlerClient.ThrottleCheckOKOrWait(rs.ctx) {
-			continue
-		}
-
-		row, err := conn.FetchNext()
+		rs.sendQuery = fmt.Sprintf("%s LIMIT %d OFFSET %d", rs.sendQuery, limit, offset)
+		log.Infof("Streaming query: %v\n", rs.sendQuery)
+		gtid, err := conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
 		if err != nil {
 			return err
 		}
-		if row == nil {
-			break
+
+		// first call the callback with the fields
+		flds, err := conn.Fields()
+		if err != nil {
+			return err
 		}
-		// Compute lastpk here, because we'll need it
-		// at the end after the loop exits.
+		pkfields := make([]*querypb.Field, len(rs.pkColumns))
 		for i, pk := range rs.pkColumns {
-			lastpk[i] = row[pk]
-		}
-		// Reuse the vstreamer's filter.
-		ok, filtered, err := rs.plan.filter(row)
-		if err != nil {
-			return err
-		}
-		if ok {
-			response.Rows = append(response.Rows, sqltypes.RowToProto3(filtered))
-			for _, s := range filtered {
-				byteCount += s.Len()
+			pkfields[i] = &querypb.Field{
+				Name: flds[pk].Name,
+				Type: flds[pk].Type,
 			}
 		}
 
-		if byteCount >= *PacketSize {
-			rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
-			rs.vse.rowStreamerNumPackets.Add(int64(1))
+		err = send(&binlogdatapb.VStreamRowsResponse{
+			Fields:   rs.plan.fields(),
+			Pkfields: pkfields,
+			Gtid:     gtid,
+		})
+		if err != nil {
+			return fmt.Errorf("stream send error: %v", err)
+		}
 
+		response := &binlogdatapb.VStreamRowsResponse{}
+		lastpk := make([]sqltypes.Value, len(rs.pkColumns))
+		byteCount := 0
+		for {
+			//log.Infof("StreamResponse for loop iteration starts")
+			select {
+			case <-rs.ctx.Done():
+				log.Infof("Stream ended because of ctx.Done")
+				return fmt.Errorf("stream ended: %v", rs.ctx.Err())
+			default:
+			}
+
+			// check throttler.
+			if !rs.vse.throttlerClient.ThrottleCheckOKOrWait(rs.ctx) {
+				continue
+			}
+
+			row, err := conn.FetchNext()
+			if err != nil {
+				return err
+			}
+			if row == nil {
+				break
+			}
+			// Compute lastpk here, because we'll need it
+			// at the end after the loop exits.
+			for i, pk := range rs.pkColumns {
+				lastpk[i] = row[pk]
+			}
+			// Reuse the vstreamer's filter.
+			ok, filtered, err := rs.plan.filter(row)
+			if err != nil {
+				return err
+			}
+			if ok {
+				response.Rows = append(response.Rows, sqltypes.RowToProto3(filtered))
+				for _, s := range filtered {
+					byteCount += s.Len()
+				}
+			}
+
+			if byteCount >= *PacketSize {
+				rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
+				rs.vse.rowStreamerNumPackets.Add(int64(1))
+
+				response.Lastpk = sqltypes.RowToProto3(lastpk)
+				err = send(response)
+				if err != nil {
+					log.Infof("Rowstreamer send returned error %v", err)
+					return err
+				}
+				// empty the rows so we start over, but we keep the
+				// same capacity
+				response.Rows = nil
+				byteCount = 0
+			}
+		}
+
+		if len(response.Rows) > 0 {
+			rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
 			response.Lastpk = sqltypes.RowToProto3(lastpk)
 			err = send(response)
 			if err != nil {
-				log.Infof("Rowstreamer send returned error %v", err)
 				return err
 			}
-			// empty the rows so we start over, but we keep the
-			// same capacity
-			response.Rows = nil
-			byteCount = 0
+			offset += delta
+			continue
 		}
-	}
 
-	if len(response.Rows) > 0 {
-		rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
-		response.Lastpk = sqltypes.RowToProto3(lastpk)
-		err = send(response)
-		if err != nil {
-			return err
-		}
+		return nil
 	}
-
-	return nil
 }
