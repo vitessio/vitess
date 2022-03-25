@@ -831,21 +831,6 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		if show.Scope == sqlparser.VitessMetadataScope {
 			return e.handleShowVitessMetadata(ctx, show.ShowTablesOpt)
 		}
-	// for ENGINES, we want to return just InnoDB
-	case sqlparser.KeywordString(sqlparser.ENGINES):
-		rows := make([][]sqltypes.Value, 0, 6)
-		row := buildVarCharRow(
-			"InnoDB",
-			"DEFAULT",
-			"Supports transactions, row-level locking, and foreign keys",
-			"YES",
-			"YES",
-			"YES")
-		rows = append(rows, row)
-		return &sqltypes.Result{
-			Fields: buildVarCharFields("Engine", "Support", "Comment", "Transactions", "XA", "Savepoints"),
-			Rows:   rows,
-		}, nil
 	case sqlparser.KeywordString(sqlparser.VITESS_SHARDS):
 		showVitessShardsFilters := func(show *sqlparser.ShowLegacy) ([]func(string) bool, []func(string, *topodatapb.ShardReference) bool) {
 			keyspaceFilters := []func(string) bool{}

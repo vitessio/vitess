@@ -627,3 +627,14 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# show engines
+"show engines"
+{
+  "QueryType": "SHOW",
+  "Original": "show engines",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+Gen4 plan same as above
