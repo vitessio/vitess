@@ -615,7 +615,6 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 	tkn.OldPosition = tkn.Position
 
 	if tkn.specialComment != nil {
-		fmt.Println("about to scan special comment")
 		// Enter specialComment scan mode.
 		// for scanning such kind of comment: /*! MySQL-specific code */
 		specialComment := tkn.specialComment
@@ -630,7 +629,6 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		tkn.specialComment = nil
 	}
 
-	fmt.Println("scanning non-special comment")
 	if tkn.potentialAccountName {
 		defer func() {
 			tkn.potentialAccountName = false
@@ -1067,8 +1065,6 @@ func (tkn *Tokenizer) scanCommentType2() (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
-	fmt.Println("scanMySQLSpecificComment")
-
 	buffer := &bytes2.Buffer{}
 	buffer.WriteString("/*!")
 	tkn.next()
@@ -1116,12 +1112,10 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 		foundStartPos = true
 	}
 	_, sql := ExtractMysqlComment(buffer.String())
-	fmt.Printf("sql comment is %s\n", sql)
 
 	tkn.specialComment = NewStringTokenizer(sql)
 	tkn.specialComment.Position = startOffset
 
-	fmt.Println("about to call scan")
 	return tkn.Scan()
 }
 

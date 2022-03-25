@@ -149,14 +149,17 @@ func adjustSubstatementPositions(sql string, tokenizer *Tokenizer) {
 			ddl.SubStatementPositionEnd > ddl.SubStatementPositionStart {
 			sub := sql[ddl.SubStatementPositionStart:ddl.SubStatementPositionEnd]
 
-			// Find the ending comment position, then backtrack until we find a non-space character.
-			// That's the actual end of the substatement.
-			// We don't actually capture the end of the comment in all cases.
+			// We don't actually capture the end of the comment in all cases, sometimes it's just *
 			endCommentIdx := strings.LastIndex(sub, "*/") - 1
 			if endCommentIdx < 0 {
-				endCommentIdx = len(sub) - 1
+				if sub[len(sub)-1] == '*' {
+					endCommentIdx = len(sub) - 2
+				} else {
+					endCommentIdx = len(sub) -1
+				}
 			}
 
+			// Backtrack until we find a non-space character. That's the actual end of the substatement.
 			for endCommentIdx > 0 && unicode.IsSpace(rune(sub[endCommentIdx])) {
 				endCommentIdx--
 			}
