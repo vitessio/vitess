@@ -79,6 +79,8 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 		return buildShowGtidPlan(show, vschema)
 	case sqlparser.Warnings:
 		return buildWarnings()
+	case sqlparser.Plugins:
+		return buildPluginsPlan()
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown show query type %s", show.Command.ToString())
 
@@ -567,4 +569,17 @@ func buildWarnings() (engine.Primitive, error) {
 	}
 
 	return engine.NewSessionPrimitive("SHOW WARNINGS", f), nil
+}
+
+func buildPluginsPlan() (engine.Primitive, error) {
+	var rows [][]sqltypes.Value
+	rows = append(rows, buildVarCharRow(
+		"InnoDB",
+		"ACTIVE",
+		"STORAGE ENGINE",
+		"NULL",
+		"GPL"))
+
+	return engine.NewRowsPrimitive(rows,
+		buildVarCharFields("Name", "Status", "Type", "Library", "License")), nil
 }
