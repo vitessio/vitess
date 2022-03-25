@@ -49,7 +49,6 @@ type Tokenizer struct {
 	nesting              int
 	multi                bool
 	specialComment       *Tokenizer
-	specialPosOffset     int
 	potentialAccountName bool
 
 	// If true, the parser should collaborate to set `stopped` on this
