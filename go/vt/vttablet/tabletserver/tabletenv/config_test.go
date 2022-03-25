@@ -49,8 +49,8 @@ func TestConfigParse(t *testing.T) {
 			MaxWaiters:         40,
 		},
 		RowStreamer: RowStreamerConfig{
-			MaxTrxHistLen:        1000,
-			MaxReplicaLagSeconds: 400,
+			MaxTrxHistLen:  1000,
+			MaxReplLagSecs: 400,
 		},
 	}
 	gotBytes, err := yaml2.Marshal(&cfg)
@@ -84,7 +84,7 @@ oltpReadPool:
   timeoutSeconds: 10
 replicationTracker: {}
 rowstreamer:
-  maxReplicaLagSeconds: 400
+  MaxReplLagSecs: 400
   maxTrxHistoryLength: 1000
 txPool: {}
 `
@@ -149,7 +149,7 @@ replicationTracker:
   heartbeatIntervalSeconds: 0.25
   mode: disable
 rowstreamer:
-  maxReplicaLagSeconds: 43200
+  MaxReplLagSecs: 43200
   maxTrxHistoryLength: 1000000
 schemaReloadIntervalSeconds: 1800
 signalSchemaChangeReloadIntervalSeconds: 5
@@ -176,8 +176,8 @@ func TestClone(t *testing.T) {
 			MaxWaiters:         40,
 		},
 		RowStreamer: RowStreamerConfig{
-			MaxTrxHistLen:        1000000,
-			MaxReplicaLagSeconds: 43200,
+			MaxTrxHistLen:  1000000,
+			MaxReplLagSecs: 43200,
 		},
 	}
 	cfg2 := cfg1.Clone()
@@ -231,8 +231,8 @@ func TestFlags(t *testing.T) {
 		EnableOnlineDDL:          true,
 		DB:                       &dbconfigs.DBConfigs{},
 		RowStreamer: RowStreamerConfig{
-			MaxTrxHistLen:        1000000,
-			MaxReplicaLagSeconds: 43200,
+			MaxTrxHistLen:  1000000,
+			MaxReplLagSecs: 43200,
 		},
 	}
 	assert.Equal(t, want.DB, currentConfig.DB)

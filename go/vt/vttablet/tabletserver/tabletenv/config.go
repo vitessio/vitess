@@ -166,7 +166,7 @@ func init() {
 	flag.BoolVar(&currentConfig.EnableOnlineDDL, "queryserver_enable_online_ddl", true, "Enable online DDL.")
 
 	flag.Int64Var(&currentConfig.RowStreamer.MaxTrxHistLen, "vreplication_copy_phase_max_trx_history", 1000000, "The maximum transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
-	flag.Int64Var(&currentConfig.RowStreamer.MaxReplicaLagSeconds, "vreplication_copy_phase_max_repl_lag", 43200, "The maximum replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
+	flag.Int64Var(&currentConfig.RowStreamer.MaxReplLagSecs, "vreplication_copy_phase_max_repl_lag", 43200, "The maximum replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -355,8 +355,8 @@ type TransactionLimitConfig struct {
 // RowStreamerConfig contains configuration parameters for a vstreamer (source) that is
 // copying the contents of a table to a target
 type RowStreamerConfig struct {
-	MaxTrxHistLen        int64 `json:"maxTrxHistoryLength,omitempty"`
-	MaxReplicaLagSeconds int64 `json:"maxReplicaLagSeconds,omitempty"`
+	MaxTrxHistLen  int64 `json:"maxTrxHistoryLength,omitempty"`
+	MaxReplLagSecs int64 `json:"MaxReplLagSecs,omitempty"`
 }
 
 // NewCurrentConfig returns a copy of the current config.
@@ -500,8 +500,8 @@ var defaultConfig = TabletConfig{
 	EnableOnlineDDL:          true,
 
 	RowStreamer: RowStreamerConfig{
-		MaxTrxHistLen:        1000000,
-		MaxReplicaLagSeconds: 43200,
+		MaxTrxHistLen:  1000000,
+		MaxReplLagSecs: 43200,
 	},
 }
 

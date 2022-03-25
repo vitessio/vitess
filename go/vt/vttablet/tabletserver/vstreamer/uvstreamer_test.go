@@ -105,7 +105,7 @@ func TestRowStreamerWaitForSource(t *testing.T) {
 				ReplicationLagSeconds: tt.fields.ReplicationLagSeconds,
 			}
 			env.TabletEnv.Config().RowStreamer.MaxTrxHistLen = tt.fields.maxTrxHistLen
-			env.TabletEnv.Config().RowStreamer.MaxReplicaLagSeconds = tt.fields.maxReplLagSecs
+			env.TabletEnv.Config().RowStreamer.MaxReplLagSecs = tt.fields.maxReplLagSecs
 			if err := uvs.waitForSource(); (err != nil) != tt.wantErr {
 				t.Errorf("uvstreamer.waitForSource() error = %v, wantErr %v", err, tt.wantErr)
 			}

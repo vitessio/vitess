@@ -443,7 +443,7 @@ func (uvs *uvstreamer) waitForSource() error {
 	backoffLimit := backoff * 30
 	ready := false
 	mhll := uvs.vse.env.Config().RowStreamer.MaxTrxHistLen
-	mrls := uvs.vse.env.Config().RowStreamer.MaxReplicaLagSeconds
+	mrls := uvs.vse.env.Config().RowStreamer.MaxReplLagSecs
 
 	loopFunc := func() error {
 		// Exit if the context has been cancelled
