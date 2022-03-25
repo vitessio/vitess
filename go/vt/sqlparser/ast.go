@@ -141,8 +141,8 @@ func captureSelectExpressions(sql string, tokenizer *Tokenizer) {
 }
 
 // For DDL statements that capture the position of a sub-statement (create view and others), we need to adjust these
-// indexes if they occurred inside a MySQL special comment (/*! */) because we inappropriately capture the comment
-// ending characters in such cases.
+// indexes if they occurred inside a MySQL special comment (/*! */) because we sometimes inappropriately capture the
+// comment ending characters in such cases.
 func adjustSubstatementPositions(sql string, tokenizer *Tokenizer) {
 	if ddl, ok := tokenizer.ParseTree.(*DDL); ok {
 		if ddl.SpecialCommentMode && ddl.SubStatementPositionStart > 0 &&
@@ -151,9 +151,21 @@ func adjustSubstatementPositions(sql string, tokenizer *Tokenizer) {
 
 			// Find the ending comment position, then backtrack until we find a non-space character.
 			// That's the actual end of the substatement.
+			// We don't actually capture the end of the comment in all cases.
 			endCommentIdx := strings.LastIndex(sub, "*/") - 1
-			for ; endCommentIdx > 0 && unicode.IsSpace(rune(sub[endCommentIdx])); endCommentIdx-- {}
-			ddl.SubStatementPositionEnd = ddl.SubStatementPositionStart + endCommentIdx + 1
+			if endCommentIdx < 0 {
+				endCommentIdx = len(sub) - 1
+			}
+
+			for endCommentIdx > 0 && unicode.IsSpace(rune(sub[endCommentIdx])) {
+				endCommentIdx--
+			}
+
+			if !unicode.IsSpace(rune(sub[endCommentIdx])) {
+				endCommentIdx++
+			}
+
+			ddl.SubStatementPositionEnd = ddl.SubStatementPositionStart + endCommentIdx
 		}
 	}
 }

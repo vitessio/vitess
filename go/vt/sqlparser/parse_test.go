@@ -2997,6 +2997,44 @@ end`,
 	}
 }
 
+func TestTmp(t *testing.T) {
+	cases := []struct {
+		query string
+		sel   string
+	}{
+		{
+			query: `/*!50604 create trigger t1 before delete on foo for each row follows baz
+			begin
+				set session foo = old.x;
+				set session bar = new.y;
+				update baz.t set a = @@foo + @@bar where z = old.x;
+			end    */`,
+			sel: `			begin
+				set session foo = old.x;
+				set session bar = new.y;
+				update baz.t set a = @@foo + @@bar where z = old.x;
+			end`,
+		},
+	}
+
+	for _, tcase := range cases {
+		t.Run(tcase.query, func(t *testing.T) {
+			tree, err := Parse(tcase.query)
+			require.Nil(t, err)
+
+			ddl, ok := tree.(*DDL)
+			require.True(t, ok, "Expected DDL when parsing (%q)", tcase.query)
+			require.True(t, ddl.SubStatementPositionStart < ddl.SubStatementPositionEnd, "substatement indexes out of order")
+
+			sel := tcase.query[ddl.SubStatementPositionStart:ddl.SubStatementPositionEnd]
+			if sel != tcase.sel {
+				require.Equal(t, tcase.sel, sel)
+			}
+		})
+	}
+}
+
+
 // Ensure there is no corruption from using a pooled yyParserImpl in Parse.
 func TestValidParallel(t *testing.T) {
 	validSQL = append(validSQL, validMultiStatementSql...)
