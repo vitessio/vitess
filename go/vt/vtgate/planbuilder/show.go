@@ -81,6 +81,8 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 		return buildWarnings()
 	case sqlparser.Plugins:
 		return buildPluginsPlan()
+	case sqlparser.Engines:
+		return buildEnginesPlan()
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown show query type %s", show.Command.ToString())
 
@@ -582,4 +584,18 @@ func buildPluginsPlan() (engine.Primitive, error) {
 
 	return engine.NewRowsPrimitive(rows,
 		buildVarCharFields("Name", "Status", "Type", "Library", "License")), nil
+}
+
+func buildEnginesPlan() (engine.Primitive, error) {
+	var rows [][]sqltypes.Value
+	rows = append(rows, buildVarCharRow(
+		"InnoDB",
+		"DEFAULT",
+		"Supports transactions, row-level locking, and foreign keys",
+		"YES",
+		"YES",
+		"YES"))
+
+	return engine.NewRowsPrimitive(rows,
+		buildVarCharFields("Engine", "Support", "Comment", "Transactions", "XA", "Savepoints")), nil
 }
