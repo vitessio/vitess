@@ -38,12 +38,15 @@ func start(t *testing.T) (*mysql.Conn, *mysql.Conn, func()) {
 	require.Nil(t, err)
 
 	deleteAll := func() {
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "set workload = oltp", utils.DontCompareResultsOnError)
-		utils.ExecCompareMySQL(t, vtConn, mysqlConn, "delete from aggr_test")
-		utils.ExecCompareMySQL(t, vtConn, mysqlConn, "delete from t3")
-		utils.ExecCompareMySQL(t, vtConn, mysqlConn, "delete from t7_xxhash")
-		utils.ExecCompareMySQL(t, vtConn, mysqlConn, "delete from aggr_test_dates")
-		utils.ExecCompareMySQL(t, vtConn, mysqlConn, "delete from t7_xxhash_idx")
+		_, _ = utils.ExecAllowError(t, vtConn, "set workload = oltp")
+
+		tables := []string{"aggr_test", "t3", "t7_xxhash", "aggr_test_dates", "t7_xxhash_idx"}
+		conns := []*mysql.Conn{vtConn, mysqlConn}
+		for _, conn := range conns {
+			for _, table := range tables {
+				_, _ = utils.ExecAllowError(t, conn, "delete from "+table)
+			}
+		}
 	}
 
 	deleteAll()
@@ -65,9 +68,14 @@ func TestAggregateTypes(t *testing.T) {
 	utils.AssertMatchesCompareMySQL(t, vtConn, mysqlConn, "select val1, sum(distinct val2), sum(val2) from aggr_test group by val1", `[[VARCHAR("a") DECIMAL(1) DECIMAL(2)] [VARCHAR("b") DECIMAL(1) DECIMAL(1)] [VARCHAR("c") DECIMAL(7) DECIMAL(7)] [VARCHAR("d") NULL NULL] [VARCHAR("e") DECIMAL(1) DECIMAL(1)]]`)
 	utils.AssertMatchesCompareMySQL(t, vtConn, mysqlConn, "select val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1", `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)] [VARCHAR("d") INT64(0) INT64(1)]]`)
 	utils.AssertMatchesCompareMySQL(t, vtConn, mysqlConn, "select val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1 limit 4", `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)]]`)
-	utils.AssertMatchesCompareMySQLWithOptions(t, vtConn, mysqlConn, "select ascii(val1) as a, count(*) from aggr_test group by a", `[[INT64(65) INT64(1)] [INT64(69) INT64(1)] [INT64(97) INT64(1)] [INT64(98) INT64(1)] [INT64(99) INT64(2)] [INT64(100) INT64(1)] [INT64(101) INT64(1)]]`, utils.IgnoreDifference)
-	utils.AssertMatchesCompareMySQLWithOptions(t, vtConn, mysqlConn, "select ascii(val1) as a, count(*) from aggr_test group by a order by a", `[[INT64(65) INT64(1)] [INT64(69) INT64(1)] [INT64(97) INT64(1)] [INT64(98) INT64(1)] [INT64(99) INT64(2)] [INT64(100) INT64(1)] [INT64(101) INT64(1)]]`, utils.IgnoreDifference)
-	utils.AssertMatchesCompareMySQLWithOptions(t, vtConn, mysqlConn, "select ascii(val1) as a, count(*) from aggr_test group by a order by 2, a", `[[INT64(65) INT64(1)] [INT64(69) INT64(1)] [INT64(97) INT64(1)] [INT64(98) INT64(1)] [INT64(100) INT64(1)] [INT64(101) INT64(1)] [INT64(99) INT64(2)]]`, utils.IgnoreDifference)
+
+	// TODO (@frouioui): following assertions produce different results between MySQL and Vitess
+	//  their differences are ignored for now. Fix it.
+	// `ascii(val1)` returns an `INT64` on Vitess, and `INT32` on MySQL
+	utils.AssertMatches(t, vtConn, "select ascii(val1) as a, count(*) from aggr_test group by a", `[[INT64(65) INT64(1)] [INT64(69) INT64(1)] [INT64(97) INT64(1)] [INT64(98) INT64(1)] [INT64(99) INT64(2)] [INT64(100) INT64(1)] [INT64(101) INT64(1)]]`)
+	utils.AssertMatches(t, vtConn, "select ascii(val1) as a, count(*) from aggr_test group by a order by a", `[[INT64(65) INT64(1)] [INT64(69) INT64(1)] [INT64(97) INT64(1)] [INT64(98) INT64(1)] [INT64(99) INT64(2)] [INT64(100) INT64(1)] [INT64(101) INT64(1)]]`)
+	utils.AssertMatches(t, vtConn, "select ascii(val1) as a, count(*) from aggr_test group by a order by 2, a", `[[INT64(65) INT64(1)] [INT64(69) INT64(1)] [INT64(97) INT64(1)] [INT64(98) INT64(1)] [INT64(100) INT64(1)] [INT64(101) INT64(1)] [INT64(99) INT64(2)]]`)
+
 	utils.AssertMatchesCompareMySQL(t, vtConn, mysqlConn, "select val1 as a, count(*) from aggr_test group by a", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
 	utils.AssertMatchesCompareMySQL(t, vtConn, mysqlConn, "select val1 as a, count(*) from aggr_test group by a order by a", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
 	utils.AssertMatchesCompareMySQL(t, vtConn, mysqlConn, "select val1 as a, count(*) from aggr_test group by a order by 2, a", `[[VARCHAR("b") INT64(1)] [VARCHAR("d") INT64(1)] [VARCHAR("a") INT64(2)] [VARCHAR("c") INT64(2)] [VARCHAR("e") INT64(2)]]`)

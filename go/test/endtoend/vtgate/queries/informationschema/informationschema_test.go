@@ -41,22 +41,17 @@ func start(t *testing.T) (*mysql.Conn, *mysql.Conn, func()) {
 
 	deleteAll := func() {
 		_, _ = utils.ExecAllowError(t, vtConn, "set workload = oltp")
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from t1", utils.DontCompareResultsOnError)
-		_, _ = utils.ExecAllowError(t, vtConn, "delete from t1_id2_idx")
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from vstream_test", utils.DontCompareResultsOnError)
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from t2", utils.DontCompareResultsOnError)
-		_, _ = utils.ExecAllowError(t, vtConn, "delete from t2_id4_idx")
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from t3", utils.DontCompareResultsOnError)
-		_, _ = utils.ExecAllowError(t, vtConn, "delete from t3_id7_idx")
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from t4", utils.DontCompareResultsOnError)
-		_, _ = utils.ExecAllowError(t, vtConn, "delete from t4_id2_idx")
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from t5_null_vindex", utils.DontCompareResultsOnError)
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from t6", utils.DontCompareResultsOnError)
-		_, _ = utils.ExecAllowError(t, vtConn, "delete from t6_id2_idx")
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from t7_xxhash", utils.DontCompareResultsOnError)
-		_, _ = utils.ExecAllowError(t, vtConn, "delete from t7_xxhash_idx")
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from t7_fk", utils.DontCompareResultsOnError)
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from t8", utils.DontCompareResultsOnError)
+
+		tables := []string{
+			"t1", "t1_id2_idx", "vstream_test", "t2", "t2_id4_idx", "t3", "t3_id7_idx", "t4",
+			"t4_id2_idx", "t5_null_vindex", "t6", "t6_id2_idx", "t7_xxhash", "t7_xxhash_idx", "t7_fk", "t8",
+		}
+		conns := []*mysql.Conn{vtConn, mysqlConn}
+		for _, conn := range conns {
+			for _, table := range tables {
+				_, _ = utils.ExecAllowError(t, conn, "delete from "+table)
+			}
+		}
 	}
 
 	deleteAll()

@@ -40,17 +40,17 @@ func start(t *testing.T) (*mysql.Conn, *mysql.Conn, func()) {
 
 	deleteAll := func() {
 		_, _ = utils.ExecAllowError(t, vtConn, "set workload = oltp")
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from s_tbl", utils.DontCompareResultsOnError)
-		_, _ = utils.ExecAllowError(t, vtConn, "delete from num_vdx_tbl")
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from user_tbl", utils.DontCompareResultsOnError)
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from order_tbl", utils.DontCompareResultsOnError)
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from oevent_tbl", utils.DontCompareResultsOnError)
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from oextra_tbl", utils.DontCompareResultsOnError)
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from auto_tbl", utils.DontCompareResultsOnError)
-		_, _ = utils.ExecAllowError(t, vtConn, "delete from oid_vdx_tbl")
-		_, _ = utils.ExecAllowError(t, vtConn, "delete from unq_idx")
-		_, _ = utils.ExecAllowError(t, vtConn, "delete from nonunq_idx")
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from u_tbl", utils.DontCompareResultsOnError)
+
+		tables := []string{
+			"s_tbl", "num_vdx_tbl", "user_tbl", "order_tbl", "oevent_tbl", "oextra_tbl",
+			"auto_tbl", "oid_vdx_tbl", "unq_idx", "nonunq_idx", "u_tbl",
+		}
+		conns := []*mysql.Conn{vtConn, mysqlConn}
+		for _, conn := range conns {
+			for _, table := range tables {
+				_, _ = utils.ExecAllowError(t, conn, "delete from "+table)
+			}
+		}
 	}
 
 	deleteAll()
@@ -90,8 +90,9 @@ func TestFailureInsertSelect(t *testing.T) {
 
 	// primary key same
 	utils.AssertContainsErrorCompareMySQL(t, vtConn, mysqlConn, "insert into s_tbl(id, num) select id, num*20 from s_tbl where id = 1", `AlreadyExists desc = Duplicate entry '1' for key`)
-	// lookup key same
-	utils.AssertContainsErrorCompareMySQL(t, vtConn, mysqlConn, "insert into s_tbl(id, num) select id*20, num from s_tbl where id = 1", `lookup.Create: Code: ALREADY_EXISTS`)
+	// lookup key same (does not fail on MySQL as there is no lookup)
+	utils.AssertContainsError(t, vtConn, "insert into s_tbl(id, num) select id*20, num from s_tbl where id = 1", `lookup.Create: Code: ALREADY_EXISTS`)
+	utils.Exec(t, mysqlConn, "insert into s_tbl(id, num) select id*20, num from s_tbl where id = 1")
 	// mismatch column count
 	utils.AssertContainsErrorCompareMySQL(t, vtConn, mysqlConn, "insert into s_tbl(id, num) select 100,200,300", `Column count doesn't match value count at row 1`)
 	utils.AssertContainsErrorCompareMySQL(t, vtConn, mysqlConn, "insert into s_tbl(id, num) select 100", `Column count doesn't match value count at row 1`)

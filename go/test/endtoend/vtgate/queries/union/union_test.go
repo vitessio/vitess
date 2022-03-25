@@ -40,10 +40,14 @@ func start(t *testing.T) (*mysql.Conn, *mysql.Conn, func()) {
 
 	deleteAll := func() {
 		_, _ = utils.ExecAllowError(t, vtConn, "set workload = oltp")
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from t1", utils.DontCompareResultsOnError)
-		_, _ = utils.ExecAllowError(t, vtConn, "delete from t1_id2_idx")
-		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "delete from t2", utils.DontCompareResultsOnError)
-		_, _ = utils.ExecAllowError(t, vtConn, "delete from t2_id4_idx")
+
+		tables := []string{"t1", "t1_id2_idx", "t2", "t2_id4_idx"}
+		conns := []*mysql.Conn{vtConn, mysqlConn}
+		for _, conn := range conns {
+			for _, table := range tables {
+				_, _ = utils.ExecAllowError(t, conn, "delete from "+table)
+			}
+		}
 	}
 
 	deleteAll()

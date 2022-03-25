@@ -31,19 +31,18 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
 
-const (
-	Ordered int = 1 << iota
-	IgnoreDifference
-	DontCompareResultsOnError
-)
-
-func NewMySQL(cluster *cluster.LocalProcessCluster, ksName string, schemaSQL ...string) (mysql.ConnParams, func(), error) {
+// NewMySQL creates a new MySQL server using the local mysqld binary. The name of the database
+// will be set to `dbName`. SQL queries that need to be executed on the new MySQL instance
+// can be passed through the `schemaSQL` argument.
+// The mysql.ConnParams to connect to the new database is returned, along with a function to
+// teardown the database.
+func NewMySQL(cluster *cluster.LocalProcessCluster, dbName string, schemaSQL ...string) (mysql.ConnParams, func(), error) {
 	mysqlDir, err := createMySQLDir()
 	if err != nil {
 		return mysql.ConnParams{}, nil, err
 	}
 
-	initMySQLFile, err := createInitSQLFile(mysqlDir, ksName)
+	initMySQLFile, err := createInitSQLFile(mysqlDir, dbName)
 	if err != nil {
 		return mysql.ConnParams{}, nil, err
 	}
@@ -63,7 +62,7 @@ func NewMySQL(cluster *cluster.LocalProcessCluster, ksName string, schemaSQL ...
 		UnixSocket: mycnf.SocketFile,
 		Host:       cluster.Hostname,
 		Uname:      "root",
-		DbName:     ksName,
+		DbName:     dbName,
 	}
 
 	for _, sql := range schemaSQL {
@@ -131,7 +130,7 @@ func prepareMySQLWithSchema(err error, params mysql.ConnParams, sql string) erro
 	return nil
 }
 
-func compareVitessAndMySQLResults(t *testing.T, query string, vtQr *sqltypes.Result, mysqlQr *sqltypes.Result, options int) {
+func compareVitessAndMySQLResults(t *testing.T, query string, vtQr *sqltypes.Result, mysqlQr *sqltypes.Result) {
 	if vtQr == nil && mysqlQr == nil {
 		return
 	}
@@ -154,7 +153,7 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtQr *sqltypes.Res
 		orderBy = sel.OrderBy != nil
 	}
 
-	if options&Ordered != 0 || orderBy && sqltypes.ResultsEqual([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr}) {
+	if orderBy && sqltypes.ResultsEqual([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr}) {
 		return
 	} else if sqltypes.ResultsEqualUnordered([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr}) {
 		return
@@ -168,19 +167,13 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtQr *sqltypes.Res
 	for _, row := range mysqlQr.Rows {
 		errStr += fmt.Sprintf("%s\n", row)
 	}
-	if options&IgnoreDifference != 0 {
-		return
-	}
 	t.Error(errStr)
 }
 
-func compareVitessAndMySQLErrors(t *testing.T, vtErr, mysqlErr error, allow bool) {
+func compareVitessAndMySQLErrors(t *testing.T, vtErr, mysqlErr error) {
 	if vtErr != nil && mysqlErr != nil || vtErr == nil && mysqlErr == nil {
 		return
 	}
 	out := fmt.Sprintf("Vitess and MySQL are not erroring the same way.\nVitess error: %v\nMySQL error: %v", vtErr, mysqlErr)
-	if !allow {
-		t.Error(out)
-		return
-	}
+	t.Error(out)
 }
