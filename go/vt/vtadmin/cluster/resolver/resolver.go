@@ -20,6 +20,24 @@ limitations under the License.
 // vtctlds and vtgates in a cluster being used by a grpc.ClientConn, allowing
 // VTAdmin to transparently reconnect to different vtctlds and vtgates both
 // periodically and when hosts are recycled.
+//
+// Some potential improvements we can add, if desired:
+//
+// 1. Background refresh. We would take a config flag that governs the refresh
+//	  interval and backoff (for when background refresh happens around the same
+//	  time as grpc-core calls to ResolveNow) and spin up a goroutine. We would
+//	  then have to spin this down when Close is called.
+//
+// 2. Stats!
+//
+// 3. Have *builder track the *resolvers it builds. The reason we want this is
+// 	  because VtctldClientProxy and VTGateProxy can only hold a reference to the
+//	  a Builder, not the Resolvers that Builder builds. If we then implement
+//	  debug.Debuggable for our builder and resolver implementations, we can then
+//	  wire all this allllll the way back up to /debug/ route for a cluster to
+//	  inspect the state of our resolvers. In particular we would be interested
+//	  in the last resolution time, last resolution error (if last resolution
+//	  failed), and the current address set.
 package resolver
 
 import (
