@@ -3457,6 +3457,10 @@ show_statement:
   {
     $$ = &Show{Type: string($2) + " " + string($3), Table: $4}
   }
+| SHOW CREATE PROCEDURE table_name
+  {
+    $$ = &Show{Type: CreateProcedureStr, Table: $4}
+  }
 | SHOW CREATE TRIGGER table_name
   {
     $$ = &Show{Type: CreateTriggerStr, Table: $4}

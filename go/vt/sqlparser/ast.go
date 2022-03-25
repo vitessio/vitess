@@ -1392,19 +1392,18 @@ func (node *Set) walkSubtree(visit Visit) error {
 }
 
 type CharsetAndCollate struct {
-	Type string //Charset = true, Collate = false
-	Value string
+	Type      string //Charset = true, Collate = false
+	Value     string
 	IsDefault bool
 }
 
-
 // DBDDL represents a CREATE, DROP database statement.
 type DBDDL struct {
-	Action      string
-	DBName      string
-	IfNotExists bool
-	IfExists    bool
-	CharsetCollate  []*CharsetAndCollate
+	Action         string
+	DBName         string
+	IfNotExists    bool
+	IfExists       bool
+	CharsetCollate []*CharsetAndCollate
 }
 
 // Format formats the node.
@@ -2669,7 +2668,8 @@ func (node *Explain) Format(buf *TrackedBuffer) {
 }
 
 const (
-	CreateTriggerStr = "create trigger"
+	CreateTriggerStr   = "create trigger"
+	CreateProcedureStr = "create procedure"
 )
 
 // Show represents a show statement.
@@ -2722,6 +2722,10 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	}
 	if node.Type == CreateTriggerStr {
 		buf.Myprintf("show create trigger %v", node.Table)
+		return
+	}
+	if node.Type == CreateProcedureStr {
+		buf.Myprintf("show create procedure %v", node.Table)
 		return
 	}
 	if node.Type == "processlist" {

@@ -1358,6 +1358,9 @@ var (
 		}, {
 			input: "show create schema if not exists d",
 		}, {
+			input:  "show create procedure t",
+			output: "show create procedure t",
+		}, {
 			input:  "show create table t",
 			output: "show create table t",
 		}, {
