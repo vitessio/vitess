@@ -517,13 +517,17 @@ func (se *Engine) RegisterNotifier(name string, f notifier) {
 // UnregisterNotifier unregisters the notifier function.
 func (se *Engine) UnregisterNotifier(name string) {
 	if !se.isOpen {
+		log.Infof("schema Engine is not open")
 		return
 	}
 
+	log.Infof("schema Engine - acquiring notifierMu lock")
 	se.notifierMu.Lock()
+	log.Infof("schema Engine - acquired notifierMu lock")
 	defer se.notifierMu.Unlock()
 
 	delete(se.notifiers, name)
+	log.Infof("schema Engine - finished UnregisterNotifier")
 }
 
 // broadcast must be called while holding a lock on se.mu.

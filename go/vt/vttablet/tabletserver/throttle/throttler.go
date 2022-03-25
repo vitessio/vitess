@@ -263,19 +263,25 @@ func (throttler *Throttler) Open() error {
 
 // Close frees resources
 func (throttler *Throttler) Close() {
+	log.Infof("Throttler - started execution of Close. Acquiring initMutex lock")
 	throttler.initMutex.Lock()
+	log.Infof("Throttler - acquired initMutex lock")
 	defer throttler.initMutex.Unlock()
 	if atomic.LoadInt64(&throttler.isOpen) == 0 {
+		log.Infof("Throttler - no throttler is open")
 		// not open
 		return
 	}
 	for _, t := range throttler.tickers {
 		t.Suspend()
 	}
+	log.Infof("Throttler - finished suspending tickers")
 	atomic.StoreInt64(&throttler.isLeader, 0)
 
+	log.Infof("Throttler - closing pool")
 	throttler.pool.Close()
 	atomic.StoreInt64(&throttler.isOpen, 0)
+	log.Infof("Throttler - finished execution of Close")
 }
 
 // readSelfMySQLThrottleMetric reads the mysql metric from thi very tablet's backend mysql.

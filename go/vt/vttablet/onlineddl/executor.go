@@ -296,15 +296,20 @@ func (e *Executor) Open() error {
 
 // Close frees resources
 func (e *Executor) Close() {
+	log.Infof("onlineDDL Executor - Acquiring lock - initMutex")
 	e.initMutex.Lock()
+	log.Infof("onlineDDL Executor - Acquired lock - initMutex")
 	defer e.initMutex.Unlock()
 	if !e.isOpen {
 		return
 	}
 
+	log.Infof("onlineDDL Executor - Stopping timer ticks")
 	e.ticks.Stop()
+	log.Infof("onlineDDL Executor - Closing the conpool")
 	e.pool.Close()
 	e.isOpen = false
+	log.Infof("onlineDDL Executor - finished Close execution")
 }
 
 // triggerNextCheckInterval the next tick sooner than normal
