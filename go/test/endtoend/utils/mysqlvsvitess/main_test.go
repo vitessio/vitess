@@ -42,7 +42,7 @@ var (
 		primary key(id1)
 	) Engine=InnoDB;`
 
-	VSchema = `
+	vschema = `
 {
   "sharded": true,
   "vindexes": {
@@ -80,7 +80,7 @@ func TestMain(m *testing.M) {
 		keyspace := &cluster.Keyspace{
 			Name:      keyspaceName,
 			SchemaSQL: schemaSQL,
-			VSchema:   VSchema,
+			VSchema:   vschema,
 		}
 		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
 		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}

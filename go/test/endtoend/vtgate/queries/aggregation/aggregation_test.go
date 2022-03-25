@@ -29,48 +29,52 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
-func start(t *testing.T) (*mysql.Conn, func()) {
+func start(t *testing.T) (*mysql.Conn, *mysql.Conn, func()) {
 	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
+	vtConn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+
+	mysqlConn, err := mysql.Connect(ctx, &mysqlParams)
 	require.Nil(t, err)
 
 	deleteAll := func() {
-		_, _ = utils.ExecAllowError(t, conn, "set workload = oltp")
-		utils.Exec(t, conn, "delete from aggr_test")
-		utils.Exec(t, conn, "delete from t3")
-		utils.Exec(t, conn, "delete from t7_xxhash")
-		utils.Exec(t, conn, "delete from aggr_test_dates")
-		utils.Exec(t, conn, "delete from t7_xxhash_idx")
+		_, _ = utils.ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, "set workload = oltp", utils.DontCompareResultsOnError)
+		utils.ExecCompareMySQL(t, vtConn, mysqlConn, "delete from aggr_test")
+		utils.ExecCompareMySQL(t, vtConn, mysqlConn, "delete from t3")
+		utils.ExecCompareMySQL(t, vtConn, mysqlConn, "delete from t7_xxhash")
+		utils.ExecCompareMySQL(t, vtConn, mysqlConn, "delete from aggr_test_dates")
+		utils.ExecCompareMySQL(t, vtConn, mysqlConn, "delete from t7_xxhash_idx")
 	}
 
 	deleteAll()
 
-	return conn, func() {
+	return vtConn, mysqlConn, func() {
 		deleteAll()
-		conn.Close()
+		vtConn.Close()
+		mysqlConn.Close()
 		cluster.PanicHandler(t)
 	}
 }
 
 func TestAggregateTypes(t *testing.T) {
-	conn, closer := start(t)
+	vtConn, mysqlConn, closer := start(t)
 	defer closer()
-	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
-	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(6,'d',null), (7,'e',null), (8,'E',1)")
-	utils.AssertMatches(t, conn, "select val1, count(distinct val2), count(*) from aggr_test group by val1", `[[VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("d") INT64(0) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)]]`)
-	utils.AssertMatches(t, conn, "select val1, sum(distinct val2), sum(val2) from aggr_test group by val1", `[[VARCHAR("a") DECIMAL(1) DECIMAL(2)] [VARCHAR("b") DECIMAL(1) DECIMAL(1)] [VARCHAR("c") DECIMAL(7) DECIMAL(7)] [VARCHAR("d") NULL NULL] [VARCHAR("e") DECIMAL(1) DECIMAL(1)]]`)
-	utils.AssertMatches(t, conn, "select val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1", `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)] [VARCHAR("d") INT64(0) INT64(1)]]`)
-	utils.AssertMatches(t, conn, "select val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1 limit 4", `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)]]`)
-	utils.AssertMatches(t, conn, "select ascii(val1) as a, count(*) from aggr_test group by a", `[[INT64(65) INT64(1)] [INT64(69) INT64(1)] [INT64(97) INT64(1)] [INT64(98) INT64(1)] [INT64(99) INT64(2)] [INT64(100) INT64(1)] [INT64(101) INT64(1)]]`)
-	utils.AssertMatches(t, conn, "select ascii(val1) as a, count(*) from aggr_test group by a order by a", `[[INT64(65) INT64(1)] [INT64(69) INT64(1)] [INT64(97) INT64(1)] [INT64(98) INT64(1)] [INT64(99) INT64(2)] [INT64(100) INT64(1)] [INT64(101) INT64(1)]]`)
-	utils.AssertMatches(t, conn, "select ascii(val1) as a, count(*) from aggr_test group by a order by 2, a", `[[INT64(65) INT64(1)] [INT64(69) INT64(1)] [INT64(97) INT64(1)] [INT64(98) INT64(1)] [INT64(100) INT64(1)] [INT64(101) INT64(1)] [INT64(99) INT64(2)]]`)
-	utils.AssertMatches(t, conn, "select val1 as a, count(*) from aggr_test group by a", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
-	utils.AssertMatches(t, conn, "select val1 as a, count(*) from aggr_test group by a order by a", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
-	utils.AssertMatches(t, conn, "select val1 as a, count(*) from aggr_test group by a order by 2, a", `[[VARCHAR("b") INT64(1)] [VARCHAR("d") INT64(1)] [VARCHAR("a") INT64(2)] [VARCHAR("c") INT64(2)] [VARCHAR("e") INT64(2)]]`)
+	utils.ExecCompareMySQL(t, vtConn, mysqlConn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
+	utils.ExecCompareMySQL(t, vtConn, mysqlConn, "insert into aggr_test(id, val1, val2) values(6,'d',null), (7,'e',null), (8,'E',1)")
+	utils.AssertMatchesCompareMySQL(t, vtConn, mysqlConn, "select val1, count(distinct val2), count(*) from aggr_test group by val1", `[[VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("d") INT64(0) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)]]`)
+	utils.AssertMatchesCompareMySQL(t, vtConn, mysqlConn, "select val1, sum(distinct val2), sum(val2) from aggr_test group by val1", `[[VARCHAR("a") DECIMAL(1) DECIMAL(2)] [VARCHAR("b") DECIMAL(1) DECIMAL(1)] [VARCHAR("c") DECIMAL(7) DECIMAL(7)] [VARCHAR("d") NULL NULL] [VARCHAR("e") DECIMAL(1) DECIMAL(1)]]`)
+	utils.AssertMatchesCompareMySQL(t, vtConn, mysqlConn, "select val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1", `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)] [VARCHAR("d") INT64(0) INT64(1)]]`)
+	utils.AssertMatchesCompareMySQL(t, vtConn, mysqlConn, "select val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1 limit 4", `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)]]`)
+	utils.AssertMatchesCompareMySQLWithOptions(t, vtConn, mysqlConn, "select ascii(val1) as a, count(*) from aggr_test group by a", `[[INT64(65) INT64(1)] [INT64(69) INT64(1)] [INT64(97) INT64(1)] [INT64(98) INT64(1)] [INT64(99) INT64(2)] [INT64(100) INT64(1)] [INT64(101) INT64(1)]]`, utils.IgnoreDifference)
+	utils.AssertMatchesCompareMySQLWithOptions(t, vtConn, mysqlConn, "select ascii(val1) as a, count(*) from aggr_test group by a order by a", `[[INT64(65) INT64(1)] [INT64(69) INT64(1)] [INT64(97) INT64(1)] [INT64(98) INT64(1)] [INT64(99) INT64(2)] [INT64(100) INT64(1)] [INT64(101) INT64(1)]]`, utils.IgnoreDifference)
+	utils.AssertMatchesCompareMySQLWithOptions(t, vtConn, mysqlConn, "select ascii(val1) as a, count(*) from aggr_test group by a order by 2, a", `[[INT64(65) INT64(1)] [INT64(69) INT64(1)] [INT64(97) INT64(1)] [INT64(98) INT64(1)] [INT64(100) INT64(1)] [INT64(101) INT64(1)] [INT64(99) INT64(2)]]`, utils.IgnoreDifference)
+	utils.AssertMatchesCompareMySQL(t, vtConn, mysqlConn, "select val1 as a, count(*) from aggr_test group by a", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
+	utils.AssertMatchesCompareMySQL(t, vtConn, mysqlConn, "select val1 as a, count(*) from aggr_test group by a order by a", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
+	utils.AssertMatchesCompareMySQL(t, vtConn, mysqlConn, "select val1 as a, count(*) from aggr_test group by a order by 2, a", `[[VARCHAR("b") INT64(1)] [VARCHAR("d") INT64(1)] [VARCHAR("a") INT64(2)] [VARCHAR("c") INT64(2)] [VARCHAR("e") INT64(2)]]`)
 }
 
 func TestGroupBy(t *testing.T) {
-	conn, closer := start(t)
+	conn, _, closer := start(t)
 	defer closer()
 	utils.Exec(t, conn, "insert into t3(id5, id6, id7) values(1,1,2), (2,2,4), (3,2,4), (4,1,2), (5,1,2), (6,3,6)")
 	// test ordering and group by int column
@@ -82,7 +86,7 @@ func TestGroupBy(t *testing.T) {
 }
 
 func TestDistinct(t *testing.T) {
-	conn, closer := start(t)
+	conn, _, closer := start(t)
 	defer closer()
 	utils.Exec(t, conn, "insert into t3(id5,id6,id7) values(1,3,3), (2,3,4), (3,3,6), (4,5,7), (5,5,6)")
 	utils.Exec(t, conn, "insert into t7_xxhash(uid,phone) values('1',4), ('2',4), ('3',3), ('4',1), ('5',1)")
@@ -96,7 +100,7 @@ func TestDistinct(t *testing.T) {
 }
 
 func TestEqualFilterOnScatter(t *testing.T) {
-	conn, closer := start(t)
+	conn, _, closer := start(t)
 	defer closer()
 
 	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'b',2), (3,'c',3), (4,'d',4), (5,'e',5)")
@@ -124,7 +128,7 @@ func TestEqualFilterOnScatter(t *testing.T) {
 }
 
 func TestAggrOnJoin(t *testing.T) {
-	conn, closer := start(t)
+	conn, _, closer := start(t)
 	defer closer()
 
 	utils.Exec(t, conn, "insert into t3(id5, id6, id7) values(1,1,1), (2,2,4), (3,2,4), (4,1,2), (5,1,1), (6,3,6)")
@@ -176,7 +180,7 @@ func TestAggrOnJoin(t *testing.T) {
 }
 
 func TestNotEqualFilterOnScatter(t *testing.T) {
-	conn, closer := start(t)
+	conn, _, closer := start(t)
 	defer closer()
 
 	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'b',2), (3,'c',3), (4,'d',4), (5,'e',5)")
@@ -201,7 +205,7 @@ func TestNotEqualFilterOnScatter(t *testing.T) {
 }
 
 func TestLessFilterOnScatter(t *testing.T) {
-	conn, closer := start(t)
+	conn, _, closer := start(t)
 	defer closer()
 
 	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'b',2), (3,'c',3), (4,'d',4), (5,'e',5)")
@@ -225,7 +229,7 @@ func TestLessFilterOnScatter(t *testing.T) {
 }
 
 func TestLessEqualFilterOnScatter(t *testing.T) {
-	conn, closer := start(t)
+	conn, _, closer := start(t)
 	defer closer()
 
 	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'b',2), (3,'c',3), (4,'d',4), (5,'e',5)")
@@ -250,7 +254,7 @@ func TestLessEqualFilterOnScatter(t *testing.T) {
 }
 
 func TestGreaterFilterOnScatter(t *testing.T) {
-	conn, closer := start(t)
+	conn, _, closer := start(t)
 	defer closer()
 
 	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'b',2), (3,'c',3), (4,'d',4), (5,'e',5)")
@@ -275,7 +279,7 @@ func TestGreaterFilterOnScatter(t *testing.T) {
 }
 
 func TestGreaterEqualFilterOnScatter(t *testing.T) {
-	conn, closer := start(t)
+	conn, _, closer := start(t)
 	defer closer()
 
 	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'b',2), (3,'c',3), (4,'d',4), (5,'e',5)")

@@ -41,8 +41,12 @@ func AssertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 }
 
 func AssertMatchesCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query, expected string) {
+	AssertMatchesCompareMySQLWithOptions(t, vtConn, mysqlConn, query, expected, 0)
+}
+
+func AssertMatchesCompareMySQLWithOptions(t *testing.T, vtConn, mysqlConn *mysql.Conn, query, expected string, options int) {
 	t.Helper()
-	qr := ExecCompareMySQL(t, vtConn, mysqlConn, query)
+	qr := ExecCompareMySQLWithOptions(t, vtConn, mysqlConn, query, options)
 	got := fmt.Sprintf("%v", qr.Rows)
 	diff := cmp.Diff(expected, got)
 	if diff != "" {
@@ -103,17 +107,36 @@ func Exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 }
 
 func ExecCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query string) *sqltypes.Result {
+	return ExecCompareMySQLWithOptions(t, vtConn, mysqlConn, query, 0)
+}
+
+func ExecCompareMySQLWithOptions(t *testing.T, vtConn, mysqlConn *mysql.Conn, query string, options int) *sqltypes.Result {
 	t.Helper()
 	vtQr, err := vtConn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err, "for query: "+query)
 
 	mysqlQr, err := mysqlConn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err, "for query: "+query)
-	compareVitessAndMySQLResults(t, query, vtQr, mysqlQr)
+	compareVitessAndMySQLResults(t, query, vtQr, mysqlQr, options)
 	return vtQr
 }
 
 func ExecAllowError(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	t.Helper()
 	return conn.ExecuteFetch(query, 1000, true)
+}
+
+// func ExecAllowErrorCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query string) (*sqltypes.Result, error) {
+// 	return ExecAllowErrorCompareMySQLWithOptions(t, vtConn, mysqlConn, query, 0)
+// }
+
+func ExecAllowErrorCompareMySQLWithOptions(t *testing.T, vtConn, mysqlConn *mysql.Conn, query string, options int) (*sqltypes.Result, error) {
+	t.Helper()
+	vtQr, vtErr := vtConn.ExecuteFetch(query, 1000, true)
+	mysqlQr, mysqlErr := mysqlConn.ExecuteFetch(query, 1000, true)
+	compareVitessAndMySQLErrors(t, vtErr, mysqlErr, true)
+	if options&DontCompareResultsOnError == 0 {
+		compareVitessAndMySQLResults(t, query, vtQr, mysqlQr, options)
+	}
+	return vtQr, vtErr
 }

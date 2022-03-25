@@ -31,6 +31,12 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
 
+const (
+	Ordered int = 1 << iota
+	IgnoreDifference
+	DontCompareResultsOnError
+)
+
 func NewMySQL(cluster *cluster.LocalProcessCluster, ksName string, schemaSQL string) (mysql.ConnParams, func(), error) {
 	mysqlDir, err := createMySQLDir()
 	if err != nil {
@@ -123,7 +129,18 @@ func prepareMySQLWithSchema(err error, params mysql.ConnParams, sql string) erro
 	return nil
 }
 
-func compareVitessAndMySQLResults(t *testing.T, query string, vtQr *sqltypes.Result, mysqlQr *sqltypes.Result) {
+func compareVitessAndMySQLResults(t *testing.T, query string, vtQr *sqltypes.Result, mysqlQr *sqltypes.Result, options int) {
+	if vtQr == nil && mysqlQr == nil {
+		return
+	}
+	if vtQr == nil {
+		t.Error("Vitess result is 'nil' while MySQL's is not.")
+		return
+	}
+	if mysqlQr == nil {
+		t.Error("MySQL result is 'nil' while Vitess' is not.")
+		return
+	}
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		t.Error(err)
@@ -135,10 +152,12 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtQr *sqltypes.Res
 		orderBy = sel.OrderBy != nil
 	}
 
-	if orderBy && sqltypes.ResultsEqual([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr}) ||
-		sqltypes.ResultsEqualUnordered([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr}) {
+	if options&Ordered != 0 || orderBy && sqltypes.ResultsEqual([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr}) {
+		return
+	} else if sqltypes.ResultsEqualUnordered([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr}) {
 		return
 	}
+
 	errStr := "Query (" + query + ") results mismatched.\nVitess Results:\n"
 	for _, row := range vtQr.Rows {
 		errStr += fmt.Sprintf("%s\n", row)
@@ -147,5 +166,23 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtQr *sqltypes.Res
 	for _, row := range mysqlQr.Rows {
 		errStr += fmt.Sprintf("%s\n", row)
 	}
+	if options&IgnoreDifference != 0 {
+		return
+	}
 	t.Error(errStr)
+}
+
+func compareVitessAndMySQLErrors(t *testing.T, vtErr, mysqlErr error, allow bool) {
+	if vtErr != nil && mysqlErr != nil || vtErr == nil && mysqlErr == nil {
+		if vtErr != nil {
+			fmt.Printf("Got an error from Vitess and MySQL:\n\tVitess error: %v\n\tMySQL error: %v\n", vtErr, mysqlErr)
+		}
+		return
+	}
+	out := fmt.Sprintf("Vitess and MySQL are not erroring the same way.\nVitess error: %v\nMySQL error: %v", vtErr, mysqlErr)
+	if !allow {
+		t.Error(out)
+		return
+	}
+	fmt.Println(out)
 }
