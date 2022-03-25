@@ -184,5 +184,4 @@ func compareVitessAndMySQLErrors(t *testing.T, vtErr, mysqlErr error, allow bool
 		t.Error(out)
 		return
 	}
-	fmt.Println(out)
 }

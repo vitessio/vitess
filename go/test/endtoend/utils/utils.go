@@ -77,9 +77,15 @@ func AssertIsEmpty(t *testing.T, conn *mysql.Conn, query string) {
 	assert.Empty(t, qr.Rows, "for query: "+query)
 }
 
-func AssertFoundRowsValue(t *testing.T, conn *mysql.Conn, query, workload string, count int) {
-	Exec(t, conn, query)
-	qr := Exec(t, conn, "select found_rows()")
+func AssertIsEmptyCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query string) {
+	t.Helper()
+	qr := ExecCompareMySQL(t, vtConn, mysqlConn, query)
+	assert.Empty(t, qr.Rows, "for query: "+query)
+}
+
+func AssertFoundRowsValueCompareMySQLWithOptions(t *testing.T, vtConn, mysqlConn *mysql.Conn, query, workload string, count, options int) {
+	ExecCompareMySQLWithOptions(t, vtConn, mysqlConn, query, options)
+	qr := ExecCompareMySQLWithOptions(t, vtConn, mysqlConn, "select found_rows()", options)
 	got := fmt.Sprintf("%v", qr.Rows)
 	want := fmt.Sprintf(`[[UINT64(%d)]]`, count)
 	assert.Equalf(t, want, got, "Workload: %s\nQuery:%s\n", workload, query)

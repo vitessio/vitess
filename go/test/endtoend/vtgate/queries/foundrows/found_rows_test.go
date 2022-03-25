@@ -31,30 +31,38 @@ import (
 func TestFoundRows(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
+	vtConn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
-	defer conn.Close()
+	defer vtConn.Close()
 
-	utils.Exec(t, conn, "delete from t2")
-	defer utils.Exec(t, conn, "delete from t2")
+	mysqlConn, err := mysql.Connect(ctx, &mysqlParams)
+	require.Nil(t, err)
+	defer mysqlConn.Close()
 
-	utils.Exec(t, conn, "insert into t2(id3,id4) values(1,2), (2,2), (3,3), (4,3), (5,3)")
+	utils.ExecCompareMySQL(t, vtConn, mysqlConn, "delete from t2")
+	defer func() {
+		utils.Exec(t, vtConn, "set workload = oltp")
+		utils.ExecCompareMySQL(t, vtConn, mysqlConn, "delete from t2")
+
+		// queries against lookup tables do not need to be executed against MySQL
+		utils.Exec(t, vtConn, "delete from t2_id4_idx")
+	}()
+
+	utils.ExecCompareMySQL(t, vtConn, mysqlConn, "insert into t2(id3,id4) values(1,2), (2,2), (3,3), (4,3), (5,3)")
 
 	runTests := func(workload string) {
-		utils.AssertFoundRowsValue(t, conn, "select * from t2", workload, 5)
-		utils.AssertFoundRowsValue(t, conn, "select * from t2 order by id3 limit 2", workload, 2)
-		utils.AssertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 order by id3 limit 2", workload, 5)
-		utils.AssertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id3 = 4 order by id3 limit 2", workload, 1)
-		utils.AssertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id4 = 3 order by id3 limit 2", workload, 3)
-		utils.AssertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS id4, count(id3) from t2 where id3 = 3 group by id4 limit 1", workload, 1)
+		// TODO (@frouioui): following assertions produce different results between MySQL and Vitess
+		//  their differences are ignored for now. Fix it.
+		// `select found_rows()` returns an `UINT64` on Vitess, and `INT64` MySQL
+		utils.AssertFoundRowsValueCompareMySQLWithOptions(t, vtConn, mysqlConn, "select * from t2", workload, 5, utils.IgnoreDifference)
+		utils.AssertFoundRowsValueCompareMySQLWithOptions(t, vtConn, mysqlConn, "select * from t2 order by id3 limit 2", workload, 2, utils.IgnoreDifference)
+		utils.AssertFoundRowsValueCompareMySQLWithOptions(t, vtConn, mysqlConn, "select SQL_CALC_FOUND_ROWS * from t2 order by id3 limit 2", workload, 5, utils.IgnoreDifference)
+		utils.AssertFoundRowsValueCompareMySQLWithOptions(t, vtConn, mysqlConn, "select SQL_CALC_FOUND_ROWS * from t2 where id3 = 4 order by id3 limit 2", workload, 1, utils.IgnoreDifference)
+		utils.AssertFoundRowsValueCompareMySQLWithOptions(t, vtConn, mysqlConn, "select SQL_CALC_FOUND_ROWS * from t2 where id4 = 3 order by id3 limit 2", workload, 3, utils.IgnoreDifference)
+		utils.AssertFoundRowsValueCompareMySQLWithOptions(t, vtConn, mysqlConn, "select SQL_CALC_FOUND_ROWS id4, count(id3) from t2 where id3 = 3 group by id4 limit 1", workload, 1, utils.IgnoreDifference)
 	}
 
 	runTests("oltp")
-	utils.Exec(t, conn, "set workload = olap")
+	utils.Exec(t, vtConn, "set workload = olap")
 	runTests("olap")
-
-	// cleanup test data
-	utils.Exec(t, conn, "set workload = oltp")
-	utils.Exec(t, conn, "delete from t2")
-	utils.Exec(t, conn, "delete from t2_id4_idx")
 }
