@@ -90,21 +90,37 @@ func NewBuilder(scheme string, disco discovery.Discovery, opts Options) grpcreso
 // returning our Resolver back to grpc core. Failing to do this means that our
 // first RPC would hang waiting for a resolver update.
 func (b *builder) Build(target grpcresolver.Target, cc grpcresolver.ClientConn, opts grpcresolver.BuildOptions) (grpcresolver.Resolver, error) {
-	r := &resolver{
-		disco:  b.disco,
-		cc:     cc,
-		target: target,
-		opts:   b.opts,
+	r, err := b.build(target, cc, opts)
+	if err != nil {
+		return nil, err
 	}
 
-	switch r.target.Authority {
-	case "vtgate", "vtctld":
-	default:
-		return nil, fmt.Errorf("%s: unsupported authority %s", logPrefix, r.target.Authority)
-	}
-
-	r.resolve()
+	r.ResolveNow(grpcresolver.ResolveNowOptions{})
 	return r, nil
+}
+
+func (b *builder) build(target grpcresolver.Target, cc grpcresolver.ClientConn, opts grpcresolver.BuildOptions) (*resolver, error) {
+	var fn func(context.Context, []string) ([]string, error)
+	switch target.Authority {
+	case "vtctld":
+		fn = b.disco.DiscoverVtctldAddrs
+	case "vtgate":
+		fn = b.disco.DiscoverVTGateAddrs
+	default:
+		return nil, fmt.Errorf("%s: unsupported authority %s", logPrefix, target.Authority)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	return &resolver{
+		component:     target.Authority,
+		cluster:       target.Scheme,
+		discoverAddrs: fn,
+		opts:          b.opts,
+		cc:            cc,
+		ctx:           ctx,
+		cancel:        cancel,
+	}, nil
 }
 
 // Scheme is part of the resolver.Builder interface.
@@ -113,74 +129,74 @@ func (b *builder) Scheme() string {
 }
 
 type resolver struct {
-	disco  discovery.Discovery
-	cc     grpcresolver.ClientConn
-	target grpcresolver.Target
-	opts   Options
+	component     string
+	cluster       string
+	discoverAddrs func(ctx context.Context, tags []string) ([]string, error)
+	opts          Options
+
+	cc grpcresolver.ClientConn
+
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
-func (r *resolver) resolve() {
-	span, ctx := trace.NewSpan(context.Background(), "(vtadmin/cluster/resolver).resolve")
+func (r *resolver) resolve() (*grpcresolver.State, error) {
+	span, ctx := trace.NewSpan(r.ctx, "(vtadmin/cluster/resolver).resolve")
 	defer span.Finish()
 
-	span.Annotate("cluster_id", r.target.Scheme)
+	span.Annotate("cluster_id", r.cluster)
+	span.Annotate("component", r.component)
 
-	span.Annotate("scheme", r.target.Scheme)
-	span.Annotate("authority", r.target.Authority)
-	span.Annotate("endpoint", r.target.Endpoint)
-
-	log.Infof("%s: resolving %ss (cluster %s)", logPrefix, r.target.Authority, r.target.Scheme)
+	log.Infof("%s: resolving %ss (cluster %s)", logPrefix, r.component, r.cluster)
 
 	ctx, cancel := context.WithTimeout(ctx, r.opts.ResolveTimeout)
 	defer cancel()
 
-	var (
-		addrStrs []string
-		err      error
-	)
-	switch r.target.Authority {
-	case "vtctld":
-		addrStrs, err = r.disco.DiscoverVtctldAddrs(ctx, r.opts.DiscoveryTags)
-		if err != nil {
-			log.Errorf("%s: failed to discover vtctlds (cluster %s): %s", logPrefix, r.target.Scheme, err)
-			return
-		}
-	case "vtgate":
-		addrStrs, err = r.disco.DiscoverVTGateAddrs(ctx, r.opts.DiscoveryTags)
-		if err != nil {
-			log.Errorf("%s: failed to discover vtgates (cluster %s): %s", logPrefix, r.target.Scheme, err)
-			return
-		}
-	default:
-		// TODO: decide if we should just log error or full-blown panic.
-		// this _should_ be impossible, since we checked this in builder.Build()
+	addrs, err := r.discoverAddrs(ctx, r.opts.DiscoveryTags)
+	if err != nil {
+		return nil, fmt.Errorf("failed to discover %ss (cluster %s): %w", r.component, r.cluster, err)
 	}
 
-	addrs := make([]grpcresolver.Address, len(addrStrs))
-	for i, addr := range addrStrs {
-		addrs[i] = grpcresolver.Address{
+	state := &grpcresolver.State{
+		Addresses: make([]grpcresolver.Address, len(addrs)),
+	}
+
+	for i, addr := range addrs {
+		state.Addresses[i] = grpcresolver.Address{
 			Addr: addr,
 		}
 	}
 
-	if len(addrs) == 0 {
-		log.Warningf("%s: found no %ss (cluster %s); not updating grpc clientconn state", logPrefix, r.target.Authority, r.target.Scheme)
-		return
-	}
-
-	log.Infof("%s: found %d %ss (cluster %s)", logPrefix, len(addrs), r.target.Authority, r.target.Scheme)
-
-	if err := r.cc.UpdateState(grpcresolver.State{Addresses: addrs}); err != nil {
-		log.Errorf("%s: failed to update addresses for %s (cluster %s)", logPrefix, err, r.target.Scheme)
-	}
+	return state, nil
 }
 
 // ResolveNow is part of the resolver.Resolver interface. It is called by grpc
 // ClientConn's when errors occur, as well as periodically to refresh the set of
 // addresses a ClientConn can use for SubConns.
 func (r *resolver) ResolveNow(o grpcresolver.ResolveNowOptions) {
-	r.resolve()
+	state, err := r.resolve()
+	if err != nil {
+		log.Errorf("%s: failed to resolve new addresses for %s (cluster %s): %s", logPrefix, r.component, r.cluster, err)
+		r.cc.ReportError(err)
+		return
+	}
+
+	switch len(state.Addresses) {
+	case 0:
+		log.Warningf("%s: found no %ss (cluster %s); updating grpc clientconn state anyway", logPrefix, r.component, r.cluster)
+	default:
+		log.Infof("%s: found %d %ss (cluster %s)", logPrefix, len(state.Addresses), r.component, r.cluster)
+	}
+
+	err = r.cc.UpdateState(*state)
+	if err != nil {
+		log.Errorf("%s: failed to update %ss addresses for %s (cluster %s): %s", logPrefix, r.component, r.cluster, err)
+		r.cc.ReportError(err)
+		return
+	}
 }
 
 // Close is part of the resolver.Resolver interface.
-func (r *resolver) Close() {}
+func (r *resolver) Close() {
+	r.cancel() // cancel any ongoing call to ResolveNow, and therefore any resultant discovery lookup.
+}

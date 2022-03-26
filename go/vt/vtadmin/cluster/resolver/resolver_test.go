@@ -33,6 +33,7 @@ type mockClientConn struct {
 	grpcresolver.ClientConn
 	Addrs             []grpcresolver.Address
 	UpdateStateCalled bool
+	ReportedError     error
 }
 
 func (cc *mockClientConn) UpdateState(state grpcresolver.State) error {
@@ -41,8 +42,19 @@ func (cc *mockClientConn) UpdateState(state grpcresolver.State) error {
 	return nil
 }
 
-var opts = Options{
+func (cc *mockClientConn) ReportError(err error) { cc.ReportedError = err }
+
+var testopts = Options{
 	ResolveTimeout: time.Millisecond * 50,
+}
+
+func mustBuild(t *testing.T, b *builder, target grpcresolver.Target, cc grpcresolver.ClientConn, opts grpcresolver.BuildOptions) *resolver {
+	t.Helper()
+
+	r, err := b.build(target, cc, opts)
+	require.NoError(t, err)
+
+	return r
 }
 
 func TestResolveNow(t *testing.T) {
@@ -54,14 +66,9 @@ func TestResolveNow(t *testing.T) {
 	})
 
 	cc := mockClientConn{}
-	r := &resolver{
-		target: grpcresolver.Target{
-			Authority: "vtctld",
-		},
-		cc:    &cc,
-		disco: disco,
-		opts:  opts,
-	}
+	r := mustBuild(t, &builder{disco: disco, opts: testopts}, grpcresolver.Target{
+		Authority: "vtctld",
+	}, &cc, grpcresolver.BuildOptions{})
 
 	r.ResolveNow(grpcresolver.ResolveNowOptions{})
 
@@ -102,14 +109,9 @@ func TestResolveWithTags(t *testing.T) {
 	})
 
 	cc := mockClientConn{}
-	r := &resolver{
-		target: grpcresolver.Target{
-			Authority: "vtgate",
-		},
-		cc:    &cc,
-		disco: disco,
-		opts:  opts,
-	}
+	r := mustBuild(t, &builder{disco: disco, opts: testopts}, grpcresolver.Target{
+		Authority: "vtgate",
+	}, &cc, grpcresolver.BuildOptions{})
 	r.opts.DiscoveryTags = []string{"tag2"}
 
 	r.ResolveNow(grpcresolver.ResolveNowOptions{})
@@ -130,19 +132,16 @@ func TestResolveEmptyList(t *testing.T) {
 	})
 
 	cc := mockClientConn{}
-	r := &resolver{
-		target: grpcresolver.Target{
+	r := mustBuild(t,
+		&builder{disco: disco, opts: testopts}, grpcresolver.Target{
 			Authority: "vtgate", // we only have vtctlds
-		},
-		cc:    &cc,
-		disco: disco,
-		opts:  opts,
-	}
+		}, &cc, grpcresolver.BuildOptions{},
+	)
 
 	r.ResolveNow(grpcresolver.ResolveNowOptions{})
 
 	assert.Empty(t, cc.Addrs, "ClientConn should have no addresses")
-	assert.False(t, cc.UpdateStateCalled, "resolver should not call cc.UpdateState with empty host list")
+	assert.True(t, cc.UpdateStateCalled, "resolver should still call cc.UpdateState with empty host list")
 
 	disco.AddTaggedGates(nil, &vtadminpb.VTGate{
 		Hostname: "gate:one",
@@ -154,7 +153,6 @@ func TestResolveEmptyList(t *testing.T) {
 			Addr: "gate:one",
 		},
 	})
-	assert.True(t, cc.UpdateStateCalled, "resolver should call cc.UpdateState after discovering new hosts")
 }
 
 func TestBuild(t *testing.T) {
@@ -165,7 +163,7 @@ func TestBuild(t *testing.T) {
 		Hostname: "vtctld:one",
 	})
 
-	b := &builder{disco: disco, opts: opts}
+	b := &builder{disco: disco, opts: testopts}
 
 	tests := []struct {
 		name      string
@@ -192,8 +190,8 @@ func TestBuild(t *testing.T) {
 				Authority: "vtgate",
 			},
 			assertion: func(t *testing.T, cc *mockClientConn) {
-				assert.Empty(t, cc.Addrs, "resolver should not UpdateState on clientconn (no vtgates in discovery)")
-				assert.False(t, cc.UpdateStateCalled, "resolver should not call UpdateState on clientconn (no vtgates in discovery)")
+				assert.Empty(t, cc.Addrs, "resolver should not add addresses to clientconn (no vtgates in discovery)")
+				assert.True(t, cc.UpdateStateCalled, "resolver should still call UpdateState on clientconn (no vtgates in discovery)")
 			},
 		},
 		{
