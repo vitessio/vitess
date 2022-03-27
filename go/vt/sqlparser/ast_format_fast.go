@@ -2631,6 +2631,30 @@ func (node *JSONOverlapsExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node
+func (node *JSONSearchExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_search(")
+	buf.printExpr(node, node.JSONDoc, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.OneOrAll, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.SearchStr, true)
+	if node.EscapeChar != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.EscapeChar, true)
+	}
+	if len(node.PathList) > 0 {
+		buf.WriteString(", ")
+	}
+	var prefix string
+	for _, n := range node.PathList {
+		buf.WriteString(prefix)
+		n.formatFast(buf)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// formatFast formats the node
 func (node *JSONValueExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("json_value(")
 	buf.printExpr(node, node.JSONDoc, true)

@@ -322,6 +322,7 @@ var keywords = []keyword{
 	{"json_extract", JSON_EXTRACT},
 	{"json_keys", JSON_KEYS},
 	{"json_overlaps", JSON_OVERLAPS},
+	{"json_search", JSON_SEARCH},
 	{"json_value", JSON_VALUE},
 	{"json_pretty", JSON_PRETTY},
 	{"json_storage_size", JSON_STORAGE_SIZE},

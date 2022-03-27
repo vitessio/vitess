@@ -2291,6 +2291,16 @@ type (
 		JSONDoc2 Expr
 	}
 
+	// JSONSearchExpr represents the function and arguments for JSON_SEARCH()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-search
+	JSONSearchExpr struct {
+		JSONDoc    Expr
+		OneOrAll   Expr
+		SearchStr  Expr
+		EscapeChar Expr
+		PathList   []*JSONPathParam
+	}
+
 	// JSONValueExpr represents the function and arguments for JSON_VALUE()
 	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-value
 	JSONValueExpr struct {
@@ -2345,6 +2355,7 @@ func (*JSONContainsPathExpr) iExpr() {}
 func (*JSONExtractExpr) iExpr()      {}
 func (*JSONKeysExpr) iExpr()         {}
 func (*JSONOverlapsExpr) iExpr()     {}
+func (*JSONSearchExpr) iExpr()       {}
 func (*JSONValueExpr) iExpr()        {}
 
 // iCallable marks all expressions that represent function calls
@@ -2368,6 +2379,7 @@ func (*JSONContainsPathExpr) iCallable() {}
 func (*JSONExtractExpr) iCallable()      {}
 func (*JSONKeysExpr) iCallable()         {}
 func (*JSONValueExpr) iCallable()        {}
+func (*JSONSearchExpr) iCallable()       {}
 func (*JSONOverlapsExpr) iCallable()     {}
 
 // Exprs represents a list of value expressions.

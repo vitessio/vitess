@@ -1515,6 +1515,39 @@ func (cached *JSONPrettyExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *JSONSearchExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(96)
+	}
+	// field JSONDoc vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONDoc.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field OneOrAll vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.OneOrAll.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field SearchStr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.SearchStr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field EscapeChar vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.EscapeChar.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field PathList []*vitess.io/vitess/go/vt/sqlparser.JSONPathParam
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.PathList)) * int64(8))
+		for _, elem := range cached.PathList {
+			size += elem.CachedSize(true)
+		}
+	}
+	return size
+}
 func (cached *JSONStorageFreeExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

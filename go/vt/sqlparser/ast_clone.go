@@ -187,6 +187,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfJSONPathParam(in)
 	case *JSONPrettyExpr:
 		return CloneRefOfJSONPrettyExpr(in)
+	case *JSONSearchExpr:
+		return CloneRefOfJSONSearchExpr(in)
 	case *JSONStorageFreeExpr:
 		return CloneRefOfJSONStorageFreeExpr(in)
 	case *JSONStorageSizeExpr:
@@ -1226,6 +1228,20 @@ func CloneRefOfJSONPrettyExpr(n *JSONPrettyExpr) *JSONPrettyExpr {
 	return &out
 }
 
+// CloneRefOfJSONSearchExpr creates a deep clone of the input.
+func CloneRefOfJSONSearchExpr(n *JSONSearchExpr) *JSONSearchExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.JSONDoc = CloneExpr(n.JSONDoc)
+	out.OneOrAll = CloneExpr(n.OneOrAll)
+	out.SearchStr = CloneExpr(n.SearchStr)
+	out.EscapeChar = CloneExpr(n.EscapeChar)
+	out.PathList = CloneSliceOfRefOfJSONPathParam(n.PathList)
+	return &out
+}
+
 // CloneRefOfJSONStorageFreeExpr creates a deep clone of the input.
 func CloneRefOfJSONStorageFreeExpr(n *JSONStorageFreeExpr) *JSONStorageFreeExpr {
 	if n == nil {
@@ -2246,6 +2262,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfJSONOverlapsExpr(in)
 	case *JSONPrettyExpr:
 		return CloneRefOfJSONPrettyExpr(in)
+	case *JSONSearchExpr:
+		return CloneRefOfJSONSearchExpr(in)
 	case *JSONStorageFreeExpr:
 		return CloneRefOfJSONStorageFreeExpr(in)
 	case *JSONStorageSizeExpr:
@@ -2442,6 +2460,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfJSONOverlapsExpr(in)
 	case *JSONPrettyExpr:
 		return CloneRefOfJSONPrettyExpr(in)
+	case *JSONSearchExpr:
+		return CloneRefOfJSONSearchExpr(in)
 	case *JSONStorageFreeExpr:
 		return CloneRefOfJSONStorageFreeExpr(in)
 	case *JSONStorageSizeExpr:

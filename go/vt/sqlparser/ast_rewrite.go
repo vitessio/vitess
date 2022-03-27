@@ -186,6 +186,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfJSONPathParam(parent, node, replacer)
 	case *JSONPrettyExpr:
 		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
+	case *JSONSearchExpr:
+		return a.rewriteRefOfJSONSearchExpr(parent, node, replacer)
 	case *JSONStorageFreeExpr:
 		return a.rewriteRefOfJSONStorageFreeExpr(parent, node, replacer)
 	case *JSONStorageSizeExpr:
@@ -2898,6 +2900,57 @@ func (a *application) rewriteRefOfJSONPrettyExpr(parent SQLNode, node *JSONPrett
 		parent.(*JSONPrettyExpr).JSONVal = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONSearchExpr(parent SQLNode, node *JSONSearchExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
+		parent.(*JSONSearchExpr).JSONDoc = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.OneOrAll, func(newNode, parent SQLNode) {
+		parent.(*JSONSearchExpr).OneOrAll = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.SearchStr, func(newNode, parent SQLNode) {
+		parent.(*JSONSearchExpr).SearchStr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.EscapeChar, func(newNode, parent SQLNode) {
+		parent.(*JSONSearchExpr).EscapeChar = newNode.(Expr)
+	}) {
+		return false
+	}
+	for x, el := range node.PathList {
+		if !a.rewriteRefOfJSONPathParam(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*JSONSearchExpr).PathList[idx] = newNode.(*JSONPathParam)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5799,6 +5852,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfJSONOverlapsExpr(parent, node, replacer)
 	case *JSONPrettyExpr:
 		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
+	case *JSONSearchExpr:
+		return a.rewriteRefOfJSONSearchExpr(parent, node, replacer)
 	case *JSONStorageFreeExpr:
 		return a.rewriteRefOfJSONStorageFreeExpr(parent, node, replacer)
 	case *JSONStorageSizeExpr:
@@ -5981,6 +6036,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfJSONOverlapsExpr(parent, node, replacer)
 	case *JSONPrettyExpr:
 		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
+	case *JSONSearchExpr:
+		return a.rewriteRefOfJSONSearchExpr(parent, node, replacer)
 	case *JSONStorageFreeExpr:
 		return a.rewriteRefOfJSONStorageFreeExpr(parent, node, replacer)
 	case *JSONStorageSizeExpr:

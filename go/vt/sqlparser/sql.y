@@ -193,7 +193,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
 %token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
-%token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE JSON_CONTAINS JSON_CONTAINS_PATH JSON_EXTRACT JSON_KEYS JSON_OVERLAPS JSON_VALUE
+%token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE JSON_CONTAINS JSON_CONTAINS_PATH JSON_EXTRACT JSON_KEYS JSON_OVERLAPS JSON_SEARCH JSON_VALUE
 %token <str> EXTRACT
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
@@ -4801,6 +4801,14 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONOverlapsExpr{JSONDoc1:$3, JSONDoc2:$5}
   }
+| JSON_SEARCH openb expression ',' expression ',' expression closeb
+  {
+    $$ = &JSONSearchExpr{JSONDoc: $3, OneOrAll: $5, SearchStr: $7 }
+  }
+| JSON_SEARCH openb expression ',' expression ',' expression ',' expression json_path_param_list_opt closeb
+  {
+    $$ = &JSONSearchExpr{JSONDoc: $3, OneOrAll: $5, SearchStr: $7, EscapeChar: $9, PathList:$10 }
+  }
 | JSON_VALUE openb expression ',' json_path_param closeb
   {
     $$ = &JSONValueExpr{JSONDoc: $3, Path: $5}
@@ -6094,6 +6102,7 @@ non_reserved_keyword:
 | JSON_CONTAINS_PATH
 | JSON_EXTRACT
 | JSON_KEYS
+| JSON_SEARCH
 | JSON_VALUE
 | JSON_PRETTY
 | JSON_STORAGE_FREE

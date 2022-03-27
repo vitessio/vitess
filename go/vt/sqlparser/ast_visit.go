@@ -186,6 +186,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfJSONPathParam(in, f)
 	case *JSONPrettyExpr:
 		return VisitRefOfJSONPrettyExpr(in, f)
+	case *JSONSearchExpr:
+		return VisitRefOfJSONSearchExpr(in, f)
 	case *JSONStorageFreeExpr:
 		return VisitRefOfJSONStorageFreeExpr(in, f)
 	case *JSONStorageSizeExpr:
@@ -1531,6 +1533,32 @@ func VisitRefOfJSONPrettyExpr(in *JSONPrettyExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfJSONSearchExpr(in *JSONSearchExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.JSONDoc, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.OneOrAll, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.SearchStr, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.EscapeChar, f); err != nil {
+		return err
+	}
+	for _, el := range in.PathList {
+		if err := VisitRefOfJSONPathParam(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func VisitRefOfJSONStorageFreeExpr(in *JSONStorageFreeExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2850,6 +2878,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfJSONOverlapsExpr(in, f)
 	case *JSONPrettyExpr:
 		return VisitRefOfJSONPrettyExpr(in, f)
+	case *JSONSearchExpr:
+		return VisitRefOfJSONSearchExpr(in, f)
 	case *JSONStorageFreeExpr:
 		return VisitRefOfJSONStorageFreeExpr(in, f)
 	case *JSONStorageSizeExpr:
@@ -3032,6 +3062,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfJSONOverlapsExpr(in, f)
 	case *JSONPrettyExpr:
 		return VisitRefOfJSONPrettyExpr(in, f)
+	case *JSONSearchExpr:
+		return VisitRefOfJSONSearchExpr(in, f)
 	case *JSONStorageFreeExpr:
 		return VisitRefOfJSONStorageFreeExpr(in, f)
 	case *JSONStorageSizeExpr:

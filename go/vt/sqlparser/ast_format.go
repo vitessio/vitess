@@ -2014,6 +2014,23 @@ func (node *JSONOverlapsExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node
+func (node *JSONSearchExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_search(%v, %v, %v", node.JSONDoc, node.OneOrAll, node.SearchStr)
+	if node.EscapeChar != nil {
+		buf.astPrintf(node, ", %v", node.EscapeChar)
+	}
+	if len(node.PathList) > 0 {
+		buf.WriteString(", ")
+	}
+	var prefix string
+	for _, n := range node.PathList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node
 func (node *JSONValueExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "json_value(%v, %v)", node.JSONDoc, node.Path)
 }

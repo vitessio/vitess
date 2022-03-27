@@ -2405,11 +2405,26 @@ var (
 		input:  `SELECT JSON_OVERLAPS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a')`,
 		output: `select json_overlaps('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a') from dual`,
 	}, {
-		input:  `SELECT JSON_OVERLAPS(@j, @k)`,
-		output: `select json_overlaps(@j, @k) from dual`,
+		input:  "SELECT JSON_OVERLAPS(@j, @k)",
+		output: "select json_overlaps(@j, @k) from dual",
 	}, {
-		input:  `SELECT JSON_OVERLAPS(@j, BIN(1))`,
-		output: `select json_overlaps(@j, BIN(1)) from dual`,
+		input:  "SELECT JSON_OVERLAPS(@j, BIN(1))",
+		output: "select json_overlaps(@j, BIN(1)) from dual",
+	}, {
+		input:  "SELECT JSON_SEARCH(@j, 'one', 'abc')",
+		output: "select json_search(@j, 'one', 'abc') from dual",
+	}, {
+		input:  `SELECT JSON_SEARCH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', @j, BIN(2))`,
+		output: `select json_search('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', @j, BIN(2)) from dual`,
+	}, {
+		input:  `SELECT JSON_SEARCH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'all', '10', NULL)`,
+		output: `select json_search('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'all', '10', null) from dual`,
+	}, {
+		input:  "SELECT JSON_SEARCH(@j, 'all', '%b%', '', '$[3]')",
+		output: "select json_search(@j, 'all', '%b%', '', '$[3]') from dual",
+	}, {
+		input:  "SELECT JSON_SEARCH(@j, 'all', '%b%', 'a', '$[3]')",
+		output: "select json_search(@j, 'all', '%b%', 'a', '$[3]') from dual",
 	}, {
 		input:  `SELECT JSON_VALUE('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a')`,
 		output: `select json_value('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a') from dual`,
