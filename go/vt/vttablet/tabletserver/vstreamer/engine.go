@@ -87,6 +87,7 @@ type Engine struct {
 	resultStreamerNumPackets  *stats.Counter
 	rowStreamerNumRows        *stats.Counter
 	rowStreamerNumPackets     *stats.Counter
+	rowStreamerWaits          *servenv.TimingsWrapper
 	errorCounts               *stats.CountersWithSingleLabel
 	vstreamersCreated         *stats.Counter
 	vstreamersEndedWithErrors *stats.Counter
@@ -122,6 +123,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		resultStreamerNumRows:     env.Exporter().NewCounter("ResultStreamerNumRows", "Number of rows sent in result streamer"),
 		rowStreamerNumPackets:     env.Exporter().NewCounter("RowStreamerNumPackets", "Number of packets in row streamer"),
 		rowStreamerNumRows:        env.Exporter().NewCounter("RowStreamerNumRows", "Number of rows sent in row streamer"),
+		rowStreamerWaits:          env.Exporter().NewTimings("RowStreamerWaits", "Count and total time we've waited for the source when starting a new vstream copy cycle", "copy-phase-waits"),
 		vstreamersCreated:         env.Exporter().NewCounter("VStreamersCreated", "Count of vstreamers created"),
 		vstreamersEndedWithErrors: env.Exporter().NewCounter("VStreamersEndedWithErrors", "Count of vstreamers that ended with errors"),
 		errorCounts:               env.Exporter().NewCountersWithSingleLabel("VStreamerErrors", "Tracks errors in vstreamer", "type", "Catchup", "Copy", "Send", "TablePlan"),

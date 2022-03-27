@@ -541,16 +541,9 @@ func verifySourceTabletThrottling(t *testing.T, targetKS, workflow string) {
 					if streamId.String() == "PrimaryReplicationStatuses" {
 						streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
 							state := attributeValue.Get("State").String()
-							copyState := attributeValue.Get("CopyState")
-							copyState.ForEach(func(key, val gjson.Result) bool { // for each table
-								table := val.Get("Table").String()
-								lastPK := val.Get("LastPK").String()
-								if state != "Copying" && lastPK != "" {
-									// The stream has been running and copied some rows!
-									require.FailNowf(t, "Unexpected running workflow stream", "Initial copy phase for the MoveTables workflow %s started in less than %d seconds when it should have been waiting. State: %s ; Table: %s ; LastPK: %s", ksWorkflow, int(tDuration.Seconds()), state, table, lastPK)
-								}
-								return true // end table loop
-							})
+							if state != "Copying" {
+								require.FailNowf(t, "Unexpected running workflow stream", "Initial copy phase for the MoveTables workflow %s started in less than %d seconds when it should have been waiting. State: %s ; Table: %s ; LastPK: %s", ksWorkflow, int(tDuration.Seconds()), state)
+							}
 							return true // end attribute loop
 						})
 					}

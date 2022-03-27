@@ -442,6 +442,7 @@ func (uvs *uvstreamer) waitForSource() error {
 	backoff := 1 * time.Second
 	backoffLimit := backoff * 30
 	ready := false
+	recording := false
 	mhll := uvs.vse.env.Config().RowStreamer.MaxTrxHistLen
 	mrls := uvs.vse.env.Config().RowStreamer.MaxReplLagSecs
 
@@ -468,6 +469,12 @@ func (uvs *uvstreamer) waitForSource() error {
 		if ready {
 			break
 		} else {
+			if !recording {
+				defer func() {
+					uvs.vse.rowStreamerWaits.Record("waitForSource", time.Now())
+				}()
+				recording = true
+			}
 			select {
 			case <-uvs.ctx.Done():
 				return uvs.ctx.Err()
