@@ -233,6 +233,11 @@ func (mysqlGRFlavor) supportsFastDropTable(c *Conn) (bool, error) {
 	return false, nil
 }
 
+// supportsTransactionalGtidExecuted is part of the Flavor interface.
+func (mysqlGRFlavor) supportsTransactionalGtidExecuted(c *Conn) (bool, error) {
+	return false, nil
+}
+
 func init() {
 	flavors[GRFlavorID] = newMysqlGRFlavor
 }

@@ -125,6 +125,12 @@ type flavor interface {
 	// lock the buffer pool and other queries.
 	// Specifically, this is supported in MySQL 8.0.23 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-23.html
 	supportsFastDropTable(c *Conn) (bool, error)
+
+	// supportsTransactionalGtidExecuted checks if reading mysql.gtid_executed is guaranteed to be consistent with
+	// an open transaction, ie will reading mysql.gtid_executed value inside a transaction representes the database
+	// state at given transaction/snapshot.
+	// Specifically, this is supported in MySQL 8.0.17 and above: https://dev.mysql.com/doc/refman/8.0/en/replication-gtids-concepts.html
+	supportsTransactionalGtidExecuted(c *Conn) (bool, error)
 }
 
 // flavors maps flavor names to their implementation.
@@ -467,4 +473,12 @@ func (c *Conn) BaseShowTables() string {
 // Specifically, this is supported in MySQL 8.0.23 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-23.html
 func (c *Conn) SupportsFastDropTable() (bool, error) {
 	return c.flavor.supportsFastDropTable(c)
+}
+
+// SupportsTransactionalGtidExecuted checks if reading mysql.gtid_executed is guaranteed to be consistent with
+// an open transaction, ie will reading mysql.gtid_executed value inside a transaction representes the database
+// state at given transaction/snapshot.
+// Specifically, this is supported in MySQL 8.0.17 and above: https://dev.mysql.com/doc/refman/8.0/en/replication-gtids-concepts.html
+func (c *Conn) SupportsTransactionalGtidExecuted() (bool, error) {
+	return c.flavor.supportsTransactionalGtidExecuted(c)
 }

@@ -300,6 +300,11 @@ func (mysqlFlavor56) supportsFastDropTable(c *Conn) (bool, error) {
 	return false, nil
 }
 
+// supportsTransactionalGtidExecuted is part of the Flavor interface.
+func (mysqlFlavor56) supportsTransactionalGtidExecuted(c *Conn) (bool, error) {
+	return false, nil
+}
+
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mysqlFlavor57) baseShowTablesWithSizes() string {
 	return TablesWithSize57
@@ -307,6 +312,11 @@ func (mysqlFlavor57) baseShowTablesWithSizes() string {
 
 // supportsFastDropTable is part of the Flavor interface.
 func (mysqlFlavor57) supportsFastDropTable(c *Conn) (bool, error) {
+	return false, nil
+}
+
+// supportsTransactionalGtidExecuted is part of the Flavor interface.
+func (mysqlFlavor57) supportsTransactionalGtidExecuted(c *Conn) (bool, error) {
 	return false, nil
 }
 
@@ -318,4 +328,9 @@ func (mysqlFlavor80) baseShowTablesWithSizes() string {
 // supportsFastDropTable is part of the Flavor interface.
 func (mysqlFlavor80) supportsFastDropTable(c *Conn) (bool, error) {
 	return c.ServerVersionAtLeast(8, 0, 23)
+}
+
+// supportsTransactionalGtidExecuted is part of the Flavor interface.
+func (mysqlFlavor80) supportsTransactionalGtidExecuted(c *Conn) (bool, error) {
+	return c.ServerVersionAtLeast(8, 0, 17)
 }

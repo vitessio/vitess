@@ -288,3 +288,8 @@ func (*filePosFlavor) baseShowTablesWithSizes() string {
 func (*filePosFlavor) supportsFastDropTable(c *Conn) (bool, error) {
 	return false, nil
 }
+
+// supportsTransactionalGtidExecuted is part of the Flavor interface.
+func (filePosFlavor) supportsTransactionalGtidExecuted(c *Conn) (bool, error) {
+	return false, nil
+}

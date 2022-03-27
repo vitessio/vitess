@@ -245,3 +245,8 @@ func (mariadbFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 func (mariadbFlavor) supportsFastDropTable(c *Conn) (bool, error) {
 	return false, nil
 }
+
+// supportsTransactionalGtidExecuted is part of the Flavor interface.
+func (mariadbFlavor) supportsTransactionalGtidExecuted(c *Conn) (bool, error) {
+	return false, nil
+}
