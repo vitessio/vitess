@@ -81,11 +81,10 @@ func (v *VReplStream) isRunning() bool {
 
 // isFailed() returns true when the workflow has failed and will not retry
 func (v *VReplStream) isFailed() bool {
-	switch v.state {
-	case binlogplayer.BlpError:
+	switch {
+	case v.state == binlogplayer.BlpError:
 		return true
-	}
-	if strings.Contains(strings.ToLower(v.message), "error") {
+	case strings.Contains(strings.ToLower(v.message), "error"):
 		return true
 	}
 	return false
