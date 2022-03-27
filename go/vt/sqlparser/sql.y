@@ -66,6 +66,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   joinCondition *JoinCondition
   collateAndCharset CollateAndCharset
   columnType    ColumnType
+  jsonPathParam *JSONPathParam
 }
 
 %union {
@@ -130,6 +131,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   renameTablePairs []*RenameTablePair
   alterOptions	   []AlterOption
   vindexParams  []VindexParam
+  jsonPathParams []*JSONPathParam
   partDefs      []*PartitionDefinition
   partitionValueRange	*PartitionValueRange
   partSpecs     []*PartitionSpec
@@ -191,7 +193,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
 %token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
-%token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE
+%token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE JSON_CONTAINS JSON_CONTAINS_PATH JSON_EXTRACT JSON_KEYS JSON_OVERLAPS JSON_VALUE
 %token <str> EXTRACT
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
@@ -459,6 +461,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
+%type <jsonPathParam> json_path_param
+%type <jsonPathParams> json_path_param_list json_path_param_list_opt
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
 %type <str> database_or_schema column_opt insert_method_options row_format_options
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
@@ -4777,6 +4781,59 @@ UTC_DATE func_paren_opt
   {
     $$ = &TrimFuncExpr{TrimArg:$3, StringArg: $5}
   }
+| JSON_CONTAINS openb expression ',' expression json_path_param_list_opt closeb
+  {
+    $$ = &JSONContainsExpr{Target: $3, Candidate: $5, PathList: $6}
+  }
+| JSON_CONTAINS_PATH openb expression ',' expression ',' json_path_param_list closeb
+  {
+    $$ = &JSONContainsPathExpr{JSONDoc: $3, OneOrAll: $5, PathList: $7}
+  }
+| JSON_EXTRACT openb expression ',' json_path_param_list closeb
+  {
+    $$ = &JSONExtractExpr{JSONDoc: $3, PathList: $5}
+  }
+| JSON_KEYS openb expression json_path_param_list_opt closeb
+  {
+    $$ = &JSONKeysExpr{JSONDoc: $3, PathList: $4}
+  }
+| JSON_OVERLAPS openb expression ',' expression closeb
+  {
+    $$ = &JSONOverlapsExpr{JSONDoc1:$3, JSONDoc2:$5}
+  }
+| JSON_VALUE openb expression ',' json_path_param closeb
+  {
+    $$ = &JSONValueExpr{JSONDoc: $3, Path: $5}
+  }
+
+json_path_param_list_opt:
+  {
+    $$ = nil
+  }
+| ',' json_path_param_list
+  {
+    $$ = $2
+  }
+
+json_path_param_list:
+  json_path_param
+  {
+    $$ = []*JSONPathParam{$1}
+  }
+| json_path_param_list ',' json_path_param
+  {
+    $$ = append($$, $3)
+  }
+
+json_path_param:
+  STRING
+  {
+    $$ = &JSONPathParam{Path:$1}
+  }
+| AT_ID
+  {
+    $$ = &JSONPathParam{PathIdentifier:NewColIdentWithAt(string($1), SingleAt)}
+  }
 
 interval:
  interval_time_stamp
@@ -5771,6 +5828,7 @@ reserved_table_id:
 */
 reserved_keyword:
   ADD
+| ALL
 | ARRAY
 | AND
 | AS
@@ -6032,6 +6090,11 @@ non_reserved_keyword:
 | INDEXES
 | ISOLATION
 | JSON
+| JSON_CONTAINS
+| JSON_CONTAINS_PATH
+| JSON_EXTRACT
+| JSON_KEYS
+| JSON_VALUE
 | JSON_PRETTY
 | JSON_STORAGE_FREE
 | JSON_STORAGE_SIZE

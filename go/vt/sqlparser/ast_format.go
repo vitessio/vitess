@@ -1948,3 +1948,72 @@ func (node Offset) Format(buf *TrackedBuffer) {
 	buf.WriteString(strconv.Itoa(int(node)))
 	buf.WriteString("]")
 }
+
+// Format formats the node
+func (node *JSONPathParam) Format(buf *TrackedBuffer) {
+	if node.Path != "" {
+		buf.astPrintf(node, "'%s'", node.Path)
+	} else {
+		buf.astPrintf(node, "%v", node.PathIdentifier)
+	}
+}
+
+// Format formats the node
+func (node *JSONContainsExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_contains(%v, %v", node.Target, node.Candidate)
+	if len(node.PathList) > 0 {
+		buf.WriteString(", ")
+	}
+	var prefix string
+	for _, n := range node.PathList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node
+func (node *JSONContainsPathExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_contains_path(%v, %v, ", node.JSONDoc, node.OneOrAll)
+	var prefix string
+	for _, n := range node.PathList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node
+func (node *JSONExtractExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_extract(%v, ", node.JSONDoc)
+	var prefix string
+	for _, n := range node.PathList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node
+func (node *JSONKeysExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_keys(%v", node.JSONDoc)
+	if len(node.PathList) > 0 {
+		buf.WriteString(", ")
+	}
+	var prefix string
+	for _, n := range node.PathList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node
+func (node *JSONOverlapsExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_overlaps(%v, %v)", node.JSONDoc1, node.JSONDoc2)
+}
+
+// Format formats the node
+func (node *JSONValueExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_value(%v, %v)", node.JSONDoc, node.Path)
+}
