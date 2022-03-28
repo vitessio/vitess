@@ -30,6 +30,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -454,11 +455,11 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	if !strings.Contains(vindex.Type, "lookup") {
 		return nil, nil, nil, fmt.Errorf("vindex %s is not a lookup type", vindex.Type)
 	}
-	strs := strings.Split(vindex.Params["table"], ".")
-	if len(strs) != 2 {
-		return nil, nil, nil, fmt.Errorf("vindex 'table' must be <keyspace>.<table>: %v", vindex)
+
+	targetKeyspace, targetTableName, err = sqlparser.ParseTable(vindex.Params["table"])
+	if err != nil || targetKeyspace == "" {
+		return nil, nil, nil, fmt.Errorf("vindex table name must be in the form <keyspace>.<table>. Got: %v", vindex.Params["table"])
 	}
-	targetKeyspace, targetTableName = strs[0], strs[1]
 
 	vindexFromCols = strings.Split(vindex.Params["from"], ",")
 	if strings.Contains(vindex.Type, "unique") {
@@ -593,15 +594,15 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	}
 
 	if vindex.Params["data_type"] == "" || strings.EqualFold(vindex.Type, "consistent_lookup_unique") || strings.EqualFold(vindex.Type, "consistent_lookup") {
-		modified = append(modified, fmt.Sprintf("  `%s` varbinary(128),", vindexToCol))
+		modified = append(modified, fmt.Sprintf("  %s varbinary(128),", sqlescape.EscapeID(vindexToCol)))
 	} else {
-		modified = append(modified, fmt.Sprintf("  `%s` `%s`,", vindexToCol, vindex.Params["data_type"]))
+		modified = append(modified, fmt.Sprintf("  %s %s,", sqlescape.EscapeID(vindexToCol), sqlescape.EscapeID(vindex.Params["data_type"])))
 	}
 	buf := sqlparser.NewTrackedBuffer(nil)
 	fmt.Fprintf(buf, "  PRIMARY KEY (")
 	prefix := ""
 	for _, col := range vindexFromCols {
-		fmt.Fprintf(buf, "%s`%s`", prefix, col)
+		fmt.Fprintf(buf, "%s%s", prefix, sqlescape.EscapeID(col))
 		prefix = ", "
 	}
 	fmt.Fprintf(buf, ")")
@@ -699,8 +700,9 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 }
 
 func generateColDef(lines []string, sourceVindexCol, vindexFromCol string) (string, error) {
-	source := fmt.Sprintf("`%s`", sourceVindexCol)
-	target := fmt.Sprintf("`%s`", vindexFromCol)
+	source := sqlescape.EscapeID(sourceVindexCol)
+	target := sqlescape.EscapeID(vindexFromCol)
+
 	for _, line := range lines[1:] {
 		if strings.Contains(line, source) {
 			line = strings.Replace(line, source, target, 1)
@@ -727,12 +729,11 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 	if sourceVindex == nil {
 		return fmt.Errorf("vindex %s not found in vschema", qualifiedVindexName)
 	}
-	qualifiedTableName := sourceVindex.Params["table"]
-	splits = strings.Split(qualifiedTableName, ".")
-	if len(splits) != 2 {
-		return fmt.Errorf("table name in vindex should be of the form keyspace.table: %s", qualifiedTableName)
+
+	targetKeyspace, targetTableName, err := sqlparser.ParseTable(sourceVindex.Params["table"])
+	if err != nil || targetKeyspace == "" {
+		return fmt.Errorf("vindex table name must be in the form <keyspace>.<table>. Got: %v", sourceVindex.Params["table"])
 	}
-	targetKeyspace, targetTableName := splits[0], splits[1]
 	workflow := targetTableName + "_vdx"
 	targetShards, err := wr.ts.GetServingShards(ctx, targetKeyspace)
 	if err != nil {
