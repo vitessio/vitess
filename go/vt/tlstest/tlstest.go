@@ -37,7 +37,7 @@ default_ca = default_ca
 
 [ default_ca ]
 database = %s
-default_md = default
+default_md = sha256
 default_crl_days = 30
 
 [ req ]
@@ -174,6 +174,7 @@ func CreateSignedCert(root, parent, serial, name, commonName string) {
 	openssl("rsa", "-in", key, "-out", key)
 	openssl("x509", "-req",
 		"-in", req,
+		"-sha256",
 		"-days", "3600",
 		"-CA", caCert,
 		"-CAkey", caKey,
