@@ -2608,6 +2608,14 @@ func TestParseOne(t *testing.T) {
 			"\t\t\tselect 1 from dual;",
 			"",
 		},
+		{
+			input: `/*!50800 create view a as select 2 from  dual    */  `,
+			remainder: "",
+		},
+		{
+			input: `/*! create view a as select 2 from  dual    */  ; select * from a`,
+			remainder: "select * from a",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.input, func(t *testing.T) {
