@@ -60,6 +60,7 @@ func WithTestServer(
 
 	client, err := vtctldclient.New("grpc", lis.Addr().String())
 	require.NoError(t, err, "cannot create vtctld client")
+	defer client.Close()
 
 	test(t, client)
 }

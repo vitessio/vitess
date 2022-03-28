@@ -345,27 +345,37 @@ func (mm *messageManager) Open() {
 
 // Close stops the messageManager service.
 func (mm *messageManager) Close() {
+	log.Infof("messageManager - started execution of Close")
 	mm.pollerTicks.Stop()
 	mm.purgeTicks.Stop()
+	log.Infof("messageManager - stopped the ticks. Acquiring mu Lock")
 
 	mm.mu.Lock()
+	log.Infof("messageManager - acquired mu Lock")
 	if !mm.isOpen {
+		log.Infof("messageManager - manager is not open")
 		mm.mu.Unlock()
 		return
 	}
 	mm.isOpen = false
+	log.Infof("messageManager - cancelling all receivers")
 	for _, rcvr := range mm.receivers {
 		rcvr.receiver.cancel()
 	}
 	mm.receivers = nil
 	MessageStats.Set([]string{mm.name.String(), "ClientCount"}, 0)
+	log.Infof("messageManager - clearing cache")
 	mm.cache.Clear()
+	log.Infof("messageManager - sending a broadcast")
 	// This broadcast will cause runSend to exit.
 	mm.cond.Broadcast()
+	log.Infof("messageManager - stopping VStream")
 	mm.stopVStream()
 	mm.mu.Unlock()
 
+	log.Infof("messageManager - Waiting for the wait group")
 	mm.wg.Wait()
+	log.Infof("messageManager - closed")
 }
 
 // Subscribe registers the send function as a receiver of messages
@@ -617,8 +627,11 @@ func (mm *messageManager) startVStream() {
 }
 
 func (mm *messageManager) stopVStream() {
+	log.Infof("messageManager - stopVStream called. Acquiring streamMu lock")
 	mm.streamMu.Lock()
+	log.Infof("messageManager - acquired streamMu lock")
 	defer mm.streamMu.Unlock()
+	log.Infof("messageManager - calling stream cancel")
 	if mm.streamCancel != nil {
 		mm.streamCancel()
 		mm.streamCancel = nil

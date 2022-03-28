@@ -176,6 +176,11 @@ func bindVariable(yylex yyLexer, bvar string) {
   partitionByType PartitionByType
   definer 	*Definer
   integer 	int
+
+  JSONTableExpr	*JSONTableExpr
+  jtColumnDefinition *JtColumnDefinition
+  jtColumnList	[]*JtColumnDefinition
+  jtOnResponse	*JtOnResponse
 }
 
 %token LEX_ERROR
@@ -193,6 +198,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
 %token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
+%token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE
 %token <str> EXTRACT
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
@@ -341,7 +347,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <alterDatabase> alter_database_prefix
 %type <collateAndCharset> collate character_set
 %type <collateAndCharsets> create_options create_options_opt
-%type <boolean> default_optional first_opt linear_opt
+%type <boolean> default_optional first_opt linear_opt jt_exists_opt jt_path_opt
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement call_statement
@@ -366,7 +372,10 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <definer> definer_opt user
 %type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr simple_expr literal NUM_literal text_literal bool_pri literal_or_null now predicate tuple_expression
 %type <tableExprs> from_opt table_references from_clause
-%type <tableExpr> table_reference table_factor join_table
+%type <tableExpr> table_reference table_factor join_table json_table_function
+%type <jtColumnDefinition> jt_column
+%type <jtColumnList> jt_columns_clause columns_list
+%type <jtOnResponse> on_error on_empty json_on_response
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
 %type <tableNames> table_name_list delete_table_list view_name_list
 %type <joinType> inner_join outer_join straight_join natural_join
@@ -2911,6 +2920,106 @@ algorithm_opt:
     $$ = convertStringToInt($3)
   }
 
+json_table_function:
+  JSON_TABLE openb expression ',' text_literal jt_columns_clause closeb as_opt_id
+  {
+    $$ = &JSONTableExpr{Expr: $3, Filter: $5, Columns: $6, Alias: $8}
+  }
+
+jt_columns_clause:
+  COLUMNS openb columns_list closeb
+  {
+    $$= $3
+  }
+
+columns_list:
+  jt_column
+  {
+    $$= []*JtColumnDefinition{$1}
+  }
+| columns_list ',' jt_column
+  {
+    $$ = append($1, $3)
+  }
+
+jt_column:
+ sql_id FOR ORDINALITY
+  {
+    $$ = &JtColumnDefinition{JtOrdinal: &JtOrdinalColDef{Name: $1}}
+  }
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal
+  {
+    $2.Options= &ColumnTypeOptions{Collate:$3}
+    jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6}
+    $$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal on_empty
+  {
+    $2.Options= &ColumnTypeOptions{Collate:$3}
+    jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6, EmptyOnResponse: $7}
+    $$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal on_error
+  {
+    $2.Options= &ColumnTypeOptions{Collate:$3}
+    jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6, ErrorOnResponse: $7}
+    $$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal on_empty on_error
+  {
+    $2.Options= &ColumnTypeOptions{Collate:$3}
+    jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6, EmptyOnResponse: $7, ErrorOnResponse: $8}
+    $$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| NESTED jt_path_opt text_literal jt_columns_clause
+  {
+    jtNestedPath := &JtNestedPathColDef{Path: $3, Columns: $4}
+    $$ = &JtColumnDefinition{JtNestedPath: jtNestedPath}
+  }
+
+jt_path_opt:
+  {
+    $$ = false
+  }
+| PATH
+  {
+    $$ = true
+  }
+jt_exists_opt:
+  {
+    $$=false
+  }
+| EXISTS
+  {
+    $$=true
+  }
+
+on_empty:
+  json_on_response ON EMPTY
+  {
+    $$= $1
+  }
+
+on_error:
+  json_on_response ON ERROR
+  {
+    $$= $1
+  }
+
+json_on_response:
+  ERROR
+  {
+    $$ = &JtOnResponse{ResponseType: ErrorJSONType}
+  }
+| NULL
+  {
+    $$ = &JtOnResponse{ResponseType: NullJSONType}
+  }
+| DEFAULT text_literal
+  {
+    $$ = &JtOnResponse{ResponseType: DefaultJSONType, Expr: $2}
+  }
+
 range_or_list:
   RANGE
   {
@@ -4011,6 +4120,10 @@ table_factor:
   {
     $$ = &ParenTableExpr{Exprs: $2}
   }
+| json_table_function
+  {
+    $$ = $1
+  }
 
 derived_table:
   openb query_expression closeb
@@ -4773,6 +4886,18 @@ UTC_DATE func_paren_opt
 | WEIGHT_STRING openb expression convert_type_weight_string closeb
   {
     $$ = &WeightStringFuncExpr{Expr: $3, As: $4}
+  }
+| JSON_PRETTY openb expression closeb
+  {
+    $$ = &JSONPrettyExpr{JSONVal: $3}
+  }
+| JSON_STORAGE_FREE openb expression closeb
+  {
+    $$ = &JSONStorageFreeExpr{ JSONVal: $3}
+  }
+| JSON_STORAGE_SIZE openb expression closeb
+  {
+    $$ = &JSONStorageSizeExpr{ JSONVal: $3}
   }
 | LTRIM openb expression closeb
   {
@@ -5837,6 +5962,7 @@ reserved_keyword:
 | DIV
 | DROP
 | ELSE
+| EMPTY
 | ESCAPE
 | EXISTS
 | EXPLAIN
@@ -6064,6 +6190,9 @@ non_reserved_keyword:
 | JSON_ARRAY
 | JSON_OBJECT
 | JSON_QUOTE
+| JSON_PRETTY
+| JSON_STORAGE_FREE
+| JSON_STORAGE_SIZE
 | KEY_BLOCK_SIZE
 | KEYS
 | KEYSPACES

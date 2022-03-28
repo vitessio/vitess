@@ -786,58 +786,14 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(ct.Charset)
 	}
-	if ct.Options != nil && ct.Options.Collate != "" {
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[COLLATE])
-		buf.WriteByte(' ')
-		buf.WriteString(ct.Options.Collate)
-	}
-	if ct.Options.Null != nil && ct.Options.As == nil {
-		if *ct.Options.Null {
+	if ct.Options != nil {
+		if ct.Options.Collate != "" {
 			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[NULL])
-		} else {
+			buf.WriteString(keywordStrings[COLLATE])
 			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[NOT])
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[NULL])
+			buf.WriteString(ct.Options.Collate)
 		}
-	}
-	if ct.Options.Default != nil {
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[DEFAULT])
-		if defaultRequiresParens(ct) {
-			buf.WriteString(" (")
-			ct.Options.Default.formatFast(buf)
-			buf.WriteByte(')')
-		} else {
-			buf.WriteByte(' ')
-			ct.Options.Default.formatFast(buf)
-		}
-	}
-	if ct.Options.OnUpdate != nil {
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[ON])
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[UPDATE])
-		buf.WriteByte(' ')
-		ct.Options.OnUpdate.formatFast(buf)
-	}
-	if ct.Options.As != nil {
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[AS])
-		buf.WriteString(" (")
-		ct.Options.As.formatFast(buf)
-		buf.WriteByte(')')
-
-		if ct.Options.Storage == VirtualStorage {
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[VIRTUAL])
-		} else if ct.Options.Storage == StoredStorage {
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[STORED])
-		}
-		if ct.Options.Null != nil {
+		if ct.Options.Null != nil && ct.Options.As == nil {
 			if *ct.Options.Null {
 				buf.WriteByte(' ')
 				buf.WriteString(keywordStrings[NULL])
@@ -848,52 +804,98 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 				buf.WriteString(keywordStrings[NULL])
 			}
 		}
-	}
-	if ct.Options.Autoincrement {
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[AUTO_INCREMENT])
-	}
-	if ct.Options.Comment != nil {
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[COMMENT_KEYWORD])
-		buf.WriteByte(' ')
-		ct.Options.Comment.formatFast(buf)
-	}
-	if ct.Options.KeyOpt == colKeyPrimary {
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[PRIMARY])
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[KEY])
-	}
-	if ct.Options.KeyOpt == colKeyUnique {
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[UNIQUE])
-	}
-	if ct.Options.KeyOpt == colKeyUniqueKey {
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[UNIQUE])
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[KEY])
-	}
-	if ct.Options.KeyOpt == colKeySpatialKey {
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[SPATIAL])
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[KEY])
-	}
-	if ct.Options.KeyOpt == colKeyFulltextKey {
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[FULLTEXT])
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[KEY])
-	}
-	if ct.Options.KeyOpt == colKey {
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[KEY])
-	}
-	if ct.Options.Reference != nil {
-		buf.WriteByte(' ')
-		ct.Options.Reference.formatFast(buf)
+		if ct.Options.Default != nil {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[DEFAULT])
+			if defaultRequiresParens(ct) {
+				buf.WriteString(" (")
+				ct.Options.Default.formatFast(buf)
+				buf.WriteByte(')')
+			} else {
+				buf.WriteByte(' ')
+				ct.Options.Default.formatFast(buf)
+			}
+		}
+		if ct.Options.OnUpdate != nil {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[ON])
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[UPDATE])
+			buf.WriteByte(' ')
+			ct.Options.OnUpdate.formatFast(buf)
+		}
+		if ct.Options.As != nil {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[AS])
+			buf.WriteString(" (")
+			ct.Options.As.formatFast(buf)
+			buf.WriteByte(')')
+
+			if ct.Options.Storage == VirtualStorage {
+				buf.WriteByte(' ')
+				buf.WriteString(keywordStrings[VIRTUAL])
+			} else if ct.Options.Storage == StoredStorage {
+				buf.WriteByte(' ')
+				buf.WriteString(keywordStrings[STORED])
+			}
+			if ct.Options.Null != nil {
+				if *ct.Options.Null {
+					buf.WriteByte(' ')
+					buf.WriteString(keywordStrings[NULL])
+				} else {
+					buf.WriteByte(' ')
+					buf.WriteString(keywordStrings[NOT])
+					buf.WriteByte(' ')
+					buf.WriteString(keywordStrings[NULL])
+				}
+			}
+		}
+		if ct.Options.Autoincrement {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[AUTO_INCREMENT])
+		}
+		if ct.Options.Comment != nil {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[COMMENT_KEYWORD])
+			buf.WriteByte(' ')
+			ct.Options.Comment.formatFast(buf)
+		}
+		if ct.Options.KeyOpt == colKeyPrimary {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[PRIMARY])
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[KEY])
+		}
+		if ct.Options.KeyOpt == colKeyUnique {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[UNIQUE])
+		}
+		if ct.Options.KeyOpt == colKeyUniqueKey {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[UNIQUE])
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[KEY])
+		}
+		if ct.Options.KeyOpt == colKeySpatialKey {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[SPATIAL])
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[KEY])
+		}
+		if ct.Options.KeyOpt == colKeyFulltextKey {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[FULLTEXT])
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[KEY])
+		}
+		if ct.Options.KeyOpt == colKey {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[KEY])
+		}
+		if ct.Options.Reference != nil {
+			buf.WriteByte(' ')
+			ct.Options.Reference.formatFast(buf)
+		}
 	}
 }
 
@@ -1761,6 +1763,30 @@ func (node *ValuesFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteByte(')')
 }
 
+// formatFast formats the node
+func (node *JSONPrettyExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_pretty(")
+	buf.printExpr(node, node.JSONVal, true)
+	buf.WriteByte(')')
+
+}
+
+// formatFast formats the node
+func (node *JSONStorageFreeExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_storage_free(")
+	buf.printExpr(node, node.JSONVal, true)
+	buf.WriteByte(')')
+
+}
+
+// formatFast formats the node
+func (node *JSONStorageSizeExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_storage_size(")
+	buf.printExpr(node, node.JSONVal, true)
+	buf.WriteByte(')')
+
+}
+
 // formatFast formats the node.
 func (node *SubstrExpr) formatFast(buf *TrackedBuffer) {
 	if node.To == nil {
@@ -2513,6 +2539,80 @@ func (node *RenameTable) formatFast(buf *TrackedBuffer) {
 // show up like argument comparisons
 func (node *ExtractedSubquery) formatFast(buf *TrackedBuffer) {
 	node.alternative.Format(buf)
+}
+
+func (node *JSONTableExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_table(")
+	node.Expr.formatFast(buf)
+	buf.WriteString(", ")
+	node.Filter.formatFast(buf)
+	buf.WriteString(" columns(\n")
+	sz := len(node.Columns)
+
+	for i := 0; i < sz-1; i++ {
+		buf.WriteByte('\t')
+		node.Columns[i].formatFast(buf)
+		buf.WriteString(",\n")
+	}
+	buf.WriteByte('\t')
+	node.Columns[sz-1].formatFast(buf)
+	buf.WriteByte('\n')
+	buf.WriteString("\t)\n) as ")
+	node.Alias.formatFast(buf)
+}
+
+func (node *JtColumnDefinition) formatFast(buf *TrackedBuffer) {
+	if node.JtOrdinal != nil {
+		node.JtOrdinal.Name.formatFast(buf)
+		buf.WriteString(" for ordinality")
+	} else if node.JtNestedPath != nil {
+		buf.WriteString("nested path ")
+		node.JtNestedPath.Path.formatFast(buf)
+		buf.WriteString(" columns(\n")
+		sz := len(node.JtNestedPath.Columns)
+
+		for i := 0; i < sz-1; i++ {
+			buf.WriteByte('\t')
+			node.JtNestedPath.Columns[i].formatFast(buf)
+			buf.WriteString(",\n")
+		}
+		buf.WriteByte('\t')
+		node.JtNestedPath.Columns[sz-1].formatFast(buf)
+		buf.WriteString("\n)")
+	} else if node.JtPath != nil {
+		node.JtPath.Name.formatFast(buf)
+		buf.WriteByte(' ')
+		node.JtPath.Type.formatFast(buf)
+		buf.WriteByte(' ')
+		if node.JtPath.JtColExists {
+			buf.WriteString("exists ")
+		}
+		buf.WriteString("path ")
+		node.JtPath.Path.formatFast(buf)
+		buf.WriteByte(' ')
+
+		if node.JtPath.EmptyOnResponse != nil {
+			node.JtPath.EmptyOnResponse.formatFast(buf)
+			buf.WriteString(" on empty ")
+		}
+
+		if node.JtPath.ErrorOnResponse != nil {
+			node.JtPath.ErrorOnResponse.formatFast(buf)
+			buf.WriteString(" on error ")
+		}
+	}
+}
+
+func (node *JtOnResponse) formatFast(buf *TrackedBuffer) {
+	switch node.ResponseType {
+	case ErrorJSONType:
+		buf.WriteString("error")
+	case NullJSONType:
+		buf.WriteString("null")
+	case DefaultJSONType:
+		buf.WriteString("default ")
+		node.Expr.formatFast(buf)
+	}
 }
 
 // formatFast formats the node.

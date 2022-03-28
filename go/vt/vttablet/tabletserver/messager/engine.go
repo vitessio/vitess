@@ -87,13 +87,18 @@ func (me *Engine) Open() {
 
 // Close closes the Engine service.
 func (me *Engine) Close() {
+	log.Infof("messager Engine - started execution of Close. Acquiring mu lock")
 	me.mu.Lock()
+	log.Infof("messager Engine - acquired mu lock")
 	defer me.mu.Unlock()
 	if !me.isOpen {
+		log.Infof("messager Engine is not open")
 		return
 	}
 	me.isOpen = false
+	log.Infof("messager Engine - unregistering notifiers")
 	me.se.UnregisterNotifier("messages")
+	log.Infof("messager Engine - closing all managers")
 	for _, mm := range me.managers {
 		mm.Close()
 	}

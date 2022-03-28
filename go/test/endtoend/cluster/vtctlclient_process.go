@@ -207,7 +207,7 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) 
 // VtctlClientProcessInstance returns a VtctlProcess handle for vtctlclient process
 // configured with the given Config.
 func VtctlClientProcessInstance(hostname string, grpcPort int, tmpDirectory string) *VtctlClientProcess {
-	version, err := getMajorVersion("vtctl") // `vtctlclient` does not have a --version flag, so we assume both vtctl/vtctlclient have the same version
+	version, err := GetMajorVersion("vtctl") // `vtctlclient` does not have a --version flag, so we assume both vtctl/vtctlclient have the same version
 	if err != nil {
 		log.Warningf("failed to get major vtctlclient version; interop with CLI changes for VEP-4 may not work: %s", err)
 	}

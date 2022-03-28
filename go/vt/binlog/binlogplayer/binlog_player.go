@@ -32,8 +32,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"context"
 
 	"vitess.io/vitess/go/history"
@@ -567,6 +565,7 @@ var AlterVReplicationTable = []string{
 
 	// records the time of the last heartbeat. Heartbeats are only received if the source has no recent events
 	"ALTER TABLE _vt.vreplication ADD COLUMN time_heartbeat BIGINT(20) NOT NULL DEFAULT 0",
+	"ALTER TABLE _vt.vreplication ADD COLUMN workflow_type int NOT NULL DEFAULT 0",
 }
 
 // WithDDLInitialQueries contains the queries that:
@@ -586,12 +585,14 @@ type VRSettings struct {
 	MaxTPS            int64
 	MaxReplicationLag int64
 	State             string
+	WorkflowType      int64
+	WorkflowName      string
 }
 
 // ReadVRSettings retrieves the throttler settings for
 // vreplication from the checkpoint table.
 func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
-	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=%v", uid)
+	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=%v", uid)
 	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("error %v in selecting vreplication settings %v", err, query)
@@ -600,31 +601,36 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 	if len(qr.Rows) != 1 {
 		return VRSettings{}, fmt.Errorf("checkpoint information not available in db for %v", uid)
 	}
-	vrRow := qr.Rows[0]
+	vrRow := qr.Named().Row()
 
-	maxTPS, err := evalengine.ToInt64(vrRow[2])
+	maxTPS, err := vrRow.ToInt64("max_tps")
 	if err != nil {
-		return VRSettings{}, fmt.Errorf("failed to parse max_tps column: %v", err)
+		return VRSettings{}, fmt.Errorf("failed to parse max_tps column2: %v", err)
 	}
-	maxReplicationLag, err := evalengine.ToInt64(vrRow[3])
+	maxReplicationLag, err := vrRow.ToInt64("max_replication_lag")
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse max_replication_lag column: %v", err)
 	}
-	startPos, err := DecodePosition(vrRow[0].ToString())
+	startPos, err := DecodePosition(vrRow.AsString("pos", ""))
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse pos column: %v", err)
 	}
-	stopPos, err := mysql.DecodePosition(vrRow[1].ToString())
+	stopPos, err := mysql.DecodePosition(vrRow.AsString("stop_pos", ""))
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse stop_pos column: %v", err)
 	}
-
+	workflowType, err := vrRow.ToInt64("workflow_type")
+	if err != nil {
+		return VRSettings{}, fmt.Errorf("failed to parse workflow_type column: %v", err)
+	}
 	return VRSettings{
 		StartPos:          startPos,
 		StopPos:           stopPos,
 		MaxTPS:            maxTPS,
 		MaxReplicationLag: maxReplicationLag,
-		State:             vrRow[4].ToString(),
+		State:             vrRow.AsString("state", ""),
+		WorkflowType:      workflowType,
+		WorkflowName:      vrRow.AsString("workflow", ""),
 	}, nil
 }
 
