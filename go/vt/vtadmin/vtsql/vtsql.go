@@ -25,12 +25,14 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	grpcresolver "google.golang.org/grpc/resolver"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 
@@ -77,10 +79,11 @@ type VTGateProxy struct {
 	dialPingTimeout time.Duration
 
 	m        sync.Mutex
-	host     string
+	host     string // TODO: no longer applicable with vtadmin.cluster.resolver
 	conn     *sql.DB
 	dialedAt time.Time
 	lastPing time.Time
+	resolver grpcresolver.Builder
 }
 
 var _ DB = (*VTGateProxy)(nil)
@@ -109,6 +112,10 @@ func New(cfg *Config) *VTGateProxy {
 		cfg:             cfg,
 		DialFunc:        vitessdriver.OpenWithConfiguration,
 		dialPingTimeout: cfg.DialPingTimeout,
+		resolver: resolver.NewBuilder(cfg.Cluster.Id, cfg.Discovery, resolver.Options{
+			ResolveTimeout: time.Second, // TODO: add flag
+			DiscoveryTags:  discoveryTags,
+		}),
 	}
 }
 
@@ -181,9 +188,9 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 
 	conf := vitessdriver.Configuration{
 		Protocol:        fmt.Sprintf("grpc_%s", vtgate.cluster.Id),
-		Address:         vtgate.host,
+		Address:         fmt.Sprintf("%s://vtgate/", vtgate.resolver.Scheme()),
 		Target:          target,
-		GRPCDialOptions: append(opts, grpc.WithInsecure()),
+		GRPCDialOptions: append(opts, grpc.WithInsecure(), grpc.WithResolvers(vtgate.resolver)),
 	}
 
 	if vtgate.creds != nil {
@@ -262,6 +269,9 @@ func (vtgate *VTGateProxy) closeLocked() error {
 }
 
 // Debug implements debug.Debuggable for VTGateProxy.
+//
+// TODO (@ajm188): this is not safe to call concurrently with Dial. Add a mutex
+// to guard.
 func (vtgate *VTGateProxy) Debug() map[string]any {
 	vtgate.m.Lock()
 	defer vtgate.m.Unlock()
@@ -288,6 +298,10 @@ func (vtgate *VTGateProxy) Debug() map[string]any {
 		}
 
 		m["credentials"] = cmap
+	}
+
+	if dr, ok := vtgate.resolver.(debug.Debuggable); ok {
+		m["resolver"] = dr.Debug()
 	}
 
 	return m
