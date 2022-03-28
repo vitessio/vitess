@@ -179,10 +179,16 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfJSONStorageFreeExpr(in)
 	case *JSONStorageSizeExpr:
 		return CloneRefOfJSONStorageSizeExpr(in)
+	case *JSONTableExpr:
+		return CloneRefOfJSONTableExpr(in)
 	case *JoinCondition:
 		return CloneRefOfJoinCondition(in)
 	case *JoinTableExpr:
 		return CloneRefOfJoinTableExpr(in)
+	case *JtColumnDefinition:
+		return CloneRefOfJtColumnDefinition(in)
+	case *JtOnResponse:
+		return CloneRefOfJtOnResponse(in)
 	case *KeyState:
 		return CloneRefOfKeyState(in)
 	case *Limit:
@@ -1165,6 +1171,19 @@ func CloneRefOfJSONStorageSizeExpr(n *JSONStorageSizeExpr) *JSONStorageSizeExpr 
 	return &out
 }
 
+// CloneRefOfJSONTableExpr creates a deep clone of the input.
+func CloneRefOfJSONTableExpr(n *JSONTableExpr) *JSONTableExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.Alias = CloneTableIdent(n.Alias)
+	out.Filter = CloneExpr(n.Filter)
+	out.Columns = CloneSliceOfRefOfJtColumnDefinition(n.Columns)
+	return &out
+}
+
 // CloneRefOfJoinCondition creates a deep clone of the input.
 func CloneRefOfJoinCondition(n *JoinCondition) *JoinCondition {
 	if n == nil {
@@ -1185,6 +1204,28 @@ func CloneRefOfJoinTableExpr(n *JoinTableExpr) *JoinTableExpr {
 	out.LeftExpr = CloneTableExpr(n.LeftExpr)
 	out.RightExpr = CloneTableExpr(n.RightExpr)
 	out.Condition = CloneRefOfJoinCondition(n.Condition)
+	return &out
+}
+
+// CloneRefOfJtColumnDefinition creates a deep clone of the input.
+func CloneRefOfJtColumnDefinition(n *JtColumnDefinition) *JtColumnDefinition {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.JtOrdinal = CloneRefOfJtOrdinalColDef(n.JtOrdinal)
+	out.JtPath = CloneRefOfJtPathColDef(n.JtPath)
+	out.JtNestedPath = CloneRefOfJtNestedPathColDef(n.JtNestedPath)
+	return &out
+}
+
+// CloneRefOfJtOnResponse creates a deep clone of the input.
+func CloneRefOfJtOnResponse(n *JtOnResponse) *JtOnResponse {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
 	return &out
 }
 
@@ -2564,6 +2605,8 @@ func CloneTableExpr(in TableExpr) TableExpr {
 	switch in := in.(type) {
 	case *AliasedTableExpr:
 		return CloneRefOfAliasedTableExpr(in)
+	case *JSONTableExpr:
+		return CloneRefOfJSONTableExpr(in)
 	case *JoinTableExpr:
 		return CloneRefOfJoinTableExpr(in)
 	case *ParenTableExpr:
@@ -2695,6 +2738,53 @@ func CloneSliceOfRefOfIndexOption(n []*IndexOption) []*IndexOption {
 		res = append(res, CloneRefOfIndexOption(x))
 	}
 	return res
+}
+
+// CloneSliceOfRefOfJtColumnDefinition creates a deep clone of the input.
+func CloneSliceOfRefOfJtColumnDefinition(n []*JtColumnDefinition) []*JtColumnDefinition {
+	if n == nil {
+		return nil
+	}
+	res := make([]*JtColumnDefinition, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneRefOfJtColumnDefinition(x))
+	}
+	return res
+}
+
+// CloneRefOfJtOrdinalColDef creates a deep clone of the input.
+func CloneRefOfJtOrdinalColDef(n *JtOrdinalColDef) *JtOrdinalColDef {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneColIdent(n.Name)
+	return &out
+}
+
+// CloneRefOfJtPathColDef creates a deep clone of the input.
+func CloneRefOfJtPathColDef(n *JtPathColDef) *JtPathColDef {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneColIdent(n.Name)
+	out.Type = CloneColumnType(n.Type)
+	out.Path = CloneExpr(n.Path)
+	out.EmptyOnResponse = CloneRefOfJtOnResponse(n.EmptyOnResponse)
+	out.ErrorOnResponse = CloneRefOfJtOnResponse(n.ErrorOnResponse)
+	return &out
+}
+
+// CloneRefOfJtNestedPathColDef creates a deep clone of the input.
+func CloneRefOfJtNestedPathColDef(n *JtNestedPathColDef) *JtNestedPathColDef {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Path = CloneExpr(n.Path)
+	out.Columns = CloneSliceOfRefOfJtColumnDefinition(n.Columns)
+	return &out
 }
 
 // CloneTableAndLockTypes creates a deep clone of the input.
