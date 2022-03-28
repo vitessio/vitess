@@ -79,6 +79,7 @@ func yyOldPosition(yylex interface{}) int {
   subquery      *Subquery
   simpleTableExpr  SimpleTableExpr
   joinCondition JoinCondition
+  triggerName   TriggerName
   tableName     TableName
   tableNames    TableNames
   procedureName ProcedureName
@@ -347,6 +348,7 @@ func yyOldPosition(yylex interface{}) int {
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
 %type <tableNames> table_name_list delete_table_list view_name_list
 %type <str> inner_join outer_join straight_join natural_join
+%type <triggerName> trigger_name
 %type <tableName> table_name load_into_table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name aliased_table_options
 %type <procedureName> procedure_name
@@ -863,9 +865,9 @@ create_statement:
     }
     $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne, CharsetCollate: $5}
   }
-| CREATE definer_opt TRIGGER ID trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position trigger_body lexer_position
+| CREATE definer_opt TRIGGER trigger_name trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position trigger_body lexer_position
   {
-    $$ = &DDL{Action: CreateStr, Table: $8, TriggerSpec: &TriggerSpec{Name: string($4), Time: $5, Event: $6, Order: $12, Body: $14}, SubStatementPositionStart: $13, SubStatementPositionEnd: $15 - 1}
+    $$ = &DDL{Action: CreateStr, Table: $8, TriggerSpec: &TriggerSpec{TrigName: $4, Time: $5, Event: $6, Order: $12, Body: $14}, SubStatementPositionStart: $13, SubStatementPositionEnd: $15 - 1}
   }
 | CREATE definer_opt PROCEDURE procedure_name '(' proc_param_list_opt ')' characteristic_list_opt lexer_position statement_list_statement lexer_position
   {
@@ -3356,13 +3358,13 @@ drop_statement:
     }
     $$ = &DBDDL{Action: DropStr, DBName: string($4), IfExists: exists}
   }
-| DROP TRIGGER exists_opt ID
+| DROP TRIGGER exists_opt trigger_name
   {
     var exists bool
     if $3 != 0 {
       exists = true
     }
-    $$ = &DDL{Action: DropStr, TriggerSpec: &TriggerSpec{Name: string($4)}, IfExists: exists}
+    $$ = &DDL{Action: DropStr, TriggerSpec: &TriggerSpec{TrigName: $4}, IfExists: exists}
   }
 | DROP PROCEDURE exists_opt procedure_name
   {
@@ -4332,6 +4334,16 @@ natural_join:
     } else {
       $$ = NaturalRightJoinStr
     }
+  }
+
+trigger_name:
+  sql_id
+  {
+    $$ = TriggerName{Name: $1}
+  }
+| table_id '.' sql_id
+  {
+    $$ = TriggerName{Qualifier: $1, Name: $3}
   }
 
 load_into_table_name:
