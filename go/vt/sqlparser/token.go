@@ -49,6 +49,7 @@ type Tokenizer struct {
 	nesting              int
 	multi                bool
 	specialComment       *Tokenizer
+	specialCommentEndPos int
 	potentialAccountName bool
 
 	// If true, the parser should collaborate to set `stopped` on this
@@ -619,10 +620,14 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		specialComment := tkn.specialComment
 		tok, val := specialComment.Scan()
 		tkn.Position = specialComment.Position
+
 		if tok != 0 {
 			// return the specialComment scan result as the result
 			return tok, val
 		}
+
+		// reset the position to what it was when we originally finished parsing the special comment
+		tkn.Position = tkn.specialCommentEndPos
 
 		// leave specialComment scan mode after all stream consumed.
 		tkn.specialComment = nil
@@ -1067,14 +1072,17 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 	buffer := &bytes2.Buffer{}
 	buffer.WriteString("/*!")
 	tkn.next()
+
 	foundStartPos := false
 	startOffset := 0
 	digitCount := 0
+
 	for {
 		if tkn.lastChar == '*' {
 			tkn.consumeNext(buffer)
 			if tkn.lastChar == '/' {
 				tkn.consumeNext(buffer)
+				tkn.specialCommentEndPos = tkn.Position
 				break
 			}
 			continue

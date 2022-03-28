@@ -2997,6 +2997,23 @@ end`,
 				require.Equal(t, tcase.sel, sel)
 			}
 		})
+
+		// Also run all these test cases with the ParseOne function (used to execute multiple queries in a single request)
+		// to make sure they appropriately consume the correct amount of buffer
+		t.Run(tcase.query + " ParseOne", func(t *testing.T) {
+			tree, remainder, err := ParseOne(tcase.query)
+			require.Nil(t, err)
+			require.Equal(t, len(tcase.query) + 1, remainder)
+
+			ddl, ok := tree.(*DDL)
+			require.True(t, ok, "Expected DDL when parsing (%q)", tcase.query)
+			require.True(t, ddl.SubStatementPositionStart < ddl.SubStatementPositionEnd, "substatement indexes out of order")
+
+			sel := tcase.query[ddl.SubStatementPositionStart:ddl.SubStatementPositionEnd]
+			if sel != tcase.sel {
+				require.Equal(t, tcase.sel, sel)
+			}
+		})
 	}
 }
 

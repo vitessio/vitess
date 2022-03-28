@@ -103,6 +103,7 @@ func ParseOne(sql string) (Statement, int, error) {
 			return nil, 0, err
 		}
 	}
+
 	return tree, tokenizer.Position, nil
 }
 
