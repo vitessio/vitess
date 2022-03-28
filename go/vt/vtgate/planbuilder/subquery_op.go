@@ -29,7 +29,7 @@ func transformSubQueryPlan(ctx *plancontext.PlanningContext, op *physical.SubQue
 	if err != nil {
 		return nil, err
 	}
-	innerPlan, err = planHorizon(ctx, innerPlan, op.Extracted.Subquery.Select, false)
+	innerPlan, err = planHorizon(ctx, innerPlan, op.Extracted.Subquery.Select, true)
 	if err != nil {
 		return nil, err
 	}
