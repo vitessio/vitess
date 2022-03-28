@@ -2946,3 +2946,59 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# json utility functions
+"select jcol, JSON_STORAGE_SIZE(jcol), JSON_STORAGE_FREE(jcol), JSON_PRETTY(jcol) from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select jcol, JSON_STORAGE_SIZE(jcol), JSON_STORAGE_FREE(jcol), JSON_PRETTY(jcol) from user",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select jcol, json_storage_size(jcol), json_storage_free(jcol), json_pretty(jcol) from `user` where 1 != 1",
+    "Query": "select jcol, json_storage_size(jcol), json_storage_free(jcol), json_pretty(jcol) from `user`",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
+
+# dual query with exists clause
+"select 1 from dual where exists (select 1 from information_schema.TABLES where information_schema.TABLES.TABLE_NAME = 'proc' and information_schema.TABLES.TABLE_SCHEMA = 'mysql')"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from dual where exists (select 1 from information_schema.TABLES where information_schema.TABLES.TABLE_NAME = 'proc' and information_schema.TABLES.TABLE_SCHEMA = 'mysql')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "DBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 1 from dual where 1 != 1",
+    "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where information_schema.`TABLES`.TABLE_NAME = :TABLES_TABLE_NAME and information_schema.`TABLES`.TABLE_SCHEMA = :__vtschemaname)",
+    "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
+    "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
+    "Table": "dual"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from dual where exists (select 1 from information_schema.TABLES where information_schema.TABLES.TABLE_NAME = 'proc' and information_schema.TABLES.TABLE_SCHEMA = 'mysql')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "DBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 1 from dual where 1 != 1",
+    "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = :TABLES_TABLE_NAME and `TABLES`.TABLE_SCHEMA = :__vtschemaname)",
+    "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
+    "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
+    "Table": "dual"
+  }
+}

@@ -172,6 +172,12 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfIsExpr(in, f)
 	case IsolationLevel:
 		return VisitIsolationLevel(in, f)
+	case *JSONPrettyExpr:
+		return VisitRefOfJSONPrettyExpr(in, f)
+	case *JSONStorageFreeExpr:
+		return VisitRefOfJSONStorageFreeExpr(in, f)
+	case *JSONStorageSizeExpr:
+		return VisitRefOfJSONStorageSizeExpr(in, f)
 	case *JSONTableExpr:
 		return VisitRefOfJSONTableExpr(in, f)
 	case *JoinCondition:
@@ -1400,6 +1406,42 @@ func VisitRefOfIsExpr(in *IsExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Left, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJSONPrettyExpr(in *JSONPrettyExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.JSONVal, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJSONStorageFreeExpr(in *JSONStorageFreeExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.JSONVal, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJSONStorageSizeExpr(in *JSONStorageSizeExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.JSONVal, f); err != nil {
 		return err
 	}
 	return nil
@@ -2716,6 +2758,12 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
+	case *JSONPrettyExpr:
+		return VisitRefOfJSONPrettyExpr(in, f)
+	case *JSONStorageFreeExpr:
+		return VisitRefOfJSONStorageFreeExpr(in, f)
+	case *JSONStorageSizeExpr:
+		return VisitRefOfJSONStorageSizeExpr(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *SubstrExpr:
@@ -2880,6 +2928,12 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfIntroducerExpr(in, f)
 	case *IsExpr:
 		return VisitRefOfIsExpr(in, f)
+	case *JSONPrettyExpr:
+		return VisitRefOfJSONPrettyExpr(in, f)
+	case *JSONStorageFreeExpr:
+		return VisitRefOfJSONStorageFreeExpr(in, f)
+	case *JSONStorageSizeExpr:
+		return VisitRefOfJSONStorageSizeExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:

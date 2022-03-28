@@ -127,7 +127,7 @@ func VtctlProcessInstance(topoPort int, hostname string) *VtctlProcess {
 		topoRootPath = ""
 	}
 
-	version, err := getMajorVersion("vtctl")
+	version, err := GetMajorVersion("vtctl")
 	if err != nil {
 		log.Warningf("failed to get major vtctl version; interop with CLI changes for VEP-4 may not work: %s", err)
 	}

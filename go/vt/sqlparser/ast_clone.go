@@ -173,6 +173,12 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfIsExpr(in)
 	case IsolationLevel:
 		return in
+	case *JSONPrettyExpr:
+		return CloneRefOfJSONPrettyExpr(in)
+	case *JSONStorageFreeExpr:
+		return CloneRefOfJSONStorageFreeExpr(in)
+	case *JSONStorageSizeExpr:
+		return CloneRefOfJSONStorageSizeExpr(in)
 	case *JSONTableExpr:
 		return CloneRefOfJSONTableExpr(in)
 	case *JoinCondition:
@@ -1132,6 +1138,36 @@ func CloneRefOfIsExpr(n *IsExpr) *IsExpr {
 	}
 	out := *n
 	out.Left = CloneExpr(n.Left)
+	return &out
+}
+
+// CloneRefOfJSONPrettyExpr creates a deep clone of the input.
+func CloneRefOfJSONPrettyExpr(n *JSONPrettyExpr) *JSONPrettyExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.JSONVal = CloneExpr(n.JSONVal)
+	return &out
+}
+
+// CloneRefOfJSONStorageFreeExpr creates a deep clone of the input.
+func CloneRefOfJSONStorageFreeExpr(n *JSONStorageFreeExpr) *JSONStorageFreeExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.JSONVal = CloneExpr(n.JSONVal)
+	return &out
+}
+
+// CloneRefOfJSONStorageSizeExpr creates a deep clone of the input.
+func CloneRefOfJSONStorageSizeExpr(n *JSONStorageSizeExpr) *JSONStorageSizeExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.JSONVal = CloneExpr(n.JSONVal)
 	return &out
 }
 
@@ -2147,6 +2183,12 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
+	case *JSONPrettyExpr:
+		return CloneRefOfJSONPrettyExpr(in)
+	case *JSONStorageFreeExpr:
+		return CloneRefOfJSONStorageFreeExpr(in)
+	case *JSONStorageSizeExpr:
+		return CloneRefOfJSONStorageSizeExpr(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
 	case *SubstrExpr:
@@ -2325,6 +2367,12 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
 		return CloneRefOfIsExpr(in)
+	case *JSONPrettyExpr:
+		return CloneRefOfJSONPrettyExpr(in)
+	case *JSONStorageFreeExpr:
+		return CloneRefOfJSONStorageFreeExpr(in)
+	case *JSONStorageSizeExpr:
+		return CloneRefOfJSONStorageSizeExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
