@@ -17,51 +17,41 @@ limitations under the License.
 package foundrows
 
 import (
-	"context"
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 func TestFoundRows(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	ctx := context.Background()
-	vtConn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
-	defer vtConn.Close()
+	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+	require.NoError(t, err)
+	defer mcmp.Close()
 
-	mysqlConn, err := mysql.Connect(ctx, &mysqlParams)
-	require.Nil(t, err)
-	defer mysqlConn.Close()
-
-	_, _ = utils.ExecAllowError(t, vtConn, "delete from t2")
-	_, _ = utils.ExecAllowError(t, mysqlConn, "delete from t2")
+	_, _ = mcmp.ExecAllowError("delete from t2")
 	defer func() {
-		utils.Exec(t, vtConn, "set workload = oltp")
-		_, _ = utils.ExecAllowError(t, vtConn, "delete from t2")
-		_, _ = utils.ExecAllowError(t, mysqlConn, "delete from t2")
-
+		utils.Exec(t, mcmp.VtConn, "set workload = oltp")
+		_, _ = mcmp.ExecAllowError("delete from t2")
 		// queries against lookup tables do not need to be executed against MySQL
-		_, _ = utils.ExecAllowError(t, vtConn, "delete from t2_id4_idx")
+		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "delete from t2_id4_idx")
 	}()
 
-	utils.ExecCompareMySQL(t, vtConn, mysqlConn, "insert into t2(id3,id4) values(1,2), (2,2), (3,3), (4,3), (5,3)")
+	mcmp.Exec("insert into t2(id3,id4) values(1,2), (2,2), (3,3), (4,3), (5,3)")
 
 	runTests := func(workload string) {
-		utils.AssertFoundRowsValueCompareMySQL(t, vtConn, mysqlConn, "select * from t2", workload, 5)
-		utils.AssertFoundRowsValueCompareMySQL(t, vtConn, mysqlConn, "select * from t2 order by id3 limit 2", workload, 2)
-		utils.AssertFoundRowsValueCompareMySQL(t, vtConn, mysqlConn, "select SQL_CALC_FOUND_ROWS * from t2 order by id3 limit 2", workload, 5)
-		utils.AssertFoundRowsValueCompareMySQL(t, vtConn, mysqlConn, "select SQL_CALC_FOUND_ROWS * from t2 where id3 = 4 order by id3 limit 2", workload, 1)
-		utils.AssertFoundRowsValueCompareMySQL(t, vtConn, mysqlConn, "select SQL_CALC_FOUND_ROWS * from t2 where id4 = 3 order by id3 limit 2", workload, 3)
-		utils.AssertFoundRowsValueCompareMySQL(t, vtConn, mysqlConn, "select SQL_CALC_FOUND_ROWS id4, count(id3) from t2 where id3 = 3 group by id4 limit 1", workload, 1)
+		mcmp.AssertFoundRowsValue("select * from t2", workload, 5)
+		mcmp.AssertFoundRowsValue("select * from t2 order by id3 limit 2", workload, 2)
+		mcmp.AssertFoundRowsValue("select SQL_CALC_FOUND_ROWS * from t2 order by id3 limit 2", workload, 5)
+		mcmp.AssertFoundRowsValue("select SQL_CALC_FOUND_ROWS * from t2 where id3 = 4 order by id3 limit 2", workload, 1)
+		mcmp.AssertFoundRowsValue("select SQL_CALC_FOUND_ROWS * from t2 where id4 = 3 order by id3 limit 2", workload, 3)
+		mcmp.AssertFoundRowsValue("select SQL_CALC_FOUND_ROWS id4, count(id3) from t2 where id3 = 3 group by id4 limit 1", workload, 1)
 	}
 
 	runTests("oltp")
-	utils.Exec(t, vtConn, "set workload = olap")
+	utils.Exec(t, mcmp.VtConn, "set workload = olap")
 	runTests("olap")
 }
