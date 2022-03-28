@@ -104,12 +104,9 @@ func (mcmp *MySQLCompare) AssertIsEmpty(query string) {
 func (mcmp *MySQLCompare) AssertFoundRowsValue(query, workload string, count int) {
 	mcmp.Exec(query)
 
-	// TODO (@frouioui): following assertions produce different results between MySQL and Vitess
-	//  their differences are ignored for now. Fix it.
-	// `select found_rows()` returns an `UINT64` on Vitess, and `INT64` on MySQL
-	qr := Exec(mcmp.t, mcmp.VtConn, "select found_rows()")
+	qr := mcmp.Exec("select found_rows()")
 	got := fmt.Sprintf("%v", qr.Rows)
-	want := fmt.Sprintf(`[[UINT64(%d)]]`, count)
+	want := fmt.Sprintf(`[[INT64(%d)]]`, count)
 	assert.Equalf(mcmp.t, want, got, "Workload: %s\nQuery:%s\n", workload, query)
 }
 

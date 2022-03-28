@@ -64,15 +64,6 @@ func AssertContainsError(t *testing.T, conn *mysql.Conn, query, expected string)
 	assert.Contains(t, err.Error(), expected, "actual error: %s", err.Error())
 }
 
-// AssertContainsErrorCompareMySQL executes the query on both Vitess and MySQL.
-// Both clients need to return an error. The error of Vitess must be matching the given expectation.
-func AssertContainsErrorCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query, expected string) {
-	t.Helper()
-	_, err := ExecAllowErrorCompareMySQL(t, vtConn, mysqlConn, query)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), expected, "actual error: %s", err.Error())
-}
-
 // AssertMatchesNoOrder executes the given query and makes sure it matches the given `expected` string.
 // The order applied to the results or expectation is ignored. They are both re-sorted.
 func AssertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string) {
@@ -82,45 +73,11 @@ func AssertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string
 	assert.Equal(t, utils.SortString(expected), utils.SortString(actual), "for query: [%s] expected \n%s \nbut actual \n%s", query, expected, actual)
 }
 
-// AssertMatchesNoOrderCompareMySQL executes the given query against both Vitess and MySQL.
-// The test will be marked as failed if there is a mismatch between the two result sets.
-// The test then follows the same logic as AssertMatchesNoOrder.
-func AssertMatchesNoOrderCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query, expected string) {
-	t.Helper()
-	qr := ExecCompareMySQL(t, vtConn, mysqlConn, query)
-	actual := fmt.Sprintf("%v", qr.Rows)
-	assert.Equal(t, utils.SortString(expected), utils.SortString(actual), "for query: [%s] expected \n%s \nbut actual \n%s", query, expected, actual)
-}
-
 // AssertIsEmpty ensures that the given query returns 0 row.
 func AssertIsEmpty(t *testing.T, conn *mysql.Conn, query string) {
 	t.Helper()
 	qr := Exec(t, conn, query)
 	assert.Empty(t, qr.Rows, "for query: "+query)
-}
-
-// AssertIsEmptyCompareMySQL executes the given query against both Vitess and MySQL and ensures
-// their results match and are empty.
-func AssertIsEmptyCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query string) {
-	t.Helper()
-	qr := ExecCompareMySQL(t, vtConn, mysqlConn, query)
-	assert.Empty(t, qr.Rows, "for query: "+query)
-}
-
-// AssertFoundRowsValueCompareMySQL executes the given query against both Vitess and MySQL.
-// The results of that query must match between Vitess and MySQL, otherwise the test will be
-// marked as failed. Once the query is executed, the test checks the value of `found_rows`,
-// which must match the given `count` argument.
-func AssertFoundRowsValueCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query, workload string, count int) {
-	ExecCompareMySQL(t, vtConn, mysqlConn, query)
-
-	// TODO (@frouioui): following assertions produce different results between MySQL and Vitess
-	//  their differences are ignored for now. Fix it.
-	// `select found_rows()` returns an `UINT64` on Vitess, and `INT64` on MySQL
-	qr := Exec(t, vtConn, "select found_rows()")
-	got := fmt.Sprintf("%v", qr.Rows)
-	want := fmt.Sprintf(`[[UINT64(%d)]]`, count)
-	assert.Equalf(t, want, got, "Workload: %s\nQuery:%s\n", workload, query)
 }
 
 func AssertSingleRowIsReturned(t *testing.T, conn *mysql.Conn, predicate string, expectedKs string) {
@@ -170,25 +127,6 @@ func ExecCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query string)
 func ExecAllowError(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	t.Helper()
 	return conn.ExecuteFetch(query, 1000, true)
-}
-
-// ExecAllowErrorCompareMySQL executes the query against both Vitess and MySQL.
-// The test will pass if:
-// 		- MySQL and Vitess both agree that there is an error
-// 		- MySQL and Vitess did not find an error, but their results are matching
-// The result set and error produced by Vitess are returned to the caller.
-func ExecAllowErrorCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query string) (*sqltypes.Result, error) {
-	t.Helper()
-	vtQr, vtErr := vtConn.ExecuteFetch(query, 1000, true)
-	mysqlQr, mysqlErr := mysqlConn.ExecuteFetch(query, 1000, true)
-	compareVitessAndMySQLErrors(t, vtErr, mysqlErr)
-
-	// Since we allow errors, we don't want to compare results if one of the client failed.
-	// Vitess and MySQL should always be agreeing whether the query returns an error or not.
-	if vtErr == nil && mysqlErr == nil {
-		compareVitessAndMySQLResults(t, query, vtQr, mysqlQr)
-	}
-	return vtQr, vtErr
 }
 
 // SkipIfBinaryIsBelowVersion skips the given test if the binary's major version is below majorVersion.
