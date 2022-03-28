@@ -302,6 +302,8 @@ func getCheckColsForUnion(ctx *plancontext.PlanningContext, result logicalPlan, 
 			continue
 		}
 		// We might need a weight string - let's push one
+		// `might` because we just don't know what type we are dealing with.
+		// If we encounter a numerical value, we don't need any weight_string values
 		newOffset, err := pushWeightStringForDistinct(ctx, result, i)
 		if err != nil {
 			return nil, err

@@ -123,7 +123,7 @@ func (pt *probeTable) hashCodeForRow(inputRow sqltypes.Row) (evalengine.HashCode
 			if err != evalengine.UnsupportedCollationHashError || checkCol.WsCol == nil {
 				return 0, err
 			}
-			checkCol = checkCol.SwitchToWeighString()
+			checkCol = checkCol.SwitchToWeightString()
 			pt.checkCols[i] = checkCol
 			hashcode, err = evalengine.NullsafeHashcode(inputRow[checkCol.Col], checkCol.Collation, col.Type())
 			if err != nil {
@@ -143,7 +143,7 @@ func (pt *probeTable) equal(a, b sqltypes.Row) (bool, error) {
 			if !isComparisonErr || checkCol.WsCol == nil {
 				return false, err
 			}
-			checkCol = checkCol.SwitchToWeighString()
+			checkCol = checkCol.SwitchToWeightString()
 			pt.checkCols[i] = checkCol
 			cmp, err = evalengine.NullsafeCompare(a[i], b[i], checkCol.Collation)
 			if err != nil {
@@ -267,7 +267,8 @@ func (d *Distinct) description() PrimitiveDescription {
 	}
 }
 
-func (cc CheckCol) SwitchToWeighString() CheckCol {
+// SwitchToWeightString returns a new CheckCol that works on the weight string column instead
+func (cc CheckCol) SwitchToWeightString() CheckCol {
 	return CheckCol{
 		Col:       *cc.WsCol,
 		WsCol:     nil,
@@ -278,9 +279,7 @@ func (cc CheckCol) SwitchToWeighString() CheckCol {
 func (cc CheckCol) String() string {
 	coll := collations.Local().LookupByID(cc.Collation)
 	var collation string
-	if coll == nil {
-		collation = ""
-	} else {
+	if coll != nil {
 		collation = ": " + coll.Name()
 	}
 
