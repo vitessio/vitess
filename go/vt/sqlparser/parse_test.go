@@ -2619,6 +2619,14 @@ func TestParseOne(t *testing.T) {
 			"\t\t\tselect 1 from dual;",
 			"",
 		},
+		{
+			input: `/*!50800 create view a as select 2 from  dual    */  `,
+			remainder: "",
+		},
+		{
+			input: `/*! create view a as select 2 from  dual    */  ; select * from a`,
+			remainder: "select * from a",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.input, func(t *testing.T) {
@@ -2805,30 +2813,226 @@ func TestValidIgnoreWhitespace(t *testing.T) {
 	}
 }
 
-func TestCreateViewSelectPosition(t *testing.T) {
+// This was a sysbench test I was failing.
+// There are strange requirements for the positions of the Tokenizer especially when handling special comments like this
+// For the record: this test was never failing as a unit test (only when running dolt as a server?)
+// Regardless, we don't appear to have any tests with really long queries, so I'm leaving it.
+func TestLongQueries(t *testing.T) {
+	query := "/*! CREATE TABLE sbtest1 (\n             \tid INT NOT NULL,\n             \ttiny_int_col TINYINT NOT NULL,\n             \tunsigned_tiny_int_col TINYINT UNSIGNED NOT NULL,\n             \tsmall_int_col SMALLINT NOT NULL,\n             \tunsigned_small_int_col SMALLINT UNSIGNED NOT NULL,\n             \tmedium_int_col MEDIUMINT NOT NULL,\n             \tunsigned_medium_int_col MEDIUMINT UNSIGNED NOT NULL,\n             \tint_col INT NOT NULL,\n             \tunsigned_int_col INT UNSIGNED NOT NULL,\n             \tbig_int_col BIGINT NOT NULL,\n             \tunsigned_big_int_col BIGINT UNSIGNED NOT NULL,\n             \tdecimal_col DECIMAL NOT NULL,\n             \tfloat_col FLOAT NOT NULL,\n             \tdouble_col DOUBLE NOT NULL,\n             \tbit_col BIT NOT NULL,\n             \tchar_col CHAR NOT NULL,\n             \tvar_char_col VARCHAR(64) NOT NULL,\n             \ttiny_text_col TINYTEXT NOT NULL,\n             \ttext_col TEXT NOT NULL,\n             \tmedium_text_col MEDIUMTEXT NOT NULL,\n             \tlong_text_col LONGTEXT NOT NULL,\n             \tenum_col ENUM('val0', 'val1', 'val2') NOT NULL,\n             \tset_col SET('val0', 'val1', 'val2') NOT NULL,\n             \tdate_col DATE NOT NULL,\n             \ttime_col TIME NOT NULL,\n             \tdatetime_col DATETIME NOT NULL,\n             \ttimestamp_col TIMESTAMP NOT NULL,\n             \tyear_col YEAR NOT NULL,\n             \tPRIMARY KEY(id),\n             \tINDEX (big_int_col)\n             ) */"
+	_, err := Parse(query)
+	assert.NoError(t, err)
+}
+
+// Some DDL statements need to record the start and end indexes of a substatement within the original query string.
+// These are tests of that functionality, which is tricky to get right in the presence of certain piece of functionality
+// like MySQL's special comments.
+func TestDDLSelectPosition(t *testing.T) {
 	cases := []struct {
 		query string
 		sel   string
-	}{{
-		query: "create view a as select current_timestamp()",
-		sel:   "select current_timestamp()",
-	}, {
-		query: "create view a as select /* comment */ 2 + 2 from dual",
-		sel:   "select /* comment */ 2 + 2 from dual",
-	}}
+	}{
+		{
+			query: "create view a as select current_timestamp()",
+			sel:   "select current_timestamp()",
+		}, {
+			query: "create view a as select /* comment */ 2 + 2 from dual",
+			sel:   "select /* comment */ 2 + 2 from dual",
+		}, {
+			query: "/*! create view a as select 2 from dual */",
+			sel:   "select 2 from dual",
+		}, {
+			query: "/*! create view a as select 2 from dual */  ",
+			sel:   "select 2 from dual",
+		}, {
+			query: "/*! create view a as select 2 from  dual    */  ",
+			sel:   "select 2 from  dual",
+		}, {
+			query: "/*!12345 create view a as select 2 from dual */",
+			sel:   "select 2 from dual",
+		}, {
+			query: "/*!50001 CREATE VIEW `some_view` as SELECT 1 AS `x`*/",
+			sel:   "SELECT 1 AS `x`",
+		}, {
+			query: "create or replace view a as select current_timestamp()",
+			sel:   "select current_timestamp()",
+		}, {
+			query: "create or replace view a as select /* comment */ 2 + 2 from dual",
+			sel:   "select /* comment */ 2 + 2 from dual",
+		}, {
+			query: "/*! create or replace view a as select 2 from dual */",
+			sel:   "select 2 from dual",
+		}, {
+			query: "/*! create or replace view a as select 2 from dual */  ",
+			sel:   "select 2 from dual",
+		}, {
+			query: "/*! create or replace view a as select 2 from  dual    */  ",
+			sel:   "select 2 from  dual",
+		}, {
+			query: "/*!12345 create or replace view a as select 2 from dual */",
+			sel:   "select 2 from dual",
+		}, {
+			query: "/*!50001 CREATE OR REPLACE VIEW `some_view` as SELECT 1 AS `x`*/",
+			sel:   "SELECT 1 AS `x`",
+		}, {
+			query: `create procedure p1(n double, m double)
+begin
+	set @s = '';
+	if n = m then set @s = 'equals';
+	else
+		if n > m then set @s = 'greater';
+		else set @s = 'less';
+		end if;
+		set @s = concat('is ', @s, ' than');
+	end if;
+	set @s = concat(n, ' ', @s, ' ', m, '.');
+	select @s;
+end`,
+sel: `begin
+	set @s = '';
+	if n = m then set @s = 'equals';
+	else
+		if n > m then set @s = 'greater';
+		else set @s = 'less';
+		end if;
+		set @s = concat('is ', @s, ' than');
+	end if;
+	set @s = concat(n, ' ', @s, ' ', m, '.');
+	select @s;
+end`,
+		}, {
+			query: "create procedure p1() language sql deterministic sql security invoker select 1+1",
+			sel: "select 1+1",
+		}, {
+			query: "create procedure p1 (in v1 int, inout v2 char(2), out v3 datetime) begin select rand() * 10; end",
+			sel: "begin select rand() * 10; end",
+		}, {
+			query: `/*!50400 create procedure p1(n double, m double)
+begin
+	set @s = '';
+	if n = m then set @s = 'equals';
+	else
+		if n > m then set @s = 'greater';
+		else set @s = 'less';
+		end if;
+		set @s = concat('is ', @s, ' than');
+	end if;
+	set @s = concat(n, ' ', @s, ' ', m, '.');
+	select @s;
+end   */  `,
+			sel: `begin
+	set @s = '';
+	if n = m then set @s = 'equals';
+	else
+		if n > m then set @s = 'greater';
+		else set @s = 'less';
+		end if;
+		set @s = concat('is ', @s, ' than');
+	end if;
+	set @s = concat(n, ' ', @s, ' ', m, '.');
+	select @s;
+end`,
+		}, {
+			query: ` /*! create procedure p1(n double, m double)
+begin
+	set @s = '';
+	if n = m then set @s = 'equals';
+	else
+		if n > m then set @s = 'greater';
+		else set @s = 'less';
+		end if;
+		set @s = concat('is ', @s, ' than');
+	end if;
+	set @s = concat(n, ' ', @s, ' ', m, '.');
+	select @s;
+end*/ `,
+			sel: `begin
+	set @s = '';
+	if n = m then set @s = 'equals';
+	else
+		if n > m then set @s = 'greater';
+		else set @s = 'less';
+		end if;
+		set @s = concat('is ', @s, ' than');
+	end if;
+	set @s = concat(n, ' ', @s, ' ', m, '.');
+	select @s;
+end`,
+		}, {
+			query: "/*!50040   create procedure p1() language sql deterministic sql security invoker select 1+1 */",
+			sel: "select 1+1",
+		}, {
+			query: "/*! create procedure p1 (in v1 int, inout v2 char(2), out v3 datetime) begin select rand() * 10; end */",
+			sel: "begin select rand() * 10; end",
+		}, {
+			query: "create trigger t1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b",
+			sel: "update xxy set baz = 1 where a = b",
+		}, {
+			query: "create definer = me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+			sel: "update xxy set x = old.y",
+		}, {
+			query: `create trigger t1 before delete on foo for each row follows baz
+			begin
+				set session foo = old.x;
+				set session bar = new.y;
+				update baz.t set a = @@foo + @@bar where z = old.x;
+			end`,
+			sel: `			begin
+				set session foo = old.x;
+				set session bar = new.y;
+				update baz.t set a = @@foo + @@bar where z = old.x;
+			end`,
+		}, {
+			query: "/*! create trigger t1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b */",
+			sel: "update xxy set baz = 1 where a = b",
+		}, {
+			query: "/*!50040 create definer = me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y */ ",
+			sel: "update xxy set x = old.y",
+		}, {
+			query: `/*!50604 create trigger t1 before delete on foo for each row follows baz
+			begin
+				set session foo = old.x;
+				set session bar = new.y;
+				update baz.t set a = @@foo + @@bar where z = old.x;
+			end    */`,
+			sel: `			begin
+				set session foo = old.x;
+				set session bar = new.y;
+				update baz.t set a = @@foo + @@bar where z = old.x;
+			end`,
+		},
+	}
+
 	for _, tcase := range cases {
-		tree, err := Parse(tcase.query)
-		if err != nil {
-			t.Errorf("Parse(%q) err: %v", tcase.query, err)
-		}
-		ddl, ok := tree.(*DDL)
-		if !ok {
-			t.Errorf("Expected DDL when parsing (%q)", tcase.query)
-		}
-		sel := tcase.query[ddl.SubStatementPositionStart:ddl.SubStatementPositionEnd]
-		if sel != tcase.sel {
-			t.Errorf("expected select to be %q, got %q", tcase.sel, sel)
-		}
+		t.Run(tcase.query, func(t *testing.T) {
+			tree, err := Parse(tcase.query)
+			require.Nil(t, err)
+
+			ddl, ok := tree.(*DDL)
+			require.True(t, ok, "Expected DDL when parsing (%q)", tcase.query)
+			require.True(t, ddl.SubStatementPositionStart < ddl.SubStatementPositionEnd, "substatement indexes out of order")
+
+			sel := tcase.query[ddl.SubStatementPositionStart:ddl.SubStatementPositionEnd]
+			if sel != tcase.sel {
+				require.Equal(t, tcase.sel, sel)
+			}
+		})
+
+		// Also run all these test cases with the ParseOne function (used to execute multiple queries in a single request)
+		// to make sure they appropriately consume the correct amount of buffer
+		t.Run(tcase.query + " ParseOne", func(t *testing.T) {
+			tree, remainder, err := ParseOne(tcase.query)
+			require.Nil(t, err)
+			require.Equal(t, len(tcase.query) + 1, remainder)
+
+			ddl, ok := tree.(*DDL)
+			require.True(t, ok, "Expected DDL when parsing (%q)", tcase.query)
+			require.True(t, ddl.SubStatementPositionStart < ddl.SubStatementPositionEnd, "substatement indexes out of order")
+
+			sel := tcase.query[ddl.SubStatementPositionStart:ddl.SubStatementPositionEnd]
+			if sel != tcase.sel {
+				require.Equal(t, tcase.sel, sel)
+			}
+		})
 	}
 }
 

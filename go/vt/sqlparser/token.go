@@ -19,10 +19,12 @@ package sqlparser
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"unicode"
+
 	"github.com/dolthub/vitess/go/bytes2"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/vterrors"
-	"io"
 )
 
 const (
@@ -47,6 +49,7 @@ type Tokenizer struct {
 	nesting              int
 	multi                bool
 	specialComment       *Tokenizer
+	specialCommentEndPos int
 	potentialAccountName bool
 
 	// If true, the parser should collaborate to set `stopped` on this
@@ -609,25 +612,33 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		return 0, nil
 	}
 
+	tkn.OldPosition = tkn.Position
+
 	if tkn.specialComment != nil {
 		// Enter specialComment scan mode.
 		// for scanning such kind of comment: /*! MySQL-specific code */
 		specialComment := tkn.specialComment
 		tok, val := specialComment.Scan()
+		tkn.Position = specialComment.Position
+
 		if tok != 0 {
 			// return the specialComment scan result as the result
 			return tok, val
 		}
+
+		// reset the position to what it was when we originally finished parsing the special comment
+		tkn.Position = tkn.specialCommentEndPos
+
 		// leave specialComment scan mode after all stream consumed.
 		tkn.specialComment = nil
 	}
+
 	if tkn.potentialAccountName {
 		defer func() {
 			tkn.potentialAccountName = false
 		}()
 	}
 
-	tkn.OldPosition = tkn.Position
 	if tkn.lastChar == 0 {
 		tkn.next()
 	}
@@ -1061,11 +1072,17 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 	buffer := &bytes2.Buffer{}
 	buffer.WriteString("/*!")
 	tkn.next()
+
+	foundStartPos := false
+	startOffset := 0
+	digitCount := 0
+
 	for {
 		if tkn.lastChar == '*' {
 			tkn.consumeNext(buffer)
 			if tkn.lastChar == '/' {
 				tkn.consumeNext(buffer)
+				tkn.specialCommentEndPos = tkn.Position
 				break
 			}
 			continue
@@ -1074,9 +1091,38 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 			return LEX_ERROR, buffer.Bytes()
 		}
 		tkn.consumeNext(buffer)
+
+		// Already found special comment starting point
+		if foundStartPos {
+			continue
+		}
+
+		// Haven't reached character count
+		if digitCount < 5 {
+			if isDigit(tkn.lastChar) {
+				// Increase digit count
+				digitCount++
+				continue
+			} else {
+				// Provided less than 5 digits, but force this to move on
+				digitCount = 5
+			}
+		}
+
+		// If no longer counting digits, ignore spaces until first non-space character
+		if unicode.IsSpace(rune(tkn.lastChar)) {
+			continue
+		}
+
+		// Found start of subexpression
+		startOffset = tkn.Position - 1
+		foundStartPos = true
 	}
 	_, sql := ExtractMysqlComment(buffer.String())
+
 	tkn.specialComment = NewStringTokenizer(sql)
+	tkn.specialComment.Position = startOffset
+
 	return tkn.Scan()
 }
 

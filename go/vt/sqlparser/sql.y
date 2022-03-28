@@ -18,6 +18,7 @@ limitations under the License.
 package sqlparser
 
 import "fmt"
+//import "runtime/debug"
 
 func setParseTree(yylex interface{}, stmt Statement) {
   yylex.(*Tokenizer).ParseTree = stmt
@@ -51,6 +52,11 @@ func yyPosition(yylex interface{}) int {
 
 func yyOldPosition(yylex interface{}) int {
   return yylex.(*Tokenizer).OldPosition
+}
+
+func yySpecialCommentMode(yylex interface{}) bool {
+  tkn := yylex.(*Tokenizer)
+  return tkn.specialComment != nil
 }
 
 %}
@@ -385,6 +391,7 @@ func yyOldPosition(yylex interface{}) int {
 %type <frameExtent> frame_extent
 %type <frameBound> frame_bound
 %type <int> lexer_position lexer_old_position
+%type <boolean> special_comment_mode
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
@@ -817,6 +824,11 @@ lexer_old_position:
     $$ = yyOldPosition(yylex)
   }
 
+special_comment_mode:
+  {
+    $$ = yySpecialCommentMode(yylex)
+  }
+
 create_statement:
   create_table_prefix table_spec
   {
@@ -841,13 +853,13 @@ create_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $7, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $4, Using: $5, Type: $2, Columns: $9, Options: $11}}
   }
-| CREATE VIEW table_name AS lexer_position select_statement lexer_position
+| CREATE VIEW table_name AS lexer_position special_comment_mode select_statement lexer_position
   {
-    $$ = &DDL{Action: CreateStr, View: $3.ToViewName(), ViewExpr: $6, SubStatementPositionStart: $5, SubStatementPositionEnd: $7 - 1}
+    $$ = &DDL{Action: CreateStr, View: $3.ToViewName(), ViewExpr: $7, SpecialCommentMode: $6, SubStatementPositionStart: $5, SubStatementPositionEnd: $8 - 1}
   }
-| CREATE OR REPLACE VIEW table_name AS lexer_position select_statement lexer_position
+| CREATE OR REPLACE VIEW table_name AS lexer_position special_comment_mode select_statement lexer_position
   {
-    $$ = &DDL{Action: CreateStr, View: $5.ToViewName(), ViewExpr: $8, SubStatementPositionStart: $7, SubStatementPositionEnd: $9 - 1, OrReplace: true}
+    $$ = &DDL{Action: CreateStr, View: $5.ToViewName(), ViewExpr: $9,  SpecialCommentMode: $8, SubStatementPositionStart: $7, SubStatementPositionEnd: $10 - 1, OrReplace: true}
   }
 | CREATE DATABASE not_exists_opt ID creation_option_opt
   {
@@ -865,13 +877,13 @@ create_statement:
     }
     $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne, CharsetCollate: $5}
   }
-| CREATE definer_opt TRIGGER trigger_name trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position trigger_body lexer_position
+| CREATE definer_opt TRIGGER trigger_name trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position special_comment_mode trigger_body lexer_position
   {
-    $$ = &DDL{Action: CreateStr, Table: $8, TriggerSpec: &TriggerSpec{TrigName: $4, Time: $5, Event: $6, Order: $12, Body: $14}, SubStatementPositionStart: $13, SubStatementPositionEnd: $15 - 1}
+    $$ = &DDL{Action: CreateStr, Table: $8, TriggerSpec: &TriggerSpec{TrigName: $4, Time: $5, Event: $6, Order: $12, Body: $15}, SpecialCommentMode: $14, SubStatementPositionStart: $13, SubStatementPositionEnd: $16 - 1}
   }
-| CREATE definer_opt PROCEDURE procedure_name '(' proc_param_list_opt ')' characteristic_list_opt lexer_position statement_list_statement lexer_position
+| CREATE definer_opt PROCEDURE procedure_name '(' proc_param_list_opt ')' characteristic_list_opt lexer_old_position special_comment_mode statement_list_statement lexer_position
   {
-    $$ = &DDL{Action: CreateStr, ProcedureSpec: &ProcedureSpec{ProcName: $4, Definer: $2, Params: $6, Characteristics: $8, Body: $10}, SubStatementPositionStart: $9, SubStatementPositionEnd: $11 - 1}
+    $$ = &DDL{Action: CreateStr, ProcedureSpec: &ProcedureSpec{ProcName: $4, Definer: $2, Params: $6, Characteristics: $8, Body: $11}, SpecialCommentMode: $10, SubStatementPositionStart: $9, SubStatementPositionEnd: $12 - 1}
   }
 | CREATE USER not_exists_opt account_with_auth_list default_role_opt tls_options account_limits pass_lock_options user_comment_attribute
   {
