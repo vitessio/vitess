@@ -441,7 +441,6 @@ func TestPlayerSavepoint(t *testing.T) {
 	expectDBClientQueries(t, []string{
 		"begin",
 		"/insert into t1.*2.*",
-		"SAVEPOINT `vrepl_b`",
 		"/insert into t1.*3.*",
 		"/update _vt.vreplication set pos=",
 		"commit",
