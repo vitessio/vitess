@@ -383,7 +383,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		// We update rows in a table not part of the MoveTables operation so that we're not blocking
 		// on the LOCK TABLE call but rather the InnoDB History List length.
 		trxConn := createSourceInnoDBRowHistory(t, sourceKs)
-		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
+		// We need to force primary tablet types as the history list has been increased on the source primary
+		moveTablesWithTabletTypes(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables, "primary")
 		verifySourceTabletThrottling(t, targetKs, workflow)
 		deleteSourceInnoDBRowHistory(t, trxConn)
 		trxConn.Close()
@@ -542,7 +543,7 @@ func verifySourceTabletThrottling(t *testing.T, targetKS, workflow string) {
 						streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
 							state := attributeValue.Get("State").String()
 							if state != "Copying" {
-								require.FailNowf(t, "Unexpected running workflow stream", "Initial copy phase for the MoveTables workflow %s started in less than %d seconds when it should have been waiting. State: %s ; Table: %s ; LastPK: %s", ksWorkflow, int(tDuration.Seconds()), state)
+								require.FailNowf(t, "Unexpected running workflow stream", "Initial copy phase for the MoveTables workflow %s started in less than %d seconds when it should have been waiting. Show output: %s", ksWorkflow, int(tDuration.Seconds()), output)
 							}
 							return true // end attribute loop
 						})
@@ -1045,6 +1046,12 @@ func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string)
 		t.Fatalf("MoveTables command failed with %+v\n", err)
 	}
 }
+func moveTablesWithTabletTypes(t *testing.T, cell, workflow, sourceKs, targetKs, tables string, tabletTypes string) {
+	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--v1", "--cells="+cell, "--workflow="+workflow,
+		"--tablet_types="+tabletTypes, sourceKs, targetKs, tables); err != nil {
+		t.Fatalf("MoveTables command failed with %+v\n", err)
+	}
+}
 func applyVSchema(t *testing.T, vschema, keyspace string) {
 	err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "--", "--vschema", vschema, keyspace)
 	require.NoError(t, err)
@@ -1129,7 +1136,7 @@ func dropSources(t *testing.T, ksWorkflow string) {
 	require.NoError(t, err, fmt.Sprintf("DropSources Error: %s: %s", err, output))
 }
 
-// createInnoDBRowHistory generates at least maxSourceTrxHistory rollback segment entries.
+// createSourceInnoDBRowHistory generates at least maxSourceTrxHistory rollback segment entries.
 // This allows us to confirm two behaviors:
 //  1. MoveTables blocks on starting its first copy phase until we rollback
 //  2. All other workflows continue to work w/o issue with this MVCC history in place

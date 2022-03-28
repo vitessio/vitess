@@ -211,7 +211,8 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 	lastPK := getLastPKFromQR(uvs.plans[tableName].tablePK.Lastpk)
 	filter := uvs.plans[tableName].rule.Filter
 
-	if err := uvs.waitForSource(); err != nil {
+	// Let's be sure that MySQL is in good shape to stream more rows
+	if err := uvs.vse.waitForMySQL(ctx, uvs.cp); err != nil {
 		return err
 	}
 

@@ -259,6 +259,11 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 }
 
 func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	// Let's be sure we MySQL is in good shape to stream rows
+	if err := rs.vse.waitForMySQL(rs.ctx, rs.cp); err != nil {
+		return err
+	}
+
 	log.Infof("Streaming query: %v\n", rs.sendQuery)
 	gtid, err := conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
 	if err != nil {

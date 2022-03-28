@@ -21,10 +21,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/sqltypes"
@@ -379,4 +383,120 @@ func (vse *Engine) setWatch() {
 
 func getPacketSize() int64 {
 	return int64(*defaultPacketSize)
+}
+
+// waitForMySQL ensures that the source is able to stay within defined bounds for
+// its MVCC history list (trx rollback segment linked list for old versions of rows
+// that should be purged ASAP) and its replica lag (which will be -1 for non-replicas)
+// to help ensure that the vstream does not have an outsized harmful impact on the
+// source's ability to function normally.
+func (vse *Engine) waitForMySQL(ctx context.Context, db dbconfigs.Connector) error {
+	sourceEndpoint, _ := vse.getMySQLEndpoint(ctx, db)
+	backoff := 1 * time.Second
+	backoffLimit := backoff * 30
+	ready := false
+	recording := false
+	mhll := vse.env.Config().RowStreamer.MaxTrxHistLen
+	mrls := vse.env.Config().RowStreamer.MaxReplLagSecs
+
+	loopFunc := func() error {
+		// Exit if the context has been cancelled
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		hll := vse.getMySQLTrxHistoryLen(ctx, db)
+		rpl := vse.getMySQLReplicationLag(ctx, db)
+		if hll <= mhll && rpl <= mrls {
+			ready = true
+		} else {
+			log.Infof("VStream source (%s) is not ready to stream more rows. Max InnoDB history length is %d and it was %d, max replication lag is %d (seconds) and it was %d. Will pause and retry.",
+				sourceEndpoint, mhll, hll, mrls, rpl)
+		}
+		return nil
+	}
+
+	for {
+		if err := loopFunc(); err != nil {
+			return err
+		}
+		if ready {
+			break
+		} else {
+			if !recording {
+				defer vse.rowStreamerWaits.Record("waitForMySQL", time.Now())
+				recording = true
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(backoff):
+				// Exponential backoff with 1.5 as a factor
+				if backoff != backoffLimit {
+					nb := time.Duration(float64(backoff) * 1.5)
+					if nb > backoffLimit {
+						backoff = backoffLimit
+					} else {
+						backoff = nb
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// getMySQLTrxHistoryLen attempts to query InnoDB's current transaction rollback segment's history
+// list length. If the value cannot be determined for any reason then -1 is returned, which means
+// "unknown".
+func (vse *Engine) getMySQLTrxHistoryLen(ctx context.Context, db dbconfigs.Connector) int64 {
+	histLen := int64(-1)
+	conn, err := db.Connect(ctx)
+	if err != nil {
+		return histLen
+	}
+	defer conn.Close()
+
+	res, err := conn.ExecuteFetch(trxHistoryLenQuery, 1, false)
+	if err != nil || len(res.Rows) != 1 || res.Rows[0] == nil {
+		return histLen
+	}
+	histLen, _ = res.Rows[0][0].ToInt64()
+	return histLen
+}
+
+// getMySQLReplicationLag attempts to get the seconds_behind_master value.
+// If the value cannot be determined for any reason then -1 is returned, which
+// means "unknown" or "irrelevant" (meaning it's not actively replicating).
+func (vse *Engine) getMySQLReplicationLag(ctx context.Context, db dbconfigs.Connector) int64 {
+	lagSecs := int64(-1)
+	conn, err := db.Connect(ctx)
+	if err != nil {
+		return lagSecs
+	}
+	defer conn.Close()
+
+	res, err := conn.ExecuteFetch(replicaLagQuery, 1, true)
+	if err != nil || len(res.Rows) != 1 || res.Rows[0] == nil {
+		return lagSecs
+	}
+	row := res.Named().Row()
+	return row.AsInt64("Seconds_Behind_Master", -1)
+}
+
+// getMySQLEndpoint returns the host:port value for the vstreamer (MySQL) instance
+func (vse *Engine) getMySQLEndpoint(ctx context.Context, db dbconfigs.Connector) (string, error) {
+	conn, err := db.Connect(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	res, err := conn.ExecuteFetch(hostQuery, 1, false)
+	if err != nil || len(res.Rows) != 1 || res.Rows[0] == nil {
+		return "", vterrors.Wrap(err, "could not get vstreamer endpoint")
+	}
+	host := res.Rows[0][0].ToString()
+	port, _ := res.Rows[0][1].ToInt64()
+	return fmt.Sprintf("%s:%d", host, port), nil
 }

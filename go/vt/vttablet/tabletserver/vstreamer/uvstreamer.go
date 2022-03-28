@@ -432,69 +432,6 @@ func (uvs *uvstreamer) sendTestEvent(msg string) {
 	}
 }
 
-// waitForSource ensures that the source is able to stay within defined bounds for
-// its MVCC history list (trx rollback segment linked list for old versions of rows
-// that should be purged ASAP) and its replica lag (which will be -1 for non-replicas)
-// to help ensure that the vstream does not have an outsized harmful impact on the
-// source's ability to function normally.
-func (uvs *uvstreamer) waitForSource() error {
-	sourceEndpoint, _ := uvs.getEndpoint()
-	backoff := 1 * time.Second
-	backoffLimit := backoff * 30
-	ready := false
-	recording := false
-	mhll := uvs.vse.env.Config().RowStreamer.MaxTrxHistLen
-	mrls := uvs.vse.env.Config().RowStreamer.MaxReplLagSecs
-
-	loopFunc := func() error {
-		// Exit if the context has been cancelled
-		if uvs.ctx.Err() != nil {
-			return uvs.ctx.Err()
-		}
-		hll := uvs.getTrxHistoryLen()
-		rpl := uvs.getReplicationLag()
-		if hll <= mhll && rpl <= mrls {
-			ready = true
-		} else {
-			log.Infof("VStream source (%s) is not ready to stream more rows. Max InnoDB history length is %d and it was %d, max replication lag is %d (seconds) and it was %d. Will pause and retry.",
-				sourceEndpoint, mhll, hll, mrls, rpl)
-		}
-		return nil
-	}
-
-	for {
-		if err := loopFunc(); err != nil {
-			return err
-		}
-		if ready {
-			break
-		} else {
-			if !recording {
-				defer func() {
-					uvs.vse.rowStreamerWaits.Record("waitForSource", time.Now())
-				}()
-				recording = true
-			}
-			select {
-			case <-uvs.ctx.Done():
-				return uvs.ctx.Err()
-			case <-time.After(backoff):
-				// Exponential backoff with 1.5 as a factor
-				if backoff != backoffLimit {
-					nb := time.Duration(float64(backoff) * 1.5)
-					if nb > backoffLimit {
-						backoff = backoffLimit
-					} else {
-						backoff = nb
-					}
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
 func (uvs *uvstreamer) copyComplete(tableName string) error {
 	evs := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_BEGIN},
