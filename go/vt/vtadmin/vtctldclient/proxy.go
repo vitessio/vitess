@@ -198,5 +198,9 @@ func (vtctld *ClientProxy) Debug() map[string]any {
 		m["dialed_at"] = debug.TimeToString(vtctld.dialedAt)
 	}
 
+	if dr, ok := vtctld.resolver.(debug.Debuggable); ok {
+		m["resolver"] = dr.Debug()
+	}
+
 	return m
 }

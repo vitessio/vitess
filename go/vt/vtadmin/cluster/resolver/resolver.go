@@ -29,20 +29,12 @@ limitations under the License.
 //	  then have to spin this down when Close is called.
 //
 // 2. Stats!
-//
-// 3. Have *builder track the *resolvers it builds. The reason we want this is
-// 	  because VtctldClientProxy and VTGateProxy can only hold a reference to the
-//	  a Builder, not the Resolvers that Builder builds. If we then implement
-//	  debug.Debuggable for our builder and resolver implementations, we can then
-//	  wire all this allllll the way back up to /debug/ route for a cluster to
-//	  inspect the state of our resolvers. In particular we would be interested
-//	  in the last resolution time, last resolution error (if last resolution
-//	  failed), and the current address set.
 package resolver
 
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	grpcresolver "google.golang.org/grpc/resolver"
@@ -50,6 +42,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/debug"
 )
 
 const logPrefix = "[vtadmin.cluster.resolver]"
@@ -58,6 +51,10 @@ type builder struct {
 	scheme string
 	disco  discovery.Discovery
 	opts   Options
+
+	// for debug.Debuggable
+	m         sync.Mutex
+	resolvers []*resolver
 }
 
 type Options struct {
@@ -95,7 +92,12 @@ func (b *builder) Build(target grpcresolver.Target, cc grpcresolver.ClientConn, 
 		return nil, err
 	}
 
+	b.m.Lock()
+	b.resolvers = append(b.resolvers, r)
+	b.m.Unlock()
+
 	r.ResolveNow(grpcresolver.ResolveNowOptions{})
+
 	return r, nil
 }
 
@@ -120,12 +122,33 @@ func (b *builder) build(target grpcresolver.Target, cc grpcresolver.ClientConn, 
 		cc:            cc,
 		ctx:           ctx,
 		cancel:        cancel,
+		createdAt:     time.Now().UTC(),
 	}, nil
 }
 
 // Scheme is part of the resolver.Builder interface.
 func (b *builder) Scheme() string {
 	return b.scheme
+}
+
+// Debug implements debug.Debuggable for builder.
+func (b *builder) Debug() map[string]any {
+	b.m.Lock()
+	defer b.m.Unlock()
+
+	resolvers := make([]map[string]any, len(b.resolvers))
+	m := map[string]any{
+		"scheme":          b.scheme,
+		"resolve_timeout": b.opts.ResolveTimeout,
+		"discovery_tags":  b.opts.DiscoveryTags,
+		"resolvers":       resolvers,
+	}
+
+	for i, r := range b.resolvers {
+		resolvers[i] = r.Debug()
+	}
+
+	return m
 }
 
 type resolver struct {
@@ -138,6 +161,15 @@ type resolver struct {
 
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	// for debug.Debuggable
+	// TODO: consider proper exported stats - histograms for timings, error rates, etc.
+
+	m                sync.Mutex
+	createdAt        time.Time
+	lastResolvedAt   time.Time
+	lastResolveError error
+	lastAddrs        []grpcresolver.Address
 }
 
 func (r *resolver) resolve() (*grpcresolver.State, error) {
@@ -174,7 +206,23 @@ func (r *resolver) resolve() (*grpcresolver.State, error) {
 // ClientConn's when errors occur, as well as periodically to refresh the set of
 // addresses a ClientConn can use for SubConns.
 func (r *resolver) ResolveNow(o grpcresolver.ResolveNowOptions) {
-	state, err := r.resolve()
+	r.m.Lock()
+	defer r.m.Unlock()
+
+	var (
+		state *grpcresolver.State
+		err   error
+	)
+
+	r.lastResolvedAt = time.Now().UTC()
+	defer func() {
+		r.lastResolveError = err
+		if state != nil {
+			r.lastAddrs = state.Addresses
+		}
+	}()
+
+	state, err = r.resolve()
 	if err != nil {
 		log.Errorf("%s: failed to resolve new addresses for %s (cluster %s): %s", logPrefix, r.component, r.cluster, err)
 		r.cc.ReportError(err)
@@ -199,4 +247,27 @@ func (r *resolver) ResolveNow(o grpcresolver.ResolveNowOptions) {
 // Close is part of the resolver.Resolver interface.
 func (r *resolver) Close() {
 	r.cancel() // cancel any ongoing call to ResolveNow, and therefore any resultant discovery lookup.
+}
+
+// Debug implements debug.Debuggable for resolver.
+func (r *resolver) Debug() map[string]any {
+	r.m.Lock()
+	defer r.m.Unlock()
+
+	m := map[string]any{
+		"cluster":    r.cluster,
+		"component":  r.component,
+		"created_at": debug.TimeToString(r.createdAt),
+		"addr_list":  r.lastAddrs,
+	}
+
+	if !r.lastResolvedAt.IsZero() {
+		m["last_resolved_at"] = debug.TimeToString(r.lastResolvedAt)
+	}
+
+	if r.lastResolveError != nil {
+		m["error"] = r.lastResolvedAt.String()
+	}
+
+	return m
 }
