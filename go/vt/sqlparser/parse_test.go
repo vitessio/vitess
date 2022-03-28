@@ -1273,6 +1273,8 @@ var (
 		}, {
 			input: "create trigger t1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b",
 		}, {
+			input: "create trigger dbName.trigger1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b",
+		}, {
 			input: "create trigger t1 after delete on foo for each row delete from xxy where old.y = z",
 		}, { //TODO: figure out why `SET SESSION sys_var = x` does not work when set directly on the trigger (works in BEGIN/END block)
 			input:  "create trigger t1 after delete on foo for each row set @@sum = @@sum + old.b",
@@ -1958,6 +1960,10 @@ var (
 		}, {
 			input: "drop trigger if exists t2",
 		}, {
+			input: "drop trigger dbName.trigger2",
+		}, {
+			input: "drop trigger if exists dbName.trigger3",
+		}, {
 			input:  "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
 			output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
 		}, {
@@ -2062,6 +2068,11 @@ var (
 			input: "drop procedure p1",
 		}, {
 			input: "drop procedure if exists p1",
+		}, {
+			input: "drop procedure dbName.p1",
+		}, {
+			input:  "create procedure mydb.p1() select rand()",
+			output: "create procedure mydb.p1 () select rand() from dual",
 		}, {
 			input:  "create procedure p1() select rand()",
 			output: "create procedure p1 () select rand() from dual",

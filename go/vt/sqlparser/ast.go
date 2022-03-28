@@ -1436,11 +1436,11 @@ func (node *DBDDL) Format(buf *TrackedBuffer) {
 }
 
 type TriggerSpec struct {
-	Name  string
-	Time  string // BeforeStr, AfterStr
-	Event string // UpdateStr, InsertStr, DeleteStr
-	Order *TriggerOrder
-	Body  Statement
+	TrigName TriggerName
+	Time     string // BeforeStr, AfterStr
+	Event    string // UpdateStr, InsertStr, DeleteStr
+	Order    *TriggerOrder
+	Body     Statement
 }
 
 type TriggerOrder struct {
@@ -1449,7 +1449,7 @@ type TriggerOrder struct {
 }
 
 type ProcedureSpec struct {
-	Name            string
+	ProcName        ProcedureName
 	Definer         string
 	Params          []ProcedureParam
 	Characteristics []Characteristic
@@ -1655,8 +1655,9 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			if trigger.Order != nil {
 				triggerOrder = fmt.Sprintf("%s %s ", trigger.Order.PrecedesOrFollows, trigger.Order.OtherTriggerName)
 			}
+			triggerName := fmt.Sprintf("%s", trigger.TrigName)
 			buf.Myprintf("%s trigger %s %s %s on %v for each row %s%v",
-				node.Action, trigger.Name, trigger.Time, trigger.Event, node.Table, triggerOrder, trigger.Body)
+				node.Action, triggerName, trigger.Time, trigger.Event, node.Table, triggerOrder, trigger.Body)
 		} else if node.ProcedureSpec != nil {
 			proc := node.ProcedureSpec
 			sb := strings.Builder{}
@@ -1664,7 +1665,7 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			if proc.Definer != "" {
 				sb.WriteString(fmt.Sprintf("definer = %s ", proc.Definer))
 			}
-			sb.WriteString(fmt.Sprintf("procedure %s (", proc.Name))
+			sb.WriteString(fmt.Sprintf("procedure %s (", proc.ProcName))
 			for i, param := range proc.Params {
 				if i > 0 {
 					sb.WriteString(", ")
@@ -1714,13 +1715,13 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			if node.IfExists {
 				exists = " if exists"
 			}
-			buf.Myprintf(fmt.Sprintf("%s trigger%s %v", node.Action, exists, node.TriggerSpec.Name))
+			buf.Myprintf(fmt.Sprintf("%s trigger%s %v", node.Action, exists, node.TriggerSpec.TrigName))
 		} else if node.ProcedureSpec != nil {
 			exists := ""
 			if node.IfExists {
 				exists = " if exists"
 			}
-			buf.Myprintf(fmt.Sprintf("%s procedure%s %v", node.Action, exists, node.ProcedureSpec.Name))
+			buf.Myprintf(fmt.Sprintf("%s procedure%s %v", node.Action, exists, node.ProcedureSpec.ProcName))
 		} else {
 			buf.Myprintf("%s table%s %v", node.Action, exists, node.FromTables)
 		}
@@ -3337,6 +3338,51 @@ func (node TableNames) walkSubtree(visit Visit) error {
 	return nil
 }
 
+// ProcedureName represents a procedure name.
+// Qualifier, if specified, represents a database name.
+// ProcedureName is a value struct whose fields are case-sensitive,
+// so TableIdent struct is used for fields
+type ProcedureName struct {
+	Name      ColIdent
+	Qualifier TableIdent
+}
+
+// Format formats the node.
+func (node ProcedureName) Format(buf *TrackedBuffer) {
+	if node.IsEmpty() {
+		return
+	}
+	if !node.Qualifier.IsEmpty() {
+		buf.Myprintf("%v.", node.Qualifier)
+	}
+	buf.Myprintf("%v", node.Name)
+}
+
+// Format formats the node.
+func (node ProcedureName) String() string {
+	if node.IsEmpty() {
+		return ""
+	}
+	if !node.Qualifier.IsEmpty() {
+		return fmt.Sprintf("%s.%s", node.Qualifier.String(), node.Name)
+	}
+	return node.Name.String()
+}
+
+func (node ProcedureName) walkSubtree(visit Visit) error {
+	return Walk(
+		visit,
+		node.Name,
+		node.Qualifier,
+	)
+}
+
+// IsEmpty returns true if TableName is nil or empty.
+func (node ProcedureName) IsEmpty() bool {
+	// If Name is empty, Qualifier is also empty.
+	return node.Name.IsEmpty()
+}
+
 // TableName represents a table  name.
 // Qualifier, if specified, represents a database or keyspace.
 // TableName is a value struct whose fields are case sensitive.
@@ -3390,6 +3436,51 @@ func (node TableName) ToViewName() TableName {
 		Qualifier: node.Qualifier,
 		Name:      NewTableIdent(strings.ToLower(node.Name.v)),
 	}
+}
+
+// TriggerName represents a trigger name.
+// Qualifier, if specified, represents a database name.
+// TriggerName is a value struct whose fields are case-sensitive,
+// so TableIdent struct is used for fields
+type TriggerName struct {
+	Name      ColIdent
+	Qualifier TableIdent
+}
+
+// Format formats the node.
+func (node TriggerName) Format(buf *TrackedBuffer) {
+	if node.IsEmpty() {
+		return
+	}
+	if !node.Qualifier.IsEmpty() {
+		buf.Myprintf("%v.", node.Qualifier)
+	}
+	buf.Myprintf("%v", node.Name)
+}
+
+// Format formats the node.
+func (node TriggerName) String() string {
+	if node.IsEmpty() {
+		return ""
+	}
+	if !node.Qualifier.IsEmpty() {
+		return fmt.Sprintf("%s.%s", node.Qualifier.String(), node.Name)
+	}
+	return node.Name.String()
+}
+
+func (node TriggerName) walkSubtree(visit Visit) error {
+	return Walk(
+		visit,
+		node.Name,
+		node.Qualifier,
+	)
+}
+
+// IsEmpty returns true if TableName is nil or empty.
+func (node TriggerName) IsEmpty() bool {
+	// If Name is empty, Qualifier is also empty.
+	return node.Name.IsEmpty()
 }
 
 // ParenTableExpr represents a parenthesized list of TableExpr.

@@ -85,8 +85,10 @@ func yySpecialCommentMode(yylex interface{}) bool {
   subquery      *Subquery
   simpleTableExpr  SimpleTableExpr
   joinCondition JoinCondition
+  triggerName   TriggerName
   tableName     TableName
   tableNames    TableNames
+  procedureName ProcedureName
   indexHints    *IndexHints
   asOf          *AsOf
   expr          Expr
@@ -352,8 +354,10 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
 %type <tableNames> table_name_list delete_table_list view_name_list
 %type <str> inner_join outer_join straight_join natural_join
+%type <triggerName> trigger_name
 %type <tableName> table_name load_into_table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name aliased_table_options
+%type <procedureName> procedure_name
 %type <indexHints> index_hint_list
 %type <expr> where_expression_opt
 %type <expr> condition
@@ -873,11 +877,11 @@ create_statement:
     }
     $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne, CharsetCollate: $5}
   }
-| CREATE definer_opt TRIGGER ID trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position special_comment_mode trigger_body lexer_position
+| CREATE definer_opt TRIGGER trigger_name trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position special_comment_mode trigger_body lexer_position
   {
     $$ = &DDL{Action: CreateStr, Table: $8, TriggerSpec: &TriggerSpec{Name: string($4), Time: $5, Event: $6, Order: $12, Body: $15}, SpecialCommentMode: $14, SubStatementPositionStart: $13, SubStatementPositionEnd: $16 - 1}
   }
-| CREATE definer_opt PROCEDURE ID '(' proc_param_list_opt ')' characteristic_list_opt lexer_old_position special_comment_mode statement_list_statement lexer_position
+| CREATE definer_opt PROCEDURE procedure_name '(' proc_param_list_opt ')' characteristic_list_opt lexer_old_position special_comment_mode statement_list_statement lexer_position
   {
     $$ = &DDL{Action: CreateStr, ProcedureSpec: &ProcedureSpec{Name: string($4), Definer: $2, Params: $6, Characteristics: $8, Body: $11}, SpecialCommentMode: $10, SubStatementPositionStart: $9, SubStatementPositionEnd: $12 - 1}
   }
@@ -3366,21 +3370,21 @@ drop_statement:
     }
     $$ = &DBDDL{Action: DropStr, DBName: string($4), IfExists: exists}
   }
-| DROP TRIGGER exists_opt ID
+| DROP TRIGGER exists_opt trigger_name
   {
     var exists bool
     if $3 != 0 {
       exists = true
     }
-    $$ = &DDL{Action: DropStr, TriggerSpec: &TriggerSpec{Name: string($4)}, IfExists: exists}
+    $$ = &DDL{Action: DropStr, TriggerSpec: &TriggerSpec{TrigName: $4}, IfExists: exists}
   }
-| DROP PROCEDURE exists_opt ID
+| DROP PROCEDURE exists_opt procedure_name
   {
     var exists bool
     if $3 != 0 {
       exists = true
     }
-    $$ = &DDL{Action: DropStr, ProcedureSpec: &ProcedureSpec{Name: string($4)}, IfExists: exists}
+    $$ = &DDL{Action: DropStr, ProcedureSpec: &ProcedureSpec{ProcName: $4}, IfExists: exists}
   }
 | DROP USER exists_opt account_name_list
   {
@@ -4344,6 +4348,16 @@ natural_join:
     }
   }
 
+trigger_name:
+  sql_id
+  {
+    $$ = TriggerName{Name: $1}
+  }
+| table_id '.' sql_id
+  {
+    $$ = TriggerName{Qualifier: $1, Name: $3}
+  }
+
 load_into_table_name:
   INTO TABLE table_name
   {
@@ -4368,6 +4382,16 @@ table_name:
 | table_id '.' reserved_table_id
   {
     $$ = TableName{Qualifier: $1, Name: $3}
+  }
+
+procedure_name:
+  sql_id
+  {
+    $$ = ProcedureName{Name: $1}
+  }
+| table_id '.' sql_id
+  {
+    $$ = ProcedureName{Qualifier: $1, Name: $3}
   }
 
 delete_table_name:
