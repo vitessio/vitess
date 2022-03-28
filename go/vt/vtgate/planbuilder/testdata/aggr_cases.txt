@@ -3856,3 +3856,25 @@ Gen4 error: cannot push projections in ordered aggregates
     ]
   }
 }
+
+"select count(distinct user_id, name) from unsharded"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(distinct user_id, name) from unsharded",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select count(distinct user_id, `name`) from unsharded where 1 != 1",
+    "Query": "select count(distinct user_id, `name`) from unsharded",
+    "Table": "unsharded"
+  }
+}
+Gen4 plan same as above
+
+"select count(distinct user_id, name) from user"
+"unsupported: only one expression allowed inside aggregates: count(distinct user_id, `name`)"
+Gen4 error: aggregate functions take a single argument 'count(distinct user_id, `name`)'
