@@ -37,7 +37,7 @@ type horizonPlanning struct {
 	qp  *abstract.QueryProjection
 }
 
-func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
+func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan, truncateColumns bool) (logicalPlan, error) {
 	rb, isRoute := plan.(*routeGen4)
 	if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
 		// If we got here, we don't have a single shard plan
@@ -97,9 +97,11 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 		return nil, err
 	}
 
-	plan, err = hp.truncateColumnsIfNeeded(ctx, plan)
-	if err != nil {
-		return nil, err
+	if truncateColumns {
+		plan, err = hp.truncateColumnsIfNeeded(ctx, plan)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return plan, nil
@@ -1219,7 +1221,7 @@ func (hp *horizonPlanning) addDistinct(ctx *plancontext.PlanningContext, plan lo
 			inner = sqlparser.NewColName(aliasExpr.As.String())
 			ctx.SemTable.CopyDependencies(aliasExpr.Expr, inner)
 		}
-		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1, CollationID: ctx.SemTable.CollationForExpr(inner)}
+		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1, CollationID: ctx.SemTable.CollationForExpr(inner), Expr: inner}
 		_, wOffset, err := wrapAndPushExpr(ctx, aliasExpr.Expr, aliasExpr.Expr, plan)
 		if err != nil {
 			return nil, err

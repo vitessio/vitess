@@ -41,14 +41,14 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func transformToLogicalPlan(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator) (logicalPlan, error) {
+func transformToLogicalPlan(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator, isRoot bool) (logicalPlan, error) {
 	switch op := op.(type) {
 	case *physical.Route:
 		return transformRoutePlan(ctx, op)
 	case *physical.ApplyJoin:
 		return transformApplyJoinPlan(ctx, op)
 	case *physical.Union:
-		return transformUnionPlan(ctx, op)
+		return transformUnionPlan(ctx, op, isRoot)
 	case *physical.Vindex:
 		return transformVindexPlan(ctx, op)
 	case *physical.SubQueryOp:
@@ -58,7 +58,7 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op abstract.Physic
 	case *physical.Derived:
 		return transformDerivedPlan(ctx, op)
 	case *physical.Filter:
-		plan, err := transformToLogicalPlan(ctx, op.Source)
+		plan, err := transformToLogicalPlan(ctx, op.Source, false)
 		if err != nil {
 			return nil, err
 		}
@@ -93,11 +93,11 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *physical.ApplyJ
 	//	return nil, err
 	// }
 
-	lhs, err := transformToLogicalPlan(ctx, n.LHS)
+	lhs, err := transformToLogicalPlan(ctx, n.LHS, false)
 	if err != nil {
 		return nil, err
 	}
-	rhs, err := transformToLogicalPlan(ctx, n.RHS)
+	rhs, err := transformToLogicalPlan(ctx, n.RHS, false)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +239,7 @@ func getAllTableNames(op *physical.Route) ([]string, error) {
 	return tableNames, nil
 }
 
-func transformUnionPlan(ctx *plancontext.PlanningContext, op *physical.Union) (logicalPlan, error) {
+func transformUnionPlan(ctx *plancontext.PlanningContext, op *physical.Union, isRoot bool) (logicalPlan, error) {
 	var sources []logicalPlan
 	var err error
 	if op.Distinct {
@@ -279,7 +279,7 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *physical.Union) (l
 		if err != nil {
 			return nil, err
 		}
-		return newDistinct(result, checkCols), nil
+		return newDistinct(result, checkCols, isRoot), nil
 	}
 	return result, nil
 
@@ -437,12 +437,12 @@ func transformAndMergeInOrder(ctx *plancontext.PlanningContext, op *physical.Uni
 }
 
 func createLogicalPlan(ctx *plancontext.PlanningContext, source abstract.PhysicalOperator, selStmt *sqlparser.Select) (logicalPlan, error) {
-	plan, err := transformToLogicalPlan(ctx, source)
+	plan, err := transformToLogicalPlan(ctx, source, false)
 	if err != nil {
 		return nil, err
 	}
 	if selStmt != nil {
-		plan, err = planHorizon(ctx, plan, selStmt)
+		plan, err = planHorizon(ctx, plan, selStmt, true)
 		if err != nil {
 			return nil, err
 		}
@@ -479,12 +479,12 @@ func transformDerivedPlan(ctx *plancontext.PlanningContext, op *physical.Derived
 	// expression containing our derived table's inner select and the derived
 	// table's alias.
 
-	plan, err := transformToLogicalPlan(ctx, op.Source)
+	plan, err := transformToLogicalPlan(ctx, op.Source, false)
 	if err != nil {
 		return nil, err
 	}
 
-	plan, err = planHorizon(ctx, plan, op.Query)
+	plan, err = planHorizon(ctx, plan, op.Query, false)
 	if err != nil {
 		return nil, err
 	}

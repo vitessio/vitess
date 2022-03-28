@@ -27,14 +27,20 @@ var _ logicalPlan = (*distinct)(nil)
 // distinct is the logicalPlan for engine.Distinct.
 type distinct struct {
 	logicalPlanCommon
-	checkCols []engine.CheckCol
+	checkCols      []engine.CheckCol
+	needToTruncate bool
 }
 
-func newDistinct(source logicalPlan, checkCols []engine.CheckCol) logicalPlan {
+func newDistinct(source logicalPlan, checkCols []engine.CheckCol, needToTruncate bool) logicalPlan {
 	return &distinct{
 		logicalPlanCommon: newBuilderCommon(source),
 		checkCols:         checkCols,
+		needToTruncate:    needToTruncate,
 	}
+}
+
+func newDistinctV3(source logicalPlan) logicalPlan {
+	return &distinct{logicalPlanCommon: newBuilderCommon(source)}
 }
 
 func (d *distinct) Primitive() engine.Primitive {
@@ -43,10 +49,12 @@ func (d *distinct) Primitive() engine.Primitive {
 		return &engine.DistinctV3{Source: d.input.Primitive()}
 	}
 	truncate := false
-	for _, col := range d.checkCols {
-		if col.WsCol != nil {
-			truncate = true
-			break
+	if d.needToTruncate {
+		for _, col := range d.checkCols {
+			if col.WsCol != nil {
+				truncate = true
+				break
+			}
 		}
 	}
 	return &engine.Distinct{

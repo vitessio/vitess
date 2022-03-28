@@ -1443,7 +1443,6 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         "Collations": [
           "(0:1)"
         ],
-        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1863,7 +1862,6 @@ Gen4 plan same as above
         "Collations": [
           "(0:1)"
         ],
-        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Concatenate",
