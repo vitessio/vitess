@@ -3857,6 +3857,25 @@ Gen4 error: cannot push projections in ordered aggregates
   }
 }
 
+# group_concat on single shards
+"select group_concat(user_id order by name), id from user group by id"
+{
+  "QueryType": "SELECT",
+  "Original": "select group_concat(user_id order by name), id from user group by id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select group_concat(user_id order by `name` asc), id from `user` where 1 != 1 group by id",
+    "Query": "select group_concat(user_id order by `name` asc), id from `user` group by id",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
+
 "select count(distinct user_id, name) from unsharded"
 {
   "QueryType": "SELECT",
