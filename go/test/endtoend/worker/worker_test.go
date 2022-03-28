@@ -307,6 +307,11 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 	localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard",
 		"test_keyspace/-80", "--new_primary", shard0Replica.Alias)
 
+	// Sleep here for one second. (as long as executefetch_retry_time)
+	// We want the next PRS call to run after the first one has passed and the retry time for the
+	// failing query has expired. More info on why this is needed https://github.com/vitessio/vitess/issues/9985#issuecomment-1079666698
+	time.Sleep(1 * time.Second)
+
 	localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard",
 		"test_keyspace/80-", "--new_primary", shard1Replica.Alias)
 
