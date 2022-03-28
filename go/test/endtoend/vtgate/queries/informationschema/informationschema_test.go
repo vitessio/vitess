@@ -43,7 +43,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 			"t4_id2_idx", "t5_null_vindex", "t6", "t6_id2_idx", "t7_xxhash", "t7_xxhash_idx", "t7_fk", "t8",
 		}
 		for _, table := range tables {
-			_, _ = mcmp.ExecAllowError("delete from " + table)
+			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
 	}
 

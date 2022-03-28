@@ -36,7 +36,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 
 		tables := []string{"t1", "t1_id2_idx", "t2", "t2_id4_idx"}
 		for _, table := range tables {
-			_, _ = mcmp.ExecAllowError("delete from " + table)
+			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
 	}
 

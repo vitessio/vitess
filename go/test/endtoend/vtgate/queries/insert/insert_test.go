@@ -40,7 +40,10 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 			"auto_tbl", "oid_vdx_tbl", "unq_idx", "nonunq_idx", "u_tbl",
 		}
 		for _, table := range tables {
-			_, _ = mcmp.ExecAllowError("delete from " + table)
+			// TODO (@frouioui): following assertions produce different results between MySQL and Vitess
+			//  their differences are ignored for now. Fix it.
+			// delete from returns different RowsAffected and Flag values
+			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
 	}
 

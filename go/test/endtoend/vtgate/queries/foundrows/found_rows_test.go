@@ -32,10 +32,10 @@ func TestFoundRows(t *testing.T) {
 	require.NoError(t, err)
 	defer mcmp.Close()
 
-	_, _ = mcmp.ExecAllowError("delete from t2")
+	_, _ = mcmp.ExecAndIgnore("delete from t2")
 	defer func() {
 		utils.Exec(t, mcmp.VtConn, "set workload = oltp")
-		_, _ = mcmp.ExecAllowError("delete from t2")
+		_, _ = mcmp.ExecAndIgnore("delete from t2")
 		// queries against lookup tables do not need to be executed against MySQL
 		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "delete from t2_id4_idx")
 	}()
