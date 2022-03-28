@@ -1413,7 +1413,7 @@ type TriggerOrder struct {
 }
 
 type ProcedureSpec struct {
-	Name            string
+	ProcName        ProcedureName
 	Definer         string
 	Params          []ProcedureParam
 	Characteristics []Characteristic
@@ -1625,7 +1625,7 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			if proc.Definer != "" {
 				sb.WriteString(fmt.Sprintf("definer = %s ", proc.Definer))
 			}
-			sb.WriteString(fmt.Sprintf("procedure %s (", proc.Name))
+			sb.WriteString(fmt.Sprintf("procedure %s (", proc.ProcName))
 			for i, param := range proc.Params {
 				if i > 0 {
 					sb.WriteString(", ")
@@ -1681,7 +1681,7 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			if node.IfExists {
 				exists = " if exists"
 			}
-			buf.Myprintf(fmt.Sprintf("%s procedure%s %v", node.Action, exists, node.ProcedureSpec.Name))
+			buf.Myprintf(fmt.Sprintf("%s procedure%s %v", node.Action, exists, node.ProcedureSpec.ProcName))
 		} else {
 			buf.Myprintf("%s table%s %v", node.Action, exists, node.FromTables)
 		}
@@ -3296,6 +3296,51 @@ func (node TableNames) walkSubtree(visit Visit) error {
 		}
 	}
 	return nil
+}
+
+// ProcedureName represents a procedure name.
+// Qualifier, if specified, represents a database name.
+// ProcedureName is a value struct whose fields are case-sensitive,
+// so TableIdent struct is used for fields
+type ProcedureName struct {
+	Name      ColIdent
+	Qualifier TableIdent
+}
+
+// Format formats the node.
+func (node ProcedureName) Format(buf *TrackedBuffer) {
+	if node.IsEmpty() {
+		return
+	}
+	if !node.Qualifier.IsEmpty() {
+		buf.Myprintf("%v.", node.Qualifier)
+	}
+	buf.Myprintf("%v", node.Name)
+}
+
+// Format formats the node.
+func (node ProcedureName) String() string {
+	if node.IsEmpty() {
+		return ""
+	}
+	if !node.Qualifier.IsEmpty() {
+		return fmt.Sprintf("%s.%s", node.Qualifier.String(), node.Name)
+	}
+	return node.Name.String()
+}
+
+func (node ProcedureName) walkSubtree(visit Visit) error {
+	return Walk(
+		visit,
+		node.Name,
+		node.Qualifier,
+	)
+}
+
+// IsEmpty returns true if TableName is nil or empty.
+func (node ProcedureName) IsEmpty() bool {
+	// If Name is empty, Qualifier is also empty.
+	return node.Name.IsEmpty()
 }
 
 // TableName represents a table  name.

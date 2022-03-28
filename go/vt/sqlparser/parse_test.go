@@ -2063,6 +2063,11 @@ var (
 		}, {
 			input: "drop procedure if exists p1",
 		}, {
+			input: "drop procedure dbName.p1",
+		}, {
+			input:  "create procedure mydb.p1() select rand()",
+			output: "create procedure mydb.p1 () select rand() from dual",
+		}, {
 			input:  "create procedure p1() select rand()",
 			output: "create procedure p1 () select rand() from dual",
 		}, {

@@ -81,6 +81,7 @@ func yyOldPosition(yylex interface{}) int {
   joinCondition JoinCondition
   tableName     TableName
   tableNames    TableNames
+  procedureName ProcedureName
   indexHints    *IndexHints
   asOf          *AsOf
   expr          Expr
@@ -348,6 +349,7 @@ func yyOldPosition(yylex interface{}) int {
 %type <str> inner_join outer_join straight_join natural_join
 %type <tableName> table_name load_into_table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name aliased_table_options
+%type <procedureName> procedure_name
 %type <indexHints> index_hint_list
 %type <expr> where_expression_opt
 %type <expr> condition
@@ -865,9 +867,9 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, Table: $8, TriggerSpec: &TriggerSpec{Name: string($4), Time: $5, Event: $6, Order: $12, Body: $14}, SubStatementPositionStart: $13, SubStatementPositionEnd: $15 - 1}
   }
-| CREATE definer_opt PROCEDURE ID '(' proc_param_list_opt ')' characteristic_list_opt lexer_position statement_list_statement lexer_position
+| CREATE definer_opt PROCEDURE procedure_name '(' proc_param_list_opt ')' characteristic_list_opt lexer_position statement_list_statement lexer_position
   {
-    $$ = &DDL{Action: CreateStr, ProcedureSpec: &ProcedureSpec{Name: string($4), Definer: $2, Params: $6, Characteristics: $8, Body: $10}, SubStatementPositionStart: $9, SubStatementPositionEnd: $11 - 1}
+    $$ = &DDL{Action: CreateStr, ProcedureSpec: &ProcedureSpec{ProcName: $4, Definer: $2, Params: $6, Characteristics: $8, Body: $10}, SubStatementPositionStart: $9, SubStatementPositionEnd: $11 - 1}
   }
 | CREATE USER not_exists_opt account_with_auth_list default_role_opt tls_options account_limits pass_lock_options user_comment_attribute
   {
@@ -3362,13 +3364,13 @@ drop_statement:
     }
     $$ = &DDL{Action: DropStr, TriggerSpec: &TriggerSpec{Name: string($4)}, IfExists: exists}
   }
-| DROP PROCEDURE exists_opt ID
+| DROP PROCEDURE exists_opt procedure_name
   {
     var exists bool
     if $3 != 0 {
       exists = true
     }
-    $$ = &DDL{Action: DropStr, ProcedureSpec: &ProcedureSpec{Name: string($4)}, IfExists: exists}
+    $$ = &DDL{Action: DropStr, ProcedureSpec: &ProcedureSpec{ProcName: $4}, IfExists: exists}
   }
 | DROP USER exists_opt account_name_list
   {
@@ -4356,6 +4358,16 @@ table_name:
 | table_id '.' reserved_table_id
   {
     $$ = TableName{Qualifier: $1, Name: $3}
+  }
+
+procedure_name:
+  sql_id
+  {
+    $$ = ProcedureName{Name: $1}
+  }
+| table_id '.' sql_id
+  {
+    $$ = ProcedureName{Qualifier: $1, Name: $3}
   }
 
 delete_table_name:
