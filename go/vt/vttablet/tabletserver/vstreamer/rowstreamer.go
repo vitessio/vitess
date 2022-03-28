@@ -207,7 +207,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 
 	offset := 0
 	limit := 10000000
-	delta := 10000001
+	delta := 10000000
 	for {
 		rs.sendQuery = fmt.Sprintf("%s LIMIT %d OFFSET %d", rs.sendQuery, limit, offset)
 		log.Infof("Streaming query: %v\n", rs.sendQuery)
