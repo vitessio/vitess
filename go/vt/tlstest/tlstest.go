@@ -135,7 +135,13 @@ func CreateCA(root string) {
 
 	openssl("genrsa", "-out", key)
 
-	openssl("req", "-new", "-x509", "-nodes", "-days", "3600", "-batch",
+	openssl("req",
+		"-new",
+		"-x509",
+		"-days", "3600",
+		"-nodes",
+		"-batch",
+		"-sha256",
 		"-config", config,
 		"-key", key,
 		"-out", cert)
@@ -156,10 +162,15 @@ func CreateSignedCert(root, parent, serial, name, commonName string) {
 	if err := os.WriteFile(config, []byte(fmt.Sprintf(certConfig, commonName, commonName)), os.ModePerm); err != nil {
 		log.Fatalf("cannot write file %v: %v", config, err)
 	}
-	openssl("req", "-newkey", "rsa:2048", "-days", "3600", "-nodes",
+	openssl("req",
+		"-newkey", "rsa:2048",
+		"-days", "3600",
+		"-nodes",
 		"-batch",
+		"-sha256",
 		"-config", config,
-		"-keyout", key, "-out", req)
+		"-keyout", key,
+		"-out", req)
 	openssl("rsa", "-in", key, "-out", key)
 	openssl("x509", "-req",
 		"-in", req,
