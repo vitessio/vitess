@@ -51,6 +51,7 @@ type (
 		iSelectStatement()
 		AddOrder(*Order)
 		SetOrderBy(OrderBy)
+		GetOrderBy() OrderBy
 		SetLimit(*Limit)
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)

@@ -149,8 +149,7 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtQr *sqltypes.Res
 	}
 	orderBy := false
 	if selStmt, isSelStmt := stmt.(sqlparser.SelectStatement); isSelStmt {
-		sel := sqlparser.GetFirstSelect(selStmt)
-		orderBy = sel.OrderBy != nil
+		orderBy = selStmt.GetOrderBy() != nil
 	}
 
 	if orderBy && sqltypes.ResultsEqual([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr}) {
