@@ -3002,3 +3002,22 @@ Gen4 plan same as above
     "Table": "dual"
   }
 }
+
+# json_quote, json_object and json_array
+"SELECT JSON_QUOTE('null'), JSON_QUOTE('\"null\"'), JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), JSON_ARRAY(1, \"abc\", NULL, TRUE, CURTIME())"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT JSON_QUOTE('null'), JSON_QUOTE('\"null\"'), JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), JSON_ARRAY(1, \"abc\", NULL, TRUE, CURTIME())",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, CURTIME()) from dual where 1 != 1",
+    "Query": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, CURTIME()) from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
