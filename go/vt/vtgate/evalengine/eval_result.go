@@ -465,7 +465,7 @@ func (er *EvalResult) nullSafeHashcode() (HashCode, error) {
 	case er.isTextual():
 		coll := collations.Local().LookupByID(er.collation().Collation)
 		if coll == nil {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "text type with an unknown/unsupported collation cannot be hashed")
+			return 0, UnsupportedCollationHashError
 		}
 		return coll.Hash(er.bytes(), 0), nil
 	case sqltypes.IsDate(er.typeof()):

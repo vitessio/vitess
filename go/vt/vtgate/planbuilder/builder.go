@@ -393,19 +393,16 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (engin
 		return keys[i].ks.Name < keys[j].ks.Name
 	})
 
-	finalPlan := &engine.Concatenate{
-		Sources: nil,
-	}
+	var sources []engine.Primitive
 	for _, sendDest := range keys {
 		plan := &engine.Send{
 			Keyspace:          sendDest.ks,
 			TargetDestination: sendDest.dest,
 			Query:             sqlparser.String(newFlushStmt(stmt, tablesMap[sendDest])),
 		}
-		finalPlan.Sources = append(finalPlan.Sources, plan)
+		sources = append(sources, plan)
 	}
-
-	return finalPlan, nil
+	return engine.NewConcatenate(sources, nil), nil
 }
 
 func newFlushStmt(stmt *sqlparser.Flush, tables sqlparser.TableNames) *sqlparser.Flush {
