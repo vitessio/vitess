@@ -2672,7 +2672,7 @@ func TestInvalid(t *testing.T) {
 		err:   "syntax error at position 35",
 	}, {
 		input: "SELECT JSON_EXTRACT(@k, TRIM('abc'))",
-		err:   "syntax error at position 29 near 'TRIM'",
+		err:   "syntax error at position 30",
 	}, {
 		input: "SELECT JSON_EXTRACT(@k)",
 		err:   "syntax error at position 24",
