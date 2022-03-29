@@ -304,7 +304,7 @@ func TestFoundRowsOnDualQueries(t *testing.T) {
 	defer conn.Close()
 
 	utils.Exec(t, conn, "select 42")
-	utils.AssertMatches(t, conn, "select found_rows()", "[[UINT64(1)]]")
+	utils.AssertMatches(t, conn, "select found_rows()", "[[INT64(1)]]")
 }
 
 func TestUseStmtInOLAP(t *testing.T) {
