@@ -107,7 +107,7 @@ func TestValidCert(t *testing.T) {
 		t.Errorf("userdata username is %v, expected %v", userData.Username, clientCertUsername)
 	}
 
-	expectedGroups := []string{"localhost", "127.0.0.1", clientCertUsername}
+	expectedGroups := []string{"localhost", clientCertUsername}
 	if !reflect.DeepEqual(userData.Groups, expectedGroups) {
 		t.Errorf("userdata groups is %v, expected %v", userData.Groups, expectedGroups)
 	}

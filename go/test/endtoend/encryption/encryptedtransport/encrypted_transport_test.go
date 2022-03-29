@@ -54,6 +54,7 @@ to the go clients (for vtgate -> vttablet link). */
 package encryptedtransport
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -66,8 +67,6 @@ import (
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -259,16 +258,16 @@ func clusterSetUp(t *testing.T) (int, error) {
 	err := encryption.ExecuteVttlstestCommand("--root", certDirectory, "CreateCA")
 	require.NoError(t, err)
 
-	err = createSignedCert("ca", "01", "vttablet-server", "vttablet server CA")
+	err = createIntermediateCA("ca", "01", "vttablet-server", "vttablet server CA")
 	require.NoError(t, err)
 
-	err = createSignedCert("ca", "02", "vttablet-client", "vttablet client CA")
+	err = createIntermediateCA("ca", "02", "vttablet-client", "vttablet client CA")
 	require.NoError(t, err)
 
-	err = createSignedCert("ca", "03", "vtgate-server", "vtgate server CA")
+	err = createIntermediateCA("ca", "03", "vtgate-server", "vtgate server CA")
 	require.NoError(t, err)
 
-	err = createSignedCert("ca", "04", "vtgate-client", "vtgate client CA")
+	err = createIntermediateCA("ca", "04", "vtgate-client", "vtgate client CA")
 	require.NoError(t, err)
 
 	err = createSignedCert("vttablet-server", "01", "vttablet-server-instance", "vttablet server instance")
@@ -335,6 +334,19 @@ func clusterSetUp(t *testing.T) (int, error) {
 		}
 	}
 	return 0, nil
+}
+
+func createIntermediateCA(ca string, serial string, name string, commonName string) error {
+	log.Infof("Creating intermediate signed cert and key %s", commonName)
+	tmpProcess := exec.Command(
+		"vttlstest",
+		"--root", certDirectory,
+		"CreateIntermediateCA", "--",
+		"--parent", ca,
+		"--serial", serial,
+		"--common_name", commonName,
+		name)
+	return tmpProcess.Run()
 }
 
 func createSignedCert(ca string, serial string, name string, commonName string) error {
