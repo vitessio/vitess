@@ -56,8 +56,10 @@ jobs:
           flavor: |
             latest=${{ matrix.default == 'true' }}
             prefix=${{ matrix.image }}-,onlatest=true
+          # head tag is so we have 2 well-known tags to a vitess image for CI
           tags: |
             type=raw,value={{date 'YYYY-MM-DD'}}.{{sha}}
+            type=raw,value=head,enable=${{ matrix.ref == 'latest' }}
 
       - name: Build and push
         id: build
