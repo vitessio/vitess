@@ -52,12 +52,11 @@ func TestParse(t *testing.T) {
 		require.NoError(t, err)
 
 		expected := &Config{
-			Cluster:             &vtadminpb.Cluster{},
-			Discovery:           nil,
-			Credentials:         nil,
-			CredentialsPath:     "",
-			ConnectivityTimeout: defaultConnectivityTimeout,
-			resolver:            resolver.NewBuilder("", nil, resolver.Options{ResolveTimeout: time.Second}),
+			Cluster:         &vtadminpb.Cluster{},
+			Discovery:       nil,
+			Credentials:     nil,
+			CredentialsPath: "",
+			resolver:        resolver.NewBuilder("", nil, resolver.Options{ResolveTimeout: time.Second}),
 		}
 		assert.Equal(t, expected, cfg)
 	})
@@ -92,11 +91,10 @@ func TestParse(t *testing.T) {
 				Cluster: &vtadminpb.Cluster{
 					Name: "testcluster",
 				},
-				Discovery:           nil,
-				Credentials:         creds,
-				CredentialsPath:     credsfile.Name(),
-				ConnectivityTimeout: defaultConnectivityTimeout,
-				resolver:            resolver.NewBuilder("", nil, resolver.Options{ResolveTimeout: time.Second}),
+				Discovery:       nil,
+				Credentials:     creds,
+				CredentialsPath: credsfile.Name(),
+				resolver:        resolver.NewBuilder("", nil, resolver.Options{ResolveTimeout: time.Second}),
 			}
 
 			assert.Equal(t, expected, cfg)

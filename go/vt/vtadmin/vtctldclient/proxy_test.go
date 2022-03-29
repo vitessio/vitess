@@ -85,9 +85,8 @@ func TestDial(t *testing.T) {
 			Id:   "test",
 			Name: "testcluster",
 		},
-		Discovery:           disco,
-		ConnectivityTimeout: defaultConnectivityTimeout,
-		resolver:            resolver.NewBuilder("test", disco, resolver.Options{}),
+		Discovery: disco,
+		resolver:  resolver.NewBuilder("test", disco, resolver.Options{}),
 	})
 	defer proxy.Close() // prevents grpc-core from logging a bunch of "connection errors" after deferred listener.Close() above.
 
@@ -162,9 +161,8 @@ func TestRedial(t *testing.T) {
 			Id:   "test",
 			Name: "testcluster",
 		},
-		Discovery:           disco,
-		ConnectivityTimeout: defaultConnectivityTimeout,
-		resolver:            &testResolverBuilder{resolver.NewBuilder("test", disco, resolver.Options{}), reResolveFired},
+		Discovery: disco,
+		resolver:  &testResolverBuilder{resolver.NewBuilder("test", disco, resolver.Options{}), reResolveFired},
 	})
 
 	// Check for a successful connection to whichever vtctld we discover first.
