@@ -25,6 +25,8 @@ linters:
     - structcheck
     - typecheck
     - varcheck
+    - staticcheck
+    - gosimple
 
     # Extras
     - gofmt
@@ -33,10 +35,6 @@ linters:
     # revive is a replacement for golint, but we do not run it in CI for now.
     # This is only enabled as a post-commit hook
     # - revive
-
-    # these linters have known issues with Go 1.18 but will be fixed soon
-    # - staticcheck
-    # - gosimple
 
 issues:
   exclude-rules:

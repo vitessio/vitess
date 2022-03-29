@@ -28,9 +28,9 @@ import (
 var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
-	KeyspaceName    = "ks_normalize"
-	Cell            = "test_normalize"
-	SchemaSQL       = `
+	keyspaceName    = "ks_normalize"
+	cell            = "test_normalize"
+	schemaSQL       = `
 create table t1(
   id bigint unsigned not null,
   charcol char(10),
@@ -55,7 +55,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
+		clusterInstance = cluster.NewCluster(cell, "localhost")
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -66,8 +66,8 @@ func TestMain(m *testing.M) {
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
+			Name:      keyspaceName,
+			SchemaSQL: schemaSQL,
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 		clusterInstance.VtTabletExtraArgs = []string{}

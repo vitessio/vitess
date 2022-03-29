@@ -221,3 +221,13 @@ func BenchmarkReservedConnWhenSettingSysVar(b *testing.B) {
 		benchmarkName = "Use reserved connections"
 	}
 }
+
+func TestJsonValueCreators(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.AssertMatches(t, conn, `SELECT JSON_QUOTE('null'), JSON_QUOTE('"null"'), JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), JSON_ARRAY(1, "abc", NULL, TRUE)`, `[[VARBINARY("\"null\"") VARBINARY("\"\\\"null\\\"\"") JSON("{\"1\": 2, \"abc\": 52}") JSON("[1, \"abc\", null, true]")]]`)
+}

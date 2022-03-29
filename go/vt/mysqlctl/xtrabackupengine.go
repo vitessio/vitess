@@ -202,7 +202,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, backupFileName string, numStripes int, flavor string) (replicationPosition mysql.Position, finalErr error) {
 
 	backupProgram := path.Join(*xtrabackupEnginePath, xtrabackupBinaryName)
-	flagsToExec := []string{"--defaults-file=" + params.Cnf.path,
+	flagsToExec := []string{"--defaults-file=" + params.Cnf.Path,
 		"--backup",
 		"--socket=" + params.Cnf.SocketFile,
 		"--slave-info",
@@ -428,7 +428,7 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	logger.Infof("Restore: Preparing the extracted files")
 	// prepare the backup
 	restoreProgram := path.Join(*xtrabackupEnginePath, xtrabackupBinaryName)
-	flagsToExec := []string{"--defaults-file=" + cnf.path,
+	flagsToExec := []string{"--defaults-file=" + cnf.Path,
 		"--prepare",
 		"--target-dir=" + tempDir,
 	}
@@ -463,7 +463,7 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	// then move-back
 	logger.Infof("Restore: Move extracted and prepared files to final locations")
 
-	flagsToExec = []string{"--defaults-file=" + cnf.path,
+	flagsToExec = []string{"--defaults-file=" + cnf.Path,
 		"--move-back",
 		"--target-dir=" + tempDir,
 	}

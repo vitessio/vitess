@@ -108,6 +108,7 @@ var (
 		"vreplication_basic",
 		"vreplication_v2",
 		"vtorc",
+		"vtorc_8.0",
 		"schemadiff_vrepl",
 	}
 
@@ -124,6 +125,7 @@ var (
 	}
 	clustersRequiringMySQL80 = []string{
 		"mysql80",
+		"vtorc_8.0",
 		"vreplication_across_db_versions",
 	}
 )

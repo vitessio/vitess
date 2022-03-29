@@ -18,8 +18,11 @@ package insert
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"testing"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -28,9 +31,10 @@ import (
 var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
+	mysqlParams     mysql.ConnParams
 	sKs             = "sks"
 	uKs             = "uks"
-	Cell            = "test"
+	cell            = "test"
 	sSchemaSQL      = `create table s_tbl(
 	id bigint,
 	num bigint,
@@ -298,7 +302,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
+		clusterInstance = cluster.NewCluster(cell, "localhost")
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -339,6 +343,15 @@ func TestMain(m *testing.M) {
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
 		}
+
+		// create mysql instance and connection parameters
+		conn, closer, err := utils.NewMySQL(clusterInstance, sKs, sSchemaSQL, uSchemaSQL)
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+		defer closer()
+		mysqlParams = conn
 		return m.Run()
 	}()
 	os.Exit(exitCode)

@@ -2965,3 +2965,59 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# dual query with exists clause
+"select 1 from dual where exists (select 1 from information_schema.TABLES where information_schema.TABLES.TABLE_NAME = 'proc' and information_schema.TABLES.TABLE_SCHEMA = 'mysql')"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from dual where exists (select 1 from information_schema.TABLES where information_schema.TABLES.TABLE_NAME = 'proc' and information_schema.TABLES.TABLE_SCHEMA = 'mysql')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "DBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 1 from dual where 1 != 1",
+    "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where information_schema.`TABLES`.TABLE_NAME = :TABLES_TABLE_NAME and information_schema.`TABLES`.TABLE_SCHEMA = :__vtschemaname)",
+    "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
+    "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
+    "Table": "dual"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from dual where exists (select 1 from information_schema.TABLES where information_schema.TABLES.TABLE_NAME = 'proc' and information_schema.TABLES.TABLE_SCHEMA = 'mysql')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "DBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 1 from dual where 1 != 1",
+    "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = :TABLES_TABLE_NAME and `TABLES`.TABLE_SCHEMA = :__vtschemaname)",
+    "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
+    "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
+    "Table": "dual"
+  }
+}
+
+# json_quote, json_object and json_array
+"SELECT JSON_QUOTE('null'), JSON_QUOTE('\"null\"'), JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), JSON_ARRAY(1, \"abc\", NULL, TRUE, CURTIME())"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT JSON_QUOTE('null'), JSON_QUOTE('\"null\"'), JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), JSON_ARRAY(1, \"abc\", NULL, TRUE, CURTIME())",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, CURTIME()) from dual where 1 != 1",
+    "Query": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, CURTIME()) from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above

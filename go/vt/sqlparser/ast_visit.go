@@ -172,6 +172,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfIsExpr(in, f)
 	case IsolationLevel:
 		return VisitIsolationLevel(in, f)
+	case *JSONArrayExpr:
+		return VisitRefOfJSONArrayExpr(in, f)
 	case *JSONContainsExpr:
 		return VisitRefOfJSONContainsExpr(in, f)
 	case *JSONContainsPathExpr:
@@ -180,22 +182,34 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfJSONExtractExpr(in, f)
 	case *JSONKeysExpr:
 		return VisitRefOfJSONKeysExpr(in, f)
+	case *JSONObjectExpr:
+		return VisitRefOfJSONObjectExpr(in, f)
+	case JSONObjectParam:
+		return VisitJSONObjectParam(in, f)
 	case *JSONOverlapsExpr:
 		return VisitRefOfJSONOverlapsExpr(in, f)
 	case *JSONPrettyExpr:
 		return VisitRefOfJSONPrettyExpr(in, f)
+	case *JSONQuoteExpr:
+		return VisitRefOfJSONQuoteExpr(in, f)
 	case *JSONSearchExpr:
 		return VisitRefOfJSONSearchExpr(in, f)
 	case *JSONStorageFreeExpr:
 		return VisitRefOfJSONStorageFreeExpr(in, f)
 	case *JSONStorageSizeExpr:
 		return VisitRefOfJSONStorageSizeExpr(in, f)
+	case *JSONTableExpr:
+		return VisitRefOfJSONTableExpr(in, f)
 	case *JSONValueExpr:
 		return VisitRefOfJSONValueExpr(in, f)
 	case *JoinCondition:
 		return VisitRefOfJoinCondition(in, f)
 	case *JoinTableExpr:
 		return VisitRefOfJoinTableExpr(in, f)
+	case *JtColumnDefinition:
+		return VisitRefOfJtColumnDefinition(in, f)
+	case *JtOnResponse:
+		return VisitRefOfJtOnResponse(in, f)
 	case *KeyState:
 		return VisitRefOfKeyState(in, f)
 	case *Limit:
@@ -1418,6 +1432,18 @@ func VisitRefOfIsExpr(in *IsExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfJSONArrayExpr(in *JSONArrayExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.Params, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfJSONContainsExpr(in *JSONContainsExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1492,6 +1518,32 @@ func VisitRefOfJSONKeysExpr(in *JSONKeysExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfJSONObjectExpr(in *JSONObjectExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in.Params {
+		if err := VisitRefOfJSONObjectParam(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func VisitJSONObjectParam(in JSONObjectParam, f Visit) error {
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Key, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Value, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfJSONOverlapsExpr(in *JSONOverlapsExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1515,6 +1567,18 @@ func VisitRefOfJSONPrettyExpr(in *JSONPrettyExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.JSONVal, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJSONQuoteExpr(in *JSONQuoteExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.StringArg, f); err != nil {
 		return err
 	}
 	return nil
@@ -1569,6 +1633,29 @@ func VisitRefOfJSONStorageSizeExpr(in *JSONStorageSizeExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfJSONTableExpr(in *JSONTableExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitTableIdent(in.Alias, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Filter, f); err != nil {
+		return err
+	}
+	for _, el := range in.Columns {
+		if err := VisitRefOfJtColumnDefinition(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func VisitRefOfJSONValueExpr(in *JSONValueExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1613,6 +1700,27 @@ func VisitRefOfJoinTableExpr(in *JoinTableExpr, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfJoinCondition(in.Condition, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJtColumnDefinition(in *JtColumnDefinition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJtOnResponse(in *JtOnResponse, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
 	}
 	return nil
@@ -2852,6 +2960,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
+	case *JSONArrayExpr:
+		return VisitRefOfJSONArrayExpr(in, f)
 	case *JSONContainsExpr:
 		return VisitRefOfJSONContainsExpr(in, f)
 	case *JSONContainsPathExpr:
@@ -2860,10 +2970,14 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfJSONExtractExpr(in, f)
 	case *JSONKeysExpr:
 		return VisitRefOfJSONKeysExpr(in, f)
+	case *JSONObjectExpr:
+		return VisitRefOfJSONObjectExpr(in, f)
 	case *JSONOverlapsExpr:
 		return VisitRefOfJSONOverlapsExpr(in, f)
 	case *JSONPrettyExpr:
 		return VisitRefOfJSONPrettyExpr(in, f)
+	case *JSONQuoteExpr:
+		return VisitRefOfJSONQuoteExpr(in, f)
 	case *JSONSearchExpr:
 		return VisitRefOfJSONSearchExpr(in, f)
 	case *JSONStorageFreeExpr:
@@ -3036,6 +3150,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfIntroducerExpr(in, f)
 	case *IsExpr:
 		return VisitRefOfIsExpr(in, f)
+	case *JSONArrayExpr:
+		return VisitRefOfJSONArrayExpr(in, f)
 	case *JSONContainsExpr:
 		return VisitRefOfJSONContainsExpr(in, f)
 	case *JSONContainsPathExpr:
@@ -3044,10 +3160,14 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfJSONExtractExpr(in, f)
 	case *JSONKeysExpr:
 		return VisitRefOfJSONKeysExpr(in, f)
+	case *JSONObjectExpr:
+		return VisitRefOfJSONObjectExpr(in, f)
 	case *JSONOverlapsExpr:
 		return VisitRefOfJSONOverlapsExpr(in, f)
 	case *JSONPrettyExpr:
 		return VisitRefOfJSONPrettyExpr(in, f)
+	case *JSONQuoteExpr:
+		return VisitRefOfJSONQuoteExpr(in, f)
 	case *JSONSearchExpr:
 		return VisitRefOfJSONSearchExpr(in, f)
 	case *JSONStorageFreeExpr:
@@ -3156,6 +3276,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfIntroducerExpr(in, f)
 	case *IsExpr:
 		return VisitRefOfIsExpr(in, f)
+	case *JSONArrayExpr:
+		return VisitRefOfJSONArrayExpr(in, f)
 	case *JSONContainsExpr:
 		return VisitRefOfJSONContainsExpr(in, f)
 	case *JSONContainsPathExpr:
@@ -3164,10 +3286,14 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfJSONExtractExpr(in, f)
 	case *JSONKeysExpr:
 		return VisitRefOfJSONKeysExpr(in, f)
+	case *JSONObjectExpr:
+		return VisitRefOfJSONObjectExpr(in, f)
 	case *JSONOverlapsExpr:
 		return VisitRefOfJSONOverlapsExpr(in, f)
 	case *JSONPrettyExpr:
 		return VisitRefOfJSONPrettyExpr(in, f)
+	case *JSONQuoteExpr:
+		return VisitRefOfJSONQuoteExpr(in, f)
 	case *JSONSearchExpr:
 		return VisitRefOfJSONSearchExpr(in, f)
 	case *JSONStorageFreeExpr:
@@ -3378,6 +3504,8 @@ func VisitTableExpr(in TableExpr, f Visit) error {
 	switch in := in.(type) {
 	case *AliasedTableExpr:
 		return VisitRefOfAliasedTableExpr(in, f)
+	case *JSONTableExpr:
+		return VisitRefOfJSONTableExpr(in, f)
 	case *JoinTableExpr:
 		return VisitRefOfJoinTableExpr(in, f)
 	case *ParenTableExpr:
@@ -3424,6 +3552,21 @@ func VisitRefOfColIdent(in *ColIdent, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJSONObjectParam(in *JSONObjectParam, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Key, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Value, f); err != nil {
 		return err
 	}
 	return nil

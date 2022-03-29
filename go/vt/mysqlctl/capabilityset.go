@@ -20,35 +20,35 @@ limitations under the License.
 
 package mysqlctl
 
-type mysqlFlavor string
+type MySQLFlavor string
 
 // Flavor constants define the type of mysql flavor being used
 const (
-	FlavorMySQL   mysqlFlavor = "mysql"
-	FlavorPercona mysqlFlavor = "percona"
-	FlavorMariaDB mysqlFlavor = "mariadb"
+	FlavorMySQL   MySQLFlavor = "mysql"
+	FlavorPercona MySQLFlavor = "percona"
+	FlavorMariaDB MySQLFlavor = "mariadb"
 )
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type capabilitySet struct {
-	flavor  mysqlFlavor
-	version serverVersion
+	flavor  MySQLFlavor
+	version ServerVersion
 }
 
-func newCapabilitySet(f mysqlFlavor, v serverVersion) (c capabilitySet) {
+func newCapabilitySet(f MySQLFlavor, v ServerVersion) (c capabilitySet) {
 	c.flavor = f
 	c.version = v
 	return
 }
 
 func (c *capabilitySet) hasMySQLUpgradeInServer() bool {
-	return c.isMySQLLike() && c.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 16})
+	return c.isMySQLLike() && c.version.atLeast(ServerVersion{Major: 8, Minor: 0, Patch: 16})
 }
 func (c *capabilitySet) hasInitializeInServer() bool {
-	return c.isMySQLLike() && c.version.atLeast(serverVersion{Major: 5, Minor: 7, Patch: 0})
+	return c.isMySQLLike() && c.version.atLeast(ServerVersion{Major: 5, Minor: 7, Patch: 0})
 }
 func (c *capabilitySet) hasMaria104InstallDb() bool {
-	return c.isMariaDB() && c.version.atLeast(serverVersion{Major: 10, Minor: 4, Patch: 0})
+	return c.isMariaDB() && c.version.atLeast(ServerVersion{Major: 10, Minor: 4, Patch: 0})
 }
 
 // IsMySQLLike tests if the server is either MySQL
