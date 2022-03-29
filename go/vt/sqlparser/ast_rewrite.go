@@ -182,8 +182,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfJSONKeysExpr(parent, node, replacer)
 	case *JSONOverlapsExpr:
 		return a.rewriteRefOfJSONOverlapsExpr(parent, node, replacer)
-	case *JSONPathParam:
-		return a.rewriteRefOfJSONPathParam(parent, node, replacer)
 	case *JSONPrettyExpr:
 		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
 	case *JSONSearchExpr:
@@ -2694,9 +2692,9 @@ func (a *application) rewriteRefOfJSONContainsExpr(parent SQLNode, node *JSONCon
 		return false
 	}
 	for x, el := range node.PathList {
-		if !a.rewriteRefOfJSONPathParam(node, el, func(idx int) replacerFunc {
+		if !a.rewriteJSONPathParam(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(*JSONContainsExpr).PathList[idx] = newNode.(*JSONPathParam)
+				parent.(*JSONContainsExpr).PathList[idx] = newNode.(JSONPathParam)
 			}
 		}(x)) {
 			return false
@@ -2735,9 +2733,9 @@ func (a *application) rewriteRefOfJSONContainsPathExpr(parent SQLNode, node *JSO
 		return false
 	}
 	for x, el := range node.PathList {
-		if !a.rewriteRefOfJSONPathParam(node, el, func(idx int) replacerFunc {
+		if !a.rewriteJSONPathParam(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(*JSONContainsPathExpr).PathList[idx] = newNode.(*JSONPathParam)
+				parent.(*JSONContainsPathExpr).PathList[idx] = newNode.(JSONPathParam)
 			}
 		}(x)) {
 			return false
@@ -2771,9 +2769,9 @@ func (a *application) rewriteRefOfJSONExtractExpr(parent SQLNode, node *JSONExtr
 		return false
 	}
 	for x, el := range node.PathList {
-		if !a.rewriteRefOfJSONPathParam(node, el, func(idx int) replacerFunc {
+		if !a.rewriteJSONPathParam(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(*JSONExtractExpr).PathList[idx] = newNode.(*JSONPathParam)
+				parent.(*JSONExtractExpr).PathList[idx] = newNode.(JSONPathParam)
 			}
 		}(x)) {
 			return false
@@ -2807,9 +2805,9 @@ func (a *application) rewriteRefOfJSONKeysExpr(parent SQLNode, node *JSONKeysExp
 		return false
 	}
 	for x, el := range node.PathList {
-		if !a.rewriteRefOfJSONPathParam(node, el, func(idx int) replacerFunc {
+		if !a.rewriteJSONPathParam(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(*JSONKeysExpr).PathList[idx] = newNode.(*JSONPathParam)
+				parent.(*JSONKeysExpr).PathList[idx] = newNode.(JSONPathParam)
 			}
 		}(x)) {
 			return false
@@ -2844,33 +2842,6 @@ func (a *application) rewriteRefOfJSONOverlapsExpr(parent SQLNode, node *JSONOve
 	}
 	if !a.rewriteExpr(node, node.JSONDoc2, func(newNode, parent SQLNode) {
 		parent.(*JSONOverlapsExpr).JSONDoc2 = newNode.(Expr)
-	}) {
-		return false
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfJSONPathParam(parent SQLNode, node *JSONPathParam, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteColIdent(node, node.PathIdentifier, func(newNode, parent SQLNode) {
-		parent.(*JSONPathParam).PathIdentifier = newNode.(ColIdent)
 	}) {
 		return false
 	}
@@ -2944,9 +2915,9 @@ func (a *application) rewriteRefOfJSONSearchExpr(parent SQLNode, node *JSONSearc
 		return false
 	}
 	for x, el := range node.PathList {
-		if !a.rewriteRefOfJSONPathParam(node, el, func(idx int) replacerFunc {
+		if !a.rewriteJSONPathParam(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(*JSONSearchExpr).PathList[idx] = newNode.(*JSONPathParam)
+				parent.(*JSONSearchExpr).PathList[idx] = newNode.(JSONPathParam)
 			}
 		}(x)) {
 			return false
@@ -3033,8 +3004,8 @@ func (a *application) rewriteRefOfJSONValueExpr(parent SQLNode, node *JSONValueE
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfJSONPathParam(node, node.Path, func(newNode, parent SQLNode) {
-		parent.(*JSONValueExpr).Path = newNode.(*JSONPathParam)
+	if !a.rewriteJSONPathParam(node, node.Path, func(newNode, parent SQLNode) {
+		parent.(*JSONValueExpr).Path = newNode.(JSONPathParam)
 	}) {
 		return false
 	}
@@ -6092,6 +6063,110 @@ func (a *application) rewriteInsertRows(parent SQLNode, node InsertRows, replace
 		return a.rewriteRefOfUnion(parent, node, replacer)
 	case Values:
 		return a.rewriteValues(parent, node, replacer)
+	default:
+		// this should never happen
+		return true
+	}
+}
+func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	switch node := node.(type) {
+	case *AndExpr:
+		return a.rewriteRefOfAndExpr(parent, node, replacer)
+	case Argument:
+		return a.rewriteArgument(parent, node, replacer)
+	case *BetweenExpr:
+		return a.rewriteRefOfBetweenExpr(parent, node, replacer)
+	case *BinaryExpr:
+		return a.rewriteRefOfBinaryExpr(parent, node, replacer)
+	case BoolVal:
+		return a.rewriteBoolVal(parent, node, replacer)
+	case *CaseExpr:
+		return a.rewriteRefOfCaseExpr(parent, node, replacer)
+	case *ColName:
+		return a.rewriteRefOfColName(parent, node, replacer)
+	case *CollateExpr:
+		return a.rewriteRefOfCollateExpr(parent, node, replacer)
+	case *ComparisonExpr:
+		return a.rewriteRefOfComparisonExpr(parent, node, replacer)
+	case *ConvertExpr:
+		return a.rewriteRefOfConvertExpr(parent, node, replacer)
+	case *ConvertUsingExpr:
+		return a.rewriteRefOfConvertUsingExpr(parent, node, replacer)
+	case *CurTimeFuncExpr:
+		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
+	case *Default:
+		return a.rewriteRefOfDefault(parent, node, replacer)
+	case *ExistsExpr:
+		return a.rewriteRefOfExistsExpr(parent, node, replacer)
+	case *ExtractFuncExpr:
+		return a.rewriteRefOfExtractFuncExpr(parent, node, replacer)
+	case *ExtractedSubquery:
+		return a.rewriteRefOfExtractedSubquery(parent, node, replacer)
+	case *FuncExpr:
+		return a.rewriteRefOfFuncExpr(parent, node, replacer)
+	case *GroupConcatExpr:
+		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
+	case *IntervalExpr:
+		return a.rewriteRefOfIntervalExpr(parent, node, replacer)
+	case *IntroducerExpr:
+		return a.rewriteRefOfIntroducerExpr(parent, node, replacer)
+	case *IsExpr:
+		return a.rewriteRefOfIsExpr(parent, node, replacer)
+	case *JSONContainsExpr:
+		return a.rewriteRefOfJSONContainsExpr(parent, node, replacer)
+	case *JSONContainsPathExpr:
+		return a.rewriteRefOfJSONContainsPathExpr(parent, node, replacer)
+	case *JSONExtractExpr:
+		return a.rewriteRefOfJSONExtractExpr(parent, node, replacer)
+	case *JSONKeysExpr:
+		return a.rewriteRefOfJSONKeysExpr(parent, node, replacer)
+	case *JSONOverlapsExpr:
+		return a.rewriteRefOfJSONOverlapsExpr(parent, node, replacer)
+	case *JSONPrettyExpr:
+		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
+	case *JSONSearchExpr:
+		return a.rewriteRefOfJSONSearchExpr(parent, node, replacer)
+	case *JSONStorageFreeExpr:
+		return a.rewriteRefOfJSONStorageFreeExpr(parent, node, replacer)
+	case *JSONStorageSizeExpr:
+		return a.rewriteRefOfJSONStorageSizeExpr(parent, node, replacer)
+	case *JSONValueExpr:
+		return a.rewriteRefOfJSONValueExpr(parent, node, replacer)
+	case ListArg:
+		return a.rewriteListArg(parent, node, replacer)
+	case *Literal:
+		return a.rewriteRefOfLiteral(parent, node, replacer)
+	case *MatchExpr:
+		return a.rewriteRefOfMatchExpr(parent, node, replacer)
+	case *NotExpr:
+		return a.rewriteRefOfNotExpr(parent, node, replacer)
+	case *NullVal:
+		return a.rewriteRefOfNullVal(parent, node, replacer)
+	case Offset:
+		return a.rewriteOffset(parent, node, replacer)
+	case *OrExpr:
+		return a.rewriteRefOfOrExpr(parent, node, replacer)
+	case *Subquery:
+		return a.rewriteRefOfSubquery(parent, node, replacer)
+	case *SubstrExpr:
+		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
+	case *TimestampFuncExpr:
+		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
+	case *TrimFuncExpr:
+		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
+	case *UnaryExpr:
+		return a.rewriteRefOfUnaryExpr(parent, node, replacer)
+	case ValTuple:
+		return a.rewriteValTuple(parent, node, replacer)
+	case *ValuesFuncExpr:
+		return a.rewriteRefOfValuesFuncExpr(parent, node, replacer)
+	case *WeightStringFuncExpr:
+		return a.rewriteRefOfWeightStringFuncExpr(parent, node, replacer)
+	case *XorExpr:
+		return a.rewriteRefOfXorExpr(parent, node, replacer)
 	default:
 		// this should never happen
 		return true

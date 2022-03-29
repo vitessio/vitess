@@ -2546,16 +2546,12 @@ func (node Offset) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("]")
 }
 
-// formatFast formats the node
-func (node *JSONPathParam) formatFast(buf *TrackedBuffer) {
-	if node.Path != "" {
-		buf.WriteByte('\'')
-		buf.WriteString(node.Path)
-		buf.WriteByte('\'')
-	} else {
-		node.PathIdentifier.formatFast(buf)
-	}
-}
+// Format formats the node
+//func (node *JSONPathParam) Format(buf *TrackedBuffer) {
+//	if node.Path != nil {
+//		buf.astPrintf(node, "%v", node.Path)
+//	}
+//}
 
 // formatFast formats the node
 func (node *JSONContainsExpr) formatFast(buf *TrackedBuffer) {
@@ -2569,7 +2565,7 @@ func (node *JSONContainsExpr) formatFast(buf *TrackedBuffer) {
 	var prefix string
 	for _, n := range node.PathList {
 		buf.WriteString(prefix)
-		n.formatFast(buf)
+		buf.printExpr(node, n, true)
 		prefix = ", "
 	}
 	buf.WriteString(")")
@@ -2585,7 +2581,7 @@ func (node *JSONContainsPathExpr) formatFast(buf *TrackedBuffer) {
 	var prefix string
 	for _, n := range node.PathList {
 		buf.WriteString(prefix)
-		n.formatFast(buf)
+		buf.printExpr(node, n, true)
 		prefix = ", "
 	}
 	buf.WriteString(")")
@@ -2599,7 +2595,7 @@ func (node *JSONExtractExpr) formatFast(buf *TrackedBuffer) {
 	var prefix string
 	for _, n := range node.PathList {
 		buf.WriteString(prefix)
-		n.formatFast(buf)
+		buf.printExpr(node, n, true)
 		prefix = ", "
 	}
 	buf.WriteString(")")
@@ -2615,7 +2611,7 @@ func (node *JSONKeysExpr) formatFast(buf *TrackedBuffer) {
 	var prefix string
 	for _, n := range node.PathList {
 		buf.WriteString(prefix)
-		n.formatFast(buf)
+		buf.printExpr(node, n, true)
 		prefix = ", "
 	}
 	buf.WriteString(")")
@@ -2648,7 +2644,7 @@ func (node *JSONSearchExpr) formatFast(buf *TrackedBuffer) {
 	var prefix string
 	for _, n := range node.PathList {
 		buf.WriteString(prefix)
-		n.formatFast(buf)
+		buf.printExpr(node, n, true)
 		prefix = ", "
 	}
 	buf.WriteString(")")
@@ -2659,6 +2655,6 @@ func (node *JSONValueExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("json_value(")
 	buf.printExpr(node, node.JSONDoc, true)
 	buf.WriteString(", ")
-	node.Path.formatFast(buf)
+	buf.printExpr(node, node.Path, true)
 	buf.WriteByte(')')
 }

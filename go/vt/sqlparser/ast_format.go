@@ -1950,13 +1950,11 @@ func (node Offset) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node
-func (node *JSONPathParam) Format(buf *TrackedBuffer) {
-	if node.Path != "" {
-		buf.astPrintf(node, "'%s'", node.Path)
-	} else {
-		buf.astPrintf(node, "%v", node.PathIdentifier)
-	}
-}
+//func (node *JSONPathParam) Format(buf *TrackedBuffer) {
+//	if node.Path != nil {
+//		buf.astPrintf(node, "%v", node.Path)
+//	}
+//}
 
 // Format formats the node
 func (node *JSONContainsExpr) Format(buf *TrackedBuffer) {

@@ -66,7 +66,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   joinCondition *JoinCondition
   collateAndCharset CollateAndCharset
   columnType    ColumnType
-  jsonPathParam *JSONPathParam
+  jsonPathParam JSONPathParam
 }
 
 %union {
@@ -131,7 +131,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   renameTablePairs []*RenameTablePair
   alterOptions	   []AlterOption
   vindexParams  []VindexParam
-  jsonPathParams []*JSONPathParam
+  jsonPathParams []JSONPathParam
   partDefs      []*PartitionDefinition
   partitionValueRange	*PartitionValueRange
   partSpecs     []*PartitionSpec
@@ -4826,7 +4826,7 @@ json_path_param_list_opt:
 json_path_param_list:
   json_path_param
   {
-    $$ = []*JSONPathParam{$1}
+    $$ = []JSONPathParam{$1}
   }
 | json_path_param_list ',' json_path_param
   {
@@ -4834,13 +4834,13 @@ json_path_param_list:
   }
 
 json_path_param:
-  STRING
+  text_literal
   {
-    $$ = &JSONPathParam{Path:$1}
+    $$ = JSONPathParam($1)
   }
-| AT_ID
+| column_name
   {
-    $$ = &JSONPathParam{PathIdentifier:NewColIdentWithAt(string($1), SingleAt)}
+    $$ = JSONPathParam($1)
   }
 
 interval:
