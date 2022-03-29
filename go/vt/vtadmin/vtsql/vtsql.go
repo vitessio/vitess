@@ -269,9 +269,6 @@ func (vtgate *VTGateProxy) closeLocked() error {
 }
 
 // Debug implements debug.Debuggable for VTGateProxy.
-//
-// TODO (@ajm188): this is not safe to call concurrently with Dial. Add a mutex
-// to guard.
 func (vtgate *VTGateProxy) Debug() map[string]any {
 	vtgate.m.Lock()
 	defer vtgate.m.Unlock()
