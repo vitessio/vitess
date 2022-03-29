@@ -110,10 +110,10 @@ func MakeTestStreamingResults(fields []*querypb.Field, rows ...string) []*Result
 	return results
 }
 
-// TestBindVariable makes a *querypb.BindVariable from
-// an interface{}.It panics on invalid input.
+// TestBindVariable makes a *querypb.BindVariable from any.
+// It panics on invalid input.
 // This function should only be used for testing.
-func TestBindVariable(v interface{}) *querypb.BindVariable {
+func TestBindVariable(v any) *querypb.BindVariable {
 	if v == nil {
 		return NullBindVariable
 	}

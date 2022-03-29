@@ -893,7 +893,7 @@ func (cached *DerivedTable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(24)
 	}
 	// field Select vitess.io/vitess/go/vt/sqlparser.SelectStatement
 	if cc, ok := cached.Select.(cachedObject); ok {
@@ -1377,6 +1377,75 @@ func (cached *IsExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *JSONPrettyExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field JSONVal vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONVal.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JSONStorageFreeExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field JSONVal vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONVal.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JSONStorageSizeExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field JSONVal vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONVal.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JSONTableExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(80)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Alias vitess.io/vitess/go/vt/sqlparser.TableIdent
+	size += cached.Alias.CachedSize(false)
+	// field Filter vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Filter.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Columns []*vitess.io/vitess/go/vt/sqlparser.JtColumnDefinition
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(8))
+		for _, elem := range cached.Columns {
+			size += elem.CachedSize(true)
+		}
+	}
+	return size
+}
 func (cached *JoinCondition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1416,6 +1485,91 @@ func (cached *JoinTableExpr) CachedSize(alloc bool) int64 {
 	}
 	// field Condition *vitess.io/vitess/go/vt/sqlparser.JoinCondition
 	size += cached.Condition.CachedSize(true)
+	return size
+}
+func (cached *JtColumnDefinition) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field JtOrdinal *vitess.io/vitess/go/vt/sqlparser.JtOrdinalColDef
+	size += cached.JtOrdinal.CachedSize(true)
+	// field JtPath *vitess.io/vitess/go/vt/sqlparser.JtPathColDef
+	size += cached.JtPath.CachedSize(true)
+	// field JtNestedPath *vitess.io/vitess/go/vt/sqlparser.JtNestedPathColDef
+	size += cached.JtNestedPath.CachedSize(true)
+	return size
+}
+func (cached *JtNestedPathColDef) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Path vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Path.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Columns []*vitess.io/vitess/go/vt/sqlparser.JtColumnDefinition
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(8))
+		for _, elem := range cached.Columns {
+			size += elem.CachedSize(true)
+		}
+	}
+	return size
+}
+func (cached *JtOnResponse) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JtOrdinalColDef) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
+	return size
+}
+func (cached *JtPathColDef) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(176)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
+	// field Type vitess.io/vitess/go/vt/sqlparser.ColumnType
+	size += cached.Type.CachedSize(false)
+	// field Path vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Path.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field EmptyOnResponse *vitess.io/vitess/go/vt/sqlparser.JtOnResponse
+	size += cached.EmptyOnResponse.CachedSize(true)
+	// field ErrorOnResponse *vitess.io/vitess/go/vt/sqlparser.JtOnResponse
+	size += cached.ErrorOnResponse.CachedSize(true)
 	return size
 }
 func (cached *KeyState) CachedSize(alloc bool) int64 {

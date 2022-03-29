@@ -50,10 +50,11 @@ func TestParse(t *testing.T) {
 		require.NoError(t, err)
 
 		expected := &Config{
-			Cluster:         nil,
-			Discovery:       nil,
-			Credentials:     nil,
-			CredentialsPath: "",
+			Cluster:             nil,
+			Discovery:           nil,
+			Credentials:         nil,
+			CredentialsPath:     "",
+			ConnectivityTimeout: defaultConnectivityTimeout,
 		}
 		assert.Equal(t, expected, cfg)
 	})
@@ -88,9 +89,10 @@ func TestParse(t *testing.T) {
 				Cluster: &vtadminpb.Cluster{
 					Name: "testcluster",
 				},
-				Discovery:       nil,
-				Credentials:     creds,
-				CredentialsPath: credsfile.Name(),
+				Discovery:           nil,
+				Credentials:         creds,
+				CredentialsPath:     credsfile.Name(),
+				ConnectivityTimeout: defaultConnectivityTimeout,
 			}
 
 			assert.Equal(t, expected, cfg)

@@ -96,7 +96,7 @@ func (l *Lock) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVaria
 }
 
 func (l *Lock) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Query":      l.Query,
 		"FieldQuery": l.FieldQuery,
 	}

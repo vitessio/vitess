@@ -91,14 +91,16 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 		}
 		wScope.tables = []TableInfo{createVTableInfoForExpressions(node, s.currentScope().tables, s.org)}
 	case sqlparser.OrderBy:
-		err := s.createSpecialScopePostProjection(cursor.Parent())
-		if err != nil {
-			return err
-		}
-		for _, order := range node {
-			lit := keepIntLiteral(order.Expr)
-			if lit != nil {
-				s.specialExprScopes[lit] = s.currentScope()
+		if isParentSelectStatement(cursor) {
+			err := s.createSpecialScopePostProjection(cursor.Parent())
+			if err != nil {
+				return err
+			}
+			for _, order := range node {
+				lit := keepIntLiteral(order.Expr)
+				if lit != nil {
+					s.specialExprScopes[lit] = s.currentScope()
+				}
 			}
 		}
 	case sqlparser.GroupBy:
@@ -117,6 +119,10 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 			break
 		}
 		return s.createSpecialScopePostProjection(cursor.Parent())
+	case *sqlparser.DerivedTable:
+		if node.Lateral {
+			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: lateral derived tables")
+		}
 	}
 	return nil
 }
@@ -139,7 +145,11 @@ func keepIntLiteral(e sqlparser.Expr) *sqlparser.Literal {
 func (s *scoper) up(cursor *sqlparser.Cursor) error {
 	node := cursor.Node()
 	switch node := node.(type) {
-	case *sqlparser.Select, sqlparser.OrderBy, sqlparser.GroupBy:
+	case sqlparser.OrderBy:
+		if isParentSelectStatement(cursor) {
+			s.popScope()
+		}
+	case *sqlparser.Select, sqlparser.GroupBy:
 		s.popScope()
 	case *sqlparser.Where:
 		if node.Type != sqlparser.HavingClause {

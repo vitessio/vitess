@@ -47,7 +47,7 @@ func (vtctl *VtctlProcess) AddCellInfo(Cell string) (err error) {
 		"--topo_global_root", vtctl.TopoGlobalRoot,
 	)
 	if *isCoverage {
-		tmpProcess.Args = append(tmpProcess.Args, "-test.coverprofile="+getCoveragePath("vtctl-addcell.out"))
+		tmpProcess.Args = append(tmpProcess.Args, "--test.coverprofile="+getCoveragePath("vtctl-addcell.out"))
 	}
 	tmpProcess.Args = append(tmpProcess.Args,
 		"AddCellInfo", "--",
@@ -127,7 +127,7 @@ func VtctlProcessInstance(topoPort int, hostname string) *VtctlProcess {
 		topoRootPath = ""
 	}
 
-	version, err := getMajorVersion("vtctl")
+	version, err := GetMajorVersion("vtctl")
 	if err != nil {
 		log.Warningf("failed to get major vtctl version; interop with CLI changes for VEP-4 may not work: %s", err)
 	}

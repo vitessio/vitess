@@ -1,4 +1,5 @@
 run:
+  go: 1.18
   timeout: 10m
   skip-dirs:
     - go/vt/topo/k8stopo/client
@@ -8,6 +9,10 @@ linters-settings:
     exclude: ./misc/errcheck_excludes.txt
   goimports:
     local-prefixes: vitess.io/vitess
+  govet:
+    disable: # not supported when using Generics in 1.18
+      - nilness
+      - unusedwrite
 
 linters:
   disable-all: true
@@ -15,13 +20,13 @@ linters:
     # Defaults
     - deadcode
     - errcheck
-    - gosimple
     - govet
     - ineffassign
-    - staticcheck
     - structcheck
     - typecheck
     - varcheck
+    - staticcheck
+    - gosimple
 
     # Extras
     - gofmt
@@ -147,4 +152,4 @@ issues:
 
 # https://github.com/golangci/golangci/wiki/Configuration
 service:
-  golangci-lint-version: 1.44.2 # use the fixed version to not introduce new linters unexpectedly
+  golangci-lint-version: 1.45.0 # use the fixed version to not introduce new linters unexpectedly

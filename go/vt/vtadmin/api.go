@@ -225,6 +225,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		api.Handler().ServeHTTP(w, r)
 		return
 	}
+
 	dynamicAPI := &API{
 		clusters:   api.clusters,
 		clusterMap: api.clusterMap,
@@ -331,7 +332,7 @@ func (api *API) Handler() http.Handler {
 	return router
 }
 
-func (api *API) EjectDynamicCluster(key string, value interface{}) {
+func (api *API) EjectDynamicCluster(key string, value any) {
 	// Delete dynamic clusters from clusterMap when they are expired from clusterCache
 	_, ok := api.clusterMap[key]
 	if ok {

@@ -153,7 +153,7 @@ func (s *Set) Inputs() []Primitive {
 }
 
 func (s *Set) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Ops": s.Ops,
 	}
 	return PrimitiveDescription{

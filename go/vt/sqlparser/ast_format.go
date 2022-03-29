@@ -576,69 +576,71 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.Charset != "" {
 		buf.astPrintf(ct, " %s %s %s", keywordStrings[CHARACTER], keywordStrings[SET], ct.Charset)
 	}
-	if ct.Options != nil && ct.Options.Collate != "" {
-		buf.astPrintf(ct, " %s %s", keywordStrings[COLLATE], ct.Options.Collate)
-	}
-	if ct.Options.Null != nil && ct.Options.As == nil {
-		if *ct.Options.Null {
-			buf.astPrintf(ct, " %s", keywordStrings[NULL])
-		} else {
-			buf.astPrintf(ct, " %s %s", keywordStrings[NOT], keywordStrings[NULL])
+	if ct.Options != nil {
+		if ct.Options.Collate != "" {
+			buf.astPrintf(ct, " %s %s", keywordStrings[COLLATE], ct.Options.Collate)
 		}
-	}
-	if ct.Options.Default != nil {
-		buf.astPrintf(ct, " %s", keywordStrings[DEFAULT])
-		if defaultRequiresParens(ct) {
-			buf.astPrintf(ct, " (%v)", ct.Options.Default)
-		} else {
-			buf.astPrintf(ct, " %v", ct.Options.Default)
-		}
-	}
-	if ct.Options.OnUpdate != nil {
-		buf.astPrintf(ct, " %s %s %v", keywordStrings[ON], keywordStrings[UPDATE], ct.Options.OnUpdate)
-	}
-	if ct.Options.As != nil {
-		buf.astPrintf(ct, " %s (%v)", keywordStrings[AS], ct.Options.As)
-
-		if ct.Options.Storage == VirtualStorage {
-			buf.astPrintf(ct, " %s", keywordStrings[VIRTUAL])
-		} else if ct.Options.Storage == StoredStorage {
-			buf.astPrintf(ct, " %s", keywordStrings[STORED])
-		}
-		if ct.Options.Null != nil {
+		if ct.Options.Null != nil && ct.Options.As == nil {
 			if *ct.Options.Null {
 				buf.astPrintf(ct, " %s", keywordStrings[NULL])
 			} else {
 				buf.astPrintf(ct, " %s %s", keywordStrings[NOT], keywordStrings[NULL])
 			}
 		}
-	}
-	if ct.Options.Autoincrement {
-		buf.astPrintf(ct, " %s", keywordStrings[AUTO_INCREMENT])
-	}
-	if ct.Options.Comment != nil {
-		buf.astPrintf(ct, " %s %v", keywordStrings[COMMENT_KEYWORD], ct.Options.Comment)
-	}
-	if ct.Options.KeyOpt == colKeyPrimary {
-		buf.astPrintf(ct, " %s %s", keywordStrings[PRIMARY], keywordStrings[KEY])
-	}
-	if ct.Options.KeyOpt == colKeyUnique {
-		buf.astPrintf(ct, " %s", keywordStrings[UNIQUE])
-	}
-	if ct.Options.KeyOpt == colKeyUniqueKey {
-		buf.astPrintf(ct, " %s %s", keywordStrings[UNIQUE], keywordStrings[KEY])
-	}
-	if ct.Options.KeyOpt == colKeySpatialKey {
-		buf.astPrintf(ct, " %s %s", keywordStrings[SPATIAL], keywordStrings[KEY])
-	}
-	if ct.Options.KeyOpt == colKeyFulltextKey {
-		buf.astPrintf(ct, " %s %s", keywordStrings[FULLTEXT], keywordStrings[KEY])
-	}
-	if ct.Options.KeyOpt == colKey {
-		buf.astPrintf(ct, " %s", keywordStrings[KEY])
-	}
-	if ct.Options.Reference != nil {
-		buf.astPrintf(ct, " %v", ct.Options.Reference)
+		if ct.Options.Default != nil {
+			buf.astPrintf(ct, " %s", keywordStrings[DEFAULT])
+			if defaultRequiresParens(ct) {
+				buf.astPrintf(ct, " (%v)", ct.Options.Default)
+			} else {
+				buf.astPrintf(ct, " %v", ct.Options.Default)
+			}
+		}
+		if ct.Options.OnUpdate != nil {
+			buf.astPrintf(ct, " %s %s %v", keywordStrings[ON], keywordStrings[UPDATE], ct.Options.OnUpdate)
+		}
+		if ct.Options.As != nil {
+			buf.astPrintf(ct, " %s (%v)", keywordStrings[AS], ct.Options.As)
+
+			if ct.Options.Storage == VirtualStorage {
+				buf.astPrintf(ct, " %s", keywordStrings[VIRTUAL])
+			} else if ct.Options.Storage == StoredStorage {
+				buf.astPrintf(ct, " %s", keywordStrings[STORED])
+			}
+			if ct.Options.Null != nil {
+				if *ct.Options.Null {
+					buf.astPrintf(ct, " %s", keywordStrings[NULL])
+				} else {
+					buf.astPrintf(ct, " %s %s", keywordStrings[NOT], keywordStrings[NULL])
+				}
+			}
+		}
+		if ct.Options.Autoincrement {
+			buf.astPrintf(ct, " %s", keywordStrings[AUTO_INCREMENT])
+		}
+		if ct.Options.Comment != nil {
+			buf.astPrintf(ct, " %s %v", keywordStrings[COMMENT_KEYWORD], ct.Options.Comment)
+		}
+		if ct.Options.KeyOpt == colKeyPrimary {
+			buf.astPrintf(ct, " %s %s", keywordStrings[PRIMARY], keywordStrings[KEY])
+		}
+		if ct.Options.KeyOpt == colKeyUnique {
+			buf.astPrintf(ct, " %s", keywordStrings[UNIQUE])
+		}
+		if ct.Options.KeyOpt == colKeyUniqueKey {
+			buf.astPrintf(ct, " %s %s", keywordStrings[UNIQUE], keywordStrings[KEY])
+		}
+		if ct.Options.KeyOpt == colKeySpatialKey {
+			buf.astPrintf(ct, " %s %s", keywordStrings[SPATIAL], keywordStrings[KEY])
+		}
+		if ct.Options.KeyOpt == colKeyFulltextKey {
+			buf.astPrintf(ct, " %s %s", keywordStrings[FULLTEXT], keywordStrings[KEY])
+		}
+		if ct.Options.KeyOpt == colKey {
+			buf.astPrintf(ct, " %s", keywordStrings[KEY])
+		}
+		if ct.Options.Reference != nil {
+			buf.astPrintf(ct, " %v", ct.Options.Reference)
+		}
 	}
 }
 
@@ -1200,6 +1202,9 @@ func (node *Subquery) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *DerivedTable) Format(buf *TrackedBuffer) {
+	if node.Lateral {
+		buf.WriteString("lateral ")
+	}
 	buf.astPrintf(node, "(%v)", node.Select)
 }
 
@@ -1316,6 +1321,24 @@ func (node *GroupConcatExpr) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *ValuesFuncExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "values(%v)", node.Name)
+}
+
+// Format formats the node
+func (node *JSONPrettyExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_pretty(%v)", node.JSONVal)
+
+}
+
+// Format formats the node
+func (node *JSONStorageFreeExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_storage_free(%v)", node.JSONVal)
+
+}
+
+// Format formats the node
+func (node *JSONStorageSizeExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_storage_size(%v)", node.JSONVal)
+
 }
 
 // Format formats the node.
@@ -1919,6 +1942,56 @@ func (node *RenameTable) Format(buf *TrackedBuffer) {
 // show up like argument comparisons
 func (node *ExtractedSubquery) Format(buf *TrackedBuffer) {
 	node.alternative.Format(buf)
+}
+
+func (node *JSONTableExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_table(%v, %v columns(\n", node.Expr, node.Filter)
+	sz := len(node.Columns)
+
+	for i := 0; i < sz-1; i++ {
+		buf.astPrintf(node, "\t%v,\n", node.Columns[i])
+	}
+	buf.astPrintf(node, "\t%v\n", node.Columns[sz-1])
+	buf.astPrintf(node, "\t)\n) as %v", node.Alias)
+}
+
+func (node *JtColumnDefinition) Format(buf *TrackedBuffer) {
+	if node.JtOrdinal != nil {
+		buf.astPrintf(node, "%v for ordinality", node.JtOrdinal.Name)
+	} else if node.JtNestedPath != nil {
+		buf.astPrintf(node, "nested path %v columns(\n", node.JtNestedPath.Path)
+		sz := len(node.JtNestedPath.Columns)
+
+		for i := 0; i < sz-1; i++ {
+			buf.astPrintf(node, "\t%v,\n", node.JtNestedPath.Columns[i])
+		}
+		buf.astPrintf(node, "\t%v\n)", node.JtNestedPath.Columns[sz-1])
+	} else if node.JtPath != nil {
+		buf.astPrintf(node, "%v %v ", node.JtPath.Name, node.JtPath.Type)
+		if node.JtPath.JtColExists {
+			buf.astPrintf(node, "exists ")
+		}
+		buf.astPrintf(node, "path %v ", node.JtPath.Path)
+
+		if node.JtPath.EmptyOnResponse != nil {
+			buf.astPrintf(node, "%v on empty ", node.JtPath.EmptyOnResponse)
+		}
+
+		if node.JtPath.ErrorOnResponse != nil {
+			buf.astPrintf(node, "%v on error ", node.JtPath.ErrorOnResponse)
+		}
+	}
+}
+
+func (node *JtOnResponse) Format(buf *TrackedBuffer) {
+	switch node.ResponseType {
+	case ErrorJSONType:
+		buf.astPrintf(node, "error")
+	case NullJSONType:
+		buf.astPrintf(node, "null")
+	case DefaultJSONType:
+		buf.astPrintf(node, "default %v", node.Expr)
+	}
 }
 
 // Format formats the node.

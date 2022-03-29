@@ -202,9 +202,12 @@ func (collector *TableGC) Open() (err error) {
 
 // Close frees resources
 func (collector *TableGC) Close() {
+	log.Infof("TableGC - started execution of Close. Acquiring initMutex lock")
 	collector.initMutex.Lock()
+	log.Infof("TableGC - acquired lock")
 	defer collector.initMutex.Unlock()
 	if atomic.LoadInt64(&collector.isOpen) == 0 {
+		log.Infof("TableGC - no collector is open")
 		// not open
 		return
 	}
@@ -213,8 +216,10 @@ func (collector *TableGC) Close() {
 	for _, t := range collector.tickers {
 		t.Suspend()
 	}
+	log.Infof("TableGC - closing pool")
 	collector.pool.Close()
 	atomic.StoreInt64(&collector.isOpen, 0)
+	log.Infof("TableGC - finished execution of Close")
 }
 
 // Operate is the main entry point for the table garbage collector operation and logic.

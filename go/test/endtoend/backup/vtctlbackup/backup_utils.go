@@ -289,7 +289,7 @@ func primaryBackup(t *testing.T) {
 
 	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", primary.Alias)
 	require.Error(t, err)
-	assert.Contains(t, output, "type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with -allow_primary")
+	assert.Contains(t, output, "type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 
 	localCluster.VerifyBackupCount(t, shardKsName, 0)
 

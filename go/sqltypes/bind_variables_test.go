@@ -43,21 +43,21 @@ func TestProtoConversions(t *testing.T) {
 
 func TestBuildBindVariables(t *testing.T) {
 	tcases := []struct {
-		in  map[string]interface{}
+		in  map[string]any
 		out map[string]*querypb.BindVariable
 		err string
 	}{{
 		in:  nil,
 		out: nil,
 	}, {
-		in: map[string]interface{}{
+		in: map[string]any{
 			"k": int64(1),
 		},
 		out: map[string]*querypb.BindVariable{
 			"k": Int64BindVariable(1),
 		},
 	}, {
-		in: map[string]interface{}{
+		in: map[string]any{
 			"k": byte(1),
 		},
 		err: "k: type uint8 not supported as bind var: 1",
@@ -82,7 +82,7 @@ func TestBuildBindVariables(t *testing.T) {
 
 func TestBuildBindVariable(t *testing.T) {
 	tcases := []struct {
-		in  interface{}
+		in  any
 		out *querypb.BindVariable
 		err string
 	}{{
@@ -152,7 +152,7 @@ func TestBuildBindVariable(t *testing.T) {
 			Value: []byte("1"),
 		},
 	}, {
-		in: []interface{}{"aa", int64(1)},
+		in: []any{"aa", int64(1)},
 		out: &querypb.BindVariable{
 			Type: querypb.Type_TUPLE,
 			Values: []*querypb.Value{{
@@ -239,7 +239,7 @@ func TestBuildBindVariable(t *testing.T) {
 		in:  byte(1),
 		err: "type uint8 not supported as bind var: 1",
 	}, {
-		in:  []interface{}{1, byte(1)},
+		in:  []any{1, byte(1)},
 		err: "type uint8 not supported as bind var: 1",
 	}}
 	for _, tcase := range tcases {

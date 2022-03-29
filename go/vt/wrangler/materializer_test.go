@@ -1436,7 +1436,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 				},
 			},
 		},
-		err: "vindex 'table' must be <keyspace>.<table>",
+		err: "vindex table name must be in the form <keyspace>.<table>",
 	}, {
 		description: "unique lookup should have only one from column",
 		input: &vschemapb.Keyspace{
@@ -1698,7 +1698,7 @@ func TestExternalizeVindex(t *testing.T) {
 		err:   "vindex sourceks.absent not found in vschema",
 	}, {
 		input: "sourceks.bad",
-		err:   "table name in vindex should be of the form keyspace.table: unqualified",
+		err:   "vindex table name must be in the form <keyspace>.<table>. Got: unqualified",
 	}, {
 		input:        "sourceks.owned",
 		vrResponse:   running,

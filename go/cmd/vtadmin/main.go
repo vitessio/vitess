@@ -43,6 +43,8 @@ var (
 	defaultClusterConfig cluster.Config
 
 	rbacConfigPath string
+	enableRBAC     bool
+	disableRBAC    bool
 
 	traceCloser io.Closer = &noopCloser{}
 
@@ -67,7 +69,7 @@ var (
 
 // fatal ensures the tracer is closed and final spans are sent before issuing
 // a log.Fatal call with the given args.
-func fatal(args ...interface{}) {
+func fatal(args ...any) {
 	trace.LogErrorsWhenClosing(traceCloser)
 	log.Fatal(args...)
 }
@@ -101,13 +103,19 @@ func run(cmd *cobra.Command, args []string) {
 	}
 
 	var rbacConfig *rbac.Config
-	if rbacConfigPath != "" {
+	if disableRBAC {
+		rbacConfig = rbac.DefaultConfig()
+	} else if enableRBAC && rbacConfigPath != "" {
 		cfg, err := rbac.LoadConfig(rbacConfigPath)
 		if err != nil {
 			fatal(err)
 		}
 
 		rbacConfig = cfg
+	} else if enableRBAC && rbacConfigPath == "" {
+		fatal("must pass --rbac-config path when enabling rbac")
+	} else {
+		fatal("must explicitly enable or disable RBAC by passing --no-rbac or --rbac")
 	}
 
 	for i, cfg := range configs {
@@ -162,7 +170,9 @@ func main() {
 	rootCmd.Flags().BoolVar(&httpOpts.EnableDynamicClusters, "http-enable-dynamic-clusters", false, "whether to enable dynamic clusters that are set by request header cookies")
 
 	// rbac flags
-	rootCmd.Flags().StringVar(&rbacConfigPath, "rbac-config", "rbac.yaml", "")
+	rootCmd.Flags().StringVar(&rbacConfigPath, "rbac-config", "", "path to an RBAC config file. must be set if passing --rbac")
+	rootCmd.Flags().BoolVar(&enableRBAC, "rbac", false, "whether to enable RBAC. must be set if not passing --rbac")
+	rootCmd.Flags().BoolVar(&disableRBAC, "no-rbac", false, "whether to disable RBAC. must be set if not passing --no-rbac")
 
 	// glog flags, no better way to do this
 	rootCmd.Flags().AddGoFlag(flag.Lookup("v"))
