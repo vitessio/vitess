@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql/fakevtsql"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -169,6 +170,8 @@ func TestDial(t *testing.T) {
 
 				tt.proxy.discovery = tt.disco
 			}
+
+			tt.proxy.resolver = resolver.NewBuilder(tt.proxy.cluster.Id, tt.disco, resolver.Options{})
 
 			err := tt.proxy.Dial(ctx, "")
 			if tt.shouldErr {

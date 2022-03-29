@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -56,7 +57,7 @@ func TestParse(t *testing.T) {
 			Credentials:         nil,
 			CredentialsPath:     "",
 			ConnectivityTimeout: defaultConnectivityTimeout,
-			resolver:            resolver.NewBuilder("", nil, resolver.Options{}),
+			resolver:            resolver.NewBuilder("", nil, resolver.Options{ResolveTimeout: time.Second}),
 		}
 		assert.Equal(t, expected, cfg)
 	})
@@ -95,7 +96,7 @@ func TestParse(t *testing.T) {
 				Credentials:         creds,
 				CredentialsPath:     credsfile.Name(),
 				ConnectivityTimeout: defaultConnectivityTimeout,
-				resolver:            resolver.NewBuilder("", nil, resolver.Options{}),
+				resolver:            resolver.NewBuilder("", nil, resolver.Options{ResolveTimeout: time.Second}),
 			}
 
 			assert.Equal(t, expected, cfg)
