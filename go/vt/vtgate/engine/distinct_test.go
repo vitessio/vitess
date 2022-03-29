@@ -25,7 +25,6 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -156,7 +155,10 @@ func TestWeightStringFallBack(t *testing.T) {
 	expected := fmt.Sprintf("%v", r("myid", "varchar", "monkey", "horse").Rows)
 	utils.MustMatch(t, expected, got)
 
-	// the primitive remembers the weight string use
-	assert.Equal(t, distinct.CheckCols[0].Col, 1)
-	assert.Nil(t, distinct.CheckCols[0].WsCol)
+	// the primitive must not change just because one run needed weight strings
+	utils.MustMatch(t, []CheckCol{{
+		Col:       0,
+		WsCol:     &offsetOne,
+		Collation: collations.Unknown,
+	}}, distinct.CheckCols, "checkCols should not be updated")
 }

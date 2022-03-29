@@ -158,9 +158,13 @@ func (pt *probeTable) equal(a, b sqltypes.Row) (bool, error) {
 }
 
 func newProbeTable(checkCols []CheckCol) *probeTable {
+	cols := make([]CheckCol, 0, len(checkCols))
+	for _, col := range checkCols {
+		cols = append(cols, col)
+	}
 	return &probeTable{
 		seenRows:  map[uintptr][]sqltypes.Row{},
-		checkCols: checkCols,
+		checkCols: cols,
 	}
 }
 
