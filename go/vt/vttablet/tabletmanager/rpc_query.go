@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -49,6 +50,23 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte, db
 		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(dbName), 1, false)
 	}
 
+	// DDL statements may have additional directives/hints embedded in the query
+	allowZeroInDate := false
+	if stmt, err := sqlparser.Parse(string(query)); err == nil {
+		if ddlStmt, ok := stmt.(sqlparser.DDLStatement); ok {
+			if comments := ddlStmt.GetComments(); comments != nil {
+				directives := sqlparser.ExtractCommentDirectives(comments)
+				if _, ok := directives["allowZeroInDate"]; ok {
+					allowZeroInDate = true
+				}
+			}
+		}
+	}
+	if allowZeroInDate {
+		if _, err := conn.ExecuteFetch("set @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", 1, false); err != nil {
+			return nil, err
+		}
+	}
 	// run the query
 	result, err := conn.ExecuteFetch(string(query), maxrows, true /*wantFields*/)
 
