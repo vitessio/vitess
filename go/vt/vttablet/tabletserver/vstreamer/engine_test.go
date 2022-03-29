@@ -23,6 +23,8 @@ import (
 
 	"context"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -251,4 +253,6 @@ func TestVStreamerWaitForMySQL(t *testing.T) {
 			}
 		})
 	}
+
+	require.Equal(t, engine.rowStreamerWaits.Counts()["VStreamerTest.waitForMySQL"], int64(2))
 }
