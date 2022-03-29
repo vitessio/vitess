@@ -42,8 +42,8 @@ type Concatenate struct {
 // weight_string() sometimes returns VARBINARY and sometimes VARCHAR
 func NewConcatenate(Sources []Primitive, ignoreCols []int) *Concatenate {
 	ignoreTypes := map[int]any{}
-	for _, ignoreType := range ignoreCols {
-		ignoreTypes[ignoreType] = nil
+	for _, i := range ignoreCols {
+		ignoreTypes[i] = nil
 	}
 	return &Concatenate{
 		Sources:           Sources,
@@ -122,17 +122,25 @@ func (c *Concatenate) getFields(res []*sqltypes.Result) ([]*querypb.Field, error
 	if len(res) == 0 {
 		return nil, nil
 	}
-	fields := res[0].Fields
+
+	var fields []*querypb.Field
 	for _, r := range res {
 		if r.Fields != nil {
-			err := c.compareFields(fields, r.Fields)
-			if err != nil {
-				return nil, err
-			}
+			continue
+		}
+		if fields == nil {
+			fields = r.Fields
+			continue
+		}
+
+		err := c.compareFields(fields, r.Fields)
+		if err != nil {
+			return nil, err
 		}
 	}
 	return fields, nil
 }
+
 func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
 	results := make([]*sqltypes.Result, len(c.Sources))
 	g, restoreCtx := vcursor.ErrorGroupCancellableContext()

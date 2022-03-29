@@ -63,24 +63,23 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 
 	// If we still have a HAVING clause, it's because it could not be pushed to the WHERE,
 	// so it probably has aggregations
-	if hp.qp.NeedsAggregation() || hp.sel.Having != nil {
+	switch {
+	case hp.qp.NeedsAggregation() || hp.sel.Having != nil:
 		plan, err = hp.planAggregations(ctx, plan)
 		if err != nil {
 			return nil, err
 		}
 		// if we already did sorting, we don't need to do it again
 		needsOrdering = needsOrdering && !hp.qp.CanPushDownSorting
-	} else {
-		if canShortcut {
-			err = planSingleShardRoutePlan(hp.sel, rb)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			err = pushProjections(ctx, plan, hp.qp.SelectExprs)
-			if err != nil {
-				return nil, err
-			}
+	case canShortcut:
+		err = planSingleShardRoutePlan(hp.sel, rb)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		err = pushProjections(ctx, plan, hp.qp.SelectExprs)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -97,11 +96,13 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 		return nil, err
 	}
 
-	if truncateColumns {
-		plan, err = hp.truncateColumnsIfNeeded(ctx, plan)
-		if err != nil {
-			return nil, err
-		}
+	if !truncateColumns {
+		return plan, nil
+	}
+
+	plan, err = hp.truncateColumnsIfNeeded(ctx, plan)
+	if err != nil {
+		return nil, err
 	}
 
 	return plan, nil

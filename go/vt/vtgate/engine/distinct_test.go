@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -127,4 +128,35 @@ func TestDistinct(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWeightStringFallBack(t *testing.T) {
+	offsetOne := 1
+	checkCols := []CheckCol{{
+		Col:       0,
+		WsCol:     &offsetOne,
+		Collation: collations.Unknown,
+	}}
+	input := r("myid|weightstring(myid)",
+		"varchar|varbinary",
+		"monkey|monkey",
+		"horse|horse",
+		"horse|horse")
+
+	distinct := &Distinct{
+		Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+		CheckCols: checkCols,
+		Truncate:  true,
+	}
+
+	qr, err := distinct.TryExecute(&noopVCursor{ctx: context.Background()}, nil, true)
+	require.NoError(t, err)
+
+	got := fmt.Sprintf("%v", qr.Rows)
+	expected := fmt.Sprintf("%v", r("myid", "varchar", "monkey", "horse").Rows)
+	utils.MustMatch(t, expected, got)
+
+	// the primitive remembers the weight string use
+	assert.Equal(t, distinct.CheckCols[0].Col, 1)
+	assert.Nil(t, distinct.CheckCols[0].WsCol)
 }
