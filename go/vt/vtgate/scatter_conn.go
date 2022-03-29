@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -574,7 +575,7 @@ func (stc *ScatterConn) multiGoTransaction(
 		startTime, statsKey := stc.startAction(name, rs.Target)
 		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-		shardActionInfo := actionInfo(rs.Target, session, autocommit)
+		shardActionInfo := actionInfo(ctx, rs.Target, session, autocommit)
 		updated, err := action(rs, i, shardActionInfo)
 		if updated == nil {
 			return
@@ -713,8 +714,12 @@ func requireNewQS(err error, target *querypb.Target) bool {
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
-func actionInfo(target *querypb.Target, session *SafeSession, autocommit bool) *shardActionInfo {
+func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSession, autocommit bool) *shardActionInfo {
 	if !(session.InTransaction() || session.InReservedConn()) {
+		return &shardActionInfo{}
+	}
+	ignoreSession := ctx.Value(engine.IgnoreReserveTxn)
+	if ignoreSession != nil {
 		return &shardActionInfo{}
 	}
 	// No need to protect ourselves from the race condition between

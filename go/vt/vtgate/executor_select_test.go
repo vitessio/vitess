@@ -52,14 +52,53 @@ func TestSelectNext(t *testing.T) {
 
 	query := "select next :n values from user_seq"
 	bv := map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)}
-	_, err := executorExec(executor, query, bv)
-	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           query,
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)},
 	}}
 
+	// Autocommit
+	session := NewAutocommitSession(&vtgatepb.Session{})
+	_, err := executor.Execute(context.Background(), "TestSelectNext", session, query, bv)
+	require.NoError(t, err)
+
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
+	assert.Zero(t, sbclookup.BeginCount.Get())
+	assert.Zero(t, sbclookup.ReserveCount.Get())
+	sbclookup.Queries = nil
+
+	// Txn
+	session = NewAutocommitSession(&vtgatepb.Session{})
+	session.Session.InTransaction = true
+	_, err = executor.Execute(context.Background(), "TestSelectNext", session, query, bv)
+	require.NoError(t, err)
+
+	utils.MustMatch(t, wantQueries, sbclookup.Queries)
+	assert.Zero(t, sbclookup.BeginCount.Get())
+	assert.Zero(t, sbclookup.ReserveCount.Get())
+	sbclookup.Queries = nil
+
+	// Reserve
+	session = NewAutocommitSession(&vtgatepb.Session{})
+	session.Session.InReservedConn = true
+	_, err = executor.Execute(context.Background(), "TestSelectNext", session, query, bv)
+	require.NoError(t, err)
+
+	utils.MustMatch(t, wantQueries, sbclookup.Queries)
+	assert.Zero(t, sbclookup.BeginCount.Get())
+	assert.Zero(t, sbclookup.ReserveCount.Get())
+	sbclookup.Queries = nil
+
+	// Reserve and Txn
+	session = NewAutocommitSession(&vtgatepb.Session{})
+	session.Session.InReservedConn = true
+	session.Session.InTransaction = true
+	_, err = executor.Execute(context.Background(), "TestSelectNext", session, query, bv)
+	require.NoError(t, err)
+
+	utils.MustMatch(t, wantQueries, sbclookup.Queries)
+	assert.Zero(t, sbclookup.BeginCount.Get())
+	assert.Zero(t, sbclookup.ReserveCount.Get())
 }
 
 func TestSelectDBA(t *testing.T) {
