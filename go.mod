@@ -129,4 +129,4 @@ require (
 
 replace github.com/skeema/tengo => github.com/planetscale/tengo v0.9.6-ps.v1
 
-replace google.golang.org/grpc => google.golang.org/grpc v1.37.0
+replace google.golang.org/grpc => google.golang.org/grpc v1.41.0
