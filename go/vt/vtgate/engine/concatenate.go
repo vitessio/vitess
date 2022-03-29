@@ -125,7 +125,7 @@ func (c *Concatenate) getFields(res []*sqltypes.Result) ([]*querypb.Field, error
 
 	var fields []*querypb.Field
 	for _, r := range res {
-		if r.Fields != nil {
+		if r.Fields == nil {
 			continue
 		}
 		if fields == nil {
