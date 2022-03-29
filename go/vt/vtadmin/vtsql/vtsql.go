@@ -173,19 +173,6 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 
 	span.Annotate("is_noop", false)
 
-	if vtgate.host == "" {
-		gate, err := vtgate.discovery.DiscoverVTGateAddr(ctx, vtgate.discoveryTags)
-		if err != nil {
-			return fmt.Errorf("error discovering vtgate to dial: %w", err)
-		}
-
-		vtgate.host = gate
-		// re-annotate the hostname
-		span.Annotate("vtgate_host", gate)
-	}
-
-	log.Infof("Dialing %s ...", vtgate.host)
-
 	conf := vitessdriver.Configuration{
 		Protocol:        fmt.Sprintf("grpc_%s", vtgate.cluster.Id),
 		Address:         fmt.Sprintf("%s://vtgate/", vtgate.resolver.Scheme()),
