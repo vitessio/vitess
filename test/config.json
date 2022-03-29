@@ -1060,7 +1060,16 @@
 		},
 		"vreplication_basic": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "^(TestVreplicationCopyThrottling|TestBasicVreplicationWorkflow)$", "-keep-data=false"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicVreplicationWorkflow"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_basic",
+			"RetryMax": 2,
+			"Tags": []
+		},
+		"vreplication_copy_throttling": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVreplicationCopyThrottling"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
