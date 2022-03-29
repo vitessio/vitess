@@ -438,6 +438,9 @@ func (exec *TabletExecutor) executeOneTablet(
 			}
 			if ddlStmt, ok := stmt.(sqlparser.DDLStatement); ok {
 				comments := sqlparser.Comments{`/*vt+ allowZeroInDate=true */`}
+				if ddlStmt.GetComments() != nil {
+					comments = append(comments, ddlStmt.GetComments()...)
+				}
 				ddlStmt.SetComments(comments)
 				sql = sqlparser.String(ddlStmt)
 			}
