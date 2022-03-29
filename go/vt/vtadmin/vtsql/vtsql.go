@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -75,6 +76,7 @@ type VTGateProxy struct {
 	DialFunc        func(cfg vitessdriver.Configuration) (*sql.DB, error)
 	dialPingTimeout time.Duration
 
+	m        sync.Mutex
 	host     string
 	conn     *sql.DB
 	dialedAt time.Time
@@ -137,6 +139,9 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 
 	vtgate.annotateSpan(span)
 
+	vtgate.m.Lock()
+	defer vtgate.m.Unlock()
+
 	if vtgate.conn != nil {
 		ctx, cancel := context.WithTimeout(ctx, vtgate.dialPingTimeout)
 		defer cancel()
@@ -153,7 +158,7 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 		default:
 			log.Warningf("Ping failed on host %s: %s; Rediscovering a vtgate to get new connection", vtgate.host, err)
 
-			if err := vtgate.Close(); err != nil {
+			if err := vtgate.closeLocked(); err != nil {
 				log.Warningf("Error when closing connection to vtgate %s: %s; Continuing anyway ...", vtgate.host, err)
 			}
 		}
@@ -237,6 +242,13 @@ func (vtgate *VTGateProxy) pingContext(ctx context.Context) error {
 
 // Close is part of the DB interface and satisfies io.Closer.
 func (vtgate *VTGateProxy) Close() error {
+	vtgate.m.Lock()
+	defer vtgate.m.Unlock()
+
+	return vtgate.closeLocked()
+}
+
+func (vtgate *VTGateProxy) closeLocked() error {
 	if vtgate.conn == nil {
 		return nil
 	}
@@ -251,6 +263,9 @@ func (vtgate *VTGateProxy) Close() error {
 
 // Debug implements debug.Debuggable for VTGateProxy.
 func (vtgate *VTGateProxy) Debug() map[string]any {
+	vtgate.m.Lock()
+	defer vtgate.m.Unlock()
+
 	m := map[string]any{
 		"host":         vtgate.host,
 		"is_connected": (vtgate.conn != nil),
