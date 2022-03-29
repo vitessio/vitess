@@ -56,7 +56,9 @@ func TestParse(t *testing.T) {
 			Discovery:       nil,
 			Credentials:     nil,
 			CredentialsPath: "",
-			resolver:        resolver.NewBuilder("", nil, resolver.Options{ResolveTimeout: time.Second}),
+			ResolverOptions: &resolver.Options{
+				DiscoveryTimeout: 100 * time.Millisecond,
+			},
 		}
 		assert.Equal(t, expected, cfg)
 	})
@@ -94,7 +96,9 @@ func TestParse(t *testing.T) {
 				Discovery:       nil,
 				Credentials:     creds,
 				CredentialsPath: credsfile.Name(),
-				resolver:        resolver.NewBuilder("", nil, resolver.Options{ResolveTimeout: time.Second}),
+				ResolverOptions: &resolver.Options{
+					DiscoveryTimeout: 100 * time.Millisecond,
+				},
 			}
 
 			assert.Equal(t, expected, cfg)

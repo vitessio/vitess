@@ -45,7 +45,7 @@ func (cc *mockClientConn) UpdateState(state grpcresolver.State) error {
 func (cc *mockClientConn) ReportError(err error) { cc.ReportedError = err }
 
 var testopts = Options{
-	ResolveTimeout: time.Millisecond * 50,
+	DiscoveryTimeout: time.Millisecond * 50,
 }
 
 func mustBuild(t *testing.T, b *builder, target grpcresolver.Target, cc grpcresolver.ClientConn, opts grpcresolver.BuildOptions) *resolver {

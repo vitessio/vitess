@@ -37,6 +37,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spf13/pflag"
 	grpcresolver "google.golang.org/grpc/resolver"
 
 	"vitess.io/vitess/go/trace"
@@ -58,8 +59,8 @@ type builder struct {
 }
 
 type Options struct {
-	ResolveTimeout time.Duration
-	DiscoveryTags  []string
+	DiscoveryTags    []string
+	DiscoveryTimeout time.Duration
 }
 
 // NewBuilder returns a gRPC resolver.Builder for the given scheme. For vtadmin,
@@ -69,12 +70,22 @@ type Options struct {
 // vtgate, based on the Authority field of the target. This means that the addr
 // passed to Dial should have the form "{clusterID}://{vtctld|vtgate}/". Other
 // target Authorities will cause an error.
-func NewBuilder(scheme string, disco discovery.Discovery, opts Options) grpcresolver.Builder {
+func (opts *Options) NewBuilder(scheme string, disco discovery.Discovery) grpcresolver.Builder {
 	return &builder{
 		scheme: scheme,
 		disco:  disco,
-		opts:   opts,
+		opts:   *opts,
 	}
+}
+
+// InstallFlags installs the resolver.Options flags on the given flagset. It is
+// used by both vtsql and vtctldclient proxies.
+func (opts *Options) InstallFlags(fs *pflag.FlagSet) {
+	fs.DurationVar(&opts.DiscoveryTimeout, "discovery-timeout", 100*time.Millisecond,
+		"Timeout to use when resolving hosts via discovery.")
+	fs.StringSliceVar(&opts.DiscoveryTags, "discovery-tags", nil,
+		"repeated, comma-separated list of tags to use when discovering hosts to connect to. "+
+			"the semantics of the tags may depend on the specific discovery implementation used.")
 }
 
 // Build is part of the resolver.Builder interface. See the commentary on
@@ -139,7 +150,7 @@ func (b *builder) Debug() map[string]any {
 	resolvers := make([]map[string]any, len(b.resolvers))
 	m := map[string]any{
 		"scheme":          b.scheme,
-		"resolve_timeout": b.opts.ResolveTimeout,
+		"resolve_timeout": b.opts.DiscoveryTimeout,
 		"discovery_tags":  b.opts.DiscoveryTags,
 		"resolvers":       resolvers,
 	}
@@ -181,7 +192,7 @@ func (r *resolver) resolve() (*grpcresolver.State, error) {
 
 	log.Infof("%s: resolving %ss (cluster %s)", logPrefix, r.component, r.cluster)
 
-	ctx, cancel := context.WithTimeout(ctx, r.opts.ResolveTimeout)
+	ctx, cancel := context.WithTimeout(ctx, r.opts.DiscoveryTimeout)
 	defer cancel()
 
 	addrs, err := r.discoverAddrs(ctx, r.opts.DiscoveryTags)

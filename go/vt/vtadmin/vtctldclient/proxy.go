@@ -88,7 +88,7 @@ func New(cfg *Config) *ClientProxy {
 		creds:     cfg.Credentials,
 		discovery: cfg.Discovery,
 		DialFunc:  grpcvtctldclient.NewWithDialOpts,
-		resolver:  cfg.resolver,
+		resolver:  cfg.ResolverOptions.NewBuilder(cfg.Cluster.Id, cfg.Discovery),
 		closed:    true,
 	}
 }

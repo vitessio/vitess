@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
-	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 
@@ -112,10 +111,11 @@ func New(cfg *Config) *VTGateProxy {
 		cfg:             cfg,
 		DialFunc:        vitessdriver.OpenWithConfiguration,
 		dialPingTimeout: cfg.DialPingTimeout,
-		resolver: resolver.NewBuilder(cfg.Cluster.Id, cfg.Discovery, resolver.Options{
-			ResolveTimeout: time.Second, // TODO: add flag
-			DiscoveryTags:  discoveryTags,
-		}),
+		resolver:        cfg.ResolverOptions.NewBuilder(cfg.Cluster.Id, cfg.Discovery),
+		// resolver: resolver.NewBuilder(cfg.Cluster.Id, cfg.Discovery, resolver.Options{
+		// 	ResolveTimeout: time.Second, // TODO: add flag
+		// 	DiscoveryTags:  discoveryTags,
+		// }),
 	}
 }
 

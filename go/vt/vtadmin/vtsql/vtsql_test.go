@@ -109,14 +109,6 @@ func TestDial(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name:  "discovery error",
-			disco: fakediscovery.New(),
-			proxy: &VTGateProxy{
-				cluster: &vtadminpb.Cluster{},
-			},
-			shouldErr: true,
-		},
-		{
 			name:  "dialer error",
 			disco: fakediscovery.New(),
 			gates: []*vtadminpb.VTGate{
@@ -125,7 +117,7 @@ func TestDial(t *testing.T) {
 				},
 			},
 			proxy: &VTGateProxy{
-				cluster: &vtadminpb.Cluster{},
+				cluster: &vtadminpb.Cluster{Id: "test"},
 				DialFunc: func(cfg vitessdriver.Configuration) (*sql.DB, error) {
 					return nil, assert.AnError
 				},
@@ -141,7 +133,7 @@ func TestDial(t *testing.T) {
 				},
 			},
 			proxy: &VTGateProxy{
-				cluster: &vtadminpb.Cluster{},
+				cluster: &vtadminpb.Cluster{Id: "test"},
 				creds: &StaticAuthCredentials{
 					StaticAuthClientCreds: &grpcclient.StaticAuthClientCreds{
 						Username: "user",
@@ -171,7 +163,9 @@ func TestDial(t *testing.T) {
 				tt.proxy.discovery = tt.disco
 			}
 
-			tt.proxy.resolver = resolver.NewBuilder(tt.proxy.cluster.Id, tt.disco, resolver.Options{})
+			tt.proxy.resolver = (&resolver.Options{
+				DiscoveryTimeout: 50 * time.Millisecond,
+			}).NewBuilder(tt.proxy.cluster.Id, tt.disco)
 
 			err := tt.proxy.Dial(ctx, "")
 			if tt.shouldErr {

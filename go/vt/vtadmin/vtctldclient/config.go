@@ -18,10 +18,8 @@ package vtctldclient
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/spf13/pflag"
-	grpcresolver "google.golang.org/grpc/resolver"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
@@ -40,7 +38,7 @@ type Config struct {
 
 	Cluster *vtadminpb.Cluster
 
-	resolver grpcresolver.Builder
+	ResolverOptions *resolver.Options
 }
 
 // Parse returns a new config with the given cluster and discovery, after
@@ -48,18 +46,15 @@ type Config struct {
 // (*Config).Parse() for more details.
 func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string) (*Config, error) {
 	cfg := &Config{
-		Cluster:   cluster,
-		Discovery: disco,
+		Cluster:         cluster,
+		Discovery:       disco,
+		ResolverOptions: &resolver.Options{},
 	}
 
 	err := cfg.Parse(args)
 	if err != nil {
 		return nil, err
 	}
-
-	cfg.resolver = resolver.NewBuilder(cluster.Id, disco, resolver.Options{
-		ResolveTimeout: time.Second, // TODO: add flag
-	})
 
 	return cfg, nil
 }
@@ -69,6 +64,12 @@ func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string)
 // (*cluster.Cluster).New().
 func (c *Config) Parse(args []string) error {
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
+
+	if c.ResolverOptions == nil {
+		c.ResolverOptions = &resolver.Options{}
+	}
+
+	c.ResolverOptions.InstallFlags(fs)
 
 	credentialsTmplStr := fs.String("credentials-path-tmpl", "",
 		"Go template used to specify a path to a credentials file, which is a json file containing "+
