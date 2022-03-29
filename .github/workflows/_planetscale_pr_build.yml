@@ -86,4 +86,6 @@ jobs:
       - name: Test kmsbackup
         run: |
           echo '${{ secrets.VITESS_PRIVATE_AWS_CREDENTIALS }}' >> "$RUNNER_TEMP/aws.credentials"
+          echo '${{ secrets.VITESS_PRIVATE_GCP_CREDENTIALS }}' >> "$RUNNER_TEMP/gcp.credentials"
           go test vitess.io/vitess/go/vt/mysqlctl/kmsbackup -v -race --aws-credentials-file "$RUNNER_TEMP/aws.credentials" --aws-credentials-profile vitess-private-ci
+          go test vitess.io/vitess/go/vt/mysqlctl/gcsbackup -v -race --gcp-credentials-file "$RUNNER_TEMP/gcp.credentials"
