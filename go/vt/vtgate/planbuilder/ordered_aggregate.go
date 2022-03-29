@@ -104,7 +104,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 		if hasAggregates {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
 		}
-		pb.plan = newDistinct(pb.plan, nil)
+		pb.plan = newDistinctV3(pb.plan)
 		return nil
 	}
 

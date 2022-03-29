@@ -146,7 +146,7 @@ func evalResultsAreDateAndNumeric(l, r *EvalResult) bool {
 func compareAsTuples(lVal, rVal *EvalResult) bool {
 	left := lVal.typeof() == sqltypes.Tuple
 	right := rVal.typeof() == sqltypes.Tuple
-	if left && right {
+	if right && left {
 		return true
 	}
 	if left || right {
@@ -407,6 +407,9 @@ type UnsupportedCollationError struct {
 func (err UnsupportedCollationError) Error() string {
 	return fmt.Sprintf("cannot compare strings, collation is unknown or unsupported (collation ID: %d)", err.ID)
 }
+
+// UnsupportedCollationHashError is returned when we try to get the hash value and are missing the collation to use
+var UnsupportedCollationHashError = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "text type with an unknown/unsupported collation cannot be hashed")
 
 // NullsafeCompare returns 0 if v1==v2, -1 if v1<v2, and 1 if v1>v2.
 // NULL is the lowest value. If any value is
