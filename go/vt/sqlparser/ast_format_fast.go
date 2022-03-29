@@ -2667,13 +2667,6 @@ func (node *JSONQuoteExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteByte(')')
 }
 
-// Format formats the node
-//func (node *JSONPathParam) Format(buf *TrackedBuffer) {
-//	if node.Path != nil {
-//		buf.astPrintf(node, "%v", node.Path)
-//	}
-//}
-
 // formatFast formats the node
 func (node *JSONContainsExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("json_contains(")

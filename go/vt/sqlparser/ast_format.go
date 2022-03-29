@@ -2042,13 +2042,6 @@ func (node *JSONQuoteExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node
-//func (node *JSONPathParam) Format(buf *TrackedBuffer) {
-//	if node.Path != nil {
-//		buf.astPrintf(node, "%v", node.Path)
-//	}
-//}
-
-// Format formats the node
 func (node *JSONContainsExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "json_contains(%v, %v", node.Target, node.Candidate)
 	if len(node.PathList) > 0 {
