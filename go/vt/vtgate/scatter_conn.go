@@ -701,9 +701,14 @@ func wasConnectionClosed(err error) bool {
 	sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
 	message := sqlErr.Error()
 
-	return sqlErr.Number() == mysql.CRServerGone ||
-		sqlErr.Number() == mysql.CRServerLost ||
-		(sqlErr.Number() == mysql.ERQueryInterrupted && txClosed.MatchString(message))
+	switch sqlErr.Number() {
+	case mysql.CRServerGone, mysql.CRServerLost, mysql.CRConnectionError, mysql.CRConnHostError:
+		return true
+	case mysql.ERQueryInterrupted:
+		return txClosed.MatchString(message)
+	default:
+		return false
+	}
 }
 
 func requireNewQS(err error, target *querypb.Target) bool {
