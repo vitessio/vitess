@@ -48,7 +48,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vschema"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -2725,7 +2724,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 							Id:   clusterID,
 							Name: clusterName,
 						},
-						SrvVSchema: &vschema.SrvVSchema{
+						SrvVSchema: &vschemapb.SrvVSchema{
 							Keyspaces: map[string]*vschemapb.Keyspace{
 								"commerce": {
 									Tables: map[string]*vschemapb.Table{
@@ -2762,7 +2761,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 							Id:   clusterID,
 							Name: clusterName,
 						},
-						SrvVSchema: &vschema.SrvVSchema{
+						SrvVSchema: &vschemapb.SrvVSchema{
 							RoutingRules: &vschemapb.RoutingRules{},
 						},
 					},
@@ -2819,7 +2818,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 							Id:   clusterID,
 							Name: clusterName,
 						},
-						SrvVSchema: &vschema.SrvVSchema{
+						SrvVSchema: &vschemapb.SrvVSchema{
 							RoutingRules: &vschemapb.RoutingRules{},
 						},
 					},
@@ -2860,7 +2859,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 							Id:   clusterID,
 							Name: clusterName,
 						},
-						SrvVSchema: &vschema.SrvVSchema{
+						SrvVSchema: &vschemapb.SrvVSchema{
 							RoutingRules: &vschemapb.RoutingRules{},
 						},
 					},
@@ -2887,7 +2886,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 							Id:   clusterID,
 							Name: clusterName,
 						},
-						SrvVSchema: &vschema.SrvVSchema{},
+						SrvVSchema: &vschemapb.SrvVSchema{},
 					},
 				},
 			},
