@@ -183,7 +183,14 @@ func (stc *ScatterConn) ExecuteMultiShard(
 
 			qs, err = getQueryService(rs, info)
 			if err != nil {
-				return nil, err
+				if info.reservedID == 0 || info.transactionID != 0 {
+					return nil, err
+				}
+				err = session.ResetShard(info.alias)
+				if err != nil {
+					return nil, err
+				}
+				qs = rs.Gateway
 			}
 
 			retryRequest := func(exec func()) {
