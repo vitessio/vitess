@@ -62,6 +62,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   str           string
   strs          []string
   vindexParam   VindexParam
+  jsonObjectParam *JSONObjectParam
   colIdent      ColIdent
   joinCondition *JoinCondition
   collateAndCharset CollateAndCharset
@@ -130,6 +131,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   renameTablePairs []*RenameTablePair
   alterOptions	   []AlterOption
   vindexParams  []VindexParam
+  jsonObjectParams []*JSONObjectParam
   partDefs      []*PartitionDefinition
   partitionValueRange	*PartitionValueRange
   partSpecs     []*PartitionSpec
@@ -293,6 +295,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> TIMESTAMPADD TIMESTAMPDIFF
 %token <str> WEIGHT_STRING
 %token <str> LTRIM RTRIM TRIM
+%token <str> JSON_ARRAY JSON_OBJECT JSON_QUOTE
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -467,6 +470,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
+%type <jsonObjectParam> json_object_param
+%type <jsonObjectParams> json_object_param_list json_object_param_opt
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
 %type <str> database_or_schema column_opt insert_method_options row_format_options
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
@@ -1030,6 +1035,31 @@ vindex_param:
   reserved_sql_id '=' table_opt_value
   {
     $$ = VindexParam{Key: $1, Val: $3}
+  }
+
+json_object_param_opt:
+  {
+    $$ = nil
+  }
+| json_object_param_list
+  {
+    $$ = $1
+  }
+
+json_object_param_list:
+  json_object_param
+  {
+    $$ = []*JSONObjectParam{$1}
+  }
+| json_object_param_list ',' json_object_param
+  {
+    $$ = append($$, $3)
+  }
+
+json_object_param:
+  expression ',' expression
+  {
+    $$ = &JSONObjectParam{Key:$1, Value:$3}
   }
 
 create_table_prefix:
@@ -4889,6 +4919,18 @@ UTC_DATE func_paren_opt
   {
     $$ = &TrimFuncExpr{TrimArg:$3, StringArg: $5}
   }
+| JSON_ARRAY openb expression_list_opt closeb
+  {
+    $$ = &JSONArrayExpr{ Params:$3 }
+  }
+| JSON_OBJECT openb json_object_param_opt closeb
+  {
+    $$ = &JSONObjectExpr{ Params:$3 }
+  }
+| JSON_QUOTE openb expression closeb
+  {
+    $$ = &JSONQuoteExpr{ StringArg:$3 }
+  }
 
 interval:
  interval_time_stamp
@@ -6145,6 +6187,9 @@ non_reserved_keyword:
 | INDEXES
 | ISOLATION
 | JSON
+| JSON_ARRAY
+| JSON_OBJECT
+| JSON_QUOTE
 | JSON_PRETTY
 | JSON_STORAGE_FREE
 | JSON_STORAGE_SIZE

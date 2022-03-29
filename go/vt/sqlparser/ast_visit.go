@@ -172,8 +172,16 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfIsExpr(in, f)
 	case IsolationLevel:
 		return VisitIsolationLevel(in, f)
+	case *JSONArrayExpr:
+		return VisitRefOfJSONArrayExpr(in, f)
+	case *JSONObjectExpr:
+		return VisitRefOfJSONObjectExpr(in, f)
+	case JSONObjectParam:
+		return VisitJSONObjectParam(in, f)
 	case *JSONPrettyExpr:
 		return VisitRefOfJSONPrettyExpr(in, f)
+	case *JSONQuoteExpr:
+		return VisitRefOfJSONQuoteExpr(in, f)
 	case *JSONStorageFreeExpr:
 		return VisitRefOfJSONStorageFreeExpr(in, f)
 	case *JSONStorageSizeExpr:
@@ -1410,6 +1418,44 @@ func VisitRefOfIsExpr(in *IsExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfJSONArrayExpr(in *JSONArrayExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.Params, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJSONObjectExpr(in *JSONObjectExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in.Params {
+		if err := VisitRefOfJSONObjectParam(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func VisitJSONObjectParam(in JSONObjectParam, f Visit) error {
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Key, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Value, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfJSONPrettyExpr(in *JSONPrettyExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1418,6 +1464,18 @@ func VisitRefOfJSONPrettyExpr(in *JSONPrettyExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.JSONVal, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJSONQuoteExpr(in *JSONQuoteExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.StringArg, f); err != nil {
 		return err
 	}
 	return nil
@@ -2758,8 +2816,14 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
+	case *JSONArrayExpr:
+		return VisitRefOfJSONArrayExpr(in, f)
+	case *JSONObjectExpr:
+		return VisitRefOfJSONObjectExpr(in, f)
 	case *JSONPrettyExpr:
 		return VisitRefOfJSONPrettyExpr(in, f)
+	case *JSONQuoteExpr:
+		return VisitRefOfJSONQuoteExpr(in, f)
 	case *JSONStorageFreeExpr:
 		return VisitRefOfJSONStorageFreeExpr(in, f)
 	case *JSONStorageSizeExpr:
@@ -2928,8 +2992,14 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfIntroducerExpr(in, f)
 	case *IsExpr:
 		return VisitRefOfIsExpr(in, f)
+	case *JSONArrayExpr:
+		return VisitRefOfJSONArrayExpr(in, f)
+	case *JSONObjectExpr:
+		return VisitRefOfJSONObjectExpr(in, f)
 	case *JSONPrettyExpr:
 		return VisitRefOfJSONPrettyExpr(in, f)
+	case *JSONQuoteExpr:
+		return VisitRefOfJSONQuoteExpr(in, f)
 	case *JSONStorageFreeExpr:
 		return VisitRefOfJSONStorageFreeExpr(in, f)
 	case *JSONStorageSizeExpr:
@@ -3200,6 +3270,21 @@ func VisitRefOfColIdent(in *ColIdent, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJSONObjectParam(in *JSONObjectParam, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Key, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Value, f); err != nil {
 		return err
 	}
 	return nil
