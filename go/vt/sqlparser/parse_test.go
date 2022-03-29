@@ -2433,6 +2433,42 @@ var (
 	)
 ) as jt1`,
 	}, {
+		input:  "SELECT JSON_ARRAY()",
+		output: "select json_array() from dual",
+	}, {
+		input:  "SELECT JSON_ARRAY(1)",
+		output: "select json_array(1) from dual",
+	}, {
+		input:  "SELECT JSON_ARRAY('abc')",
+		output: "select json_array('abc') from dual",
+	}, {
+		input:  "SELECT JSON_ARRAY(BIN(11))",
+		output: "select json_array(BIN(11)) from dual",
+	}, {
+		input:  `SELECT JSON_ARRAY(1, "abc", NULL, TRUE, CURTIME());`,
+		output: `select json_array(1, 'abc', null, true, CURTIME()) from dual`,
+	}, {
+		input:  "SELECT JSON_OBJECT(1,2)",
+		output: "select json_object(1, 2) from dual",
+	}, {
+		input:  "SELECT JSON_OBJECT(1,'abc')",
+		output: "select json_object(1, 'abc') from dual",
+	}, {
+		input:  "SELECT JSON_OBJECT('abc',1)",
+		output: "select json_object('abc', 1) from dual",
+	}, {
+		input:  "SELECT JSON_OBJECT(BIN(1),2)",
+		output: "select json_object(BIN(1), 2) from dual",
+	}, {
+		input:  "SELECT JSON_OBJECT(BIN(1),2,'abc',ASCII(4))",
+		output: "select json_object(BIN(1), 2, 'abc', ASCII(4)) from dual",
+	}, {
+		input:  "SELECT JSON_QUOTE(BIN(11))",
+		output: "select json_quote(BIN(11)) from dual",
+	}, {
+		input:  `SELECT JSON_QUOTE('null'), JSON_QUOTE('"null"')`,
+		output: `select json_quote('null'), json_quote('\"null\"') from dual`,
+	}, {
 		input:  "select t1.a, dt.a from t1, lateral (select t1.a+t2.a as a from t2) dt",
 		output: "select t1.a, dt.a from t1, lateral (select t1.a + t2.a as a from t2) as dt",
 	}, {
@@ -2544,6 +2580,21 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "SELECT jcol, JSON_PRETTY(jcol, jcol) from jtable",
 		err:   "syntax error at position 31",
+	}, {
+		input: "SELECT JSON_ARRAY(1,)",
+		err:   "syntax error at position 22",
+	}, {
+		input: "SELECT JSON_OBJECT(1)",
+		err:   "syntax error at position 22",
+	}, {
+		input: "SELECT JSON_OBJECT(1,2,)",
+		err:   "syntax error at position 25",
+	}, {
+		input: "SELECT JSON_OBJECT(1,)",
+		err:   "syntax error at position 23",
+	}, {
+		input: "SELECT JSON_QUOTE()",
+		err:   "syntax error at position 20",
 	}, {
 		input: "select from t1, lateral (with qn as (select t1.a) select (select max(a) from qn)) as dt",
 		err:   "syntax error at position 12 near 'from'",

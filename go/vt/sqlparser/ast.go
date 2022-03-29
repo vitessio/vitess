@@ -2247,6 +2247,30 @@ type (
 	// Offset is another AST type that is used during planning and never produced by the parser
 	Offset int
 
+	// JSONArrayExpr represents JSON_ARRAY()
+	// More information on https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-array
+	JSONArrayExpr struct {
+		Params Exprs
+	}
+
+	// JSONObjectExpr represents JSON_ARRAY()
+	// More information on https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-object
+	JSONObjectExpr struct {
+		Params []*JSONObjectParam
+	}
+
+	// JSONObjectParam defines a key/value parameter for a JSON_OBJECT expression
+	JSONObjectParam struct {
+		Key   Expr
+		Value Expr
+	}
+
+	// JSONQuoteExpr represents JSON_QUOTE()
+	// More information https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-quote
+	JSONQuoteExpr struct {
+		StringArg Expr
+	}
+
 	// JSONTableExpr describes the components of JSON_TABLE()
 	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/json-table-functions.html#function_json-table
 	JSONTableExpr struct {
@@ -2335,6 +2359,9 @@ func (*JSONStorageFreeExpr) iExpr()  {}
 func (*JSONStorageSizeExpr) iExpr()  {}
 func (*TrimFuncExpr) iExpr()         {}
 func (Offset) iExpr()                {}
+func (*JSONArrayExpr) iExpr()        {}
+func (*JSONObjectExpr) iExpr()       {}
+func (*JSONQuoteExpr) iExpr()        {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()             {}
@@ -2352,6 +2379,9 @@ func (*GroupConcatExpr) iCallable()      {}
 func (*JSONPrettyExpr) iCallable()       {}
 func (*JSONStorageFreeExpr) iCallable()  {}
 func (*JSONStorageSizeExpr) iCallable()  {}
+func (*JSONArrayExpr) iCallable()        {}
+func (*JSONObjectExpr) iCallable()       {}
+func (*JSONQuoteExpr) iCallable()        {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.
