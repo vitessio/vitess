@@ -434,7 +434,7 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 		case sqlparser.LastInsertIDName:
 			bindVars[sqlparser.LastInsertIDName] = sqltypes.Uint64BindVariable(session.GetLastInsertId())
 		case sqlparser.FoundRowsName:
-			bindVars[sqlparser.FoundRowsName] = sqltypes.Uint64BindVariable(session.FoundRows)
+			bindVars[sqlparser.FoundRowsName] = sqltypes.Int64BindVariable(int64(session.FoundRows))
 		case sqlparser.RowCountName:
 			bindVars[sqlparser.RowCountName] = sqltypes.Int64BindVariable(session.RowCount)
 		}
