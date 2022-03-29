@@ -73,6 +73,15 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 			f(ival)
 			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
 		}
+		setInt64Val := func(f func(int64)) {
+			ival, err := strconv.ParseInt(value, 10, 64)
+			if err != nil {
+				msg = fmt.Sprintf("Failed setting value for %v: %v", varname, err)
+				return
+			}
+			f(ival)
+			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
+		}
 		setDurationVal := func(f func(time.Duration)) {
 			durationVal, err := time.ParseDuration(value)
 			if err != nil {
@@ -104,6 +113,10 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 			setIntVal(tsv.SetMaxResultSize)
 		case "WarnResultSize":
 			setIntVal(tsv.SetWarnResultSize)
+		case "VReplication: max InnoDB history list length on source for streaming rows":
+			setInt64Val(func(val int64) { tsv.Config().RowStreamer.MaxTrxHistLen = val })
+		case "VReplication: max MySQL replication lag on source for streaming rows":
+			setInt64Val(func(val int64) { tsv.Config().RowStreamer.MaxReplLagSecs = val })
 		case "UnhealthyThreshold":
 			setDurationVal(tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Set)
 			setDurationVal(tsv.hs.SetUnhealthyThreshold)
@@ -118,6 +131,12 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 
 	var vars []envValue
 	addIntVar := func(varname string, f func() int) {
+		vars = append(vars, envValue{
+			VarName: varname,
+			Value:   fmt.Sprintf("%v", f()),
+		})
+	}
+	addInt64Var := func(varname string, f func() int64) {
 		vars = append(vars, envValue{
 			VarName: varname,
 			Value:   fmt.Sprintf("%v", f()),
@@ -141,6 +160,8 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 	addIntVar("QueryCacheCapacity", tsv.QueryPlanCacheCap)
 	addIntVar("MaxResultSize", tsv.MaxResultSize)
 	addIntVar("WarnResultSize", tsv.WarnResultSize)
+	addInt64Var("VReplication: max InnoDB history list length on source for streaming rows", func() int64 { return tsv.Config().RowStreamer.MaxTrxHistLen })
+	addInt64Var("VReplication: max MySQL replication lag on source for streaming rows", func() int64 { return tsv.Config().RowStreamer.MaxReplLagSecs })
 	addDurationVar("UnhealthyThreshold", tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Get)
 	addFloat64Var("ThrottleMetricThreshold", tsv.ThrottleMetricThreshold)
 	vars = append(vars, envValue{
