@@ -396,7 +396,9 @@ func (hs *healthStreamer) InitSchemaLocked(conn *connpool.DBConn) (bool, error) 
 	for _, query := range mysql.VTDatabaseInit {
 		_, err := conn.Exec(hs.ctx, query, 1, false)
 		if err != nil {
-			return false, err
+			// it is possible that the _vt schema was already created by online ddl or vreplication as part of its init
+			// so ignore any errors and continue running future ddls
+			log.Infof("InitSchemaLocked: unable to run query %s: %s, ddl was probably already executed", query, err)
 		}
 	}
 
