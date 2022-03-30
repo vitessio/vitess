@@ -3505,9 +3505,9 @@ show_statement:
   {
     $$ = &Show{Type: string($2) + " " + string($3), Database: $4, Filter:$5}
   }
-| SHOW full_opt columns_or_fields FROM table_name from_database_opt like_or_where_opt
+| SHOW full_opt columns_or_fields FROM table_name from_database_opt as_of_opt like_or_where_opt
   {
-    showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
+    showTablesOpt := &ShowTablesOpt{DbName:$6, AsOf:$7, Filter:$8}
     $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5, Full: $2}
   }
 | SHOW full_opt TABLES from_database_opt as_of_opt like_or_where_opt
@@ -3765,10 +3765,11 @@ explain_verb:
 | EXPLAIN
 
 describe_statement:
-  describe table_name
+  describe table_name as_of_opt
   // rewrite describe table as show columns from table
   {
-    $$ = &Show{Type: "columns", OnTable: $2}
+    showTablesOpt := &ShowTablesOpt{AsOf:$3}
+    $$ = &Show{Type: "columns", OnTable: $2, ShowTablesOpt: showTablesOpt}
   }
 
 comment_opt:

@@ -1603,10 +1603,19 @@ var (
 			output: "use `ks:-80@master`",
 		}, {
 			input:  "describe foobar",
-			output: "show columns on foobar",
+			output: "show columns from foobar",
 		}, {
 			input:  "desc foobar",
-			output: "show columns on foobar",
+			output: "show columns from foobar",
+		}, {
+			input:  "describe a as of 'foo'",
+			output: "show columns from a as of 'foo'",
+		}, {
+			input:  "describe a as of func('foo')",
+			output: "show columns from a as of func('foo')",
+		}, {
+			input:  "show columns from a as of 'foo'",
+			output: "show columns from a as of 'foo'",
 		}, {
 			input: "explain select * from foobar",
 		}, {
@@ -2620,11 +2629,11 @@ func TestParseOne(t *testing.T) {
 			"",
 		},
 		{
-			input: `/*!50800 create view a as select 2 from  dual    */  `,
+			input:     `/*!50800 create view a as select 2 from  dual    */  `,
 			remainder: "",
 		},
 		{
-			input: `/*! create view a as select 2 from  dual    */  ; select * from a`,
+			input:     `/*! create view a as select 2 from  dual    */  ; select * from a`,
 			remainder: "select * from a",
 		},
 	}
@@ -2887,7 +2896,7 @@ begin
 	set @s = concat(n, ' ', @s, ' ', m, '.');
 	select @s;
 end`,
-sel: `begin
+			sel: `begin
 	set @s = '';
 	if n = m then set @s = 'equals';
 	else
@@ -2901,10 +2910,10 @@ sel: `begin
 end`,
 		}, {
 			query: "create procedure p1() language sql deterministic sql security invoker select 1+1",
-			sel: "select 1+1",
+			sel:   "select 1+1",
 		}, {
 			query: "create procedure p1 (in v1 int, inout v2 char(2), out v3 datetime) begin select rand() * 10; end",
-			sel: "begin select rand() * 10; end",
+			sel:   "begin select rand() * 10; end",
 		}, {
 			query: `/*!50400 create procedure p1(n double, m double)
 begin
@@ -2959,16 +2968,16 @@ end*/ `,
 end`,
 		}, {
 			query: "/*!50040   create procedure p1() language sql deterministic sql security invoker select 1+1 */",
-			sel: "select 1+1",
+			sel:   "select 1+1",
 		}, {
 			query: "/*! create procedure p1 (in v1 int, inout v2 char(2), out v3 datetime) begin select rand() * 10; end */",
-			sel: "begin select rand() * 10; end",
+			sel:   "begin select rand() * 10; end",
 		}, {
 			query: "create trigger t1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b",
-			sel: "update xxy set baz = 1 where a = b",
+			sel:   "update xxy set baz = 1 where a = b",
 		}, {
 			query: "create definer = me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
-			sel: "update xxy set x = old.y",
+			sel:   "update xxy set x = old.y",
 		}, {
 			query: `create trigger t1 before delete on foo for each row follows baz
 			begin
@@ -2983,10 +2992,10 @@ end`,
 			end`,
 		}, {
 			query: "/*! create trigger t1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b */",
-			sel: "update xxy set baz = 1 where a = b",
+			sel:   "update xxy set baz = 1 where a = b",
 		}, {
 			query: "/*!50040 create definer = me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y */ ",
-			sel: "update xxy set x = old.y",
+			sel:   "update xxy set x = old.y",
 		}, {
 			query: `/*!50604 create trigger t1 before delete on foo for each row follows baz
 			begin
@@ -3019,10 +3028,10 @@ end`,
 
 		// Also run all these test cases with the ParseOne function (used to execute multiple queries in a single request)
 		// to make sure they appropriately consume the correct amount of buffer
-		t.Run(tcase.query + " ParseOne", func(t *testing.T) {
+		t.Run(tcase.query+" ParseOne", func(t *testing.T) {
 			tree, remainder, err := ParseOne(tcase.query)
 			require.Nil(t, err)
-			require.Equal(t, len(tcase.query) + 1, remainder)
+			require.Equal(t, len(tcase.query)+1, remainder)
 
 			ddl, ok := tree.(*DDL)
 			require.True(t, ok, "Expected DDL when parsing (%q)", tcase.query)
