@@ -89,9 +89,9 @@ describe('Tablet view', () => {
             (process as any).env.REACT_APP_READONLY_MODE = 'true';
         });
 
-        it('hides the "Advanced" tab', async () => {
+        it('hides the "Advanced" tab', () => {
             renderHelper();
-            const tab = await screen.queryByRole('tab', { name: 'Advanced' });
+            const tab = screen.queryByRole('tab', { name: 'Advanced' });
             expect(tab).toBe(null);
         });
 
