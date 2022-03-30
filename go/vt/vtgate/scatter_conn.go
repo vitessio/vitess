@@ -181,16 +181,9 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				}
 			}
 
-			qs, err = getQueryService(rs, info)
+			qs, err = getQueryService(rs, info, session, false)
 			if err != nil {
-				if info.reservedID == 0 || info.transactionID != 0 {
-					return nil, err
-				}
-				err = session.ResetShard(info.alias)
-				if err != nil {
-					return nil, err
-				}
-				qs = rs.Gateway
+				return nil, err
 			}
 
 			retryRequest := func(exec func()) {
@@ -281,11 +274,25 @@ func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSe
 	return retry
 }
 
-func getQueryService(rs *srvtopo.ResolvedShard, info *shardActionInfo) (queryservice.QueryService, error) {
+func getQueryService(rs *srvtopo.ResolvedShard, info *shardActionInfo, session *SafeSession, skipReset bool) (queryservice.QueryService, error) {
 	if info.alias == nil {
 		return rs.Gateway, nil
 	}
-	return rs.Gateway.QueryServiceByAlias(info.alias, rs.Target)
+	qs, err := rs.Gateway.QueryServiceByAlias(info.alias, rs.Target)
+	if err == nil || skipReset {
+		return qs, err
+	}
+	// If the session info has only reserved connection and no transaction then we will route it through gateway
+	// Otherwise, we will fail.
+	if info.reservedID == 0 || info.transactionID != 0 {
+		return nil, err
+	}
+	err = session.ResetShard(info.alias)
+	if err != nil {
+		return nil, err
+	}
+	// Returning rs.Gateway will make the gateway to choose new healthy tablet for the targeted tablet type.
+	return rs.Gateway, nil
 }
 
 func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *bool, qr *sqltypes.Result, callback func(*sqltypes.Result) error) error {
@@ -352,7 +359,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				}
 			}
 
-			qs, err = getQueryService(rs, info)
+			qs, err = getQueryService(rs, info, session, false)
 			if err != nil {
 				return nil, err
 			}
@@ -662,7 +669,7 @@ func (stc *ScatterConn) ExecuteLock(
 		_ = stc.txConn.ReleaseLock(ctx, session)
 		return nil, vterrors.Wrap(err, "Any previous held locks are released")
 	}
-	qs, err := getQueryService(rs, info)
+	qs, err := getQueryService(rs, info, nil, true)
 	if err != nil {
 		return nil, err
 	}
