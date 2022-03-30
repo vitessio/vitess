@@ -40,6 +40,7 @@ import (
 
 	"github.com/spf13/pflag"
 	grpcresolver "google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/serviceconfig"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
@@ -66,10 +67,38 @@ func DialAddr(resolver grpcresolver.Builder, component string) string {
 	return fmt.Sprintf("%s://%s/", resolver.Scheme(), component)
 }
 
+type BalancerPolicy string
+
+const (
+	PickFirstBalancer  BalancerPolicy = "pick_first"
+	RoundRobinBalancer BalancerPolicy = "round_robin"
+)
+
+var allBalancerPolicies = []string{
+	string(PickFirstBalancer),
+	string(RoundRobinBalancer),
+}
+
+func (bp *BalancerPolicy) Set(s string) error {
+	switch s {
+	case string(PickFirstBalancer), string(RoundRobinBalancer):
+		*bp = BalancerPolicy(s)
+	default:
+		return fmt.Errorf("unsupported balancer policy %s; must be one of %s", s, strings.Join(allBalancerPolicies, ", "))
+	}
+
+	return nil
+}
+
+func (bp *BalancerPolicy) String() string { return string(*bp) }
+func (*BalancerPolicy) Type() string      { return "resolver.BalancerPolicy" }
+
 type Options struct {
 	Discovery        discovery.Discovery
 	DiscoveryTags    []string
 	DiscoveryTimeout time.Duration
+
+	BalancerPolicy BalancerPolicy
 }
 
 // NewBuilder returns a gRPC resolver.Builder for the given scheme. For vtadmin,
@@ -94,6 +123,9 @@ func (opts *Options) InstallFlags(fs *pflag.FlagSet) {
 	fs.StringSliceVar(&opts.DiscoveryTags, "discovery-tags", nil,
 		"repeated, comma-separated list of tags to use when discovering hosts to connect to. "+
 			"the semantics of the tags may depend on the specific discovery implementation used.")
+	fs.Var(&opts.BalancerPolicy, "grpc-balancer-policy",
+		fmt.Sprintf("Specify a load balancer policy to use for resolvers built by these options (the default grpc behavior is pick_first). Valid choices are %s",
+			strings.Join(allBalancerPolicies, ",")))
 }
 
 // Build is part of the resolver.Builder interface. See the commentary on
@@ -131,6 +163,16 @@ func (b *builder) build(target grpcresolver.Target, cc grpcresolver.ClientConn, 
 		return nil, fmt.Errorf("%s: unsupported authority %s", logPrefix, target.Authority)
 	}
 
+	var sc serviceconfig.Config
+	if b.opts.BalancerPolicy != "" {
+		scpr := cc.ParseServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{ "%s": {} }] }`, b.opts.BalancerPolicy))
+		if scpr.Err != nil {
+			return nil, fmt.Errorf("failed to initialize service config with load balancer policy %s: %s", b.opts.BalancerPolicy, scpr.Err)
+		}
+
+		sc = scpr.Config
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &resolver{
@@ -139,6 +181,7 @@ func (b *builder) build(target grpcresolver.Target, cc grpcresolver.ClientConn, 
 		discoverAddrs: fn,
 		opts:          b.opts,
 		cc:            cc,
+		sc:            sc,
 		ctx:           ctx,
 		cancel:        cancel,
 		createdAt:     time.Now().UTC(),
@@ -177,6 +220,7 @@ type resolver struct {
 	opts          Options
 
 	cc grpcresolver.ClientConn
+	sc serviceconfig.Config // optionally used to enforce a balancer policy
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -212,6 +256,13 @@ func (r *resolver) resolve() (*grpcresolver.State, error) {
 
 	state := &grpcresolver.State{
 		Addresses: make([]grpcresolver.Address, len(addrs)),
+	}
+
+	if r.sc != nil {
+		span.Annotate("balancer_policy", r.opts.BalancerPolicy)
+		state.ServiceConfig = &serviceconfig.ParseResult{
+			Config: r.sc,
+		}
 	}
 
 	for i, addr := range addrs {
