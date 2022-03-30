@@ -78,15 +78,24 @@ func TestTopoCustomRule(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err, "error should be Nil")
 
-	// Verify that query is working
-	result, err := vtctlExec("select id, value from t1", rTablet.Alias)
-	require.NoError(t, err)
-	resultMap := make(map[string]any)
-	err = json.Unmarshal([]byte(result), &resultMap)
-	require.NoError(t, err)
+	// And wait until the query is working.
+	// We need a wait here because the instance we have created is a replica
+	// It might take a while to replicate the two rows.
+	timeout := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeout) {
+		result, err := vtctlExec("select id, value from t1", rTablet.Alias)
+		if err == nil {
+			resultMap := make(map[string]any)
+			err = json.Unmarshal([]byte(result), &resultMap)
+			require.NoError(t, err)
 
-	rowsAffected := resultMap["rows"].([]any)
-	assert.EqualValues(t, 2, len(rowsAffected))
+			rowsAffected := resultMap["rows"].([]any)
+			if len(rowsAffected) == 2 {
+				break
+			}
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
 
 	// Now update the topocustomrule file.
 	data = []byte(`[{
@@ -102,7 +111,7 @@ func TestTopoCustomRule(t *testing.T) {
 	require.Nil(t, err, "error should be Nil")
 
 	// And wait until the query fails with the right error.
-	timeout := time.Now().Add(10 * time.Second)
+	timeout = time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
 		result, err := vtctlExec("select id, value from t1", rTablet.Alias)
 		if err != nil {
