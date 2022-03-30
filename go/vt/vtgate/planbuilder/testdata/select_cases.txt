@@ -2195,8 +2195,8 @@ Gen4 plan same as above
     "OperatorType": "Route",
     "Variant": "Scatter",
     "Keyspace": {
-      "Name": "main",
-      "Sharded": false
+      "Name": "user",
+      "Sharded": true
     },
     "FieldQuery": "select 42, id from dual, `user` where 1 != 1",
     "Query": "select 42, id from dual, `user`",
