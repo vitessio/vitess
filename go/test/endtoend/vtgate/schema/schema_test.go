@@ -107,6 +107,7 @@ func TestSchemaChange(t *testing.T) {
 	testWithDropCreateSchema(t)
 	testSchemaChangePreflightErrorPartially(t)
 	testDropNonExistentTables(t)
+	testCreateInvalidView(t)
 	testCopySchemaShards(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, 2)
 	testCopySchemaShards(t, fmt.Sprintf("%s/0", keyspaceName), 3)
 	testCopySchemaShardWithDifferentDB(t, 4)
@@ -222,6 +223,17 @@ func testDropNonExistentTables(t *testing.T) {
 	require.Nil(t, err)
 
 	checkTables(t, totalTableCount)
+}
+
+// testCreateInvalidView attempts to create a view that depends on non-existent table. We expect an error
+// we test with different 'direct' strategy options
+func testCreateInvalidView(t *testing.T) {
+	for _, ddlStrategy := range []string{"direct", "direct -allow-zero-in-date"} {
+		createInvalidView := "CREATE OR REPLACE VIEW invalid_view AS SELECT * FROM nonexistent_table;"
+		output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "-skip_preflight", "-ddl_strategy", ddlStrategy, "--sql", createInvalidView, keyspaceName)
+		require.Error(t, err)
+		assert.Contains(t, output, "doesn't exist (errno 1146)")
+	}
 }
 
 // checkTables checks the number of tables in the first two shards.
