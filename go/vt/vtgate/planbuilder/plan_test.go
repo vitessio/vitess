@@ -258,6 +258,18 @@ func TestOne(t *testing.T) {
 	testFile(t, "onecase.txt", "", vschema)
 }
 
+func TestOneWithMainAsDefault(t *testing.T) {
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json", true),
+		keyspace: &vindexes.Keyspace{
+			Name:    "main",
+			Sharded: false,
+		},
+	}
+
+	testFile(t, "onecase.txt", "", vschema)
+}
+
 func TestRubyOnRailsQueries(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
 		v:             loadSchema(t, "rails_schema_test.json", true),
