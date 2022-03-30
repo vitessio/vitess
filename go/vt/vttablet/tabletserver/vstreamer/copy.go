@@ -211,11 +211,6 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 	lastPK := getLastPKFromQR(uvs.plans[tableName].tablePK.Lastpk)
 	filter := uvs.plans[tableName].rule.Filter
 
-	// Let's be sure that MySQL is in good shape to stream more rows
-	if err := uvs.vse.waitForMySQL(ctx, uvs.cp); err != nil {
-		return err
-	}
-
 	log.Infof("Starting copyTable for %s, PK %v", tableName, lastPK)
 	uvs.sendTestEvent(fmt.Sprintf("Copy Start %s", tableName))
 

@@ -390,7 +390,7 @@ func getPacketSize() int64 {
 // that should be purged ASAP) and its replica lag (which will be -1 for non-replicas)
 // to help ensure that the vstream does not have an outsized harmful impact on the
 // source's ability to function normally.
-func (vse *Engine) waitForMySQL(ctx context.Context, db dbconfigs.Connector) error {
+func (vse *Engine) waitForMySQL(ctx context.Context, db dbconfigs.Connector, tableName string) error {
 	sourceEndpoint, _ := vse.getMySQLEndpoint(ctx, db)
 	backoff := 1 * time.Second
 	backoffLimit := backoff * 30
@@ -427,8 +427,8 @@ func (vse *Engine) waitForMySQL(ctx context.Context, db dbconfigs.Connector) err
 					ct := time.Now()
 					// Global row streamer waits on the source tablet
 					vse.rowStreamerWaits.Record("waitForMySQL", ct)
-					// Waits for this vstream (vreplication stats on target tablet)
-					vse.vstreamerPhaseTimings.Record("waitForMySQL", ct)
+					// Waits by the table we're copying from the sourcer tablet
+					vse.vstreamerPhaseTimings.Record(fmt.Sprintf("%s:waitForMySQL", tableName), ct)
 				}()
 				recording = true
 			}

@@ -248,7 +248,7 @@ func TestVStreamerWaitForMySQL(t *testing.T) {
 			}
 			env.TabletEnv.Config().RowStreamer.MaxTrxHistLen = tt.fields.maxTrxHistLen
 			env.TabletEnv.Config().RowStreamer.MaxReplLagSecs = tt.fields.maxReplLagSecs
-			if err := uvs.vse.waitForMySQL(ctx, uvs.cp); (err != nil) != tt.wantErr {
+			if err := uvs.vse.waitForMySQL(ctx, uvs.cp, "test"); (err != nil) != tt.wantErr {
 				t.Errorf("vstreamer.waitForMySQL() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
