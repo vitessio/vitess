@@ -339,7 +339,7 @@ func (r *resolver) Debug() map[string]any {
 	}
 
 	if r.lastResolveError != nil {
-		m["error"] = r.lastResolvedAt.String()
+		m["error"] = r.lastResolveError.Error()
 	}
 
 	return m
