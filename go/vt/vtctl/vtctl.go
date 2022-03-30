@@ -3538,11 +3538,19 @@ func commandGetPermissions(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	p, err := wr.GetPermissions(ctx, tabletAlias)
-	if err == nil {
-		printJSON(wr.Logger(), p)
+	resp, err := wr.VtctldServer().GetPermissions(ctx, &vtctldatapb.GetPermissionsRequest{
+		TabletAlias: tabletAlias,
+	})
+	if err != nil {
+		return err
 	}
-	return err
+	p, err := json2.MarshalIndentPB(resp.Permissions, "	")
+	if err != nil {
+		wr.Logger().Printf("%v\n", err)
+		return err
+	}
+	wr.Logger().Printf("%s\n", p)
+	return nil
 }
 
 func commandValidatePermissionsShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

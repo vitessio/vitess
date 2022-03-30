@@ -24,6 +24,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"vitess.io/vitess/go/json2"
+
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -189,6 +191,15 @@ Note that, in the SleepTablet implementation, the value should be positively-sig
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandStopReplication,
+	}
+	// GetPermissions asks the remote tablet for its permissions list.
+	GetPermissions = &cobra.Command{
+		Use:                   "GetPermissions <tablet_alias>",
+		Aliases:               []string{"GetPermissions"},
+		Short:                 "Asks the remote tablet for its permissions list.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetPermissions,
 	}
 )
 
@@ -557,6 +568,26 @@ func commandStopReplication(cmd *cobra.Command, args []string) error {
 	return err
 }
 
+func commandGetPermissions(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.GetPermissions(commandCtx, &vtctldatapb.GetPermissionsRequest{
+		TabletAlias: alias,
+	})
+	if err != nil {
+		fmt.Printf("%v\n", err)
+		return err
+	}
+	p, err := json2.MarshalIndentPB(resp.Permissions, "	")
+	fmt.Printf("%s\n", p)
+	return err
+}
+
 func init() {
 	ChangeTabletType.Flags().BoolVarP(&changeTabletTypeOptions.DryRun, "dry-run", "d", false, "Shows the proposed change without actually executing it")
 	Root.AddCommand(ChangeTabletType)
@@ -587,4 +618,5 @@ func init() {
 	Root.AddCommand(SleepTablet)
 	Root.AddCommand(StartReplication)
 	Root.AddCommand(StopReplication)
+	Root.AddCommand(GetPermissions)
 }

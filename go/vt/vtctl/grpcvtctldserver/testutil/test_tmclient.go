@@ -183,6 +183,13 @@ type TabletManagerClient struct {
 		Error  error
 	}
 	// keyed by tablet alias.
+	GetPermissionsDelays map[string]time.Duration
+	// keyed by tablet alias.
+	GetPermissionsResults map[string]struct {
+		Permissions *tabletmanagerdatapb.Permissions
+		Error       error
+	}
+	// keyed by tablet alias.
 	PrimaryPositionDelays map[string]time.Duration
 	// keyed by tablet alias.
 	PrimaryPositionResults map[string]struct {
@@ -547,6 +554,36 @@ func (fake *TabletManagerClient) GetSchema(ctx context.Context, tablet *topodata
 	}
 
 	return nil, fmt.Errorf("%w: no schemas for %s", assert.AnError, key)
+}
+
+// GetPermission is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error) {
+	if fake.GetPermissionsResults == nil {
+		return nil, assert.AnError
+	}
+
+	if tablet.Alias == nil {
+		return nil, assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.GetPermissionsDelays != nil {
+		if delay, ok := fake.GetPermissionsDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.GetPermissionsResults[key]; ok {
+		return result.Permissions, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no permissions for %s", assert.AnError, key)
 }
 
 // PrimaryPosition is part of the tmclient.TabletManagerClient interface.

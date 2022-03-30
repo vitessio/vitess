@@ -385,6 +385,8 @@ type VtctldClient interface {
 	ValidateVersionKeyspace(ctx context.Context, in *vtctldata.ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionKeyspaceResponse, error)
 	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
 	ValidateVSchema(ctx context.Context, in *vtctldata.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVSchemaResponse, error)
+	// GetPermissions returns permission set on the remote tablet.
+	GetPermissions(ctx context.Context, in *vtctldata.GetPermissionsRequest, opts ...grpc.CallOption) (*vtctldata.GetPermissionsResponse, error)
 }
 
 type vtctldClient struct {
@@ -1166,6 +1168,15 @@ func (c *vtctldClient) ValidateVSchema(ctx context.Context, in *vtctldata.Valida
 	return out, nil
 }
 
+func (c *vtctldClient) GetPermissions(ctx context.Context, in *vtctldata.GetPermissionsRequest, opts ...grpc.CallOption) (*vtctldata.GetPermissionsResponse, error) {
+	out := new(vtctldata.GetPermissionsResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetPermissions", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VtctldServer is the server API for Vtctld service.
 // All implementations must embed UnimplementedVtctldServer
 // for forward compatibility
@@ -1423,6 +1434,8 @@ type VtctldServer interface {
 	ValidateVersionKeyspace(context.Context, *vtctldata.ValidateVersionKeyspaceRequest) (*vtctldata.ValidateVersionKeyspaceResponse, error)
 	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
 	ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error)
+	// GetPermissions returns permission set on the remote tablet.
+	GetPermissions(context.Context, *vtctldata.GetPermissionsRequest) (*vtctldata.GetPermissionsResponse, error)
 	mustEmbedUnimplementedVtctldServer()
 }
 
@@ -1663,6 +1676,9 @@ func (UnimplementedVtctldServer) ValidateVersionKeyspace(context.Context, *vtctl
 }
 func (UnimplementedVtctldServer) ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateVSchema not implemented")
+}
+func (UnimplementedVtctldServer) GetPermissions(context.Context, *vtctldata.GetPermissionsRequest) (*vtctldata.GetPermissionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPermissions not implemented")
 }
 func (UnimplementedVtctldServer) mustEmbedUnimplementedVtctldServer() {}
 
@@ -3090,6 +3106,24 @@ func _Vtctld_ValidateVSchema_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_GetPermissions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetPermissionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetPermissions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetPermissions",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetPermissions(ctx, req.(*vtctldata.GetPermissionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Vtctld_ServiceDesc is the grpc.ServiceDesc for Vtctld service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -3396,6 +3430,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateVSchema",
 			Handler:    _Vtctld_ValidateVSchema_Handler,
+		},
+		{
+			MethodName: "GetPermissions",
+			Handler:    _Vtctld_GetPermissions_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

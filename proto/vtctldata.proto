@@ -1172,3 +1172,11 @@ message ValidateVSchemaResponse {
   repeated string results = 1;
   map<string, ValidateShardResponse> results_by_shard = 2;
 }
+
+message GetPermissionsRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message GetPermissionsResponse {
+  tabletmanagerdata.Permissions permissions = 1;
+}

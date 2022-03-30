@@ -29,6 +29,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/json2"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -11635,6 +11637,158 @@ func TestValidateShard(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestGetPermissions(t *testing.T) {
+	var testGetPermissionsReply = &tabletmanagerdatapb.Permissions{
+		UserPermissions: []*tabletmanagerdatapb.UserPermission{
+			{
+				Host: "host1",
+				User: "user1",
+				Privileges: map[string]string{
+					"create": "yes",
+					"delete": "no",
+				},
+			},
+		},
+		DbPermissions: []*tabletmanagerdatapb.DbPermission{
+			{
+				Host: "host2",
+				Db:   "db1",
+				User: "user2",
+				Privileges: map[string]string{
+					"create": "no",
+					"delete": "yes",
+				},
+			},
+		},
+	}
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		tablets   []*topodatapb.Tablet
+		tmc       testutil.TabletManagerClient
+		req       *vtctldatapb.GetPermissionsRequest
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			tmc: testutil.TabletManagerClient{
+				GetPermissionsResults: map[string]struct {
+					Permissions *tabletmanagerdatapb.Permissions
+					Error       error
+				}{
+					"zone1-0000000100": {
+						Permissions: testGetPermissionsReply,
+						Error:       nil,
+					},
+				},
+			},
+			req: &vtctldatapb.GetPermissionsRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		},
+		{
+			name: "no tablet",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  404,
+					},
+				},
+			},
+			tmc: testutil.TabletManagerClient{
+				GetPermissionsResults: map[string]struct {
+					Permissions *tabletmanagerdatapb.Permissions
+					Error       error
+				}{
+					"zone1-0000000100": {
+						Permissions: testGetPermissionsReply,
+						Error:       nil,
+					},
+				},
+			},
+			req: &vtctldatapb.GetPermissionsRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "tmc call failed",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			tmc: testutil.TabletManagerClient{
+				GetPermissionsResults: map[string]struct {
+					Permissions *tabletmanagerdatapb.Permissions
+					Error       error
+				}{
+					"zone1-0000000100": {
+						Permissions: testGetPermissionsReply,
+						Error:       assert.AnError,
+					},
+				},
+			},
+			req: &vtctldatapb.GetPermissionsRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ts := memorytopo.NewServer("zone1")
+			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			resp, err := vtctld.GetPermissions(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+			// we should expect same user and DB permissions as assigned
+			assert.Equal(t, resp.Permissions.DbPermissions[0].Host, "host2")
+			assert.Equal(t, resp.Permissions.UserPermissions[0].Host, "host1")
+
+			// result should be Marshalled-able
+			perms, err := json2.MarshalIndentPB(resp.Permissions, "	")
+			if err != nil {
+				t.Errorf("tabletmanagerdatapb.Permissions():\n%s", perms)
+			}
+			require.NoError(t, err)
 		})
 	}
 }
