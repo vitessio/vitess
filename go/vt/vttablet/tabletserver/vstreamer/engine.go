@@ -132,6 +132,8 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		vstreamersEndedWithErrors: env.Exporter().NewCounter("VStreamersEndedWithErrors", "Count of vstreamers that ended with errors"),
 		errorCounts:               env.Exporter().NewCountersWithSingleLabel("VStreamerErrors", "Tracks errors in vstreamer", "type", "Catchup", "Copy", "Send", "TablePlan"),
 	}
+	env.Exporter().NewGaugeFunc("RowStreamerMaxInnoDBTrxHistLen", "", func() int64 { return env.Config().RowStreamer.MaxTrxHistLen })
+	env.Exporter().NewGaugeFunc("RowStreamerMaxMySQLReplLagSecs", "", func() int64 { return env.Config().RowStreamer.MaxReplLagSecs })
 	env.Exporter().HandleFunc("/debug/tablet_vschema", vse.ServeHTTP)
 	return vse
 }
@@ -427,7 +429,7 @@ func (vse *Engine) waitForMySQL(ctx context.Context, db dbconfigs.Connector, tab
 					ct := time.Now()
 					// Global row streamer waits on the source tablet
 					vse.rowStreamerWaits.Record("waitForMySQL", ct)
-					// Waits by the table we're copying from the sourcer tablet
+					// Waits by the table we're copying from the source tablet
 					vse.vstreamerPhaseTimings.Record(fmt.Sprintf("%s:waitForMySQL", tableName), ct)
 				}()
 				recording = true

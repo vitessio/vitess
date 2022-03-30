@@ -113,9 +113,9 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 			setIntVal(tsv.SetMaxResultSize)
 		case "WarnResultSize":
 			setIntVal(tsv.SetWarnResultSize)
-		case "VReplication: max InnoDB history list length on source for streaming rows":
+		case "RowStreamerMaxInnoDBTrxHistLen":
 			setInt64Val(func(val int64) { tsv.Config().RowStreamer.MaxTrxHistLen = val })
-		case "VReplication: max MySQL replication lag on source for streaming rows":
+		case "RowStreamerMaxMySQLReplLagSecs":
 			setInt64Val(func(val int64) { tsv.Config().RowStreamer.MaxReplLagSecs = val })
 		case "UnhealthyThreshold":
 			setDurationVal(tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Set)
