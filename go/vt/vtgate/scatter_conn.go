@@ -716,7 +716,7 @@ func wasConnectionClosed(err error) bool {
 	message := sqlErr.Error()
 
 	switch sqlErr.Number() {
-	case mysql.CRServerGone, mysql.CRServerLost, mysql.CRConnectionError, mysql.CRConnHostError:
+	case mysql.CRServerGone, mysql.CRServerLost:
 		return true
 	case mysql.ERQueryInterrupted:
 		return txClosed.MatchString(message)
@@ -728,8 +728,20 @@ func wasConnectionClosed(err error) bool {
 func requireNewQS(err error, target *querypb.Target) bool {
 	code := vterrors.Code(err)
 	msg := err.Error()
-	return (code == vtrpcpb.Code_FAILED_PRECONDITION && vterrors.RxWrongTablet.MatchString(msg)) ||
-		(code == vtrpcpb.Code_CLUSTER_EVENT && ((target != nil && target.TabletType == topodatapb.TabletType_PRIMARY) || vterrors.RxOp.MatchString(msg)))
+	if (code == vtrpcpb.Code_FAILED_PRECONDITION && vterrors.RxWrongTablet.MatchString(msg)) ||
+		(code == vtrpcpb.Code_CLUSTER_EVENT && ((target != nil && target.TabletType == topodatapb.TabletType_PRIMARY) || vterrors.RxOp.MatchString(msg))) ||
+		(code == vtrpcpb.Code_UNAVAILABLE && vterrors.RxTxEngineClosed.MatchString(msg)) {
+		return true
+	}
+
+	sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+
+	switch sqlErr.Number() {
+	case mysql.CRConnectionError, mysql.CRConnHostError:
+		return true
+	default:
+		return false
+	}
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
