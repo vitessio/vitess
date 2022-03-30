@@ -34,6 +34,7 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -198,6 +199,8 @@ func (r *resolver) resolve() (*grpcresolver.State, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover %ss (cluster %s): %w", r.component, r.cluster, err)
 	}
+
+	span.Annotate("addrs", strings.Join(addrs, ","))
 
 	state := &grpcresolver.State{
 		Addresses: make([]grpcresolver.Address, len(addrs)),
