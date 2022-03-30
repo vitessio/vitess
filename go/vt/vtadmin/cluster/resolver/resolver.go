@@ -149,10 +149,10 @@ func (b *builder) Debug() map[string]any {
 
 	resolvers := make([]map[string]any, len(b.resolvers))
 	m := map[string]any{
-		"scheme":          b.scheme,
-		"resolve_timeout": b.opts.DiscoveryTimeout,
-		"discovery_tags":  b.opts.DiscoveryTags,
-		"resolvers":       resolvers,
+		"scheme":            b.scheme,
+		"discovery_tags":    b.opts.DiscoveryTags,
+		"discovery_timeout": b.opts.DiscoveryTimeout,
+		"resolvers":         resolvers,
 	}
 
 	for i, r := range b.resolvers {
