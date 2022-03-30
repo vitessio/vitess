@@ -2195,8 +2195,8 @@ Gen4 plan same as above
     "OperatorType": "Route",
     "Variant": "Scatter",
     "Keyspace": {
-      "Name": "main",
-      "Sharded": false
+      "Name": "user",
+      "Sharded": true
     },
     "FieldQuery": "select 42, id from dual, `user` where 1 != 1",
     "Query": "select 42, id from dual, `user`",
@@ -3108,5 +3108,67 @@ Gen4 plan same as above
         "Table": "user_extra"
       }
     ]
+  }
+}
+
+# yeah, it does not make sense, but it's valid
+"select exists(select 1) from user where id = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "select exists(select 1) from user where id = 5",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from dual where 1 != 1",
+        "Query": "select 1 from dual",
+        "Table": "dual"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select :__sq_has_values1 from `user` where 1 != 1",
+        "Query": "select :__sq_has_values1 from `user` where id = 5",
+        "Table": "`user`",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select exists(select 1) from user where id = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select exists (select 1 from dual where 1 != 1) from `user` where 1 != 1",
+    "Query": "select exists (select 1 from dual) from `user` where id = 5",
+    "Table": "`user`",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
   }
 }
