@@ -423,7 +423,13 @@ func (vse *Engine) waitForMySQL(ctx context.Context, db dbconfigs.Connector) err
 			break
 		} else {
 			if !recording {
-				defer vse.rowStreamerWaits.Record("waitForMySQL", time.Now())
+				defer func() {
+					ct := time.Now()
+					// Global row streamer waits on the source tablet
+					vse.rowStreamerWaits.Record("waitForMySQL", ct)
+					// Waits for this vstream (vreplication stats on target tablet)
+					vse.vstreamerPhaseTimings.Record("waitForMySQL", ct)
+				}()
 				recording = true
 			}
 			select {

@@ -444,6 +444,7 @@ var vreplicationTemplate = `
     <th>Source</th>
     <th>Source Tablet</th>
     <th>State</th>
+    <th>Phase Stats</th>
     <th>Stop Position</th>
     <th>Last Position</th>
     <th>VReplication Lag</th>
@@ -456,6 +457,7 @@ var vreplicationTemplate = `
       <td>{{.Source}}</td>
       <td>{{.SourceTablet}}</td>
       <td>{{.State}}</td>
+      <td>{{.PhaseTimings}}</td>
       <td>{{.StopPosition}}</td>
       <td>{{.LastPosition}}</td>
       <td>{{.ReplicationLagSeconds}}</td>

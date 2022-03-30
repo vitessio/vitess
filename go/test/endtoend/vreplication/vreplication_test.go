@@ -552,8 +552,6 @@ func verifySourceTabletThrottling(t *testing.T, targetKS, workflow string) {
 		case <-ticker.C:
 			output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
 			require.NoError(t, err)
-			// If the source keyspace is sharded, we may not have data to copy from each shard, so
-			// we check for the state being Copying or the LastPK being empty
 			result := gjson.Get(output, "ShardStatuses")
 			result.ForEach(func(tabletId, tabletStreams gjson.Result) bool { // for each source tablet
 				tabletStreams.ForEach(func(streamId, streamInfos gjson.Result) bool { // for each stream
