@@ -77,7 +77,6 @@ type VTGateProxy struct {
 	dialPingTimeout time.Duration
 
 	m        sync.Mutex
-	host     string // TODO: no longer applicable with vtadmin.cluster.resolver
 	conn     *sql.DB
 	dialedAt time.Time
 	lastPing time.Time
@@ -143,17 +142,17 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 		err := vtgate.PingContext(ctx)
 		switch err {
 		case nil:
-			log.Infof("Have valid connection to %s, reusing it.", vtgate.host)
+			log.Info("Have valid connection to vtgate, reusing it.")
 			span.Annotate("is_noop", true)
 
 			vtgate.lastPing = time.Now()
 
 			return nil
 		default:
-			log.Warningf("Ping failed on host %s: %s; Rediscovering a vtgate to get new connection", vtgate.host, err)
+			log.Warningf("Ping failed on vtgate: %s; Rediscovering a vtgate to get new connection", err)
 
 			if err := vtgate.closeLocked(); err != nil {
-				log.Warningf("Error when closing connection to vtgate %s: %s; Continuing anyway ...", vtgate.host, err)
+				log.Warningf("Error when closing connection to vtgate: %s; Continuing anyway ...", err)
 			}
 		}
 	}
@@ -175,7 +174,7 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 
 	db, err := vtgate.DialFunc(conf)
 	if err != nil {
-		return fmt.Errorf("error dialing vtgate %s: %w", vtgate.host, err)
+		return fmt.Errorf("error dialing vtgate: %w", err)
 	}
 
 	vtgate.conn = db
@@ -235,8 +234,6 @@ func (vtgate *VTGateProxy) closeLocked() error {
 	}
 
 	err := vtgate.conn.Close()
-
-	vtgate.host = ""
 	vtgate.conn = nil
 
 	return err
@@ -248,7 +245,6 @@ func (vtgate *VTGateProxy) Debug() map[string]any {
 	defer vtgate.m.Unlock()
 
 	m := map[string]any{
-		"host":         vtgate.host,
 		"is_connected": (vtgate.conn != nil),
 	}
 
@@ -280,8 +276,4 @@ func (vtgate *VTGateProxy) Debug() map[string]any {
 
 func (vtgate *VTGateProxy) annotateSpan(span trace.Span) {
 	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
-
-	if vtgate.host != "" {
-		span.Annotate("vtgate_host", vtgate.host)
-	}
 }
