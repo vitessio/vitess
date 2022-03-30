@@ -67,18 +67,22 @@ func DialAddr(resolver grpcresolver.Builder, component string) string {
 	return fmt.Sprintf("%s://%s/", resolver.Scheme(), component)
 }
 
+// BalancerPolicy is an enum for different grpc load balancer policies. It also
+// implements the pflag.Value interface to be used as a flagset Var destination.
 type BalancerPolicy string
 
 const (
+	// PickFirstBalancer
 	PickFirstBalancer  BalancerPolicy = "pick_first"
 	RoundRobinBalancer BalancerPolicy = "round_robin"
 )
 
-var allBalancerPolicies = []string{
+var allBalancerPolicies = []string{ // convenience for help/error messages
 	string(PickFirstBalancer),
 	string(RoundRobinBalancer),
 }
 
+// Set is part of the pflag.Value interface.
 func (bp *BalancerPolicy) Set(s string) error {
 	switch s {
 	case string(PickFirstBalancer), string(RoundRobinBalancer):
@@ -90,14 +94,31 @@ func (bp *BalancerPolicy) Set(s string) error {
 	return nil
 }
 
+// String is part of the pflag.Value interface.
 func (bp *BalancerPolicy) String() string { return string(*bp) }
-func (*BalancerPolicy) Type() string      { return "resolver.BalancerPolicy" }
 
+// Type is part of the pflag.Value interface.
+func (*BalancerPolicy) Type() string { return "resolver.BalancerPolicy" }
+
+// Options defines the configuration options that can produce a resolver.Builder.
+//
+// A builder may be produced directly from an Options struct, but the intended
+// usage is to first initialize an Options struct via opts.InstallFlags, which
+// ensures the Options have sensible defaults and both vtctldclient proxy and
+// VTGateProxy do.
 type Options struct {
+	// Discovery is the discovery implementation used to discover host addresses
+	// when the ClientConn requests an update from the resolver.
 	Discovery        discovery.Discovery
 	DiscoveryTags    []string
 	DiscoveryTimeout time.Duration
 
+	// BalancerPolicy, if set, will cause a resolver to provide a ServiceConfig
+	// to the resolver's ClientConn with a corresponding loadBalancingConfig.
+	// Omitting this option will cause grpc to use its default load balacing
+	// policy, which is currently pick_first.
+	//
+	// For more details, see https://github.com/grpc/grpc/blob/master/doc/service_config.md.
 	BalancerPolicy BalancerPolicy
 }
 
