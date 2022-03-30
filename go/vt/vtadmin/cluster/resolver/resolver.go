@@ -58,6 +58,14 @@ type builder struct {
 	resolvers []*resolver
 }
 
+// DialAddr returns the dial address for a resolver scheme and component.
+//
+// VtctldClientProxy and VTGateProxy should use this to ensure their Dial calls
+// use their respective discovery resolvers.
+func DialAddr(resolver grpcresolver.Builder, component string) string {
+	return fmt.Sprintf("%s://%s/", resolver.Scheme(), component)
+}
+
 type Options struct {
 	Discovery        discovery.Discovery
 	DiscoveryTags    []string

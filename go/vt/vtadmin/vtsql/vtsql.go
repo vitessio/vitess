@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vitessdriver"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 
@@ -102,10 +103,6 @@ func New(cfg *Config) *VTGateProxy {
 		DialFunc:        vitessdriver.OpenWithConfiguration,
 		dialPingTimeout: cfg.DialPingTimeout,
 		resolver:        cfg.ResolverOptions.NewBuilder(cfg.Cluster.Id),
-		// resolver: resolver.NewBuilder(cfg.Cluster.Id, cfg.Discovery, resolver.Options{
-		// 	ResolveTimeout: time.Second, // TODO: add flag
-		// 	DiscoveryTags:  discoveryTags,
-		// }),
 	}
 }
 
@@ -165,7 +162,7 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 
 	conf := vitessdriver.Configuration{
 		Protocol:        fmt.Sprintf("grpc_%s", vtgate.cluster.Id),
-		Address:         fmt.Sprintf("%s://vtgate/", vtgate.resolver.Scheme()),
+		Address:         resolver.DialAddr(vtgate.resolver, "vtgate"),
 		Target:          target,
 		GRPCDialOptions: append(opts, grpc.WithInsecure(), grpc.WithResolvers(vtgate.resolver)),
 	}

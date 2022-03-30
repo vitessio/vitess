@@ -22,11 +22,12 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/resolver"
+	grpcresolver "google.golang.org/grpc/resolver"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldclient"
@@ -65,7 +66,7 @@ type ClientProxy struct {
 	// this should always be grpcvtctldclient.NewWithDialOpts, but it is
 	// exported for testing purposes.
 	DialFunc func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)
-	resolver resolver.Builder
+	resolver grpcresolver.Builder
 
 	m        sync.Mutex
 	closed   bool
@@ -132,7 +133,7 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 	opts = append(opts, grpc.WithResolvers(vtctld.resolver))
 
 	// TODO: update DialFunc to take ctx as first arg.
-	client, err := vtctld.DialFunc(vtctld.resolver.Scheme()+"://vtctld/", grpcclient.FailFast(false), opts...)
+	client, err := vtctld.DialFunc(resolver.DialAddr(vtctld.resolver, "vtctld"), grpcclient.FailFast(false), opts...)
 	if err != nil {
 		return err
 	}
