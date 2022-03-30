@@ -155,6 +155,9 @@ func TestRewrites(in *testing.T) {
 		in:       "select (select 42) from dual",
 		expected: "select 42 as `(select 42 from dual)` from dual",
 	}, {
+		in:       "select exists(select 1) from user",
+		expected: "select exists(select 1) from user",
+	}, {
 		in:       "select * from user where col = (select 42)",
 		expected: "select * from user where col = 42",
 	}, {
