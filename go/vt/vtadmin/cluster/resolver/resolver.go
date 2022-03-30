@@ -165,6 +165,7 @@ func (b *builder) build(target grpcresolver.Target, cc grpcresolver.ClientConn, 
 
 	var sc serviceconfig.Config
 	if b.opts.BalancerPolicy != "" {
+		// c.f. https://github.com/grpc/grpc/blob/master/doc/service_config.md#example
 		scpr := cc.ParseServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{ "%s": {} }] }`, b.opts.BalancerPolicy))
 		if scpr.Err != nil {
 			return nil, fmt.Errorf("failed to initialize service config with load balancer policy %s: %s", b.opts.BalancerPolicy, scpr.Err)
