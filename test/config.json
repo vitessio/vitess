@@ -840,6 +840,24 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtgate_reserved_conn3": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect3"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_reservedconn",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vtgate_reserved_conn4": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect4"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_reservedconn",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtgate_tablet_healthcheck_cache": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/tablet_healthcheck_cache", "-timeout", "45m"],
