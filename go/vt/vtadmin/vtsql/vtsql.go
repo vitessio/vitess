@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vitessdriver"
-	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 
@@ -65,16 +64,15 @@ type DB interface {
 // VTGateProxy is a proxy for creating and using database connections to vtgates
 // in a Vitess cluster.
 type VTGateProxy struct {
-	cluster       *vtadminpb.Cluster
-	discovery     discovery.Discovery
-	discoveryTags []string
-	creds         Credentials
-	cfg           *Config
+	cluster *vtadminpb.Cluster
+	creds   Credentials
+	cfg     *Config
 
 	// DialFunc is called to open a new database connection. In production this
 	// should always be vitessdriver.OpenWithConfiguration, but it is exported
 	// for testing purposes.
 	DialFunc        func(cfg vitessdriver.Configuration) (*sql.DB, error)
+	resolver        grpcresolver.Builder
 	dialPingTimeout time.Duration
 
 	m        sync.Mutex
@@ -82,7 +80,6 @@ type VTGateProxy struct {
 	conn     *sql.DB
 	dialedAt time.Time
 	lastPing time.Time
-	resolver grpcresolver.Builder
 }
 
 var _ DB = (*VTGateProxy)(nil)
@@ -98,20 +95,13 @@ var ErrConnClosed = errors.New("use of closed connection")
 // It does not open a connection to a vtgate; users must call Dial before first
 // use.
 func New(cfg *Config) *VTGateProxy {
-	discoveryTags := cfg.DiscoveryTags
-	if discoveryTags == nil {
-		discoveryTags = []string{}
-	}
-
 	return &VTGateProxy{
 		cluster:         cfg.Cluster,
-		discovery:       cfg.Discovery,
-		discoveryTags:   discoveryTags,
 		creds:           cfg.Credentials,
 		cfg:             cfg,
 		DialFunc:        vitessdriver.OpenWithConfiguration,
 		dialPingTimeout: cfg.DialPingTimeout,
-		resolver:        cfg.ResolverOptions.NewBuilder(cfg.Cluster.Id, cfg.Discovery),
+		resolver:        cfg.ResolverOptions.NewBuilder(cfg.Cluster.Id),
 		// resolver: resolver.NewBuilder(cfg.Cluster.Id, cfg.Discovery, resolver.Options{
 		// 	ResolveTimeout: time.Second, // TODO: add flag
 		// 	DiscoveryTags:  discoveryTags,

@@ -2653,8 +2653,9 @@ func TestGetTablets(t *testing.T) {
 			Id:   "c1",
 			Name: "one",
 		},
-		Discovery:       disco,
-		ResolverOptions: &resolver.Options{},
+		ResolverOptions: &resolver.Options{
+			Discovery: disco,
+		},
 	})
 	db.DialFunc = func(cfg vitessdriver.Configuration) (*sql.DB, error) {
 		return nil, assert.AnError

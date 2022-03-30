@@ -32,16 +32,13 @@ import (
 
 // Config represents the options that modify the behavior of a vtqsl.VTGateProxy.
 type Config struct {
-	Discovery     discovery.Discovery
-	DiscoveryTags []string
-	Credentials   Credentials
-
-	DialPingTimeout time.Duration
-
+	Credentials Credentials
 	// CredentialsPath is used only to power vtadmin debug endpoints; there may
 	// be a better way where we don't need to put this in the config, because
 	// it's not really an "option" in normal use.
 	CredentialsPath string
+
+	DialPingTimeout time.Duration
 
 	Cluster         *vtadminpb.Cluster
 	ResolverOptions *resolver.Options
@@ -52,9 +49,10 @@ type Config struct {
 // (*Config).Parse() for more details.
 func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string) (*Config, error) {
 	cfg := &Config{
-		Cluster:         cluster,
-		Discovery:       disco,
-		ResolverOptions: &resolver.Options{},
+		Cluster: cluster,
+		ResolverOptions: &resolver.Options{
+			Discovery: disco,
+		},
 	}
 
 	err := cfg.Parse(args)

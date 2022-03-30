@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldclient"
@@ -58,10 +57,9 @@ type Proxy interface {
 type ClientProxy struct {
 	vtctldclient.VtctldClient // embedded to provide easy implementation of the vtctlservicepb.VtctldClient interface
 
-	cluster   *vtadminpb.Cluster
-	creds     *grpcclient.StaticAuthClientCreds
-	discovery discovery.Discovery
-	cfg       *Config
+	cluster *vtadminpb.Cluster
+	creds   *grpcclient.StaticAuthClientCreds
+	cfg     *Config
 
 	// DialFunc is called to open a new vtctdclient connection. In production,
 	// this should always be grpcvtctldclient.NewWithDialOpts, but it is
@@ -83,13 +81,12 @@ type ClientProxy struct {
 // use.
 func New(cfg *Config) *ClientProxy {
 	return &ClientProxy{
-		cfg:       cfg,
-		cluster:   cfg.Cluster,
-		creds:     cfg.Credentials,
-		discovery: cfg.Discovery,
-		DialFunc:  grpcvtctldclient.NewWithDialOpts,
-		resolver:  cfg.ResolverOptions.NewBuilder(cfg.Cluster.Id, cfg.Discovery),
-		closed:    true,
+		cfg:      cfg,
+		cluster:  cfg.Cluster,
+		creds:    cfg.Credentials,
+		DialFunc: grpcvtctldclient.NewWithDialOpts,
+		resolver: cfg.ResolverOptions.NewBuilder(cfg.Cluster.Id),
+		closed:   true,
 	}
 }
 

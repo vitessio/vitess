@@ -159,13 +159,12 @@ func TestDial(t *testing.T) {
 				if len(tt.gates) > 0 {
 					tt.disco.AddTaggedGates(nil, tt.gates...)
 				}
-
-				tt.proxy.discovery = tt.disco
 			}
 
 			tt.proxy.resolver = (&resolver.Options{
+				Discovery:        tt.disco,
 				DiscoveryTimeout: 50 * time.Millisecond,
-			}).NewBuilder(tt.proxy.cluster.Id, tt.disco)
+			}).NewBuilder(tt.proxy.cluster.Id)
 
 			err := tt.proxy.Dial(ctx, "")
 			if tt.shouldErr {

@@ -31,9 +31,7 @@ import (
 
 // Config represents the options that modify the behavior of a Proxy.
 type Config struct {
-	Discovery   discovery.Discovery
-	Credentials *grpcclient.StaticAuthClientCreds
-
+	Credentials     *grpcclient.StaticAuthClientCreds
 	CredentialsPath string
 
 	Cluster *vtadminpb.Cluster
@@ -46,9 +44,10 @@ type Config struct {
 // (*Config).Parse() for more details.
 func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string) (*Config, error) {
 	cfg := &Config{
-		Cluster:         cluster,
-		Discovery:       disco,
-		ResolverOptions: &resolver.Options{},
+		Cluster: cluster,
+		ResolverOptions: &resolver.Options{
+			Discovery: disco,
+		},
 	}
 
 	err := cfg.Parse(args)

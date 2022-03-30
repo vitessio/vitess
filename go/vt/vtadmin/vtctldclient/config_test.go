@@ -53,7 +53,6 @@ func TestParse(t *testing.T) {
 
 		expected := &Config{
 			Cluster:         &vtadminpb.Cluster{},
-			Discovery:       nil,
 			Credentials:     nil,
 			CredentialsPath: "",
 			ResolverOptions: &resolver.Options{
@@ -93,7 +92,6 @@ func TestParse(t *testing.T) {
 				Cluster: &vtadminpb.Cluster{
 					Name: "testcluster",
 				},
-				Discovery:       nil,
 				Credentials:     creds,
 				CredentialsPath: credsfile.Name(),
 				ResolverOptions: &resolver.Options{

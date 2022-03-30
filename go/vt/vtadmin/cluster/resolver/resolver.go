@@ -50,7 +50,6 @@ const logPrefix = "[vtadmin.cluster.resolver]"
 
 type builder struct {
 	scheme string
-	disco  discovery.Discovery
 	opts   Options
 
 	// for debug.Debuggable
@@ -59,6 +58,7 @@ type builder struct {
 }
 
 type Options struct {
+	Discovery        discovery.Discovery
 	DiscoveryTags    []string
 	DiscoveryTimeout time.Duration
 }
@@ -70,10 +70,9 @@ type Options struct {
 // vtgate, based on the Authority field of the target. This means that the addr
 // passed to Dial should have the form "{clusterID}://{vtctld|vtgate}/". Other
 // target Authorities will cause an error.
-func (opts *Options) NewBuilder(scheme string, disco discovery.Discovery) grpcresolver.Builder {
+func (opts *Options) NewBuilder(scheme string) grpcresolver.Builder {
 	return &builder{
 		scheme: scheme,
-		disco:  disco,
 		opts:   *opts,
 	}
 }
@@ -116,9 +115,9 @@ func (b *builder) build(target grpcresolver.Target, cc grpcresolver.ClientConn, 
 	var fn func(context.Context, []string) ([]string, error)
 	switch target.Authority {
 	case "vtctld":
-		fn = b.disco.DiscoverVtctldAddrs
+		fn = b.opts.Discovery.DiscoverVtctldAddrs
 	case "vtgate":
-		fn = b.disco.DiscoverVTGateAddrs
+		fn = b.opts.Discovery.DiscoverVTGateAddrs
 	default:
 		return nil, fmt.Errorf("%s: unsupported authority %s", logPrefix, target.Authority)
 	}

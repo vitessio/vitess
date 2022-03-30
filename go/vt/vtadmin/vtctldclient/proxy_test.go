@@ -85,8 +85,8 @@ func TestDial(t *testing.T) {
 			Id:   "test",
 			Name: "testcluster",
 		},
-		Discovery: disco,
 		ResolverOptions: &resolver.Options{
+			Discovery:        disco,
 			DiscoveryTimeout: 50 * time.Millisecond,
 		},
 	})
@@ -163,8 +163,8 @@ func TestRedial(t *testing.T) {
 			Id:   "test",
 			Name: "testcluster",
 		},
-		Discovery: disco,
 		ResolverOptions: &resolver.Options{
+			Discovery:        disco,
 			DiscoveryTimeout: 50 * time.Millisecond,
 		},
 	})

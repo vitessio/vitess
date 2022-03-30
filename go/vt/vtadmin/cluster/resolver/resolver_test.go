@@ -64,9 +64,11 @@ func TestResolveNow(t *testing.T) {
 	disco.AddTaggedVtctlds(nil, &vtadminpb.Vtctld{
 		Hostname: "one",
 	})
+	testopts := testopts
+	testopts.Discovery = disco
 
 	cc := mockClientConn{}
-	r := mustBuild(t, &builder{disco: disco, opts: testopts}, grpcresolver.Target{
+	r := mustBuild(t, &builder{opts: testopts}, grpcresolver.Target{
 		Authority: "vtctld",
 	}, &cc, grpcresolver.BuildOptions{})
 
@@ -107,9 +109,11 @@ func TestResolveWithTags(t *testing.T) {
 	disco.AddTaggedGates([]string{"tag2"}, &vtadminpb.VTGate{
 		Hostname: "two",
 	})
+	testopts := testopts
+	testopts.Discovery = disco
 
 	cc := mockClientConn{}
-	r := mustBuild(t, &builder{disco: disco, opts: testopts}, grpcresolver.Target{
+	r := mustBuild(t, &builder{opts: testopts}, grpcresolver.Target{
 		Authority: "vtgate",
 	}, &cc, grpcresolver.BuildOptions{})
 	r.opts.DiscoveryTags = []string{"tag2"}
@@ -130,10 +134,12 @@ func TestResolveEmptyList(t *testing.T) {
 	disco.AddTaggedVtctlds(nil, &vtadminpb.Vtctld{
 		Hostname: "one",
 	})
+	testopts := testopts
+	testopts.Discovery = disco
 
 	cc := mockClientConn{}
 	r := mustBuild(t,
-		&builder{disco: disco, opts: testopts}, grpcresolver.Target{
+		&builder{opts: testopts}, grpcresolver.Target{
 			Authority: "vtgate", // we only have vtctlds
 		}, &cc, grpcresolver.BuildOptions{},
 	)
@@ -162,8 +168,10 @@ func TestBuild(t *testing.T) {
 	disco.AddTaggedVtctlds(nil, &vtadminpb.Vtctld{
 		Hostname: "vtctld:one",
 	})
+	testopts := testopts
+	testopts.Discovery = disco
 
-	b := &builder{disco: disco, opts: testopts}
+	b := &builder{opts: testopts}
 
 	tests := []struct {
 		name      string
