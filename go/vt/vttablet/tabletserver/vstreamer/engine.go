@@ -127,13 +127,13 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		resultStreamerNumRows:     env.Exporter().NewCounter("ResultStreamerNumRows", "Number of rows sent in result streamer"),
 		rowStreamerNumPackets:     env.Exporter().NewCounter("RowStreamerNumPackets", "Number of packets in row streamer"),
 		rowStreamerNumRows:        env.Exporter().NewCounter("RowStreamerNumRows", "Number of rows sent in row streamer"),
-		rowStreamerWaits:          env.Exporter().NewTimings("RowStreamerWaits", "Count and total time we've waited for the source when starting a new vstream copy cycle", "copy-phase-waits"),
+		rowStreamerWaits:          env.Exporter().NewTimings("RowStreamerWaits", "Total counts and time we've waited when streaming rows in the vstream copy phase", "copy-phase-waits"),
 		vstreamersCreated:         env.Exporter().NewCounter("VStreamersCreated", "Count of vstreamers created"),
 		vstreamersEndedWithErrors: env.Exporter().NewCounter("VStreamersEndedWithErrors", "Count of vstreamers that ended with errors"),
 		errorCounts:               env.Exporter().NewCountersWithSingleLabel("VStreamerErrors", "Tracks errors in vstreamer", "type", "Catchup", "Copy", "Send", "TablePlan"),
 	}
-	env.Exporter().NewGaugeFunc("RowStreamerMaxInnoDBTrxHistLen", "", func() int64 { return env.Config().RowStreamer.MaxTrxHistLen })
-	env.Exporter().NewGaugeFunc("RowStreamerMaxMySQLReplLagSecs", "", func() int64 { return env.Config().RowStreamer.MaxReplLagSecs })
+	env.Exporter().NewGaugeFunc("RowStreamerMaxInnoDBTrxHistLen", "", func() int64 { return env.Config().RowStreamer.MaxInnoDBTrxHistLen })
+	env.Exporter().NewGaugeFunc("RowStreamerMaxMySQLReplLagSecs", "", func() int64 { return env.Config().RowStreamer.MaxMySQLReplLagSecs })
 	env.Exporter().HandleFunc("/debug/tablet_vschema", vse.ServeHTTP)
 	return vse
 }
@@ -398,15 +398,18 @@ func (vse *Engine) waitForMySQL(ctx context.Context, db dbconfigs.Connector, tab
 	backoffLimit := backoff * 30
 	ready := false
 	recording := false
-	mhll := vse.env.Config().RowStreamer.MaxTrxHistLen
-	mrls := vse.env.Config().RowStreamer.MaxReplLagSecs
 
 	loopFunc := func() error {
 		// Exit if the context has been cancelled
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		hll := vse.getMySQLTrxHistoryLen(ctx, db)
+		// Check the config values each time as they can be updated in the running process via the /debug/env endpoint.
+		// This allows the user to break out of a wait w/o incurring any downtime or restarting the workflow if they
+		// need to.
+		mhll := vse.env.Config().RowStreamer.MaxInnoDBTrxHistLen
+		mrls := vse.env.Config().RowStreamer.MaxMySQLReplLagSecs
+		hll := vse.getInnoDBTrxHistoryLen(ctx, db)
 		rpl := vse.getMySQLReplicationLag(ctx, db)
 		if hll <= mhll && rpl <= mrls {
 			ready = true
@@ -454,10 +457,10 @@ func (vse *Engine) waitForMySQL(ctx context.Context, db dbconfigs.Connector, tab
 	return nil
 }
 
-// getMySQLTrxHistoryLen attempts to query InnoDB's current transaction rollback segment's history
+// getInnoDBTrxHistoryLen attempts to query InnoDB's current transaction rollback segment's history
 // list length. If the value cannot be determined for any reason then -1 is returned, which means
 // "unknown".
-func (vse *Engine) getMySQLTrxHistoryLen(ctx context.Context, db dbconfigs.Connector) int64 {
+func (vse *Engine) getInnoDBTrxHistoryLen(ctx context.Context, db dbconfigs.Connector) int64 {
 	histLen := int64(-1)
 	conn, err := db.Connect(ctx)
 	if err != nil {
@@ -502,7 +505,7 @@ func (vse *Engine) getMySQLEndpoint(ctx context.Context, db dbconfigs.Connector)
 
 	res, err := conn.ExecuteFetch(hostQuery, 1, false)
 	if err != nil || len(res.Rows) != 1 || res.Rows[0] == nil {
-		return "", vterrors.Wrap(err, "could not get vstreamer endpoint")
+		return "", vterrors.Wrap(err, "could not get vstreamer MySQL endpoint")
 	}
 	host := res.Rows[0][0].ToString()
 	port, _ := res.Rows[0][1].ToInt64()

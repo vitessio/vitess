@@ -49,8 +49,8 @@ func TestConfigParse(t *testing.T) {
 			MaxWaiters:         40,
 		},
 		RowStreamer: RowStreamerConfig{
-			MaxTrxHistLen:  1000,
-			MaxReplLagSecs: 400,
+			MaxInnoDBTrxHistLen: 1000,
+			MaxMySQLReplLagSecs: 400,
 		},
 	}
 	gotBytes, err := yaml2.Marshal(&cfg)
@@ -83,9 +83,9 @@ oltpReadPool:
   size: 16
   timeoutSeconds: 10
 replicationTracker: {}
-rowstreamer:
-  maxReplLagSecs: 400
-  maxTrxHistLen: 1000
+rowStreamer:
+  maxInnoDBTrxHistLen: 1000
+  maxMySQLReplLagSecs: 400
 txPool: {}
 `
 	assert.Equal(t, wantBytes, string(gotBytes))
@@ -148,9 +148,9 @@ queryCacheSize: 5000
 replicationTracker:
   heartbeatIntervalSeconds: 0.25
   mode: disable
-rowstreamer:
-  maxReplLagSecs: 43200
-  maxTrxHistLen: 1000000
+rowStreamer:
+  maxInnoDBTrxHistLen: 1000000
+  maxMySQLReplLagSecs: 43200
 schemaReloadIntervalSeconds: 1800
 signalSchemaChangeReloadIntervalSeconds: 5
 streamBufferSize: 32768
@@ -176,8 +176,8 @@ func TestClone(t *testing.T) {
 			MaxWaiters:         40,
 		},
 		RowStreamer: RowStreamerConfig{
-			MaxTrxHistLen:  1000000,
-			MaxReplLagSecs: 43200,
+			MaxInnoDBTrxHistLen: 1000000,
+			MaxMySQLReplLagSecs: 43200,
 		},
 	}
 	cfg2 := cfg1.Clone()
@@ -231,8 +231,8 @@ func TestFlags(t *testing.T) {
 		EnableOnlineDDL:          true,
 		DB:                       &dbconfigs.DBConfigs{},
 		RowStreamer: RowStreamerConfig{
-			MaxTrxHistLen:  1000000,
-			MaxReplLagSecs: 43200,
+			MaxInnoDBTrxHistLen: 1000000,
+			MaxMySQLReplLagSecs: 43200,
 		},
 	}
 	assert.Equal(t, want.DB, currentConfig.DB)

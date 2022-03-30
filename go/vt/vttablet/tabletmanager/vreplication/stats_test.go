@@ -150,8 +150,6 @@ func TestVReplicationStats(t *testing.T) {
 	require.Greater(t, want, testStats.status().Controllers[0].PhaseTimings["catchup"])
 	record("copy")
 	require.Greater(t, want, testStats.status().Controllers[0].PhaseTimings["copy"])
-	record("waitForMySQL")
-	require.Greater(t, want, testStats.status().Controllers[0].PhaseTimings["waitForMySQL"])
 
 	blpStats.QueryCount.Add("replicate", 11)
 	blpStats.QueryCount.Add("fastforward", 23)

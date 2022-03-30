@@ -559,7 +559,9 @@ func verifySourceTabletThrottling(t *testing.T, targetKS, workflow string) {
 						streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
 							state := attributeValue.Get("State").String()
 							if state != "Copying" {
-								require.FailNowf(t, "Unexpected running workflow stream", "Initial copy phase for the MoveTables workflow %s started in less than %d seconds when it should have been waiting. Show output: %s", ksWorkflow, int(tDuration.Seconds()), output)
+								require.FailNowf(t, "Unexpected running workflow stream",
+									"Initial copy phase for the MoveTables workflow %s started in less than %d seconds when it should have been waiting. Show output: %s",
+									ksWorkflow, int(tDuration.Seconds()), output)
 							}
 							return true // end attribute loop
 						})

@@ -114,9 +114,9 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 		case "WarnResultSize":
 			setIntVal(tsv.SetWarnResultSize)
 		case "RowStreamerMaxInnoDBTrxHistLen":
-			setInt64Val(func(val int64) { tsv.Config().RowStreamer.MaxTrxHistLen = val })
+			setInt64Val(func(val int64) { tsv.Config().RowStreamer.MaxInnoDBTrxHistLen = val })
 		case "RowStreamerMaxMySQLReplLagSecs":
-			setInt64Val(func(val int64) { tsv.Config().RowStreamer.MaxReplLagSecs = val })
+			setInt64Val(func(val int64) { tsv.Config().RowStreamer.MaxMySQLReplLagSecs = val })
 		case "UnhealthyThreshold":
 			setDurationVal(tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Set)
 			setDurationVal(tsv.hs.SetUnhealthyThreshold)
@@ -160,8 +160,8 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 	addIntVar("QueryCacheCapacity", tsv.QueryPlanCacheCap)
 	addIntVar("MaxResultSize", tsv.MaxResultSize)
 	addIntVar("WarnResultSize", tsv.WarnResultSize)
-	addInt64Var("VReplication: max InnoDB history list length on source for streaming rows", func() int64 { return tsv.Config().RowStreamer.MaxTrxHistLen })
-	addInt64Var("VReplication: max MySQL replication lag on source for streaming rows", func() int64 { return tsv.Config().RowStreamer.MaxReplLagSecs })
+	addInt64Var("RowStreamerMaxInnoDBTrxHistLen", func() int64 { return tsv.Config().RowStreamer.MaxInnoDBTrxHistLen })
+	addInt64Var("RowStreamerMaxMySQLReplLagSecs", func() int64 { return tsv.Config().RowStreamer.MaxMySQLReplLagSecs })
 	addDurationVar("UnhealthyThreshold", tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Get)
 	addFloat64Var("ThrottleMetricThreshold", tsv.ThrottleMetricThreshold)
 	vars = append(vars, envValue{

@@ -165,8 +165,8 @@ func init() {
 	flag.BoolVar(&enableReplicationReporter, "enable_replication_reporter", false, "Use polling to track replication lag.")
 	flag.BoolVar(&currentConfig.EnableOnlineDDL, "queryserver_enable_online_ddl", true, "Enable online DDL.")
 
-	flag.Int64Var(&currentConfig.RowStreamer.MaxTrxHistLen, "vreplication_copy_phase_max_innodb_history_list_length", 1000000, "The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
-	flag.Int64Var(&currentConfig.RowStreamer.MaxReplLagSecs, "vreplication_copy_phase_max_mysql_replication_lag", 43200, "The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
+	flag.Int64Var(&currentConfig.RowStreamer.MaxInnoDBTrxHistLen, "vreplication_copy_phase_max_innodb_history_list_length", 1000000, "The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
+	flag.Int64Var(&currentConfig.RowStreamer.MaxMySQLReplLagSecs, "vreplication_copy_phase_max_mysql_replication_lag", 43200, "The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -290,7 +290,7 @@ type TabletConfig struct {
 	EnforceStrictTransTables bool `json:"-"`
 	EnableOnlineDDL          bool `json:"-"`
 
-	RowStreamer RowStreamerConfig `json:"rowstreamer,omitempty"`
+	RowStreamer RowStreamerConfig `json:"rowStreamer,omitempty"`
 }
 
 // ConnPoolConfig contains the config for a conn pool.
@@ -355,8 +355,8 @@ type TransactionLimitConfig struct {
 // RowStreamerConfig contains configuration parameters for a vstreamer (source) that is
 // copying the contents of a table to a target
 type RowStreamerConfig struct {
-	MaxTrxHistLen  int64 `json:"maxTrxHistLen,omitempty"`
-	MaxReplLagSecs int64 `json:"maxReplLagSecs,omitempty"`
+	MaxInnoDBTrxHistLen int64 `json:"maxInnoDBTrxHistLen,omitempty"`
+	MaxMySQLReplLagSecs int64 `json:"maxMySQLReplLagSecs,omitempty"`
 }
 
 // NewCurrentConfig returns a copy of the current config.
@@ -500,8 +500,8 @@ var defaultConfig = TabletConfig{
 	EnableOnlineDDL:          true,
 
 	RowStreamer: RowStreamerConfig{
-		MaxTrxHistLen:  1000000,
-		MaxReplLagSecs: 43200,
+		MaxInnoDBTrxHistLen: 1000000,
+		MaxMySQLReplLagSecs: 43200,
 	},
 }
 

@@ -96,7 +96,7 @@ func (rs *rowStreamer) Cancel() {
 }
 
 func (rs *rowStreamer) Stream() error {
-	// Ensure se is Open. If vttablet came up in a non_serving role,
+	// Ensure sh is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
 	if err := rs.se.Open(); err != nil {
 		return err
@@ -259,7 +259,7 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 }
 
 func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
-	// Let's be sure MySQL is in good shape to stream rows
+	// Let's wait until MySQL is in good shape to stream rows
 	if err := rs.vse.waitForMySQL(rs.ctx, rs.cp, rs.plan.Table.Name); err != nil {
 		return err
 	}

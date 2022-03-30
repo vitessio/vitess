@@ -170,13 +170,14 @@ func expectUpdateCount(t *testing.T, wantCount int64) int64 {
 }
 
 func TestVStreamerWaitForMySQL(t *testing.T) {
+	tableName := "test"
 	type fields struct {
 		vse                   *Engine
 		cp                    dbconfigs.Connector
 		se                    *schema.Engine
 		ReplicationLagSeconds int64
-		maxTrxHistLen         int64
-		maxReplLagSecs        int64
+		maxInnoDBTrxHistLen   int64
+		maxMySQLReplLagSecs   int64
 	}
 	tests := []struct {
 		name    string
@@ -184,32 +185,32 @@ func TestVStreamerWaitForMySQL(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "Small mvcc impact limit",
+			name: "Small InnoDB MVCC impact limit",
 			fields: fields{
-				vse:            engine,
-				se:             engine.se,
-				maxTrxHistLen:  100,
-				maxReplLagSecs: 5000,
+				vse:                 engine,
+				se:                  engine.se,
+				maxInnoDBTrxHistLen: 100,
+				maxMySQLReplLagSecs: 5000,
 			},
 			wantErr: true,
 		},
 		{
-			name: "Small lag impact limit",
+			name: "Small Repl Lag impact limit",
 			fields: fields{
-				vse:            engine,
-				se:             engine.se,
-				maxTrxHistLen:  10000,
-				maxReplLagSecs: 5,
+				vse:                 engine,
+				se:                  engine.se,
+				maxInnoDBTrxHistLen: 10000,
+				maxMySQLReplLagSecs: 5,
 			},
 			wantErr: true,
 		},
 		{
-			name: "Large impact limit",
+			name: "Large impact limits",
 			fields: fields{
-				vse:            engine,
-				se:             engine.se,
-				maxTrxHistLen:  10000,
-				maxReplLagSecs: 200,
+				vse:                 engine,
+				se:                  engine.se,
+				maxInnoDBTrxHistLen: 10000,
+				maxMySQLReplLagSecs: 200,
 			},
 			wantErr: false,
 		},
@@ -246,13 +247,14 @@ func TestVStreamerWaitForMySQL(t *testing.T) {
 				se:                    tt.fields.se,
 				ReplicationLagSeconds: tt.fields.ReplicationLagSeconds,
 			}
-			env.TabletEnv.Config().RowStreamer.MaxTrxHistLen = tt.fields.maxTrxHistLen
-			env.TabletEnv.Config().RowStreamer.MaxReplLagSecs = tt.fields.maxReplLagSecs
-			if err := uvs.vse.waitForMySQL(ctx, uvs.cp, "test"); (err != nil) != tt.wantErr {
+			env.TabletEnv.Config().RowStreamer.MaxInnoDBTrxHistLen = tt.fields.maxInnoDBTrxHistLen
+			env.TabletEnv.Config().RowStreamer.MaxMySQLReplLagSecs = tt.fields.maxMySQLReplLagSecs
+			if err := uvs.vse.waitForMySQL(ctx, uvs.cp, tableName); (err != nil) != tt.wantErr {
 				t.Errorf("vstreamer.waitForMySQL() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 
 	require.Equal(t, engine.rowStreamerWaits.Counts()["VStreamerTest.waitForMySQL"], int64(2))
+	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest."+tableName+":waitForMySQL"], int64(2))
 }
