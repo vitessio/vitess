@@ -130,7 +130,7 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 	span, _ := trace.NewSpan(ctx, "VTGateProxy.Dial")
 	defer span.Finish()
 
-	vtgate.annotateSpan(span)
+	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
 
 	vtgate.m.Lock()
 	defer vtgate.m.Unlock()
@@ -188,7 +188,7 @@ func (vtgate *VTGateProxy) ShowTablets(ctx context.Context) (*sql.Rows, error) {
 	span, ctx := trace.NewSpan(ctx, "VTGateProxy.ShowTablets")
 	defer span.Finish()
 
-	vtgate.annotateSpan(span)
+	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
 
 	if vtgate.conn == nil {
 		return nil, ErrConnClosed
@@ -207,7 +207,7 @@ func (vtgate *VTGateProxy) PingContext(ctx context.Context) error {
 	span, ctx := trace.NewSpan(ctx, "VTGateProxy.PingContext")
 	defer span.Finish()
 
-	vtgate.annotateSpan(span)
+	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
 
 	return vtgate.pingContext(ctx)
 }
@@ -272,8 +272,4 @@ func (vtgate *VTGateProxy) Debug() map[string]any {
 	}
 
 	return m
-}
-
-func (vtgate *VTGateProxy) annotateSpan(span trace.Span) {
-	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
 }
