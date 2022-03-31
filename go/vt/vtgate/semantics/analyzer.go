@@ -85,7 +85,7 @@ func (a analyzer) newSemTable(statement sqlparser.SelectStatement, coll collatio
 		NotSingleRouteErr: a.projErr,
 		NotUnshardedErr:   a.unshardedErr,
 		Warning:           a.warning,
-		Comments:          statement.GetComments(),
+		Comments:          statement.GetParsedComments(),
 		SubqueryMap:       a.binder.subqueryMap,
 		SubqueryRef:       a.binder.subqueryRef,
 		ColumnEqualities:  map[columnName][]sqlparser.Expr{},

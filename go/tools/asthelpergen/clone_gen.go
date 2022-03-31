@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"go/types"
 	"log"
+	"strings"
 
 	"github.com/dave/jennifer/jen"
 )
@@ -231,7 +232,7 @@ func (c *cloneGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gene
 	var fields []jen.Code
 	for i := 0; i < strct.NumFields(); i++ {
 		field := strct.Field(i)
-		if isBasic(field.Type()) || field.Name() == "_" {
+		if isBasic(field.Type()) || strings.HasPrefix(field.Name(), "_") {
 			continue
 		}
 		// out.Field = CloneType(n.Field)

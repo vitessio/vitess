@@ -51,30 +51,13 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte, db
 	}
 
 	// Handle special possible directives
-	getDirectives := func() sqlparser.CommentDirectives {
-		stmt, err := sqlparser.Parse(string(query))
-		if err != nil {
-			return nil
+	var directives sqlparser.CommentDirectives
+	if stmt, err := sqlparser.Parse(string(query)); err == nil {
+		if cmnt, ok := stmt.(sqlparser.Commented); ok {
+			directives = cmnt.GetParsedComments().Directives()
 		}
-		ddlStmt, ok := stmt.(sqlparser.DDLStatement)
-		if !ok {
-			return nil
-		}
-		comments := ddlStmt.GetComments()
-		if comments == nil {
-			return nil
-		}
-		return sqlparser.ExtractCommentDirectives(comments)
 	}
-	directives := getDirectives()
-	directiveIsSet := func(name string) bool {
-		if directives == nil {
-			return false
-		}
-		_, ok := directives[name]
-		return ok
-	}
-	if directiveIsSet("allowZeroInDate") {
+	if directives.IsSet("allowZeroInDate") {
 		if _, err := conn.ExecuteFetch("set @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", 1, false); err != nil {
 			return nil, err
 		}

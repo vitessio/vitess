@@ -286,7 +286,7 @@ func checkColumnCounts(ins *sqlparser.Insert, selectStmt sqlparser.SelectStateme
 }
 
 func applyCommentDirectives(ins *sqlparser.Insert, eins *engine.Insert) {
-	directives := sqlparser.ExtractCommentDirectives(ins.Comments)
+	directives := ins.Comments.Directives()
 	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
 		eins.MultiShardAutocommit = true
 	}

@@ -212,12 +212,6 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsColumns(a, b)
-	case Comments:
-		b, ok := inB.(Comments)
-		if !ok {
-			return false
-		}
-		return EqualsComments(a, b)
 	case *Commit:
 		b, ok := inB.(*Commit)
 		if !ok {
@@ -680,6 +674,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfParenTableExpr(a, b)
+	case *ParsedComments:
+		b, ok := inB.(*ParsedComments)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfParsedComments(a, b)
 	case *PartitionDefinition:
 		b, ok := inB.(*PartitionDefinition)
 		if !ok {
@@ -1196,7 +1196,7 @@ func EqualsRefOfAlterTable(a, b *AlterTable) bool {
 		EqualsSliceOfAlterOption(a.AlterOptions, b.AlterOptions) &&
 		EqualsRefOfPartitionSpec(a.PartitionSpec, b.PartitionSpec) &&
 		EqualsRefOfPartitionOption(a.PartitionOption, b.PartitionOption) &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfAlterView does deep equals between the two objects.
@@ -1214,7 +1214,7 @@ func EqualsRefOfAlterView(a, b *AlterView) bool {
 		EqualsRefOfDefiner(a.Definer, b.Definer) &&
 		EqualsColumns(a.Columns, b.Columns) &&
 		EqualsSelectStatement(a.Select, b.Select) &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfAlterVschema does deep equals between the two objects.
@@ -1419,19 +1419,6 @@ func EqualsColumns(a, b Columns) bool {
 	return true
 }
 
-// EqualsComments does deep equals between the two objects.
-func EqualsComments(a, b Comments) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 // EqualsRefOfCommit does deep equals between the two objects.
 func EqualsRefOfCommit(a, b *Commit) bool {
 	if a == b {
@@ -1530,7 +1517,7 @@ func EqualsRefOfCreateDatabase(a, b *CreateDatabase) bool {
 	}
 	return a.IfNotExists == b.IfNotExists &&
 		a.FullyParsed == b.FullyParsed &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsTableIdent(a.DBName, b.DBName) &&
 		EqualsSliceOfCollateAndCharset(a.CreateOptions, b.CreateOptions)
 }
@@ -1549,7 +1536,7 @@ func EqualsRefOfCreateTable(a, b *CreateTable) bool {
 		EqualsTableName(a.Table, b.Table) &&
 		EqualsRefOfTableSpec(a.TableSpec, b.TableSpec) &&
 		EqualsRefOfOptLike(a.OptLike, b.OptLike) &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfCreateView does deep equals between the two objects.
@@ -1568,7 +1555,7 @@ func EqualsRefOfCreateView(a, b *CreateView) bool {
 		EqualsRefOfDefiner(a.Definer, b.Definer) &&
 		EqualsColumns(a.Columns, b.Columns) &&
 		EqualsSelectStatement(a.Select, b.Select) &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfCurTimeFuncExpr does deep equals between the two objects.
@@ -1592,7 +1579,7 @@ func EqualsRefOfDeallocateStmt(a, b *DeallocateStmt) bool {
 		return false
 	}
 	return a.Type == b.Type &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsColIdent(a.Name, b.Name)
 }
 
@@ -1629,7 +1616,7 @@ func EqualsRefOfDelete(a, b *Delete) bool {
 	}
 	return EqualsRefOfWith(a.With, b.With) &&
 		a.Ignore == b.Ignore &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsTableNames(a.Targets, b.Targets) &&
 		EqualsTableExprs(a.TableExprs, b.TableExprs) &&
 		EqualsPartitions(a.Partitions, b.Partitions) &&
@@ -1670,7 +1657,7 @@ func EqualsRefOfDropDatabase(a, b *DropDatabase) bool {
 		return false
 	}
 	return a.IfExists == b.IfExists &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsTableIdent(a.DBName, b.DBName)
 }
 
@@ -1697,7 +1684,7 @@ func EqualsRefOfDropTable(a, b *DropTable) bool {
 	return a.Temp == b.Temp &&
 		a.IfExists == b.IfExists &&
 		EqualsTableNames(a.FromTables, b.FromTables) &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfDropView does deep equals between the two objects.
@@ -1710,7 +1697,7 @@ func EqualsRefOfDropView(a, b *DropView) bool {
 	}
 	return a.IfExists == b.IfExists &&
 		EqualsTableNames(a.FromTables, b.FromTables) &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfExecuteStmt does deep equals between the two objects.
@@ -1722,7 +1709,7 @@ func EqualsRefOfExecuteStmt(a, b *ExecuteStmt) bool {
 		return false
 	}
 	return EqualsColIdent(a.Name, b.Name) &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsColumns(a.Arguments, b.Arguments)
 }
 
@@ -1950,7 +1937,7 @@ func EqualsRefOfInsert(a, b *Insert) bool {
 		return false
 	}
 	return a.Action == b.Action &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		a.Ignore == b.Ignore &&
 		EqualsTableName(a.Table, b.Table) &&
 		EqualsPartitions(a.Partitions, b.Partitions) &&
@@ -2364,6 +2351,17 @@ func EqualsRefOfParenTableExpr(a, b *ParenTableExpr) bool {
 	return EqualsTableExprs(a.Exprs, b.Exprs)
 }
 
+// EqualsRefOfParsedComments does deep equals between the two objects.
+func EqualsRefOfParsedComments(a, b *ParsedComments) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsComments(a.comments, b.comments)
+}
+
 // EqualsRefOfPartitionDefinition does deep equals between the two objects.
 func EqualsRefOfPartitionDefinition(a, b *PartitionDefinition) bool {
 	if a == b {
@@ -2447,7 +2445,7 @@ func EqualsRefOfPrepareStmt(a, b *PrepareStmt) bool {
 	}
 	return a.Statement == b.Statement &&
 		EqualsColIdent(a.Name, b.Name) &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsColIdent(a.StatementIdentifier, b.StatementIdentifier)
 }
 
@@ -2519,7 +2517,7 @@ func EqualsRefOfRevertMigration(a, b *RevertMigration) bool {
 		return false
 	}
 	return a.UUID == b.UUID &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfRollback does deep equals between the two objects.
@@ -2573,7 +2571,7 @@ func EqualsRefOfSelect(a, b *Select) bool {
 		a.SQLCalcFoundRows == b.SQLCalcFoundRows &&
 		EqualsRefOfBool(a.Cache, b.Cache) &&
 		EqualsSliceOfTableExpr(a.From, b.From) &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsSelectExprs(a.SelectExprs, b.SelectExprs) &&
 		EqualsRefOfWhere(a.Where, b.Where) &&
 		EqualsRefOfWith(a.With, b.With) &&
@@ -2623,7 +2621,7 @@ func EqualsRefOfSet(a, b *Set) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsComments(a.Comments, b.Comments) &&
+	return EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsSetExprs(a.Exprs, b.Exprs)
 }
 
@@ -2662,7 +2660,7 @@ func EqualsRefOfSetTransaction(a, b *SetTransaction) bool {
 		return false
 	}
 	return EqualsSQLNode(a.SQLNode, b.SQLNode) &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		a.Scope == b.Scope &&
 		EqualsSliceOfCharacteristic(a.Characteristics, b.Characteristics)
 }
@@ -2743,7 +2741,7 @@ func EqualsRefOfShowMigrationLogs(a, b *ShowMigrationLogs) bool {
 		return false
 	}
 	return a.UUID == b.UUID &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfStarExpr does deep equals between the two objects.
@@ -2765,7 +2763,7 @@ func EqualsRefOfStream(a, b *Stream) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsComments(a.Comments, b.Comments) &&
+	return EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsSelectExpr(a.SelectExpr, b.SelectExpr) &&
 		EqualsTableName(a.Table, b.Table)
 }
@@ -2975,7 +2973,7 @@ func EqualsRefOfUpdate(a, b *Update) bool {
 		return false
 	}
 	return EqualsRefOfWith(a.With, b.With) &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		a.Ignore == b.Ignore &&
 		EqualsTableExprs(a.TableExprs, b.TableExprs) &&
 		EqualsUpdateExprs(a.Exprs, b.Exprs) &&
@@ -3028,7 +3026,7 @@ func EqualsRefOfVStream(a, b *VStream) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsComments(a.Comments, b.Comments) &&
+	return EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsSelectExpr(a.SelectExpr, b.SelectExpr) &&
 		EqualsTableName(a.Table, b.Table) &&
 		EqualsRefOfWhere(a.Where, b.Where) &&
@@ -4601,6 +4599,19 @@ func EqualsTableAndLockTypes(a, b TableAndLockTypes) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if !EqualsRefOfTableAndLockType(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsComments does deep equals between the two objects.
+func EqualsComments(a, b Comments) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
 			return false
 		}
 	}

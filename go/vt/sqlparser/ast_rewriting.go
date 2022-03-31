@@ -311,7 +311,7 @@ func (er *astRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, err
 func (er *astRewriter) rewrite(cursor *Cursor) bool {
 	// Add SET_VAR comment to this node if it supports it and is needed
 	if supportOptimizerHint, supportsOptimizerHint := cursor.Node().(SupportOptimizerHint); supportsOptimizerHint && er.setVarComment != "" {
-		newComments, err := supportOptimizerHint.GetComments().AddQueryHint(er.setVarComment)
+		newComments, err := supportOptimizerHint.GetParsedComments().AddQueryHint(er.setVarComment)
 		if err != nil {
 			er.err = err
 			return false

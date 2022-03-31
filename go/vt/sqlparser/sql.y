@@ -760,13 +760,13 @@ select_stmt_with_into:
 stream_statement:
   STREAM comment_opt select_expression FROM table_name
   {
-    $$ = &Stream{Comments: Comments($2), SelectExpr: $3, Table: $5}
+    $$ = &Stream{Comments: Comments($2).Parsed(), SelectExpr: $3, Table: $5}
   }
 
 vstream_statement:
   VSTREAM comment_opt select_expression FROM table_name where_expression_opt limit_opt
   {
-    $$ = &VStream{Comments: Comments($2), SelectExpr: $3, Table: $5, Where: NewWhere(WhereClause, $6), Limit: $7}
+    $$ = &VStream{Comments: Comments($2).Parsed(), SelectExpr: $3, Table: $5, Where: NewWhere(WhereClause, $6), Limit: $7}
   }
 
 // query_primary is an unparenthesized SELECT with no order by clause or beyond.
@@ -789,7 +789,7 @@ insert_statement:
     // insert_data returns a *Insert pre-filled with Columns & Values
     ins := $6
     ins.Action = $1
-    ins.Comments = $2
+    ins.Comments = Comments($2).Parsed()
     ins.Ignore = $3
     ins.Table = $4
     ins.Partitions = $5
@@ -804,7 +804,7 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $1, Comments: Comments($2), Ignore: $3, Table: $4, Partitions: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)}
+    $$ = &Insert{Action: $1, Comments: Comments($2).Parsed(), Ignore: $3, Table: $4, Partitions: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)}
   }
 
 insert_or_replace:
@@ -820,25 +820,25 @@ insert_or_replace:
 update_statement:
   with_clause_opt UPDATE comment_opt ignore_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{With: $1, Comments: Comments($3), Ignore: $4, TableExprs: $5, Exprs: $7, Where: NewWhere(WhereClause, $8), OrderBy: $9, Limit: $10}
+    $$ = &Update{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: $5, Exprs: $7, Where: NewWhere(WhereClause, $8), OrderBy: $9, Limit: $10}
   }
 
 delete_statement:
   with_clause_opt DELETE comment_opt ignore_opt FROM table_name as_opt_id opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, TableExprs: TableExprs{&AliasedTableExpr{Expr:$6, As: $7}}, Partitions: $8, Where: NewWhere(WhereClause, $9), OrderBy: $10, Limit: $11}
+    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: TableExprs{&AliasedTableExpr{Expr:$6, As: $7}}, Partitions: $8, Where: NewWhere(WhereClause, $9), OrderBy: $10, Limit: $11}
   }
 | with_clause_opt DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, Targets: $6, TableExprs: $8, Where: NewWhere(WhereClause, $9)}
+    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $6, TableExprs: $8, Where: NewWhere(WhereClause, $9)}
   }
 | with_clause_opt DELETE comment_opt ignore_opt table_name_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
+    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
   }
 | with_clause_opt DELETE comment_opt ignore_opt delete_table_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
+    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
   }
 
 from_or_using:
@@ -887,17 +887,17 @@ opt_partition_clause:
 set_statement:
   SET comment_opt set_list
   {
-    $$ = &Set{Comments: Comments($2), Exprs: $3}
+    $$ = &Set{Comments: Comments($2).Parsed(), Exprs: $3}
   }
 
 set_transaction_statement:
   SET comment_opt set_session_or_global TRANSACTION transaction_chars
   {
-    $$ = &SetTransaction{Comments: Comments($2), Scope: $3, Characteristics: $5}
+    $$ = &SetTransaction{Comments: Comments($2).Parsed(), Scope: $3, Characteristics: $5}
   }
 | SET comment_opt TRANSACTION transaction_chars
   {
-    $$ = &SetTransaction{Comments: Comments($2), Characteristics: $4, Scope: ImplicitScope}
+    $$ = &SetTransaction{Comments: Comments($2).Parsed(), Characteristics: $4, Scope: ImplicitScope}
   }
 
 transaction_chars:
@@ -977,7 +977,7 @@ create_statement:
   }
 | CREATE comment_opt replace_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &CreateView{ViewName: $8.ToViewName(), Comments: Comments($2), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6, Columns:$9, Select: $11, CheckOption: $12 }
+    $$ = &CreateView{ViewName: $8.ToViewName(), Comments: Comments($2).Parsed(), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6, Columns:$9, Select: $11, CheckOption: $12 }
   }
 | create_database_prefix create_options_opt
   {
@@ -1065,14 +1065,14 @@ json_object_param:
 create_table_prefix:
   CREATE comment_opt temp_opt TABLE not_exists_opt table_name
   {
-    $$ = &CreateTable{Comments: Comments($2), Table: $6, IfNotExists: $5, Temp: $3}
+    $$ = &CreateTable{Comments: Comments($2).Parsed(), Table: $6, IfNotExists: $5, Temp: $3}
     setDDL(yylex, $$)
   }
 
 alter_table_prefix:
   ALTER comment_opt TABLE table_name
   {
-    $$ = &AlterTable{Comments: Comments($2), Table: $4}
+    $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $4}
     setDDL(yylex, $$)
   }
 
@@ -1101,7 +1101,7 @@ create_index_prefix:
 create_database_prefix:
   CREATE comment_opt database_or_schema comment_opt not_exists_opt table_id
   {
-    $$ = &CreateDatabase{Comments: Comments($4), DBName: $6, IfNotExists: $5}
+    $$ = &CreateDatabase{Comments: Comments($4).Parsed(), DBName: $6, IfNotExists: $5}
     setDDL(yylex,$$)
   }
 
@@ -2705,7 +2705,7 @@ alter_statement:
   }
 | ALTER comment_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &AlterView{ViewName: $7.ToViewName(), Comments: Comments($2), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
+    $$ = &AlterView{ViewName: $7.ToViewName(), Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
 | alter_database_prefix table_id_opt create_options
   {
@@ -3229,7 +3229,7 @@ rename_list:
 drop_statement:
   DROP comment_opt temp_opt TABLE exists_opt table_name_list restrict_or_cascade_opt
   {
-    $$ = &DropTable{FromTables: $6, IfExists: $5, Comments: Comments($2), Temp: $3}
+    $$ = &DropTable{FromTables: $6, IfExists: $5, Comments: Comments($2).Parsed(), Temp: $3}
   }
 | DROP comment_opt INDEX id_or_var ON table_name algorithm_lock_opt
   {
@@ -3242,11 +3242,11 @@ drop_statement:
   }
 | DROP comment_opt VIEW exists_opt view_name_list restrict_or_cascade_opt
   {
-    $$ = &DropView{FromTables: $5, Comments: Comments($2), IfExists: $4}
+    $$ = &DropView{FromTables: $5, Comments: Comments($2).Parsed(), IfExists: $4}
   }
 | DROP comment_opt database_or_schema exists_opt table_id
   {
-    $$ = &DropDatabase{Comments: Comments($2), DBName: $5, IfExists: $4}
+    $$ = &DropDatabase{Comments: Comments($2).Parsed(), DBName: $5, IfExists: $4}
   }
 
 truncate_statement:
@@ -3765,7 +3765,7 @@ unlock_statement:
 revert_statement:
   REVERT comment_opt VITESS_MIGRATION STRING
   {
-    $$ = &RevertMigration{Comments: Comments($2), UUID: string($4)}
+    $$ = &RevertMigration{Comments: Comments($2).Parsed(), UUID: string($4)}
   }
 
 flush_statement:
@@ -3938,17 +3938,17 @@ distinct_opt:
 prepare_statement:
   PREPARE comment_opt sql_id FROM STRING
   {
-    $$ = &PrepareStmt{Name:$3, Comments: $2, Statement:$5}
+    $$ = &PrepareStmt{Name:$3, Comments: Comments($2).Parsed(), Statement:$5}
   }
 | PREPARE comment_opt sql_id FROM AT_ID
   {
-    $$ = &PrepareStmt{Name:$3, Comments: $2, StatementIdentifier: NewColIdentWithAt(string($5), SingleAt)}
+    $$ = &PrepareStmt{Name:$3, Comments: Comments($2).Parsed(), StatementIdentifier: NewColIdentWithAt(string($5), SingleAt)}
   }
 
 execute_statement:
   EXECUTE comment_opt sql_id execute_statement_list_opt
   {
-    $$ = &ExecuteStmt{Name:$3, Comments: $2, Arguments: $4}
+    $$ = &ExecuteStmt{Name:$3, Comments: Comments($2).Parsed(), Arguments: $4}
   }
 
 execute_statement_list_opt:
@@ -3963,11 +3963,11 @@ execute_statement_list_opt:
 deallocate_statement:
   DEALLOCATE comment_opt PREPARE sql_id
   {
-    $$ = &DeallocateStmt{Type:DeallocateType, Comments: $2, Name:$4}
+    $$ = &DeallocateStmt{Type:DeallocateType, Comments: Comments($2).Parsed(), Name:$4}
   }
 | DROP comment_opt PREPARE sql_id
   {
-    $$ = &DeallocateStmt{Type: DropType, Comments: $2, Name: $4}
+    $$ = &DeallocateStmt{Type: DropType, Comments: Comments($2).Parsed(), Name: $4}
   }
 
 select_expression_list_opt:
