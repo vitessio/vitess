@@ -5458,7 +5458,7 @@ var yyPgo = [...]int{
 	1894, 1893, 3437, 2944, 126, 1874, 177,
 }
 
-//line sql.y:6428
+//line sql.y:6429
 type yySymType struct {
 	union             any
 	empty             struct{}
@@ -7686,7 +7686,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:762
 		{
-			yyLOCAL = &Stream{Comments: Comments(yyDollar[2].strs), SelectExpr: yyDollar[3].selectExprUnion(), Table: yyDollar[5].tableName}
+			yyLOCAL = &Stream{Comments: Comments(yyDollar[2].strs).Parsed(), SelectExpr: yyDollar[3].selectExprUnion(), Table: yyDollar[5].tableName}
 		}
 		yyVAL.union = yyLOCAL
 	case 78:
@@ -7694,7 +7694,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:768
 		{
-			yyLOCAL = &VStream{Comments: Comments(yyDollar[2].strs), SelectExpr: yyDollar[3].selectExprUnion(), Table: yyDollar[5].tableName, Where: NewWhere(WhereClause, yyDollar[6].exprUnion()), Limit: yyDollar[7].limitUnion()}
+			yyLOCAL = &VStream{Comments: Comments(yyDollar[2].strs).Parsed(), SelectExpr: yyDollar[3].selectExprUnion(), Table: yyDollar[5].tableName, Where: NewWhere(WhereClause, yyDollar[6].exprUnion()), Limit: yyDollar[7].limitUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 79:
@@ -7721,7 +7721,7 @@ yydefault:
 			// insert_data returns a *Insert pre-filled with Columns & Values
 			ins := yyDollar[6].insUnion()
 			ins.Action = yyDollar[1].insertActionUnion()
-			ins.Comments = yyDollar[2].strs
+			ins.Comments = Comments(yyDollar[2].strs).Parsed()
 			ins.Ignore = yyDollar[3].ignoreUnion()
 			ins.Table = yyDollar[4].tableName
 			ins.Partitions = yyDollar[5].partitionsUnion()
@@ -7740,7 +7740,7 @@ yydefault:
 				cols = append(cols, updateList.Name.Name)
 				vals = append(vals, updateList.Expr)
 			}
-			yyLOCAL = &Insert{Action: yyDollar[1].insertActionUnion(), Comments: Comments(yyDollar[2].strs), Ignore: yyDollar[3].ignoreUnion(), Table: yyDollar[4].tableName, Partitions: yyDollar[5].partitionsUnion(), Columns: cols, Rows: Values{vals}, OnDup: OnDup(yyDollar[8].updateExprsUnion())}
+			yyLOCAL = &Insert{Action: yyDollar[1].insertActionUnion(), Comments: Comments(yyDollar[2].strs).Parsed(), Ignore: yyDollar[3].ignoreUnion(), Table: yyDollar[4].tableName, Partitions: yyDollar[5].partitionsUnion(), Columns: cols, Rows: Values{vals}, OnDup: OnDup(yyDollar[8].updateExprsUnion())}
 		}
 		yyVAL.union = yyLOCAL
 	case 83:
@@ -7764,7 +7764,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:822
 		{
-			yyLOCAL = &Update{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs), Ignore: yyDollar[4].ignoreUnion(), TableExprs: yyDollar[5].tableExprsUnion(), Exprs: yyDollar[7].updateExprsUnion(), Where: NewWhere(WhereClause, yyDollar[8].exprUnion()), OrderBy: yyDollar[9].orderByUnion(), Limit: yyDollar[10].limitUnion()}
+			yyLOCAL = &Update{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), TableExprs: yyDollar[5].tableExprsUnion(), Exprs: yyDollar[7].updateExprsUnion(), Where: NewWhere(WhereClause, yyDollar[8].exprUnion()), OrderBy: yyDollar[9].orderByUnion(), Limit: yyDollar[10].limitUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 86:
@@ -7772,7 +7772,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:828
 		{
-			yyLOCAL = &Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs), Ignore: yyDollar[4].ignoreUnion(), TableExprs: TableExprs{&AliasedTableExpr{Expr: yyDollar[6].tableName, As: yyDollar[7].tableIdent}}, Partitions: yyDollar[8].partitionsUnion(), Where: NewWhere(WhereClause, yyDollar[9].exprUnion()), OrderBy: yyDollar[10].orderByUnion(), Limit: yyDollar[11].limitUnion()}
+			yyLOCAL = &Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), TableExprs: TableExprs{&AliasedTableExpr{Expr: yyDollar[6].tableName, As: yyDollar[7].tableIdent}}, Partitions: yyDollar[8].partitionsUnion(), Where: NewWhere(WhereClause, yyDollar[9].exprUnion()), OrderBy: yyDollar[10].orderByUnion(), Limit: yyDollar[11].limitUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 87:
@@ -7780,7 +7780,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:832
 		{
-			yyLOCAL = &Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs), Ignore: yyDollar[4].ignoreUnion(), Targets: yyDollar[6].tableNamesUnion(), TableExprs: yyDollar[8].tableExprsUnion(), Where: NewWhere(WhereClause, yyDollar[9].exprUnion())}
+			yyLOCAL = &Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), Targets: yyDollar[6].tableNamesUnion(), TableExprs: yyDollar[8].tableExprsUnion(), Where: NewWhere(WhereClause, yyDollar[9].exprUnion())}
 		}
 		yyVAL.union = yyLOCAL
 	case 88:
@@ -7788,7 +7788,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:836
 		{
-			yyLOCAL = &Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs), Ignore: yyDollar[4].ignoreUnion(), Targets: yyDollar[5].tableNamesUnion(), TableExprs: yyDollar[7].tableExprsUnion(), Where: NewWhere(WhereClause, yyDollar[8].exprUnion())}
+			yyLOCAL = &Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), Targets: yyDollar[5].tableNamesUnion(), TableExprs: yyDollar[7].tableExprsUnion(), Where: NewWhere(WhereClause, yyDollar[8].exprUnion())}
 		}
 		yyVAL.union = yyLOCAL
 	case 89:
@@ -7796,7 +7796,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:840
 		{
-			yyLOCAL = &Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs), Ignore: yyDollar[4].ignoreUnion(), Targets: yyDollar[5].tableNamesUnion(), TableExprs: yyDollar[7].tableExprsUnion(), Where: NewWhere(WhereClause, yyDollar[8].exprUnion())}
+			yyLOCAL = &Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), Targets: yyDollar[5].tableNamesUnion(), TableExprs: yyDollar[7].tableExprsUnion(), Where: NewWhere(WhereClause, yyDollar[8].exprUnion())}
 		}
 		yyVAL.union = yyLOCAL
 	case 90:
@@ -7875,7 +7875,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:889
 		{
-			yyLOCAL = &Set{Comments: Comments(yyDollar[2].strs), Exprs: yyDollar[3].setExprsUnion()}
+			yyLOCAL = &Set{Comments: Comments(yyDollar[2].strs).Parsed(), Exprs: yyDollar[3].setExprsUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 101:
@@ -7883,7 +7883,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:895
 		{
-			yyLOCAL = &SetTransaction{Comments: Comments(yyDollar[2].strs), Scope: yyDollar[3].scopeUnion(), Characteristics: yyDollar[5].characteristicsUnion()}
+			yyLOCAL = &SetTransaction{Comments: Comments(yyDollar[2].strs).Parsed(), Scope: yyDollar[3].scopeUnion(), Characteristics: yyDollar[5].characteristicsUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 102:
@@ -7891,7 +7891,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:899
 		{
-			yyLOCAL = &SetTransaction{Comments: Comments(yyDollar[2].strs), Characteristics: yyDollar[4].characteristicsUnion(), Scope: ImplicitScope}
+			yyLOCAL = &SetTransaction{Comments: Comments(yyDollar[2].strs).Parsed(), Characteristics: yyDollar[4].characteristicsUnion(), Scope: ImplicitScope}
 		}
 		yyVAL.union = yyLOCAL
 	case 103:
@@ -8020,7 +8020,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:979
 		{
-			yyLOCAL = &CreateView{ViewName: yyDollar[8].tableName.ToViewName(), Comments: Comments(yyDollar[2].strs), IsReplace: yyDollar[3].booleanUnion(), Algorithm: yyDollar[4].str, Definer: yyDollar[5].definerUnion(), Security: yyDollar[6].str, Columns: yyDollar[9].columnsUnion(), Select: yyDollar[11].selStmtUnion(), CheckOption: yyDollar[12].str}
+			yyLOCAL = &CreateView{ViewName: yyDollar[8].tableName.ToViewName(), Comments: Comments(yyDollar[2].strs).Parsed(), IsReplace: yyDollar[3].booleanUnion(), Algorithm: yyDollar[4].str, Definer: yyDollar[5].definerUnion(), Security: yyDollar[6].str, Columns: yyDollar[9].columnsUnion(), Select: yyDollar[11].selStmtUnion(), CheckOption: yyDollar[12].str}
 		}
 		yyVAL.union = yyLOCAL
 	case 118:
@@ -8148,7 +8148,7 @@ yydefault:
 		var yyLOCAL *CreateTable
 //line sql.y:1067
 		{
-			yyLOCAL = &CreateTable{Comments: Comments(yyDollar[2].strs), Table: yyDollar[6].tableName, IfNotExists: yyDollar[5].booleanUnion(), Temp: yyDollar[3].booleanUnion()}
+			yyLOCAL = &CreateTable{Comments: Comments(yyDollar[2].strs).Parsed(), Table: yyDollar[6].tableName, IfNotExists: yyDollar[5].booleanUnion(), Temp: yyDollar[3].booleanUnion()}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.union = yyLOCAL
@@ -8157,7 +8157,7 @@ yydefault:
 		var yyLOCAL *AlterTable
 //line sql.y:1074
 		{
-			yyLOCAL = &AlterTable{Comments: Comments(yyDollar[2].strs), Table: yyDollar[4].tableName}
+			yyLOCAL = &AlterTable{Comments: Comments(yyDollar[2].strs).Parsed(), Table: yyDollar[4].tableName}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.union = yyLOCAL
@@ -8202,7 +8202,7 @@ yydefault:
 		var yyLOCAL *CreateDatabase
 //line sql.y:1103
 		{
-			yyLOCAL = &CreateDatabase{Comments: Comments(yyDollar[4].strs), DBName: yyDollar[6].tableIdent, IfNotExists: yyDollar[5].booleanUnion()}
+			yyLOCAL = &CreateDatabase{Comments: Comments(yyDollar[4].strs).Parsed(), DBName: yyDollar[6].tableIdent, IfNotExists: yyDollar[5].booleanUnion()}
 			setDDL(yylex, yyLOCAL)
 		}
 		yyVAL.union = yyLOCAL
@@ -10687,7 +10687,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:2707
 		{
-			yyLOCAL = &AlterView{ViewName: yyDollar[7].tableName.ToViewName(), Comments: Comments(yyDollar[2].strs), Algorithm: yyDollar[3].str, Definer: yyDollar[4].definerUnion(), Security: yyDollar[5].str, Columns: yyDollar[8].columnsUnion(), Select: yyDollar[10].selStmtUnion(), CheckOption: yyDollar[11].str}
+			yyLOCAL = &AlterView{ViewName: yyDollar[7].tableName.ToViewName(), Comments: Comments(yyDollar[2].strs).Parsed(), Algorithm: yyDollar[3].str, Definer: yyDollar[4].definerUnion(), Security: yyDollar[5].str, Columns: yyDollar[8].columnsUnion(), Select: yyDollar[10].selStmtUnion(), CheckOption: yyDollar[11].str}
 		}
 		yyVAL.union = yyLOCAL
 	case 500:
@@ -11533,7 +11533,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3231
 		{
-			yyLOCAL = &DropTable{FromTables: yyDollar[6].tableNamesUnion(), IfExists: yyDollar[5].booleanUnion(), Comments: Comments(yyDollar[2].strs), Temp: yyDollar[3].booleanUnion()}
+			yyLOCAL = &DropTable{FromTables: yyDollar[6].tableNamesUnion(), IfExists: yyDollar[5].booleanUnion(), Comments: Comments(yyDollar[2].strs).Parsed(), Temp: yyDollar[3].booleanUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 594:
@@ -11554,7 +11554,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3244
 		{
-			yyLOCAL = &DropView{FromTables: yyDollar[5].tableNamesUnion(), Comments: Comments(yyDollar[2].strs), IfExists: yyDollar[4].booleanUnion()}
+			yyLOCAL = &DropView{FromTables: yyDollar[5].tableNamesUnion(), Comments: Comments(yyDollar[2].strs).Parsed(), IfExists: yyDollar[4].booleanUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 596:
@@ -11562,7 +11562,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3248
 		{
-			yyLOCAL = &DropDatabase{Comments: Comments(yyDollar[2].strs), DBName: yyDollar[5].tableIdent, IfExists: yyDollar[4].booleanUnion()}
+			yyLOCAL = &DropDatabase{Comments: Comments(yyDollar[2].strs).Parsed(), DBName: yyDollar[5].tableIdent, IfExists: yyDollar[4].booleanUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 597:
@@ -12434,7 +12434,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3767
 		{
-			yyLOCAL = &RevertMigration{Comments: Comments(yyDollar[2].strs), UUID: string(yyDollar[4].str)}
+			yyLOCAL = &RevertMigration{Comments: Comments(yyDollar[2].strs).Parsed(), UUID: string(yyDollar[4].str)}
 		}
 		yyVAL.union = yyLOCAL
 	case 711:
@@ -12701,7 +12701,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3940
 		{
-			yyLOCAL = &PrepareStmt{Name: yyDollar[3].colIdent, Comments: yyDollar[2].strs, Statement: yyDollar[5].str}
+			yyLOCAL = &PrepareStmt{Name: yyDollar[3].colIdent, Comments: Comments(yyDollar[2].strs).Parsed(), Statement: yyDollar[5].str}
 		}
 		yyVAL.union = yyLOCAL
 	case 750:
@@ -12709,7 +12709,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3944
 		{
-			yyLOCAL = &PrepareStmt{Name: yyDollar[3].colIdent, Comments: yyDollar[2].strs, StatementIdentifier: NewColIdentWithAt(string(yyDollar[5].str), SingleAt)}
+			yyLOCAL = &PrepareStmt{Name: yyDollar[3].colIdent, Comments: Comments(yyDollar[2].strs).Parsed(), StatementIdentifier: NewColIdentWithAt(string(yyDollar[5].str), SingleAt)}
 		}
 		yyVAL.union = yyLOCAL
 	case 751:
@@ -12717,7 +12717,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3950
 		{
-			yyLOCAL = &ExecuteStmt{Name: yyDollar[3].colIdent, Comments: yyDollar[2].strs, Arguments: yyDollar[4].columnsUnion()}
+			yyLOCAL = &ExecuteStmt{Name: yyDollar[3].colIdent, Comments: Comments(yyDollar[2].strs).Parsed(), Arguments: yyDollar[4].columnsUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 752:
@@ -12741,7 +12741,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3965
 		{
-			yyLOCAL = &DeallocateStmt{Type: DeallocateType, Comments: yyDollar[2].strs, Name: yyDollar[4].colIdent}
+			yyLOCAL = &DeallocateStmt{Type: DeallocateType, Comments: Comments(yyDollar[2].strs).Parsed(), Name: yyDollar[4].colIdent}
 		}
 		yyVAL.union = yyLOCAL
 	case 755:
@@ -12749,7 +12749,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3969
 		{
-			yyLOCAL = &DeallocateStmt{Type: DropType, Comments: yyDollar[2].strs, Name: yyDollar[4].colIdent}
+			yyLOCAL = &DeallocateStmt{Type: DropType, Comments: Comments(yyDollar[2].strs).Parsed(), Name: yyDollar[4].colIdent}
 		}
 		yyVAL.union = yyLOCAL
 	case 756:

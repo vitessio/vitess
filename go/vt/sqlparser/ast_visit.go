@@ -84,8 +84,6 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfColumnType(in, f)
 	case Columns:
 		return VisitColumns(in, f)
-	case Comments:
-		return VisitComments(in, f)
 	case *Commit:
 		return VisitRefOfCommit(in, f)
 	case *CommonTableExpr:
@@ -240,6 +238,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfOtherRead(in, f)
 	case *ParenTableExpr:
 		return VisitRefOfParenTableExpr(in, f)
+	case *ParsedComments:
+		return VisitRefOfParsedComments(in, f)
 	case *PartitionDefinition:
 		return VisitRefOfPartitionDefinition(in, f)
 	case *PartitionOption:
@@ -519,7 +519,7 @@ func VisitRefOfAlterTable(in *AlterTable, f Visit) error {
 	if err := VisitRefOfPartitionOption(in.PartitionOption, f); err != nil {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	return nil
@@ -543,7 +543,7 @@ func VisitRefOfAlterView(in *AlterView, f Visit) error {
 	if err := VisitSelectStatement(in.Select, f); err != nil {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	return nil
@@ -782,10 +782,6 @@ func VisitColumns(in Columns, f Visit) error {
 	}
 	return nil
 }
-func VisitComments(in Comments, f Visit) error {
-	_, err := f(in)
-	return err
-}
 func VisitRefOfCommit(in *Commit, f Visit) error {
 	if in == nil {
 		return nil
@@ -895,7 +891,7 @@ func VisitRefOfCreateDatabase(in *CreateDatabase, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	if err := VisitTableIdent(in.DBName, f); err != nil {
@@ -919,7 +915,7 @@ func VisitRefOfCreateTable(in *CreateTable, f Visit) error {
 	if err := VisitRefOfOptLike(in.OptLike, f); err != nil {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	return nil
@@ -943,7 +939,7 @@ func VisitRefOfCreateView(in *CreateView, f Visit) error {
 	if err := VisitSelectStatement(in.Select, f); err != nil {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	return nil
@@ -970,7 +966,7 @@ func VisitRefOfDeallocateStmt(in *DeallocateStmt, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	if err := VisitColIdent(in.Name, f); err != nil {
@@ -1006,7 +1002,7 @@ func VisitRefOfDelete(in *Delete, f Visit) error {
 	if err := VisitRefOfWith(in.With, f); err != nil {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	if err := VisitTableNames(in.Targets, f); err != nil {
@@ -1060,7 +1056,7 @@ func VisitRefOfDropDatabase(in *DropDatabase, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	if err := VisitTableIdent(in.DBName, f); err != nil {
@@ -1090,7 +1086,7 @@ func VisitRefOfDropTable(in *DropTable, f Visit) error {
 	if err := VisitTableNames(in.FromTables, f); err != nil {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	return nil
@@ -1105,7 +1101,7 @@ func VisitRefOfDropView(in *DropView, f Visit) error {
 	if err := VisitTableNames(in.FromTables, f); err != nil {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	return nil
@@ -1120,7 +1116,7 @@ func VisitRefOfExecuteStmt(in *ExecuteStmt, f Visit) error {
 	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	if err := VisitColumns(in.Arguments, f); err != nil {
@@ -1362,7 +1358,7 @@ func VisitRefOfInsert(in *Insert, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	if err := VisitTableName(in.Table, f); err != nil {
@@ -1813,6 +1809,15 @@ func VisitRefOfParenTableExpr(in *ParenTableExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfParsedComments(in *ParsedComments, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
 func VisitRefOfPartitionDefinition(in *PartitionDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -1910,7 +1915,7 @@ func VisitRefOfPrepareStmt(in *PrepareStmt, f Visit) error {
 	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	if err := VisitColIdent(in.StatementIdentifier, f); err != nil {
@@ -1994,7 +1999,7 @@ func VisitRefOfRevertMigration(in *RevertMigration, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	return nil
@@ -2053,7 +2058,7 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 			return err
 		}
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	if err := VisitSelectExprs(in.SelectExprs, f); err != nil {
@@ -2112,7 +2117,7 @@ func VisitRefOfSet(in *Set, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	if err := VisitSetExprs(in.Exprs, f); err != nil {
@@ -2159,7 +2164,7 @@ func VisitRefOfSetTransaction(in *SetTransaction, f Visit) error {
 	if err := VisitSQLNode(in.SQLNode, f); err != nil {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	for _, el := range in.Characteristics {
@@ -2248,7 +2253,7 @@ func VisitRefOfShowMigrationLogs(in *ShowMigrationLogs, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	return nil
@@ -2272,7 +2277,7 @@ func VisitRefOfStream(in *Stream, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	if err := VisitSelectExpr(in.SelectExpr, f); err != nil {
@@ -2517,7 +2522,7 @@ func VisitRefOfUpdate(in *Update, f Visit) error {
 	if err := VisitRefOfWith(in.With, f); err != nil {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	if err := VisitTableExprs(in.TableExprs, f); err != nil {
@@ -2585,7 +2590,7 @@ func VisitRefOfVStream(in *VStream, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
 	if err := VisitSelectExpr(in.SelectExpr, f); err != nil {

@@ -20,8 +20,6 @@ import (
 	"errors"
 	"sort"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -149,23 +147,13 @@ func getPlannerFromQueryHint(stmt sqlparser.SelectStatement) (plancontext.Planne
 
 	firstSelect := sqlparser.GetFirstSelect(stmt)
 	if firstSelect != nil {
-		d = sqlparser.ExtractCommentDirectives(firstSelect.Comments)
+		d = firstSelect.Comments.Directives()
 	}
-	if d == nil {
-		return plancontext.PlannerVersion(0), false
-	}
-
 	val, ok := d[sqlparser.DirectiveQueryPlanner]
 	if !ok {
 		return plancontext.PlannerVersion(0), false
 	}
-
-	str, ok := val.(string)
-	if !ok {
-		log.Errorf("planner specified with unknown type %v", val)
-		return plancontext.PlannerVersion(0), false
-	}
-	return plancontext.PlannerNameToVersion(str)
+	return plancontext.PlannerNameToVersion(val)
 }
 
 func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, f func(statement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, schema plancontext.VSchema) (engine.Primitive, error)) (engine.Primitive, error) {
@@ -263,7 +251,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema
 		if !ksExists {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.DbDropExists, "Can't drop database '%s'; database doesn't exists", ksName)
 		}
-		return engine.NewDBDDL(ksName, false, queryTimeout(sqlparser.ExtractCommentDirectives(dbDDL.Comments))), nil
+		return engine.NewDBDDL(ksName, false, queryTimeout(dbDDL.Comments.Directives())), nil
 	case *sqlparser.AlterDatabase:
 		if !ksExists {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Can't alter database '%s'; unknown database", ksName)
@@ -276,7 +264,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema
 		if !dbDDL.IfNotExists && ksExists {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_ALREADY_EXISTS, vterrors.DbCreateExists, "Can't create database '%s'; database exists", ksName)
 		}
-		return engine.NewDBDDL(ksName, true, queryTimeout(sqlparser.ExtractCommentDirectives(dbDDL.Comments))), nil
+		return engine.NewDBDDL(ksName, true, queryTimeout(dbDDL.Comments.Directives())), nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] database ddl not recognized: %s", sqlparser.String(dbDDLstmt))
 }
