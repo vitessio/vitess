@@ -51,6 +51,7 @@ type (
 		iSelectStatement()
 		AddOrder(*Order)
 		SetOrderBy(OrderBy)
+		GetOrderBy() OrderBy
 		SetLimit(*Limit)
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)
@@ -1882,6 +1883,7 @@ type (
 func (*AliasedTableExpr) iTableExpr() {}
 func (*ParenTableExpr) iTableExpr()   {}
 func (*JoinTableExpr) iTableExpr()    {}
+func (*JSONTableExpr) iTableExpr()    {}
 
 type (
 	// SimpleTableExpr represents a simple table expression.
@@ -1906,7 +1908,8 @@ type (
 
 	// DerivedTable represents a subquery used as a table expression.
 	DerivedTable struct {
-		Select SelectStatement
+		Lateral bool
+		Select  SelectStatement
 	}
 )
 
@@ -2223,8 +2226,96 @@ type (
 		alternative  Expr // this is what will be used to Format this struct
 	}
 
+	// JSONPrettyExpr represents the function and argument for JSON_PRETTY()
+	// https://dev.mysql.com/doc/refman/8.0/en/json-utility-functions.html#function_json-pretty
+	JSONPrettyExpr struct {
+		JSONVal Expr
+	}
+
+	// JSONStorageFreeExpr represents the function and argument for JSON_STORAGE_FREE()
+	// https://dev.mysql.com/doc/refman/8.0/en/json-utility-functions.html#function_json-storage-free
+	JSONStorageFreeExpr struct {
+		JSONVal Expr
+	}
+
+	// JSONStorageSizeExpr represents the function and argument for JSON_STORAGE_SIZE()
+	// https://dev.mysql.com/doc/refman/8.0/en/json-utility-functions.html#function_json-storage-size
+	JSONStorageSizeExpr struct {
+		JSONVal Expr
+	}
+
 	// Offset is another AST type that is used during planning and never produced by the parser
 	Offset int
+
+	// JSONArrayExpr represents JSON_ARRAY()
+	// More information on https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-array
+	JSONArrayExpr struct {
+		Params Exprs
+	}
+
+	// JSONObjectExpr represents JSON_ARRAY()
+	// More information on https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-object
+	JSONObjectExpr struct {
+		Params []*JSONObjectParam
+	}
+
+	// JSONObjectParam defines a key/value parameter for a JSON_OBJECT expression
+	JSONObjectParam struct {
+		Key   Expr
+		Value Expr
+	}
+
+	// JSONQuoteExpr represents JSON_QUOTE()
+	// More information https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-quote
+	JSONQuoteExpr struct {
+		StringArg Expr
+	}
+
+	// JSONTableExpr describes the components of JSON_TABLE()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/json-table-functions.html#function_json-table
+	JSONTableExpr struct {
+		Expr    Expr
+		Alias   TableIdent
+		Filter  Expr
+		Columns []*JtColumnDefinition
+	}
+
+	// JtOnResponseType describes the type of column: default, error or null
+	JtOnResponseType int
+
+	// JtColumnDefinition represents the structure of column definition in JSON_TABLE
+	JtColumnDefinition struct {
+		JtOrdinal    *JtOrdinalColDef
+		JtPath       *JtPathColDef
+		JtNestedPath *JtNestedPathColDef
+	}
+
+	// JtOrdinalColDef is a type of column definition similar to using AUTO_INCREMENT with a column
+	JtOrdinalColDef struct {
+		Name ColIdent
+	}
+
+	// JtPathColDef is a type of column definition specifying the path in JSON structure to extract values
+	JtPathColDef struct {
+		Name            ColIdent
+		Type            ColumnType
+		JtColExists     bool
+		Path            Expr
+		EmptyOnResponse *JtOnResponse
+		ErrorOnResponse *JtOnResponse
+	}
+
+	// JtNestedPathColDef is type of column definition with nested column definitions
+	JtNestedPathColDef struct {
+		Path    Expr
+		Columns []*JtColumnDefinition
+	}
+
+	// JtOnResponse specifies for a column the JtOnResponseType along with the expression for default and error
+	JtOnResponse struct {
+		ResponseType JtOnResponseType
+		Expr         Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2263,8 +2354,14 @@ func (*MatchExpr) iExpr()            {}
 func (*GroupConcatExpr) iExpr()      {}
 func (*Default) iExpr()              {}
 func (*ExtractedSubquery) iExpr()    {}
+func (*JSONPrettyExpr) iExpr()       {}
+func (*JSONStorageFreeExpr) iExpr()  {}
+func (*JSONStorageSizeExpr) iExpr()  {}
 func (*TrimFuncExpr) iExpr()         {}
 func (Offset) iExpr()                {}
+func (*JSONArrayExpr) iExpr()        {}
+func (*JSONObjectExpr) iExpr()       {}
+func (*JSONQuoteExpr) iExpr()        {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()             {}
@@ -2279,6 +2376,12 @@ func (*SubstrExpr) iCallable()           {}
 func (*ConvertUsingExpr) iCallable()     {}
 func (*MatchExpr) iCallable()            {}
 func (*GroupConcatExpr) iCallable()      {}
+func (*JSONPrettyExpr) iCallable()       {}
+func (*JSONStorageFreeExpr) iCallable()  {}
+func (*JSONStorageSizeExpr) iCallable()  {}
+func (*JSONArrayExpr) iCallable()        {}
+func (*JSONObjectExpr) iCallable()       {}
+func (*JSONQuoteExpr) iCallable()        {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

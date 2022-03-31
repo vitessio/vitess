@@ -51,11 +51,43 @@ type VReplStream struct {
 	source               string
 	pos                  string
 	timeUpdated          int64
+	timeHeartbeat        int64
 	transactionTimestamp int64
 	state                string
 	message              string
 	rowsCopied           int64
 	bls                  *binlogdatapb.BinlogSource
+}
+
+// livenessTimeIndicator returns a time indicator for last known healthy state.
+// vreplication uses two indicators: time_updates and time_heartbeat. Either one making progress is good news. The greater of the two indicates the
+// latest progress. Note that both indicate timestamp of events in the binary log stream, rather than time "now".
+// A vreplication stream health is determined by "is there any progress in either of the two counters in the past X minutes"
+func (v *VReplStream) livenessTimeIndicator() int64 {
+	if v.timeHeartbeat > v.timeUpdated {
+		return v.timeHeartbeat
+	}
+	return v.timeUpdated
+}
+
+// isFailed() returns true when the workflow is actively running
+func (v *VReplStream) isRunning() bool {
+	switch v.state {
+	case binlogplayer.VReplicationInit, binlogplayer.VReplicationCopying, binlogplayer.BlpRunning:
+		return true
+	}
+	return false
+}
+
+// isFailed() returns true when the workflow has failed and will not retry
+func (v *VReplStream) isFailed() bool {
+	switch {
+	case v.state == binlogplayer.BlpError:
+		return true
+	case strings.Contains(strings.ToLower(v.message), "error"):
+		return true
+	}
+	return false
 }
 
 // VRepl is an online DDL helper for VReplication based migrations (ddl_strategy="online")

@@ -23,12 +23,26 @@ import { isReadOnlyMode } from '../util/env';
  *      <ReadOnlyGate>
  *          <SomeSpicyWriteAction />
  *      </ReadOnlyGate>
+ *
+ * Do not use ReadOnly gate in a react-router Switch statement as it will break
+ * redirects. The following will NOT work:
+ *
+ *      <Switch>
+ *          <ReadOnlyGate>
+ *              <Route path="/private">readonly content</Route>
+ *          <ReadOnlyGate>
+ *      </Switch>
+ *
+ * In this case, you'll want to do the following:
+ *
+ *      <Switch>
+ *          {isReadOnlyMode &&
+ *              <Route path="/private">readonly content</Route>
+ *          }
+ *      </Switch>
  */
 export const ReadOnlyGate: React.FunctionComponent = ({ children }) => {
     if (isReadOnlyMode()) {
-        // Returning `null` here prevents ReadOnlyGate from being used around
-        // <Route> components within a switch statement; returning a fragment
-        // doesn't seem to have this issue.
         return <></>;
     }
 

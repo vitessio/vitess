@@ -87,6 +87,8 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, rese
 		return err
 	case *sqlparser.JoinTableExpr:
 		return pb.processJoin(tableExpr, reservedVars, where)
+	case *sqlparser.JSONTableExpr:
+		return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: json_table expressions")
 	}
 	return fmt.Errorf("BUG: unexpected table expression type: %T", tableExpr)
 }
@@ -106,6 +108,9 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 	case sqlparser.TableName:
 		return pb.buildTablePrimitive(tableExpr, expr)
 	case *sqlparser.DerivedTable:
+		if expr.Lateral {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: lateral derived tables")
+		}
 		spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 		switch stmt := expr.Select.(type) {
 		case *sqlparser.Select:

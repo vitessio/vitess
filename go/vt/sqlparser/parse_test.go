@@ -2297,6 +2297,42 @@ var (
 		input:  "create table unused_reserved_keywords (dense_rank bigint, lead VARCHAR(255), percent_rank decimal(3, 0), row TINYINT, rows CHAR(10), constraint PK_project PRIMARY KEY (dense_rank))",
 		output: "create table unused_reserved_keywords (\n\t`dense_rank` bigint,\n\t`lead` VARCHAR(255),\n\t`percent_rank` decimal(3,0),\n\t`row` TINYINT,\n\t`rows` CHAR(10),\n\tconstraint PK_project PRIMARY KEY (`dense_rank`)\n)",
 	}, {
+		input:  `SELECT JSON_PRETTY('{"a":"10","b":"15","x":"25"}')`,
+		output: `select json_pretty('{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
+	}, {
+		input:  `SELECT JSON_PRETTY(N'{"a":"10","b":"15","x":"25"}')`,
+		output: `select json_pretty(N'{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
+	}, {
+		input:  "SELECT jcol, JSON_PRETTY(jcol) from jtable",
+		output: "select jcol, json_pretty(jcol) from jtable",
+	}, {
+		input:  "SELECT JSON_PRETTY(@j)",
+		output: "select json_pretty(@j) from dual",
+	}, {
+		input:  "SELECT jcol, JSON_STORAGE_SIZE(jcol) AS Size FROM jtable",
+		output: "select jcol, json_storage_size(jcol) as Size from jtable",
+	}, {
+		input:  `SELECT jcol, JSON_STORAGE_SIZE(N'{"a":"10","b":"15","x":"25"}') AS Size FROM jtable`,
+		output: `select jcol, json_storage_size(N'{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') as Size from jtable`,
+	}, {
+		input:  `SELECT JSON_STORAGE_SIZE('[100, "sakila", [1, 3, 5], 425.05]') AS A, JSON_STORAGE_SIZE('{"a": 1000, "b": "a", "c": "[1, 3, 5, 7]"}') AS B, JSON_STORAGE_SIZE('{"a": 1000, "b": "wxyz", "c": "[1, 3, 5, 7]"}') AS C,JSON_STORAGE_SIZE('[100, "json", [[10, 20, 30], 3, 5], 425.05]') AS D`,
+		output: `select json_storage_size('[100, \"sakila\", [1, 3, 5], 425.05]') as A, json_storage_size('{\"a\": 1000, \"b\": \"a\", \"c\": \"[1, 3, 5, 7]\"}') as B, json_storage_size('{\"a\": 1000, \"b\": \"wxyz\", \"c\": \"[1, 3, 5, 7]\"}') as C, json_storage_size('[100, \"json\", [[10, 20, 30], 3, 5], 425.05]') as D from dual`,
+	}, {
+		input:  "SELECT JSON_STORAGE_SIZE(@j)",
+		output: "select json_storage_size(@j) from dual",
+	}, {
+		input:  "SELECT JSON_STORAGE_FREE(jcol) FROM jtable",
+		output: "select json_storage_free(jcol) from jtable",
+	}, {
+		input:  `SELECT JSON_STORAGE_FREE('{"a":"10","b":"15","x":"25"}')`,
+		output: `select json_storage_free('{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
+	}, {
+		input:  `SELECT JSON_STORAGE_FREE(N'{"a":"10","b":"15","x":"25"}')`,
+		output: `select json_storage_free(N'{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
+	}, {
+		input:  "SELECT JSON_STORAGE_FREE(@j)",
+		output: "select json_storage_free(@j) from dual",
+	}, {
 		input:  "SELECT LTRIM('abc')",
 		output: "select ltrim('abc') from dual",
 	}, {
@@ -2326,6 +2362,118 @@ var (
 	}, {
 		input:  "SELECT TRIM(BOTH 'a' FROM 'abc')",
 		output: "select trim(both 'a' from 'abc') from dual",
+	}, {
+		input: `SELECT * FROM JSON_TABLE('[ {"c1": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt`,
+		output: `select * from json_table('[ {\"c1\": null} ]', '$[*]' columns(
+	c1 INT path '$.c1' error on error 
+	)
+) as jt`,
+	}, {
+		input: `SELECT * FROM  JSON_TABLE(    '[{"a": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}]', '$[*]' COLUMNS(a INT PATH '$.a', NESTED PATH '$.b[*]' COLUMNS (b1 INT PATH '$'), NESTED PATH '$.b[*]' COLUMNS (b2 INT PATH '$'))) AS jt`,
+		output: `select * from json_table('[{\"a\": 1, \"b\": [11,111]}, {\"a\": 2, \"b\": [22,222]}]', '$[*]' columns(
+	a INT path '$.a' ,
+	nested path '$.b[*]' columns(
+	b1 INT path '$' 
+),
+	nested path '$.b[*]' columns(
+	b2 INT path '$' 
+)
+	)
+) as jt`,
+	}, {
+		input: `SELECT * FROM JSON_TABLE('[ {"c1": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt`,
+		output: `select * from json_table('[ {\"c1\": null} ]', '$[*]' columns(
+	c1 INT path '$.c1' error on error 
+	)
+) as jt`,
+	}, {
+		input: `SELECT * FROM JSON_TABLE('[{"a":"3"},{"a":2},{"b":1},{"a":0},{"a":[1,2]}]', "$[*]" COLUMNS(rowid FOR ORDINALITY, ac VARCHAR(100) PATH "$.a" DEFAULT '111' ON EMPTY DEFAULT '999' ON ERROR,  aj JSON PATH "$.a" DEFAULT '{"x": 333}' ON EMPTY, bx INT EXISTS PATH "$.b" ) ) AS tt`,
+		output: `select * from json_table('[{\"a\":\"3\"},{\"a\":2},{\"b\":1},{\"a\":0},{\"a\":[1,2]}]', '$[*]' columns(
+	rowid for ordinality,
+	ac VARCHAR(100) path '$.a' default '111' on empty default '999' on error ,
+	aj JSON path '$.a' default '{\"x\": 333}' on empty ,
+	bx INT exists path '$.b' 
+	)
+) as tt`,
+	}, {
+		input: `SELECT * FROM  JSON_TABLE(    '[ {"a": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3}]',    '$[*]' COLUMNS(            a INT PATH '$.a',            NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$')           )   ) AS jt WHERE b IS NOT NULL`,
+		output: `select * from json_table('[ {\"a\": 1, \"b\": [11,111]}, {\"a\": 2, \"b\": [22,222]}, {\"a\":3}]', '$[*]' columns(
+	a INT path '$.a' ,
+	nested path '$.b[*]' columns(
+	b INT path '$' 
+)
+	)
+) as jt where b is not null`,
+	}, {
+		input: `SELECT * FROM  JSON_TABLE(    '[{"x":2,"y":"8"},{"x":"3","y":"7"},{"x":"4","y":6}]',    "$[1]" COLUMNS(      xval VARCHAR(100) PATH "$.x",      yval VARCHAR(100) PATH "$.y"    )  ) AS  jt1`,
+		output: `select * from json_table('[{\"x\":2,\"y\":\"8\"},{\"x\":\"3\",\"y\":\"7\"},{\"x\":\"4\",\"y\":6}]', '$[1]' columns(
+	xval VARCHAR(100) path '$.x' ,
+	yval VARCHAR(100) path '$.y' 
+	)
+) as jt1`,
+	}, {
+		input: `SELECT * FROM  JSON_TABLE(    '[{"a": "a_val","b": [{"c": "c_val", "l": [1,2]}]},{"a": "a_val", "b": [{"c": "c_val","l": [11]}, {"c": "c_val", "l": [22]}]}]',    '$[*]' COLUMNS(      top_ord FOR ORDINALITY,      apath VARCHAR(10) PATH '$.a',      NESTED PATH '$.b[*]' COLUMNS (        bpath VARCHAR(10) PATH '$.c',        ord FOR ORDINALITY,        NESTED PATH '$.l[*]' COLUMNS (lpath varchar(10) PATH '$')        )    )) as jt`,
+		output: `select * from json_table('[{\"a\": \"a_val\",\"b\": [{\"c\": \"c_val\", \"l\": [1,2]}]},{\"a\": \"a_val\", \"b\": [{\"c\": \"c_val\",\"l\": [11]}, {\"c\": \"c_val\", \"l\": [22]}]}]', '$[*]' columns(
+	top_ord for ordinality,
+	apath VARCHAR(10) path '$.a' ,
+	nested path '$.b[*]' columns(
+	bpath VARCHAR(10) path '$.c' ,
+	ord for ordinality,
+	nested path '$.l[*]' columns(
+	lpath varchar(10) path '$' 
+)
+)
+	)
+) as jt`,
+	}, {
+		input: `SELECT * FROM JSON_TABLE('[{"x":2,"y":"8"},{"x":"3","y":"7"},{"x":"4","y":6}]', "$[1]" COLUMNS( xval VARCHAR(100) PATH "$.x", yval VARCHAR(100) PATH "$.y")) AS  jt1;`,
+		output: `select * from json_table('[{\"x\":2,\"y\":\"8\"},{\"x\":\"3\",\"y\":\"7\"},{\"x\":\"4\",\"y\":6}]', '$[1]' columns(
+	xval VARCHAR(100) path '$.x' ,
+	yval VARCHAR(100) path '$.y' 
+	)
+) as jt1`,
+	}, {
+		input:  "SELECT JSON_ARRAY()",
+		output: "select json_array() from dual",
+	}, {
+		input:  "SELECT JSON_ARRAY(1)",
+		output: "select json_array(1) from dual",
+	}, {
+		input:  "SELECT JSON_ARRAY('abc')",
+		output: "select json_array('abc') from dual",
+	}, {
+		input:  "SELECT JSON_ARRAY(BIN(11))",
+		output: "select json_array(BIN(11)) from dual",
+	}, {
+		input:  `SELECT JSON_ARRAY(1, "abc", NULL, TRUE, CURTIME());`,
+		output: `select json_array(1, 'abc', null, true, CURTIME()) from dual`,
+	}, {
+		input:  "SELECT JSON_OBJECT(1,2)",
+		output: "select json_object(1, 2) from dual",
+	}, {
+		input:  "SELECT JSON_OBJECT(1,'abc')",
+		output: "select json_object(1, 'abc') from dual",
+	}, {
+		input:  "SELECT JSON_OBJECT('abc',1)",
+		output: "select json_object('abc', 1) from dual",
+	}, {
+		input:  "SELECT JSON_OBJECT(BIN(1),2)",
+		output: "select json_object(BIN(1), 2) from dual",
+	}, {
+		input:  "SELECT JSON_OBJECT(BIN(1),2,'abc',ASCII(4))",
+		output: "select json_object(BIN(1), 2, 'abc', ASCII(4)) from dual",
+	}, {
+		input:  "SELECT JSON_QUOTE(BIN(11))",
+		output: "select json_quote(BIN(11)) from dual",
+	}, {
+		input:  `SELECT JSON_QUOTE('null'), JSON_QUOTE('"null"')`,
+		output: `select json_quote('null'), json_quote('\"null\"') from dual`,
+	}, {
+		input:  "select t1.a, dt.a from t1, lateral (select t1.a+t2.a as a from t2) dt",
+		output: "select t1.a, dt.a from t1, lateral (select t1.a + t2.a as a from t2) as dt",
+	}, {
+		input:  "select b from v1 vq1, lateral (select count(*) from v1 vq2 having vq1.b = 3) dt",
+		output: "select b from v1 as vq1, lateral (select count(*) from v1 as vq2 having vq1.b = 3) as dt",
 	}}
 )
 
@@ -2429,6 +2577,27 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "select 1, next value from seq",
 		err:   "syntax error",
+	}, {
+		input: "SELECT jcol, JSON_PRETTY(jcol, jcol) from jtable",
+		err:   "syntax error at position 31",
+	}, {
+		input: "SELECT JSON_ARRAY(1,)",
+		err:   "syntax error at position 22",
+	}, {
+		input: "SELECT JSON_OBJECT(1)",
+		err:   "syntax error at position 22",
+	}, {
+		input: "SELECT JSON_OBJECT(1,2,)",
+		err:   "syntax error at position 25",
+	}, {
+		input: "SELECT JSON_OBJECT(1,)",
+		err:   "syntax error at position 23",
+	}, {
+		input: "SELECT JSON_QUOTE()",
+		err:   "syntax error at position 20",
+	}, {
+		input: "select from t1, lateral (with qn as (select t1.a) select (select max(a) from qn)) as dt",
+		err:   "syntax error at position 12 near 'from'",
 	}}
 
 	for _, tcase := range invalidSQL {

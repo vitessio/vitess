@@ -62,6 +62,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   str           string
   strs          []string
   vindexParam   VindexParam
+  jsonObjectParam *JSONObjectParam
   colIdent      ColIdent
   joinCondition *JoinCondition
   collateAndCharset CollateAndCharset
@@ -130,6 +131,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   renameTablePairs []*RenameTablePair
   alterOptions	   []AlterOption
   vindexParams  []VindexParam
+  jsonObjectParams []*JSONObjectParam
   partDefs      []*PartitionDefinition
   partitionValueRange	*PartitionValueRange
   partSpecs     []*PartitionSpec
@@ -174,6 +176,11 @@ func bindVariable(yylex yyLexer, bvar string) {
   partitionByType PartitionByType
   definer 	*Definer
   integer 	int
+
+  JSONTableExpr	*JSONTableExpr
+  jtColumnDefinition *JtColumnDefinition
+  jtColumnList	[]*JtColumnDefinition
+  jtOnResponse	*JtOnResponse
 }
 
 %token LEX_ERROR
@@ -191,6 +198,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
 %token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
+%token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE
 %token <str> EXTRACT
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
@@ -287,6 +295,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> TIMESTAMPADD TIMESTAMPDIFF
 %token <str> WEIGHT_STRING
 %token <str> LTRIM RTRIM TRIM
+%token <str> JSON_ARRAY JSON_OBJECT JSON_QUOTE
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -338,7 +347,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <alterDatabase> alter_database_prefix
 %type <collateAndCharset> collate character_set
 %type <collateAndCharsets> create_options create_options_opt
-%type <boolean> default_optional first_opt linear_opt
+%type <boolean> default_optional first_opt linear_opt jt_exists_opt jt_path_opt
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement call_statement
@@ -363,7 +372,10 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <definer> definer_opt user
 %type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr simple_expr literal NUM_literal text_literal bool_pri literal_or_null now predicate tuple_expression
 %type <tableExprs> from_opt table_references from_clause
-%type <tableExpr> table_reference table_factor join_table
+%type <tableExpr> table_reference table_factor join_table json_table_function
+%type <jtColumnDefinition> jt_column
+%type <jtColumnList> jt_columns_clause columns_list
+%type <jtOnResponse> on_error on_empty json_on_response
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
 %type <tableNames> table_name_list delete_table_list view_name_list
 %type <joinType> inner_join outer_join straight_join natural_join
@@ -458,6 +470,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
+%type <jsonObjectParam> json_object_param
+%type <jsonObjectParams> json_object_param_list json_object_param_opt
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
 %type <str> database_or_schema column_opt insert_method_options row_format_options
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
@@ -1021,6 +1035,31 @@ vindex_param:
   reserved_sql_id '=' table_opt_value
   {
     $$ = VindexParam{Key: $1, Val: $3}
+  }
+
+json_object_param_opt:
+  {
+    $$ = nil
+  }
+| json_object_param_list
+  {
+    $$ = $1
+  }
+
+json_object_param_list:
+  json_object_param
+  {
+    $$ = []*JSONObjectParam{$1}
+  }
+| json_object_param_list ',' json_object_param
+  {
+    $$ = append($$, $3)
+  }
+
+json_object_param:
+  expression ',' expression
+  {
+    $$ = &JSONObjectParam{Key:$1, Value:$3}
   }
 
 create_table_prefix:
@@ -2881,6 +2920,106 @@ algorithm_opt:
     $$ = convertStringToInt($3)
   }
 
+json_table_function:
+  JSON_TABLE openb expression ',' text_literal jt_columns_clause closeb as_opt_id
+  {
+    $$ = &JSONTableExpr{Expr: $3, Filter: $5, Columns: $6, Alias: $8}
+  }
+
+jt_columns_clause:
+  COLUMNS openb columns_list closeb
+  {
+    $$= $3
+  }
+
+columns_list:
+  jt_column
+  {
+    $$= []*JtColumnDefinition{$1}
+  }
+| columns_list ',' jt_column
+  {
+    $$ = append($1, $3)
+  }
+
+jt_column:
+ sql_id FOR ORDINALITY
+  {
+    $$ = &JtColumnDefinition{JtOrdinal: &JtOrdinalColDef{Name: $1}}
+  }
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal
+  {
+    $2.Options= &ColumnTypeOptions{Collate:$3}
+    jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6}
+    $$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal on_empty
+  {
+    $2.Options= &ColumnTypeOptions{Collate:$3}
+    jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6, EmptyOnResponse: $7}
+    $$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal on_error
+  {
+    $2.Options= &ColumnTypeOptions{Collate:$3}
+    jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6, ErrorOnResponse: $7}
+    $$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal on_empty on_error
+  {
+    $2.Options= &ColumnTypeOptions{Collate:$3}
+    jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6, EmptyOnResponse: $7, ErrorOnResponse: $8}
+    $$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| NESTED jt_path_opt text_literal jt_columns_clause
+  {
+    jtNestedPath := &JtNestedPathColDef{Path: $3, Columns: $4}
+    $$ = &JtColumnDefinition{JtNestedPath: jtNestedPath}
+  }
+
+jt_path_opt:
+  {
+    $$ = false
+  }
+| PATH
+  {
+    $$ = true
+  }
+jt_exists_opt:
+  {
+    $$=false
+  }
+| EXISTS
+  {
+    $$=true
+  }
+
+on_empty:
+  json_on_response ON EMPTY
+  {
+    $$= $1
+  }
+
+on_error:
+  json_on_response ON ERROR
+  {
+    $$= $1
+  }
+
+json_on_response:
+  ERROR
+  {
+    $$ = &JtOnResponse{ResponseType: ErrorJSONType}
+  }
+| NULL
+  {
+    $$ = &JtOnResponse{ResponseType: NullJSONType}
+  }
+| DEFAULT text_literal
+  {
+    $$ = &JtOnResponse{ResponseType: DefaultJSONType, Expr: $2}
+  }
+
 range_or_list:
   RANGE
   {
@@ -3981,11 +4120,19 @@ table_factor:
   {
     $$ = &ParenTableExpr{Exprs: $2}
   }
+| json_table_function
+  {
+    $$ = $1
+  }
 
 derived_table:
   openb query_expression closeb
   {
-    $$ = &DerivedTable{$2}
+    $$ = &DerivedTable{Lateral: false, Select: $2}
+  }
+| LATERAL openb query_expression closeb
+  {
+    $$ = &DerivedTable{Lateral: true, Select: $3}
   }
 
 aliased_table_name:
@@ -4740,6 +4887,18 @@ UTC_DATE func_paren_opt
   {
     $$ = &WeightStringFuncExpr{Expr: $3, As: $4}
   }
+| JSON_PRETTY openb expression closeb
+  {
+    $$ = &JSONPrettyExpr{JSONVal: $3}
+  }
+| JSON_STORAGE_FREE openb expression closeb
+  {
+    $$ = &JSONStorageFreeExpr{ JSONVal: $3}
+  }
+| JSON_STORAGE_SIZE openb expression closeb
+  {
+    $$ = &JSONStorageSizeExpr{ JSONVal: $3}
+  }
 | LTRIM openb expression closeb
   {
     $$ = &TrimFuncExpr{TrimFuncType:LTrimType, StringArg: $3}
@@ -4759,6 +4918,18 @@ UTC_DATE func_paren_opt
 | TRIM openb expression FROM expression closeb
   {
     $$ = &TrimFuncExpr{TrimArg:$3, StringArg: $5}
+  }
+| JSON_ARRAY openb expression_list_opt closeb
+  {
+    $$ = &JSONArrayExpr{ Params:$3 }
+  }
+| JSON_OBJECT openb json_object_param_opt closeb
+  {
+    $$ = &JSONObjectExpr{ Params:$3 }
+  }
+| JSON_QUOTE openb expression closeb
+  {
+    $$ = &JSONQuoteExpr{ StringArg:$3 }
   }
 
 interval:
@@ -5791,6 +5962,7 @@ reserved_keyword:
 | DIV
 | DROP
 | ELSE
+| EMPTY
 | ESCAPE
 | EXISTS
 | EXPLAIN
@@ -6015,6 +6187,12 @@ non_reserved_keyword:
 | INDEXES
 | ISOLATION
 | JSON
+| JSON_ARRAY
+| JSON_OBJECT
+| JSON_QUOTE
+| JSON_PRETTY
+| JSON_STORAGE_FREE
+| JSON_STORAGE_SIZE
 | KEY_BLOCK_SIZE
 | KEYS
 | KEYSPACES

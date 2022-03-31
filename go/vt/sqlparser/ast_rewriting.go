@@ -280,19 +280,19 @@ func newASTRewriter(keyspace string, selectLimit int, setVarComment string, sysV
 }
 
 const (
-	//LastInsertIDName is a reserved bind var name for last_insert_id()
+	// LastInsertIDName is a reserved bind var name for last_insert_id()
 	LastInsertIDName = "__lastInsertId"
 
-	//DBVarName is a reserved bind var name for database()
+	// DBVarName is a reserved bind var name for database()
 	DBVarName = "__vtdbname"
 
-	//FoundRowsName is a reserved bind var name for found_rows()
+	// FoundRowsName is a reserved bind var name for found_rows()
 	FoundRowsName = "__vtfrows"
 
-	//RowCountName is a reserved bind var name for row_count()
+	// RowCountName is a reserved bind var name for row_count()
 	RowCountName = "__vtrcount"
 
-	//UserDefinedVariableName is what we prepend bind var names for user defined variables
+	// UserDefinedVariableName is what we prepend bind var names for user defined variables
 	UserDefinedVariableName = "__vtudv"
 )
 
@@ -506,6 +506,9 @@ func (er *astRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
 }
 
 func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
+	if _, isExists := cursor.Parent().(*ExistsExpr); isExists {
+		return
+	}
 	sel, isSimpleSelect := subquery.Select.(*Select)
 	if !isSimpleSelect {
 		return

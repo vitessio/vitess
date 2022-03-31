@@ -57,7 +57,7 @@ type VtgateProcess struct {
 	VSchemaURL            string
 	SysVarSetEnabled      bool
 	PlannerVersion        plancontext.PlannerVersion
-	//Extra Args to be set before starting the vtgate process
+	// Extra Args to be set before starting the vtgate process
 	ExtraArgs []string
 
 	proc *exec.Cmd

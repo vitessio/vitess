@@ -172,10 +172,30 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
 	case IsolationLevel:
 		return a.rewriteIsolationLevel(parent, node, replacer)
+	case *JSONArrayExpr:
+		return a.rewriteRefOfJSONArrayExpr(parent, node, replacer)
+	case *JSONObjectExpr:
+		return a.rewriteRefOfJSONObjectExpr(parent, node, replacer)
+	case JSONObjectParam:
+		return a.rewriteJSONObjectParam(parent, node, replacer)
+	case *JSONPrettyExpr:
+		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
+	case *JSONQuoteExpr:
+		return a.rewriteRefOfJSONQuoteExpr(parent, node, replacer)
+	case *JSONStorageFreeExpr:
+		return a.rewriteRefOfJSONStorageFreeExpr(parent, node, replacer)
+	case *JSONStorageSizeExpr:
+		return a.rewriteRefOfJSONStorageSizeExpr(parent, node, replacer)
+	case *JSONTableExpr:
+		return a.rewriteRefOfJSONTableExpr(parent, node, replacer)
 	case *JoinCondition:
 		return a.rewriteRefOfJoinCondition(parent, node, replacer)
 	case *JoinTableExpr:
 		return a.rewriteRefOfJoinTableExpr(parent, node, replacer)
+	case *JtColumnDefinition:
+		return a.rewriteRefOfJtColumnDefinition(parent, node, replacer)
+	case *JtOnResponse:
+		return a.rewriteRefOfJtOnResponse(parent, node, replacer)
 	case *KeyState:
 		return a.rewriteRefOfKeyState(parent, node, replacer)
 	case *Limit:
@@ -2649,6 +2669,247 @@ func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer 
 	}
 	return true
 }
+func (a *application) rewriteRefOfJSONArrayExpr(parent SQLNode, node *JSONArrayExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExprs(node, node.Params, func(newNode, parent SQLNode) {
+		parent.(*JSONArrayExpr).Params = newNode.(Exprs)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONObjectExpr(parent SQLNode, node *JSONObjectExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	for x, el := range node.Params {
+		if !a.rewriteRefOfJSONObjectParam(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*JSONObjectExpr).Params[idx] = newNode.(*JSONObjectParam)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteJSONObjectParam(parent SQLNode, node JSONObjectParam, replacer replacerFunc) bool {
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Key, func(newNode, parent SQLNode) {
+		panic("[BUG] tried to replace 'Key' on 'JSONObjectParam'")
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Value, func(newNode, parent SQLNode) {
+		panic("[BUG] tried to replace 'Value' on 'JSONObjectParam'")
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONPrettyExpr(parent SQLNode, node *JSONPrettyExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.JSONVal, func(newNode, parent SQLNode) {
+		parent.(*JSONPrettyExpr).JSONVal = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONQuoteExpr(parent SQLNode, node *JSONQuoteExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.StringArg, func(newNode, parent SQLNode) {
+		parent.(*JSONQuoteExpr).StringArg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONStorageFreeExpr(parent SQLNode, node *JSONStorageFreeExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.JSONVal, func(newNode, parent SQLNode) {
+		parent.(*JSONStorageFreeExpr).JSONVal = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONStorageSizeExpr(parent SQLNode, node *JSONStorageSizeExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.JSONVal, func(newNode, parent SQLNode) {
+		parent.(*JSONStorageSizeExpr).JSONVal = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONTableExpr(parent SQLNode, node *JSONTableExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*JSONTableExpr).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteTableIdent(node, node.Alias, func(newNode, parent SQLNode) {
+		parent.(*JSONTableExpr).Alias = newNode.(TableIdent)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Filter, func(newNode, parent SQLNode) {
+		parent.(*JSONTableExpr).Filter = newNode.(Expr)
+	}) {
+		return false
+	}
+	for x, el := range node.Columns {
+		if !a.rewriteRefOfJtColumnDefinition(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*JSONTableExpr).Columns[idx] = newNode.(*JtColumnDefinition)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfJoinCondition(parent SQLNode, node *JoinCondition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2705,6 +2966,57 @@ func (a *application) rewriteRefOfJoinTableExpr(parent SQLNode, node *JoinTableE
 	}
 	if !a.rewriteRefOfJoinCondition(node, node.Condition, func(newNode, parent SQLNode) {
 		parent.(*JoinTableExpr).Condition = newNode.(*JoinCondition)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJtColumnDefinition(parent SQLNode, node *JtColumnDefinition, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJtOnResponse(parent SQLNode, node *JtOnResponse, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*JtOnResponse).Expr = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -5441,6 +5753,18 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case *GroupConcatExpr:
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
+	case *JSONArrayExpr:
+		return a.rewriteRefOfJSONArrayExpr(parent, node, replacer)
+	case *JSONObjectExpr:
+		return a.rewriteRefOfJSONObjectExpr(parent, node, replacer)
+	case *JSONPrettyExpr:
+		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
+	case *JSONQuoteExpr:
+		return a.rewriteRefOfJSONQuoteExpr(parent, node, replacer)
+	case *JSONStorageFreeExpr:
+		return a.rewriteRefOfJSONStorageFreeExpr(parent, node, replacer)
+	case *JSONStorageSizeExpr:
+		return a.rewriteRefOfJSONStorageSizeExpr(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *SubstrExpr:
@@ -5605,6 +5929,18 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfIntroducerExpr(parent, node, replacer)
 	case *IsExpr:
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
+	case *JSONArrayExpr:
+		return a.rewriteRefOfJSONArrayExpr(parent, node, replacer)
+	case *JSONObjectExpr:
+		return a.rewriteRefOfJSONObjectExpr(parent, node, replacer)
+	case *JSONPrettyExpr:
+		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
+	case *JSONQuoteExpr:
+		return a.rewriteRefOfJSONQuoteExpr(parent, node, replacer)
+	case *JSONStorageFreeExpr:
+		return a.rewriteRefOfJSONStorageFreeExpr(parent, node, replacer)
+	case *JSONStorageSizeExpr:
+		return a.rewriteRefOfJSONStorageSizeExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
@@ -5823,6 +6159,8 @@ func (a *application) rewriteTableExpr(parent SQLNode, node TableExpr, replacer 
 	switch node := node.(type) {
 	case *AliasedTableExpr:
 		return a.rewriteRefOfAliasedTableExpr(parent, node, replacer)
+	case *JSONTableExpr:
+		return a.rewriteRefOfJSONTableExpr(parent, node, replacer)
 	case *JoinTableExpr:
 		return a.rewriteRefOfJoinTableExpr(parent, node, replacer)
 	case *ParenTableExpr:
@@ -6018,6 +6356,38 @@ func (a *application) rewriteRefOfColIdent(parent SQLNode, node *ColIdent, repla
 			a.cur.parent = parent
 			a.cur.node = node
 		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONObjectParam(parent SQLNode, node *JSONObjectParam, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Key, func(newNode, parent SQLNode) {
+		parent.(*JSONObjectParam).Key = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Value, func(newNode, parent SQLNode) {
+		parent.(*JSONObjectParam).Value = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
