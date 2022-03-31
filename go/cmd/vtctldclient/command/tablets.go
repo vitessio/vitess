@@ -24,8 +24,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"vitess.io/vitess/go/json2"
-
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -74,6 +72,14 @@ Note: hook names may not contain slash (/) characters.
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.MinimumNArgs(2),
 		RunE:                  commandExecuteHook,
+	}
+	// GetPermissions makes a GetPermissions gRPC call to a vtctld.
+	GetPermissions = &cobra.Command{
+		Use:                   "GetPermissions <tablet_alias>",
+		Short:                 "Displays the permissions for a tablet.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetPermissions,
 	}
 	// GetTablet makes a GetTablet gRPC call to a vtctld.
 	GetTablet = &cobra.Command{
@@ -192,15 +198,6 @@ Note that, in the SleepTablet implementation, the value should be positively-sig
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandStopReplication,
 	}
-	// GetPermissions asks the remote tablet for its permissions list.
-	GetPermissions = &cobra.Command{
-		Use:                   "GetPermissions <tablet_alias>",
-		Aliases:               []string{"GetPermissions"},
-		Short:                 "Asks the remote tablet for its permissions list.",
-		DisableFlagsInUseLine: true,
-		Args:                  cobra.ExactArgs(1),
-		RunE:                  commandGetPermissions,
-	}
 )
 
 var changeTabletTypeOptions = struct {
@@ -299,6 +296,29 @@ func commandExecuteHook(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("%s\n", data)
+	return nil
+}
+
+func commandGetPermissions(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.GetPermissions(commandCtx, &vtctldatapb.GetPermissionsRequest{
+		TabletAlias: alias,
+	})
+	if err != nil {
+		return err
+	}
+	p, err := cli.MarshalJSON(resp.Permissions)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s\n", p)
+
 	return nil
 }
 
@@ -568,26 +588,6 @@ func commandStopReplication(cmd *cobra.Command, args []string) error {
 	return err
 }
 
-func commandGetPermissions(cmd *cobra.Command, args []string) error {
-	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
-	if err != nil {
-		return err
-	}
-
-	cli.FinishedParsing(cmd)
-
-	resp, err := client.GetPermissions(commandCtx, &vtctldatapb.GetPermissionsRequest{
-		TabletAlias: alias,
-	})
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		return err
-	}
-	p, err := json2.MarshalIndentPB(resp.Permissions, "	")
-	fmt.Printf("%s\n", p)
-	return err
-}
-
 func init() {
 	ChangeTabletType.Flags().BoolVarP(&changeTabletTypeOptions.DryRun, "dry-run", "d", false, "Shows the proposed change without actually executing it")
 	Root.AddCommand(ChangeTabletType)
@@ -596,6 +596,7 @@ func init() {
 	Root.AddCommand(DeleteTablets)
 
 	Root.AddCommand(ExecuteHook)
+	Root.AddCommand(GetPermissions)
 	Root.AddCommand(GetTablet)
 
 	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.TabletAliasStrings, "tablet-alias", "t", nil, "List of tablet aliases to filter by")
@@ -618,5 +619,4 @@ func init() {
 	Root.AddCommand(SleepTablet)
 	Root.AddCommand(StartReplication)
 	Root.AddCommand(StopReplication)
-	Root.AddCommand(GetPermissions)
 }

@@ -109,6 +109,8 @@ service Vtctld {
   rpc GetKeyspace(vtctldata.GetKeyspaceRequest) returns (vtctldata.GetKeyspaceResponse) {};
   // GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
   rpc GetKeyspaces(vtctldata.GetKeyspacesRequest) returns (vtctldata.GetKeyspacesResponse) {};
+  // GetPermissions returns permission set on the remote tablet.
+  rpc GetPermissions(vtctldata.GetPermissionsRequest) returns (vtctldata.GetPermissionsResponse) {};
   // GetRoutingRules returns the VSchema routing rules.
   rpc GetRoutingRules(vtctldata.GetRoutingRulesRequest) returns (vtctldata.GetRoutingRulesResponse) {};
   // GetSchema returns the schema for a tablet, or just the schema for the
@@ -284,6 +286,4 @@ service Vtctld {
   rpc ValidateVersionKeyspace(vtctldata.ValidateVersionKeyspaceRequest) returns (vtctldata.ValidateVersionKeyspaceResponse) {};
   // ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
   rpc ValidateVSchema(vtctldata.ValidateVSchemaRequest) returns (vtctldata.ValidateVSchemaResponse) {};
-  // GetPermissions returns permission set on the remote tablet.
-  rpc GetPermissions(vtctldata.GetPermissionsRequest) returns (vtctldata.GetPermissionsResponse) {};
 }

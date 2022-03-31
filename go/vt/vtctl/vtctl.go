@@ -3546,7 +3546,6 @@ func commandGetPermissions(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 	p, err := json2.MarshalIndentPB(resp.Permissions, "	")
 	if err != nil {
-		wr.Logger().Printf("%v\n", err)
 		return err
 	}
 	wr.Logger().Printf("%s\n", p)

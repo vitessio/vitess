@@ -1171,6 +1171,27 @@ func (s *VtctldServer) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKey
 	return &vtctldatapb.GetKeyspacesResponse{Keyspaces: keyspaces}, nil
 }
 
+// GetPermissions is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetPermissions(ctx context.Context, req *vtctldatapb.GetPermissionsRequest) (*vtctldatapb.GetPermissionsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetPermissions")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "Failed to get tablet %v: %v", req.TabletAlias, err)
+	}
+
+	p, err := s.tmc.GetPermissions(ctx, ti.Tablet)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetPermissionsResponse{
+		Permissions: p,
+	}, nil
+}
+
 // GetRoutingRules is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetRoutingRules(ctx context.Context, req *vtctldatapb.GetRoutingRulesRequest) (*vtctldatapb.GetRoutingRulesResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetRoutingRules")
@@ -2369,26 +2390,6 @@ func (s *VtctldServer) RunHealthCheck(ctx context.Context, req *vtctldatapb.RunH
 	}
 
 	return &vtctldatapb.RunHealthCheckResponse{}, nil
-}
-
-func (s *VtctldServer) GetPermissions(ctx context.Context, req *vtctldatapb.GetPermissionsRequest) (*vtctldatapb.GetPermissionsResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetPermissions")
-	defer span.Finish()
-
-	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
-	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
-	if err != nil {
-		return nil, err
-	}
-
-	p, err := s.tmc.GetPermissions(ctx, ti.Tablet)
-	if err != nil {
-		return nil, err
-	}
-
-	return &vtctldatapb.GetPermissionsResponse{
-		Permissions: p,
-	}, nil
 }
 
 // SetKeyspaceServedFrom is part of the vtctlservicepb.VtctldServer interface.

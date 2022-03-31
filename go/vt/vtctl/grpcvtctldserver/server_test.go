@@ -29,8 +29,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/json2"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -11783,11 +11781,6 @@ func TestGetPermissions(t *testing.T) {
 			assert.Equal(t, resp.Permissions.DbPermissions[0].Host, "host2")
 			assert.Equal(t, resp.Permissions.UserPermissions[0].Host, "host1")
 
-			// result should be Marshalled-able
-			perms, err := json2.MarshalIndentPB(resp.Permissions, "	")
-			if err != nil {
-				t.Errorf("tabletmanagerdatapb.Permissions():\n%s", perms)
-			}
 			require.NoError(t, err)
 		})
 	}

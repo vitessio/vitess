@@ -34723,6 +34723,186 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a GetPermissionsRequest. */
+    interface IGetPermissionsRequest {
+
+        /** GetPermissionsRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+    }
+
+    /** Represents a GetPermissionsRequest. */
+    class GetPermissionsRequest implements IGetPermissionsRequest {
+
+        /**
+         * Constructs a new GetPermissionsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetPermissionsRequest);
+
+        /** GetPermissionsRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /**
+         * Creates a new GetPermissionsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetPermissionsRequest instance
+         */
+        public static create(properties?: vtctldata.IGetPermissionsRequest): vtctldata.GetPermissionsRequest;
+
+        /**
+         * Encodes the specified GetPermissionsRequest message. Does not implicitly {@link vtctldata.GetPermissionsRequest.verify|verify} messages.
+         * @param message GetPermissionsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetPermissionsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetPermissionsRequest message, length delimited. Does not implicitly {@link vtctldata.GetPermissionsRequest.verify|verify} messages.
+         * @param message GetPermissionsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetPermissionsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetPermissionsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetPermissionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetPermissionsRequest;
+
+        /**
+         * Decodes a GetPermissionsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetPermissionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetPermissionsRequest;
+
+        /**
+         * Verifies a GetPermissionsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetPermissionsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetPermissionsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetPermissionsRequest;
+
+        /**
+         * Creates a plain object from a GetPermissionsRequest message. Also converts values to other types if specified.
+         * @param message GetPermissionsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetPermissionsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetPermissionsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetPermissionsResponse. */
+    interface IGetPermissionsResponse {
+
+        /** GetPermissionsResponse permissions */
+        permissions?: (tabletmanagerdata.IPermissions|null);
+    }
+
+    /** Represents a GetPermissionsResponse. */
+    class GetPermissionsResponse implements IGetPermissionsResponse {
+
+        /**
+         * Constructs a new GetPermissionsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetPermissionsResponse);
+
+        /** GetPermissionsResponse permissions. */
+        public permissions?: (tabletmanagerdata.IPermissions|null);
+
+        /**
+         * Creates a new GetPermissionsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetPermissionsResponse instance
+         */
+        public static create(properties?: vtctldata.IGetPermissionsResponse): vtctldata.GetPermissionsResponse;
+
+        /**
+         * Encodes the specified GetPermissionsResponse message. Does not implicitly {@link vtctldata.GetPermissionsResponse.verify|verify} messages.
+         * @param message GetPermissionsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetPermissionsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetPermissionsResponse message, length delimited. Does not implicitly {@link vtctldata.GetPermissionsResponse.verify|verify} messages.
+         * @param message GetPermissionsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetPermissionsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetPermissionsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetPermissionsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetPermissionsResponse;
+
+        /**
+         * Decodes a GetPermissionsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetPermissionsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetPermissionsResponse;
+
+        /**
+         * Verifies a GetPermissionsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetPermissionsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetPermissionsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetPermissionsResponse;
+
+        /**
+         * Creates a plain object from a GetPermissionsResponse message. Also converts values to other types if specified.
+         * @param message GetPermissionsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetPermissionsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetPermissionsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a GetRoutingRulesRequest. */
     interface IGetRoutingRulesRequest {
     }
@@ -44525,186 +44705,6 @@ export namespace vtctldata {
 
         /**
          * Converts this ValidateVSchemaResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a GetPermissionsRequest. */
-    interface IGetPermissionsRequest {
-
-        /** GetPermissionsRequest tablet_alias */
-        tablet_alias?: (topodata.ITabletAlias|null);
-    }
-
-    /** Represents a GetPermissionsRequest. */
-    class GetPermissionsRequest implements IGetPermissionsRequest {
-
-        /**
-         * Constructs a new GetPermissionsRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtctldata.IGetPermissionsRequest);
-
-        /** GetPermissionsRequest tablet_alias. */
-        public tablet_alias?: (topodata.ITabletAlias|null);
-
-        /**
-         * Creates a new GetPermissionsRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns GetPermissionsRequest instance
-         */
-        public static create(properties?: vtctldata.IGetPermissionsRequest): vtctldata.GetPermissionsRequest;
-
-        /**
-         * Encodes the specified GetPermissionsRequest message. Does not implicitly {@link vtctldata.GetPermissionsRequest.verify|verify} messages.
-         * @param message GetPermissionsRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtctldata.IGetPermissionsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified GetPermissionsRequest message, length delimited. Does not implicitly {@link vtctldata.GetPermissionsRequest.verify|verify} messages.
-         * @param message GetPermissionsRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtctldata.IGetPermissionsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a GetPermissionsRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns GetPermissionsRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetPermissionsRequest;
-
-        /**
-         * Decodes a GetPermissionsRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns GetPermissionsRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetPermissionsRequest;
-
-        /**
-         * Verifies a GetPermissionsRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a GetPermissionsRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns GetPermissionsRequest
-         */
-        public static fromObject(object: { [k: string]: any }): vtctldata.GetPermissionsRequest;
-
-        /**
-         * Creates a plain object from a GetPermissionsRequest message. Also converts values to other types if specified.
-         * @param message GetPermissionsRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtctldata.GetPermissionsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this GetPermissionsRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a GetPermissionsResponse. */
-    interface IGetPermissionsResponse {
-
-        /** GetPermissionsResponse permissions */
-        permissions?: (tabletmanagerdata.IPermissions|null);
-    }
-
-    /** Represents a GetPermissionsResponse. */
-    class GetPermissionsResponse implements IGetPermissionsResponse {
-
-        /**
-         * Constructs a new GetPermissionsResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtctldata.IGetPermissionsResponse);
-
-        /** GetPermissionsResponse permissions. */
-        public permissions?: (tabletmanagerdata.IPermissions|null);
-
-        /**
-         * Creates a new GetPermissionsResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns GetPermissionsResponse instance
-         */
-        public static create(properties?: vtctldata.IGetPermissionsResponse): vtctldata.GetPermissionsResponse;
-
-        /**
-         * Encodes the specified GetPermissionsResponse message. Does not implicitly {@link vtctldata.GetPermissionsResponse.verify|verify} messages.
-         * @param message GetPermissionsResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtctldata.IGetPermissionsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified GetPermissionsResponse message, length delimited. Does not implicitly {@link vtctldata.GetPermissionsResponse.verify|verify} messages.
-         * @param message GetPermissionsResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtctldata.IGetPermissionsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a GetPermissionsResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns GetPermissionsResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetPermissionsResponse;
-
-        /**
-         * Decodes a GetPermissionsResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns GetPermissionsResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetPermissionsResponse;
-
-        /**
-         * Verifies a GetPermissionsResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a GetPermissionsResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns GetPermissionsResponse
-         */
-        public static fromObject(object: { [k: string]: any }): vtctldata.GetPermissionsResponse;
-
-        /**
-         * Creates a plain object from a GetPermissionsResponse message. Also converts values to other types if specified.
-         * @param message GetPermissionsResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtctldata.GetPermissionsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this GetPermissionsResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
