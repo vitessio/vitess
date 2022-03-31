@@ -88,7 +88,7 @@ type (
 
 		ExprTypes   map[sqlparser.Expr]Type
 		selectScope map[*sqlparser.Select]*scope
-		Comments    sqlparser.Comments
+		Comments    *sqlparser.ParsedComments
 		SubqueryMap map[*sqlparser.Select][]*sqlparser.ExtractedSubquery
 		SubqueryRef map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery
 

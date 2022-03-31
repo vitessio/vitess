@@ -1249,8 +1249,11 @@ func (node *OtherAdmin) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node Comments) formatFast(buf *TrackedBuffer) {
-	for _, c := range node {
+func (node *ParsedComments) formatFast(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	for _, c := range node.comments {
 		buf.WriteString(c)
 		buf.WriteByte(' ')
 	}
