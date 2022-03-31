@@ -1464,7 +1464,7 @@ func convertErrorCode(err error) vtrpcpb.Code {
 		errCode = vtrpcpb.Code_RESOURCE_EXHAUSTED
 	case mysql.ERLockWaitTimeout:
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
-	case mysql.CRServerGone, mysql.ERServerShutdown, mysql.ERServerIsntAvailable:
+	case mysql.CRServerGone, mysql.ERServerShutdown, mysql.ERServerIsntAvailable, mysql.CRConnectionError, mysql.CRConnHostError:
 		errCode = vtrpcpb.Code_UNAVAILABLE
 	case mysql.ERFormNotFound, mysql.ERKeyNotFound, mysql.ERBadFieldError, mysql.ERNoSuchThread, mysql.ERUnknownTable, mysql.ERCantFindUDF, mysql.ERNonExistingGrant,
 		mysql.ERNoSuchTable, mysql.ERNonExistingTableGrant, mysql.ERKeyDoesNotExist:
