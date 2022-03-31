@@ -134,11 +134,11 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	// have an InnoDB History List length that is less than specified in the tablet's config.
 	// We update rows in a table not part of the MoveTables operation so that we're not blocking
 	// on the LOCK TABLE call but rather the InnoDB History List length.
-	trxConn := createSourceInnoDBRowHistory(t, sourceKs, maxSourceTrxHistory)
+	trxConn := generateInnoDBRowHistory(t, sourceKs, maxSourceTrxHistory)
 	// We need to force primary tablet types as the history list has been increased on the source primary
 	moveTablesWithTabletTypes(t, defaultCell.Name, workflow, sourceKs, targetKs, table, "primary")
 	verifySourceTabletThrottling(t, targetKs, workflow)
-	deleteSourceInnoDBRowHistory(t, trxConn)
+	releaseInnoDBRowHistory(t, trxConn)
 	trxConn.Close()
 }
 
@@ -1154,13 +1154,13 @@ func dropSources(t *testing.T, ksWorkflow string) {
 	require.NoError(t, err, fmt.Sprintf("DropSources Error: %s: %s", err, output))
 }
 
-// createSourceInnoDBRowHistory generates at least maxSourceTrxHistory rollback segment entries.
+// generateInnoDBRowHistory generates at least maxSourceTrxHistory rollback segment entries.
 // This allows us to confirm two behaviors:
 //  1. MoveTables blocks on starting its first copy phase until we rollback
 //  2. All other workflows continue to work w/o issue with this MVCC history in place (not used yet)
 // Returns a db connection used for the transaction which you can use for follow-up
-// work, such as rolling it back directly or using the deleteSourceInnoDBRowHistory call.
-func createSourceInnoDBRowHistory(t *testing.T, sourceKS string, neededTrxHistory int) *mysql.Conn {
+// work, such as rolling it back directly or using the releaseInnoDBRowHistory call.
+func generateInnoDBRowHistory(t *testing.T, sourceKS string, neededTrxHistory int) *mysql.Conn {
 	dbConn1 := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	dbConn2 := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	execQuery(t, dbConn1, "use "+sourceKS)
@@ -1184,6 +1184,6 @@ func createSourceInnoDBRowHistory(t *testing.T, sourceKS string, neededTrxHistor
 	return dbConn2
 }
 
-func deleteSourceInnoDBRowHistory(t *testing.T, dbConn *mysql.Conn) {
+func releaseInnoDBRowHistory(t *testing.T, dbConn *mysql.Conn) {
 	execQuery(t, dbConn, "rollback")
 }
