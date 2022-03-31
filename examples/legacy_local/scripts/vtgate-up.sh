@@ -37,7 +37,6 @@ vtgate \
   --cell $cell \
   --cells_to_watch $cell \
   --tablet_types_to_wait PRIMARY,REPLICA \
-  --gateway_implementation discoverygateway \
   --service_map 'grpc-vtgateservice' \
   --pid_file $VTDATAROOT/tmp/vtgate.pid \
   --mysql_auth_server_impl none \
