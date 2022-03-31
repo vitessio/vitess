@@ -1652,8 +1652,8 @@ func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeF
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfLiteral(node, node.Fsp, func(newNode, parent SQLNode) {
-		parent.(*CurTimeFuncExpr).Fsp = newNode.(*Literal)
+	if !a.rewriteExpr(node, node.Fsp, func(newNode, parent SQLNode) {
+		parent.(*CurTimeFuncExpr).Fsp = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -3791,13 +3791,13 @@ func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt,
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*PrepareStmt).Comments = newNode.(Comments)
+	if !a.rewriteExpr(node, node.Statement, func(newNode, parent SQLNode) {
+		parent.(*PrepareStmt).Statement = newNode.(Expr)
 	}) {
 		return false
 	}
-	if !a.rewriteColIdent(node, node.StatementIdentifier, func(newNode, parent SQLNode) {
-		parent.(*PrepareStmt).StatementIdentifier = newNode.(ColIdent)
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*PrepareStmt).Comments = newNode.(Comments)
 	}) {
 		return false
 	}

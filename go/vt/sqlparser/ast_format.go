@@ -888,10 +888,8 @@ func (node *ExplainTab) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *PrepareStmt) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "prepare %v%v from ", node.Comments, node.Name)
-	if node.Statement != "" {
-		buf.astPrintf(node, "%s", node.Statement)
-	} else {
-		buf.astPrintf(node, "%v", node.StatementIdentifier)
+	if node.Statement != nil {
+		buf.astPrintf(node, "%v", node.Statement)
 	}
 }
 

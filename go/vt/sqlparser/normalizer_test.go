@@ -265,6 +265,28 @@ func TestNormalize(t *testing.T) {
 	}
 }
 
+func TestNormalizeValidSQL(t *testing.T) {
+	for _, tcase := range validSQL {
+		t.Run(tcase.input, func(t *testing.T) {
+			if tcase.partialDDL || tcase.ignoreNormalizerTest {
+				return
+			}
+			tree, err := Parse(tcase.input)
+			require.NoError(t, err, tcase.input)
+			bv := make(map[string]*querypb.BindVariable)
+			known := make(BindVars)
+			err = Normalize(tree, NewReservedVars("vtg", known), bv)
+			require.NoError(t, err)
+			normalizerOutput := String(tree)
+			if normalizerOutput == "otheradmin" || normalizerOutput == "otherread" {
+				return
+			}
+			_, err = Parse(normalizerOutput)
+			require.NoError(t, err, normalizerOutput)
+		})
+	}
+}
+
 func TestGetBindVars(t *testing.T) {
 	stmt, err := Parse("select * from t where :v1 = :v2 and :v2 = :v3 and :v4 in ::v5")
 	if err != nil {

@@ -1197,10 +1197,8 @@ func (node *PrepareStmt) formatFast(buf *TrackedBuffer) {
 	node.Comments.formatFast(buf)
 	node.Name.formatFast(buf)
 	buf.WriteString(" from ")
-	if node.Statement != "" {
-		buf.WriteString(node.Statement)
-	} else {
-		node.StatementIdentifier.formatFast(buf)
+	if node.Statement != nil {
+		node.Statement.formatFast(buf)
 	}
 }
 

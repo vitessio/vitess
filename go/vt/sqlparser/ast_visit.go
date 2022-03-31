@@ -958,7 +958,7 @@ func VisitRefOfCurTimeFuncExpr(in *CurTimeFuncExpr, f Visit) error {
 	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfLiteral(in.Fsp, f); err != nil {
+	if err := VisitExpr(in.Fsp, f); err != nil {
 		return err
 	}
 	return nil
@@ -1910,10 +1910,10 @@ func VisitRefOfPrepareStmt(in *PrepareStmt, f Visit) error {
 	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
 	}
-	if err := VisitComments(in.Comments, f); err != nil {
+	if err := VisitExpr(in.Statement, f); err != nil {
 		return err
 	}
-	if err := VisitColIdent(in.StatementIdentifier, f); err != nil {
+	if err := VisitComments(in.Comments, f); err != nil {
 		return err
 	}
 	return nil

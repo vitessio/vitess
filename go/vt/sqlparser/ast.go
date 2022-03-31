@@ -616,10 +616,9 @@ type (
 	// PrepareStmt represents a Prepare Statement
 	// More info available on https://dev.mysql.com/doc/refman/8.0/en/sql-prepared-statements.html
 	PrepareStmt struct {
-		Name                ColIdent
-		Statement           string
-		Comments            Comments
-		StatementIdentifier ColIdent
+		Name      ColIdent
+		Statement Expr
+		Comments  Comments
 	}
 
 	// ExecuteStmt represents an Execute Statement
@@ -2208,7 +2207,7 @@ type (
 	// supported functions are documented in the grammar
 	CurTimeFuncExpr struct {
 		Name ColIdent
-		Fsp  *Literal // fractional seconds precision, integer from 0 to 6
+		Fsp  Expr // fractional seconds precision, integer from 0 to 6 or an Argument
 	}
 
 	// ExtractedSubquery is a subquery that has been extracted from the original AST

@@ -801,7 +801,7 @@ func CloneRefOfCurTimeFuncExpr(n *CurTimeFuncExpr) *CurTimeFuncExpr {
 	}
 	out := *n
 	out.Name = CloneColIdent(n.Name)
-	out.Fsp = CloneRefOfLiteral(n.Fsp)
+	out.Fsp = CloneExpr(n.Fsp)
 	return &out
 }
 
@@ -1539,8 +1539,8 @@ func CloneRefOfPrepareStmt(n *PrepareStmt) *PrepareStmt {
 	}
 	out := *n
 	out.Name = CloneColIdent(n.Name)
+	out.Statement = CloneExpr(n.Statement)
 	out.Comments = CloneComments(n.Comments)
-	out.StatementIdentifier = CloneColIdent(n.StatementIdentifier)
 	return &out
 }
 

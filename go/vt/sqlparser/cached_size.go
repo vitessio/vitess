@@ -781,12 +781,14 @@ func (cached *CurTimeFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
 	size += cached.Name.CachedSize(false)
-	// field Fsp *vitess.io/vitess/go/vt/sqlparser.Literal
-	size += cached.Fsp.CachedSize(true)
+	// field Fsp vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Fsp.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *DeallocateStmt) CachedSize(alloc bool) int64 {
@@ -1965,12 +1967,14 @@ func (cached *PrepareStmt) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(128)
+		size += int64(80)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
 	size += cached.Name.CachedSize(false)
-	// field Statement string
-	size += hack.RuntimeAllocSize(int64(len(cached.Statement)))
+	// field Statement vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Statement.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
@@ -1978,8 +1982,6 @@ func (cached *PrepareStmt) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
-	// field StatementIdentifier vitess.io/vitess/go/vt/sqlparser.ColIdent
-	size += cached.StatementIdentifier.CachedSize(false)
 	return size
 }
 func (cached *ReferenceDefinition) CachedSize(alloc bool) int64 {
