@@ -60,11 +60,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte, db
 		if !ok {
 			return nil
 		}
-		comments := ddlStmt.GetComments()
-		if comments == nil {
-			return nil
-		}
-		return sqlparser.ExtractCommentDirectives(comments)
+		return ddlStmt.GetParsedComments().Directives()
 	}
 	directives := getDirectives()
 	directiveIsSet := func(name string) bool {

@@ -302,7 +302,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 		comments := sqlparser.Comments{
 			fmt.Sprintf(`/*vt+ %s */`, strings.Join(commentsList, " ")),
 		}
-		tpb.sendSelect.Comments = comments
+		tpb.sendSelect.Comments = comments.Parsed()
 	}
 	sendRule.Filter = sqlparser.String(tpb.sendSelect)
 
