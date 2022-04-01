@@ -143,13 +143,17 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 		clusters:   clusters,
 		clusterMap: clusterMap,
 		authz:      authz,
-		options:    opts,
 	}
 
 	if opts.HTTPOpts.EnableDynamicClusters {
 		api.clusterCache = cache.New(24*time.Hour, 24*time.Hour)
 		api.clusterCache.OnEvicted(api.EjectDynamicCluster)
+
+		opts.GRPCOpts.StreamInterceptors = append(opts.GRPCOpts.StreamInterceptors, dynamic.StreamServerInterceptor(api))
+		opts.GRPCOpts.UnaryInterceptors = append(opts.GRPCOpts.UnaryInterceptors, dynamic.UnaryServerInterceptor(api))
 	}
+
+	api.options = opts
 
 	serv := grpcserver.New("vtadmin", opts.GRPCOpts)
 	serv.Router().HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
