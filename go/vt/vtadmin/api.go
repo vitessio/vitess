@@ -139,21 +139,28 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 		})
 	}
 
+	api := &API{
+		clusters:   clusters,
+		clusterMap: clusterMap,
+		authz:      authz,
+		options:    opts,
+	}
+
+	if opts.HTTPOpts.EnableDynamicClusters {
+		api.clusterCache = cache.New(24*time.Hour, 24*time.Hour)
+		api.clusterCache.OnEvicted(api.EjectDynamicCluster)
+	}
+
 	serv := grpcserver.New("vtadmin", opts.GRPCOpts)
 	serv.Router().HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok\n"))
 	})
 
 	router := serv.Router().PathPrefix("/api").Subrouter()
-	api := &API{
-		clusters:   clusters,
-		clusterMap: clusterMap,
-		router:     router,
-		serv:       serv,
-		authz:      authz,
-		options:    opts,
-	}
 	router.PathPrefix("/").Handler(api).Methods("DELETE", "OPTIONS", "GET", "POST", "PUT")
+
+	api.serv = serv
+	api.router = router
 	vtadminpb.RegisterVTAdminServer(api.serv.GRPCServer(), api)
 
 	if !opts.HTTPOpts.DisableDebug {
@@ -196,11 +203,6 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 
 	if authn != nil {
 		middlewares = append(middlewares, vthandlers.NewAuthenticationHandler(authn))
-	}
-
-	if opts.HTTPOpts.EnableDynamicClusters {
-		api.clusterCache = cache.New(24*time.Hour, 24*time.Hour)
-		api.clusterCache.OnEvicted(api.EjectDynamicCluster)
 	}
 
 	router.Use(middlewares...)
