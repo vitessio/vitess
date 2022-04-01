@@ -2540,6 +2540,15 @@ var (
 	}, {
 		input:  `SELECT JSON_VALUE(@j, @k)`,
 		output: `select json_value(@j, @k) from dual`,
+	}, {
+		input:  `SELECT 17 MEMBER OF ('[23, "abc", 17, "ab", 10]')`,
+		output: `select 17 member of ('[23, \"abc\", 17, \"ab\", 10]') from dual`,
+	}, {
+		input:  "SELECT @j MEMBER OF (@k)",
+		output: "select @j member of (@k) from dual",
+	}, {
+		input:  `SELECT 17 MEMBER OF('[23, "abc", "17", "ab", 10]'), "17" MEMBER OF('[23, "abc", 17, "ab", 10]')`,
+		output: `select 17 member of ('[23, \"abc\", \"17\", \"ab\", 10]'), '17' member of ('[23, \"abc\", 17, \"ab\", 10]') from dual`,
 	}}
 )
 

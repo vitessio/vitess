@@ -2376,6 +2376,13 @@ type (
 		JSONDoc Expr
 		Path    JSONPathParam
 	}
+
+	// MemberOf represents the function and arguments for MEMBER OF()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#operator_member-of
+	MemberOfExpr struct {
+		Value   Expr
+		JSONArr Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2429,6 +2436,7 @@ func (*JSONValueExpr) iExpr()        {}
 func (*JSONArrayExpr) iExpr()        {}
 func (*JSONObjectExpr) iExpr()       {}
 func (*JSONQuoteExpr) iExpr()        {}
+func (*MemberOfExpr) iExpr()         {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()             {}
@@ -2456,6 +2464,7 @@ func (*JSONKeysExpr) iCallable()         {}
 func (*JSONValueExpr) iCallable()        {}
 func (*JSONSearchExpr) iCallable()       {}
 func (*JSONOverlapsExpr) iCallable()     {}
+func (*MemberOfExpr) iCallable()         {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

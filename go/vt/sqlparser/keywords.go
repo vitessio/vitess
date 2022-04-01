@@ -405,7 +405,7 @@ var keywords = []keyword{
 	{"ntile", UNUSED},
 	{"null", NULL},
 	{"numeric", NUMERIC},
-	{"of", UNUSED},
+	{"of", OF},
 	{"off", OFF},
 	{"offset", OFFSET},
 	{"on", ON},

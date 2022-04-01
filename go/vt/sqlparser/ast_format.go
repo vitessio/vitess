@@ -2117,3 +2117,8 @@ func (node *JSONSearchExpr) Format(buf *TrackedBuffer) {
 func (node *JSONValueExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "json_value(%v, %v)", node.JSONDoc, node.Path)
 }
+
+// Format formats the node
+func (node *MemberOfExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%v member of (%v)", node.Value, node.JSONArr)
+}

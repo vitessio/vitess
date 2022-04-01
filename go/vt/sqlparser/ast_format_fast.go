@@ -2772,3 +2772,11 @@ func (node *JSONValueExpr) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.Path, true)
 	buf.WriteByte(')')
 }
+
+// formatFast formats the node
+func (node *MemberOfExpr) formatFast(buf *TrackedBuffer) {
+	buf.printExpr(node, node.Value, true)
+	buf.WriteString(" member of (")
+	buf.printExpr(node, node.JSONArr, true)
+	buf.WriteByte(')')
+}

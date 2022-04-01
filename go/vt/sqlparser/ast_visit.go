@@ -226,6 +226,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfLockTables(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
+	case *MemberOfExpr:
+		return VisitRefOfMemberOfExpr(in, f)
 	case *ModifyColumn:
 		return VisitRefOfModifyColumn(in, f)
 	case *Nextval:
@@ -1800,6 +1802,21 @@ func VisitRefOfMatchExpr(in *MatchExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfMemberOfExpr(in *MemberOfExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Value, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.JSONArr, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfModifyColumn(in *ModifyColumn, f Visit) error {
 	if in == nil {
 		return nil
@@ -2988,6 +3005,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfJSONValueExpr(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
+	case *MemberOfExpr:
+		return VisitRefOfMemberOfExpr(in, f)
 	case *SubstrExpr:
 		return VisitRefOfSubstrExpr(in, f)
 	case *TimestampFuncExpr:
@@ -3182,6 +3201,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfLiteral(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
+	case *MemberOfExpr:
+		return VisitRefOfMemberOfExpr(in, f)
 	case *NotExpr:
 		return VisitRefOfNotExpr(in, f)
 	case *NullVal:
@@ -3308,6 +3329,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfLiteral(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
+	case *MemberOfExpr:
+		return VisitRefOfMemberOfExpr(in, f)
 	case *NotExpr:
 		return VisitRefOfNotExpr(in, f)
 	case *NullVal:

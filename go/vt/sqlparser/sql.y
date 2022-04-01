@@ -217,6 +217,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 // * NOTE: If you change anything here, update precedence.go as well *
 %nonassoc <str> LOWER_THAN_CHARSET
 %nonassoc <str> CHARSET
+%nonassoc <str> MEMBER
 // Resolve column attribute ambiguity.
 %right <str> UNIQUE KEY
 %left <str> EXPRESSION_PREC_SETTER
@@ -303,7 +304,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
 
 // MySQL reserved words that are unused by this grammar will map to this token.
-%token <str> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD MEMBER
+%token <str> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD
 %token <str> NTH_VALUE NTILE OF OVER PERCENT_RANK RANK RECURSIVE ROW_NUMBER SYSTEM WINDOW
 %token <str> ACTIVE ADMIN BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <str> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
@@ -4441,6 +4442,10 @@ expression:
 | bool_pri %prec EXPRESSION_PREC_SETTER
   {
 	$$ = $1
+  }
+| expression MEMBER OF openb expression closeb
+  {
+    $$ = &MemberOfExpr{Value: $1, JSONArr:$5 }
   }
 
 
