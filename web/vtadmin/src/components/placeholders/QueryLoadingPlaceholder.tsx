@@ -39,7 +39,7 @@ export const QueryLoadingPlaceholder: React.FC<Props> = (props) => {
     }
 
     return (
-        <div aria-busy="true" aria-live="polite" className="text-center my-12" role="status">
+        <div aria-busy="true" className="text-center my-12" role="status">
             <Spinner />
             <div className="my-4 text-secondary">
                 {props.query.failureCount > 2 ? 'Still loading...' : 'Loading...'}

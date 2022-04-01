@@ -41,10 +41,10 @@ export const QueryErrorPlaceholder: React.FC<Props> = ({ query, title = 'An erro
     const message = (query.error as any).response?.error?.message || (query.error as any).message;
 
     return (
-        <div className="my-12 text-center">
+        <div aria-live="polite" className="my-12 text-center" role="status">
             <span className="text-[6rem]">😰</span>
             <div className="text-xl font-bold my-4">{title}</div>
-            <code>{message}</code>
+            <code data-testid="error-message">{message}</code>
 
             <div className="my-12">
                 <button className="btn btn-secondary" onClick={() => query.refetch()} type="button">
