@@ -29,7 +29,7 @@ export const KeyspaceVSchema = ({ clusterID, name }: Props) => {
     return (
         <div>
             <QueryLoadingPlaceholder query={query} />
-            <QueryErrorPlaceholder query={query} title="Couldn't load vschema" />
+            <QueryErrorPlaceholder query={query} title="Couldn't load VSchema" />
             {query.isSuccess && <Code code={JSON.stringify(query.data, null, 2)} />}
         </div>
     );
