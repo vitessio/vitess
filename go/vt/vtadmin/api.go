@@ -145,6 +145,8 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 		authz:      authz,
 	}
 
+	// TODO: this is no longer an http opt. Should rename the flag and move up
+	// to the struct top-level.
 	if opts.HTTPOpts.EnableDynamicClusters {
 		api.clusterCache = cache.New(24*time.Hour, 24*time.Hour)
 		api.clusterCache.OnEvicted(api.EjectDynamicCluster)
