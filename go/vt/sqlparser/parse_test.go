@@ -1366,6 +1366,9 @@ var (
 			input:  "show create table t",
 			output: "show create table t",
 		}, {
+			input:  "show create table t as of 'version'",
+			output: "show create table t as of 'version'",
+		}, {
 			input:  "show create trigger t",
 			output: "show create trigger t",
 		}, {

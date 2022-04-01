@@ -156,7 +156,7 @@ func adjustSubstatementPositions(sql string, tokenizer *Tokenizer) {
 				if sub[len(sub)-1] == '*' {
 					endCommentIdx = len(sub) - 2
 				} else {
-					endCommentIdx = len(sub) -1
+					endCommentIdx = len(sub) - 1
 				}
 			}
 
@@ -1563,7 +1563,7 @@ type DDL struct {
 	// Meaning is specific to the different kinds of statements with sub statements, e.g. views, trigger definitions.
 	// For statements defined within a MySQL special comment (/*! */), we have to fudge the offset a bit because we won't
 	// get the final lexer position token until after the comment close.
-	SpecialCommentMode bool
+	SpecialCommentMode        bool
 	SubStatementPositionStart int
 	SubStatementPositionEnd   int
 
@@ -2677,7 +2677,6 @@ const (
 // Show represents a show statement.
 type Show struct {
 	Type                   string
-	OnTable                TableName
 	Table                  TableName
 	Database               string
 	IfNotExists            bool
@@ -2700,8 +2699,8 @@ func (node *Show) Format(buf *TrackedBuffer) {
 			buf.Myprintf("full ")
 		}
 		buf.Myprintf("%s", node.Type)
-		if (node.Type == "columns" || node.Type == "fields") && node.HasOnTable() {
-			buf.Myprintf(" from %v", node.OnTable)
+		if (node.Type == "columns" || node.Type == "fields") && node.HasTable() {
+			buf.Myprintf(" from %v", node.Table)
 		}
 		if opt.DbName != "" {
 			buf.Myprintf(" from %s", opt.DbName)
@@ -2762,6 +2761,17 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		}
 		return
 	}
+	if strings.ToLower(node.Type) == "create table" && node.HasTable() {
+		buf.Myprintf("show %s %v", node.Type, node.Table)
+
+		if node.ShowTablesOpt != nil {
+			if node.ShowTablesOpt.AsOf != nil {
+				buf.Myprintf(" as of %v", node.ShowTablesOpt.AsOf)
+			}
+		}
+		return
+	}
+
 	if node.Database != "" {
 		notExistsOpt := ""
 		if node.IfNotExists {
@@ -2780,20 +2790,12 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		}
 	}
 
-	if node.HasOnTable() {
-		buf.Myprintf(" on %v", node.OnTable)
-	}
 	if node.Type == "collation" && node.ShowCollationFilterOpt != nil {
 		buf.Myprintf(" where %v", *node.ShowCollationFilterOpt)
 	}
 	if node.HasTable() {
 		buf.Myprintf(" %v", node.Table)
 	}
-}
-
-// HasOnTable returns true if the show statement has an "on" clause
-func (node *Show) HasOnTable() bool {
-	return node.OnTable.Name.v != ""
 }
 
 // HasTable returns true if the show statement has a parsed table name.
@@ -2808,7 +2810,6 @@ func (node *Show) walkSubtree(visit Visit) error {
 	}
 	return Walk(
 		visit,
-		node.OnTable,
 		node.Table,
 		node.ShowIndexFilterOpt,
 		node.Filter,
