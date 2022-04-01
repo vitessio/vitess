@@ -18,7 +18,6 @@ package vtadmin
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	stderrors "errors"
 	"fmt"
@@ -41,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/dynamic"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
@@ -216,84 +216,77 @@ func (api *API) ListenAndServe() error {
 
 // ServeHTTP serves all routes matching path "/api" (see above)
 // It first processes cookies, and acts accordingly
-// Primarily, it sets up a dynamic API if HttpOpts.EnableDynamicClusters is set to true
+// Primarily, it sets up a dynamic API if HttpOpts.EnableDynamicClusters is set
+// to true.
 func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !api.options.HTTPOpts.EnableDynamicClusters {
 		api.Handler().ServeHTTP(w, r)
 		return
 	}
 
-	var dynamicAPI *API
-	clusterCookie, err := r.Cookie("cluster")
+	var dynamicAPI dynamic.API = api
 
-	if err == nil {
+	if clusterCookie, err := r.Cookie("cluster"); err == nil {
 		urlDecoded, err := url.QueryUnescape(clusterCookie.Value)
 		if err == nil {
-			decoded, err := base64.StdEncoding.DecodeString(urlDecoded)
-			if err == nil {
-				var clusterJSON DynamicClusterJSON
-				err = json.Unmarshal(decoded, &clusterJSON)
-				if err == nil {
-
-					api.clusterMu.Lock()
-
-					clusterID := clusterJSON.ClusterName
-					if _, exists := api.clusterMap[clusterID]; !exists {
-						c, err := cluster.Config{
-							ID:            clusterID,
-							Name:          clusterID,
-							DiscoveryImpl: "dynamic",
-							DiscoveryFlagsByImpl: cluster.FlagsByImpl{
-								"dynamic": map[string]string{
-									"discovery": string(decoded),
-								},
-							},
-						}.Cluster()
-
-						if err == nil {
-							api.clusterMap[clusterID] = c
-							api.clusters = append(api.clusters, c)
-							sort.ClustersBy(func(c1, c2 *cluster.Cluster) bool {
-								return c1.ID < c2.ID
-							}).Sort(api.clusters)
-
-							err = api.clusterCache.Add(clusterID, c, cache.DefaultExpiration)
-							if err != nil {
-								log.Infof("could not add dynamic cluster %s to cluster cache: %+v", clusterID, err)
-							}
-						}
-					} else {
-						log.Infof("API already has cluster with id %s, using that instead", clusterID)
-					}
-
-					selectedCluster := api.clusterMap[clusterID]
-
-					api.clusterMu.Unlock()
-
-					dynamicAPI = &API{
-						clusters:     []*cluster.Cluster{selectedCluster},
-						clusterMap:   map[string]*cluster.Cluster{clusterID: selectedCluster},
-						clusterCache: api.clusterCache,
-						serv:         api.serv,
-						router:       api.router,
-						authz:        api.authz,
-						options:      api.options,
-					}
+			c, id, err := dynamic.ClusterFromString(urlDecoded)
+			if id != "" {
+				if err != nil {
+					log.Warningf("failed to extract valid cluster from cookie; attempting to use existing cluster with id=%s; error: %s", id, err)
 				}
+
+				dynamicAPI = api.WithCluster(c, id)
 			}
+
+			log.Warningf("failed to unmarshal dynamic cluster spec from cookie; falling back to static API; error: %s", err)
 		}
 	}
 
-	if dynamicAPI == nil {
-		dynamicAPI = api
-	}
-
-	defer dynamicAPI.Close()
 	dynamicAPI.Handler().ServeHTTP(w, r)
 }
 
-func (api *API) Close() error {
-	return nil
+// WithCluster returns a dynamic API with the given cluster. If `c` is non-nil,
+// it is used as the selected cluster. If the cluster is nil, then a cluster
+// with the given id is retrieved from the API and used in the dynamic API.
+//
+// Callers must ensure that:
+// 1. If c is non-nil, c.ID == id.
+// 2. id is non-empty.
+//
+// Note that using dynamic.ClusterFromString ensures both of these
+// preconditions.
+func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
+	api.clusterMu.Lock()
+	defer api.clusterMu.Unlock()
+
+	dynamicAPI := &API{
+		router:  api.router,
+		serv:    api.serv,
+		authz:   api.authz,
+		options: api.options,
+	}
+
+	if c != nil {
+		if _, exists := api.clusterMap[id]; !exists {
+			api.clusterMap[id] = c
+			api.clusters = append(api.clusters, c)
+			sort.ClustersBy(func(c1, c2 *cluster.Cluster) bool {
+				return c1.ID < c2.ID
+			}).Sort(api.clusters)
+
+			if err := api.clusterCache.Add(id, c, cache.DefaultExpiration); err != nil {
+				log.Infof("failed to add dynamic cluster %s to cluster cache: %+v", id, err)
+			}
+		} else {
+			log.Infof("API already has cluster with id %s, using that instead", id)
+		}
+	}
+
+	selectedCluster := api.clusterMap[id]
+	dynamicAPI.clusters = []*cluster.Cluster{selectedCluster}
+	dynamicAPI.clusterMap = map[string]*cluster.Cluster{id: selectedCluster}
+
+	return dynamicAPI
 }
 
 // Handler handles all routes under "/api" (see above)
