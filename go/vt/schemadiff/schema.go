@@ -114,13 +114,9 @@ func getViewDependentTableNames(createView *sqlparser.CreateView) (names []strin
 		case *sqlparser.AliasedTableExpr:
 			if tableName, ok := node.Expr.(sqlparser.TableName); ok {
 				names = append(names, tableName.Name.String())
-			} else {
-				name, err := node.TableName()
-				if err != nil {
-					return true, err
-				}
-				names = append(names, name.Name.String())
 			}
+			// or, this could be a more complex expression, like a derived table `(select * from v1) as derived`,
+			// in which case further Walk-ing will eventually find the "real" table name
 		}
 		return true, nil
 	}, createView)

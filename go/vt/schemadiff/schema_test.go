@@ -24,7 +24,7 @@ import (
 )
 
 var createQueries = []string{
-	"create view v5 as select * from t1, v3",
+	"create view v5 as select * from t1, (select * from v3) as some_alias",
 	"create table t3(id int)",
 	"create table t1(id int)",
 	"create view v6 as select * from v4",
@@ -35,6 +35,7 @@ var createQueries = []string{
 	"create view v1 as select * from v3",
 	"create view v3 as select * from t3 as t3",
 	"create view v0 as select 1 from DUAL",
+	"create view v9 as select 1",
 }
 
 var expectSortedNames = []string{
@@ -44,6 +45,7 @@ var expectSortedNames = []string{
 	"t5",
 	"v0", // level 1 ("dual" is an implicit table)
 	"v3", // level 1
+	"v9", // level 1 (no source table)
 	"v1", // level 2
 	"v2", // level 2
 	"v4", // level 2
