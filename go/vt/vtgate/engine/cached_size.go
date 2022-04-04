@@ -967,6 +967,18 @@ func (cached *Set) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *ShowExec) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field ShowFilter *vitess.io/vitess/go/vt/sqlparser.ShowFilter
+	size += cached.ShowFilter.CachedSize(true)
+	return size
+}
 func (cached *SimpleProjection) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
