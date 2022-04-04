@@ -30,6 +30,7 @@ type VSchema interface {
 	SysVarSetEnabled() bool
 	KeyspaceExists(keyspace string) bool
 	AllKeyspace() ([]*vindexes.Keyspace, error)
+	FindKeyspace(keyspace string) (*vindexes.Keyspace, error)
 	GetSemTable() *semantics.SemTable
 	Planner() PlannerVersion
 	SetPlannerVersion(pv PlannerVersion)
