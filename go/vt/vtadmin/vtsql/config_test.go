@@ -144,7 +144,6 @@ func TestConfigParse(t *testing.T) {
 				Id:   "cid",
 				Name: "testcluster",
 			},
-			DialPingTimeout: time.Millisecond * 500,
 			ResolverOptions: &resolver.Options{
 				DiscoveryTags:    expectedTags,
 				DiscoveryTimeout: 100 * time.Millisecond,
