@@ -48,7 +48,6 @@ var (
 	// Hence, they are not listed in the list below.
 	clusterList = []string{
 		"vtctlbackup_sharded_clustertest_heavy",
-		"12",
 		"13",
 		"ers_prs_newfeatures_heavy",
 		"15",
@@ -112,8 +111,10 @@ var (
 		"schemadiff_vrepl",
 	}
 
-	clusterSelfHostedList []string
-	clusterDockerList     = []string{}
+	clusterSelfHostedList = []string{
+		"12",
+	}
+	clusterDockerList = []string{}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
 	clustersRequiringXtraBackup = append(clusterList, clusterSelfHostedList...)
