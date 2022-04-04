@@ -805,3 +805,13 @@ func TestFilterAfterLeftJoin(t *testing.T) {
 	query := "select /*vt+ PLANNER=gen4 */ A.id1, A.id2 from t1 as A left join t1 as B on A.id1 = B.id2 WHERE B.id1 IS NULL"
 	utils.AssertMatches(t, conn, query, `[[INT64(1) INT64(10)]]`)
 }
+
+func TestDescribeVindex(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.AssertContainsError(t, conn, "describe hash", "'vt_ks.hash' doesn't exist")
+}
