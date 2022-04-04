@@ -1675,17 +1675,9 @@ STRING
    }
 
 text_literal_or_arg:
-STRING
+  text_literal
   {
-    $$ = NewStrLiteral($1)
-  }
-| NCHAR_STRING
-  {
-    $$ = &UnaryExpr{Operator: NStringOp, Expr: NewStrLiteral($1)}
-  }
-| underscore_charsets STRING %prec UNARY
-  {
-    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewStrLiteral($2)}
+    $$ = $1
   }
 | VALUE_ARG
   {
@@ -3040,7 +3032,7 @@ json_on_response:
   {
     $$ = &JtOnResponse{ResponseType: NullJSONType}
   }
-| DEFAULT text_literal
+| DEFAULT text_literal_or_arg
   {
     $$ = &JtOnResponse{ResponseType: DefaultJSONType, Expr: $2}
   }
@@ -5019,7 +5011,7 @@ json_path_param_list:
   }
 
 json_path_param:
-  text_literal
+  text_literal_or_arg
   {
     $$ = JSONPathParam($1)
   }
