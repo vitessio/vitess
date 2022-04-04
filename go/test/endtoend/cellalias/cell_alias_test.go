@@ -29,6 +29,8 @@ import (
 	"os/exec"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -355,6 +357,7 @@ func testQueriesOnTabletType(t *testing.T, tabletType string, vtgateGrpcPort int
 		require.Error(t, err)
 		return
 	}
+	log.Errorf("Output - %v", output)
 	require.NoError(t, err)
 	var result sqltypes.Result
 
