@@ -97,7 +97,7 @@ func run(cmd *cobra.Command, args []string) {
 	configs := clusterFileConfig.Combine(defaultClusterConfig, clusterConfigs)
 	clusters := make([]*cluster.Cluster, len(configs))
 
-	if len(configs) == 0 {
+	if len(configs) == 0 && !httpOpts.EnableDynamicClusters {
 		bootSpan.Finish()
 		fatal("must specify at least one cluster")
 	}

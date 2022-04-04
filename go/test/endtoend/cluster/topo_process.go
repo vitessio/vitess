@@ -306,8 +306,12 @@ func (topo *TopoProcess) IsHealthy() bool {
 }
 
 func (topo *TopoProcess) removeTopoDirectories(Cell string) {
-	_ = topo.ManageTopoDir("rmdir", "/vitess/global")
-	_ = topo.ManageTopoDir("rmdir", "/vitess/"+Cell)
+	if err := topo.ManageTopoDir("rmdir", "/vitess/global"); err != nil {
+		log.Errorf("Failed to remove global topo directory: %v", err)
+	}
+	if err := topo.ManageTopoDir("rmdir", "/vitess/"+Cell); err != nil {
+		log.Errorf("Failed to remove local topo directory: %v", err)
+	}
 }
 
 // ManageTopoDir creates global and zone in etcd2

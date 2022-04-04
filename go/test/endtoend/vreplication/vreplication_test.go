@@ -27,9 +27,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/buger/jsonparser"
+	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -101,6 +103,43 @@ func throttlerCheckSelf(tablet *cluster.VttabletProcess, app string) (resp *http
 	b, err := io.ReadAll(resp.Body)
 	respBody = string(b)
 	return resp, respBody, err
+}
+
+func TestVreplicationCopyThrottling(t *testing.T) {
+	workflow := "copy-throttling"
+	cell := "zone1"
+	table := "customer"
+	shard := "0"
+	vc = NewVitessCluster(t, "TestVreplicationCopyThrottling", []string{cell}, mainClusterConfig)
+	defer vc.TearDown(t)
+	defaultCell = vc.Cells[cell]
+	// To test vstreamer source throttling for the MoveTables operation
+	maxSourceTrxHistory := 5
+	extraVTTabletArgs = []string{
+		fmt.Sprintf("--vreplication_copy_phase_max_innodb_history_list_length=%d", maxSourceTrxHistory),
+	}
+
+	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, shard, "", "", 0, 0, 200, nil); err != nil {
+		t.Fatal(err)
+	}
+	vtgate = defaultCell.Vtgates[0]
+	require.NotNil(t, vtgate)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, shard), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, shard), 1)
+
+	// Confirm that the initial copy table phase does not proceed until the source tablet(s)
+	// have an InnoDB History List length that is less than specified in the tablet's config.
+	// We update rows in a table not part of the MoveTables operation so that we're not blocking
+	// on the LOCK TABLE call but rather the InnoDB History List length.
+	trxConn := generateInnoDBRowHistory(t, sourceKs, maxSourceTrxHistory)
+	// We need to force primary tablet types as the history list has been increased on the source primary
+	moveTablesWithTabletTypes(t, defaultCell.Name, workflow, sourceKs, targetKs, table, "primary")
+	verifySourceTabletThrottling(t, targetKs, workflow)
+	releaseInnoDBRowHistory(t, trxConn)
+	trxConn.Close()
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
@@ -501,6 +540,40 @@ func validateRollupReplicates(t *testing.T) {
 		validateQuery(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
 			`[[VARCHAR("total") INT32(5)]]`)
 	})
+}
+
+func verifySourceTabletThrottling(t *testing.T, targetKS, workflow string) {
+	tDuration := time.Duration(15 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
+	timer := time.NewTimer(tDuration)
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKS, workflow)
+	for {
+		select {
+		case <-ticker.C:
+			output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
+			require.NoError(t, err)
+			result := gjson.Get(output, "ShardStatuses")
+			result.ForEach(func(tabletId, tabletStreams gjson.Result) bool { // for each source tablet
+				tabletStreams.ForEach(func(streamId, streamInfos gjson.Result) bool { // for each stream
+					if streamId.String() == "PrimaryReplicationStatuses" {
+						streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
+							state := attributeValue.Get("State").String()
+							if state != "Copying" {
+								require.FailNowf(t, "Unexpected running workflow stream",
+									"Initial copy phase for the MoveTables workflow %s started in less than %d seconds when it should have been waiting. Show output: %s",
+									ksWorkflow, int(tDuration.Seconds()), output)
+							}
+							return true // end attribute loop
+						})
+					}
+					return true // end stream loop
+				})
+				return true // end tablet loop
+			})
+		case <-timer.C:
+			return
+		}
+	}
 }
 
 func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias string) {
@@ -991,6 +1064,12 @@ func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string)
 		t.Fatalf("MoveTables command failed with %+v\n", err)
 	}
 }
+func moveTablesWithTabletTypes(t *testing.T, cell, workflow, sourceKs, targetKs, tables string, tabletTypes string) {
+	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--v1", "--cells="+cell, "--workflow="+workflow,
+		"--tablet_types="+tabletTypes, sourceKs, targetKs, tables); err != nil {
+		t.Fatalf("MoveTables command failed with %+v\n", err)
+	}
+}
 func applyVSchema(t *testing.T, vschema, keyspace string) {
 	err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "--", "--vschema", vschema, keyspace)
 	require.NoError(t, err)
@@ -1073,4 +1152,38 @@ func dropSourcesDryRun(t *testing.T, ksWorkflow string, renameTables bool, dryRu
 func dropSources(t *testing.T, ksWorkflow string) {
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput("DropSources", ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("DropSources Error: %s: %s", err, output))
+}
+
+// generateInnoDBRowHistory generates at least maxSourceTrxHistory rollback segment entries.
+// This allows us to confirm two behaviors:
+//  1. MoveTables blocks on starting its first copy phase until we rollback
+//  2. All other workflows continue to work w/o issue with this MVCC history in place (not used yet)
+// Returns a db connection used for the transaction which you can use for follow-up
+// work, such as rolling it back directly or using the releaseInnoDBRowHistory call.
+func generateInnoDBRowHistory(t *testing.T, sourceKS string, neededTrxHistory int) *mysql.Conn {
+	dbConn1 := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	dbConn2 := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	execQuery(t, dbConn1, "use "+sourceKS)
+	execQuery(t, dbConn2, "use "+sourceKS)
+	offset := 1000
+	insertStmt := strings.Builder{}
+	for i := offset; i <= (neededTrxHistory*10)+offset; i++ {
+		if i == offset {
+			insertStmt.WriteString(fmt.Sprintf("insert into product (pid, description) values (%d, 'test')", i))
+		} else {
+			insertStmt.WriteString(fmt.Sprintf(", (%d, 'test')", i))
+		}
+	}
+	execQuery(t, dbConn2, "start transaction")
+	execQuery(t, dbConn2, "select count(*) from product")
+	execQuery(t, dbConn1, insertStmt.String())
+	execQuery(t, dbConn2, "rollback")
+	execQuery(t, dbConn2, "start transaction")
+	execQuery(t, dbConn2, "select count(*) from product")
+	execQuery(t, dbConn1, fmt.Sprintf("delete from product where pid >= %d and pid < %d", offset, offset+10000))
+	return dbConn2
+}
+
+func releaseInnoDBRowHistory(t *testing.T, dbConn *mysql.Conn) {
+	execQuery(t, dbConn, "rollback")
 }

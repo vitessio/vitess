@@ -25,31 +25,49 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	grpcresolver "google.golang.org/grpc/resolver"
+
+	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
-	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 )
 
 type fakeVtctld struct {
-	vtctlservicepb.VtctlServer
+	vtctlservicepb.VtctldServer
+	addr string
 }
 
-func initVtctlServer() (net.Listener, *grpc.Server, error) {
+// GetKeyspace is used for tests to detect what addr the VtctldServer is
+// listening on. The addr will always be stored as resp.Keyspace.Name, and the
+// actual request is ignored.
+func (fake *fakeVtctld) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeyspaceRequest) (*vtctldatapb.GetKeyspaceResponse, error) {
+	return &vtctldatapb.GetKeyspaceResponse{
+		Keyspace: &vtctldatapb.Keyspace{
+			Name: fake.addr,
+		},
+	}, nil
+}
+
+func initVtctldServer() (net.Listener, *grpc.Server, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, nil, err
 	}
 
-	vtctld := &fakeVtctld{}
+	vtctld := &fakeVtctld{
+		addr: listener.Addr().String(),
+	}
 	server := grpc.NewServer()
-	vtctlservicepb.RegisterVtctlServer(server, vtctld)
+	vtctlservicepb.RegisterVtctldServer(server, vtctld)
 
 	return listener, server, err
 }
 
 func TestDial(t *testing.T) {
-	listener, server, err := initVtctlServer()
+	listener, server, err := initVtctldServer()
 	require.NoError(t, err)
 
 	defer listener.Close()
@@ -67,24 +85,54 @@ func TestDial(t *testing.T) {
 			Id:   "test",
 			Name: "testcluster",
 		},
-		Discovery:           disco,
-		ConnectivityTimeout: defaultConnectivityTimeout,
+		ResolverOptions: &resolver.Options{
+			Discovery:        disco,
+			DiscoveryTimeout: 50 * time.Millisecond,
+		},
 	})
 	defer proxy.Close() // prevents grpc-core from logging a bunch of "connection errors" after deferred listener.Close() above.
 
-	// We don't have a vtctld host until we call Dial
-	require.Empty(t, proxy.host)
-
 	err = proxy.Dial(context.Background())
 	assert.NoError(t, err)
-	assert.Equal(t, listener.Addr().String(), proxy.host)
+
+	resp, err := proxy.GetKeyspace(context.Background(), &vtctldatapb.GetKeyspaceRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, listener.Addr().String(), resp.Keyspace.Name)
+}
+
+// testResolverBuilder wraps a grpcresolver.Builder to return *testResolvers
+// with a channel to detect calls to ResolveNow in tests.
+type testResolverBuilder struct {
+	grpcresolver.Builder
+	fired chan struct{}
+}
+
+func (b *testResolverBuilder) Build(target grpcresolver.Target, cc grpcresolver.ClientConn, opts grpcresolver.BuildOptions) (grpcresolver.Resolver, error) {
+	r, err := b.Builder.Build(target, cc, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return &testResolver{r, b.fired}, nil
+}
+
+// testResolver wraps a grpcresolver.Resolver to signal when ResolveNow is
+// called in tests.
+type testResolver struct {
+	grpcresolver.Resolver
+	fired chan struct{}
+}
+
+func (r *testResolver) ResolveNow(o grpcresolver.ResolveNowOptions) {
+	r.Resolver.ResolveNow(o)
+	r.fired <- struct{}{}
 }
 
 // TestRedial tests that vtadmin-api is able to recover from a lost connection to
 // a vtctld by rediscovering and redialing a new one.
 func TestRedial(t *testing.T) {
 	// Initialize vtctld #1
-	listener1, server1, err := initVtctlServer()
+	listener1, server1, err := initVtctldServer()
 	require.NoError(t, err)
 
 	defer listener1.Close()
@@ -93,7 +141,7 @@ func TestRedial(t *testing.T) {
 	defer server1.Stop()
 
 	// Initialize vtctld #2
-	listener2, server2, err := initVtctlServer()
+	listener2, server2, err := initVtctldServer()
 	require.NoError(t, err)
 
 	defer listener2.Close()
@@ -109,17 +157,20 @@ func TestRedial(t *testing.T) {
 		Hostname: listener2.Addr().String(),
 	})
 
+	reResolveFired := make(chan struct{})
 	proxy := New(&Config{
 		Cluster: &vtadminpb.Cluster{
 			Id:   "test",
 			Name: "testcluster",
 		},
-		Discovery:           disco,
-		ConnectivityTimeout: defaultConnectivityTimeout,
+		ResolverOptions: &resolver.Options{
+			Discovery:        disco,
+			DiscoveryTimeout: 50 * time.Millisecond,
+		},
 	})
 
-	// We don't have a vtctld host until we call Dial
-	require.Empty(t, proxy.host)
+	// wrap the resolver builder to test that re-resolve has fired as expected.
+	proxy.resolver = &testResolverBuilder{Builder: proxy.resolver, fired: reResolveFired}
 
 	// Check for a successful connection to whichever vtctld we discover first.
 	err = proxy.Dial(context.Background())
@@ -131,7 +182,11 @@ func TestRedial(t *testing.T) {
 	var currentVtctld *grpc.Server
 	var nextAddr string
 
-	switch proxy.host {
+	resp, err := proxy.GetKeyspace(context.Background(), &vtctldatapb.GetKeyspaceRequest{})
+	require.NoError(t, err)
+
+	proxyHost := resp.Keyspace.Name
+	switch proxyHost {
 	case listener1.Addr().String():
 		currentVtctld = server1
 		nextAddr = listener2.Addr().String()
@@ -140,7 +195,7 @@ func TestRedial(t *testing.T) {
 		currentVtctld = server2
 		nextAddr = listener1.Addr().String()
 	default:
-		t.Fatalf("invalid proxy host %s", proxy.host)
+		t.Fatalf("invalid proxy host %s", proxyHost)
 	}
 
 	// Remove the shut down vtctld from VTAdmin's service discovery (clumsily).
@@ -153,20 +208,20 @@ func TestRedial(t *testing.T) {
 	// Force an ungraceful shutdown of the gRPC server to which we're connected
 	currentVtctld.Stop()
 
-	// Wait for the client connection to shut down. (If we redial too quickly,
-	// we get into a race condition with gRPC's internal retry logic.
-	// (Using WaitForReady here _does_ expose more function internals than is ideal for a unit test,
-	// but it's far less flaky than using time.Sleep.)
-	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		if err = proxy.VtctldClient.WaitForReady(ctx); err != nil {
-			break
-		}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	select {
+	case <-reResolveFired:
+	case <-ctx.Done():
+		require.FailNowf(t, "forced shutdown of vtctld should trigger grpc re-resolution", ctx.Err().Error())
 	}
 
 	// Finally, check that we discover, dial + establish a new connection to the remaining vtctld.
 	err = proxy.Dial(context.Background())
 	assert.NoError(t, err)
-	assert.Equal(t, nextAddr, proxy.host)
+
+	resp, err = proxy.GetKeyspace(context.Background(), &vtctldatapb.GetKeyspaceRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, nextAddr, resp.Keyspace.Name)
 }

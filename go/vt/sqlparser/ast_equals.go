@@ -1567,7 +1567,7 @@ func EqualsRefOfCurTimeFuncExpr(a, b *CurTimeFuncExpr) bool {
 		return false
 	}
 	return EqualsColIdent(a.Name, b.Name) &&
-		EqualsRefOfLiteral(a.Fsp, b.Fsp)
+		EqualsExpr(a.Fsp, b.Fsp)
 }
 
 // EqualsRefOfDeallocateStmt does deep equals between the two objects.
@@ -2443,10 +2443,9 @@ func EqualsRefOfPrepareStmt(a, b *PrepareStmt) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Statement == b.Statement &&
-		EqualsColIdent(a.Name, b.Name) &&
-		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
-		EqualsColIdent(a.StatementIdentifier, b.StatementIdentifier)
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsExpr(a.Statement, b.Statement) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfReferenceDefinition does deep equals between the two objects.

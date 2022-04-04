@@ -181,6 +181,21 @@ func (d *Fake) DiscoverVTGateAddr(ctx context.Context, tags []string) (string, e
 	return gate.Hostname, nil
 }
 
+// DiscoverVTGateAddrs is part of the discovery.Discovery interface.
+func (d *Fake) DiscoverVTGateAddrs(ctx context.Context, tags []string) ([]string, error) {
+	gates, err := d.DiscoverVTGates(ctx, tags)
+	if err != nil {
+		return nil, err
+	}
+
+	addrs := make([]string, len(gates))
+	for i, gate := range gates {
+		addrs[i] = gate.Hostname
+	}
+
+	return addrs, nil
+}
+
 // DiscoverVtctlds is part of the discover.Discovery interface.
 func (d *Fake) DiscoverVtctlds(ctx context.Context, tags []string) ([]*vtadminpb.Vtctld, error) {
 	if d.vtctlds.shouldErr {
@@ -232,6 +247,21 @@ func (d *Fake) DiscoverVtctldAddr(ctx context.Context, tags []string) (string, e
 	}
 
 	return vtctld.Hostname, nil
+}
+
+// DiscoverVtctldAddrs is part of the discovery.Discovery interface.
+func (d *Fake) DiscoverVtctldAddrs(ctx context.Context, tags []string) ([]string, error) {
+	vtctlds, err := d.DiscoverVtctlds(ctx, tags)
+	if err != nil {
+		return nil, err
+	}
+
+	addrs := make([]string, len(vtctlds))
+	for i, vtctld := range vtctlds {
+		addrs[i] = vtctld.Hostname
+	}
+
+	return addrs, nil
 }
 
 // DiscoverVtctld is part of the discover.Discovery interface.
