@@ -3453,9 +3453,10 @@ show_statement:
   {
     $$ = &Show{Type: string($2) + " " + string($3), IfNotExists: $4 == 1, Database: string($5)}
   }
-| SHOW CREATE TABLE table_name
+| SHOW CREATE TABLE table_name as_of_opt
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Table: $4}
+    showTablesOpt := &ShowTablesOpt{AsOf:$5}
+    $$ = &Show{Type: string($2) + " " + string($3), Table: $4, ShowTablesOpt: showTablesOpt}
   }
 | SHOW CREATE PROCEDURE table_name
   {
@@ -3508,7 +3509,7 @@ show_statement:
 | SHOW full_opt columns_or_fields FROM table_name from_database_opt as_of_opt like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{DbName:$6, AsOf:$7, Filter:$8}
-    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5, Full: $2}
+    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, Table: $5, Full: $2}
   }
 | SHOW full_opt TABLES from_database_opt as_of_opt like_or_where_opt
   {
@@ -3769,7 +3770,7 @@ describe_statement:
   // rewrite describe table as show columns from table
   {
     showTablesOpt := &ShowTablesOpt{AsOf:$3}
-    $$ = &Show{Type: "columns", OnTable: $2, ShowTablesOpt: showTablesOpt}
+    $$ = &Show{Type: "columns", Table: $2, ShowTablesOpt: showTablesOpt}
   }
 
 comment_opt:
