@@ -481,7 +481,6 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
 %type <str> database_or_schema column_opt insert_method_options row_format_options
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
-%type <str> vitess_topo
 %type <tableAndLockTypes> lock_table_list
 %type <tableAndLockType> lock_table
 %type <lockType> lock_type
@@ -3460,13 +3459,13 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: Warnings}}
   }
-/* vitess_topo supports SHOW VITESS_SHARDS / SHOW VITESS_TABLETS */
-| SHOW vitess_topo like_or_where_opt
+| SHOW VITESS_SHARDS like_or_where_opt
   {
-    // This should probably be a different type (ShowVitessTopoOpt), but
-    // just getting the thing working for now
-    showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{&ShowLegacy{Type: $2, ShowTablesOpt: showTablesOpt}}
+    $$ = &Show{&ShowBasic{Command: VitessShards, Filter: $3}}
+  }
+| SHOW VITESS_TABLETS like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: VitessTablets, Filter: $3}}
   }
 /*
  * Catch-all for show statements without vitess keywords:
@@ -3486,16 +3485,6 @@ show_statement:
 | SHOW STORAGE ddl_skip_to_end
   {
     $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
-  }
-
-vitess_topo:
-  VITESS_TABLETS
-  {
-    $$ = string($1)
-  }
-| VITESS_SHARDS
-  {
-    $$ = string($1)
   }
 
 extended_opt:

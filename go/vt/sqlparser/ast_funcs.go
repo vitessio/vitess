@@ -1523,6 +1523,10 @@ func (ty ShowCommandType) ToString() string {
 		return VGtidExecGlobalStr
 	case VitessMigrations:
 		return VitessMigrationsStr
+	case VitessShards:
+		return VitessShardsStr
+	case VitessTablets:
+		return VitessTabletsStr
 	case Warnings:
 		return WarningsStr
 	case Keyspace:

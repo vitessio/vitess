@@ -638,3 +638,40 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# show vitess_shards
+"show vitess_shards"
+{
+  "QueryType": "SHOW",
+  "Original": "show vitess_shards",
+  "Instructions": {
+    "OperatorType": "ShowExec",
+    "Variant": " vitess_shards"
+  }
+}
+Gen4 plan same as above
+
+# show vitess_tablets
+"show vitess_tablets"
+{
+  "QueryType": "SHOW",
+  "Original": "show vitess_tablets",
+  "Instructions": {
+    "OperatorType": "ShowExec",
+    "Variant": " vitess_tablets"
+  }
+}
+Gen4 plan same as above
+
+# show vitess_tablets with filter
+"show vitess_tablets like '-2%'"
+{
+  "QueryType": "SHOW",
+  "Original": "show vitess_tablets like '-2%'",
+  "Instructions": {
+    "OperatorType": "ShowExec",
+    "Variant": " vitess_tablets",
+    "Filter": " like '-2%'"
+  }
+}
+Gen4 plan same as above

@@ -290,6 +290,8 @@ const (
 	VGtidExecGlobalStr  = " global vgtid_executed"
 	KeyspaceStr         = " keyspaces"
 	VitessMigrationsStr = " vitess_migrations"
+	VitessShardsStr     = " vitess_shards"
+	VitessTabletsStr    = " vitess_tablets"
 	WarningsStr         = " warnings"
 
 	// DropKeyType strings
@@ -617,6 +619,8 @@ const (
 	VariableSession
 	VGtidExecGlobal
 	VitessMigrations
+	VitessShards
+	VitessTablets
 	Warnings
 	Keyspace
 )

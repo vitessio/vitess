@@ -72,6 +72,9 @@ type iExecute interface {
 	ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
 	ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
 
+	showShards(ctx context.Context, filter *sqlparser.ShowFilter, destTabletType topodatapb.TabletType) (*sqltypes.Result, error)
+	showTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
+
 	// TODO: remove when resolver is gone
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
 	VSchema() *vindexes.VSchema
@@ -923,4 +926,15 @@ func (vc *vcursorImpl) MessageStream(rss []*srvtopo.ResolvedShard, tableName str
 
 func (vc *vcursorImpl) VStream(rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
 	return vc.executor.ExecuteVStream(vc.ctx, rss, filter, gtid, callback)
+}
+
+func (vc *vcursorImpl) ShowExec(command sqlparser.ShowCommandType, filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
+	switch command {
+	case sqlparser.VitessShards:
+		return vc.executor.showShards(vc.ctx, filter, vc.tabletType)
+	case sqlparser.VitessTablets:
+		return vc.executor.showTablets(filter)
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "bug: unexpected show command: %v", command)
+	}
 }
