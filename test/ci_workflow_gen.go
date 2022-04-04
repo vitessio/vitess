@@ -53,7 +53,6 @@ var (
 		"15",
 		"shardedrecovery_stress_verticalsplit_heavy",
 		"17",
-		"18",
 		"19",
 		"20",
 		"21",
@@ -113,6 +112,7 @@ var (
 
 	clusterSelfHostedList = []string{
 		"12",
+		"18",
 	}
 	clusterDockerList = []string{}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
