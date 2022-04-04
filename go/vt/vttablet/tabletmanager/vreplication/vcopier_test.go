@@ -560,7 +560,7 @@ func TestPlayerCopyBigTable(t *testing.T) {
 	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time shoulw be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multiple times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
@@ -676,7 +676,7 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time shoulw be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multipel times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 

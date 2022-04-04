@@ -1085,6 +1085,15 @@
 			"RetryMax": 2,
 			"Tags": []
 		},
+		"vreplication_copy_throttling": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVreplicationCopyThrottling"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_basic",
+			"RetryMax": 2,
+			"Tags": []
+		},
 		"vstream_failover": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamFailover"],
