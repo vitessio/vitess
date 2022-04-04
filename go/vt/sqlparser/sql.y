@@ -309,6 +309,9 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
 %token <bytes> THREAD_PRIORITY TIES VCPU VISIBLE SYSTEM INFILE
 
+// Generated Columns
+%token <bytes> GENERATED ALWAYS STORED VIRTUAL
+
 // TODO: categorize/organize these somehow later
 %token <bytes> NVAR PASSWORD_LOCK
 
@@ -430,6 +433,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <boolean> default_keyword_opt
 %type <charsetCollate> charset_default_opt collate_default_opt encryption_default_opt
 %type <charsetCollates> creation_option creation_option_opt
+%type <boolVal> stored_opt
 %type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolVal> auto_increment local_opt optionally_opt
@@ -2125,6 +2129,19 @@ column_definition_for_create:
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
 
+stored_opt:
+  {
+    $$ = BoolVal(false)
+  }
+| VIRTUAL
+  {
+    $$ = BoolVal(false)
+  }
+| STORED
+  {
+    $$ = BoolVal(true)
+  }
+
 column_type_options:
   {
     $$ = ColumnType{}
@@ -2186,6 +2203,24 @@ column_type_options:
 | column_type_options column_comment
   {
     opt := ColumnType{Comment: $2}
+    if err := $1.merge(opt); err != nil {
+    	yylex.Error(err.Error())
+    	return 1
+    }
+    $$ = $1
+  }
+| column_type_options AS openb value_expression closeb stored_opt
+  {
+    opt := ColumnType{GeneratedExpr: $4, Stored: $6}
+    if err := $1.merge(opt); err != nil {
+    	yylex.Error(err.Error())
+    	return 1
+    }
+    $$ = $1
+  }
+| column_type_options GENERATED ALWAYS AS openb value_expression closeb stored_opt
+  {
+    opt := ColumnType{GeneratedExpr: $6, Stored: $8}
     if err := $1.merge(opt); err != nil {
     	yylex.Error(err.Error())
     	return 1

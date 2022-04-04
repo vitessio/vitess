@@ -2043,6 +2043,10 @@ type ColumnType struct {
 
 	// Key specification
 	KeyOpt ColumnKeyOption
+
+	// Generated columns
+	GeneratedExpr Expr    // The expression used to generate this column
+	Stored        BoolVal // Default is Virtual (not stored)
 }
 
 func (ct *ColumnType) merge(other ColumnType) error {
@@ -2151,6 +2155,14 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 	if ct.KeyOpt == colKeyFulltextKey {
 		opts = append(opts, keywordStrings[FULLTEXT])
+	}
+	if ct.GeneratedExpr != nil {
+		opts = append(opts, keywordStrings[GENERATED])
+		if ct.Stored {
+			opts = append(opts, keywordStrings[STORED])
+		} else {
+			opts = append(opts, keywordStrings[VIRTUAL])
+		}
 	}
 
 	if len(opts) != 0 {
