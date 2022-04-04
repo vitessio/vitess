@@ -32,9 +32,14 @@ var (
 	ErrNotFullyParsed                 = errors.New("unable to fully parse statement")
 	ErrExpectedCreateTable            = errors.New("expected a CREATE TABLE statement")
 	ErrExpectedCreateView             = errors.New("expected a CREATE VIEW statement")
+	ErrUnsupportedEntity              = errors.New("Unsupported entity type")
+	ErrUnsupportedStatement           = errors.New("Unsupported statement")
+	ErrDuplicateName                  = errors.New("Duplicate name")
+	ErrViewDependencyLoop             = errors.New("Views have dependency loop")
 )
 
 type Entity interface {
+	Name() string
 	Diff(other Entity, hints *DiffHints) (diff EntityDiff, err error)
 }
 

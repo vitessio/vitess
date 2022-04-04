@@ -110,6 +110,10 @@ func NewCreateTableEntity(c *sqlparser.CreateTable) *CreateTableEntity {
 	return &CreateTableEntity{CreateTable: *c}
 }
 
+func (c *CreateTableEntity) Name() string {
+	return c.CreateTable.GetTable().Name.String()
+}
+
 // Diff implements Entity interface function
 func (c *CreateTableEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, error) {
 	otherCreateTable, ok := other.(*CreateTableEntity)

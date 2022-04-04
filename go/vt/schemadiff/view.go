@@ -105,6 +105,10 @@ func NewCreateViewEntity(c *sqlparser.CreateView) *CreateViewEntity {
 	return &CreateViewEntity{CreateView: *c}
 }
 
+func (c *CreateViewEntity) Name() string {
+	return c.CreateView.GetTable().Name.String()
+}
+
 // Diff implements Entity interface function
 func (c *CreateViewEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, error) {
 	otherCreateView, ok := other.(*CreateViewEntity)
