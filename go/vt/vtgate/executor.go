@@ -831,92 +831,6 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		if show.Scope == sqlparser.VitessMetadataScope {
 			return e.handleShowVitessMetadata(ctx, show.ShowTablesOpt)
 		}
-	case sqlparser.KeywordString(sqlparser.VITESS_SHARDS):
-		showVitessShardsFilters := func(show *sqlparser.ShowLegacy) ([]func(string) bool, []func(string, *topodatapb.ShardReference) bool) {
-			keyspaceFilters := []func(string) bool{}
-			shardFilters := []func(string, *topodatapb.ShardReference) bool{}
-
-			if show.ShowTablesOpt == nil || show.ShowTablesOpt.Filter == nil {
-				return keyspaceFilters, shardFilters
-			}
-
-			filter := show.ShowTablesOpt.Filter
-
-			if filter.Like != "" {
-				shardLikeRexep := sqlparser.LikeToRegexp(filter.Like)
-
-				if strings.Contains(filter.Like, "/") {
-					keyspaceLikeRexep := sqlparser.LikeToRegexp(strings.Split(filter.Like, "/")[0])
-					keyspaceFilters = append(keyspaceFilters, func(ks string) bool {
-						return keyspaceLikeRexep.MatchString(ks)
-					})
-				}
-				shardFilters = append(shardFilters, func(ks string, shard *topodatapb.ShardReference) bool {
-					return shardLikeRexep.MatchString(topoproto.KeyspaceShardString(ks, shard.Name))
-				})
-
-				return keyspaceFilters, shardFilters
-			}
-
-			if filter.Filter != nil {
-				// TODO build a query planner I guess? lol that should be fun
-				log.Infof("SHOW VITESS_SHARDS where clause %+v. Ignoring this (for now).", filter.Filter)
-			}
-
-			return keyspaceFilters, shardFilters
-		}
-
-		keyspaceFilters, shardFilters := showVitessShardsFilters(show)
-
-		keyspaces, err := e.resolver.resolver.GetAllKeyspaces(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		var rows [][]sqltypes.Value
-		for _, keyspace := range keyspaces {
-			skipKeyspace := false
-			for _, filter := range keyspaceFilters {
-				if !filter(keyspace) {
-					skipKeyspace = true
-					break
-				}
-			}
-
-			if skipKeyspace {
-				continue
-			}
-
-			_, _, shards, err := e.resolver.resolver.GetKeyspaceShards(ctx, keyspace, destTabletType)
-			if err != nil {
-				// There might be a misconfigured keyspace or no shards in the keyspace.
-				// Skip any errors and move on.
-				continue
-			}
-
-			for _, shard := range shards {
-				skipShard := false
-				for _, filter := range shardFilters {
-					if !filter(keyspace, shard) {
-						skipShard = true
-						break
-					}
-				}
-
-				if skipShard {
-					continue
-				}
-
-				rows = append(rows, buildVarCharRow(topoproto.KeyspaceShardString(keyspace, shard.Name)))
-			}
-		}
-
-		return &sqltypes.Result{
-			Fields: buildVarCharFields("Shards"),
-			Rows:   rows,
-		}, nil
-	case sqlparser.KeywordString(sqlparser.VITESS_TABLETS):
-		return e.showTablets(show)
 	case sqlparser.KeywordString(sqlparser.VITESS_REPLICATION_STATUS):
 		return e.showVitessReplicationStatus(ctx, show)
 	case "vitess_target":
@@ -1042,15 +956,98 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 // (tablet, servingState, mtst) -> bool
 type tabletFilter func(*topodatapb.Tablet, string, int64) bool
 
-func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, error) {
-	getTabletFilters := func(show *sqlparser.ShowLegacy) []tabletFilter {
+func (e *Executor) showShards(ctx context.Context, filter *sqlparser.ShowFilter, destTabletType topodatapb.TabletType) (*sqltypes.Result, error) {
+	showVitessShardsFilters := func(filter *sqlparser.ShowFilter) ([]func(string) bool, []func(string, *topodatapb.ShardReference) bool) {
+		keyspaceFilters := []func(string) bool{}
+		shardFilters := []func(string, *topodatapb.ShardReference) bool{}
+
+		if filter == nil {
+			return keyspaceFilters, shardFilters
+		}
+
+		if filter.Like != "" {
+			shardLikeRexep := sqlparser.LikeToRegexp(filter.Like)
+
+			if strings.Contains(filter.Like, "/") {
+				keyspaceLikeRexep := sqlparser.LikeToRegexp(strings.Split(filter.Like, "/")[0])
+				keyspaceFilters = append(keyspaceFilters, func(ks string) bool {
+					return keyspaceLikeRexep.MatchString(ks)
+				})
+			}
+			shardFilters = append(shardFilters, func(ks string, shard *topodatapb.ShardReference) bool {
+				return shardLikeRexep.MatchString(topoproto.KeyspaceShardString(ks, shard.Name))
+			})
+
+			return keyspaceFilters, shardFilters
+		}
+
+		if filter.Filter != nil {
+			// TODO build a query planner I guess? lol that should be fun
+			log.Infof("SHOW VITESS_SHARDS where clause %+v. Ignoring this (for now).", filter.Filter)
+		}
+
+		return keyspaceFilters, shardFilters
+	}
+
+	keyspaceFilters, shardFilters := showVitessShardsFilters(filter)
+
+	keyspaces, err := e.resolver.resolver.GetAllKeyspaces(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var rows [][]sqltypes.Value
+	for _, keyspace := range keyspaces {
+		skipKeyspace := false
+		for _, filter := range keyspaceFilters {
+			if !filter(keyspace) {
+				skipKeyspace = true
+				break
+			}
+		}
+
+		if skipKeyspace {
+			continue
+		}
+
+		_, _, shards, err := e.resolver.resolver.GetKeyspaceShards(ctx, keyspace, destTabletType)
+		if err != nil {
+			// There might be a misconfigured keyspace or no shards in the keyspace.
+			// Skip any errors and move on.
+			continue
+		}
+
+		for _, shard := range shards {
+			skipShard := false
+			for _, filter := range shardFilters {
+				if !filter(keyspace, shard) {
+					skipShard = true
+					break
+				}
+			}
+
+			if skipShard {
+				continue
+			}
+
+			rows = append(rows, buildVarCharRow(topoproto.KeyspaceShardString(keyspace, shard.Name)))
+		}
+	}
+
+	return &sqltypes.Result{
+		Fields: buildVarCharFields("Shards"),
+		Rows:   rows,
+	}, nil
+}
+
+func (e *Executor) showTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
+	getTabletFilters := func(filter *sqlparser.ShowFilter) []tabletFilter {
 		filters := []tabletFilter{}
 
-		if show.ShowTablesOpt == nil || show.ShowTablesOpt.Filter == nil {
+		if filter == nil {
 			return filters
 		}
 
-		filter := show.ShowTablesOpt.Filter
 		if filter.Like != "" {
 			tabletRegexp := sqlparser.LikeToRegexp(filter.Like)
 
@@ -1069,7 +1066,7 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 		return filters
 	}
 
-	tabletFilters := getTabletFilters(show)
+	tabletFilters := getTabletFilters(filter)
 
 	rows := [][]sqltypes.Value{}
 	status := e.scatterConn.GetHealthCheckCacheStatus()

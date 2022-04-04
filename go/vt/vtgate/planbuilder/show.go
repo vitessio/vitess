@@ -83,6 +83,11 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 		return buildPluginsPlan()
 	case sqlparser.Engines:
 		return buildEnginesPlan()
+	case sqlparser.VitessShards, sqlparser.VitessTablets:
+		return &engine.ShowExec{
+			Command:    show.Command,
+			ShowFilter: show.Filter,
+		}, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown show query type %s", show.Command.ToString())
 
