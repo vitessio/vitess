@@ -210,7 +210,7 @@ type VtctldClient interface {
 	GetKeyspace(ctx context.Context, in *vtctldata.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.GetKeyspaceResponse, error)
 	// GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
 	GetKeyspaces(ctx context.Context, in *vtctldata.GetKeyspacesRequest, opts ...grpc.CallOption) (*vtctldata.GetKeyspacesResponse, error)
-	// GetPermissions returns permission set on the remote tablet.
+	// GetPermissions returns the permissions set on the remote tablet.
 	GetPermissions(ctx context.Context, in *vtctldata.GetPermissionsRequest, opts ...grpc.CallOption) (*vtctldata.GetPermissionsResponse, error)
 	// GetRoutingRules returns the VSchema routing rules.
 	GetRoutingRules(ctx context.Context, in *vtctldata.GetRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.GetRoutingRulesResponse, error)
@@ -1259,7 +1259,7 @@ type VtctldServer interface {
 	GetKeyspace(context.Context, *vtctldata.GetKeyspaceRequest) (*vtctldata.GetKeyspaceResponse, error)
 	// GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
 	GetKeyspaces(context.Context, *vtctldata.GetKeyspacesRequest) (*vtctldata.GetKeyspacesResponse, error)
-	// GetPermissions returns permission set on the remote tablet.
+	// GetPermissions returns the permissions set on the remote tablet.
 	GetPermissions(context.Context, *vtctldata.GetPermissionsRequest) (*vtctldata.GetPermissionsResponse, error)
 	// GetRoutingRules returns the VSchema routing rules.
 	GetRoutingRules(context.Context, *vtctldata.GetRoutingRulesRequest) (*vtctldata.GetRoutingRulesResponse, error)
