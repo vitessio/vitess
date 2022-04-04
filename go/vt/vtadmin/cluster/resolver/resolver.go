@@ -126,9 +126,11 @@ type Options struct {
 // the scheme should be a cluster ID.
 //
 // The target provided to Builder.Build will be used to switch on vtctld or
-// vtgate, based on the Authority field of the target. This means that the addr
-// passed to Dial should have the form "{clusterID}://{vtctld|vtgate}/". Other
-// target Authorities will cause an error.
+// vtgate, based on the URL.Host field of the parsed dial target. This means
+// that the addr passed to Dial should have the form
+// "{clusterID}://{vtctld|vtgate}/". Other target URL hosts will cause an error.
+// To ensure the dial address conforms to this constraint, use this package's
+// DialAddr function.
 func (opts *Options) NewBuilder(scheme string) grpcresolver.Builder {
 	return &builder{
 		scheme: scheme,
@@ -175,13 +177,13 @@ func (b *builder) Build(target grpcresolver.Target, cc grpcresolver.ClientConn, 
 
 func (b *builder) build(target grpcresolver.Target, cc grpcresolver.ClientConn, opts grpcresolver.BuildOptions) (*resolver, error) {
 	var fn func(context.Context, []string) ([]string, error)
-	switch target.Authority {
+	switch target.URL.Host {
 	case "vtctld":
 		fn = b.opts.Discovery.DiscoverVtctldAddrs
 	case "vtgate":
 		fn = b.opts.Discovery.DiscoverVTGateAddrs
 	default:
-		return nil, fmt.Errorf("%s: unsupported authority %s", logPrefix, target.Authority)
+		return nil, fmt.Errorf("%s: unsupported URL host %s", logPrefix, target.URL.Host)
 	}
 
 	var sc serviceconfig.Config
@@ -198,8 +200,8 @@ func (b *builder) build(target grpcresolver.Target, cc grpcresolver.ClientConn, 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &resolver{
-		component:     target.Authority,
-		cluster:       target.Scheme,
+		component:     target.URL.Host,
+		cluster:       target.URL.Scheme,
 		discoverAddrs: fn,
 		opts:          b.opts,
 		cc:            cc,
