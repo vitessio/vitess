@@ -3,6 +3,8 @@ package plancontext
 import (
 	"strings"
 
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -50,6 +52,12 @@ type VSchema interface {
 
 	// ForeignKeyMode returns the foreign_key flag value
 	ForeignKeyMode() string
+
+	// GetVSchema returns the latest cached vindexes.VSchema
+	GetVSchema() *vindexes.VSchema
+
+	// GetSrvVschema returns the latest cached vschema.SrvVSchema
+	GetSrvVschema() *vschemapb.SrvVSchema
 }
 
 // PlannerNameToVersion returns the numerical representation of the planner

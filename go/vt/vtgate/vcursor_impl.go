@@ -938,3 +938,11 @@ func (vc *vcursorImpl) ShowExec(command sqlparser.ShowCommandType, filter *sqlpa
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "bug: unexpected show command: %v", command)
 	}
 }
+
+func (vc *vcursorImpl) GetVSchema() *vindexes.VSchema {
+	return vc.vschema
+}
+
+func (vc *vcursorImpl) GetSrvVschema() *vschemapb.SrvVSchema {
+	return vc.vm.GetCurrentSrvVschema()
+}
