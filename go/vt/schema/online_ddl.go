@@ -277,35 +277,34 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 	}, nil
 }
 
+func formatWithoutComments(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
+	if _, ok := node.(*sqlparser.ParsedComments); ok {
+		return
+	}
+	node.Format(buf)
+}
+
 // OnlineDDLFromCommentedStatement creates a schema  instance based on a commented query. The query is expected
 // to be commented as e.g. `CREATE /*vt+ uuid=... context=... table=... strategy=... options=... */ TABLE ...`
 func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *OnlineDDL, err error) {
-	var sql string
-	var comments sqlparser.Comments
+	var comments *sqlparser.ParsedComments
 	switch stmt := stmt.(type) {
 	case sqlparser.DDLStatement:
-		comments = stmt.GetComments()
-		// We want sql to be clean of comments, so we temporarily remove, then restore the comments
-		stmt.SetComments(sqlparser.Comments{})
-		sql = sqlparser.String(stmt)
-		stmt.SetComments(comments)
+		comments = stmt.GetParsedComments()
 	case *sqlparser.RevertMigration:
-		comments = stmt.Comments[:]
-		// We want sql to be clean of comments, so we temporarily remove, then restore the comments
-		stmt.SetComments(sqlparser.Comments{})
-		sql = sqlparser.String(stmt)
-		stmt.SetComments(comments)
+		comments = stmt.Comments
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement for Online DDL: %v", sqlparser.String(stmt))
 	}
-	if len(comments) == 0 {
+
+	if comments.Length() == 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no comments found in statement: %v", sqlparser.String(stmt))
 	}
-	directives := sqlparser.ExtractCommentDirectives(comments)
 
+	directives := comments.Directives()
 	decodeDirective := func(name string) (string, error) {
-		value := fmt.Sprintf("%s", directives[name])
-		if value == "" {
+		value, ok := directives[name]
+		if !ok {
 			return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no value found for comment directive %s", name)
 		}
 		unquoted, err := strconv.Unquote(value)
@@ -319,8 +318,11 @@ func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *Onlin
 		return string(b), nil
 	}
 
+	buf := sqlparser.NewTrackedBuffer(formatWithoutComments)
+	stmt.Format(buf)
+
 	onlineDDL = &OnlineDDL{
-		SQL: sql,
+		SQL: buf.String(),
 	}
 	if onlineDDL.UUID, err = decodeDirective("uuid"); err != nil {
 		return nil, err

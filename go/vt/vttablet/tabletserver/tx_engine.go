@@ -214,7 +214,7 @@ func (te *TxEngine) isTxPoolAvailable(addToWaitGroup func(int)) error {
 
 	canOpenTransactions := te.state == AcceptingReadOnly || te.state == AcceptingReadAndWrite
 	if !canOpenTransactions {
-		return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can't accept new connections in state %v", te.state)
+		return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, vterrors.TxEngineClosed, te.state)
 	}
 	addToWaitGroup(1)
 	return nil

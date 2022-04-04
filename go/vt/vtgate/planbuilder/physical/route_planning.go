@@ -569,17 +569,22 @@ func leaves(op abstract.Operator) (sources []abstract.Operator) {
 }
 
 func tryMergeReferenceTable(aRoute, bRoute *Route, merger mergeFunc) (*Route, error) {
-	// if either side is a reference table, we can just merge it and use the opcode of the other side
-	var opCode engine.Opcode
-	var selected *VindexOption
+	var (
+		// if either side is a reference table, we can just merge it and use the opcode of the other side
+		opCode engine.Opcode
+		vindex *VindexOption
+		ks     *vindexes.Keyspace
+	)
 
 	switch {
 	case aRoute.RouteOpCode == engine.Reference:
-		selected = bRoute.Selected
+		vindex = bRoute.Selected
 		opCode = bRoute.RouteOpCode
+		ks = bRoute.Keyspace
 	case bRoute.RouteOpCode == engine.Reference:
-		selected = aRoute.Selected
+		vindex = aRoute.Selected
 		opCode = aRoute.RouteOpCode
+		ks = aRoute.Keyspace
 	default:
 		return nil, nil
 	}
@@ -589,7 +594,8 @@ func tryMergeReferenceTable(aRoute, bRoute *Route, merger mergeFunc) (*Route, er
 		return nil, err
 	}
 	r.RouteOpCode = opCode
-	r.Selected = selected
+	r.Selected = vindex
+	r.Keyspace = ks
 	return r, nil
 }
 

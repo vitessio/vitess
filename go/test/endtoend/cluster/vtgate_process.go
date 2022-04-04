@@ -50,7 +50,6 @@ type VtgateProcess struct {
 	Cell                  string
 	CellsToWatch          string
 	TabletTypesToWait     string
-	GatewayImplementation string
 	ServiceMap            string
 	MySQLAuthServerImpl   string
 	Directory             string
@@ -243,7 +242,6 @@ func VtgateProcessInstance(
 		Cell:                  cell,
 		CellsToWatch:          cellsToWatch,
 		TabletTypesToWait:     tabletTypesToWait,
-		GatewayImplementation: "tabletgateway",
 		CommonArg:             *vtctl,
 		MySQLAuthServerImpl:   "none",
 		ExtraArgs:             extraArgs,

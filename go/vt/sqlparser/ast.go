@@ -37,11 +37,15 @@ type (
 		SQLNode
 	}
 
+	Commented interface {
+		SetComments(comments Comments)
+		GetParsedComments() *ParsedComments
+	}
+
 	// SupportOptimizerHint represents a statement that accepts optimizer hints.
 	SupportOptimizerHint interface {
 		iSupportOptimizerHint()
-		SetComments(comments Comments)
-		GetComments() Comments
+		Commented
 	}
 
 	// SelectStatement any SELECT statement.
@@ -58,8 +62,7 @@ type (
 		SetWith(with *With)
 		MakeDistinct()
 		GetColumnCount() int
-		SetComments(comments Comments)
-		GetComments() Comments
+		Commented
 	}
 
 	// DDLStatement represents any DDL Statement
@@ -79,9 +82,8 @@ type (
 		AffectedTables() TableNames
 		SetTable(qualifier string, name string)
 		SetFromTables(tables TableNames)
-		SetComments(comments Comments)
-		GetComments() Comments
 		SetFullyParsed(fullyParsed bool)
+		Commented
 		Statement
 	}
 
@@ -230,7 +232,7 @@ type (
 		SQLCalcFoundRows bool
 		// The From field must be the first AST element of this struct so the rewriter sees it first
 		From        []TableExpr
-		Comments    Comments
+		Comments    *ParsedComments
 		SelectExprs SelectExprs
 		Where       *Where
 		With        *With
@@ -273,7 +275,7 @@ type (
 
 	// VStream represents a VSTREAM statement.
 	VStream struct {
-		Comments   Comments
+		Comments   *ParsedComments
 		SelectExpr SelectExpr
 		Table      TableName
 		Where      *Where
@@ -282,7 +284,7 @@ type (
 
 	// Stream represents a SELECT statement.
 	Stream struct {
-		Comments   Comments
+		Comments   *ParsedComments
 		SelectExpr SelectExpr
 		Table      TableName
 	}
@@ -297,7 +299,7 @@ type (
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Insert struct {
 		Action     InsertAction
-		Comments   Comments
+		Comments   *ParsedComments
 		Ignore     Ignore
 		Table      TableName
 		Partitions Partitions
@@ -316,7 +318,7 @@ type (
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Update struct {
 		With       *With
-		Comments   Comments
+		Comments   *ParsedComments
 		Ignore     Ignore
 		TableExprs TableExprs
 		Exprs      UpdateExprs
@@ -330,7 +332,7 @@ type (
 	Delete struct {
 		With       *With
 		Ignore     Ignore
-		Comments   Comments
+		Comments   *ParsedComments
 		Targets    TableNames
 		TableExprs TableExprs
 		Partitions Partitions
@@ -341,14 +343,14 @@ type (
 
 	// Set represents a SET statement.
 	Set struct {
-		Comments Comments
+		Comments *ParsedComments
 		Exprs    SetExprs
 	}
 
 	// SetTransaction represents a SET TRANSACTION statement.
 	SetTransaction struct {
 		SQLNode
-		Comments        Comments
+		Comments        *ParsedComments
 		Scope           Scope
 		Characteristics []Characteristic
 	}
@@ -370,7 +372,7 @@ type (
 
 	// DropDatabase represents a DROP database statement.
 	DropDatabase struct {
-		Comments Comments
+		Comments *ParsedComments
 		DBName   TableIdent
 		IfExists bool
 	}
@@ -387,7 +389,7 @@ type (
 
 	// CreateDatabase represents a CREATE database statement.
 	CreateDatabase struct {
-		Comments      Comments
+		Comments      *ParsedComments
 		DBName        TableIdent
 		IfNotExists   bool
 		CreateOptions []CollateAndCharset
@@ -445,13 +447,13 @@ type (
 	// ShowMigrationLogs represents a SHOW VITESS_MIGRATION '<uuid>' LOGS statement
 	ShowMigrationLogs struct {
 		UUID     string
-		Comments Comments
+		Comments *ParsedComments
 	}
 
 	// RevertMigration represents a REVERT VITESS_MIGRATION statement
 	RevertMigration struct {
 		UUID     string
-		Comments Comments
+		Comments *ParsedComments
 	}
 
 	// AlterMigrationType represents the type of operation in an ALTER VITESS_MIGRATION statement
@@ -469,7 +471,7 @@ type (
 		AlterOptions    []AlterOption
 		PartitionSpec   *PartitionSpec
 		PartitionOption *PartitionOption
-		Comments        Comments
+		Comments        *ParsedComments
 		FullyParsed     bool
 	}
 
@@ -479,14 +481,14 @@ type (
 		FromTables TableNames
 		// The following fields are set if a DDL was fully analyzed.
 		IfExists bool
-		Comments Comments
+		Comments *ParsedComments
 	}
 
 	// DropView represents a DROP VIEW statement.
 	DropView struct {
 		FromTables TableNames
 		IfExists   bool
-		Comments   Comments
+		Comments   *ParsedComments
 	}
 
 	// CreateTable represents a CREATE TABLE statement.
@@ -496,7 +498,7 @@ type (
 		IfNotExists bool
 		TableSpec   *TableSpec
 		OptLike     *OptLike
-		Comments    Comments
+		Comments    *ParsedComments
 		FullyParsed bool
 	}
 
@@ -510,7 +512,7 @@ type (
 		Select      SelectStatement
 		CheckOption string
 		IsReplace   bool
-		Comments    Comments
+		Comments    *ParsedComments
 	}
 
 	// AlterView represents a ALTER VIEW query
@@ -522,7 +524,7 @@ type (
 		Columns     Columns
 		Select      SelectStatement
 		CheckOption string
-		Comments    Comments
+		Comments    *ParsedComments
 	}
 
 	// Definer stores the user for AlterView and CreateView definers
@@ -616,17 +618,16 @@ type (
 	// PrepareStmt represents a Prepare Statement
 	// More info available on https://dev.mysql.com/doc/refman/8.0/en/sql-prepared-statements.html
 	PrepareStmt struct {
-		Name                ColIdent
-		Statement           string
-		Comments            Comments
-		StatementIdentifier ColIdent
+		Name      ColIdent
+		Statement Expr
+		Comments  *ParsedComments
 	}
 
 	// ExecuteStmt represents an Execute Statement
 	// More info available on https://dev.mysql.com/doc/refman/8.0/en/execute.html
 	ExecuteStmt struct {
 		Name      ColIdent
-		Comments  Comments
+		Comments  *ParsedComments
 		Arguments Columns
 	}
 
@@ -634,7 +635,7 @@ type (
 	// More info available on https://dev.mysql.com/doc/refman/8.0/en/deallocate-prepare.html
 	DeallocateStmt struct {
 		Type     DeallocateStmtType
-		Comments Comments
+		Comments *ParsedComments
 		Name     ColIdent
 	}
 
@@ -1232,128 +1233,128 @@ func (node *TruncateTable) SetComments(comments Comments) {
 
 // SetComments implements DDLStatement.
 func (node *AlterTable) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments implements DDLStatement.
 func (node *CreateTable) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments implements DDLStatement.
 func (node *CreateView) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments implements DDLStatement.
 func (node *DropTable) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments implements DDLStatement.
 func (node *DropView) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments implements DDLStatement.
 func (node *AlterView) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments for RevertMigration, does not implement DDLStatement
 func (node *RevertMigration) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments for Delete
 func (node *Delete) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments for Insert
 func (node *Insert) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments for Stream
 func (node *Stream) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments for Update
 func (node *Update) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments for VStream
 func (node *VStream) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
-// GetComments implements DDLStatement.
-func (node *RenameTable) GetComments() Comments {
+// GetParsedComments implements DDLStatement.
+func (node *RenameTable) GetParsedComments() *ParsedComments {
 	// irrelevant
 	return nil
 }
 
-// GetComments implements DDLStatement.
-func (node *TruncateTable) GetComments() Comments {
+// GetParsedComments implements DDLStatement.
+func (node *TruncateTable) GetParsedComments() *ParsedComments {
 	// irrelevant
 	return nil
 }
 
-// GetComments implements DDLStatement.
-func (node *AlterTable) GetComments() Comments {
+// GetParsedComments implements DDLStatement.
+func (node *AlterTable) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements DDLStatement.
-func (node *CreateTable) GetComments() Comments {
+// GetParsedComments implements DDLStatement.
+func (node *CreateTable) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements DDLStatement.
-func (node *CreateView) GetComments() Comments {
+// GetParsedComments implements DDLStatement.
+func (node *CreateView) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements DDLStatement.
-func (node *DropTable) GetComments() Comments {
+// GetParsedComments implements DDLStatement.
+func (node *DropTable) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements DDLStatement.
-func (node *DropView) GetComments() Comments {
+// GetParsedComments implements DDLStatement.
+func (node *DropView) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements DDLStatement.
-func (node *AlterView) GetComments() Comments {
+// GetParsedComments implements DDLStatement.
+func (node *AlterView) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements SupportOptimizerHint.
-func (node *Delete) GetComments() Comments {
+// GetParsedComments implements SupportOptimizerHint.
+func (node *Delete) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements Insert.
-func (node *Insert) GetComments() Comments {
+// GetParsedComments implements Insert.
+func (node *Insert) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements Stream.
-func (node *Stream) GetComments() Comments {
+// GetParsedComments implements Stream.
+func (node *Stream) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements Update.
-func (node *Update) GetComments() Comments {
+// GetParsedComments implements Update.
+func (node *Update) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements VStream.
-func (node *VStream) GetComments() Comments {
+// GetParsedComments implements VStream.
+func (node *VStream) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
@@ -1805,6 +1806,18 @@ type ShowFilter struct {
 // Comments represents a list of comments.
 type Comments []string
 
+func (c Comments) Parsed() *ParsedComments {
+	if len(c) == 0 {
+		return nil
+	}
+	return &ParsedComments{comments: c}
+}
+
+type ParsedComments struct {
+	comments    Comments
+	_directives CommentDirectives
+}
+
 // SelectExprs represents SELECT expressions.
 type SelectExprs []SelectExpr
 
@@ -2208,7 +2221,7 @@ type (
 	// supported functions are documented in the grammar
 	CurTimeFuncExpr struct {
 		Name ColIdent
-		Fsp  *Literal // fractional seconds precision, integer from 0 to 6
+		Fsp  Expr // fractional seconds precision, integer from 0 to 6 or an Argument
 	}
 
 	// ExtractedSubquery is a subquery that has been extracted from the original AST

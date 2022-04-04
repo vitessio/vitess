@@ -1197,10 +1197,8 @@ func (node *PrepareStmt) formatFast(buf *TrackedBuffer) {
 	node.Comments.formatFast(buf)
 	node.Name.formatFast(buf)
 	buf.WriteString(" from ")
-	if node.Statement != "" {
-		buf.WriteString(node.Statement)
-	} else {
-		node.StatementIdentifier.formatFast(buf)
+	if node.Statement != nil {
+		node.Statement.formatFast(buf)
 	}
 }
 
@@ -1249,8 +1247,11 @@ func (node *OtherAdmin) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node Comments) formatFast(buf *TrackedBuffer) {
-	for _, c := range node {
+func (node *ParsedComments) formatFast(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	for _, c := range node.comments {
 		buf.WriteString(c)
 		buf.WriteByte(' ')
 	}
