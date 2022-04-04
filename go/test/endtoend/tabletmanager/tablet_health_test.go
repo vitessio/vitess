@@ -175,6 +175,12 @@ func TestHealthCheck(t *testing.T) {
 	primaryTablet.MysqlctlProcess.InitMysql = true
 	require.NoError(t, err)
 
+	// On a MySQL restart, it comes up as a read-only tablet (check default.cnf file).
+	// We have to explicitly set it to read-write otherwise heartbeat writer is unable
+	// to write the heartbeats
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", primaryTablet.Alias)
+	require.NoError(t, err)
+
 	// explicitly start replication on all of the replicas to avoid any test flakiness as they were all
 	// replicating from the primary instance
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", rTablet.Alias)

@@ -438,10 +438,8 @@ func (exec *TabletExecutor) executeOneTablet(
 			}
 			if ddlStmt, ok := stmt.(sqlparser.DDLStatement); ok {
 				// Add comments directive to allow zero in date
-				comments := sqlparser.Comments{`/*vt+ allowZeroInDate=true */`}
-				// Preserve potentially existing comments
-				comments = append(comments, ddlStmt.GetComments()...)
-				ddlStmt.SetComments(comments)
+				const directive = `/*vt+ allowZeroInDate=true */`
+				ddlStmt.SetComments(ddlStmt.GetParsedComments().Prepend(directive))
 				sql = sqlparser.String(ddlStmt)
 			}
 		}

@@ -284,12 +284,10 @@ func planOrderByOnUnion(ctx *plancontext.PlanningContext, plan logicalPlan, unio
 }
 
 func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.SelectStatement) (logicalPlan, error) {
-	directives := sqlparser.ExtractCommentDirectives(sqlparser.GetFirstSelect(stmt).Comments)
-	scatterAsWarns := false
-	if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
-		scatterAsWarns = true
-	}
+	directives := sqlparser.GetFirstSelect(stmt).Comments.Directives()
+	scatterAsWarns := directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings)
 	queryTimeout := queryTimeout(directives)
+
 	if scatterAsWarns || queryTimeout > 0 {
 		_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
 			switch plan := logicalPlan.(type) {

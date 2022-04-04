@@ -17,7 +17,13 @@ limitations under the License.
 
 package sqlparser
 
-import hack "vitess.io/vitess/go/hack"
+import (
+	"math"
+	"reflect"
+	"unsafe"
+
+	hack "vitess.io/vitess/go/hack"
+)
 
 type cachedObject interface {
 	CachedSize(alloc bool) int64
@@ -186,7 +192,7 @@ func (cached *AlterTable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(96)
 	}
 	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.Table.CachedSize(false)
@@ -203,13 +209,8 @@ func (cached *AlterTable) CachedSize(alloc bool) int64 {
 	size += cached.PartitionSpec.CachedSize(true)
 	// field PartitionOption *vitess.io/vitess/go/vt/sqlparser.PartitionOption
 	size += cached.PartitionOption.CachedSize(true)
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	return size
 }
 func (cached *AlterView) CachedSize(alloc bool) int64 {
@@ -218,7 +219,7 @@ func (cached *AlterView) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(160)
+		size += int64(144)
 	}
 	// field ViewName vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.ViewName.CachedSize(false)
@@ -241,13 +242,8 @@ func (cached *AlterView) CachedSize(alloc bool) int64 {
 	}
 	// field CheckOption string
 	size += hack.RuntimeAllocSize(int64(len(cached.CheckOption)))
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	return size
 }
 func (cached *AlterVschema) CachedSize(alloc bool) int64 {
@@ -694,15 +690,10 @@ func (cached *CreateDatabase) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(64)
 	}
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	// field DBName vitess.io/vitess/go/vt/sqlparser.TableIdent
 	size += cached.DBName.CachedSize(false)
 	// field CreateOptions []vitess.io/vitess/go/vt/sqlparser.CollateAndCharset
@@ -720,7 +711,7 @@ func (cached *CreateTable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(80)
 	}
 	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.Table.CachedSize(false)
@@ -728,13 +719,8 @@ func (cached *CreateTable) CachedSize(alloc bool) int64 {
 	size += cached.TableSpec.CachedSize(true)
 	// field OptLike *vitess.io/vitess/go/vt/sqlparser.OptLike
 	size += cached.OptLike.CachedSize(true)
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	return size
 }
 func (cached *CreateView) CachedSize(alloc bool) int64 {
@@ -743,7 +729,7 @@ func (cached *CreateView) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(160)
+		size += int64(144)
 	}
 	// field ViewName vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.ViewName.CachedSize(false)
@@ -766,13 +752,8 @@ func (cached *CreateView) CachedSize(alloc bool) int64 {
 	}
 	// field CheckOption string
 	size += hack.RuntimeAllocSize(int64(len(cached.CheckOption)))
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	return size
 }
 func (cached *CurTimeFuncExpr) CachedSize(alloc bool) int64 {
@@ -797,15 +778,10 @@ func (cached *DeallocateStmt) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(64)
 	}
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
 	size += cached.Name.CachedSize(false)
 	return size
@@ -842,17 +818,12 @@ func (cached *Delete) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(160)
+		size += int64(144)
 	}
 	// field With *vitess.io/vitess/go/vt/sqlparser.With
 	size += cached.With.CachedSize(true)
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	// field Targets vitess.io/vitess/go/vt/sqlparser.TableNames
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Targets)) * int64(32))
@@ -921,15 +892,10 @@ func (cached *DropDatabase) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(32)
 	}
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	// field DBName vitess.io/vitess/go/vt/sqlparser.TableIdent
 	size += cached.DBName.CachedSize(false)
 	return size
@@ -952,7 +918,7 @@ func (cached *DropTable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(48)
 	}
 	// field FromTables vitess.io/vitess/go/vt/sqlparser.TableNames
 	{
@@ -961,13 +927,8 @@ func (cached *DropTable) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(false)
 		}
 	}
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	return size
 }
 func (cached *DropView) CachedSize(alloc bool) int64 {
@@ -976,7 +937,7 @@ func (cached *DropView) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(48)
 	}
 	// field FromTables vitess.io/vitess/go/vt/sqlparser.TableNames
 	{
@@ -985,13 +946,8 @@ func (cached *DropView) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(false)
 		}
 	}
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	return size
 }
 func (cached *ExecuteStmt) CachedSize(alloc bool) int64 {
@@ -1000,17 +956,12 @@ func (cached *ExecuteStmt) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(80)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
 	size += cached.Name.CachedSize(false)
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	// field Arguments vitess.io/vitess/go/vt/sqlparser.Columns
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Arguments)) * int64(40))
@@ -1295,15 +1246,10 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(160)
+		size += int64(144)
 	}
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.Table.CachedSize(false)
 	// field Partitions vitess.io/vitess/go/vt/sqlparser.Partitions
@@ -1854,6 +1800,40 @@ func (cached *ParenTableExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
+//go:nocheckptr
+func (cached *ParsedComments) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field comments vitess.io/vitess/go/vt/sqlparser.Comments
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.comments)) * int64(16))
+		for _, elem := range cached.comments {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
+	// field _directives vitess.io/vitess/go/vt/sqlparser.CommentDirectives
+	if cached._directives != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached._directives)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached._directives) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached._directives {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
+	return size
+}
 func (cached *ParsedQuery) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1967,7 +1947,7 @@ func (cached *PrepareStmt) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(64)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
 	size += cached.Name.CachedSize(false)
@@ -1975,13 +1955,8 @@ func (cached *PrepareStmt) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Statement.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	return size
 }
 func (cached *ReferenceDefinition) CachedSize(alloc bool) int64 {
@@ -2078,17 +2053,12 @@ func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(24)
 	}
 	// field UUID string
 	size += hack.RuntimeAllocSize(int64(len(cached.UUID)))
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	return size
 }
 func (cached *RootNode) CachedSize(alloc bool) int64 {
@@ -2135,7 +2105,7 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(192)
+		size += int64(176)
 	}
 	// field Cache *bool
 	size += hack.RuntimeAllocSize(int64(1))
@@ -2148,13 +2118,8 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	// field SelectExprs vitess.io/vitess/go/vt/sqlparser.SelectExprs
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.SelectExprs)) * int64(16))
@@ -2220,15 +2185,10 @@ func (cached *Set) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(32)
 	}
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	// field Exprs vitess.io/vitess/go/vt/sqlparser.SetExprs
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Exprs)) * int64(8))
@@ -2260,19 +2220,14 @@ func (cached *SetTransaction) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(64)
 	}
 	// field SQLNode vitess.io/vitess/go/vt/sqlparser.SQLNode
 	if cc, ok := cached.SQLNode.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	// field Characteristics []vitess.io/vitess/go/vt/sqlparser.Characteristic
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Characteristics)) * int64(16))
@@ -2372,17 +2327,12 @@ func (cached *ShowMigrationLogs) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(24)
 	}
 	// field UUID string
 	size += hack.RuntimeAllocSize(int64(len(cached.UUID)))
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	return size
 }
 func (cached *ShowTablesOpt) CachedSize(alloc bool) int64 {
@@ -2419,15 +2369,10 @@ func (cached *Stream) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(64)
 	}
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	// field SelectExpr vitess.io/vitess/go/vt/sqlparser.SelectExpr
 	if cc, ok := cached.SelectExpr.(cachedObject); ok {
 		size += cc.CachedSize(true)
@@ -2709,17 +2654,12 @@ func (cached *Update) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(128)
+		size += int64(112)
 	}
 	// field With *vitess.io/vitess/go/vt/sqlparser.With
 	size += cached.With.CachedSize(true)
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	// field TableExprs vitess.io/vitess/go/vt/sqlparser.TableExprs
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.TableExprs)) * int64(16))
@@ -2783,15 +2723,10 @@ func (cached *VStream) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(80)
 	}
-	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
-		for _, elem := range cached.Comments {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	// field SelectExpr vitess.io/vitess/go/vt/sqlparser.SelectExpr
 	if cc, ok := cached.SelectExpr.(cachedObject); ok {
 		size += cc.CachedSize(true)

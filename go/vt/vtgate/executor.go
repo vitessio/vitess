@@ -1184,7 +1184,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, show *sqlpar
 			replLastError := ""
 			replLag := int64(-1)
 			sql := "show slave status"
-			results, err := e.txConn.gateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
+			results, err := e.txConn.tabletGateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
 			if err != nil || results == nil {
 				log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
 			} else if row := results.Named().Row(); row != nil {

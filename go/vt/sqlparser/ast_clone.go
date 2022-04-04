@@ -85,8 +85,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfColumnType(in)
 	case Columns:
 		return CloneColumns(in)
-	case Comments:
-		return CloneComments(in)
 	case *Commit:
 		return CloneRefOfCommit(in)
 	case *CommonTableExpr:
@@ -241,6 +239,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfOtherRead(in)
 	case *ParenTableExpr:
 		return CloneRefOfParenTableExpr(in)
+	case *ParsedComments:
+		return CloneRefOfParsedComments(in)
 	case *PartitionDefinition:
 		return CloneRefOfPartitionDefinition(in)
 	case *PartitionOption:
@@ -481,7 +481,7 @@ func CloneRefOfAlterTable(n *AlterTable) *AlterTable {
 	out.AlterOptions = CloneSliceOfAlterOption(n.AlterOptions)
 	out.PartitionSpec = CloneRefOfPartitionSpec(n.PartitionSpec)
 	out.PartitionOption = CloneRefOfPartitionOption(n.PartitionOption)
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }
 
@@ -495,7 +495,7 @@ func CloneRefOfAlterView(n *AlterView) *AlterView {
 	out.Definer = CloneRefOfDefiner(n.Definer)
 	out.Columns = CloneColumns(n.Columns)
 	out.Select = CloneSelectStatement(n.Select)
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }
 
@@ -667,18 +667,6 @@ func CloneColumns(n Columns) Columns {
 	return res
 }
 
-// CloneComments creates a deep clone of the input.
-func CloneComments(n Comments) Comments {
-	if n == nil {
-		return nil
-	}
-	res := make(Comments, 0, len(n))
-	for _, x := range n {
-		res = append(res, x)
-	}
-	return res
-}
-
 // CloneRefOfCommit creates a deep clone of the input.
 func CloneRefOfCommit(n *Commit) *Commit {
 	if n == nil {
@@ -761,7 +749,7 @@ func CloneRefOfCreateDatabase(n *CreateDatabase) *CreateDatabase {
 		return nil
 	}
 	out := *n
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.DBName = CloneTableIdent(n.DBName)
 	out.CreateOptions = CloneSliceOfCollateAndCharset(n.CreateOptions)
 	return &out
@@ -776,7 +764,7 @@ func CloneRefOfCreateTable(n *CreateTable) *CreateTable {
 	out.Table = CloneTableName(n.Table)
 	out.TableSpec = CloneRefOfTableSpec(n.TableSpec)
 	out.OptLike = CloneRefOfOptLike(n.OptLike)
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }
 
@@ -790,7 +778,7 @@ func CloneRefOfCreateView(n *CreateView) *CreateView {
 	out.Definer = CloneRefOfDefiner(n.Definer)
 	out.Columns = CloneColumns(n.Columns)
 	out.Select = CloneSelectStatement(n.Select)
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }
 
@@ -811,7 +799,7 @@ func CloneRefOfDeallocateStmt(n *DeallocateStmt) *DeallocateStmt {
 		return nil
 	}
 	out := *n
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.Name = CloneColIdent(n.Name)
 	return &out
 }
@@ -841,7 +829,7 @@ func CloneRefOfDelete(n *Delete) *Delete {
 	}
 	out := *n
 	out.With = CloneRefOfWith(n.With)
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.Targets = CloneTableNames(n.Targets)
 	out.TableExprs = CloneTableExprs(n.TableExprs)
 	out.Partitions = ClonePartitions(n.Partitions)
@@ -877,7 +865,7 @@ func CloneRefOfDropDatabase(n *DropDatabase) *DropDatabase {
 		return nil
 	}
 	out := *n
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.DBName = CloneTableIdent(n.DBName)
 	return &out
 }
@@ -899,7 +887,7 @@ func CloneRefOfDropTable(n *DropTable) *DropTable {
 	}
 	out := *n
 	out.FromTables = CloneTableNames(n.FromTables)
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }
 
@@ -910,7 +898,7 @@ func CloneRefOfDropView(n *DropView) *DropView {
 	}
 	out := *n
 	out.FromTables = CloneTableNames(n.FromTables)
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }
 
@@ -921,7 +909,7 @@ func CloneRefOfExecuteStmt(n *ExecuteStmt) *ExecuteStmt {
 	}
 	out := *n
 	out.Name = CloneColIdent(n.Name)
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.Arguments = CloneColumns(n.Arguments)
 	return &out
 }
@@ -1110,7 +1098,7 @@ func CloneRefOfInsert(n *Insert) *Insert {
 		return nil
 	}
 	out := *n
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.Table = CloneTableName(n.Table)
 	out.Partitions = ClonePartitions(n.Partitions)
 	out.Columns = CloneColumns(n.Columns)
@@ -1473,6 +1461,16 @@ func CloneRefOfParenTableExpr(n *ParenTableExpr) *ParenTableExpr {
 	return &out
 }
 
+// CloneRefOfParsedComments creates a deep clone of the input.
+func CloneRefOfParsedComments(n *ParsedComments) *ParsedComments {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.comments = CloneComments(n.comments)
+	return &out
+}
+
 // CloneRefOfPartitionDefinition creates a deep clone of the input.
 func CloneRefOfPartitionDefinition(n *PartitionDefinition) *PartitionDefinition {
 	if n == nil {
@@ -1540,7 +1538,7 @@ func CloneRefOfPrepareStmt(n *PrepareStmt) *PrepareStmt {
 	out := *n
 	out.Name = CloneColIdent(n.Name)
 	out.Statement = CloneExpr(n.Statement)
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }
 
@@ -1602,7 +1600,7 @@ func CloneRefOfRevertMigration(n *RevertMigration) *RevertMigration {
 		return nil
 	}
 	out := *n
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }
 
@@ -1648,7 +1646,7 @@ func CloneRefOfSelect(n *Select) *Select {
 	out := *n
 	out.Cache = CloneRefOfBool(n.Cache)
 	out.From = CloneSliceOfTableExpr(n.From)
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.SelectExprs = CloneSelectExprs(n.SelectExprs)
 	out.Where = CloneRefOfWhere(n.Where)
 	out.With = CloneRefOfWith(n.With)
@@ -1687,7 +1685,7 @@ func CloneRefOfSet(n *Set) *Set {
 		return nil
 	}
 	out := *n
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.Exprs = CloneSetExprs(n.Exprs)
 	return &out
 }
@@ -1722,7 +1720,7 @@ func CloneRefOfSetTransaction(n *SetTransaction) *SetTransaction {
 	}
 	out := *n
 	out.SQLNode = CloneSQLNode(n.SQLNode)
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.Characteristics = CloneSliceOfCharacteristic(n.Characteristics)
 	return &out
 }
@@ -1788,7 +1786,7 @@ func CloneRefOfShowMigrationLogs(n *ShowMigrationLogs) *ShowMigrationLogs {
 		return nil
 	}
 	out := *n
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }
 
@@ -1808,7 +1806,7 @@ func CloneRefOfStream(n *Stream) *Stream {
 		return nil
 	}
 	out := *n
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.SelectExpr = CloneSelectExpr(n.SelectExpr)
 	out.Table = CloneTableName(n.Table)
 	return &out
@@ -1989,7 +1987,7 @@ func CloneRefOfUpdate(n *Update) *Update {
 	}
 	out := *n
 	out.With = CloneRefOfWith(n.With)
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.TableExprs = CloneTableExprs(n.TableExprs)
 	out.Exprs = CloneUpdateExprs(n.Exprs)
 	out.Where = CloneRefOfWhere(n.Where)
@@ -2037,7 +2035,7 @@ func CloneRefOfVStream(n *VStream) *VStream {
 		return nil
 	}
 	out := *n
-	out.Comments = CloneComments(n.Comments)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.SelectExpr = CloneSelectExpr(n.SelectExpr)
 	out.Table = CloneTableName(n.Table)
 	out.Where = CloneRefOfWhere(n.Where)
@@ -2873,6 +2871,18 @@ func CloneTableAndLockTypes(n TableAndLockTypes) TableAndLockTypes {
 	res := make(TableAndLockTypes, 0, len(n))
 	for _, x := range n {
 		res = append(res, CloneRefOfTableAndLockType(x))
+	}
+	return res
+}
+
+// CloneComments creates a deep clone of the input.
+func CloneComments(n Comments) Comments {
+	if n == nil {
+		return nil
+	}
+	res := make(Comments, 0, len(n))
+	for _, x := range n {
+		res = append(res, x)
 	}
 	return res
 }

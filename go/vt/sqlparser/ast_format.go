@@ -927,8 +927,11 @@ func (node *OtherAdmin) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node Comments) Format(buf *TrackedBuffer) {
-	for _, c := range node {
+func (node *ParsedComments) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	for _, c := range node.comments {
 		buf.astPrintf(node, "%s ", c)
 	}
 }
