@@ -2550,7 +2550,7 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 	require.EqualError(t, err, "could not find vindex column c1")
 }
 
-func TestStripFKConstraints(t *testing.T) {
+func TestStripForeignKeys(t *testing.T) {
 	tcs := []struct {
 		desc string
 		ddl  string
@@ -2604,7 +2604,7 @@ func TestStripFKConstraints(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		newDDL, err := stripTableFKConstraints(tc.ddl)
+		newDDL, err := stripTableForeignKeys(tc.ddl)
 		if tc.hasErr != (err != nil) {
 			t.Fatalf("hasErr does not match: err: %v, tc: %+v", err, tc)
 		}

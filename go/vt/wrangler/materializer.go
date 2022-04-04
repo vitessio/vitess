@@ -63,9 +63,9 @@ type materializer struct {
 }
 
 const (
-	createDDLAsCopy                 = "copy"
-	createDDLAsCopyDropConstraint   = "copy:drop_constraint"
-	createDDLAsCopyDropFKConstraint = "copy:drop_fk_constraint"
+	createDDLAsCopy                = "copy"
+	createDDLAsCopyDropConstraint  = "copy:drop_constraint"
+	createDDLAsCopyDropForeignKeys = "copy:drop_foreign_keys"
 )
 
 // addTablesToVSchema adds tables to an (unsharded) vschema. Depending on copyAttributes It will also add any sequence info
@@ -119,7 +119,7 @@ func shouldInclude(table string, excludes []string) bool {
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
-	externalCluster string, dropFKConstraints bool) error {
+	externalCluster string, dropForeignKeys bool) error {
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
@@ -246,8 +246,8 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	}
 
 	createDDLMode := createDDLAsCopy
-	if dropFKConstraints {
-		createDDLMode = createDDLAsCopyDropFKConstraint
+	if dropForeignKeys {
+		createDDLMode = createDDLAsCopyDropForeignKeys
 	}
 
 	for _, table := range tables {
@@ -1015,7 +1015,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			}
 
 			createDDL := ts.CreateDdl
-			if createDDL == createDDLAsCopy || createDDL == createDDLAsCopyDropConstraint || createDDL == createDDLAsCopyDropFKConstraint {
+			if createDDL == createDDLAsCopy || createDDL == createDDLAsCopyDropConstraint || createDDL == createDDLAsCopyDropForeignKeys {
 				if ts.SourceExpression != "" {
 					// Check for table if non-empty SourceExpression.
 					sourceTableName, err := sqlparser.TableFromStatement(ts.SourceExpression)
@@ -1042,8 +1042,8 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 					ddl = strippedDDL
 				}
 
-				if createDDL == createDDLAsCopyDropFKConstraint {
-					strippedDDL, err := stripTableFKConstraints(ddl)
+				if createDDL == createDDLAsCopyDropForeignKeys {
+					strippedDDL, err := stripTableForeignKeys(ddl)
 					if err != nil {
 						return err
 					}
@@ -1074,7 +1074,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 	})
 }
 
-func stripTableFKConstraints(ddl string) (string, error) {
+func stripTableForeignKeys(ddl string) (string, error) {
 
 	ast, err := sqlparser.ParseStrictDDL(ddl)
 	if err != nil {
@@ -1085,7 +1085,7 @@ func stripTableFKConstraints(ddl string) (string, error) {
 		switch node := cursor.Node().(type) {
 		case sqlparser.DDLStatement:
 			if node.GetTableSpec() != nil {
-				noFKConstraints := make([]*sqlparser.ConstraintDefinition, 0, len(node.GetTableSpec().Constraints))
+				var noFKConstraints []*sqlparser.ConstraintDefinition
 				for _, constraint := range node.GetTableSpec().Constraints {
 					if constraint.Details != nil {
 						if _, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition); !ok {
