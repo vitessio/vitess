@@ -1591,8 +1591,8 @@ func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeF
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfLiteral(node, node.Fsp, func(newNode, parent SQLNode) {
-		parent.(*CurTimeFuncExpr).Fsp = newNode.(*Literal)
+	if !a.rewriteExpr(node, node.Fsp, func(newNode, parent SQLNode) {
+		parent.(*CurTimeFuncExpr).Fsp = newNode.(Expr)
 	}) {
 		return false
 	}

@@ -37,9 +37,10 @@ import (
 
 var (
 	validSQL = []struct {
-		input      string
-		output     string
-		partialDDL bool
+		input                string
+		output               string
+		partialDDL           bool
+		ignoreNormalizerTest bool
 	}{{
 		input:      "create table x(location GEOMETRYCOLLECTION DEFAULT POINT(7.0, 3.0))",
 		output:     "create table x",
@@ -185,6 +186,9 @@ var (
 		input: "select n, d from something",
 	}, {
 		input: "insert into sys_message_assign(message_id, assign_user_id, read_state, id, is_delete, create_time, update_time, remark) values (N'3477028275831808', N'4104487936', N'1', N'0', N'0', '2021-09-22 14:24:17.922', '2021-09-22 14:24:17.922', null), (N'3477028275831808', N'3454139190608923', N'1', N'0', N'0', '2021-09-22 14:24:17.922', '2021-09-22 14:24:17.922', null)",
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
 	}, {
 		input:  "select name, numbers from (select * from users) as x(name, numbers)",
 		output: "select `name`, numbers from (select * from users) as x(`name`, numbers)",
@@ -1426,72 +1430,130 @@ var (
 		input:  "create table t (pur date) partition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2 (partition p0 values less than (2015), partition p2 values less than (2018))",
 		output: "create table t (\n\tpur date\n) partition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2 (partition p0 values less than (2015), partition p2 values less than (2018))",
 	}, {
-		input: "alter vschema create vindex hash_vdx using `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema create vindex hash_vdx using `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema create vindex keyspace.hash_vdx using `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema create vindex keyspace.hash_vdx using `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema drop vindex hash_vdx",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema drop vindex hash_vdx",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema drop vindex ks.hash_vdx",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema drop vindex ks.hash_vdx",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema add table a",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema add table a",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema add table ks.a",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema add table ks.a",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema add sequence a_seq",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema add sequence a_seq",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema add sequence ks.a_seq",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema add sequence ks.a_seq",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on a add auto_increment id using a_seq",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add auto_increment id using a_seq",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on ks.a add auto_increment id using a_seq",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on ks.a add auto_increment id using a_seq",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema drop table a",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema drop table a",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema drop table ks.a",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema drop table ks.a",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on a add vindex `hash` (id)",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add vindex `hash` (id)",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on ks.a add vindex `hash` (id)",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on ks.a add vindex `hash` (id)",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on a add vindex `hash` (`id`)",
-		output: "alter vschema on a add vindex `hash` (id)",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add vindex `hash` (`id`)",
+		output:               "alter vschema on a add vindex `hash` (id)",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on `ks`.a add vindex `hash` (`id`)",
-		output: "alter vschema on ks.a add vindex `hash` (id)",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on `ks`.a add vindex `hash` (`id`)",
+		output:               "alter vschema on ks.a add vindex `hash` (id)",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on a add vindex hash (id) using `hash`",
-		output: "alter vschema on a add vindex `hash` (id) using `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add vindex hash (id) using `hash`",
+		output:               "alter vschema on a add vindex `hash` (id) using `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on a add vindex `add` (`add`)",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add vindex `add` (`add`)",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on a add vindex `hash` (id) using `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add vindex `hash` (id) using `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on a add vindex hash (id) using `hash`",
-		output: "alter vschema on a add vindex `hash` (id) using `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add vindex hash (id) using `hash`",
+		output:               "alter vschema on a add vindex `hash` (id) using `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
-		output: "alter vschema on `user` add vindex name_lookup_vdx (`name`) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+		output:               "alter vschema on `user` add vindex name_lookup_vdx (`name`) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
-		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (`name`, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
+		output:               "alter vschema on user2 add vindex name_lastname_lookup_vdx (`name`, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on a drop vindex `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a drop vindex `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on ks.a drop vindex `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on ks.a drop vindex `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on a drop vindex `hash`",
-		output: "alter vschema on a drop vindex `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a drop vindex `hash`",
+		output:               "alter vschema on a drop vindex `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on a drop vindex hash",
-		output: "alter vschema on a drop vindex `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a drop vindex hash",
+		output:               "alter vschema on a drop vindex `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on a drop vindex `add`",
-		output: "alter vschema on a drop vindex `add`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a drop vindex `add`",
+		output:               "alter vschema on a drop vindex `add`",
+		ignoreNormalizerTest: true,
 	}, {
 		input:  "create index a on b (col1)",
 		output: "alter table b add index a (col1)",
