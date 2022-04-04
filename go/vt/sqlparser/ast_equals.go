@@ -1470,7 +1470,7 @@ func EqualsRefOfCurTimeFuncExpr(a, b *CurTimeFuncExpr) bool {
 		return false
 	}
 	return EqualsColIdent(a.Name, b.Name) &&
-		EqualsRefOfLiteral(a.Fsp, b.Fsp)
+		EqualsExpr(a.Fsp, b.Fsp)
 }
 
 // EqualsRefOfDefault does deep equals between the two objects.

@@ -760,12 +760,14 @@ func (cached *CurTimeFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
 	size += cached.Name.CachedSize(false)
-	// field Fsp *vitess.io/vitess/go/vt/sqlparser.Literal
-	size += cached.Fsp.CachedSize(true)
+	// field Fsp vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Fsp.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *Default) CachedSize(alloc bool) int64 {

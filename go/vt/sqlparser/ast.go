@@ -2024,7 +2024,7 @@ type (
 	// supported functions are documented in the grammar
 	CurTimeFuncExpr struct {
 		Name ColIdent
-		Fsp  *Literal // fractional seconds precision, integer from 0 to 6
+		Fsp  Expr // fractional seconds precision, integer from 0 to 6 or an Argument
 	}
 
 	// ExtractedSubquery is a subquery that has been extracted from the original AST
