@@ -724,6 +724,16 @@ func TestRenameFieldsOnOLAP(t *testing.T) {
 	assert.Equal(t, `[[VARBINARY("OLAP")]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
+func TestDescribeVindex(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	assertContainsError(t, conn, "describe hash", "'vt_ks.hash' doesn't exist")
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
@@ -732,6 +742,13 @@ func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	if diff != "" {
 		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
 	}
+}
+
+func assertContainsError(t *testing.T, conn *mysql.Conn, query, expected string) {
+	t.Helper()
+	_, err := execAllowError(t, conn, query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), expected, "actual error: %s", err.Error())
 }
 
 func assertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string) {
@@ -752,4 +769,9 @@ func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err, "for query: "+query)
 	return qr
+}
+
+func execAllowError(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
+	t.Helper()
+	return conn.ExecuteFetch(query, 1000, true)
 }
