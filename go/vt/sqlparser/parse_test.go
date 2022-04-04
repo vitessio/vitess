@@ -2327,7 +2327,7 @@ var (
 		input: "call proc(@param)",
 	}, {
 		input:  "PREPARE stmt1 FROM 'SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse'",
-		output: "prepare stmt1 from SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse",
+		output: "prepare stmt1 from 'SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse'",
 	}, {
 		input:  "PREPARE stmt2 FROM @s",
 		output: "prepare stmt2 from @s",
