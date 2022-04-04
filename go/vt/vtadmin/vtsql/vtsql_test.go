@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql/fakevtsql"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -108,14 +109,6 @@ func TestDial(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name:  "discovery error",
-			disco: fakediscovery.New(),
-			proxy: &VTGateProxy{
-				cluster: &vtadminpb.Cluster{},
-			},
-			shouldErr: true,
-		},
-		{
 			name:  "dialer error",
 			disco: fakediscovery.New(),
 			gates: []*vtadminpb.VTGate{
@@ -124,7 +117,7 @@ func TestDial(t *testing.T) {
 				},
 			},
 			proxy: &VTGateProxy{
-				cluster: &vtadminpb.Cluster{},
+				cluster: &vtadminpb.Cluster{Id: "test"},
 				DialFunc: func(cfg vitessdriver.Configuration) (*sql.DB, error) {
 					return nil, assert.AnError
 				},
@@ -140,7 +133,7 @@ func TestDial(t *testing.T) {
 				},
 			},
 			proxy: &VTGateProxy{
-				cluster: &vtadminpb.Cluster{},
+				cluster: &vtadminpb.Cluster{Id: "test"},
 				creds: &StaticAuthCredentials{
 					StaticAuthClientCreds: &grpcclient.StaticAuthClientCreds{
 						Username: "user",
@@ -166,9 +159,12 @@ func TestDial(t *testing.T) {
 				if len(tt.gates) > 0 {
 					tt.disco.AddTaggedGates(nil, tt.gates...)
 				}
-
-				tt.proxy.discovery = tt.disco
 			}
+
+			tt.proxy.resolver = (&resolver.Options{
+				Discovery:        tt.disco,
+				DiscoveryTimeout: 50 * time.Millisecond,
+			}).NewBuilder(tt.proxy.cluster.Id)
 
 			err := tt.proxy.Dial(ctx, "")
 			if tt.shouldErr {

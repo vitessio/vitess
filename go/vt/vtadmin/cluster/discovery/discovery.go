@@ -53,6 +53,10 @@ type Discovery interface {
 	// return an address is not specified by the interface, and can be
 	// implementation-specific.
 	DiscoverVTGateAddr(ctx context.Context, tags []string) (string, error)
+	// DiscoverVTGateAddrs returns a list of addresses of vtgates found in the
+	// discovery service. This is semantically equivalent to the result of
+	// DiscoverVTGateAddr for each gate returned by a call to DiscoverVTGates.
+	DiscoverVTGateAddrs(ctx context.Context, tags []string) ([]string, error)
 	// DiscoverVTGates returns a list of vtgates found in the discovery service.
 	// Tags can optionally be used to filter gates. Order of the gates is not
 	// specified by the interface, and can be implementation-specific.
@@ -68,6 +72,10 @@ type Discovery interface {
 	// return an address is not specified by the interface, and can be
 	// implementation-specific.
 	DiscoverVtctldAddr(ctx context.Context, tags []string) (string, error)
+	// DiscoverVtctldAddrs returns a list of addresses of vtctlds found in the
+	// discovery service. This is semantically equivalent to the result of
+	// DiscoverVtctldAddr for each gate returned by a call to DiscoverVtctlds.
+	DiscoverVtctldAddrs(ctx context.Context, tags []string) ([]string, error)
 	// DiscoverVtctlds returns a list of vtctlds found in the discovery service.
 	// Tags can optionally be used to filter vtctlds. Order of the vtctlds is
 	// not specified by the interface, and can be implementation-specific.
