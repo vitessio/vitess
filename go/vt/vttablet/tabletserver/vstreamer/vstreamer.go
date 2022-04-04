@@ -41,6 +41,12 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+const (
+	trxHistoryLenQuery = `select count as history_len from information_schema.INNODB_METRICS where name = 'trx_rseg_history_len'`
+	replicaLagQuery    = `show slave status`
+	hostQuery          = `select @@hostname as hostname, @@port as port`
+)
+
 // HeartbeatTime is set to slightly below 1s, compared to idleTimeout
 // set by VPlayer at slightly above 1s. This minimizes conflicts
 // between the two timeouts.

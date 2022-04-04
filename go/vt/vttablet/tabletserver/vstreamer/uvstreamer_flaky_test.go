@@ -316,6 +316,7 @@ func resetMetrics(t *testing.T) {
 	engine.resultStreamerNumRows.Reset()
 	engine.rowStreamerNumRows.Reset()
 	engine.vstreamerPhaseTimings.Reset()
+	engine.rowStreamerWaits.Reset()
 }
 
 func validateMetrics(t *testing.T) {
@@ -325,6 +326,7 @@ func validateMetrics(t *testing.T) {
 	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest.copy"], int64(3))
 	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest.catchup"], int64(2))
 	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest.fastforward"], int64(2))
+	require.Equal(t, engine.rowStreamerWaits.Counts()["VStreamerTest.waitForMySQL"], int64(0))
 }
 
 func insertMultipleRows(t *testing.T, table string, idx int, numRows int) {
