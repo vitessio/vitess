@@ -370,7 +370,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> select_option algorithm_view security_view security_view_opt
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
-%type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr simple_expr literal NUM_literal text_literal bool_pri literal_or_null now predicate tuple_expression
+%type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression
 %type <tableExprs> from_opt table_references from_clause
 %type <tableExpr> table_reference table_factor join_table json_table_function
 %type <jtColumnDefinition> jt_column
@@ -441,7 +441,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <convertType> convert_type convert_type_weight_string
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <literal> length_opt func_datetime_precision
+%type <literal> length_opt
+%type <expr> func_datetime_precision
 %type <str> charset_opt collate_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolean> unsigned_opt zero_fill_opt without_valid_opt
@@ -1667,6 +1668,25 @@ STRING
    {
    	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewStrLiteral($2)}
    }
+
+text_literal_or_arg:
+STRING
+  {
+    $$ = NewStrLiteral($1)
+  }
+| NCHAR_STRING
+  {
+    $$ = &UnaryExpr{Operator: NStringOp, Expr: NewStrLiteral($1)}
+  }
+| underscore_charsets STRING %prec UNARY
+  {
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewStrLiteral($2)}
+  }
+| VALUE_ARG
+  {
+    $$ = NewArgument($1[1:])
+    bindVariable(yylex, $1[1:])
+  }
 
 keys:
   PRIMARY KEY
@@ -2921,7 +2941,7 @@ algorithm_opt:
   }
 
 json_table_function:
-  JSON_TABLE openb expression ',' text_literal jt_columns_clause closeb as_opt_id
+  JSON_TABLE openb expression ',' text_literal_or_arg jt_columns_clause closeb as_opt_id
   {
     $$ = &JSONTableExpr{Expr: $3, Filter: $5, Columns: $6, Alias: $8}
   }
@@ -2947,31 +2967,31 @@ jt_column:
   {
     $$ = &JtColumnDefinition{JtOrdinal: &JtOrdinalColDef{Name: $1}}
   }
-| sql_id column_type collate_opt jt_exists_opt PATH text_literal
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal_or_arg
   {
     $2.Options= &ColumnTypeOptions{Collate:$3}
     jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6}
     $$ = &JtColumnDefinition{JtPath: jtPath}
   }
-| sql_id column_type collate_opt jt_exists_opt PATH text_literal on_empty
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal_or_arg on_empty
   {
     $2.Options= &ColumnTypeOptions{Collate:$3}
     jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6, EmptyOnResponse: $7}
     $$ = &JtColumnDefinition{JtPath: jtPath}
   }
-| sql_id column_type collate_opt jt_exists_opt PATH text_literal on_error
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal_or_arg on_error
   {
     $2.Options= &ColumnTypeOptions{Collate:$3}
     jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6, ErrorOnResponse: $7}
     $$ = &JtColumnDefinition{JtPath: jtPath}
   }
-| sql_id column_type collate_opt jt_exists_opt PATH text_literal on_empty on_error
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal_or_arg on_empty on_error
   {
     $2.Options= &ColumnTypeOptions{Collate:$3}
     jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6, EmptyOnResponse: $7, ErrorOnResponse: $8}
     $$ = &JtColumnDefinition{JtPath: jtPath}
   }
-| NESTED jt_path_opt text_literal jt_columns_clause
+| NESTED jt_path_opt text_literal_or_arg jt_columns_clause
   {
     jtNestedPath := &JtNestedPathColDef{Path: $3, Columns: $4}
     $$ = &JtColumnDefinition{JtNestedPath: jtNestedPath}
@@ -3936,13 +3956,19 @@ distinct_opt:
   }
 
 prepare_statement:
-  PREPARE comment_opt sql_id FROM STRING
+  PREPARE comment_opt sql_id FROM text_literal_or_arg
   {
     $$ = &PrepareStmt{Name:$3, Comments: Comments($2).Parsed(), Statement:$5}
   }
 | PREPARE comment_opt sql_id FROM AT_ID
   {
-    $$ = &PrepareStmt{Name:$3, Comments: Comments($2).Parsed(), StatementIdentifier: NewColIdentWithAt(string($5), SingleAt)}
+    $$ = &PrepareStmt{
+    	Name:$3,
+    	Comments: Comments($2).Parsed(),
+    	Statement: &ColName{
+    		Name: NewColIdentWithAt(string($5), SingleAt),
+    	},
+    }
   }
 
 execute_statement:
@@ -4651,13 +4677,13 @@ function_call_keyword
 	// will be non-trivial because of grammar conflicts.
 	$$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
   }
-| column_name JSON_EXTRACT_OP STRING
+| column_name JSON_EXTRACT_OP text_literal_or_arg
   {
-	$$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: NewStrLiteral($3)}
+	$$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
   }
-| column_name JSON_UNQUOTE_EXTRACT_OP STRING
+| column_name JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
   {
-	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: NewStrLiteral($3)}
+	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
   }
 
 trim_type:
@@ -5034,6 +5060,11 @@ func_datetime_precision:
 | openb INTEGRAL closeb
   {
   	$$ = NewIntLiteral($2)
+  }
+| openb VALUE_ARG closeb
+  {
+    $$ = NewArgument($2[1:])
+    bindVariable(yylex, $2[1:])
   }
 
 /*
