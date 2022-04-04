@@ -25,12 +25,13 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	grpcresolver "google.golang.org/grpc/resolver"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vitessdriver"
-	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 
@@ -64,20 +65,18 @@ type DB interface {
 // VTGateProxy is a proxy for creating and using database connections to vtgates
 // in a Vitess cluster.
 type VTGateProxy struct {
-	cluster       *vtadminpb.Cluster
-	discovery     discovery.Discovery
-	discoveryTags []string
-	creds         Credentials
-	cfg           *Config
+	cluster *vtadminpb.Cluster
+	creds   Credentials
+	cfg     *Config
 
 	// DialFunc is called to open a new database connection. In production this
 	// should always be vitessdriver.OpenWithConfiguration, but it is exported
 	// for testing purposes.
 	DialFunc        func(cfg vitessdriver.Configuration) (*sql.DB, error)
+	resolver        grpcresolver.Builder
 	dialPingTimeout time.Duration
 
 	m        sync.Mutex
-	host     string
 	conn     *sql.DB
 	dialedAt time.Time
 	lastPing time.Time
@@ -96,19 +95,13 @@ var ErrConnClosed = errors.New("use of closed connection")
 // It does not open a connection to a vtgate; users must call Dial before first
 // use.
 func New(cfg *Config) *VTGateProxy {
-	discoveryTags := cfg.DiscoveryTags
-	if discoveryTags == nil {
-		discoveryTags = []string{}
-	}
-
 	return &VTGateProxy{
 		cluster:         cfg.Cluster,
-		discovery:       cfg.Discovery,
-		discoveryTags:   discoveryTags,
 		creds:           cfg.Credentials,
 		cfg:             cfg,
 		DialFunc:        vitessdriver.OpenWithConfiguration,
 		dialPingTimeout: cfg.DialPingTimeout,
+		resolver:        cfg.ResolverOptions.NewBuilder(cfg.Cluster.Id),
 	}
 }
 
@@ -137,7 +130,7 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 	span, _ := trace.NewSpan(ctx, "VTGateProxy.Dial")
 	defer span.Finish()
 
-	vtgate.annotateSpan(span)
+	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
 
 	vtgate.m.Lock()
 	defer vtgate.m.Unlock()
@@ -149,41 +142,28 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 		err := vtgate.PingContext(ctx)
 		switch err {
 		case nil:
-			log.Infof("Have valid connection to %s, reusing it.", vtgate.host)
+			log.Info("Have valid connection to vtgate, reusing it.")
 			span.Annotate("is_noop", true)
 
 			vtgate.lastPing = time.Now()
 
 			return nil
 		default:
-			log.Warningf("Ping failed on host %s: %s; Rediscovering a vtgate to get new connection", vtgate.host, err)
+			log.Warningf("Ping failed on vtgate: %s; Rediscovering a vtgate to get new connection", err)
 
 			if err := vtgate.closeLocked(); err != nil {
-				log.Warningf("Error when closing connection to vtgate %s: %s; Continuing anyway ...", vtgate.host, err)
+				log.Warningf("Error when closing connection to vtgate: %s; Continuing anyway ...", err)
 			}
 		}
 	}
 
 	span.Annotate("is_noop", false)
 
-	if vtgate.host == "" {
-		gate, err := vtgate.discovery.DiscoverVTGateAddr(ctx, vtgate.discoveryTags)
-		if err != nil {
-			return fmt.Errorf("error discovering vtgate to dial: %w", err)
-		}
-
-		vtgate.host = gate
-		// re-annotate the hostname
-		span.Annotate("vtgate_host", gate)
-	}
-
-	log.Infof("Dialing %s ...", vtgate.host)
-
 	conf := vitessdriver.Configuration{
 		Protocol:        fmt.Sprintf("grpc_%s", vtgate.cluster.Id),
-		Address:         vtgate.host,
+		Address:         resolver.DialAddr(vtgate.resolver, "vtgate"),
 		Target:          target,
-		GRPCDialOptions: append(opts, grpc.WithInsecure()),
+		GRPCDialOptions: append(opts, grpc.WithInsecure(), grpc.WithResolvers(vtgate.resolver)),
 	}
 
 	if vtgate.creds != nil {
@@ -194,7 +174,7 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 
 	db, err := vtgate.DialFunc(conf)
 	if err != nil {
-		return fmt.Errorf("error dialing vtgate %s: %w", vtgate.host, err)
+		return fmt.Errorf("error dialing vtgate: %w", err)
 	}
 
 	vtgate.conn = db
@@ -208,7 +188,7 @@ func (vtgate *VTGateProxy) ShowTablets(ctx context.Context) (*sql.Rows, error) {
 	span, ctx := trace.NewSpan(ctx, "VTGateProxy.ShowTablets")
 	defer span.Finish()
 
-	vtgate.annotateSpan(span)
+	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
 
 	if vtgate.conn == nil {
 		return nil, ErrConnClosed
@@ -227,7 +207,7 @@ func (vtgate *VTGateProxy) PingContext(ctx context.Context) error {
 	span, ctx := trace.NewSpan(ctx, "VTGateProxy.PingContext")
 	defer span.Finish()
 
-	vtgate.annotateSpan(span)
+	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
 
 	return vtgate.pingContext(ctx)
 }
@@ -254,8 +234,6 @@ func (vtgate *VTGateProxy) closeLocked() error {
 	}
 
 	err := vtgate.conn.Close()
-
-	vtgate.host = ""
 	vtgate.conn = nil
 
 	return err
@@ -267,7 +245,6 @@ func (vtgate *VTGateProxy) Debug() map[string]any {
 	defer vtgate.m.Unlock()
 
 	m := map[string]any{
-		"host":         vtgate.host,
 		"is_connected": (vtgate.conn != nil),
 	}
 
@@ -290,13 +267,9 @@ func (vtgate *VTGateProxy) Debug() map[string]any {
 		m["credentials"] = cmap
 	}
 
-	return m
-}
-
-func (vtgate *VTGateProxy) annotateSpan(span trace.Span) {
-	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
-
-	if vtgate.host != "" {
-		span.Annotate("vtgate_host", vtgate.host)
+	if dr, ok := vtgate.resolver.(debug.Debuggable); ok {
+		m["resolver"] = dr.Debug()
 	}
+
+	return m
 }

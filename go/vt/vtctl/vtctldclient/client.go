@@ -3,7 +3,6 @@
 package vtctldclient
 
 import (
-	"context"
 	"fmt"
 	"log"
 
@@ -15,10 +14,6 @@ type VtctldClient interface {
 
 	// Close augments the vtctlservicepb.VtctlClient interface with io.Closer.
 	Close() error
-
-	// WaitForReady waits until the connection to the vtctld is in a ready state,
-	// or until the context times out.
-	WaitForReady(ctx context.Context) error
 }
 
 // Factory is a function that creates new VtctldClients.

@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
@@ -2652,7 +2653,9 @@ func TestGetTablets(t *testing.T) {
 			Id:   "c1",
 			Name: "one",
 		},
-		Discovery: disco,
+		ResolverOptions: &resolver.Options{
+			Discovery: disco,
+		},
 	})
 	db.DialFunc = func(cfg vitessdriver.Configuration) (*sql.DB, error) {
 		return nil, assert.AnError

@@ -18,12 +18,12 @@ package vtctldclient
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/credentials"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -31,25 +31,23 @@ import (
 
 // Config represents the options that modify the behavior of a Proxy.
 type Config struct {
-	Discovery   discovery.Discovery
-	Credentials *grpcclient.StaticAuthClientCreds
-
+	Credentials     *grpcclient.StaticAuthClientCreds
 	CredentialsPath string
 
 	Cluster *vtadminpb.Cluster
 
-	ConnectivityTimeout time.Duration
+	ResolverOptions *resolver.Options
 }
-
-const defaultConnectivityTimeout = 2 * time.Second
 
 // Parse returns a new config with the given cluster and discovery, after
 // attempting to parse the command-line pflags into that Config. See
 // (*Config).Parse() for more details.
 func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string) (*Config, error) {
 	cfg := &Config{
-		Cluster:   cluster,
-		Discovery: disco,
+		Cluster: cluster,
+		ResolverOptions: &resolver.Options{
+			Discovery: disco,
+		},
 	}
 
 	err := cfg.Parse(args)
@@ -66,7 +64,11 @@ func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string)
 func (c *Config) Parse(args []string) error {
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
 
-	fs.DurationVar(&c.ConnectivityTimeout, "grpc-connectivity-timeout", defaultConnectivityTimeout, "The maximum duration to wait for a gRPC connection to be established to the vtctld.")
+	if c.ResolverOptions == nil {
+		c.ResolverOptions = &resolver.Options{}
+	}
+
+	c.ResolverOptions.InstallFlags(fs)
 
 	credentialsTmplStr := fs.String("credentials-path-tmpl", "",
 		"Go template used to specify a path to a credentials file, which is a json file containing "+
