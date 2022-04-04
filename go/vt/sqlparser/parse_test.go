@@ -2513,11 +2513,31 @@ func TestValid(t *testing.T) {
 	}
 }
 
-func TestTmp(t *testing.T) {
+func TestGeneratedColumns(t *testing.T) {
 	tests := []parseTest{
 		{
-			input:  "create table t (i int as (i + 1) stored)",
-			output: "create table t (\n\ti int, j int as (i + 1) STORED\n)",
+			input:  "create table t (i int, j int as (i + 1))",
+			output: "create table t (\n\ti int,\n\tj int generated always as (i + 1) virtual\n)",
+		},
+		{
+			input:  "create table t (i int, j int as (i + 1) virtual)",
+			output: "create table t (\n\ti int,\n\tj int generated always as (i + 1) virtual\n)",
+		},
+		{
+			input:  "create table t (i int, j int as (i + 1) stored)",
+			output: "create table t (\n\ti int,\n\tj int generated always as (i + 1) stored\n)",
+		},
+		{
+			input:  "create table t (i int, j int generated always as (i + 1))",
+			output: "create table t (\n\ti int,\n\tj int generated always as (i + 1) virtual\n)",
+		},
+		{
+			input:  "create table t (i int, j int generated always as (i + 1) virtual)",
+			output: "create table t (\n\ti int,\n\tj int generated always as (i + 1) virtual\n)",
+		},
+		{
+			input:  "create table t (i int, j int generated always as (i + 1) stored)",
+			output: "create table t (\n\ti int,\n\tj int generated always as (i + 1) stored\n)",
 		},
 	}
 	for _, tcase := range tests {

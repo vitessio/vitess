@@ -2092,6 +2092,19 @@ func (ct *ColumnType) merge(other ColumnType) error {
 		ct.Comment = other.Comment
 	}
 
+	if other.GeneratedExpr != nil {
+		// TODO: necessary?
+		// Generated expression already defined for column
+		if ct.GeneratedExpr != nil {
+			return errors.New("cannot defined GENERATED expression more than once")
+		}
+		ct.GeneratedExpr = other.GeneratedExpr
+	}
+
+	if other.Stored {
+		ct.Stored = true
+	}
+
 	return nil
 }
 
@@ -2157,7 +2170,7 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		opts = append(opts, keywordStrings[FULLTEXT])
 	}
 	if ct.GeneratedExpr != nil {
-		opts = append(opts, keywordStrings[GENERATED])
+		opts = append(opts, keywordStrings[GENERATED], keywordStrings[ALWAYS], keywordStrings[AS], "("+String(ct.GeneratedExpr)+")")
 		if ct.Stored {
 			opts = append(opts, keywordStrings[STORED])
 		} else {
