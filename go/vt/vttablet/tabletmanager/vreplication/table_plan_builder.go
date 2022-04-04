@@ -419,7 +419,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		cexpr.expr = expr
 		cexpr.operation = opExpr
 		tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: selExpr, As: as})
-		cexpr.references[as.Lowered()] = true
+		cexpr.references[as.String()] = true
 		return cexpr, nil
 	}
 	if expr, ok := aliased.Expr.(*sqlparser.FuncExpr); ok {
@@ -451,7 +451,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			cexpr.operation = opSum
 			cexpr.expr = innerCol
 			tpb.addCol(innerCol.Name)
-			cexpr.references[innerCol.Name.Lowered()] = true
+			cexpr.references[innerCol.Name.String()] = true
 			return cexpr, nil
 		case "keyspace_id":
 			if len(expr.Exprs) != 0 {
@@ -470,7 +470,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 				return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
 			}
 			tpb.addCol(node.Name)
-			cexpr.references[node.Name.Lowered()] = true
+			cexpr.references[node.Name.String()] = true
 		case *sqlparser.Subquery:
 			return false, fmt.Errorf("unsupported subquery: %v", sqlparser.String(node))
 		case *sqlparser.FuncExpr:
