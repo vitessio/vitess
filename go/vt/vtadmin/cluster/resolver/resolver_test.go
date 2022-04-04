@@ -17,6 +17,7 @@ limitations under the License.
 package resolver
 
 import (
+	"net/url"
 	"testing"
 	"time"
 
@@ -69,7 +70,7 @@ func TestResolveNow(t *testing.T) {
 
 	cc := mockClientConn{}
 	r := mustBuild(t, &builder{opts: testopts}, grpcresolver.Target{
-		Authority: "vtctld",
+		URL: url.URL{Host: "vtctld"},
 	}, &cc, grpcresolver.BuildOptions{})
 
 	r.ResolveNow(grpcresolver.ResolveNowOptions{})
@@ -114,7 +115,7 @@ func TestResolveWithTags(t *testing.T) {
 
 	cc := mockClientConn{}
 	r := mustBuild(t, &builder{opts: testopts}, grpcresolver.Target{
-		Authority: "vtgate",
+		URL: url.URL{Host: "vtgate"},
 	}, &cc, grpcresolver.BuildOptions{})
 	r.opts.DiscoveryTags = []string{"tag2"}
 
@@ -140,7 +141,7 @@ func TestResolveEmptyList(t *testing.T) {
 	cc := mockClientConn{}
 	r := mustBuild(t,
 		&builder{opts: testopts}, grpcresolver.Target{
-			Authority: "vtgate", // we only have vtctlds
+			URL: url.URL{Host: "vtgate"}, // we only have vtctlds
 		}, &cc, grpcresolver.BuildOptions{},
 	)
 
@@ -182,7 +183,7 @@ func TestBuild(t *testing.T) {
 		{
 			name: "vtctld",
 			target: grpcresolver.Target{
-				Authority: "vtctld",
+				URL: url.URL{Host: "vtctld"},
 			},
 			assertion: func(t *testing.T, cc *mockClientConn) {
 				assert.ElementsMatch(t, cc.Addrs, []grpcresolver.Address{
@@ -195,7 +196,7 @@ func TestBuild(t *testing.T) {
 		{
 			name: "vtgate",
 			target: grpcresolver.Target{
-				Authority: "vtgate",
+				URL: url.URL{Host: "vtgate"},
 			},
 			assertion: func(t *testing.T, cc *mockClientConn) {
 				assert.Empty(t, cc.Addrs, "resolver should not add addresses to clientconn (no vtgates in discovery)")
@@ -205,7 +206,7 @@ func TestBuild(t *testing.T) {
 		{
 			name: "bad authority",
 			target: grpcresolver.Target{
-				Authority: "unsupported",
+				URL: url.URL{Host: "unsupported"},
 			},
 			shouldErr: true,
 		},
