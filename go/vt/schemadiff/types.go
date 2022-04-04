@@ -35,7 +35,7 @@ var (
 	ErrUnsupportedEntity              = errors.New("Unsupported entity type")
 	ErrUnsupportedStatement           = errors.New("Unsupported statement")
 	ErrDuplicateName                  = errors.New("Duplicate name")
-	ErrViewDependencyLoop             = errors.New("Views have dependency loop")
+	ErrViewDependencyUnresolved       = errors.New("Views have unresolved/loop dependencies")
 )
 
 type Entity interface {

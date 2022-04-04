@@ -19,6 +19,7 @@ package schemadiff
 import (
 	"io"
 	"sort"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -98,11 +99,32 @@ func NewSchemaFromSQL(sql string) (*Schema, error) {
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			return nil, errors.Wrapf(err, "could not parse statement in schema snapshot")
+			return nil, errors.Wrapf(err, "could not parse statement in SQL: %v", sql)
 		}
 		statements = append(statements, stmt)
 	}
 	return NewSchemaFromStatements(statements)
+}
+
+func getViewDependentTableNames(createView *sqlparser.CreateView) (names []string, err error) {
+	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.TableName:
+			names = append(names, node.Name.String())
+		case *sqlparser.AliasedTableExpr:
+			if tableName, ok := node.Expr.(sqlparser.TableName); ok {
+				names = append(names, tableName.Name.String())
+			} else {
+				name, err := node.TableName()
+				if err != nil {
+					return true, err
+				}
+				names = append(names, name.Name.String())
+			}
+		}
+		return true, nil
+	}, createView)
+	return names, err
 }
 
 func (s *Schema) normalize() error {
@@ -135,38 +157,63 @@ func (s *Schema) normalize() error {
 	// We actually prioritise all tables first, then views.
 	// If a view v1 depends on v2, then v2 must come before v1, even though v1
 	// precedes v2 alphabetically
-	handledNames := map[string]bool{}
+	dependencyLevels := map[string]int{}
 	for _, t := range s.tables {
 		s.sorted = append(s.sorted, t)
-		handledNames[t.Name()] = true
+		dependencyLevels[t.Name()] = 0
 	}
 
-	handledViewsInItration := -1
-	for handledViewsInItration != 0 {
+	allNamesFoundInLowerLevel := func(names []string, level int) bool {
+		for _, name := range names {
+			dependencyLevel, ok := dependencyLevels[name]
+			if !ok {
+				if strings.ToLower(name) != "dual" {
+					// named table is not yet handled. This means this view cannot be defined yet.
+					return false
+				}
+			}
+			if dependencyLevel >= level {
+				// named table/view is in same dependency level as this view; we want to postpone this
+				// view for s future iteration because we want to first maintain alphabetical ordering.
+				return false
+			}
+		}
+		return true
+	}
+
+	// We now iterate all views. We iterate "dependency levels":
+	// - first we want all views that only depend on tables. These are 1st level views.
+	// - then we only want views that depend on 1st level views or on tables. These are 2nd level views.
+	// - etc.
+	// we stop when we have been unable to find a view in an iteration.
+	for iterationLevel := 1; ; iterationLevel++ {
+		handledAnyViewsInItration := false
 		for _, v := range s.views {
 			name := v.Name()
-			if handledNames[name] {
+			if _, ok := dependencyLevels[name]; ok {
 				// already handled; skip
 				continue
 			}
 			// Not handled. Is this view dependant on already handled objects?
-			allDependenciesHandled := true
-			for _, fromTable := range v.GetFromTables() {
-				if !handledNames[fromTable.Name.String()] {
-					// "from" table is not yet handled. This means this view cannot be defined yet.
-					allDependenciesHandled = false
-					break
-				}
+			dependentNames, err := getViewDependentTableNames(&v.CreateView)
+			if err != nil {
+				return err
 			}
-			if allDependenciesHandled {
+			if allNamesFoundInLowerLevel(dependentNames, iterationLevel) {
 				s.sorted = append(s.sorted, v)
-				handledNames[v.Name()] = true
-				handledViewsInItration++
+				dependencyLevels[v.Name()] = iterationLevel
+				handledAnyViewsInItration = true
 			}
+		}
+		if !handledAnyViewsInItration {
+			break
 		}
 	}
 	if len(s.sorted) != len(s.tables)+len(s.views) {
-		return ErrViewDependencyLoop
+		// We have leftover views. This can happen if the schema definition is invalid:
+		// - a vew depends on a nonexistent table
+		// - two views have a circular dependency
+		return ErrViewDependencyUnresolved
 	}
 	return nil
 }
