@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -163,17 +162,6 @@ func pushProjection(
 ) (offset int, added bool, err error) {
 	switch node := plan.(type) {
 	case *routeGen4:
-		_, isColName := expr.Expr.(*sqlparser.ColName)
-		if !isColName {
-			_, err := evalengine.Translate(expr.Expr, ctx.SemTable)
-			if err != nil {
-				if vterrors.Code(err) != vtrpcpb.Code_UNIMPLEMENTED {
-					return 0, false, err
-				} else if !inner {
-					return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and column expressions")
-				}
-			}
-		}
 		return addExpressionToRoute(ctx, node, expr, reuseCol)
 	case *hashJoin:
 		lhsSolves := node.Left.ContainsTables()

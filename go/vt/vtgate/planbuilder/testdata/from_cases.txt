@@ -4471,3 +4471,104 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# left join with expressions
+"select user_extra.col+1 from user left join user_extra on user.col = user_extra.col"
+{
+  "QueryType": "SELECT",
+  "Original": "select user_extra.col+1 from user left join user_extra on user.col = user_extra.col",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "LeftJoin",
+    "JoinColumnIndexes": "R:0",
+    "JoinVars": {
+      "user_col": 0
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col + 1 from user_extra where 1 != 1",
+        "Query": "select user_extra.col + 1 from user_extra where user_extra.col = :user_col",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# left join with expressions, with three-way join (different code path)
+"select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col join user_extra e"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col join user_extra e",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "L:0,L:1",
+    "TableName": "`user`_user_extra_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:1,R:0",
+        "JoinVars": {
+          "user_col": 0
+        },
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col, `user`.id from `user` where 1 != 1",
+            "Query": "select `user`.col, `user`.id from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_extra.col + 1 from user_extra where 1 != 1",
+            "Query": "select user_extra.col + 1 from user_extra where user_extra.col = :user_col",
+            "Table": "user_extra"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra as e where 1 != 1",
+        "Query": "select 1 from user_extra as e",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+Gen4 plan same as above

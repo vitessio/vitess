@@ -443,3 +443,24 @@ func TestSubShardVindexDML(t *testing.T) {
 		})
 	}
 }
+
+func TestOuterJoin(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, _ = utils.ExecAllowError(t, conn, `delete from t1`)
+	_, _ = utils.ExecAllowError(t, conn, `delete from t2`)
+	defer func() {
+		_, _ = utils.ExecAllowError(t, conn, `delete from t1`)
+		_, _ = utils.ExecAllowError(t, conn, `delete from t2`)
+	}()
+
+	// insert some data.
+	utils.Exec(t, conn, `insert into t1(id, col) values (100, 123), (10, 123), (1, 13), (1000, 1234)`)
+	utils.Exec(t, conn, `insert into t2(id, tcol1, tcol2) values (12, 13, 1),(123, 7, 15),(1, 123, 123),(1004, 134, 123)`)
+
+	// Gen4 only supported query.
+	utils.AssertMatchesNoOrder(t, conn, `select t1.id, t2.tcol1+t2.tcol2 from t1 left join t2 on t1.col = t2.id`, `[[INT64(10) FLOAT64(22)] [INT64(1) NULL] [INT64(100) FLOAT64(22)] [INT64(1000) NULL]]`)
+}
