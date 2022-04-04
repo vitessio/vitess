@@ -6039,6 +6039,7 @@ reserved_keyword:
 | FROM
 | FULL
 | FUNCTION
+| GENERATED
 | GRANT
 | GROUP
 | GROUPING
@@ -6118,6 +6119,7 @@ reserved_keyword:
 | STDDEV
 | STDDEV_POP
 | STDDEV_SAMP
+| STORED
 | STRAIGHT_JOIN
 | SUBSTR
 | SUBSTRING
@@ -6146,6 +6148,7 @@ reserved_keyword:
 | VARIANCE
 | VAR_POP
 | VAR_SAMP
+| VIRTUAL
 | WHEN
 | WHERE
 | WINDOW
@@ -6163,6 +6166,7 @@ non_reserved_keyword:
 | ACTIVE
 | ADMIN
 | AGAINST
+| ALWAYS
 | AUTHENTICATION
 | BEFORE // TODO: this (and some others) should be reserved
 | BEGIN
