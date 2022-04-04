@@ -363,7 +363,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 		}
 	}
 
-	//Apply VSchema
+	// Apply VSchema
 	if keyspace.VSchema != "" {
 		if err = cluster.VtctlclientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
 			log.Errorf("error applying vschema: %v, %v", keyspace.VSchema, err)
@@ -511,7 +511,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 		}
 	}
 
-	//Apply VSchema
+	// Apply VSchema
 	if keyspace.VSchema != "" {
 		if err = cluster.VtctlclientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
 			log.Errorf("error applying vschema: %v, %v", keyspace.VSchema, err)
@@ -643,15 +643,15 @@ func NewCluster(cell string, hostname string) *LocalProcessCluster {
 // populateVersionInfo is used to populate the version information for the binaries used to setup the cluster.
 func (cluster *LocalProcessCluster) populateVersionInfo() error {
 	var err error
-	cluster.VtTabletMajorVersion, err = getMajorVersion("vttablet")
+	cluster.VtTabletMajorVersion, err = GetMajorVersion("vttablet")
 	if err != nil {
 		return err
 	}
-	cluster.VtctlMajorVersion, err = getMajorVersion("vtctl")
+	cluster.VtctlMajorVersion, err = GetMajorVersion("vtctl")
 	return err
 }
 
-func getMajorVersion(binaryName string) (int, error) {
+func GetMajorVersion(binaryName string) (int, error) {
 	version, err := exec.Command(binaryName, "--version").Output()
 	if err != nil {
 		return 0, err
