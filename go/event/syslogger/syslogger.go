@@ -146,7 +146,7 @@ func init() {
 	var err error
 	writer, err = syslog.New(syslog.LOG_INFO|syslog.LOG_USER, os.Args[0])
 	if err != nil {
-		log.Errorf("can't connect to syslog")
+		log.Errorf("can't connect to syslog - %v", err)
 		writer = nil
 	}
 
