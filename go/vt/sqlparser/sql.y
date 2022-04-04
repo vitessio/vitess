@@ -3445,15 +3445,15 @@ show_statement:
   }
 | SHOW VSCHEMA TABLES
   {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
+    $$ = &Show{&ShowBasic{Command: VschemaTables}}
   }
 | SHOW VSCHEMA VINDEXES
   {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
+    $$ = &Show{&ShowBasic{Command: VschemaVindexes}}
   }
 | SHOW VSCHEMA VINDEXES ON table_name
   {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), OnTable: $5, Scope: ImplicitScope}}
+    $$ = &Show{&ShowBasic{Command: VschemaVindexes, Tbl: $5}}
   }
 | SHOW WARNINGS
   {

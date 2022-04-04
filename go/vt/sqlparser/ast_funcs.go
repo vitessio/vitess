@@ -1527,6 +1527,10 @@ func (ty ShowCommandType) ToString() string {
 		return VitessShardsStr
 	case VitessTablets:
 		return VitessTabletsStr
+	case VschemaTables:
+		return VschemaTablesStr
+	case VschemaVindexes:
+		return VschemaVindexesStr
 	case Warnings:
 		return WarningsStr
 	case Keyspace:

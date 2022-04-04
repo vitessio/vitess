@@ -12104,7 +12104,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3447
 		{
-			yyLOCAL = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Scope: ImplicitScope}}
+			yyLOCAL = &Show{&ShowBasic{Command: VschemaTables}}
 		}
 		yyVAL.union = yyLOCAL
 	case 643:
@@ -12112,7 +12112,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3451
 		{
-			yyLOCAL = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Scope: ImplicitScope}}
+			yyLOCAL = &Show{&ShowBasic{Command: VschemaVindexes}}
 		}
 		yyVAL.union = yyLOCAL
 	case 644:
@@ -12120,7 +12120,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3455
 		{
-			yyLOCAL = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), OnTable: yyDollar[5].tableName, Scope: ImplicitScope}}
+			yyLOCAL = &Show{&ShowBasic{Command: VschemaVindexes, Tbl: yyDollar[5].tableName}}
 		}
 		yyVAL.union = yyLOCAL
 	case 645:

@@ -19,7 +19,10 @@ package planbuilder
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
+
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -88,6 +91,10 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 			Command:    show.Command,
 			ShowFilter: show.Filter,
 		}, nil
+	case sqlparser.VschemaTables:
+		return buildVschemaTablesPlan(show, vschema)
+	case sqlparser.VschemaVindexes:
+		return buildVschemaVindexesPlan(show, vschema)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown show query type %s", show.Command.ToString())
 
@@ -603,4 +610,107 @@ func buildEnginesPlan() (engine.Primitive, error) {
 
 	return engine.NewRowsPrimitive(rows,
 		buildVarCharFields("Engine", "Support", "Comment", "Transactions", "XA", "Savepoints")), nil
+}
+
+func buildVschemaTablesPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
+	vs := vschema.GetVSchema()
+	ks, err := vschema.DefaultKeyspace()
+	if err != nil {
+		return nil, err
+	}
+	schemaKs, ok := vs.Keyspaces[ks.Name]
+	if !ok {
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s' in vschema", ks.Name)
+	}
+
+	var tables []string
+	for name := range schemaKs.Tables {
+		tables = append(tables, name)
+	}
+	sort.Strings(tables)
+
+	rows := make([][]sqltypes.Value, len(tables))
+	for i, v := range tables {
+		rows[i] = buildVarCharRow(v)
+	}
+
+	return engine.NewRowsPrimitive(rows, buildVarCharFields("Tables")), nil
+}
+
+func buildVschemaVindexesPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
+	vs := vschema.GetSrvVschema()
+	rows := make([][]sqltypes.Value, 0, 16)
+
+	if !show.Tbl.IsEmpty() {
+		_, ks, _, err := vschema.TargetDestination(show.Tbl.Qualifier.String())
+		if err != nil {
+			return nil, err
+		}
+		var schemaKs *vschemapb.Keyspace
+		var tbl *vschemapb.Table
+		if !ks.Sharded {
+			tbl = &vschemapb.Table{}
+		} else {
+			schemaKs = vs.Keyspaces[ks.Name]
+			tableName := show.Tbl.Name.String()
+			schemaTbl, ok := schemaKs.Tables[tableName]
+			if !ok {
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.NoSuchTable, "table '%s' does not exist in keyspace '%s'", tableName, ks.Name)
+			}
+			tbl = schemaTbl
+		}
+
+		for _, colVindex := range tbl.ColumnVindexes {
+			vindex, ok := schemaKs.Vindexes[colVindex.GetName()]
+			columns := colVindex.GetColumns()
+			if len(columns) == 0 {
+				columns = []string{colVindex.GetColumn()}
+			}
+			if ok {
+				params := make([]string, 0, 4)
+				for k, v := range vindex.GetParams() {
+					params = append(params, fmt.Sprintf("%s=%s", k, v))
+				}
+				sort.Strings(params)
+				rows = append(rows, buildVarCharRow(strings.Join(columns, ", "), colVindex.GetName(), vindex.GetType(), strings.Join(params, "; "), vindex.GetOwner()))
+			} else {
+				rows = append(rows, buildVarCharRow(strings.Join(columns, ", "), colVindex.GetName(), "", "", ""))
+			}
+		}
+
+		return engine.NewRowsPrimitive(rows,
+			buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
+		), nil
+	}
+
+	// For the query interface to be stable we need to sort
+	// for each of the map iterations
+	ksNames := make([]string, 0, len(vs.Keyspaces))
+	for name := range vs.Keyspaces {
+		ksNames = append(ksNames, name)
+	}
+	sort.Strings(ksNames)
+	for _, ksName := range ksNames {
+		ks := vs.Keyspaces[ksName]
+
+		vindexNames := make([]string, 0, len(ks.Vindexes))
+		for name := range ks.Vindexes {
+			vindexNames = append(vindexNames, name)
+		}
+		sort.Strings(vindexNames)
+		for _, vindexName := range vindexNames {
+			vindex := ks.Vindexes[vindexName]
+
+			params := make([]string, 0, 4)
+			for k, v := range vindex.GetParams() {
+				params = append(params, fmt.Sprintf("%s=%s", k, v))
+			}
+			sort.Strings(params)
+			rows = append(rows, buildVarCharRow(ksName, vindexName, vindex.GetType(), strings.Join(params, "; "), vindex.GetOwner()))
+		}
+	}
+	return engine.NewRowsPrimitive(rows,
+		buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
+	), nil
+
 }

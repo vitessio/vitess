@@ -675,3 +675,36 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# show vschema tables
+"show vschema tables"
+{
+  "QueryType": "SHOW",
+  "Original": "show vschema tables",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+Gen4 plan same as above
+
+# show vschema vindexes
+"show vschema vindexes"
+{
+  "QueryType": "SHOW",
+  "Original": "show vschema vindexes",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+Gen4 plan same as above
+
+# show vschema vindexes on a table
+"show vschema vindexes on user.user"
+{
+  "QueryType": "SHOW",
+  "Original": "show vschema vindexes on user.user",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+Gen4 plan same as above

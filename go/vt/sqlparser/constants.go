@@ -292,6 +292,8 @@ const (
 	VitessMigrationsStr = " vitess_migrations"
 	VitessShardsStr     = " vitess_shards"
 	VitessTabletsStr    = " vitess_tablets"
+	VschemaTablesStr    = " vschema tables"
+	VschemaVindexesStr  = " vschema vindexes"
 	WarningsStr         = " warnings"
 
 	// DropKeyType strings
@@ -621,6 +623,8 @@ const (
 	VitessMigrations
 	VitessShards
 	VitessTablets
+	VschemaTables
+	VschemaVindexes
 	Warnings
 	Keyspace
 )
