@@ -2093,7 +2093,6 @@ func (ct *ColumnType) merge(other ColumnType) error {
 	}
 
 	if other.GeneratedExpr != nil {
-		// TODO: necessary?
 		// Generated expression already defined for column
 		if ct.GeneratedExpr != nil {
 			return errors.New("cannot defined GENERATED expression more than once")
