@@ -67,6 +67,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   joinCondition *JoinCondition
   collateAndCharset CollateAndCharset
   columnType    ColumnType
+  jsonPathParam JSONPathParam
 }
 
 %union {
@@ -131,6 +132,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   renameTablePairs []*RenameTablePair
   alterOptions	   []AlterOption
   vindexParams  []VindexParam
+  jsonPathParams []JSONPathParam
   jsonObjectParams []*JSONObjectParam
   partDefs      []*PartitionDefinition
   partitionValueRange	*PartitionValueRange
@@ -198,7 +200,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
 %token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
-%token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE
+%token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE JSON_CONTAINS JSON_CONTAINS_PATH JSON_EXTRACT JSON_KEYS JSON_OVERLAPS JSON_SEARCH JSON_VALUE
 %token <str> EXTRACT
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
@@ -215,6 +217,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 // * NOTE: If you change anything here, update precedence.go as well *
 %nonassoc <str> LOWER_THAN_CHARSET
 %nonassoc <str> CHARSET
+%nonassoc <str> MEMBER
 // Resolve column attribute ambiguity.
 %right <str> UNIQUE KEY
 %left <str> EXPRESSION_PREC_SETTER
@@ -301,7 +304,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
 
 // MySQL reserved words that are unused by this grammar will map to this token.
-%token <str> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD MEMBER
+%token <str> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD
 %token <str> NTH_VALUE NTILE OF OVER PERCENT_RANK RANK RECURSIVE ROW_NUMBER SYSTEM WINDOW
 %token <str> ACTIVE ADMIN BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <str> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
@@ -471,6 +474,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
+%type <jsonPathParam> json_path_param
+%type <jsonPathParams> json_path_param_list json_path_param_list_opt
 %type <jsonObjectParam> json_object_param
 %type <jsonObjectParams> json_object_param_list json_object_param_opt
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
@@ -1670,17 +1675,9 @@ STRING
    }
 
 text_literal_or_arg:
-STRING
+  text_literal
   {
-    $$ = NewStrLiteral($1)
-  }
-| NCHAR_STRING
-  {
-    $$ = &UnaryExpr{Operator: NStringOp, Expr: NewStrLiteral($1)}
-  }
-| underscore_charsets STRING %prec UNARY
-  {
-    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewStrLiteral($2)}
+    $$ = $1
   }
 | VALUE_ARG
   {
@@ -3035,7 +3032,7 @@ json_on_response:
   {
     $$ = &JtOnResponse{ResponseType: NullJSONType}
   }
-| DEFAULT text_literal
+| DEFAULT text_literal_or_arg
   {
     $$ = &JtOnResponse{ResponseType: DefaultJSONType, Expr: $2}
   }
@@ -4464,6 +4461,10 @@ expression:
   {
 	$$ = $1
   }
+| expression MEMBER OF openb expression closeb
+  {
+    $$ = &MemberOfExpr{Value: $1, JSONArr:$5 }
+  }
 
 
 bool_pri:
@@ -4956,6 +4957,67 @@ UTC_DATE func_paren_opt
 | JSON_QUOTE openb expression closeb
   {
     $$ = &JSONQuoteExpr{ StringArg:$3 }
+  }
+| JSON_CONTAINS openb expression ',' expression json_path_param_list_opt closeb
+  {
+    $$ = &JSONContainsExpr{Target: $3, Candidate: $5, PathList: $6}
+  }
+| JSON_CONTAINS_PATH openb expression ',' expression ',' json_path_param_list closeb
+  {
+    $$ = &JSONContainsPathExpr{JSONDoc: $3, OneOrAll: $5, PathList: $7}
+  }
+| JSON_EXTRACT openb expression ',' json_path_param_list closeb
+  {
+    $$ = &JSONExtractExpr{JSONDoc: $3, PathList: $5}
+  }
+| JSON_KEYS openb expression json_path_param_list_opt closeb
+  {
+    $$ = &JSONKeysExpr{JSONDoc: $3, PathList: $4}
+  }
+| JSON_OVERLAPS openb expression ',' expression closeb
+  {
+    $$ = &JSONOverlapsExpr{JSONDoc1:$3, JSONDoc2:$5}
+  }
+| JSON_SEARCH openb expression ',' expression ',' expression closeb
+  {
+    $$ = &JSONSearchExpr{JSONDoc: $3, OneOrAll: $5, SearchStr: $7 }
+  }
+| JSON_SEARCH openb expression ',' expression ',' expression ',' expression json_path_param_list_opt closeb
+  {
+    $$ = &JSONSearchExpr{JSONDoc: $3, OneOrAll: $5, SearchStr: $7, EscapeChar: $9, PathList:$10 }
+  }
+| JSON_VALUE openb expression ',' json_path_param closeb
+  {
+    $$ = &JSONValueExpr{JSONDoc: $3, Path: $5}
+  }
+
+json_path_param_list_opt:
+  {
+    $$ = nil
+  }
+| ',' json_path_param_list
+  {
+    $$ = $2
+  }
+
+json_path_param_list:
+  json_path_param
+  {
+    $$ = []JSONPathParam{$1}
+  }
+| json_path_param_list ',' json_path_param
+  {
+    $$ = append($$, $3)
+  }
+
+json_path_param:
+  text_literal_or_arg
+  {
+    $$ = JSONPathParam($1)
+  }
+| column_name
+  {
+    $$ = JSONPathParam($1)
   }
 
 interval:
@@ -5956,6 +6018,7 @@ reserved_table_id:
 */
 reserved_keyword:
   ADD
+| ALL
 | ARRAY
 | AND
 | AS
@@ -6219,11 +6282,18 @@ non_reserved_keyword:
 | ISOLATION
 | JSON
 | JSON_ARRAY
+| JSON_CONTAINS
+| JSON_CONTAINS_PATH
+| JSON_EXTRACT
+| JSON_KEYS
 | JSON_OBJECT
-| JSON_QUOTE
+| JSON_OVERLAPS
 | JSON_PRETTY
+| JSON_QUOTE
+| JSON_SEARCH
 | JSON_STORAGE_FREE
 | JSON_STORAGE_SIZE
+| JSON_VALUE
 | KEY_BLOCK_SIZE
 | KEYS
 | KEYSPACES

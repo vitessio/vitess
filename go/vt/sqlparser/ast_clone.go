@@ -173,20 +173,34 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return in
 	case *JSONArrayExpr:
 		return CloneRefOfJSONArrayExpr(in)
+	case *JSONContainsExpr:
+		return CloneRefOfJSONContainsExpr(in)
+	case *JSONContainsPathExpr:
+		return CloneRefOfJSONContainsPathExpr(in)
+	case *JSONExtractExpr:
+		return CloneRefOfJSONExtractExpr(in)
+	case *JSONKeysExpr:
+		return CloneRefOfJSONKeysExpr(in)
 	case *JSONObjectExpr:
 		return CloneRefOfJSONObjectExpr(in)
 	case JSONObjectParam:
 		return CloneJSONObjectParam(in)
+	case *JSONOverlapsExpr:
+		return CloneRefOfJSONOverlapsExpr(in)
 	case *JSONPrettyExpr:
 		return CloneRefOfJSONPrettyExpr(in)
 	case *JSONQuoteExpr:
 		return CloneRefOfJSONQuoteExpr(in)
+	case *JSONSearchExpr:
+		return CloneRefOfJSONSearchExpr(in)
 	case *JSONStorageFreeExpr:
 		return CloneRefOfJSONStorageFreeExpr(in)
 	case *JSONStorageSizeExpr:
 		return CloneRefOfJSONStorageSizeExpr(in)
 	case *JSONTableExpr:
 		return CloneRefOfJSONTableExpr(in)
+	case *JSONValueExpr:
+		return CloneRefOfJSONValueExpr(in)
 	case *JoinCondition:
 		return CloneRefOfJoinCondition(in)
 	case *JoinTableExpr:
@@ -211,6 +225,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfLockTables(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
+	case *MemberOfExpr:
+		return CloneRefOfMemberOfExpr(in)
 	case *ModifyColumn:
 		return CloneRefOfModifyColumn(in)
 	case *Nextval:
@@ -1147,6 +1163,52 @@ func CloneRefOfJSONArrayExpr(n *JSONArrayExpr) *JSONArrayExpr {
 	return &out
 }
 
+// CloneRefOfJSONContainsExpr creates a deep clone of the input.
+func CloneRefOfJSONContainsExpr(n *JSONContainsExpr) *JSONContainsExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Target = CloneExpr(n.Target)
+	out.Candidate = CloneExpr(n.Candidate)
+	out.PathList = CloneSliceOfJSONPathParam(n.PathList)
+	return &out
+}
+
+// CloneRefOfJSONContainsPathExpr creates a deep clone of the input.
+func CloneRefOfJSONContainsPathExpr(n *JSONContainsPathExpr) *JSONContainsPathExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.JSONDoc = CloneExpr(n.JSONDoc)
+	out.OneOrAll = CloneExpr(n.OneOrAll)
+	out.PathList = CloneSliceOfJSONPathParam(n.PathList)
+	return &out
+}
+
+// CloneRefOfJSONExtractExpr creates a deep clone of the input.
+func CloneRefOfJSONExtractExpr(n *JSONExtractExpr) *JSONExtractExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.JSONDoc = CloneExpr(n.JSONDoc)
+	out.PathList = CloneSliceOfJSONPathParam(n.PathList)
+	return &out
+}
+
+// CloneRefOfJSONKeysExpr creates a deep clone of the input.
+func CloneRefOfJSONKeysExpr(n *JSONKeysExpr) *JSONKeysExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.JSONDoc = CloneExpr(n.JSONDoc)
+	out.PathList = CloneSliceOfJSONPathParam(n.PathList)
+	return &out
+}
+
 // CloneRefOfJSONObjectExpr creates a deep clone of the input.
 func CloneRefOfJSONObjectExpr(n *JSONObjectExpr) *JSONObjectExpr {
 	if n == nil {
@@ -1160,6 +1222,17 @@ func CloneRefOfJSONObjectExpr(n *JSONObjectExpr) *JSONObjectExpr {
 // CloneJSONObjectParam creates a deep clone of the input.
 func CloneJSONObjectParam(n JSONObjectParam) JSONObjectParam {
 	return *CloneRefOfJSONObjectParam(&n)
+}
+
+// CloneRefOfJSONOverlapsExpr creates a deep clone of the input.
+func CloneRefOfJSONOverlapsExpr(n *JSONOverlapsExpr) *JSONOverlapsExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.JSONDoc1 = CloneExpr(n.JSONDoc1)
+	out.JSONDoc2 = CloneExpr(n.JSONDoc2)
+	return &out
 }
 
 // CloneRefOfJSONPrettyExpr creates a deep clone of the input.
@@ -1179,6 +1252,20 @@ func CloneRefOfJSONQuoteExpr(n *JSONQuoteExpr) *JSONQuoteExpr {
 	}
 	out := *n
 	out.StringArg = CloneExpr(n.StringArg)
+	return &out
+}
+
+// CloneRefOfJSONSearchExpr creates a deep clone of the input.
+func CloneRefOfJSONSearchExpr(n *JSONSearchExpr) *JSONSearchExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.JSONDoc = CloneExpr(n.JSONDoc)
+	out.OneOrAll = CloneExpr(n.OneOrAll)
+	out.SearchStr = CloneExpr(n.SearchStr)
+	out.EscapeChar = CloneExpr(n.EscapeChar)
+	out.PathList = CloneSliceOfJSONPathParam(n.PathList)
 	return &out
 }
 
@@ -1212,6 +1299,17 @@ func CloneRefOfJSONTableExpr(n *JSONTableExpr) *JSONTableExpr {
 	out.Alias = CloneTableIdent(n.Alias)
 	out.Filter = CloneExpr(n.Filter)
 	out.Columns = CloneSliceOfRefOfJtColumnDefinition(n.Columns)
+	return &out
+}
+
+// CloneRefOfJSONValueExpr creates a deep clone of the input.
+func CloneRefOfJSONValueExpr(n *JSONValueExpr) *JSONValueExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.JSONDoc = CloneExpr(n.JSONDoc)
+	out.Path = CloneJSONPathParam(n.Path)
 	return &out
 }
 
@@ -1325,6 +1423,17 @@ func CloneRefOfMatchExpr(n *MatchExpr) *MatchExpr {
 	out := *n
 	out.Columns = CloneSelectExprs(n.Columns)
 	out.Expr = CloneExpr(n.Expr)
+	return &out
+}
+
+// CloneRefOfMemberOfExpr creates a deep clone of the input.
+func CloneRefOfMemberOfExpr(n *MemberOfExpr) *MemberOfExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Value = CloneExpr(n.Value)
+	out.JSONArr = CloneExpr(n.JSONArr)
 	return &out
 }
 
@@ -2226,18 +2335,34 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfGroupConcatExpr(in)
 	case *JSONArrayExpr:
 		return CloneRefOfJSONArrayExpr(in)
+	case *JSONContainsExpr:
+		return CloneRefOfJSONContainsExpr(in)
+	case *JSONContainsPathExpr:
+		return CloneRefOfJSONContainsPathExpr(in)
+	case *JSONExtractExpr:
+		return CloneRefOfJSONExtractExpr(in)
+	case *JSONKeysExpr:
+		return CloneRefOfJSONKeysExpr(in)
 	case *JSONObjectExpr:
 		return CloneRefOfJSONObjectExpr(in)
+	case *JSONOverlapsExpr:
+		return CloneRefOfJSONOverlapsExpr(in)
 	case *JSONPrettyExpr:
 		return CloneRefOfJSONPrettyExpr(in)
 	case *JSONQuoteExpr:
 		return CloneRefOfJSONQuoteExpr(in)
+	case *JSONSearchExpr:
+		return CloneRefOfJSONSearchExpr(in)
 	case *JSONStorageFreeExpr:
 		return CloneRefOfJSONStorageFreeExpr(in)
 	case *JSONStorageSizeExpr:
 		return CloneRefOfJSONStorageSizeExpr(in)
+	case *JSONValueExpr:
+		return CloneRefOfJSONValueExpr(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
+	case *MemberOfExpr:
+		return CloneRefOfMemberOfExpr(in)
 	case *SubstrExpr:
 		return CloneRefOfSubstrExpr(in)
 	case *TimestampFuncExpr:
@@ -2416,22 +2541,38 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfIsExpr(in)
 	case *JSONArrayExpr:
 		return CloneRefOfJSONArrayExpr(in)
+	case *JSONContainsExpr:
+		return CloneRefOfJSONContainsExpr(in)
+	case *JSONContainsPathExpr:
+		return CloneRefOfJSONContainsPathExpr(in)
+	case *JSONExtractExpr:
+		return CloneRefOfJSONExtractExpr(in)
+	case *JSONKeysExpr:
+		return CloneRefOfJSONKeysExpr(in)
 	case *JSONObjectExpr:
 		return CloneRefOfJSONObjectExpr(in)
+	case *JSONOverlapsExpr:
+		return CloneRefOfJSONOverlapsExpr(in)
 	case *JSONPrettyExpr:
 		return CloneRefOfJSONPrettyExpr(in)
 	case *JSONQuoteExpr:
 		return CloneRefOfJSONQuoteExpr(in)
+	case *JSONSearchExpr:
+		return CloneRefOfJSONSearchExpr(in)
 	case *JSONStorageFreeExpr:
 		return CloneRefOfJSONStorageFreeExpr(in)
 	case *JSONStorageSizeExpr:
 		return CloneRefOfJSONStorageSizeExpr(in)
+	case *JSONValueExpr:
+		return CloneRefOfJSONValueExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
 		return CloneRefOfLiteral(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
+	case *MemberOfExpr:
+		return CloneRefOfMemberOfExpr(in)
 	case *NotExpr:
 		return CloneRefOfNotExpr(in)
 	case *NullVal:
@@ -2476,6 +2617,120 @@ func CloneInsertRows(in InsertRows) InsertRows {
 		return CloneRefOfUnion(in)
 	case Values:
 		return CloneValues(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// CloneJSONPathParam creates a deep clone of the input.
+func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *AndExpr:
+		return CloneRefOfAndExpr(in)
+	case Argument:
+		return in
+	case *BetweenExpr:
+		return CloneRefOfBetweenExpr(in)
+	case *BinaryExpr:
+		return CloneRefOfBinaryExpr(in)
+	case BoolVal:
+		return in
+	case *CaseExpr:
+		return CloneRefOfCaseExpr(in)
+	case *ColName:
+		return CloneRefOfColName(in)
+	case *CollateExpr:
+		return CloneRefOfCollateExpr(in)
+	case *ComparisonExpr:
+		return CloneRefOfComparisonExpr(in)
+	case *ConvertExpr:
+		return CloneRefOfConvertExpr(in)
+	case *ConvertUsingExpr:
+		return CloneRefOfConvertUsingExpr(in)
+	case *CurTimeFuncExpr:
+		return CloneRefOfCurTimeFuncExpr(in)
+	case *Default:
+		return CloneRefOfDefault(in)
+	case *ExistsExpr:
+		return CloneRefOfExistsExpr(in)
+	case *ExtractFuncExpr:
+		return CloneRefOfExtractFuncExpr(in)
+	case *ExtractedSubquery:
+		return CloneRefOfExtractedSubquery(in)
+	case *FuncExpr:
+		return CloneRefOfFuncExpr(in)
+	case *GroupConcatExpr:
+		return CloneRefOfGroupConcatExpr(in)
+	case *IntervalExpr:
+		return CloneRefOfIntervalExpr(in)
+	case *IntroducerExpr:
+		return CloneRefOfIntroducerExpr(in)
+	case *IsExpr:
+		return CloneRefOfIsExpr(in)
+	case *JSONArrayExpr:
+		return CloneRefOfJSONArrayExpr(in)
+	case *JSONContainsExpr:
+		return CloneRefOfJSONContainsExpr(in)
+	case *JSONContainsPathExpr:
+		return CloneRefOfJSONContainsPathExpr(in)
+	case *JSONExtractExpr:
+		return CloneRefOfJSONExtractExpr(in)
+	case *JSONKeysExpr:
+		return CloneRefOfJSONKeysExpr(in)
+	case *JSONObjectExpr:
+		return CloneRefOfJSONObjectExpr(in)
+	case *JSONOverlapsExpr:
+		return CloneRefOfJSONOverlapsExpr(in)
+	case *JSONPrettyExpr:
+		return CloneRefOfJSONPrettyExpr(in)
+	case *JSONQuoteExpr:
+		return CloneRefOfJSONQuoteExpr(in)
+	case *JSONSearchExpr:
+		return CloneRefOfJSONSearchExpr(in)
+	case *JSONStorageFreeExpr:
+		return CloneRefOfJSONStorageFreeExpr(in)
+	case *JSONStorageSizeExpr:
+		return CloneRefOfJSONStorageSizeExpr(in)
+	case *JSONValueExpr:
+		return CloneRefOfJSONValueExpr(in)
+	case ListArg:
+		return in
+	case *Literal:
+		return CloneRefOfLiteral(in)
+	case *MatchExpr:
+		return CloneRefOfMatchExpr(in)
+	case *MemberOfExpr:
+		return CloneRefOfMemberOfExpr(in)
+	case *NotExpr:
+		return CloneRefOfNotExpr(in)
+	case *NullVal:
+		return CloneRefOfNullVal(in)
+	case Offset:
+		return in
+	case *OrExpr:
+		return CloneRefOfOrExpr(in)
+	case *Subquery:
+		return CloneRefOfSubquery(in)
+	case *SubstrExpr:
+		return CloneRefOfSubstrExpr(in)
+	case *TimestampFuncExpr:
+		return CloneRefOfTimestampFuncExpr(in)
+	case *TrimFuncExpr:
+		return CloneRefOfTrimFuncExpr(in)
+	case *UnaryExpr:
+		return CloneRefOfUnaryExpr(in)
+	case ValTuple:
+		return CloneValTuple(in)
+	case *ValuesFuncExpr:
+		return CloneRefOfValuesFuncExpr(in)
+	case *WeightStringFuncExpr:
+		return CloneRefOfWeightStringFuncExpr(in)
+	case *XorExpr:
+		return CloneRefOfXorExpr(in)
 	default:
 		// this should never happen
 		return nil
@@ -2789,6 +3044,18 @@ func CloneSliceOfRefOfIndexOption(n []*IndexOption) []*IndexOption {
 	res := make([]*IndexOption, 0, len(n))
 	for _, x := range n {
 		res = append(res, CloneRefOfIndexOption(x))
+	}
+	return res
+}
+
+// CloneSliceOfJSONPathParam creates a deep clone of the input.
+func CloneSliceOfJSONPathParam(n []JSONPathParam) []JSONPathParam {
+	if n == nil {
+		return nil
+	}
+	res := make([]JSONPathParam, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneJSONPathParam(x))
 	}
 	return res
 }
