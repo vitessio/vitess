@@ -414,17 +414,18 @@ func (vrw *VReplicationWorkflow) initReshard() error {
 
 func (vrw *VReplicationWorkflow) switchReads() (*[]string, error) {
 	log.Infof("In VReplicationWorkflow.switchReads() for %+v", vrw)
-	tabletTypes, _, err := discovery.ParseTabletTypesAndOrder(vrw.params.TabletTypes)
+	fullTabletTypes, _, err := discovery.ParseTabletTypesAndOrder(vrw.params.TabletTypes)
 	if err != nil {
 		return nil, err
 	}
-	for _, tt := range tabletTypes {
+	var nonPrimaryTabletTypes []topodatapb.TabletType
+	for _, tt := range fullTabletTypes {
 		if tt != topodatapb.TabletType_PRIMARY {
-			tabletTypes = append(tabletTypes, tt)
+			nonPrimaryTabletTypes = append(nonPrimaryTabletTypes, tt)
 		}
 	}
 	var dryRunResults *[]string
-	dryRunResults, err = vrw.wr.SwitchReads(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, tabletTypes,
+	dryRunResults, err = vrw.wr.SwitchReads(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, nonPrimaryTabletTypes,
 		vrw.getCellsAsArray(), vrw.params.Direction, vrw.params.DryRun)
 	if err != nil {
 		return nil, err
