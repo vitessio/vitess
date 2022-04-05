@@ -54,34 +54,11 @@ func gen4UpdateStmtPlanner(
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in update statement")
 	}
 
-	// gen4:
-	// update, err := newBuildUpdatePlan(stmt, vars, vschema, version)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// Below is V3's code:
-	dml, ksidVindex, err := buildDMLPlan(vschema, "update", stmt, vars, stmt.TableExprs, stmt.Where, stmt.OrderBy, stmt.Limit, stmt.Comments, stmt.Exprs)
+	update, err := newBuildUpdatePlan(stmt, vars, vschema, version)
 	if err != nil {
 		return nil, err
 	}
-	eupd := &engine.Update{DML: dml}
-
-	if dml.Opcode == engine.Unsharded {
-		return eupd, nil
-	}
-
-	cvv, ovq, err := buildChangedVindexesValues(stmt, eupd.Table, ksidVindex.Columns)
-	if err != nil {
-		return nil, err
-	}
-	eupd.ChangedVindexValues = cvv
-	eupd.OwnedVindexQuery = ovq
-	if len(eupd.ChangedVindexValues) != 0 {
-		eupd.KsidVindex = ksidVindex.Vindex
-		eupd.KsidLength = len(ksidVindex.Columns)
-	}
-	return eupd, nil
+	return update.Primitive(), nil
 }
 
 func gen4SelectStmtPlanner(
@@ -265,7 +242,14 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 	vschema plancontext.VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
 ) (logicalPlan, error) {
-
+	ksName := ""
+	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
+		ksName = ks.Name
+	}
+	_, err := semantics.Analyze(updStmt, ksName, vschema)
+	if err != nil {
+		return nil, err
+	}
 	return nil, nil
 }
 
