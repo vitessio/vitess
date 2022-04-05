@@ -1,1 +1,24 @@
 # Add your test case here for debugging and run go test -run=One.
+# update by primary keyspace id
+"update user set val = 1 where id = 1"
+{
+  "QueryType": "UPDATE",
+  "Original": "update user set val = 1 where id = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update `user` set val = 1 where id = 1",
+    "Table": "user",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
+Gen4 plan same as above

@@ -28,58 +28,116 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-var _ selectPlanner = gen4Planner("apa", 0)
+var _ stmtPlanner = gen4Planner("apa", 0)
 
-func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVersion) selectPlanner {
+func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVersion) stmtPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
-		selStatement, ok := stmt.(sqlparser.SelectStatement)
-		if !ok {
+		switch stmt := stmt.(type) {
+		case sqlparser.SelectStatement:
+			return gen4SelectStmtPlanner(query, plannerVersion, stmt, reservedVars, vschema)
+		case *sqlparser.Update:
+			return gen4UpdateStmtPlanner(query, plannerVersion, stmt, reservedVars, vschema)
+		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
 		}
-		switch node := selStatement.(type) {
-		case *sqlparser.Select:
-			if node.With != nil {
-				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in select statement")
-			}
-		case *sqlparser.Union:
-			if node.With != nil {
-				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in union statement")
-			}
-		}
-
-		sel, isSel := selStatement.(*sqlparser.Select)
-		if isSel {
-			// handle dual table for processing at vtgate.
-			p, err := handleDualSelects(sel, vschema)
-			if err != nil || p != nil {
-				return p, err
-			}
-
-			if sel.SQLCalcFoundRows && sel.Limit != nil {
-				return gen4planSQLCalcFoundRows(vschema, sel, query, reservedVars)
-			}
-			// if there was no limit, we can safely ignore the SQLCalcFoundRows directive
-			sel.SQLCalcFoundRows = false
-		}
-
-		getPlan := func(selStatement sqlparser.SelectStatement) (logicalPlan, error) {
-			return newBuildSelectPlan(selStatement, reservedVars, vschema, plannerVersion)
-		}
-
-		plan, err := getPlan(selStatement)
-		if err != nil {
-			return nil, err
-		}
-
-		if shouldRetryWithCNFRewriting(plan) {
-			// by transforming the predicates to CNF, the planner will sometimes find better plans
-			primitive := gen4CNFRewrite(stmt, getPlan)
-			if primitive != nil {
-				return primitive, nil
-			}
-		}
-		return plan.Primitive(), nil
 	}
+}
+
+func gen4UpdateStmtPlanner(
+	query string,
+	version querypb.ExecuteOptions_PlannerVersion,
+	stmt *sqlparser.Update,
+	vars *sqlparser.ReservedVars,
+	vschema plancontext.VSchema,
+) (engine.Primitive, error) {
+	if stmt.With != nil {
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in update statement")
+	}
+
+	// gen4:
+	// update, err := newBuildUpdatePlan(stmt, vars, vschema, version)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// Below is V3's code:
+	dml, ksidVindex, err := buildDMLPlan(vschema, "update", stmt, vars, stmt.TableExprs, stmt.Where, stmt.OrderBy, stmt.Limit, stmt.Comments, stmt.Exprs)
+	if err != nil {
+		return nil, err
+	}
+	eupd := &engine.Update{DML: dml}
+
+	if dml.Opcode == engine.Unsharded {
+		return eupd, nil
+	}
+
+	cvv, ovq, err := buildChangedVindexesValues(stmt, eupd.Table, ksidVindex.Columns)
+	if err != nil {
+		return nil, err
+	}
+	eupd.ChangedVindexValues = cvv
+	eupd.OwnedVindexQuery = ovq
+	if len(eupd.ChangedVindexValues) != 0 {
+		eupd.KsidVindex = ksidVindex.Vindex
+		eupd.KsidLength = len(ksidVindex.Columns)
+	}
+	return eupd, nil
+}
+
+func gen4SelectStmtPlanner(
+	query string,
+	plannerVersion querypb.ExecuteOptions_PlannerVersion,
+	stmt sqlparser.Statement,
+	reservedVars *sqlparser.ReservedVars,
+	vschema plancontext.VSchema,
+) (engine.Primitive, error) {
+	selStatement, ok := stmt.(sqlparser.SelectStatement)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
+	}
+	switch node := selStatement.(type) {
+	case *sqlparser.Select:
+		if node.With != nil {
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in select statement")
+		}
+	case *sqlparser.Union:
+		if node.With != nil {
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in union statement")
+		}
+	}
+
+	sel, isSel := selStatement.(*sqlparser.Select)
+	if isSel {
+		// handle dual table for processing at vtgate.
+		p, err := handleDualSelects(sel, vschema)
+		if err != nil || p != nil {
+			return p, err
+		}
+
+		if sel.SQLCalcFoundRows && sel.Limit != nil {
+			return gen4planSQLCalcFoundRows(vschema, sel, query, reservedVars)
+		}
+		// if there was no limit, we can safely ignore the SQLCalcFoundRows directive
+		sel.SQLCalcFoundRows = false
+	}
+
+	getPlan := func(selStatement sqlparser.SelectStatement) (logicalPlan, error) {
+		return newBuildSelectPlan(selStatement, reservedVars, vschema, plannerVersion)
+	}
+
+	plan, err := getPlan(selStatement)
+	if err != nil {
+		return nil, err
+	}
+
+	if shouldRetryWithCNFRewriting(plan) {
+		// by transforming the predicates to CNF, the planner will sometimes find better plans
+		primitive := gen4CNFRewrite(stmt, getPlan)
+		if primitive != nil {
+			return primitive, nil
+		}
+	}
+	return plan.Primitive(), nil
 }
 
 func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (engine.Primitive, error) {
@@ -200,6 +258,15 @@ func newBuildSelectPlan(
 	}
 
 	return plan, nil
+}
+
+func newBuildUpdatePlan(updStmt *sqlparser.Update,
+	reservedVars *sqlparser.ReservedVars,
+	vschema plancontext.VSchema,
+	version querypb.ExecuteOptions_PlannerVersion,
+) (logicalPlan, error) {
+
+	return nil, nil
 }
 
 func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
