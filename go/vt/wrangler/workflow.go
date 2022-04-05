@@ -377,6 +377,9 @@ func (vrw *VReplicationWorkflow) getCellsAsArray() []string {
 
 func (vrw *VReplicationWorkflow) parseTabletTypes() (hasReplica, hasRdonly, hasPrimary bool, err error) {
 	tabletTypes, _, err := discovery.ParseTabletTypesAndOrder(vrw.params.TabletTypes)
+	if err != nil {
+		return false, false, false, err
+	}
 	for _, tabletType := range tabletTypes {
 		switch tabletType {
 		case topodatapb.TabletType_REPLICA:
@@ -389,7 +392,7 @@ func (vrw *VReplicationWorkflow) parseTabletTypes() (hasReplica, hasRdonly, hasP
 			return false, false, false, fmt.Errorf("invalid tablet type passed %s", tabletType)
 		}
 	}
-	return hasReplica, hasRdonly, hasPrimary, err
+	return hasReplica, hasRdonly, hasPrimary, nil
 }
 
 // endregion
