@@ -264,8 +264,20 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 	}
 
 	edml.Table = semTable.Tables[0].GetVindexTable()
-	edml.Query = generateQuery(updStmt)
 	edml.Keyspace = edml.Table.Keyspace
+
+	// Rewrite routed tables
+	aliasTbl := updStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	tableName := aliasTbl.Expr.(sqlparser.TableName)
+	if edml.Table.Name.String() != tableName.Name.String() {
+		name := tableName.Name
+		if aliasTbl.As.IsEmpty() {
+			// if the user hasn't specified an alias, we'll insert one here so the old table name still works
+			aliasTbl.As = sqlparser.NewTableIdent(name.String())
+		}
+		tableName.Name = sqlparser.NewTableIdent(edml.Table.Name.String())
+		aliasTbl.Expr = tableName
+	}
 
 	directives := updStmt.GetParsedComments().Directives()
 	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
@@ -286,7 +298,7 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 		edml.Vindex = vindex
 		edml.Values = values
 	}
-
+	edml.Query = generateQuery(updStmt)
 	up := &engine.Update{DML: edml}
 
 	cvv, ovq, err := buildChangedVindexesValues(updStmt, up.Table, ksidVindex.Columns)
