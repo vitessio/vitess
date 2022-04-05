@@ -252,6 +252,18 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 
 func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
+	case *sqlparser.Update:
+		if len(node.TableExprs) != 1 {
+			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multiple tables in update")}
+		}
+		alias, isAlias := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
+		if !isAlias {
+			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multiple tables in update")}
+		}
+		_, isTblName := alias.Expr.(sqlparser.TableName)
+		if !isTblName {
+			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multiple tables in update")}
+		}
 	case *sqlparser.Select:
 		parent := cursor.Parent()
 		if _, isUnion := parent.(*sqlparser.Union); isUnion && node.SQLCalcFoundRows {

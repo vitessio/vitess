@@ -251,15 +251,55 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 		return nil, err
 	}
 
+	edml := engine.NewDML()
 	if ks := semTable.SingleUnshardedKeyspace(); ks != nil {
-		edml := engine.NewDML()
 		edml.Keyspace = ks
 		edml.Opcode = engine.Unsharded
 		edml.Query = generateQuery(updStmt)
 		return &engine.Update{DML: edml}, nil
 	}
 
-	return nil, nil
+	if semTable.NotUnshardedErr != nil {
+		return nil, semTable.NotUnshardedErr
+	}
+
+	edml.Table = semTable.Tables[0].GetVindexTable()
+	edml.Query = generateQuery(updStmt)
+	edml.Keyspace = edml.Table.Keyspace
+
+	directives := updStmt.GetParsedComments().Directives()
+	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
+		edml.MultiShardAutocommit = true
+	}
+	edml.QueryTimeout = queryTimeout(directives)
+
+	routingType, ksidVindex, vindex, values, err := getDMLRouting(updStmt.Where, edml.Table)
+	if err != nil {
+		return nil, err
+	}
+	edml.Opcode = routingType
+	if routingType == engine.Scatter {
+		if updStmt.Limit != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard update with limit is not supported")
+		}
+	} else {
+		edml.Vindex = vindex
+		edml.Values = values
+	}
+
+	up := &engine.Update{DML: edml}
+
+	cvv, ovq, err := buildChangedVindexesValues(updStmt, up.Table, ksidVindex.Columns)
+	if err != nil {
+		return nil, err
+	}
+	up.ChangedVindexValues = cvv
+	up.OwnedVindexQuery = ovq
+	if len(up.ChangedVindexValues) != 0 {
+		up.KsidVindex = ksidVindex.Vindex
+		up.KsidLength = len(ksidVindex.Columns)
+	}
+	return up, nil
 }
 
 func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
