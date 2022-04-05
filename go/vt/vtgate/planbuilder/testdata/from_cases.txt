@@ -4572,3 +4572,45 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# left join with expressions coming from both sides
+"select user.foo+user_extra.col+1 from user left join user_extra on user.col = user_extra.col"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.foo+user_extra.col+1 from user left join user_extra on user.col = user_extra.col",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "LeftJoin",
+    "JoinColumnIndexes": "R:0",
+    "JoinVars": {
+      "user_col": 0,
+      "user_foo": 1
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col, `user`.foo from `user` where 1 != 1",
+        "Query": "select `user`.col, `user`.foo from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select :user_foo + user_extra.col + 1 from user_extra where 1 != 1",
+        "Query": "select :user_foo + user_extra.col + 1 from user_extra where user_extra.col = :user_col",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+Gen4 plan same as above

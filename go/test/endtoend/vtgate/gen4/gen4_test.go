@@ -463,4 +463,9 @@ func TestOuterJoin(t *testing.T) {
 
 	// Gen4 only supported query.
 	utils.AssertMatchesNoOrder(t, conn, `select t1.id, t2.tcol1+t2.tcol2 from t1 left join t2 on t1.col = t2.id`, `[[INT64(10) FLOAT64(22)] [INT64(1) NULL] [INT64(100) FLOAT64(22)] [INT64(1000) NULL]]`)
+	utils.AssertMatchesNoOrder(t, conn, `select t1.id, t2.id, t2.tcol1+t1.col+t2.tcol2 from t1 left join t2 on t1.col = t2.id`,
+		`[[INT64(10) INT64(123) FLOAT64(145)]`+
+			` [INT64(1) NULL NULL]`+
+			` [INT64(100) INT64(123) FLOAT64(145)]`+
+			` [INT64(1000) NULL NULL]]`)
 }
