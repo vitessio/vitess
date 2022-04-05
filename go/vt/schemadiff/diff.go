@@ -143,13 +143,13 @@ func DiffSchemasSQL(sql1 string, sql2 string, hints *DiffHints) ([]EntityDiff, e
 func DiffSchemas(schema1 *Schema, schema2 *Schema, hints *DiffHints) ([]EntityDiff, error) {
 	var err error
 	if schema1 == nil {
-		schema1, err = NewSchemaFromSQL("")
+		schema1, err = NewSchemaFromStatements(nil)
 		if err != nil {
 			return nil, err
 		}
 	}
 	if schema2 == nil {
-		schema2, err = NewSchemaFromSQL("")
+		schema2, err = NewSchemaFromStatements(nil)
 		if err != nil {
 			return nil, err
 		}

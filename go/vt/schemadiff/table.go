@@ -101,7 +101,7 @@ func (d *DropTableEntityDiff) StatementString() (s string) {
 	return s
 }
 
-//
+// CreateTableEntity stands for a TABLE construct. It contains the table's CREATE statement.
 type CreateTableEntity struct {
 	sqlparser.CreateTable
 }
@@ -110,6 +110,7 @@ func NewCreateTableEntity(c *sqlparser.CreateTable) *CreateTableEntity {
 	return &CreateTableEntity{CreateTable: *c}
 }
 
+// Name implements Entity interface
 func (c *CreateTableEntity) Name() string {
 	return c.CreateTable.GetTable().Name.String()
 }
@@ -677,10 +678,12 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	}
 }
 
+// Create implements Entity interface
 func (c *CreateTableEntity) Create() (diff EntityDiff, err error) {
 	return &CreateTableEntityDiff{createTable: &c.CreateTable}, nil
 }
 
+// Drop implements Entity interface
 func (c *CreateTableEntity) Drop() (diff EntityDiff, err error) {
 	dropTable := &sqlparser.DropTable{
 		FromTables: []sqlparser.TableName{c.Table},

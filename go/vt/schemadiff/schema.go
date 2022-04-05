@@ -26,7 +26,8 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-//
+// Schema represents a database schema, which may contain entities such as tables and views.
+// Schema is not in itself an Entity, since it is more of a collection of entities.
 type Schema struct {
 	tables []*CreateTableEntity
 	views  []*CreateViewEntity
@@ -35,7 +36,8 @@ type Schema struct {
 	sorted []Entity
 }
 
-func NewSchema() *Schema {
+// newEmptySchema is used internally to initialize a Schema object
+func newEmptySchema() *Schema {
 	schema := &Schema{
 		tables: []*CreateTableEntity{},
 		views:  []*CreateViewEntity{},
@@ -45,8 +47,9 @@ func NewSchema() *Schema {
 	return schema
 }
 
+// NewSchemaFromEntities creates a valid and normalized schema based on list of entities
 func NewSchemaFromEntities(entities []Entity) (*Schema, error) {
-	schema := NewSchema()
+	schema := newEmptySchema()
 	for _, e := range entities {
 		switch c := e.(type) {
 		case *CreateTableEntity:
@@ -63,6 +66,7 @@ func NewSchemaFromEntities(entities []Entity) (*Schema, error) {
 	return schema, nil
 }
 
+// NewSchemaFromEntities creates a valid and normalized schema based on list of valid statements
 func NewSchemaFromStatements(statements []sqlparser.Statement) (*Schema, error) {
 	entities := []Entity{}
 	for _, s := range statements {
@@ -78,6 +82,7 @@ func NewSchemaFromStatements(statements []sqlparser.Statement) (*Schema, error) 
 	return NewSchemaFromEntities(entities)
 }
 
+// NewSchemaFromEntities creates a valid and normalized schema based on list of queries
 func NewSchemaFromQueries(queries []string) (*Schema, error) {
 	statements := []sqlparser.Statement{}
 	for _, q := range queries {
@@ -90,6 +95,8 @@ func NewSchemaFromQueries(queries []string) (*Schema, error) {
 	return NewSchemaFromStatements(statements)
 }
 
+// NewSchemaFromEntities creates a valid and normalized schema based on a SQL blog that contains
+// CREATE statements for various objects (tables, views)
 func NewSchemaFromSQL(sql string) (*Schema, error) {
 	statements := []sqlparser.Statement{}
 	tokenizer := sqlparser.NewStringTokenizer(sql)
@@ -106,6 +113,7 @@ func NewSchemaFromSQL(sql string) (*Schema, error) {
 	return NewSchemaFromStatements(statements)
 }
 
+// getViewDependentTableNames analyzes a CREATE VIEW definition and extracts all tables/views read by this view
 func getViewDependentTableNames(createView *sqlparser.CreateView) (names []string, err error) {
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
@@ -123,6 +131,8 @@ func getViewDependentTableNames(createView *sqlparser.CreateView) (names []strin
 	return names, err
 }
 
+// normalize is called as part of Schema creation process. The user may only get a hold of normalized schema.
+// It validates some cross-entity constraints, and orders entity based on dependencies (e.g. tables, views that read from tables, 2nd level views, etc.)
 func (s *Schema) normalize() error {
 	// Verify no two entities share same name
 	for _, t := range s.tables {
@@ -214,10 +224,12 @@ func (s *Schema) normalize() error {
 	return nil
 }
 
+// Entities returns this schema's entities in good order (may be applied without error)
 func (s *Schema) Entities() []Entity {
 	return s.sorted
 }
 
+// EntityNames is a convenience function that returns just the names of entities, in good order
 func (s *Schema) EntityNames() []string {
 	names := []string{}
 	for _, e := range s.Entities() {
