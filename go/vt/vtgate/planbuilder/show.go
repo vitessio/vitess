@@ -91,6 +91,8 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 			Command:    show.Command,
 			ShowFilter: show.Filter,
 		}, nil
+	case sqlparser.VitessTarget:
+		return buildShowTargetPlan(vschema)
 	case sqlparser.VschemaTables:
 		return buildVschemaTablesPlan(show, vschema)
 	case sqlparser.VschemaVindexes:
@@ -98,6 +100,12 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown show query type %s", show.Command.ToString())
 
+}
+
+func buildShowTargetPlan(vschema plancontext.VSchema) (engine.Primitive, error) {
+	rows := [][]sqltypes.Value{buildVarCharRow(vschema.TargetString())}
+	return engine.NewRowsPrimitive(rows,
+		buildVarCharFields("Target")), nil
 }
 
 func buildCharsetPlan(show *sqlparser.ShowBasic) (engine.Primitive, error) {

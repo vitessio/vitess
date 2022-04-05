@@ -832,13 +832,6 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}
 	case sqlparser.KeywordString(sqlparser.VITESS_REPLICATION_STATUS):
 		return e.showVitessReplicationStatus(ctx, show)
-	case "vitess_target":
-		var rows [][]sqltypes.Value
-		rows = append(rows, buildVarCharRow(safeSession.TargetString))
-		return &sqltypes.Result{
-			Fields: buildVarCharFields("Target"),
-			Rows:   rows,
-		}, nil
 	}
 
 	// Any other show statement is passed through

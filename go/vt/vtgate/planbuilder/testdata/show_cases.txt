@@ -708,3 +708,14 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# show vitess target
+"show vitess_target"
+{
+  "QueryType": "SHOW",
+  "Original": "show vitess_target",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+Gen4 plan same as above
