@@ -2557,6 +2557,9 @@ var (
 	}, {
 		input:  `SELECT JSON_SCHEMA_VALID(N'{"type":"string","pattern":"("}', '"abc"')`,
 		output: `select json_schema_valid(N'{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual`,
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
 	}, {
 		input:  `SELECT JSON_SCHEMA_VALIDATION_REPORT('{"type":"string","pattern":"("}', '"abc"')`,
 		output: `select json_schema_validation_report('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual`,
@@ -2569,6 +2572,9 @@ var (
 	}, {
 		input:  `SELECT JSON_SCHEMA_VALIDATION_REPORT(N'{"type":"string","pattern":"("}', '"abc"')`,
 		output: `select json_schema_validation_report(N'{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual`,
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
 	}, {
 		input:  `SELECT JSON_CONTAINS('{"a": 1, "b": 2, "c": {"d": 4}}', '1')`,
 		output: `select json_contains('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1') from dual`,
