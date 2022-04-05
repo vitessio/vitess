@@ -830,8 +830,6 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		if show.Scope == sqlparser.VitessMetadataScope {
 			return e.handleShowVitessMetadata(ctx, show.ShowTablesOpt)
 		}
-	case sqlparser.KeywordString(sqlparser.VITESS_REPLICATION_STATUS):
-		return e.showVitessReplicationStatus(ctx, show)
 	}
 
 	// Any other show statement is passed through
@@ -998,7 +996,7 @@ func (e *Executor) showTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, 
 	}, nil
 }
 
-func (e *Executor) showVitessReplicationStatus(ctx context.Context, show *sqlparser.ShowLegacy) (*sqltypes.Result, error) {
+func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, *HealthCheckTimeout)
 	defer cancel()
 	rows := [][]sqltypes.Value{}
@@ -1013,8 +1011,8 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, show *sqlpar
 			}
 
 			// Allow people to filter by Keyspace and Shard using a LIKE clause
-			if show.ShowTablesOpt != nil && show.ShowTablesOpt.Filter != nil {
-				ksFilterRegex := sqlparser.LikeToRegexp(show.ShowTablesOpt.Filter.Like)
+			if filter != nil {
+				ksFilterRegex := sqlparser.LikeToRegexp(filter.Like)
 				keyspaceShardStr := fmt.Sprintf("%s/%s", ts.Tablet.Keyspace, ts.Tablet.Shard)
 				if !ksFilterRegex.MatchString(keyspaceShardStr) {
 					continue
