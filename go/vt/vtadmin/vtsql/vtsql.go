@@ -72,14 +72,12 @@ type VTGateProxy struct {
 	// DialFunc is called to open a new database connection. In production this
 	// should always be vitessdriver.OpenWithConfiguration, but it is exported
 	// for testing purposes.
-	DialFunc        func(cfg vitessdriver.Configuration) (*sql.DB, error)
-	resolver        grpcresolver.Builder
-	dialPingTimeout time.Duration
+	DialFunc func(cfg vitessdriver.Configuration) (*sql.DB, error)
+	resolver grpcresolver.Builder
 
 	m        sync.Mutex
 	conn     *sql.DB
 	dialedAt time.Time
-	lastPing time.Time
 }
 
 var _ DB = (*VTGateProxy)(nil)
@@ -96,12 +94,11 @@ var ErrConnClosed = errors.New("use of closed connection")
 // use.
 func New(cfg *Config) *VTGateProxy {
 	return &VTGateProxy{
-		cluster:         cfg.Cluster,
-		creds:           cfg.Credentials,
-		cfg:             cfg,
-		DialFunc:        vitessdriver.OpenWithConfiguration,
-		dialPingTimeout: cfg.DialPingTimeout,
-		resolver:        cfg.ResolverOptions.NewBuilder(cfg.Cluster.Id),
+		cluster:  cfg.Cluster,
+		creds:    cfg.Credentials,
+		cfg:      cfg,
+		DialFunc: vitessdriver.OpenWithConfiguration,
+		resolver: cfg.ResolverOptions.NewBuilder(cfg.Cluster.Id),
 	}
 }
 
@@ -136,25 +133,10 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 	defer vtgate.m.Unlock()
 
 	if vtgate.conn != nil {
-		ctx, cancel := context.WithTimeout(ctx, vtgate.dialPingTimeout)
-		defer cancel()
+		log.Info("Have valid connection to vtgate, reusing it.")
+		span.Annotate("is_noop", true)
 
-		err := vtgate.PingContext(ctx)
-		switch err {
-		case nil:
-			log.Info("Have valid connection to vtgate, reusing it.")
-			span.Annotate("is_noop", true)
-
-			vtgate.lastPing = time.Now()
-
-			return nil
-		default:
-			log.Warningf("Ping failed on vtgate: %s; Rediscovering a vtgate to get new connection", err)
-
-			if err := vtgate.closeLocked(); err != nil {
-				log.Warningf("Error when closing connection to vtgate: %s; Continuing anyway ...", err)
-			}
-		}
+		return nil
 	}
 
 	span.Annotate("is_noop", false)
@@ -249,7 +231,6 @@ func (vtgate *VTGateProxy) Debug() map[string]any {
 	}
 
 	if vtgate.conn != nil {
-		m["last_ping"] = debug.TimeToString(vtgate.lastPing)
 		m["dialed_at"] = debug.TimeToString(vtgate.dialedAt)
 	}
 

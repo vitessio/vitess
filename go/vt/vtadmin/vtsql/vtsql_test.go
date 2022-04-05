@@ -102,9 +102,8 @@ func TestDial(t *testing.T) {
 		{
 			name: "existing conn",
 			proxy: &VTGateProxy{
-				cluster:         &vtadminpb.Cluster{},
-				conn:            sql.OpenDB(&fakevtsql.Connector{}),
-				dialPingTimeout: time.Millisecond * 10,
+				cluster: &vtadminpb.Cluster{},
+				conn:    sql.OpenDB(&fakevtsql.Connector{}),
 			},
 			shouldErr: false,
 		},
