@@ -58,7 +58,7 @@ func gen4UpdateStmtPlanner(
 	if err != nil {
 		return nil, err
 	}
-	return update.Primitive(), nil
+	return update, nil
 }
 
 func gen4SelectStmtPlanner(
@@ -241,15 +241,24 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
-) (logicalPlan, error) {
+) (engine.Primitive, error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
 	}
-	_, err := semantics.Analyze(updStmt, ksName, vschema)
+	semTable, err := semantics.Analyze(updStmt, ksName, vschema)
 	if err != nil {
 		return nil, err
 	}
+
+	if ks := semTable.SingleUnshardedKeyspace(); ks != nil {
+		edml := engine.NewDML()
+		edml.Keyspace = ks
+		edml.Opcode = engine.Unsharded
+		edml.Query = generateQuery(updStmt)
+		return &engine.Update{DML: edml}, nil
+	}
+
 	return nil, nil
 }
 
