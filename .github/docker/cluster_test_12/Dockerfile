@@ -21,6 +21,7 @@ RUN apt-get install -y percona-xtrabackup-24
 RUN apt-get install -y rsyslog
 RUN sed -i '/imklog/s/^/#/' /etc/rsyslog.conf
 RUN service rsyslog start
+RUN apt-get install -y sockstat
 
 # Set the working directory
 WORKDIR /vt/src/vitess.io/vitess
