@@ -3440,8 +3440,7 @@ show_statement:
   }
 | SHOW VITESS_REPLICATION_STATUS like_opt
   {
-    showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope, ShowTablesOpt: showTablesOpt}}
+    $$ = &Show{&ShowBasic{Command: VitessReplicationStatus, Filter: $3}}
   }
 | SHOW VSCHEMA TABLES
   {

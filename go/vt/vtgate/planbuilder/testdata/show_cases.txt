@@ -719,3 +719,28 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# show vitess_replication_status
+"show vitess_replication_status"
+{
+  "QueryType": "SHOW",
+  "Original": "show vitess_replication_status",
+  "Instructions": {
+    "OperatorType": "ShowExec",
+    "Variant": " vitess_replication_status"
+  }
+}
+Gen4 plan same as above
+
+# show vitess_replication_status with filter
+"show vitess_replication_status like 'x'"
+{
+  "QueryType": "SHOW",
+  "Original": "show vitess_replication_status like 'x'",
+  "Instructions": {
+    "OperatorType": "ShowExec",
+    "Variant": " vitess_replication_status",
+    "Filter": " like 'x'"
+  }
+}
+Gen4 plan same as above

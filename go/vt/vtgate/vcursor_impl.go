@@ -72,6 +72,7 @@ type iExecute interface {
 	ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
 	ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
 
+	showVitessReplicationStatus(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
 	showShards(ctx context.Context, filter *sqlparser.ShowFilter, destTabletType topodatapb.TabletType) (*sqltypes.Result, error)
 	showTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
 
@@ -930,6 +931,8 @@ func (vc *vcursorImpl) VStream(rss []*srvtopo.ResolvedShard, filter *binlogdatap
 
 func (vc *vcursorImpl) ShowExec(command sqlparser.ShowCommandType, filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
 	switch command {
+	case sqlparser.VitessReplicationStatus:
+		return vc.executor.showVitessReplicationStatus(vc.ctx, filter)
 	case sqlparser.VitessShards:
 		return vc.executor.showShards(vc.ctx, filter, vc.tabletType)
 	case sqlparser.VitessTablets:
