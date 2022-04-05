@@ -45466,8 +45466,14 @@ export namespace binlogdata {
         /** Filter rules */
         rules?: (binlogdata.IRule[]|null);
 
-        /** Filter fieldEventMode */
-        fieldEventMode?: (binlogdata.Filter.FieldEventMode|null);
+        /** Filter field_event_mode */
+        field_event_mode?: (binlogdata.Filter.FieldEventMode|null);
+
+        /** Filter workflow_type */
+        workflow_type?: (number|Long|null);
+
+        /** Filter workflow_name */
+        workflow_name?: (string|null);
     }
 
     /** Represents a Filter. */
@@ -45482,8 +45488,14 @@ export namespace binlogdata {
         /** Filter rules. */
         public rules: binlogdata.IRule[];
 
-        /** Filter fieldEventMode. */
-        public fieldEventMode: binlogdata.Filter.FieldEventMode;
+        /** Filter field_event_mode. */
+        public field_event_mode: binlogdata.Filter.FieldEventMode;
+
+        /** Filter workflow_type. */
+        public workflow_type: (number|Long);
+
+        /** Filter workflow_name. */
+        public workflow_name: string;
 
         /**
          * Creates a new Filter instance using the specified properties.
@@ -45571,6 +45583,16 @@ export namespace binlogdata {
         STOP = 1,
         EXEC = 2,
         EXEC_IGNORE = 3
+    }
+
+    /** VReplicationWorkflowType enum. */
+    enum VReplicationWorkflowType {
+        MATERIALIZE = 0,
+        MOVETABLES = 1,
+        CREATELOOKUPINDEX = 2,
+        MIGRATE = 3,
+        RESHARD = 4,
+        ONLINEDDL = 5
     }
 
     /** Properties of a BinlogSource. */
