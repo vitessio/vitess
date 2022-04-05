@@ -132,4 +132,3 @@ jobs:
 
         # print test output
         cat output.txt
-      if: always()

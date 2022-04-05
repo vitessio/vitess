@@ -15,25 +15,37 @@ jobs:
     {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-18.04{{end}}
 
     steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Check for changes in relevant files
+      uses: dorny/paths-filter@v2
+      id: changes
+      with:
+        filters: |
+          end_to_end:
+            - 'go/**'
+
     - name: Set up Go
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v2
       with:
         go-version: 1.18
 
     - name: Set up python
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@v2
 
     - name: Tune the OS
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
         # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
         echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
         sudo sysctl -p /etc/sysctl.conf
 
-    - name: Check out code
-      uses: actions/checkout@v2
-
     - name: Get dependencies
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
@@ -68,12 +80,14 @@ jobs:
     {{if .MakeTools}}
 
     - name: Installing zookeeper and consul
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
           make tools
 
     {{end}}
 
     - name: Setup launchable dependencies
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
         pip3 install --user launchable~=1.0 > /dev/null
@@ -85,6 +99,7 @@ jobs:
         launchable record build --name "$GITHUB_RUN_ID" --source .
 
     - name: Run cluster endtoend test
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 30
       run: |
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
@@ -120,10 +135,10 @@ jobs:
         eatmydata -- go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable
+      if: steps.changes.outputs.end_to_end == 'true' && always()
       run: |
         # send recorded tests to launchable
         launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
 
         # print test output
         cat output.txt
-      if: always()
