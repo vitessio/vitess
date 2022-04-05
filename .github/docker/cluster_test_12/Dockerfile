@@ -18,9 +18,8 @@ RUN apt-get install -y gnupg2
 RUN dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
 RUN apt-get update
 RUN apt-get install -y percona-xtrabackup-24
-RUN apt-get install -y rsyslog
-RUN sed -i '/imklog/s/^/#/' /etc/rsyslog.conf
-RUN service rsyslog start
+RUN apt-get install -y syslog-ng
+RUN service syslog-ng start
 RUN apt-get install -y sockstat
 
 # Set the working directory
