@@ -1927,7 +1927,8 @@ var (
 	}, {
 		input: "show vschema vindexes",
 	}, {
-		input: "show vschema vindexes on t",
+		input:  "show vschema vindexes on t",
+		output: "show vschema vindexes from t",
 	}, {
 		input: "show vitess_migrations",
 	}, {
