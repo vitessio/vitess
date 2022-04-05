@@ -3,7 +3,10 @@ package gcsbackup
 import (
 	"bufio"
 	"os"
+	"strconv"
 	"strings"
+
+	"github.com/pkg/errors"
 
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -42,13 +45,26 @@ func load(path string) (*labels, error) {
 			continue
 		}
 
-		switch parts[0] {
+		var (
+			key = strings.TrimSpace(parts[0])
+			val = strings.TrimSpace(parts[1])
+		)
+
+		if val != "" {
+			v, err := strconv.Unquote(val)
+			if err != nil {
+				return nil, errors.Wrapf(err, "cannot parse quoted label %s=%s", key, val)
+			}
+			val = v
+		}
+
+		switch key {
 		case lastBackupIDLabel:
-			r.LastBackupID = strings.TrimSpace(parts[1])
+			r.LastBackupID = strings.TrimSpace(val)
 		case lastBackupExcludedKeyspacesLabel:
-			r.LastBackupExcludedKeyspaces = split(parts[1])
+			r.LastBackupExcludedKeyspaces = split(val)
 		case backupIDLabel:
-			r.BackupID = strings.TrimSpace(parts[1])
+			r.BackupID = strings.TrimSpace(val)
 		}
 	}
 

@@ -63,7 +63,7 @@ func setupLabels(t testing.TB) string {
 	}
 
 	for key, value := range all {
-		fmt.Fprintf(f, "%s= %s \n", key, value)
+		fmt.Fprintf(f, "%s= %q \n", key, value)
 	}
 
 	if err := f.Sync(); err != nil {
