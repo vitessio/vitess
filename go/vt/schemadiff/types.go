@@ -41,6 +41,8 @@ var (
 type Entity interface {
 	Name() string
 	Diff(other Entity, hints *DiffHints) (diff EntityDiff, err error)
+	Create() (diff EntityDiff, err error)
+	Drop() (diff EntityDiff, err error)
 }
 
 type EntityDiff interface {

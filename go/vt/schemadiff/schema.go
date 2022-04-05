@@ -225,3 +225,40 @@ func (s *Schema) EntityNames() []string {
 	}
 	return names
 }
+
+// Diff compares this schema with another schema, and sees what it takes to make this schema look
+// like the other. It returns a list of diffs.
+func (s *Schema) Diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err error) {
+	// dropped entities
+	for _, e := range s.Entities() {
+		if _, ok := other.named[e.Name()]; !ok {
+			// other schema does not have the entity
+			diff, err := e.Drop()
+			if err != nil {
+				return nil, err
+			}
+			diffs = append(diffs, diff)
+		}
+	}
+	for _, e := range other.Entities() {
+		if fromEntity, ok := s.named[e.Name()]; ok {
+			// entities exist by same name in both schemas. Let's diff them.
+			diff, err := fromEntity.Diff(e, hints)
+			if err != nil {
+				return nil, err
+			}
+			if diff != nil && !diff.IsEmpty() {
+				diffs = append(diffs, diff)
+			}
+		} else {
+			// Added entity
+			// this schema does not have the entity
+			diff, err := e.Create()
+			if err != nil {
+				return nil, err
+			}
+			diffs = append(diffs, diff)
+		}
+	}
+	return diffs, err
+}

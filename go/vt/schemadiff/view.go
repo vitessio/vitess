@@ -150,3 +150,14 @@ func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, hints *DiffHints) (
 	}
 	return &AlterViewEntityDiff{alterView: alterView}, nil
 }
+
+func (c *CreateViewEntity) Create() (diff EntityDiff, err error) {
+	return &CreateViewEntityDiff{createView: &c.CreateView}, nil
+}
+
+func (c *CreateViewEntity) Drop() (diff EntityDiff, err error) {
+	dropView := &sqlparser.DropView{
+		FromTables: []sqlparser.TableName{c.ViewName},
+	}
+	return &DropViewEntityDiff{dropView: dropView}, nil
+}

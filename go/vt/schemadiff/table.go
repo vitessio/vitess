@@ -676,3 +676,14 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		}
 	}
 }
+
+func (c *CreateTableEntity) Create() (diff EntityDiff, err error) {
+	return &CreateTableEntityDiff{createTable: &c.CreateTable}, nil
+}
+
+func (c *CreateTableEntity) Drop() (diff EntityDiff, err error) {
+	dropTable := &sqlparser.DropTable{
+		FromTables: []sqlparser.TableName{c.Table},
+	}
+	return &DropTableEntityDiff{dropTable: dropTable}, nil
+}
