@@ -75,6 +75,7 @@ type iExecute interface {
 	showVitessReplicationStatus(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
 	showShards(ctx context.Context, filter *sqlparser.ShowFilter, destTabletType topodatapb.TabletType) (*sqltypes.Result, error)
 	showTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
+	showVitessMetadata(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
 
 	// TODO: remove when resolver is gone
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
@@ -937,6 +938,8 @@ func (vc *vcursorImpl) ShowExec(command sqlparser.ShowCommandType, filter *sqlpa
 		return vc.executor.showShards(vc.ctx, filter, vc.tabletType)
 	case sqlparser.VitessTablets:
 		return vc.executor.showTablets(filter)
+	case sqlparser.VitessVariables:
+		return vc.executor.showVitessMetadata(vc.ctx, filter)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "bug: unexpected show command: %v", command)
 	}

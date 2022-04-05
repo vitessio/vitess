@@ -744,3 +744,28 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# show vitess_metadata variables
+"show vitess_metadata variables"
+{
+  "QueryType": "SHOW",
+  "Original": "show vitess_metadata variables",
+  "Instructions": {
+    "OperatorType": "ShowExec",
+    "Variant": " vitess_metadata variables"
+  }
+}
+Gen4 plan same as above
+
+# show vitess_metadata variables with filter
+"show vitess_metadata variables like 'x'"
+{
+  "QueryType": "SHOW",
+  "Original": "show vitess_metadata variables like 'x'",
+  "Instructions": {
+    "OperatorType": "ShowExec",
+    "Variant": " vitess_metadata variables",
+    "Filter": " like 'x'"
+  }
+}
+Gen4 plan same as above
