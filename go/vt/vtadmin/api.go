@@ -342,13 +342,14 @@ func (api *API) EjectDynamicCluster(key string, value any) {
 	}
 
 	// Maintain order of clusters when removing dynamic cluster
-	clusters := []*cluster.Cluster{}
-	for _, cluster := range api.clusters {
-		if cluster.ID != key {
-			clusters = append(clusters, cluster)
-		}
+	clusterIndex := stdsort.Search(len(api.clusters), func(i int) bool { return api.clusters[i].ID == key })
+	if clusterIndex >= len(api.clusters) || clusterIndex < 0 {
+		log.Errorf("Cannot remove cluster %s from api.clusters. Cluster index %d is out of range for clusters slice of %d length.", key, clusterIndex, len(api.clusters))
 	}
-	api.clusters = clusters
+
+	api.clusters[0] = api.clusters[clusterIndex]
+
+	api.clusters = api.clusters[1:]
 }
 
 // CreateKeyspace is part of the vtadminpb.VTAdminServer interface.
