@@ -223,15 +223,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dynamicAPI := &API{
-		clusters:   api.clusters,
-		clusterMap: api.clusterMap,
-		router:     api.router,
-		serv:       api.serv,
-		authz:      api.authz,
-		options:    api.options,
-	}
-
+	var dynamicAPI *API
 	clusterCookie, err := r.Cookie("cluster")
 
 	if err == nil {
@@ -242,6 +234,9 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				var clusterJSON DynamicClusterJSON
 				err = json.Unmarshal(decoded, &clusterJSON)
 				if err == nil {
+
+					api.clusterMu.Lock()
+
 					clusterID := clusterJSON.ClusterName
 					if _, exists := api.clusterMap[clusterID]; !exists {
 						c, err := cluster.Config{
@@ -254,6 +249,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								},
 							},
 						}.Cluster()
+
 						if err == nil {
 							api.clusterMap[clusterID] = c
 							api.clusters = append(api.clusters, c)
@@ -263,12 +259,27 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							}
 						}
 					}
+
 					selectedCluster := api.clusterMap[clusterID]
-					dynamicAPI.clusters = []*cluster.Cluster{selectedCluster}
-					dynamicAPI.clusterMap = map[string]*cluster.Cluster{clusterID: selectedCluster}
+
+					api.clusterMu.Unlock()
+
+					dynamicAPI = &API{
+						clusters:     []*cluster.Cluster{selectedCluster},
+						clusterMap:   map[string]*cluster.Cluster{clusterID: selectedCluster},
+						clusterCache: api.clusterCache,
+						serv:         api.serv,
+						router:       api.router,
+						authz:        api.authz,
+						options:      api.options,
+					}
 				}
 			}
 		}
+	}
+
+	if dynamicAPI == nil {
+		dynamicAPI = api
 	}
 
 	defer dynamicAPI.Close()
@@ -332,6 +343,9 @@ func (api *API) Handler() http.Handler {
 }
 
 func (api *API) EjectDynamicCluster(key string, value any) {
+	api.clusterMu.Lock()
+	defer api.clusterMu.Unlock()
+
 	// Delete dynamic clusters from clusterMap when they are expired from clusterCache
 	_, ok := api.clusterMap[key]
 	if ok {
