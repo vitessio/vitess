@@ -2329,6 +2329,73 @@ type (
 		ResponseType JtOnResponseType
 		Expr         Expr
 	}
+
+	// JSONPathParam is used to store the path used as arguments in different JSON functions
+	JSONPathParam Expr
+
+	// JSONContainsExpr represents the function and arguments for JSON_CONTAINS()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-contains
+	JSONContainsExpr struct {
+		Target    Expr
+		Candidate Expr
+		PathList  []JSONPathParam
+	}
+
+	// JSONContainsPathExpr represents the function and arguments for JSON_CONTAINS_PATH()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-contains-path
+	JSONContainsPathExpr struct {
+		JSONDoc  Expr
+		OneOrAll Expr
+		PathList []JSONPathParam
+	}
+
+	// JSONContainsPathType is an enum to get types of Trim
+	JSONContainsPathType int8
+
+	// JSONExtractExpr represents the function and arguments for JSON_EXTRACT()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-extract
+	JSONExtractExpr struct {
+		JSONDoc  Expr
+		PathList []JSONPathParam
+	}
+
+	// JSONKeysExpr represents the function and arguments for JSON_KEYS()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-keys
+	JSONKeysExpr struct {
+		JSONDoc  Expr
+		PathList []JSONPathParam
+	}
+
+	// JSONOverlapsExpr represents the function and arguments for JSON_OVERLAPS()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-overlaps
+	JSONOverlapsExpr struct {
+		JSONDoc1 Expr
+		JSONDoc2 Expr
+	}
+
+	// JSONSearchExpr represents the function and arguments for JSON_SEARCH()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-search
+	JSONSearchExpr struct {
+		JSONDoc    Expr
+		OneOrAll   Expr
+		SearchStr  Expr
+		EscapeChar Expr
+		PathList   []JSONPathParam
+	}
+
+	// JSONValueExpr represents the function and arguments for JSON_VALUE()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-value
+	JSONValueExpr struct {
+		JSONDoc Expr
+		Path    JSONPathParam
+	}
+
+	// MemberOf represents the function and arguments for MEMBER OF()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#operator_member-of
+	MemberOfExpr struct {
+		Value   Expr
+		JSONArr Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2372,9 +2439,17 @@ func (*JSONStorageFreeExpr) iExpr()  {}
 func (*JSONStorageSizeExpr) iExpr()  {}
 func (*TrimFuncExpr) iExpr()         {}
 func (Offset) iExpr()                {}
+func (*JSONContainsExpr) iExpr()     {}
+func (*JSONContainsPathExpr) iExpr() {}
+func (*JSONExtractExpr) iExpr()      {}
+func (*JSONKeysExpr) iExpr()         {}
+func (*JSONOverlapsExpr) iExpr()     {}
+func (*JSONSearchExpr) iExpr()       {}
+func (*JSONValueExpr) iExpr()        {}
 func (*JSONArrayExpr) iExpr()        {}
 func (*JSONObjectExpr) iExpr()       {}
 func (*JSONQuoteExpr) iExpr()        {}
+func (*MemberOfExpr) iExpr()         {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()             {}
@@ -2395,6 +2470,14 @@ func (*JSONStorageSizeExpr) iCallable()  {}
 func (*JSONArrayExpr) iCallable()        {}
 func (*JSONObjectExpr) iCallable()       {}
 func (*JSONQuoteExpr) iCallable()        {}
+func (*JSONContainsExpr) iCallable()     {}
+func (*JSONContainsPathExpr) iCallable() {}
+func (*JSONExtractExpr) iCallable()      {}
+func (*JSONKeysExpr) iCallable()         {}
+func (*JSONValueExpr) iCallable()        {}
+func (*JSONSearchExpr) iCallable()       {}
+func (*JSONOverlapsExpr) iCallable()     {}
+func (*MemberOfExpr) iCallable()         {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

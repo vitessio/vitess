@@ -2667,3 +2667,117 @@ func (node *JSONQuoteExpr) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.StringArg, true)
 	buf.WriteByte(')')
 }
+
+// formatFast formats the node
+func (node *JSONContainsExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_contains(")
+	buf.printExpr(node, node.Target, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Candidate, true)
+	if len(node.PathList) > 0 {
+		buf.WriteString(", ")
+	}
+	var prefix string
+	for _, n := range node.PathList {
+		buf.WriteString(prefix)
+		buf.printExpr(node, n, true)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// formatFast formats the node
+func (node *JSONContainsPathExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_contains_path(")
+	buf.printExpr(node, node.JSONDoc, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.OneOrAll, true)
+	buf.WriteString(", ")
+	var prefix string
+	for _, n := range node.PathList {
+		buf.WriteString(prefix)
+		buf.printExpr(node, n, true)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// formatFast formats the node
+func (node *JSONExtractExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_extract(")
+	buf.printExpr(node, node.JSONDoc, true)
+	buf.WriteString(", ")
+	var prefix string
+	for _, n := range node.PathList {
+		buf.WriteString(prefix)
+		buf.printExpr(node, n, true)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// formatFast formats the node
+func (node *JSONKeysExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_keys(")
+	buf.printExpr(node, node.JSONDoc, true)
+	if len(node.PathList) > 0 {
+		buf.WriteString(", ")
+	}
+	var prefix string
+	for _, n := range node.PathList {
+		buf.WriteString(prefix)
+		buf.printExpr(node, n, true)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// formatFast formats the node
+func (node *JSONOverlapsExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_overlaps(")
+	buf.printExpr(node, node.JSONDoc1, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.JSONDoc2, true)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *JSONSearchExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_search(")
+	buf.printExpr(node, node.JSONDoc, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.OneOrAll, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.SearchStr, true)
+	if node.EscapeChar != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.EscapeChar, true)
+	}
+	if len(node.PathList) > 0 {
+		buf.WriteString(", ")
+	}
+	var prefix string
+	for _, n := range node.PathList {
+		buf.WriteString(prefix)
+		buf.printExpr(node, n, true)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// formatFast formats the node
+func (node *JSONValueExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_value(")
+	buf.printExpr(node, node.JSONDoc, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Path, true)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *MemberOfExpr) formatFast(buf *TrackedBuffer) {
+	buf.printExpr(node, node.Value, true)
+	buf.WriteString(" member of (")
+	buf.printExpr(node, node.JSONArr, true)
+	buf.WriteByte(')')
+}

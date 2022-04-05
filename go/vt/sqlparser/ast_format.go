@@ -2041,3 +2041,85 @@ func (node JSONObjectParam) Format(buf *TrackedBuffer) {
 func (node *JSONQuoteExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "json_quote(%v)", node.StringArg)
 }
+
+// Format formats the node
+func (node *JSONContainsExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_contains(%v, %v", node.Target, node.Candidate)
+	if len(node.PathList) > 0 {
+		buf.WriteString(", ")
+	}
+	var prefix string
+	for _, n := range node.PathList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node
+func (node *JSONContainsPathExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_contains_path(%v, %v, ", node.JSONDoc, node.OneOrAll)
+	var prefix string
+	for _, n := range node.PathList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node
+func (node *JSONExtractExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_extract(%v, ", node.JSONDoc)
+	var prefix string
+	for _, n := range node.PathList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node
+func (node *JSONKeysExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_keys(%v", node.JSONDoc)
+	if len(node.PathList) > 0 {
+		buf.WriteString(", ")
+	}
+	var prefix string
+	for _, n := range node.PathList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node
+func (node *JSONOverlapsExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_overlaps(%v, %v)", node.JSONDoc1, node.JSONDoc2)
+}
+
+// Format formats the node
+func (node *JSONSearchExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_search(%v, %v, %v", node.JSONDoc, node.OneOrAll, node.SearchStr)
+	if node.EscapeChar != nil {
+		buf.astPrintf(node, ", %v", node.EscapeChar)
+	}
+	if len(node.PathList) > 0 {
+		buf.WriteString(", ")
+	}
+	var prefix string
+	for _, n := range node.PathList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node
+func (node *JSONValueExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_value(%v, %v)", node.JSONDoc, node.Path)
+}
+
+// Format formats the node
+func (node *MemberOfExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%v member of (%v)", node.Value, node.JSONArr)
+}
