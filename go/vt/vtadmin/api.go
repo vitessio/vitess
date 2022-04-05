@@ -246,22 +246,24 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				err = json.Unmarshal(decoded, &clusterJSON)
 				if err == nil {
 					clusterID := clusterJSON.ClusterName
-					c, err := cluster.Config{
-						ID:            clusterID,
-						Name:          clusterID,
-						DiscoveryImpl: "dynamic",
-						DiscoveryFlagsByImpl: cluster.FlagsByImpl{
-							"dynamic": map[string]string{
-								"discovery": string(decoded),
+					if _, exists := api.clusterMap[clusterID]; !exists {
+						c, err := cluster.Config{
+							ID:            clusterID,
+							Name:          clusterID,
+							DiscoveryImpl: "dynamic",
+							DiscoveryFlagsByImpl: cluster.FlagsByImpl{
+								"dynamic": map[string]string{
+									"discovery": string(decoded),
+								},
 							},
-						},
-					}.Cluster()
-					if err == nil {
-						api.clusterMap[clusterID] = c
-						api.clusters = append(api.clusters, c)
-						err = api.clusterCache.Add(clusterID, c, 24*time.Hour)
-						if err != nil {
-							log.Infof("could not add dynamic cluster %s to cluster cache: %+v", clusterID, err)
+						}.Cluster()
+						if err == nil {
+							api.clusterMap[clusterID] = c
+							api.clusters = append(api.clusters, c)
+							err = api.clusterCache.Add(clusterID, c, 24*time.Hour)
+							if err != nil {
+								log.Infof("could not add dynamic cluster %s to cluster cache: %+v", clusterID, err)
+							}
 						}
 					}
 					selectedCluster := api.clusterMap[clusterID]
