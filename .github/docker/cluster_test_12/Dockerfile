@@ -19,6 +19,7 @@ RUN dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
 RUN apt-get update
 RUN apt-get install -y percona-xtrabackup-24
 RUN apt-get install -y syslog-ng
+RUN echo 'SYSLOGNG_OPTS="--no-caps"' > /etc/default/syslog-ng
 RUN service syslog-ng start
 RUN apt-get install -y sockstat
 
