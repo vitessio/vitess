@@ -22,9 +22,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
-// Generate all the metadata used for collations from the JSON data dumped from MySQL
-//go:generate go run ./tools/makecolldata/
-
 // ID is a numeric identifier for a collation. These identifiers are defined by MySQL, not by Vitess.
 type ID uint16
 
