@@ -242,6 +242,14 @@ func TestDiffSchemas(t *testing.T) {
 			},
 		},
 		{
+			name: "create table (2)",
+			from: ";;; ; ;    ;;;",
+			to:   "create table t(id int primary key)",
+			diffs: []string{
+				"create table t (\n\tid int primary key\n)",
+			},
+		},
+		{
 			name: "drop table",
 			from: "create table t(id int primary key)",
 			diffs: []string{
@@ -306,6 +314,12 @@ func TestDiffSchemas(t *testing.T) {
 			expectError: ErrEntityTypeMismatch.Error(),
 		},
 		{
+			name:        "unsupported statement",
+			from:        "create table t(id int)",
+			to:          "drop table t",
+			expectError: ErrUnsupportedStatement.Error(),
+		},
+		{
 			name: "create, alter, drop tables and views",
 			from: "create view v1 as select * from t1; create table t1(id int primary key); create table t2(id int primary key); create view v2 as select * from t2; create table t3(id int primary key);",
 			to:   "create view v0 as select * from v2, t2; create table t4(id int primary key); create view v2 as select id from t2; create table t2(id bigint primary key); create table t3(id int primary key)",
@@ -325,7 +339,7 @@ func TestDiffSchemas(t *testing.T) {
 			diffs, err := DiffSchemasSQL(ts.from, ts.to, hints)
 			if ts.expectError != "" {
 				assert.Error(t, err)
-				assert.Contains(t, ts.expectError, err.Error())
+				assert.Contains(t, err.Error(), ts.expectError)
 			} else {
 				assert.NoError(t, err)
 				statements := []string{}
