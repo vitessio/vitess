@@ -34,6 +34,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
+	channelz "google.golang.org/grpc/channelz/service"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/reflection"
 
@@ -63,6 +64,9 @@ type Options struct {
 	// EnableTracing specifies whether to install opentracing interceptors on
 	// the gRPC server.
 	EnableTracing bool
+	// EnableChannelz specifies whether to register the channelz service on the
+	// gRPC server.
+	EnableChannelz bool
 
 	StreamInterceptors []grpc.StreamServerInterceptor
 	UnaryInterceptors  []grpc.UnaryServerInterceptor
@@ -121,6 +125,10 @@ func New(name string, opts Options) *Server {
 
 	healthServer := health.NewServer()
 	healthpb.RegisterHealthServer(gserv, healthServer)
+
+	if opts.EnableChannelz {
+		channelz.RegisterChannelzServiceToServer(gserv)
+	}
 
 	return &Server{
 		name:         name,
