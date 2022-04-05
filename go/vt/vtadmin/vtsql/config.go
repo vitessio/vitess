@@ -18,7 +18,6 @@ package vtsql
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/spf13/pflag"
 
@@ -37,8 +36,6 @@ type Config struct {
 	// be a better way where we don't need to put this in the config, because
 	// it's not really an "option" in normal use.
 	CredentialsPath string
-
-	DialPingTimeout time.Duration
 
 	Cluster         *vtadminpb.Cluster
 	ResolverOptions *resolver.Options
@@ -74,9 +71,6 @@ func (c *Config) Parse(args []string) error {
 	}
 
 	c.ResolverOptions.InstallFlags(fs)
-
-	fs.DurationVar(&c.DialPingTimeout, "dial-ping-timeout", time.Millisecond*500,
-		"Timeout to use when pinging an existing connection during calls to Dial.")
 
 	credentialsTmplStr := fs.String("credentials-path-tmpl", "",
 		"Go template used to specify a path to a credentials file, which is a json file containing "+
