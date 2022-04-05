@@ -292,6 +292,7 @@ const (
 	VitessMigrationsStr = " vitess_migrations"
 	VitessShardsStr     = " vitess_shards"
 	VitessTabletsStr    = " vitess_tablets"
+	VitessTargetStr     = " vitess_target"
 	VschemaTablesStr    = " vschema tables"
 	VschemaVindexesStr  = " vschema vindexes"
 	WarningsStr         = " warnings"
@@ -623,6 +624,7 @@ const (
 	VitessMigrations
 	VitessShards
 	VitessTablets
+	VitessTarget
 	VschemaTables
 	VschemaVindexes
 	Warnings
