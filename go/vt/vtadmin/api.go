@@ -106,10 +106,6 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 		return c1.ID < c2.ID
 	}).Sort(clusters)
 
-	if opts.GRPCOpts.Services == nil {
-		opts.GRPCOpts.Services = []string{"vtadmin.VTAdminServer"}
-	}
-
 	var (
 		authn rbac.Authenticator
 		authz *rbac.Authorizer
