@@ -87,7 +87,12 @@ endif
 	# For the specified GOOS + GOARCH, build all the binaries by default with CGO disabled
 	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 	# unset GOOS and embed local resources in the vttablet executable
-	(cd go/cmd/vttablet && unset GOOS && unset GOARCH && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=$${HOME}/go/bin/${GOOS}_${GOARCH}/vttablet)
+	if [ -d /go/bin ]; then
+		# Probably in the bootstrap container
+		(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=/go/bin/${GOOS}_${GOARCH}/vttablet)
+	else
+		(cd go/cmd/vttablet && unset GOOS && unset GOARCH && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=$${HOME}/go/bin/${GOOS}_${GOARCH}/vttablet)
+	fi
 	# Cross-compiling w/ cgo isn't trivial and we don't need vtorc, so we can skip building it
 
 debug:
@@ -104,6 +109,13 @@ install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
 	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+
+# Will only work inside the docker bootstrap for now
+cross-install: cross-build
+	# binaries
+	mkdir -p "$${PREFIX}/bin"
+	# Still no vtorc for cross-compile
+	cp "/go/bin/${GOOS}_${GOARCH}/"{mysqlctl,mysqlctld,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 
 # Install local install the binaries needed to run vitess locally
 # Usage: make install-local PREFIX=/path/to/install/root
@@ -213,9 +225,9 @@ java_test:
 	VTROOT=${PWD} mvn -f java/pom.xml -B clean verify
 
 install_protoc-gen-go:
-	go install google.golang.org/protobuf/cmd/protoc-gen-go
-	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc
-	go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
+	go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto@latest
 
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
@@ -269,7 +281,14 @@ define build_docker_image
 	${info Building ${2}}
 	# Fix permissions before copying files, to avoid AUFS bug other must have read/access permissions
 	chmod -R o=rx *;
-	docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .;
+
+	if grep -q arm64 <<< ${2}; then \
+		echo "Building docker using arm64 buildx"; \
+		docker buildx build --platform linux/arm64 -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
+	else \
+		echo "Building docker using straight docker build"; \
+		docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
+	fi
 endef
 
 docker_base:
@@ -285,7 +304,7 @@ docker_base_all: docker_base $(DOCKER_BASE_TARGETS)
 docker_lite:
 	${call build_docker_image,docker/lite/Dockerfile,vitess/lite}
 
-DOCKER_LITE_SUFFIX = mysql56 mysql57 ubi7.mysql57 mysql80 ubi7.mysql80 mariadb mariadb103 percona percona57 ubi7.percona57 percona80 ubi7.percona80 alpine testing
+DOCKER_LITE_SUFFIX = mysql56 mysql57 ubi7.mysql57 mysql80 ubi7.mysql80 mariadb mariadb103 percona percona57 ubi7.percona57 percona80 ubi7.percona80 alpine testing ubi8.mysql80 ubi8.arm64.mysql80
 DOCKER_LITE_TARGETS = $(addprefix docker_lite_,$(DOCKER_LITE_SUFFIX))
 $(DOCKER_LITE_TARGETS): docker_lite_%:
 	${call build_docker_image,docker/lite/Dockerfile.$*,vitess/lite:$*}

@@ -291,37 +291,41 @@ func (ct *ColumnType) SQLType() querypb.Type {
 // If the list is empty, one will be created containing the query hint.
 // If the list already contains a query hint, the given string will be merged with the existing one.
 // This is done because only one query hint is allowed per query.
-func (node Comments) AddQueryHint(queryHint string) (Comments, error) {
+func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 	if queryHint == "" {
-		return node, nil
+		if node == nil {
+			return nil, nil
+		}
+		return node.comments, nil
 	}
-	queryHintCommentStr := fmt.Sprintf("%s %s */", queryOptimizerPrefix, queryHint)
-	if len(node) == 0 {
-		return Comments{queryHintCommentStr}, nil
-	}
+
 	var newComments Comments
 	var hasQueryHint bool
-	for _, comment := range node {
-		if strings.HasPrefix(comment, queryOptimizerPrefix) {
-			if hasQueryHint {
-				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Must have only one query hint")
-			}
-			hasQueryHint = true
-			idx := strings.Index(comment, "*/")
-			if idx == -1 {
-				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Query hint comment is malformed")
-			}
-			if strings.Contains(comment, queryHint) {
-				newComments = append(Comments{comment}, newComments...)
+
+	if node != nil {
+		for _, comment := range node.comments {
+			if strings.HasPrefix(comment, queryOptimizerPrefix) {
+				if hasQueryHint {
+					return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Must have only one query hint")
+				}
+				hasQueryHint = true
+				idx := strings.Index(comment, "*/")
+				if idx == -1 {
+					return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Query hint comment is malformed")
+				}
+				if strings.Contains(comment, queryHint) {
+					newComments = append(Comments{comment}, newComments...)
+					continue
+				}
+				newComment := fmt.Sprintf("%s %s */", strings.TrimSpace(comment[:idx]), queryHint)
+				newComments = append(Comments{newComment}, newComments...)
 				continue
 			}
-			newComment := fmt.Sprintf("%s %s */", strings.TrimSpace(comment[:idx]), queryHint)
-			newComments = append(Comments{newComment}, newComments...)
-			continue
+			newComments = append(newComments, comment)
 		}
-		newComments = append(newComments, comment)
 	}
 	if !hasQueryHint {
+		queryHintCommentStr := fmt.Sprintf("%s %s */", queryOptimizerPrefix, queryHint)
 		newComments = append(Comments{queryHintCommentStr}, newComments...)
 	}
 	return newComments, nil
@@ -379,7 +383,7 @@ func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
 	return &noHints
 }
 
-//TableName returns a TableName pointing to this table expr
+// TableName returns a TableName pointing to this table expr
 func (node *AliasedTableExpr) TableName() (TableName, error) {
 	if !node.As.IsEmpty() {
 		return TableName{Name: node.As}, nil
@@ -617,7 +621,7 @@ func NewColNameWithQualifier(identifier string, table TableName) *ColName {
 	}
 }
 
-//NewSelect is used to create a select statement
+// NewSelect is used to create a select statement
 func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, into *SelectInto, from TableExprs, where *Where, groupBy GroupBy, having *Where) *Select {
 	var cache *bool
 	var distinct, straightJoinHint, sqlFoundRows bool
@@ -640,7 +644,7 @@ func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, int
 	}
 	return &Select{
 		Cache:            cache,
-		Comments:         comments,
+		Comments:         comments.Parsed(),
 		Distinct:         distinct,
 		StraightJoinHint: straightJoinHint,
 		SQLCalcFoundRows: sqlFoundRows,
@@ -828,6 +832,11 @@ func (node *Select) SetOrderBy(orderBy OrderBy) {
 	node.OrderBy = orderBy
 }
 
+// GetOrderBy gets the order by clause
+func (node *Select) GetOrderBy() OrderBy {
+	return node.OrderBy
+}
+
 // SetLimit sets the limit clause
 func (node *Select) SetLimit(limit *Limit) {
 	node.Limit = limit
@@ -860,11 +869,11 @@ func (node *Select) GetColumnCount() int {
 
 // SetComments implements the SelectStatement interface
 func (node *Select) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // GetComments implements the SelectStatement interface
-func (node *Select) GetComments() Comments {
+func (node *Select) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
@@ -935,6 +944,11 @@ func (node *Union) SetOrderBy(orderBy OrderBy) {
 	node.OrderBy = orderBy
 }
 
+// GetOrderBy gets the order by clause
+func (node *Union) GetOrderBy() OrderBy {
+	return node.OrderBy
+}
+
 // SetLimit sets the limit clause
 func (node *Union) SetLimit(limit *Limit) {
 	node.Limit = limit
@@ -971,8 +985,8 @@ func (node *Union) SetComments(comments Comments) {
 }
 
 // GetComments implements the SelectStatement interface
-func (node *Union) GetComments() Comments {
-	return node.Left.GetComments()
+func (node *Union) GetParsedComments() *ParsedComments {
+	return node.Left.GetParsedComments()
 }
 
 func requiresParen(stmt SelectStatement) bool {

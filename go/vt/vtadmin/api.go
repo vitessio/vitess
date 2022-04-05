@@ -106,10 +106,6 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 		return c1.ID < c2.ID
 	}).Sort(clusters)
 
-	if opts.GRPCOpts.Services == nil {
-		opts.GRPCOpts.Services = []string{"vtadmin.VTAdminServer"}
-	}
-
 	var (
 		authn rbac.Authenticator
 		authz *rbac.Authorizer
@@ -225,6 +221,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		api.Handler().ServeHTTP(w, r)
 		return
 	}
+
 	dynamicAPI := &API{
 		clusters:   api.clusters,
 		clusterMap: api.clusterMap,

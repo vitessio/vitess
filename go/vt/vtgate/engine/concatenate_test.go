@@ -39,7 +39,13 @@ func TestConcatenate_NoErrors(t *testing.T) {
 		inputs         []*sqltypes.Result
 		expectedResult *sqltypes.Result
 		expectedError  string
+		ignoreTypes    []int
 	}
+
+	r1 := r("id|col1|col2", "int64|varbinary|varbinary", "1|a1|b1", "2|a2|b2")
+	r2 := r("id|col1|col2", "int32|varbinary|varbinary", "1|a1|b1", "2|a2|b2")
+	combinedResult := r1
+	combinedResult.Rows = append(combinedResult.Rows, r2.Rows...)
 
 	testCases := []*testCase{{
 		testName: "empty results",
@@ -67,6 +73,14 @@ func TestConcatenate_NoErrors(t *testing.T) {
 		},
 		expectedError: "merging field of different types is not supported",
 	}, {
+		testName: "ignored field types - ignored",
+		inputs: []*sqltypes.Result{
+			r("id|col1|col2", "int64|varbinary|varbinary", "1|a1|b1", "2|a2|b2"),
+			r("id|col1|col2", "int32|varbinary|varbinary", "1|a1|b1", "2|a2|b2"),
+		},
+		expectedResult: combinedResult,
+		ignoreTypes:    []int{0},
+	}, {
 		testName: "input source has different column count",
 		inputs: []*sqltypes.Result{
 			r("id|col1|col2", "int64|varchar|varchar", "1|a1|b1", "2|a2|b2"),
@@ -89,9 +103,8 @@ func TestConcatenate_NoErrors(t *testing.T) {
 			// input is added twice, since the first one is used by execute and the next by stream execute
 			sources = append(sources, &fakePrimitive{results: []*sqltypes.Result{input, input}})
 		}
-		concatenate := &Concatenate{
-			Sources: sources,
-		}
+
+		concatenate := NewConcatenate(sources, tc.ignoreTypes)
 
 		t.Run(tc.testName+"-Execute", func(t *testing.T) {
 			qr, err := concatenate.TryExecute(&noopVCursor{ctx: context.Background()}, nil, true)
@@ -121,13 +134,13 @@ func TestConcatenate_WithErrors(t *testing.T) {
 	strFailed := "failed"
 
 	fake := r("id|col1|col2", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2")
-	concatenate := &Concatenate{
-		Sources: []Primitive{
+	concatenate := NewConcatenate(
+		[]Primitive{
 			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
 			&fakePrimitive{results: []*sqltypes.Result{nil, nil}, sendErr: errors.New(strFailed)},
 			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
-		},
-	}
+		}, nil,
+	)
 	ctx := context.Background()
 	_, err := concatenate.TryExecute(&noopVCursor{ctx: ctx}, nil, true)
 	require.EqualError(t, err, strFailed)
@@ -135,13 +148,13 @@ func TestConcatenate_WithErrors(t *testing.T) {
 	_, err = wrapStreamExecute(concatenate, &noopVCursor{ctx: ctx}, nil, true)
 	require.EqualError(t, err, strFailed)
 
-	concatenate = &Concatenate{
-		Sources: []Primitive{
+	concatenate = NewConcatenate(
+		[]Primitive{
 			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
 			&fakePrimitive{results: []*sqltypes.Result{nil, nil}, sendErr: errors.New(strFailed)},
 			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
-		},
-	}
+		}, nil)
+
 	_, err = concatenate.TryExecute(&noopVCursor{ctx: ctx}, nil, true)
 	require.EqualError(t, err, strFailed)
 	_, err = wrapStreamExecute(concatenate, &noopVCursor{ctx: ctx}, nil, true)

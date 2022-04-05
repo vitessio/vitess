@@ -173,12 +173,12 @@ func newBuildSelectPlan(
 		return nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, physOp)
+	plan, err := transformToLogicalPlan(ctx, physOp, true)
 	if err != nil {
 		return nil, err
 	}
 
-	plan, err = planHorizon(ctx, plan, selStmt)
+	plan, err = planHorizon(ctx, plan, selStmt, true)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +225,7 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 	return lPlan, nil
 }
 
-func planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan, in sqlparser.SelectStatement) (logicalPlan, error) {
+func planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan, in sqlparser.SelectStatement, truncateColumns bool) (logicalPlan, error) {
 	switch node := in.(type) {
 	case *sqlparser.Select:
 		hp := horizonPlanning{
@@ -234,7 +234,7 @@ func planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan, in sqlparse
 
 		replaceSubQuery(ctx, node)
 		var err error
-		plan, err = hp.planHorizon(ctx, plan)
+		plan, err = hp.planHorizon(ctx, plan, truncateColumns)
 		if err != nil {
 			return nil, err
 		}
@@ -284,12 +284,10 @@ func planOrderByOnUnion(ctx *plancontext.PlanningContext, plan logicalPlan, unio
 }
 
 func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.SelectStatement) (logicalPlan, error) {
-	directives := sqlparser.ExtractCommentDirectives(sqlparser.GetFirstSelect(stmt).Comments)
-	scatterAsWarns := false
-	if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
-		scatterAsWarns = true
-	}
+	directives := sqlparser.GetFirstSelect(stmt).Comments.Directives()
+	scatterAsWarns := directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings)
 	queryTimeout := queryTimeout(directives)
+
 	if scatterAsWarns || queryTimeout > 0 {
 		_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
 			switch plan := logicalPlan.(type) {

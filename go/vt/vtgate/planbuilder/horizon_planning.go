@@ -37,7 +37,7 @@ type horizonPlanning struct {
 	qp  *abstract.QueryProjection
 }
 
-func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
+func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan, truncateColumns bool) (logicalPlan, error) {
 	rb, isRoute := plan.(*routeGen4)
 	if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
 		// If we got here, we don't have a single shard plan
@@ -63,24 +63,23 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 
 	// If we still have a HAVING clause, it's because it could not be pushed to the WHERE,
 	// so it probably has aggregations
-	if hp.qp.NeedsAggregation() || hp.sel.Having != nil {
+	switch {
+	case hp.qp.NeedsAggregation() || hp.sel.Having != nil:
 		plan, err = hp.planAggregations(ctx, plan)
 		if err != nil {
 			return nil, err
 		}
 		// if we already did sorting, we don't need to do it again
 		needsOrdering = needsOrdering && !hp.qp.CanPushDownSorting
-	} else {
-		if canShortcut {
-			err = planSingleShardRoutePlan(hp.sel, rb)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			err = pushProjections(ctx, plan, hp.qp.SelectExprs)
-			if err != nil {
-				return nil, err
-			}
+	case canShortcut:
+		err = planSingleShardRoutePlan(hp.sel, rb)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		err = pushProjections(ctx, plan, hp.qp.SelectExprs)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -95,6 +94,10 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	plan, err = hp.planDistinct(ctx, plan)
 	if err != nil {
 		return nil, err
+	}
+
+	if !truncateColumns {
+		return plan, nil
 	}
 
 	plan, err = hp.truncateColumnsIfNeeded(ctx, plan)
@@ -1219,7 +1222,7 @@ func (hp *horizonPlanning) addDistinct(ctx *plancontext.PlanningContext, plan lo
 			inner = sqlparser.NewColName(aliasExpr.As.String())
 			ctx.SemTable.CopyDependencies(aliasExpr.Expr, inner)
 		}
-		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1, CollationID: ctx.SemTable.CollationForExpr(inner)}
+		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1, CollationID: ctx.SemTable.CollationForExpr(inner), Expr: inner}
 		_, wOffset, err := wrapAndPushExpr(ctx, aliasExpr.Expr, aliasExpr.Expr, plan)
 		if err != nil {
 			return nil, err

@@ -258,6 +258,30 @@ func TestOne(t *testing.T) {
 	testFile(t, "onecase.txt", "", vschema)
 }
 
+func TestOneWithMainAsDefault(t *testing.T) {
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json", true),
+		keyspace: &vindexes.Keyspace{
+			Name:    "main",
+			Sharded: false,
+		},
+	}
+
+	testFile(t, "onecase.txt", "", vschema)
+}
+
+func TestOneWithSecondUserAsDefault(t *testing.T) {
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json", true),
+		keyspace: &vindexes.Keyspace{
+			Name:    "second_user",
+			Sharded: true,
+		},
+	}
+
+	testFile(t, "onecase.txt", "", vschema)
+}
+
 func TestRubyOnRailsQueries(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
 		v:             loadSchema(t, "rails_schema_test.json", true),
@@ -372,6 +396,21 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 	testFile(t, "call_cases.txt", testOutputTempDir, vschema)
 }
 
+func TestWithDefaultKeyspaceFromFileSharded(t *testing.T) {
+	// We are testing this separately so we can set a default keyspace
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json", true),
+		keyspace: &vindexes.Keyspace{
+			Name:    "second_user",
+			Sharded: true,
+		},
+		tabletType: topodatapb.TabletType_PRIMARY,
+	}
+
+	testOutputTempDir := makeTestOutput(t)
+	testFile(t, "select_cases_with_default.txt", testOutputTempDir, vschema)
+}
+
 func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	vschema := &vschemaWrapper{
@@ -456,6 +495,17 @@ func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
 		return nil, errors.New("keyspace not available")
 	}
 	return []*vindexes.Keyspace{vw.keyspace}, nil
+}
+
+// FindKeyspace implements the VSchema interface
+func (vw *vschemaWrapper) FindKeyspace(keyspace string) (*vindexes.Keyspace, error) {
+	if vw.keyspace == nil {
+		return nil, errors.New("keyspace not available")
+	}
+	if vw.keyspace.Name == keyspace {
+		return vw.keyspace, nil
+	}
+	return nil, nil
 }
 
 func (vw *vschemaWrapper) Planner() plancontext.PlannerVersion {

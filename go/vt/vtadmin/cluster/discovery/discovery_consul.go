@@ -228,6 +228,31 @@ func (c *ConsulDiscovery) DiscoverVTGateAddr(ctx context.Context, tags []string)
 	return addr, nil
 }
 
+// DiscoverVTGateAddrs is part of the Discovery interface.
+func (c *ConsulDiscovery) DiscoverVTGateAddrs(ctx context.Context, tags []string) ([]string, error) {
+	span, ctx := trace.NewSpan(ctx, "ConsulDiscovery.DiscoverVTGateAddrs")
+	defer span.Finish()
+
+	executeFQDNTemplate := false
+
+	vtgates, err := c.discoverVTGates(ctx, tags, executeFQDNTemplate)
+	if err != nil {
+		return nil, err
+	}
+
+	addrs := make([]string, len(vtgates))
+	for i, vtgate := range vtgates {
+		addr, err := textutil.ExecuteTemplate(c.vtgateAddrTmpl, vtgate)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute vtgate address template for %v: %w", vtgate, err)
+		}
+
+		addrs[i] = addr
+	}
+
+	return addrs, nil
+}
+
 // DiscoverVTGates is part of the Discovery interface.
 func (c *ConsulDiscovery) DiscoverVTGates(ctx context.Context, tags []string) ([]*vtadminpb.VTGate, error) {
 	span, ctx := trace.NewSpan(ctx, "ConsulDiscovery.DiscoverVTGates")
@@ -346,6 +371,31 @@ func (c *ConsulDiscovery) DiscoverVtctldAddr(ctx context.Context, tags []string)
 	}
 
 	return addr, nil
+}
+
+// DiscoverVtctldAddrs is part of the Discovery interface.
+func (c *ConsulDiscovery) DiscoverVtctldAddrs(ctx context.Context, tags []string) ([]string, error) {
+	span, ctx := trace.NewSpan(ctx, "ConsulDiscovery.DiscoverVtctldAddrs")
+	defer span.Finish()
+
+	executeFQDNTemplate := false
+
+	vtctlds, err := c.discoverVtctlds(ctx, tags, executeFQDNTemplate)
+	if err != nil {
+		return nil, err
+	}
+
+	addrs := make([]string, len(vtctlds))
+	for i, vtctld := range vtctlds {
+		addr, err := textutil.ExecuteTemplate(c.vtctldAddrTmpl, vtctld)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute vtctld address template for %v: %w", vtctld, err)
+		}
+
+		addrs[i] = addr
+	}
+
+	return addrs, nil
 }
 
 // DiscoverVtctlds is part of the Discovery interface.

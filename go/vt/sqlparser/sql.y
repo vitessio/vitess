@@ -62,10 +62,12 @@ func bindVariable(yylex yyLexer, bvar string) {
   str           string
   strs          []string
   vindexParam   VindexParam
+  jsonObjectParam *JSONObjectParam
   colIdent      ColIdent
   joinCondition *JoinCondition
   collateAndCharset CollateAndCharset
   columnType    ColumnType
+  jsonPathParam JSONPathParam
 }
 
 %union {
@@ -130,6 +132,8 @@ func bindVariable(yylex yyLexer, bvar string) {
   renameTablePairs []*RenameTablePair
   alterOptions	   []AlterOption
   vindexParams  []VindexParam
+  jsonPathParams []JSONPathParam
+  jsonObjectParams []*JSONObjectParam
   partDefs      []*PartitionDefinition
   partitionValueRange	*PartitionValueRange
   partSpecs     []*PartitionSpec
@@ -174,6 +178,11 @@ func bindVariable(yylex yyLexer, bvar string) {
   partitionByType PartitionByType
   definer 	*Definer
   integer 	int
+
+  JSONTableExpr	*JSONTableExpr
+  jtColumnDefinition *JtColumnDefinition
+  jtColumnList	[]*JtColumnDefinition
+  jtOnResponse	*JtOnResponse
 }
 
 %token LEX_ERROR
@@ -191,6 +200,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
 %token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
+%token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE JSON_CONTAINS JSON_CONTAINS_PATH JSON_EXTRACT JSON_KEYS JSON_OVERLAPS JSON_SEARCH JSON_VALUE
 %token <str> EXTRACT
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
@@ -207,6 +217,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 // * NOTE: If you change anything here, update precedence.go as well *
 %nonassoc <str> LOWER_THAN_CHARSET
 %nonassoc <str> CHARSET
+%nonassoc <str> MEMBER
 // Resolve column attribute ambiguity.
 %right <str> UNIQUE KEY
 %left <str> EXPRESSION_PREC_SETTER
@@ -287,12 +298,13 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> TIMESTAMPADD TIMESTAMPDIFF
 %token <str> WEIGHT_STRING
 %token <str> LTRIM RTRIM TRIM
+%token <str> JSON_ARRAY JSON_OBJECT JSON_QUOTE
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
 
 // MySQL reserved words that are unused by this grammar will map to this token.
-%token <str> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD MEMBER
+%token <str> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD
 %token <str> NTH_VALUE NTILE OF OVER PERCENT_RANK RANK RECURSIVE ROW_NUMBER SYSTEM WINDOW
 %token <str> ACTIVE ADMIN BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <str> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
@@ -338,7 +350,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <alterDatabase> alter_database_prefix
 %type <collateAndCharset> collate character_set
 %type <collateAndCharsets> create_options create_options_opt
-%type <boolean> default_optional first_opt linear_opt
+%type <boolean> default_optional first_opt linear_opt jt_exists_opt jt_path_opt
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement call_statement
@@ -361,9 +373,12 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> select_option algorithm_view security_view security_view_opt
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
-%type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr simple_expr literal NUM_literal text_literal bool_pri literal_or_null now predicate tuple_expression
+%type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression
 %type <tableExprs> from_opt table_references from_clause
-%type <tableExpr> table_reference table_factor join_table
+%type <tableExpr> table_reference table_factor join_table json_table_function
+%type <jtColumnDefinition> jt_column
+%type <jtColumnList> jt_columns_clause columns_list
+%type <jtOnResponse> on_error on_empty json_on_response
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
 %type <tableNames> table_name_list delete_table_list view_name_list
 %type <joinType> inner_join outer_join straight_join natural_join
@@ -429,7 +444,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <convertType> convert_type convert_type_weight_string
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <literal> length_opt func_datetime_precision
+%type <literal> length_opt
+%type <expr> func_datetime_precision
 %type <str> charset_opt collate_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolean> unsigned_opt zero_fill_opt without_valid_opt
@@ -458,6 +474,10 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
+%type <jsonPathParam> json_path_param
+%type <jsonPathParams> json_path_param_list json_path_param_list_opt
+%type <jsonObjectParam> json_object_param
+%type <jsonObjectParams> json_object_param_list json_object_param_opt
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
 %type <str> database_or_schema column_opt insert_method_options row_format_options
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
@@ -746,13 +766,13 @@ select_stmt_with_into:
 stream_statement:
   STREAM comment_opt select_expression FROM table_name
   {
-    $$ = &Stream{Comments: Comments($2), SelectExpr: $3, Table: $5}
+    $$ = &Stream{Comments: Comments($2).Parsed(), SelectExpr: $3, Table: $5}
   }
 
 vstream_statement:
   VSTREAM comment_opt select_expression FROM table_name where_expression_opt limit_opt
   {
-    $$ = &VStream{Comments: Comments($2), SelectExpr: $3, Table: $5, Where: NewWhere(WhereClause, $6), Limit: $7}
+    $$ = &VStream{Comments: Comments($2).Parsed(), SelectExpr: $3, Table: $5, Where: NewWhere(WhereClause, $6), Limit: $7}
   }
 
 // query_primary is an unparenthesized SELECT with no order by clause or beyond.
@@ -775,7 +795,7 @@ insert_statement:
     // insert_data returns a *Insert pre-filled with Columns & Values
     ins := $6
     ins.Action = $1
-    ins.Comments = $2
+    ins.Comments = Comments($2).Parsed()
     ins.Ignore = $3
     ins.Table = $4
     ins.Partitions = $5
@@ -790,7 +810,7 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $1, Comments: Comments($2), Ignore: $3, Table: $4, Partitions: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)}
+    $$ = &Insert{Action: $1, Comments: Comments($2).Parsed(), Ignore: $3, Table: $4, Partitions: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)}
   }
 
 insert_or_replace:
@@ -806,25 +826,25 @@ insert_or_replace:
 update_statement:
   with_clause_opt UPDATE comment_opt ignore_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{With: $1, Comments: Comments($3), Ignore: $4, TableExprs: $5, Exprs: $7, Where: NewWhere(WhereClause, $8), OrderBy: $9, Limit: $10}
+    $$ = &Update{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: $5, Exprs: $7, Where: NewWhere(WhereClause, $8), OrderBy: $9, Limit: $10}
   }
 
 delete_statement:
   with_clause_opt DELETE comment_opt ignore_opt FROM table_name as_opt_id opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, TableExprs: TableExprs{&AliasedTableExpr{Expr:$6, As: $7}}, Partitions: $8, Where: NewWhere(WhereClause, $9), OrderBy: $10, Limit: $11}
+    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: TableExprs{&AliasedTableExpr{Expr:$6, As: $7}}, Partitions: $8, Where: NewWhere(WhereClause, $9), OrderBy: $10, Limit: $11}
   }
 | with_clause_opt DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, Targets: $6, TableExprs: $8, Where: NewWhere(WhereClause, $9)}
+    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $6, TableExprs: $8, Where: NewWhere(WhereClause, $9)}
   }
 | with_clause_opt DELETE comment_opt ignore_opt table_name_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
+    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
   }
 | with_clause_opt DELETE comment_opt ignore_opt delete_table_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
+    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
   }
 
 from_or_using:
@@ -873,17 +893,17 @@ opt_partition_clause:
 set_statement:
   SET comment_opt set_list
   {
-    $$ = &Set{Comments: Comments($2), Exprs: $3}
+    $$ = &Set{Comments: Comments($2).Parsed(), Exprs: $3}
   }
 
 set_transaction_statement:
   SET comment_opt set_session_or_global TRANSACTION transaction_chars
   {
-    $$ = &SetTransaction{Comments: Comments($2), Scope: $3, Characteristics: $5}
+    $$ = &SetTransaction{Comments: Comments($2).Parsed(), Scope: $3, Characteristics: $5}
   }
 | SET comment_opt TRANSACTION transaction_chars
   {
-    $$ = &SetTransaction{Comments: Comments($2), Characteristics: $4, Scope: ImplicitScope}
+    $$ = &SetTransaction{Comments: Comments($2).Parsed(), Characteristics: $4, Scope: ImplicitScope}
   }
 
 transaction_chars:
@@ -963,7 +983,7 @@ create_statement:
   }
 | CREATE comment_opt replace_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &CreateView{ViewName: $8.ToViewName(), Comments: Comments($2), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6, Columns:$9, Select: $11, CheckOption: $12 }
+    $$ = &CreateView{ViewName: $8.ToViewName(), Comments: Comments($2).Parsed(), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6, Columns:$9, Select: $11, CheckOption: $12 }
   }
 | create_database_prefix create_options_opt
   {
@@ -1023,17 +1043,42 @@ vindex_param:
     $$ = VindexParam{Key: $1, Val: $3}
   }
 
+json_object_param_opt:
+  {
+    $$ = nil
+  }
+| json_object_param_list
+  {
+    $$ = $1
+  }
+
+json_object_param_list:
+  json_object_param
+  {
+    $$ = []*JSONObjectParam{$1}
+  }
+| json_object_param_list ',' json_object_param
+  {
+    $$ = append($$, $3)
+  }
+
+json_object_param:
+  expression ',' expression
+  {
+    $$ = &JSONObjectParam{Key:$1, Value:$3}
+  }
+
 create_table_prefix:
   CREATE comment_opt temp_opt TABLE not_exists_opt table_name
   {
-    $$ = &CreateTable{Comments: Comments($2), Table: $6, IfNotExists: $5, Temp: $3}
+    $$ = &CreateTable{Comments: Comments($2).Parsed(), Table: $6, IfNotExists: $5, Temp: $3}
     setDDL(yylex, $$)
   }
 
 alter_table_prefix:
   ALTER comment_opt TABLE table_name
   {
-    $$ = &AlterTable{Comments: Comments($2), Table: $4}
+    $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $4}
     setDDL(yylex, $$)
   }
 
@@ -1062,7 +1107,7 @@ create_index_prefix:
 create_database_prefix:
   CREATE comment_opt database_or_schema comment_opt not_exists_opt table_id
   {
-    $$ = &CreateDatabase{Comments: Comments($4), DBName: $6, IfNotExists: $5}
+    $$ = &CreateDatabase{Comments: Comments($4).Parsed(), DBName: $6, IfNotExists: $5}
     setDDL(yylex,$$)
   }
 
@@ -1614,7 +1659,6 @@ INTEGRAL
     $$ = NewDecimalLiteral($1)
   }
 
-
 text_literal:
 STRING
   {
@@ -1628,6 +1672,17 @@ STRING
    {
    	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewStrLiteral($2)}
    }
+
+text_literal_or_arg:
+  text_literal
+  {
+    $$ = $1
+  }
+| VALUE_ARG
+  {
+    $$ = NewArgument($1[1:])
+    bindVariable(yylex, $1[1:])
+  }
 
 keys:
   PRIMARY KEY
@@ -2666,7 +2721,7 @@ alter_statement:
   }
 | ALTER comment_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &AlterView{ViewName: $7.ToViewName(), Comments: Comments($2), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
+    $$ = &AlterView{ViewName: $7.ToViewName(), Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
 | alter_database_prefix table_id_opt create_options
   {
@@ -2881,6 +2936,106 @@ algorithm_opt:
     $$ = convertStringToInt($3)
   }
 
+json_table_function:
+  JSON_TABLE openb expression ',' text_literal_or_arg jt_columns_clause closeb as_opt_id
+  {
+    $$ = &JSONTableExpr{Expr: $3, Filter: $5, Columns: $6, Alias: $8}
+  }
+
+jt_columns_clause:
+  COLUMNS openb columns_list closeb
+  {
+    $$= $3
+  }
+
+columns_list:
+  jt_column
+  {
+    $$= []*JtColumnDefinition{$1}
+  }
+| columns_list ',' jt_column
+  {
+    $$ = append($1, $3)
+  }
+
+jt_column:
+ sql_id FOR ORDINALITY
+  {
+    $$ = &JtColumnDefinition{JtOrdinal: &JtOrdinalColDef{Name: $1}}
+  }
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal_or_arg
+  {
+    $2.Options= &ColumnTypeOptions{Collate:$3}
+    jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6}
+    $$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal_or_arg on_empty
+  {
+    $2.Options= &ColumnTypeOptions{Collate:$3}
+    jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6, EmptyOnResponse: $7}
+    $$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal_or_arg on_error
+  {
+    $2.Options= &ColumnTypeOptions{Collate:$3}
+    jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6, ErrorOnResponse: $7}
+    $$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal_or_arg on_empty on_error
+  {
+    $2.Options= &ColumnTypeOptions{Collate:$3}
+    jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6, EmptyOnResponse: $7, ErrorOnResponse: $8}
+    $$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| NESTED jt_path_opt text_literal_or_arg jt_columns_clause
+  {
+    jtNestedPath := &JtNestedPathColDef{Path: $3, Columns: $4}
+    $$ = &JtColumnDefinition{JtNestedPath: jtNestedPath}
+  }
+
+jt_path_opt:
+  {
+    $$ = false
+  }
+| PATH
+  {
+    $$ = true
+  }
+jt_exists_opt:
+  {
+    $$=false
+  }
+| EXISTS
+  {
+    $$=true
+  }
+
+on_empty:
+  json_on_response ON EMPTY
+  {
+    $$= $1
+  }
+
+on_error:
+  json_on_response ON ERROR
+  {
+    $$= $1
+  }
+
+json_on_response:
+  ERROR
+  {
+    $$ = &JtOnResponse{ResponseType: ErrorJSONType}
+  }
+| NULL
+  {
+    $$ = &JtOnResponse{ResponseType: NullJSONType}
+  }
+| DEFAULT text_literal_or_arg
+  {
+    $$ = &JtOnResponse{ResponseType: DefaultJSONType, Expr: $2}
+  }
+
 range_or_list:
   RANGE
   {
@@ -3090,7 +3245,7 @@ rename_list:
 drop_statement:
   DROP comment_opt temp_opt TABLE exists_opt table_name_list restrict_or_cascade_opt
   {
-    $$ = &DropTable{FromTables: $6, IfExists: $5, Comments: Comments($2), Temp: $3}
+    $$ = &DropTable{FromTables: $6, IfExists: $5, Comments: Comments($2).Parsed(), Temp: $3}
   }
 | DROP comment_opt INDEX id_or_var ON table_name algorithm_lock_opt
   {
@@ -3103,11 +3258,11 @@ drop_statement:
   }
 | DROP comment_opt VIEW exists_opt view_name_list restrict_or_cascade_opt
   {
-    $$ = &DropView{FromTables: $5, Comments: Comments($2), IfExists: $4}
+    $$ = &DropView{FromTables: $5, Comments: Comments($2).Parsed(), IfExists: $4}
   }
 | DROP comment_opt database_or_schema exists_opt table_id
   {
-    $$ = &DropDatabase{Comments: Comments($2), DBName: $5, IfExists: $4}
+    $$ = &DropDatabase{Comments: Comments($2).Parsed(), DBName: $5, IfExists: $4}
   }
 
 truncate_statement:
@@ -3626,7 +3781,7 @@ unlock_statement:
 revert_statement:
   REVERT comment_opt VITESS_MIGRATION STRING
   {
-    $$ = &RevertMigration{Comments: Comments($2), UUID: string($4)}
+    $$ = &RevertMigration{Comments: Comments($2).Parsed(), UUID: string($4)}
   }
 
 flush_statement:
@@ -3797,19 +3952,25 @@ distinct_opt:
   }
 
 prepare_statement:
-  PREPARE comment_opt sql_id FROM STRING
+  PREPARE comment_opt sql_id FROM text_literal_or_arg
   {
-    $$ = &PrepareStmt{Name:$3, Comments: $2, Statement:$5}
+    $$ = &PrepareStmt{Name:$3, Comments: Comments($2).Parsed(), Statement:$5}
   }
 | PREPARE comment_opt sql_id FROM AT_ID
   {
-    $$ = &PrepareStmt{Name:$3, Comments: $2, StatementIdentifier: NewColIdentWithAt(string($5), SingleAt)}
+    $$ = &PrepareStmt{
+    	Name:$3,
+    	Comments: Comments($2).Parsed(),
+    	Statement: &ColName{
+    		Name: NewColIdentWithAt(string($5), SingleAt),
+    	},
+    }
   }
 
 execute_statement:
   EXECUTE comment_opt sql_id execute_statement_list_opt
   {
-    $$ = &ExecuteStmt{Name:$3, Comments: $2, Arguments: $4}
+    $$ = &ExecuteStmt{Name:$3, Comments: Comments($2).Parsed(), Arguments: $4}
   }
 
 execute_statement_list_opt:
@@ -3824,11 +3985,11 @@ execute_statement_list_opt:
 deallocate_statement:
   DEALLOCATE comment_opt PREPARE sql_id
   {
-    $$ = &DeallocateStmt{Type:DeallocateType, Comments: $2, Name:$4}
+    $$ = &DeallocateStmt{Type:DeallocateType, Comments: Comments($2).Parsed(), Name:$4}
   }
 | DROP comment_opt PREPARE sql_id
   {
-    $$ = &DeallocateStmt{Type: DropType, Comments: $2, Name: $4}
+    $$ = &DeallocateStmt{Type: DropType, Comments: Comments($2).Parsed(), Name: $4}
   }
 
 select_expression_list_opt:
@@ -3980,6 +4141,10 @@ table_factor:
 | openb table_references closeb
   {
     $$ = &ParenTableExpr{Exprs: $2}
+  }
+| json_table_function
+  {
+    $$ = $1
   }
 
 derived_table:
@@ -4295,6 +4460,10 @@ expression:
   {
 	$$ = $1
   }
+| expression MEMBER OF openb expression closeb
+  {
+    $$ = &MemberOfExpr{Value: $1, JSONArr:$5 }
+  }
 
 
 bool_pri:
@@ -4508,13 +4677,13 @@ function_call_keyword
 	// will be non-trivial because of grammar conflicts.
 	$$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
   }
-| column_name JSON_EXTRACT_OP STRING
+| column_name JSON_EXTRACT_OP text_literal_or_arg
   {
-	$$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: NewStrLiteral($3)}
+	$$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
   }
-| column_name JSON_UNQUOTE_EXTRACT_OP STRING
+| column_name JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
   {
-	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: NewStrLiteral($3)}
+	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
   }
 
 trim_type:
@@ -4744,6 +4913,18 @@ UTC_DATE func_paren_opt
   {
     $$ = &WeightStringFuncExpr{Expr: $3, As: $4}
   }
+| JSON_PRETTY openb expression closeb
+  {
+    $$ = &JSONPrettyExpr{JSONVal: $3}
+  }
+| JSON_STORAGE_FREE openb expression closeb
+  {
+    $$ = &JSONStorageFreeExpr{ JSONVal: $3}
+  }
+| JSON_STORAGE_SIZE openb expression closeb
+  {
+    $$ = &JSONStorageSizeExpr{ JSONVal: $3}
+  }
 | LTRIM openb expression closeb
   {
     $$ = &TrimFuncExpr{TrimFuncType:LTrimType, StringArg: $3}
@@ -4771,6 +4952,79 @@ UTC_DATE func_paren_opt
 | JSON_SCHEMA_VALIDATION_REPORT openb expression ',' expression closeb
   {
     $$ = &JSONSchemaValidationReportFuncExpr{ Schema: $3, Document: $5}
+  }
+| JSON_ARRAY openb expression_list_opt closeb
+  {
+    $$ = &JSONArrayExpr{ Params:$3 }
+  }
+| JSON_OBJECT openb json_object_param_opt closeb
+  {
+    $$ = &JSONObjectExpr{ Params:$3 }
+  }
+| JSON_QUOTE openb expression closeb
+  {
+    $$ = &JSONQuoteExpr{ StringArg:$3 }
+  }
+| JSON_CONTAINS openb expression ',' expression json_path_param_list_opt closeb
+  {
+    $$ = &JSONContainsExpr{Target: $3, Candidate: $5, PathList: $6}
+  }
+| JSON_CONTAINS_PATH openb expression ',' expression ',' json_path_param_list closeb
+  {
+    $$ = &JSONContainsPathExpr{JSONDoc: $3, OneOrAll: $5, PathList: $7}
+  }
+| JSON_EXTRACT openb expression ',' json_path_param_list closeb
+  {
+    $$ = &JSONExtractExpr{JSONDoc: $3, PathList: $5}
+  }
+| JSON_KEYS openb expression json_path_param_list_opt closeb
+  {
+    $$ = &JSONKeysExpr{JSONDoc: $3, PathList: $4}
+  }
+| JSON_OVERLAPS openb expression ',' expression closeb
+  {
+    $$ = &JSONOverlapsExpr{JSONDoc1:$3, JSONDoc2:$5}
+  }
+| JSON_SEARCH openb expression ',' expression ',' expression closeb
+  {
+    $$ = &JSONSearchExpr{JSONDoc: $3, OneOrAll: $5, SearchStr: $7 }
+  }
+| JSON_SEARCH openb expression ',' expression ',' expression ',' expression json_path_param_list_opt closeb
+  {
+    $$ = &JSONSearchExpr{JSONDoc: $3, OneOrAll: $5, SearchStr: $7, EscapeChar: $9, PathList:$10 }
+  }
+| JSON_VALUE openb expression ',' json_path_param closeb
+  {
+    $$ = &JSONValueExpr{JSONDoc: $3, Path: $5}
+  }
+
+json_path_param_list_opt:
+  {
+    $$ = nil
+  }
+| ',' json_path_param_list
+  {
+    $$ = $2
+  }
+
+json_path_param_list:
+  json_path_param
+  {
+    $$ = []JSONPathParam{$1}
+  }
+| json_path_param_list ',' json_path_param
+  {
+    $$ = append($$, $3)
+  }
+
+json_path_param:
+  text_literal_or_arg
+  {
+    $$ = JSONPathParam($1)
+  }
+| column_name
+  {
+    $$ = JSONPathParam($1)
   }
 
 interval:
@@ -4875,6 +5129,11 @@ func_datetime_precision:
 | openb INTEGRAL closeb
   {
   	$$ = NewIntLiteral($2)
+  }
+| openb VALUE_ARG closeb
+  {
+    $$ = NewArgument($2[1:])
+    bindVariable(yylex, $2[1:])
   }
 
 /*
@@ -5766,6 +6025,7 @@ reserved_table_id:
 */
 reserved_keyword:
   ADD
+| ALL
 | ARRAY
 | AND
 | AS
@@ -5803,6 +6063,7 @@ reserved_keyword:
 | DIV
 | DROP
 | ELSE
+| EMPTY
 | ESCAPE
 | EXISTS
 | EXPLAIN
@@ -6027,6 +6288,19 @@ non_reserved_keyword:
 | INDEXES
 | ISOLATION
 | JSON
+| JSON_ARRAY
+| JSON_CONTAINS
+| JSON_CONTAINS_PATH
+| JSON_EXTRACT
+| JSON_KEYS
+| JSON_OBJECT
+| JSON_OVERLAPS
+| JSON_PRETTY
+| JSON_QUOTE
+| JSON_SEARCH
+| JSON_STORAGE_FREE
+| JSON_STORAGE_SIZE
+| JSON_VALUE
 | JSON_SCHEMA_VALID
 | JSON_SCHEMA_VALIDATION_REPORT
 | KEY_BLOCK_SIZE

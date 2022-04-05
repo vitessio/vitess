@@ -2195,8 +2195,8 @@ Gen4 plan same as above
     "OperatorType": "Route",
     "Variant": "Scatter",
     "Keyspace": {
-      "Name": "main",
-      "Sharded": false
+      "Name": "user",
+      "Sharded": true
     },
     "FieldQuery": "select 42, id from dual, `user` where 1 != 1",
     "Query": "select 42, id from dual, `user`",
@@ -2946,3 +2946,229 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# json utility functions
+"select jcol, JSON_STORAGE_SIZE(jcol), JSON_STORAGE_FREE(jcol), JSON_PRETTY(jcol) from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select jcol, JSON_STORAGE_SIZE(jcol), JSON_STORAGE_FREE(jcol), JSON_PRETTY(jcol) from user",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select jcol, json_storage_size(jcol), json_storage_free(jcol), json_pretty(jcol) from `user` where 1 != 1",
+    "Query": "select jcol, json_storage_size(jcol), json_storage_free(jcol), json_pretty(jcol) from `user`",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
+
+# dual query with exists clause
+"select 1 from dual where exists (select 1 from information_schema.TABLES where information_schema.TABLES.TABLE_NAME = 'proc' and information_schema.TABLES.TABLE_SCHEMA = 'mysql')"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from dual where exists (select 1 from information_schema.TABLES where information_schema.TABLES.TABLE_NAME = 'proc' and information_schema.TABLES.TABLE_SCHEMA = 'mysql')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "DBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 1 from dual where 1 != 1",
+    "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where information_schema.`TABLES`.TABLE_NAME = :TABLES_TABLE_NAME and information_schema.`TABLES`.TABLE_SCHEMA = :__vtschemaname)",
+    "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
+    "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
+    "Table": "dual"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from dual where exists (select 1 from information_schema.TABLES where information_schema.TABLES.TABLE_NAME = 'proc' and information_schema.TABLES.TABLE_SCHEMA = 'mysql')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "DBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 1 from dual where 1 != 1",
+    "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = :TABLES_TABLE_NAME and `TABLES`.TABLE_SCHEMA = :__vtschemaname)",
+    "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
+    "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
+    "Table": "dual"
+  }
+}
+
+# json_quote, json_object and json_array
+"SELECT JSON_QUOTE('null'), JSON_QUOTE('\"null\"'), JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), JSON_ARRAY(1, \"abc\", NULL, TRUE, CURTIME())"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT JSON_QUOTE('null'), JSON_QUOTE('\"null\"'), JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), JSON_ARRAY(1, \"abc\", NULL, TRUE, CURTIME())",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, CURTIME()) from dual where 1 != 1",
+    "Query": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, CURTIME()) from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+
+"select (select id from user order by id limit 1) from user_extra"
+{
+  "QueryType": "SELECT",
+  "Original": "select (select id from user order by id limit 1) from user_extra",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": "INT64(1)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+            "ResultColumns": 1,
+            "Table": "`user`"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select :__sq1 from user_extra where 1 != 1",
+        "Query": "select :__sq1 from user_extra",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select (select id from user order by id limit 1) from user_extra",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": "INT64(1)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+            "ResultColumns": 1,
+            "Table": "`user`"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select :__sq1 from user_extra where 1 != 1",
+        "Query": "select :__sq1 from user_extra",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+
+# yeah, it does not make sense, but it's valid
+"select exists(select 1) from user where id = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "select exists(select 1) from user where id = 5",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from dual where 1 != 1",
+        "Query": "select 1 from dual",
+        "Table": "dual"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select :__sq_has_values1 from `user` where 1 != 1",
+        "Query": "select :__sq_has_values1 from `user` where id = 5",
+        "Table": "`user`",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select exists(select 1) from user where id = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select exists (select 1 from dual where 1 != 1) from `user` where 1 != 1",
+    "Query": "select exists (select 1 from dual) from `user` where id = 5",
+    "Table": "`user`",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  }
+}

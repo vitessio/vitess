@@ -52,14 +52,53 @@ func TestSelectNext(t *testing.T) {
 
 	query := "select next :n values from user_seq"
 	bv := map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)}
-	_, err := executorExec(executor, query, bv)
-	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           query,
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)},
 	}}
 
+	// Autocommit
+	session := NewAutocommitSession(&vtgatepb.Session{})
+	_, err := executor.Execute(context.Background(), "TestSelectNext", session, query, bv)
+	require.NoError(t, err)
+
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
+	assert.Zero(t, sbclookup.BeginCount.Get())
+	assert.Zero(t, sbclookup.ReserveCount.Get())
+	sbclookup.Queries = nil
+
+	// Txn
+	session = NewAutocommitSession(&vtgatepb.Session{})
+	session.Session.InTransaction = true
+	_, err = executor.Execute(context.Background(), "TestSelectNext", session, query, bv)
+	require.NoError(t, err)
+
+	utils.MustMatch(t, wantQueries, sbclookup.Queries)
+	assert.Zero(t, sbclookup.BeginCount.Get())
+	assert.Zero(t, sbclookup.ReserveCount.Get())
+	sbclookup.Queries = nil
+
+	// Reserve
+	session = NewAutocommitSession(&vtgatepb.Session{})
+	session.Session.InReservedConn = true
+	_, err = executor.Execute(context.Background(), "TestSelectNext", session, query, bv)
+	require.NoError(t, err)
+
+	utils.MustMatch(t, wantQueries, sbclookup.Queries)
+	assert.Zero(t, sbclookup.BeginCount.Get())
+	assert.Zero(t, sbclookup.ReserveCount.Get())
+	sbclookup.Queries = nil
+
+	// Reserve and Txn
+	session = NewAutocommitSession(&vtgatepb.Session{})
+	session.Session.InReservedConn = true
+	session.Session.InTransaction = true
+	_, err = executor.Execute(context.Background(), "TestSelectNext", session, query, bv)
+	require.NoError(t, err)
+
+	utils.MustMatch(t, wantQueries, sbclookup.Queries)
+	assert.Zero(t, sbclookup.BeginCount.Get())
+	assert.Zero(t, sbclookup.ReserveCount.Get())
 }
 
 func TestSelectDBA(t *testing.T) {
@@ -801,10 +840,10 @@ func TestFoundRows(t *testing.T) {
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "found_rows()", Type: sqltypes.Uint64},
+			{Name: "found_rows()", Type: sqltypes.Int64},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewUint64(1),
+			sqltypes.NewInt64(1),
 		}},
 	}
 	require.NoError(t, err)
@@ -842,12 +881,33 @@ func testRowCount(t *testing.T, executor *Executor, wantRowCount int64) {
 }
 
 func TestSelectLastInsertIdInUnion(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
-	sql := "select last_insert_id() as id union select id from user"
-	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "text type with an unknown/unsupported collation cannot be hashed")
+	primarySession.LastInsertId = 52
+
+	result1 := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+		},
+		InsertID: 0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(52),
+		}},
+	}}
+	sbc1.SetResults(result1)
+
+	sql := "select last_insert_id() as id union select last_insert_id() as id"
+	got, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(52),
+		}},
+	}
+	utils.MustMatch(t, wantResult, got, "mismatch")
 }
 
 func TestSelectLastInsertIdInWhere(t *testing.T) {
@@ -2816,7 +2876,7 @@ func TestSelectLock(t *testing.T) {
 
 	_, err := exec(executor, session, "select get_lock('lock name', 10) from dual")
 	require.NoError(t, err)
-	wantSession.LastLockHeartbeat = session.Session.LastLockHeartbeat //copying as this is current timestamp value.
+	wantSession.LastLockHeartbeat = session.Session.LastLockHeartbeat // copying as this is current timestamp value.
 	utils.MustMatch(t, wantSession, session.Session, "")
 	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
 

@@ -261,7 +261,7 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 		// If MySQL is down, we wait until vtworker retried at least once to make
 		// sure it reached the point where a write failed due to MySQL being down.
 		// There should be two retries at least, one for each destination shard.
-		pollForVarsWorkerRetryCount(t, 1)
+		pollForVarsWorkerRetryCount(t, 2)
 
 		// Bring back primaries. Since we test with semi-sync now, we need at least
 		// one replica for the new primary. This test is already quite expensive,
@@ -306,7 +306,6 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 	// Reparent away from the old primaries.
 	localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard",
 		"test_keyspace/-80", "--new_primary", shard0Replica.Alias)
-
 	localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard",
 		"test_keyspace/80-", "--new_primary", shard1Replica.Alias)
 
@@ -406,7 +405,7 @@ func pollForVarsWorkerRetryCount(t *testing.T, count int) {
 		}
 		continue
 	}
-	assert.Greater(t, workerRetryCountInt, count)
+	assert.GreaterOrEqual(t, workerRetryCountInt, count)
 }
 
 // vttablet: the Tablet instance to modify.

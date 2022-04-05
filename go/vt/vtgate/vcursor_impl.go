@@ -77,7 +77,7 @@ type iExecute interface {
 	VSchema() *vindexes.VSchema
 }
 
-//VSchemaOperator is an interface to Vschema Operations
+// VSchemaOperator is an interface to Vschema Operations
 type VSchemaOperator interface {
 	GetCurrentSrvVschema() *vschemapb.SrvVSchema
 	UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error
@@ -216,6 +216,15 @@ func (vc *vcursorImpl) ErrorGroupCancellableContext() (*errgroup.Group, func()) 
 	g, ctx := errgroup.WithContext(vc.ctx)
 	vc.ctx = ctx
 	return g, func() {
+		vc.ctx = origCtx
+	}
+}
+
+// SetContextWithValue implements the VCursor interface.
+func (vc *vcursorImpl) SetContextWithValue(k, v interface{}) func() {
+	origCtx := vc.ctx
+	vc.ctx = context.WithValue(vc.ctx, k, v)
+	return func() {
 		vc.ctx = origCtx
 	}
 }
@@ -367,6 +376,19 @@ func (vc *vcursorImpl) AllKeyspace() ([]*vindexes.Keyspace, error) {
 		kss = append(kss, ks.Keyspace)
 	}
 	return kss, nil
+}
+
+// FindKeyspace implements the VSchema interface
+func (vc *vcursorImpl) FindKeyspace(keyspace string) (*vindexes.Keyspace, error) {
+	if len(vc.vschema.Keyspaces) == 0 {
+		return nil, errNoDbAvailable
+	}
+	for _, ks := range vc.vschema.Keyspaces {
+		if ks.Keyspace.Name == keyspace {
+			return ks.Keyspace, nil
+		}
+	}
+	return nil, nil
 }
 
 // Planner implements the ContextVSchema interface
@@ -599,7 +621,7 @@ func (vc *vcursorImpl) SetSysVar(name string, expr string) {
 	vc.safeSession.SetSystemVariable(name, expr)
 }
 
-//NeedsReservedConn implements the SessionActions interface
+// NeedsReservedConn implements the SessionActions interface
 func (vc *vcursorImpl) NeedsReservedConn() {
 	vc.safeSession.SetReservedConn(true)
 }

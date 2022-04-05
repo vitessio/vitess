@@ -1436,7 +1436,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 				},
 			},
 		},
-		err: "vindex 'table' must be <keyspace>.<table>",
+		err: "vindex table name must be in the form <keyspace>.<table>",
 	}, {
 		description: "unique lookup should have only one from column",
 		input: &vschemapb.Keyspace{
@@ -1698,7 +1698,7 @@ func TestExternalizeVindex(t *testing.T) {
 		err:   "vindex sourceks.absent not found in vschema",
 	}, {
 		input: "sourceks.bad",
-		err:   "table name in vindex should be of the form keyspace.table: unqualified",
+		err:   "vindex table name must be in the form <keyspace>.<table>. Got: unqualified",
 	}, {
 		input:        "sourceks.owned",
 		vrResponse:   running,
@@ -2548,6 +2548,71 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.wr.Materialize(context.Background(), ms)
 	require.EqualError(t, err, "could not find vindex column c1")
+}
+
+func TestStripForeignKeys(t *testing.T) {
+	tcs := []struct {
+		desc string
+		ddl  string
+
+		hasErr bool
+		newDDL string
+	}{
+		{
+			desc: "has FK constraints",
+			ddl: "CREATE TABLE `table1` (\n" +
+				"`id` int(11) NOT NULL AUTO_INCREMENT,\n" +
+				"`foreign_id` int(11) CHECK (foreign_id>10),\n" +
+				"PRIMARY KEY (`id`),\n" +
+				"KEY `fk_table1_ref_foreign_id` (`foreign_id`),\n" +
+				"CONSTRAINT `fk_table1_ref_foreign_id` FOREIGN KEY (`foreign_id`) REFERENCES `foreign` (`id`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
+
+			newDDL: "create table table1 (\n" +
+				"\tid int(11) not null auto_increment,\n" +
+				"\tforeign_id int(11),\n" +
+				"\tPRIMARY KEY (id),\n" +
+				"\tKEY fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tcheck (foreign_id > 10)\n" +
+				") ENGINE InnoDB,\n" +
+				"  CHARSET latin1",
+
+			hasErr: false,
+		},
+		{
+			desc: "no FK constraints",
+			ddl: "CREATE TABLE `table1` (\n" +
+				"`id` int(11) NOT NULL AUTO_INCREMENT,\n" +
+				"`foreign_id` int(11) NOT NULL  CHECK (foreign_id>10),\n" +
+				"`user_id` int(11) NOT NULL,\n" +
+				"PRIMARY KEY (`id`),\n" +
+				"KEY `fk_table1_ref_foreign_id` (`foreign_id`),\n" +
+				"KEY `fk_table1_ref_user_id` (`user_id`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
+
+			newDDL: "create table table1 (\n" +
+				"\tid int(11) not null auto_increment,\n" +
+				"\tforeign_id int(11) not null,\n" +
+				"\tuser_id int(11) not null,\n" +
+				"\tPRIMARY KEY (id),\n" +
+				"\tKEY fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tKEY fk_table1_ref_user_id (user_id),\n" +
+				"\tcheck (foreign_id > 10)\n" +
+				") ENGINE InnoDB,\n" +
+				"  CHARSET latin1",
+		},
+	}
+
+	for _, tc := range tcs {
+		newDDL, err := stripTableForeignKeys(tc.ddl)
+		if tc.hasErr != (err != nil) {
+			t.Fatalf("hasErr does not match: err: %v, tc: %+v", err, tc)
+		}
+
+		if newDDL != tc.newDDL {
+			utils.MustMatch(t, tc.newDDL, newDDL, fmt.Sprintf("newDDL does not match. tc: %+v", tc))
+		}
+	}
 }
 
 func TestStripConstraints(t *testing.T) {

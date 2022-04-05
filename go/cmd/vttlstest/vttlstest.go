@@ -36,8 +36,10 @@ vttlstest is a tool for generating test certificates and keys for TLS tests.
 To create a toplevel CA, use:
   $ vttlstest --root /tmp CreateCA
 
-To create an intermediate or leaf CA, use:
-  $ vttlstest --root /tmp CreateSignedCert servers
+To create an intermediate CA, use:
+  $ vttlstest --root /tmp CreateIntermediateCA servers
+
+To create a leaf certificate, use:
   $ vttlstest --root /tmp CreateSignedCert --parent servers server
 
 To get help on a command, use:
@@ -50,10 +52,11 @@ var cmdMap map[string]cmdFunc
 
 func init() {
 	cmdMap = map[string]cmdFunc{
-		"CreateCA":         cmdCreateCA,
-		"CreateCRL":        cmdCreateCRL,
-		"CreateSignedCert": cmdCreateSignedCert,
-		"RevokeCert":       cmdRevokeCert,
+		"CreateCA":             cmdCreateCA,
+		"CreateCRL":            cmdCreateCRL,
+		"CreateIntermediateCA": cmdCreateIntermediateCA,
+		"CreateSignedCert":     cmdCreateSignedCert,
+		"RevokeCert":           cmdRevokeCert,
 	}
 }
 
@@ -90,6 +93,24 @@ func cmdRevokeCert(subFlags *flag.FlagSet, args []string) {
 
 	name := subFlags.Arg(0)
 	tlstest.RevokeCertAndRegenerateCRL(*root, *parent, name)
+}
+
+func cmdCreateIntermediateCA(subFlags *flag.FlagSet, args []string) {
+	parent := subFlags.String("parent", "ca", "Parent cert name to use. Use 'ca' for the toplevel CA.")
+	serial := subFlags.String("serial", "01", "Serial number for the certificate to create. Should be different for two certificates with the same parent.")
+	commonName := subFlags.String("common_name", "", "Common name for the certificate. If empty, uses the name.")
+
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 {
+		log.Fatalf("CreateIntermediateCA command takes a single name as a parameter")
+	}
+
+	name := subFlags.Arg(0)
+	if *commonName == "" {
+		*commonName = name
+	}
+
+	tlstest.CreateIntermediateCA(*root, *parent, *serial, name, *commonName)
 }
 
 func cmdCreateSignedCert(subFlags *flag.FlagSet, args []string) {

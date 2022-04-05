@@ -37,11 +37,15 @@ type (
 		SQLNode
 	}
 
+	Commented interface {
+		SetComments(comments Comments)
+		GetParsedComments() *ParsedComments
+	}
+
 	// SupportOptimizerHint represents a statement that accepts optimizer hints.
 	SupportOptimizerHint interface {
 		iSupportOptimizerHint()
-		SetComments(comments Comments)
-		GetComments() Comments
+		Commented
 	}
 
 	// SelectStatement any SELECT statement.
@@ -51,14 +55,14 @@ type (
 		iSelectStatement()
 		AddOrder(*Order)
 		SetOrderBy(OrderBy)
+		GetOrderBy() OrderBy
 		SetLimit(*Limit)
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)
 		SetWith(with *With)
 		MakeDistinct()
 		GetColumnCount() int
-		SetComments(comments Comments)
-		GetComments() Comments
+		Commented
 	}
 
 	// DDLStatement represents any DDL Statement
@@ -78,9 +82,8 @@ type (
 		AffectedTables() TableNames
 		SetTable(qualifier string, name string)
 		SetFromTables(tables TableNames)
-		SetComments(comments Comments)
-		GetComments() Comments
 		SetFullyParsed(fullyParsed bool)
+		Commented
 		Statement
 	}
 
@@ -229,7 +232,7 @@ type (
 		SQLCalcFoundRows bool
 		// The From field must be the first AST element of this struct so the rewriter sees it first
 		From        []TableExpr
-		Comments    Comments
+		Comments    *ParsedComments
 		SelectExprs SelectExprs
 		Where       *Where
 		With        *With
@@ -272,7 +275,7 @@ type (
 
 	// VStream represents a VSTREAM statement.
 	VStream struct {
-		Comments   Comments
+		Comments   *ParsedComments
 		SelectExpr SelectExpr
 		Table      TableName
 		Where      *Where
@@ -281,7 +284,7 @@ type (
 
 	// Stream represents a SELECT statement.
 	Stream struct {
-		Comments   Comments
+		Comments   *ParsedComments
 		SelectExpr SelectExpr
 		Table      TableName
 	}
@@ -296,7 +299,7 @@ type (
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Insert struct {
 		Action     InsertAction
-		Comments   Comments
+		Comments   *ParsedComments
 		Ignore     Ignore
 		Table      TableName
 		Partitions Partitions
@@ -315,7 +318,7 @@ type (
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Update struct {
 		With       *With
-		Comments   Comments
+		Comments   *ParsedComments
 		Ignore     Ignore
 		TableExprs TableExprs
 		Exprs      UpdateExprs
@@ -329,7 +332,7 @@ type (
 	Delete struct {
 		With       *With
 		Ignore     Ignore
-		Comments   Comments
+		Comments   *ParsedComments
 		Targets    TableNames
 		TableExprs TableExprs
 		Partitions Partitions
@@ -340,14 +343,14 @@ type (
 
 	// Set represents a SET statement.
 	Set struct {
-		Comments Comments
+		Comments *ParsedComments
 		Exprs    SetExprs
 	}
 
 	// SetTransaction represents a SET TRANSACTION statement.
 	SetTransaction struct {
 		SQLNode
-		Comments        Comments
+		Comments        *ParsedComments
 		Scope           Scope
 		Characteristics []Characteristic
 	}
@@ -369,7 +372,7 @@ type (
 
 	// DropDatabase represents a DROP database statement.
 	DropDatabase struct {
-		Comments Comments
+		Comments *ParsedComments
 		DBName   TableIdent
 		IfExists bool
 	}
@@ -386,7 +389,7 @@ type (
 
 	// CreateDatabase represents a CREATE database statement.
 	CreateDatabase struct {
-		Comments      Comments
+		Comments      *ParsedComments
 		DBName        TableIdent
 		IfNotExists   bool
 		CreateOptions []CollateAndCharset
@@ -444,13 +447,13 @@ type (
 	// ShowMigrationLogs represents a SHOW VITESS_MIGRATION '<uuid>' LOGS statement
 	ShowMigrationLogs struct {
 		UUID     string
-		Comments Comments
+		Comments *ParsedComments
 	}
 
 	// RevertMigration represents a REVERT VITESS_MIGRATION statement
 	RevertMigration struct {
 		UUID     string
-		Comments Comments
+		Comments *ParsedComments
 	}
 
 	// AlterMigrationType represents the type of operation in an ALTER VITESS_MIGRATION statement
@@ -468,7 +471,7 @@ type (
 		AlterOptions    []AlterOption
 		PartitionSpec   *PartitionSpec
 		PartitionOption *PartitionOption
-		Comments        Comments
+		Comments        *ParsedComments
 		FullyParsed     bool
 	}
 
@@ -478,14 +481,14 @@ type (
 		FromTables TableNames
 		// The following fields are set if a DDL was fully analyzed.
 		IfExists bool
-		Comments Comments
+		Comments *ParsedComments
 	}
 
 	// DropView represents a DROP VIEW statement.
 	DropView struct {
 		FromTables TableNames
 		IfExists   bool
-		Comments   Comments
+		Comments   *ParsedComments
 	}
 
 	// CreateTable represents a CREATE TABLE statement.
@@ -495,7 +498,7 @@ type (
 		IfNotExists bool
 		TableSpec   *TableSpec
 		OptLike     *OptLike
-		Comments    Comments
+		Comments    *ParsedComments
 		FullyParsed bool
 	}
 
@@ -509,7 +512,7 @@ type (
 		Select      SelectStatement
 		CheckOption string
 		IsReplace   bool
-		Comments    Comments
+		Comments    *ParsedComments
 	}
 
 	// AlterView represents a ALTER VIEW query
@@ -521,7 +524,7 @@ type (
 		Columns     Columns
 		Select      SelectStatement
 		CheckOption string
-		Comments    Comments
+		Comments    *ParsedComments
 	}
 
 	// Definer stores the user for AlterView and CreateView definers
@@ -615,17 +618,16 @@ type (
 	// PrepareStmt represents a Prepare Statement
 	// More info available on https://dev.mysql.com/doc/refman/8.0/en/sql-prepared-statements.html
 	PrepareStmt struct {
-		Name                ColIdent
-		Statement           string
-		Comments            Comments
-		StatementIdentifier ColIdent
+		Name      ColIdent
+		Statement Expr
+		Comments  *ParsedComments
 	}
 
 	// ExecuteStmt represents an Execute Statement
 	// More info available on https://dev.mysql.com/doc/refman/8.0/en/execute.html
 	ExecuteStmt struct {
 		Name      ColIdent
-		Comments  Comments
+		Comments  *ParsedComments
 		Arguments Columns
 	}
 
@@ -633,7 +635,7 @@ type (
 	// More info available on https://dev.mysql.com/doc/refman/8.0/en/deallocate-prepare.html
 	DeallocateStmt struct {
 		Type     DeallocateStmtType
-		Comments Comments
+		Comments *ParsedComments
 		Name     ColIdent
 	}
 
@@ -1231,128 +1233,128 @@ func (node *TruncateTable) SetComments(comments Comments) {
 
 // SetComments implements DDLStatement.
 func (node *AlterTable) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments implements DDLStatement.
 func (node *CreateTable) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments implements DDLStatement.
 func (node *CreateView) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments implements DDLStatement.
 func (node *DropTable) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments implements DDLStatement.
 func (node *DropView) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments implements DDLStatement.
 func (node *AlterView) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments for RevertMigration, does not implement DDLStatement
 func (node *RevertMigration) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments for Delete
 func (node *Delete) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments for Insert
 func (node *Insert) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments for Stream
 func (node *Stream) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments for Update
 func (node *Update) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // SetComments for VStream
 func (node *VStream) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
-// GetComments implements DDLStatement.
-func (node *RenameTable) GetComments() Comments {
+// GetParsedComments implements DDLStatement.
+func (node *RenameTable) GetParsedComments() *ParsedComments {
 	// irrelevant
 	return nil
 }
 
-// GetComments implements DDLStatement.
-func (node *TruncateTable) GetComments() Comments {
+// GetParsedComments implements DDLStatement.
+func (node *TruncateTable) GetParsedComments() *ParsedComments {
 	// irrelevant
 	return nil
 }
 
-// GetComments implements DDLStatement.
-func (node *AlterTable) GetComments() Comments {
+// GetParsedComments implements DDLStatement.
+func (node *AlterTable) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements DDLStatement.
-func (node *CreateTable) GetComments() Comments {
+// GetParsedComments implements DDLStatement.
+func (node *CreateTable) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements DDLStatement.
-func (node *CreateView) GetComments() Comments {
+// GetParsedComments implements DDLStatement.
+func (node *CreateView) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements DDLStatement.
-func (node *DropTable) GetComments() Comments {
+// GetParsedComments implements DDLStatement.
+func (node *DropTable) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements DDLStatement.
-func (node *DropView) GetComments() Comments {
+// GetParsedComments implements DDLStatement.
+func (node *DropView) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements DDLStatement.
-func (node *AlterView) GetComments() Comments {
+// GetParsedComments implements DDLStatement.
+func (node *AlterView) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements SupportOptimizerHint.
-func (node *Delete) GetComments() Comments {
+// GetParsedComments implements SupportOptimizerHint.
+func (node *Delete) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements Insert.
-func (node *Insert) GetComments() Comments {
+// GetParsedComments implements Insert.
+func (node *Insert) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements Stream.
-func (node *Stream) GetComments() Comments {
+// GetParsedComments implements Stream.
+func (node *Stream) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements Update.
-func (node *Update) GetComments() Comments {
+// GetParsedComments implements Update.
+func (node *Update) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetComments implements VStream.
-func (node *VStream) GetComments() Comments {
+// GetParsedComments implements VStream.
+func (node *VStream) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
@@ -1804,6 +1806,18 @@ type ShowFilter struct {
 // Comments represents a list of comments.
 type Comments []string
 
+func (c Comments) Parsed() *ParsedComments {
+	if len(c) == 0 {
+		return nil
+	}
+	return &ParsedComments{comments: c}
+}
+
+type ParsedComments struct {
+	comments    Comments
+	_directives CommentDirectives
+}
+
 // SelectExprs represents SELECT expressions.
 type SelectExprs []SelectExpr
 
@@ -1882,6 +1896,7 @@ type (
 func (*AliasedTableExpr) iTableExpr() {}
 func (*ParenTableExpr) iTableExpr()   {}
 func (*JoinTableExpr) iTableExpr()    {}
+func (*JSONTableExpr) iTableExpr()    {}
 
 type (
 	// SimpleTableExpr represents a simple table expression.
@@ -2206,7 +2221,7 @@ type (
 	// supported functions are documented in the grammar
 	CurTimeFuncExpr struct {
 		Name ColIdent
-		Fsp  *Literal // fractional seconds precision, integer from 0 to 6
+		Fsp  Expr // fractional seconds precision, integer from 0 to 6 or an Argument
 	}
 
 	// ExtractedSubquery is a subquery that has been extracted from the original AST
@@ -2224,8 +2239,163 @@ type (
 		alternative  Expr // this is what will be used to Format this struct
 	}
 
+	// JSONPrettyExpr represents the function and argument for JSON_PRETTY()
+	// https://dev.mysql.com/doc/refman/8.0/en/json-utility-functions.html#function_json-pretty
+	JSONPrettyExpr struct {
+		JSONVal Expr
+	}
+
+	// JSONStorageFreeExpr represents the function and argument for JSON_STORAGE_FREE()
+	// https://dev.mysql.com/doc/refman/8.0/en/json-utility-functions.html#function_json-storage-free
+	JSONStorageFreeExpr struct {
+		JSONVal Expr
+	}
+
+	// JSONStorageSizeExpr represents the function and argument for JSON_STORAGE_SIZE()
+	// https://dev.mysql.com/doc/refman/8.0/en/json-utility-functions.html#function_json-storage-size
+	JSONStorageSizeExpr struct {
+		JSONVal Expr
+	}
+
 	// Offset is another AST type that is used during planning and never produced by the parser
 	Offset int
+
+	// JSONArrayExpr represents JSON_ARRAY()
+	// More information on https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-array
+	JSONArrayExpr struct {
+		Params Exprs
+	}
+
+	// JSONObjectExpr represents JSON_ARRAY()
+	// More information on https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-object
+	JSONObjectExpr struct {
+		Params []*JSONObjectParam
+	}
+
+	// JSONObjectParam defines a key/value parameter for a JSON_OBJECT expression
+	JSONObjectParam struct {
+		Key   Expr
+		Value Expr
+	}
+
+	// JSONQuoteExpr represents JSON_QUOTE()
+	// More information https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-quote
+	JSONQuoteExpr struct {
+		StringArg Expr
+	}
+
+	// JSONTableExpr describes the components of JSON_TABLE()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/json-table-functions.html#function_json-table
+	JSONTableExpr struct {
+		Expr    Expr
+		Alias   TableIdent
+		Filter  Expr
+		Columns []*JtColumnDefinition
+	}
+
+	// JtOnResponseType describes the type of column: default, error or null
+	JtOnResponseType int
+
+	// JtColumnDefinition represents the structure of column definition in JSON_TABLE
+	JtColumnDefinition struct {
+		JtOrdinal    *JtOrdinalColDef
+		JtPath       *JtPathColDef
+		JtNestedPath *JtNestedPathColDef
+	}
+
+	// JtOrdinalColDef is a type of column definition similar to using AUTO_INCREMENT with a column
+	JtOrdinalColDef struct {
+		Name ColIdent
+	}
+
+	// JtPathColDef is a type of column definition specifying the path in JSON structure to extract values
+	JtPathColDef struct {
+		Name            ColIdent
+		Type            ColumnType
+		JtColExists     bool
+		Path            Expr
+		EmptyOnResponse *JtOnResponse
+		ErrorOnResponse *JtOnResponse
+	}
+
+	// JtNestedPathColDef is type of column definition with nested column definitions
+	JtNestedPathColDef struct {
+		Path    Expr
+		Columns []*JtColumnDefinition
+	}
+
+	// JtOnResponse specifies for a column the JtOnResponseType along with the expression for default and error
+	JtOnResponse struct {
+		ResponseType JtOnResponseType
+		Expr         Expr
+	}
+
+	// JSONPathParam is used to store the path used as arguments in different JSON functions
+	JSONPathParam Expr
+
+	// JSONContainsExpr represents the function and arguments for JSON_CONTAINS()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-contains
+	JSONContainsExpr struct {
+		Target    Expr
+		Candidate Expr
+		PathList  []JSONPathParam
+	}
+
+	// JSONContainsPathExpr represents the function and arguments for JSON_CONTAINS_PATH()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-contains-path
+	JSONContainsPathExpr struct {
+		JSONDoc  Expr
+		OneOrAll Expr
+		PathList []JSONPathParam
+	}
+
+	// JSONContainsPathType is an enum to get types of Trim
+	JSONContainsPathType int8
+
+	// JSONExtractExpr represents the function and arguments for JSON_EXTRACT()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-extract
+	JSONExtractExpr struct {
+		JSONDoc  Expr
+		PathList []JSONPathParam
+	}
+
+	// JSONKeysExpr represents the function and arguments for JSON_KEYS()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-keys
+	JSONKeysExpr struct {
+		JSONDoc  Expr
+		PathList []JSONPathParam
+	}
+
+	// JSONOverlapsExpr represents the function and arguments for JSON_OVERLAPS()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-overlaps
+	JSONOverlapsExpr struct {
+		JSONDoc1 Expr
+		JSONDoc2 Expr
+	}
+
+	// JSONSearchExpr represents the function and arguments for JSON_SEARCH()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-search
+	JSONSearchExpr struct {
+		JSONDoc    Expr
+		OneOrAll   Expr
+		SearchStr  Expr
+		EscapeChar Expr
+		PathList   []JSONPathParam
+	}
+
+	// JSONValueExpr represents the function and arguments for JSON_VALUE()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-value
+	JSONValueExpr struct {
+		JSONDoc Expr
+		Path    JSONPathParam
+	}
+
+	// MemberOf represents the function and arguments for MEMBER OF()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#operator_member-of
+	MemberOfExpr struct {
+		Value   Expr
+		JSONArr Expr
+	}
 
 	// JSONSchemaValidFuncExpr represents the structure of JSON_SCHEMA_VALID()
 	// More information available on https://dev.mysql.com/doc/refman/8.0/en/json-validation-functions.html#function_json-schema-valid
@@ -2282,6 +2452,20 @@ func (*TrimFuncExpr) iExpr()                       {}
 func (*JSONSchemaValidFuncExpr) iExpr()            {}
 func (*JSONSchemaValidationReportFuncExpr) iExpr() {}
 func (Offset) iExpr()                              {}
+func (*JSONPrettyExpr) iExpr()                     {}
+func (*JSONStorageFreeExpr) iExpr()                {}
+func (*JSONStorageSizeExpr) iExpr()                {}
+func (*JSONContainsExpr) iExpr()                   {}
+func (*JSONContainsPathExpr) iExpr()               {}
+func (*JSONExtractExpr) iExpr()                    {}
+func (*JSONKeysExpr) iExpr()                       {}
+func (*JSONOverlapsExpr) iExpr()                   {}
+func (*JSONSearchExpr) iExpr()                     {}
+func (*JSONValueExpr) iExpr()                      {}
+func (*JSONArrayExpr) iExpr()                      {}
+func (*JSONObjectExpr) iExpr()                     {}
+func (*JSONQuoteExpr) iExpr()                      {}
+func (*MemberOfExpr) iExpr()                       {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -2298,6 +2482,20 @@ func (*MatchExpr) iCallable()                          {}
 func (*GroupConcatExpr) iCallable()                    {}
 func (*JSONSchemaValidFuncExpr) iCallable()            {}
 func (*JSONSchemaValidationReportFuncExpr) iCallable() {}
+func (*JSONPrettyExpr) iCallable()                     {}
+func (*JSONStorageFreeExpr) iCallable()                {}
+func (*JSONStorageSizeExpr) iCallable()                {}
+func (*JSONArrayExpr) iCallable()                      {}
+func (*JSONObjectExpr) iCallable()                     {}
+func (*JSONQuoteExpr) iCallable()                      {}
+func (*JSONContainsExpr) iCallable()                   {}
+func (*JSONContainsPathExpr) iCallable()               {}
+func (*JSONExtractExpr) iCallable()                    {}
+func (*JSONKeysExpr) iCallable()                       {}
+func (*JSONValueExpr) iCallable()                      {}
+func (*JSONSearchExpr) iCallable()                     {}
+func (*JSONOverlapsExpr) iCallable()                   {}
+func (*MemberOfExpr) iCallable()                       {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

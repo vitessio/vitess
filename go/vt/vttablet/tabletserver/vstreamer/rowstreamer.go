@@ -156,7 +156,7 @@ func (rs *rowStreamer) buildPlan() error {
 		return err
 	}
 
-	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+	directives := sel.Comments.Directives()
 	if s := directives.GetString("ukColumns", ""); s != "" {
 		rs.ukColumnNames, err = textutil.SplitUnescape(s, ",")
 		if err != nil {
@@ -259,6 +259,11 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 }
 
 func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	// Let's wait until MySQL is in good shape to stream rows
+	if err := rs.vse.waitForMySQL(rs.ctx, rs.cp, rs.plan.Table.Name); err != nil {
+		return err
+	}
+
 	log.Infof("Streaming query: %v\n", rs.sendQuery)
 	gtid, err := conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
 	if err != nil {

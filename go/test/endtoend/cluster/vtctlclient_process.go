@@ -43,7 +43,7 @@ type VtctlClientParams struct {
 	MigrationContext string
 	SkipPreflight    bool
 	UUIDList         string
-	CallerId         string
+	CallerID         string
 }
 
 // InitShardPrimary executes vtctlclient command to make specified tablet the primary for the shard.
@@ -91,8 +91,8 @@ func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQ
 		args = append(args, "--skip_preflight")
 	}
 
-	if params.CallerId != "" {
-		args = append(args, "--caller_id", params.CallerId)
+	if params.CallerID != "" {
+		args = append(args, "--caller_id", params.CallerID)
 	}
 	args = append(args, Keyspace)
 	return vtctlclient.ExecuteCommandWithOutput(args...)
@@ -207,7 +207,7 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) 
 // VtctlClientProcessInstance returns a VtctlProcess handle for vtctlclient process
 // configured with the given Config.
 func VtctlClientProcessInstance(hostname string, grpcPort int, tmpDirectory string) *VtctlClientProcess {
-	version, err := getMajorVersion("vtctl") // `vtctlclient` does not have a --version flag, so we assume both vtctl/vtctlclient have the same version
+	version, err := GetMajorVersion("vtctl") // `vtctlclient` does not have a --version flag, so we assume both vtctl/vtctlclient have the same version
 	if err != nil {
 		log.Warningf("failed to get major vtctlclient version; interop with CLI changes for VEP-4 may not work: %s", err)
 	}

@@ -78,9 +78,33 @@ jobs:
     - name: Run cluster endtoend test
       timeout-minutes: 30
       run: |
+        # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
+        # which musn't be more than 107 characters long.
+        export VTDATAROOT="/tmp/"
         source build.env
 
         set -x
+
+        {{if .LimitResourceUsage}}
+        # Increase our local ephemeral port range as we could exhaust this
+        sudo sysctl -w net.ipv4.ip_local_port_range="22768 61999"
+        # Increase our open file descriptor limit as we could hit this
+        ulimit -n 65536
+        cat <<-EOF>>./config/mycnf/mysql57.cnf
+        innodb_buffer_pool_dump_at_shutdown=OFF
+        innodb_buffer_pool_load_at_startup=OFF
+        innodb_buffer_pool_size=64M
+        innodb_doublewrite=OFF
+        innodb_flush_log_at_trx_commit=0
+        innodb_flush_method=O_DIRECT
+        innodb_numa_interleave=ON
+        innodb_adaptive_hash_index=OFF
+        sync_binlog=0
+        sync_relay_log=0
+        performance_schema=OFF
+        slow-query-log=OFF
+        EOF
+        {{end}}
 
         # run the tests however you normally do, then produce a JUnit XML file
         eatmydata -- go run test.go -docker=false -follow -shard {{.Shard}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml

@@ -277,7 +277,7 @@ func costForDML(foundVindex *vindexes.ColumnVindex, opcode engine.Opcode) costDM
 	}
 }
 
-func buildDMLPlan(vschema plancontext.VSchema, dmlType string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, tableExprs sqlparser.TableExprs, where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, comments sqlparser.Comments, nodes ...sqlparser.SQLNode) (*engine.DML, *vindexes.ColumnVindex, error) {
+func buildDMLPlan(vschema plancontext.VSchema, dmlType string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, tableExprs sqlparser.TableExprs, where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, comments *sqlparser.ParsedComments, nodes ...sqlparser.SQLNode) (*engine.DML, *vindexes.ColumnVindex, error) {
 	edml := engine.NewDML()
 	pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
 	rb, err := pb.processDMLTable(tableExprs, reservedVars, nil)
@@ -310,7 +310,7 @@ func buildDMLPlan(vschema plancontext.VSchema, dmlType string, stmt sqlparser.St
 	// routed tables won't happen.
 	edml.Query = generateQuery(stmt)
 
-	directives := sqlparser.ExtractCommentDirectives(comments)
+	directives := comments.Directives()
 	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
 		edml.MultiShardAutocommit = true
 	}

@@ -18,12 +18,12 @@ package vtsql
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/credentials"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -31,18 +31,14 @@ import (
 
 // Config represents the options that modify the behavior of a vtqsl.VTGateProxy.
 type Config struct {
-	Discovery     discovery.Discovery
-	DiscoveryTags []string
-	Credentials   Credentials
-
-	DialPingTimeout time.Duration
-
+	Credentials Credentials
 	// CredentialsPath is used only to power vtadmin debug endpoints; there may
 	// be a better way where we don't need to put this in the config, because
 	// it's not really an "option" in normal use.
 	CredentialsPath string
 
-	Cluster *vtadminpb.Cluster
+	Cluster         *vtadminpb.Cluster
+	ResolverOptions *resolver.Options
 }
 
 // Parse returns a new config with the given cluster ID and name, after
@@ -50,8 +46,10 @@ type Config struct {
 // (*Config).Parse() for more details.
 func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string) (*Config, error) {
 	cfg := &Config{
-		Cluster:   cluster,
-		Discovery: disco,
+		Cluster: cluster,
+		ResolverOptions: &resolver.Options{
+			Discovery: disco,
+		},
 	}
 
 	err := cfg.Parse(args)
@@ -68,11 +66,11 @@ func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string)
 func (c *Config) Parse(args []string) error {
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
 
-	fs.DurationVar(&c.DialPingTimeout, "dial-ping-timeout", time.Millisecond*500,
-		"Timeout to use when pinging an existing connection during calls to Dial.")
-	fs.StringSliceVar(&c.DiscoveryTags, "discovery-tags", []string{},
-		"repeated, comma-separated list of tags to use when discovering a vtgate to connect to. "+
-			"the semantics of the tags may depend on the specific discovery implementation used")
+	if c.ResolverOptions == nil {
+		c.ResolverOptions = &resolver.Options{}
+	}
+
+	c.ResolverOptions.InstallFlags(fs)
 
 	credentialsTmplStr := fs.String("credentials-path-tmpl", "",
 		"Go template used to specify a path to a credentials file, which is a json file containing "+

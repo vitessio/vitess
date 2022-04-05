@@ -84,8 +84,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfColumnType(parent, node, replacer)
 	case Columns:
 		return a.rewriteColumns(parent, node, replacer)
-	case Comments:
-		return a.rewriteComments(parent, node, replacer)
 	case *Commit:
 		return a.rewriteRefOfCommit(parent, node, replacer)
 	case *CommonTableExpr:
@@ -172,14 +170,48 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
 	case IsolationLevel:
 		return a.rewriteIsolationLevel(parent, node, replacer)
+	case *JSONArrayExpr:
+		return a.rewriteRefOfJSONArrayExpr(parent, node, replacer)
+	case *JSONContainsExpr:
+		return a.rewriteRefOfJSONContainsExpr(parent, node, replacer)
+	case *JSONContainsPathExpr:
+		return a.rewriteRefOfJSONContainsPathExpr(parent, node, replacer)
+	case *JSONExtractExpr:
+		return a.rewriteRefOfJSONExtractExpr(parent, node, replacer)
+	case *JSONKeysExpr:
+		return a.rewriteRefOfJSONKeysExpr(parent, node, replacer)
+	case *JSONObjectExpr:
+		return a.rewriteRefOfJSONObjectExpr(parent, node, replacer)
+	case JSONObjectParam:
+		return a.rewriteJSONObjectParam(parent, node, replacer)
+	case *JSONOverlapsExpr:
+		return a.rewriteRefOfJSONOverlapsExpr(parent, node, replacer)
+	case *JSONPrettyExpr:
+		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
+	case *JSONQuoteExpr:
+		return a.rewriteRefOfJSONQuoteExpr(parent, node, replacer)
 	case *JSONSchemaValidFuncExpr:
 		return a.rewriteRefOfJSONSchemaValidFuncExpr(parent, node, replacer)
 	case *JSONSchemaValidationReportFuncExpr:
 		return a.rewriteRefOfJSONSchemaValidationReportFuncExpr(parent, node, replacer)
+	case *JSONSearchExpr:
+		return a.rewriteRefOfJSONSearchExpr(parent, node, replacer)
+	case *JSONStorageFreeExpr:
+		return a.rewriteRefOfJSONStorageFreeExpr(parent, node, replacer)
+	case *JSONStorageSizeExpr:
+		return a.rewriteRefOfJSONStorageSizeExpr(parent, node, replacer)
+	case *JSONTableExpr:
+		return a.rewriteRefOfJSONTableExpr(parent, node, replacer)
+	case *JSONValueExpr:
+		return a.rewriteRefOfJSONValueExpr(parent, node, replacer)
 	case *JoinCondition:
 		return a.rewriteRefOfJoinCondition(parent, node, replacer)
 	case *JoinTableExpr:
 		return a.rewriteRefOfJoinTableExpr(parent, node, replacer)
+	case *JtColumnDefinition:
+		return a.rewriteRefOfJtColumnDefinition(parent, node, replacer)
+	case *JtOnResponse:
+		return a.rewriteRefOfJtOnResponse(parent, node, replacer)
 	case *KeyState:
 		return a.rewriteRefOfKeyState(parent, node, replacer)
 	case *Limit:
@@ -196,6 +228,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfLockTables(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
+	case *MemberOfExpr:
+		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
 	case *ModifyColumn:
 		return a.rewriteRefOfModifyColumn(parent, node, replacer)
 	case *Nextval:
@@ -224,6 +258,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfOtherRead(parent, node, replacer)
 	case *ParenTableExpr:
 		return a.rewriteRefOfParenTableExpr(parent, node, replacer)
+	case *ParsedComments:
+		return a.rewriteRefOfParsedComments(parent, node, replacer)
 	case *PartitionDefinition:
 		return a.rewriteRefOfPartitionDefinition(parent, node, replacer)
 	case *PartitionOption:
@@ -669,8 +705,8 @@ func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, r
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*AlterTable).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*AlterTable).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -716,8 +752,8 @@ func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, rep
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*AlterView).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*AlterView).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -1247,36 +1283,6 @@ func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer repl
 	}
 	return true
 }
-func (a *application) rewriteComments(parent SQLNode, node Comments, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		kontinue := !a.pre(&a.cur)
-		if a.cur.revisit {
-			node = a.cur.node.(Comments)
-			a.cur.revisit = false
-			return a.rewriteComments(parent, node, replacer)
-		}
-		if kontinue {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
 func (a *application) rewriteRefOfCommit(parent SQLNode, node *Commit, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1510,8 +1516,8 @@ func (a *application) rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDat
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*CreateDatabase).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*CreateDatabase).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -1557,8 +1563,8 @@ func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable,
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*CreateTable).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*CreateTable).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -1604,8 +1610,8 @@ func (a *application) rewriteRefOfCreateView(parent SQLNode, node *CreateView, r
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*CreateView).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*CreateView).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -1636,8 +1642,8 @@ func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeF
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfLiteral(node, node.Fsp, func(newNode, parent SQLNode) {
-		parent.(*CurTimeFuncExpr).Fsp = newNode.(*Literal)
+	if !a.rewriteExpr(node, node.Fsp, func(newNode, parent SQLNode) {
+		parent.(*CurTimeFuncExpr).Fsp = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -1663,8 +1669,8 @@ func (a *application) rewriteRefOfDeallocateStmt(parent SQLNode, node *Deallocat
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*DeallocateStmt).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*DeallocateStmt).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -1748,8 +1754,8 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*Delete).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Delete).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -1859,8 +1865,8 @@ func (a *application) rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabas
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*DropDatabase).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*DropDatabase).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -1923,8 +1929,8 @@ func (a *application) rewriteRefOfDropTable(parent SQLNode, node *DropTable, rep
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*DropTable).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*DropTable).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -1955,8 +1961,8 @@ func (a *application) rewriteRefOfDropView(parent SQLNode, node *DropView, repla
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*DropView).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*DropView).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -1987,8 +1993,8 @@ func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt,
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*ExecuteStmt).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*ExecuteStmt).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -2532,8 +2538,8 @@ func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer 
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*Insert).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Insert).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -2653,6 +2659,333 @@ func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer 
 	}
 	return true
 }
+func (a *application) rewriteRefOfJSONArrayExpr(parent SQLNode, node *JSONArrayExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExprs(node, node.Params, func(newNode, parent SQLNode) {
+		parent.(*JSONArrayExpr).Params = newNode.(Exprs)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONContainsExpr(parent SQLNode, node *JSONContainsExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Target, func(newNode, parent SQLNode) {
+		parent.(*JSONContainsExpr).Target = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Candidate, func(newNode, parent SQLNode) {
+		parent.(*JSONContainsExpr).Candidate = newNode.(Expr)
+	}) {
+		return false
+	}
+	for x, el := range node.PathList {
+		if !a.rewriteJSONPathParam(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*JSONContainsExpr).PathList[idx] = newNode.(JSONPathParam)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONContainsPathExpr(parent SQLNode, node *JSONContainsPathExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
+		parent.(*JSONContainsPathExpr).JSONDoc = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.OneOrAll, func(newNode, parent SQLNode) {
+		parent.(*JSONContainsPathExpr).OneOrAll = newNode.(Expr)
+	}) {
+		return false
+	}
+	for x, el := range node.PathList {
+		if !a.rewriteJSONPathParam(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*JSONContainsPathExpr).PathList[idx] = newNode.(JSONPathParam)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONExtractExpr(parent SQLNode, node *JSONExtractExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
+		parent.(*JSONExtractExpr).JSONDoc = newNode.(Expr)
+	}) {
+		return false
+	}
+	for x, el := range node.PathList {
+		if !a.rewriteJSONPathParam(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*JSONExtractExpr).PathList[idx] = newNode.(JSONPathParam)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONKeysExpr(parent SQLNode, node *JSONKeysExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
+		parent.(*JSONKeysExpr).JSONDoc = newNode.(Expr)
+	}) {
+		return false
+	}
+	for x, el := range node.PathList {
+		if !a.rewriteJSONPathParam(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*JSONKeysExpr).PathList[idx] = newNode.(JSONPathParam)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONObjectExpr(parent SQLNode, node *JSONObjectExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	for x, el := range node.Params {
+		if !a.rewriteRefOfJSONObjectParam(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*JSONObjectExpr).Params[idx] = newNode.(*JSONObjectParam)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteJSONObjectParam(parent SQLNode, node JSONObjectParam, replacer replacerFunc) bool {
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Key, func(newNode, parent SQLNode) {
+		panic("[BUG] tried to replace 'Key' on 'JSONObjectParam'")
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Value, func(newNode, parent SQLNode) {
+		panic("[BUG] tried to replace 'Value' on 'JSONObjectParam'")
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONOverlapsExpr(parent SQLNode, node *JSONOverlapsExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.JSONDoc1, func(newNode, parent SQLNode) {
+		parent.(*JSONOverlapsExpr).JSONDoc1 = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.JSONDoc2, func(newNode, parent SQLNode) {
+		parent.(*JSONOverlapsExpr).JSONDoc2 = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONPrettyExpr(parent SQLNode, node *JSONPrettyExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.JSONVal, func(newNode, parent SQLNode) {
+		parent.(*JSONPrettyExpr).JSONVal = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONQuoteExpr(parent SQLNode, node *JSONQuoteExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.StringArg, func(newNode, parent SQLNode) {
+		parent.(*JSONQuoteExpr).StringArg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfJSONSchemaValidFuncExpr(parent SQLNode, node *JSONSchemaValidFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2704,6 +3037,189 @@ func (a *application) rewriteRefOfJSONSchemaValidationReportFuncExpr(parent SQLN
 	}
 	if !a.rewriteExpr(node, node.Document, func(newNode, parent SQLNode) {
 		parent.(*JSONSchemaValidationReportFuncExpr).Document = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONSearchExpr(parent SQLNode, node *JSONSearchExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
+		parent.(*JSONSearchExpr).JSONDoc = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.OneOrAll, func(newNode, parent SQLNode) {
+		parent.(*JSONSearchExpr).OneOrAll = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.SearchStr, func(newNode, parent SQLNode) {
+		parent.(*JSONSearchExpr).SearchStr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.EscapeChar, func(newNode, parent SQLNode) {
+		parent.(*JSONSearchExpr).EscapeChar = newNode.(Expr)
+	}) {
+		return false
+	}
+	for x, el := range node.PathList {
+		if !a.rewriteJSONPathParam(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*JSONSearchExpr).PathList[idx] = newNode.(JSONPathParam)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONStorageFreeExpr(parent SQLNode, node *JSONStorageFreeExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.JSONVal, func(newNode, parent SQLNode) {
+		parent.(*JSONStorageFreeExpr).JSONVal = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONStorageSizeExpr(parent SQLNode, node *JSONStorageSizeExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.JSONVal, func(newNode, parent SQLNode) {
+		parent.(*JSONStorageSizeExpr).JSONVal = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONTableExpr(parent SQLNode, node *JSONTableExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*JSONTableExpr).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteTableIdent(node, node.Alias, func(newNode, parent SQLNode) {
+		parent.(*JSONTableExpr).Alias = newNode.(TableIdent)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Filter, func(newNode, parent SQLNode) {
+		parent.(*JSONTableExpr).Filter = newNode.(Expr)
+	}) {
+		return false
+	}
+	for x, el := range node.Columns {
+		if !a.rewriteRefOfJtColumnDefinition(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*JSONTableExpr).Columns[idx] = newNode.(*JtColumnDefinition)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONValueExpr(parent SQLNode, node *JSONValueExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
+		parent.(*JSONValueExpr).JSONDoc = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteJSONPathParam(node, node.Path, func(newNode, parent SQLNode) {
+		parent.(*JSONValueExpr).Path = newNode.(JSONPathParam)
 	}) {
 		return false
 	}
@@ -2773,6 +3289,57 @@ func (a *application) rewriteRefOfJoinTableExpr(parent SQLNode, node *JoinTableE
 	}
 	if !a.rewriteRefOfJoinCondition(node, node.Condition, func(newNode, parent SQLNode) {
 		parent.(*JoinTableExpr).Condition = newNode.(*JoinCondition)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJtColumnDefinition(parent SQLNode, node *JtColumnDefinition, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJtOnResponse(parent SQLNode, node *JtOnResponse, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*JtOnResponse).Expr = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -2957,6 +3524,38 @@ func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, rep
 	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*MatchExpr).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfMemberOfExpr(parent SQLNode, node *MemberOfExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Value, func(newNode, parent SQLNode) {
+		parent.(*MemberOfExpr).Value = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.JSONArr, func(newNode, parent SQLNode) {
+		parent.(*MemberOfExpr).JSONArr = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -3342,6 +3941,30 @@ func (a *application) rewriteRefOfParenTableExpr(parent SQLNode, node *ParenTabl
 	}
 	return true
 }
+func (a *application) rewriteRefOfParsedComments(parent SQLNode, node *ParsedComments, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *PartitionDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3547,13 +4170,13 @@ func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt,
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*PrepareStmt).Comments = newNode.(Comments)
+	if !a.rewriteExpr(node, node.Statement, func(newNode, parent SQLNode) {
+		parent.(*PrepareStmt).Statement = newNode.(Expr)
 	}) {
 		return false
 	}
-	if !a.rewriteColIdent(node, node.StatementIdentifier, func(newNode, parent SQLNode) {
-		parent.(*PrepareStmt).StatementIdentifier = newNode.(ColIdent)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*PrepareStmt).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -3731,8 +4354,8 @@ func (a *application) rewriteRefOfRevertMigration(parent SQLNode, node *RevertMi
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*RevertMigration).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*RevertMigration).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -3869,8 +4492,8 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 			return false
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*Select).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Select).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -3997,8 +4620,8 @@ func (a *application) rewriteRefOfSet(parent SQLNode, node *Set, replacer replac
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*Set).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Set).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -4103,8 +4726,8 @@ func (a *application) rewriteRefOfSetTransaction(parent SQLNode, node *SetTransa
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*SetTransaction).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*SetTransaction).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -4294,8 +4917,8 @@ func (a *application) rewriteRefOfShowMigrationLogs(parent SQLNode, node *ShowMi
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*ShowMigrationLogs).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*ShowMigrationLogs).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -4348,8 +4971,8 @@ func (a *application) rewriteRefOfStream(parent SQLNode, node *Stream, replacer 
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*Stream).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Stream).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -4917,8 +5540,8 @@ func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer 
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*Update).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Update).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -5065,8 +5688,8 @@ func (a *application) rewriteRefOfVStream(parent SQLNode, node *VStream, replace
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*VStream).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*VStream).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -5509,12 +6132,40 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case *GroupConcatExpr:
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
+	case *JSONArrayExpr:
+		return a.rewriteRefOfJSONArrayExpr(parent, node, replacer)
+	case *JSONContainsExpr:
+		return a.rewriteRefOfJSONContainsExpr(parent, node, replacer)
+	case *JSONContainsPathExpr:
+		return a.rewriteRefOfJSONContainsPathExpr(parent, node, replacer)
+	case *JSONExtractExpr:
+		return a.rewriteRefOfJSONExtractExpr(parent, node, replacer)
+	case *JSONKeysExpr:
+		return a.rewriteRefOfJSONKeysExpr(parent, node, replacer)
+	case *JSONObjectExpr:
+		return a.rewriteRefOfJSONObjectExpr(parent, node, replacer)
+	case *JSONOverlapsExpr:
+		return a.rewriteRefOfJSONOverlapsExpr(parent, node, replacer)
+	case *JSONPrettyExpr:
+		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
+	case *JSONQuoteExpr:
+		return a.rewriteRefOfJSONQuoteExpr(parent, node, replacer)
 	case *JSONSchemaValidFuncExpr:
 		return a.rewriteRefOfJSONSchemaValidFuncExpr(parent, node, replacer)
 	case *JSONSchemaValidationReportFuncExpr:
 		return a.rewriteRefOfJSONSchemaValidationReportFuncExpr(parent, node, replacer)
+	case *JSONSearchExpr:
+		return a.rewriteRefOfJSONSearchExpr(parent, node, replacer)
+	case *JSONStorageFreeExpr:
+		return a.rewriteRefOfJSONStorageFreeExpr(parent, node, replacer)
+	case *JSONStorageSizeExpr:
+		return a.rewriteRefOfJSONStorageSizeExpr(parent, node, replacer)
+	case *JSONValueExpr:
+		return a.rewriteRefOfJSONValueExpr(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
+	case *MemberOfExpr:
+		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
 	case *SubstrExpr:
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *TimestampFuncExpr:
@@ -5677,16 +6328,44 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfIntroducerExpr(parent, node, replacer)
 	case *IsExpr:
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
+	case *JSONArrayExpr:
+		return a.rewriteRefOfJSONArrayExpr(parent, node, replacer)
+	case *JSONContainsExpr:
+		return a.rewriteRefOfJSONContainsExpr(parent, node, replacer)
+	case *JSONContainsPathExpr:
+		return a.rewriteRefOfJSONContainsPathExpr(parent, node, replacer)
+	case *JSONExtractExpr:
+		return a.rewriteRefOfJSONExtractExpr(parent, node, replacer)
+	case *JSONKeysExpr:
+		return a.rewriteRefOfJSONKeysExpr(parent, node, replacer)
+	case *JSONObjectExpr:
+		return a.rewriteRefOfJSONObjectExpr(parent, node, replacer)
+	case *JSONOverlapsExpr:
+		return a.rewriteRefOfJSONOverlapsExpr(parent, node, replacer)
+	case *JSONPrettyExpr:
+		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
+	case *JSONQuoteExpr:
+		return a.rewriteRefOfJSONQuoteExpr(parent, node, replacer)
 	case *JSONSchemaValidFuncExpr:
 		return a.rewriteRefOfJSONSchemaValidFuncExpr(parent, node, replacer)
 	case *JSONSchemaValidationReportFuncExpr:
 		return a.rewriteRefOfJSONSchemaValidationReportFuncExpr(parent, node, replacer)
+	case *JSONSearchExpr:
+		return a.rewriteRefOfJSONSearchExpr(parent, node, replacer)
+	case *JSONStorageFreeExpr:
+		return a.rewriteRefOfJSONStorageFreeExpr(parent, node, replacer)
+	case *JSONStorageSizeExpr:
+		return a.rewriteRefOfJSONStorageSizeExpr(parent, node, replacer)
+	case *JSONValueExpr:
+		return a.rewriteRefOfJSONValueExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
 		return a.rewriteRefOfLiteral(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
+	case *MemberOfExpr:
+		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
 	case *NotExpr:
 		return a.rewriteRefOfNotExpr(parent, node, replacer)
 	case *NullVal:
@@ -5729,6 +6408,122 @@ func (a *application) rewriteInsertRows(parent SQLNode, node InsertRows, replace
 		return a.rewriteRefOfUnion(parent, node, replacer)
 	case Values:
 		return a.rewriteValues(parent, node, replacer)
+	default:
+		// this should never happen
+		return true
+	}
+}
+func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	switch node := node.(type) {
+	case *AndExpr:
+		return a.rewriteRefOfAndExpr(parent, node, replacer)
+	case Argument:
+		return a.rewriteArgument(parent, node, replacer)
+	case *BetweenExpr:
+		return a.rewriteRefOfBetweenExpr(parent, node, replacer)
+	case *BinaryExpr:
+		return a.rewriteRefOfBinaryExpr(parent, node, replacer)
+	case BoolVal:
+		return a.rewriteBoolVal(parent, node, replacer)
+	case *CaseExpr:
+		return a.rewriteRefOfCaseExpr(parent, node, replacer)
+	case *ColName:
+		return a.rewriteRefOfColName(parent, node, replacer)
+	case *CollateExpr:
+		return a.rewriteRefOfCollateExpr(parent, node, replacer)
+	case *ComparisonExpr:
+		return a.rewriteRefOfComparisonExpr(parent, node, replacer)
+	case *ConvertExpr:
+		return a.rewriteRefOfConvertExpr(parent, node, replacer)
+	case *ConvertUsingExpr:
+		return a.rewriteRefOfConvertUsingExpr(parent, node, replacer)
+	case *CurTimeFuncExpr:
+		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
+	case *Default:
+		return a.rewriteRefOfDefault(parent, node, replacer)
+	case *ExistsExpr:
+		return a.rewriteRefOfExistsExpr(parent, node, replacer)
+	case *ExtractFuncExpr:
+		return a.rewriteRefOfExtractFuncExpr(parent, node, replacer)
+	case *ExtractedSubquery:
+		return a.rewriteRefOfExtractedSubquery(parent, node, replacer)
+	case *FuncExpr:
+		return a.rewriteRefOfFuncExpr(parent, node, replacer)
+	case *GroupConcatExpr:
+		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
+	case *IntervalExpr:
+		return a.rewriteRefOfIntervalExpr(parent, node, replacer)
+	case *IntroducerExpr:
+		return a.rewriteRefOfIntroducerExpr(parent, node, replacer)
+	case *IsExpr:
+		return a.rewriteRefOfIsExpr(parent, node, replacer)
+	case *JSONArrayExpr:
+		return a.rewriteRefOfJSONArrayExpr(parent, node, replacer)
+	case *JSONContainsExpr:
+		return a.rewriteRefOfJSONContainsExpr(parent, node, replacer)
+	case *JSONContainsPathExpr:
+		return a.rewriteRefOfJSONContainsPathExpr(parent, node, replacer)
+	case *JSONExtractExpr:
+		return a.rewriteRefOfJSONExtractExpr(parent, node, replacer)
+	case *JSONKeysExpr:
+		return a.rewriteRefOfJSONKeysExpr(parent, node, replacer)
+	case *JSONObjectExpr:
+		return a.rewriteRefOfJSONObjectExpr(parent, node, replacer)
+	case *JSONOverlapsExpr:
+		return a.rewriteRefOfJSONOverlapsExpr(parent, node, replacer)
+	case *JSONPrettyExpr:
+		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
+	case *JSONQuoteExpr:
+		return a.rewriteRefOfJSONQuoteExpr(parent, node, replacer)
+	case *JSONSchemaValidFuncExpr:
+		return a.rewriteRefOfJSONSchemaValidFuncExpr(parent, node, replacer)
+	case *JSONSchemaValidationReportFuncExpr:
+		return a.rewriteRefOfJSONSchemaValidationReportFuncExpr(parent, node, replacer)
+	case *JSONSearchExpr:
+		return a.rewriteRefOfJSONSearchExpr(parent, node, replacer)
+	case *JSONStorageFreeExpr:
+		return a.rewriteRefOfJSONStorageFreeExpr(parent, node, replacer)
+	case *JSONStorageSizeExpr:
+		return a.rewriteRefOfJSONStorageSizeExpr(parent, node, replacer)
+	case *JSONValueExpr:
+		return a.rewriteRefOfJSONValueExpr(parent, node, replacer)
+	case ListArg:
+		return a.rewriteListArg(parent, node, replacer)
+	case *Literal:
+		return a.rewriteRefOfLiteral(parent, node, replacer)
+	case *MatchExpr:
+		return a.rewriteRefOfMatchExpr(parent, node, replacer)
+	case *MemberOfExpr:
+		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
+	case *NotExpr:
+		return a.rewriteRefOfNotExpr(parent, node, replacer)
+	case *NullVal:
+		return a.rewriteRefOfNullVal(parent, node, replacer)
+	case Offset:
+		return a.rewriteOffset(parent, node, replacer)
+	case *OrExpr:
+		return a.rewriteRefOfOrExpr(parent, node, replacer)
+	case *Subquery:
+		return a.rewriteRefOfSubquery(parent, node, replacer)
+	case *SubstrExpr:
+		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
+	case *TimestampFuncExpr:
+		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
+	case *TrimFuncExpr:
+		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
+	case *UnaryExpr:
+		return a.rewriteRefOfUnaryExpr(parent, node, replacer)
+	case ValTuple:
+		return a.rewriteValTuple(parent, node, replacer)
+	case *ValuesFuncExpr:
+		return a.rewriteRefOfValuesFuncExpr(parent, node, replacer)
+	case *WeightStringFuncExpr:
+		return a.rewriteRefOfWeightStringFuncExpr(parent, node, replacer)
+	case *XorExpr:
+		return a.rewriteRefOfXorExpr(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -5899,6 +6694,8 @@ func (a *application) rewriteTableExpr(parent SQLNode, node TableExpr, replacer 
 	switch node := node.(type) {
 	case *AliasedTableExpr:
 		return a.rewriteRefOfAliasedTableExpr(parent, node, replacer)
+	case *JSONTableExpr:
+		return a.rewriteRefOfJSONTableExpr(parent, node, replacer)
 	case *JoinTableExpr:
 		return a.rewriteRefOfJoinTableExpr(parent, node, replacer)
 	case *ParenTableExpr:
@@ -6094,6 +6891,38 @@ func (a *application) rewriteRefOfColIdent(parent SQLNode, node *ColIdent, repla
 			a.cur.parent = parent
 			a.cur.node = node
 		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONObjectParam(parent SQLNode, node *JSONObjectParam, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Key, func(newNode, parent SQLNode) {
+		parent.(*JSONObjectParam).Key = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Value, func(newNode, parent SQLNode) {
+		parent.(*JSONObjectParam).Value = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}

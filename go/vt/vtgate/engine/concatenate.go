@@ -19,8 +19,6 @@ package engine
 import (
 	"sync"
 
-	"vitess.io/vitess/go/sync2"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -30,12 +28,30 @@ import (
 // Concatenate Primitive is used to concatenate results from multiple sources.
 var _ Primitive = (*Concatenate)(nil)
 
-//Concatenate specified the parameter for concatenate primitive
+// Concatenate specified the parameter for concatenate primitive
 type Concatenate struct {
 	Sources []Primitive
+
+	// These column offsets do not need to be typed checked - they usually contain weight_string()
+	// columns that are not going to be returned to the user
+	NoNeedToTypeCheck map[int]any
 }
 
-//RouteType returns a description of the query routing type used by the primitive
+// NewConcatenate creates a Concatenate primitive. The ignoreCols slice contains the offsets that
+// don't need to have the same type between sources -
+// weight_string() sometimes returns VARBINARY and sometimes VARCHAR
+func NewConcatenate(Sources []Primitive, ignoreCols []int) *Concatenate {
+	ignoreTypes := map[int]any{}
+	for _, i := range ignoreCols {
+		ignoreTypes[i] = nil
+	}
+	return &Concatenate{
+		Sources:           Sources,
+		NoNeedToTypeCheck: ignoreTypes,
+	}
+}
+
+// RouteType returns a description of the query routing type used by the primitive
 func (c *Concatenate) RouteType() string {
 	return "Concatenate"
 }
@@ -103,23 +119,28 @@ func (c *Concatenate) TryExecute(vcursor VCursor, bindVars map[string]*querypb.B
 }
 
 func (c *Concatenate) getFields(res []*sqltypes.Result) ([]*querypb.Field, error) {
-	var resFields []*querypb.Field
+	if len(res) == 0 {
+		return nil, nil
+	}
+
+	var fields []*querypb.Field
 	for _, r := range res {
-		fields := r.Fields
+		if r.Fields == nil {
+			continue
+		}
 		if fields == nil {
+			fields = r.Fields
 			continue
 		}
-		if resFields == nil {
-			resFields = fields
-			continue
-		}
-		err := compareFields(fields, resFields)
+
+		err := c.compareFields(fields, r.Fields)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return resFields, nil
+	return fields, nil
 }
+
 func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
 	results := make([]*sqltypes.Result, len(c.Sources))
 	g, restoreCtx := vcursor.ErrorGroupCancellableContext()
@@ -146,13 +167,13 @@ func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.
 // TryStreamExecute performs a streaming exec.
 func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var seenFields []*querypb.Field
-	var fieldset sync.WaitGroup
-	var cbMu sync.Mutex
+	var wg sync.WaitGroup
+	var cbMu, fieldsMu sync.Mutex
 
 	g, restoreCtx := vcursor.ErrorGroupCancellableContext()
 	defer restoreCtx()
-	var fieldsSent sync2.AtomicBool
-	fieldset.Add(1)
+	var fieldsSent bool
+	wg.Add(1)
 
 	for i, source := range c.Sources {
 		currIndex, currSource := i, source
@@ -160,16 +181,21 @@ func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 		g.Go(func() error {
 			err := vcursor.StreamExecutePrimitive(currSource, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
 				// if we have fields to compare, make sure all the fields are all the same
-				if currIndex == 0 && !fieldsSent.Get() {
-					defer fieldset.Done()
-					seenFields = resultChunk.Fields
-					fieldsSent.Set(true)
-					// No other call can happen before this call.
-					return callback(resultChunk)
+				if currIndex == 0 {
+					fieldsMu.Lock()
+					if !fieldsSent {
+						defer wg.Done()
+						defer fieldsMu.Unlock()
+						seenFields = resultChunk.Fields
+						fieldsSent = true
+						// No other call can happen before this call.
+						return callback(resultChunk)
+					}
+					fieldsMu.Unlock()
 				}
-				fieldset.Wait()
+				wg.Wait()
 				if resultChunk.Fields != nil {
-					err := compareFields(seenFields, resultChunk.Fields)
+					err := c.compareFields(seenFields, resultChunk.Fields)
 					if err != nil {
 						return err
 					}
@@ -185,9 +211,15 @@ func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 				}
 			})
 			// This is to ensure other streams complete if the first stream failed to unlock the wait.
-			if currIndex == 0 && !fieldsSent.Get() {
-				fieldset.Done()
+			if currIndex == 0 {
+				fieldsMu.Lock()
+				if !fieldsSent {
+					fieldsSent = true
+					wg.Done()
+				}
+				fieldsMu.Unlock()
 			}
+
 			return err
 		})
 
@@ -200,6 +232,7 @@ func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 
 // GetFields fetches the field info.
 func (c *Concatenate) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	// TODO: type coercions
 	res, err := c.Sources[0].GetFields(vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -210,15 +243,16 @@ func (c *Concatenate) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bi
 		if err != nil {
 			return nil, err
 		}
-		err = compareFields(result.Fields, res.Fields)
+		err = c.compareFields(res.Fields, result.Fields)
 		if err != nil {
 			return nil, err
 		}
 	}
+
 	return res, nil
 }
 
-//NeedsTransaction returns whether a transaction is needed for this primitive
+// NeedsTransaction returns whether a transaction is needed for this primitive
 func (c *Concatenate) NeedsTransaction() bool {
 	for _, source := range c.Sources {
 		if source.NeedsTransaction() {
@@ -237,12 +271,15 @@ func (c *Concatenate) description() PrimitiveDescription {
 	return PrimitiveDescription{OperatorType: c.RouteType()}
 }
 
-func compareFields(fields1 []*querypb.Field, fields2 []*querypb.Field) error {
+func (c *Concatenate) compareFields(fields1 []*querypb.Field, fields2 []*querypb.Field) error {
 	if len(fields1) != len(fields2) {
 		return ErrWrongNumberOfColumnsInSelect
 	}
-	for i, field2 := range fields2 {
-		field1 := fields1[i]
+	for i, field1 := range fields1 {
+		if _, found := c.NoNeedToTypeCheck[i]; found {
+			continue
+		}
+		field2 := fields2[i]
 		if field1.Type != field2.Type {
 			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "merging field of different types is not supported, name: (%v, %v) types: (%v, %v)", field1.Name, field2.Name, field1.Type, field2.Type)
 		}

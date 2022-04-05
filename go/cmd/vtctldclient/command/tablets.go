@@ -103,6 +103,15 @@ Valid output formats are "awk" and "json".`,
 		Args:                  cobra.NoArgs,
 		RunE:                  commandGetTablets,
 	}
+	// GetTabletVersion makes a GetVersion RPC to a vtctld.
+	GetTabletVersion = &cobra.Command{
+		Use:                   "GetTabletVersion <alias>",
+		Aliases:               []string{"GetVersion"},
+		Short:                 "Print the version of a tablet from its debug vars.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetTabletVersion,
+	}
 	// PingTablet makes a PingTablet gRPC call to a vtctld.
 	PingTablet = &cobra.Command{
 		Use:                   "PingTablet <alias>",
@@ -379,6 +388,25 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandGetTabletVersion(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.GetVersion(commandCtx, &vtctldatapb.GetVersionRequest{
+		TabletAlias: alias,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(resp.Version)
+	return nil
+}
+
 func commandPingTablet(cmd *cobra.Command, args []string) error {
 	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
 	if err != nil {
@@ -547,6 +575,7 @@ func init() {
 	GetTablets.Flags().BoolVar(&getTabletsOptions.Strict, "strict", false, "Require all cells to return successful tablet data. Without --strict, tablet listings may be partial.")
 	Root.AddCommand(GetTablets)
 
+	Root.AddCommand(GetTabletVersion)
 	Root.AddCommand(PingTablet)
 	Root.AddCommand(RefreshState)
 

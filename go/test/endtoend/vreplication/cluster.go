@@ -32,6 +32,8 @@ var (
 	externalClusterConfig *ClusterConfig
 	extraVTGateArgs       = []string{"--tablet_refresh_interval", "10ms"}
 	extraVtctldArgs       = []string{"--remote_operation_timeout", "600s", "--topo_etcd_lease_ttl", "120"}
+	// This variable can be used within specific tests to alter vttablet behavior
+	extraVTTabletArgs = []string{}
 )
 
 // ClusterConfig defines the parameters like ports, tmpDir, tablet types which uniquely define a vitess cluster
@@ -406,6 +408,7 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 		"--heartbeat_enable",
 		"--heartbeat_interval", "250ms",
 	} //FIXME: for multi-cell initial schema doesn't seem to load without "--queryserver-config-schema-reload-time"
+	options = append(options, extraVTTabletArgs...)
 
 	if mainClusterConfig.vreplicationCompressGTID {
 		options = append(options, "--vreplication_store_compressed_gtid=true")

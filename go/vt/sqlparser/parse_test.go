@@ -37,9 +37,10 @@ import (
 
 var (
 	validSQL = []struct {
-		input      string
-		output     string
-		partialDDL bool
+		input                string
+		output               string
+		partialDDL           bool
+		ignoreNormalizerTest bool
 	}{{
 		input:      "create table x(location GEOMETRYCOLLECTION DEFAULT POINT(7.0, 3.0))",
 		output:     "create table x",
@@ -185,6 +186,9 @@ var (
 		input: "select n, d from something",
 	}, {
 		input: "insert into sys_message_assign(message_id, assign_user_id, read_state, id, is_delete, create_time, update_time, remark) values (N'3477028275831808', N'4104487936', N'1', N'0', N'0', '2021-09-22 14:24:17.922', '2021-09-22 14:24:17.922', null), (N'3477028275831808', N'3454139190608923', N'1', N'0', N'0', '2021-09-22 14:24:17.922', '2021-09-22 14:24:17.922', null)",
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
 	}, {
 		input:  "select name, numbers from (select * from users) as x(name, numbers)",
 		output: "select `name`, numbers from (select * from users) as x(`name`, numbers)",
@@ -1441,72 +1445,130 @@ var (
 		input:  "create table t (pur date) partition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2 (partition p0 values less than (2015), partition p2 values less than (2018))",
 		output: "create table t (\n\tpur date\n) partition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2 (partition p0 values less than (2015), partition p2 values less than (2018))",
 	}, {
-		input: "alter vschema create vindex hash_vdx using `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema create vindex hash_vdx using `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema create vindex keyspace.hash_vdx using `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema create vindex keyspace.hash_vdx using `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema drop vindex hash_vdx",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema drop vindex hash_vdx",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema drop vindex ks.hash_vdx",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema drop vindex ks.hash_vdx",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema add table a",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema add table a",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema add table ks.a",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema add table ks.a",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema add sequence a_seq",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema add sequence a_seq",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema add sequence ks.a_seq",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema add sequence ks.a_seq",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on a add auto_increment id using a_seq",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add auto_increment id using a_seq",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on ks.a add auto_increment id using a_seq",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on ks.a add auto_increment id using a_seq",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema drop table a",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema drop table a",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema drop table ks.a",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema drop table ks.a",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on a add vindex `hash` (id)",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add vindex `hash` (id)",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on ks.a add vindex `hash` (id)",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on ks.a add vindex `hash` (id)",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on a add vindex `hash` (`id`)",
-		output: "alter vschema on a add vindex `hash` (id)",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add vindex `hash` (`id`)",
+		output:               "alter vschema on a add vindex `hash` (id)",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on `ks`.a add vindex `hash` (`id`)",
-		output: "alter vschema on ks.a add vindex `hash` (id)",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on `ks`.a add vindex `hash` (`id`)",
+		output:               "alter vschema on ks.a add vindex `hash` (id)",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on a add vindex hash (id) using `hash`",
-		output: "alter vschema on a add vindex `hash` (id) using `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add vindex hash (id) using `hash`",
+		output:               "alter vschema on a add vindex `hash` (id) using `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on a add vindex `add` (`add`)",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add vindex `add` (`add`)",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on a add vindex `hash` (id) using `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add vindex `hash` (id) using `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on a add vindex hash (id) using `hash`",
-		output: "alter vschema on a add vindex `hash` (id) using `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add vindex hash (id) using `hash`",
+		output:               "alter vschema on a add vindex `hash` (id) using `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
-		output: "alter vschema on `user` add vindex name_lookup_vdx (`name`) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+		output:               "alter vschema on `user` add vindex name_lookup_vdx (`name`) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
-		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (`name`, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
+		output:               "alter vschema on user2 add vindex name_lastname_lookup_vdx (`name`, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on a drop vindex `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a drop vindex `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on ks.a drop vindex `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on ks.a drop vindex `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on a drop vindex `hash`",
-		output: "alter vschema on a drop vindex `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a drop vindex `hash`",
+		output:               "alter vschema on a drop vindex `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on a drop vindex hash",
-		output: "alter vschema on a drop vindex `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a drop vindex hash",
+		output:               "alter vschema on a drop vindex `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on a drop vindex `add`",
-		output: "alter vschema on a drop vindex `add`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a drop vindex `add`",
+		output:               "alter vschema on a drop vindex `add`",
+		ignoreNormalizerTest: true,
 	}, {
 		input:  "create index a on b (col1)",
 		output: "alter table b add index a (col1)",
@@ -2265,7 +2327,7 @@ var (
 		input: "call proc(@param)",
 	}, {
 		input:  "PREPARE stmt1 FROM 'SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse'",
-		output: "prepare stmt1 from SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse",
+		output: "prepare stmt1 from 'SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse'",
 	}, {
 		input:  "PREPARE stmt2 FROM @s",
 		output: "prepare stmt2 from @s",
@@ -2297,6 +2359,51 @@ var (
 		input:  "create table unused_reserved_keywords (dense_rank bigint, lead VARCHAR(255), percent_rank decimal(3, 0), row TINYINT, rows CHAR(10), constraint PK_project PRIMARY KEY (dense_rank))",
 		output: "create table unused_reserved_keywords (\n\t`dense_rank` bigint,\n\t`lead` VARCHAR(255),\n\t`percent_rank` decimal(3,0),\n\t`row` TINYINT,\n\t`rows` CHAR(10),\n\tconstraint PK_project PRIMARY KEY (`dense_rank`)\n)",
 	}, {
+		input:  `SELECT JSON_PRETTY('{"a":"10","b":"15","x":"25"}')`,
+		output: `select json_pretty('{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
+	}, {
+		input:  `SELECT JSON_PRETTY(N'{"a":"10","b":"15","x":"25"}')`,
+		output: `select json_pretty(N'{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
+	}, {
+		input:  "SELECT jcol, JSON_PRETTY(jcol) from jtable",
+		output: "select jcol, json_pretty(jcol) from jtable",
+	}, {
+		input:  "SELECT JSON_PRETTY(@j)",
+		output: "select json_pretty(@j) from dual",
+	}, {
+		input:  "SELECT jcol, JSON_STORAGE_SIZE(jcol) AS Size FROM jtable",
+		output: "select jcol, json_storage_size(jcol) as Size from jtable",
+	}, {
+		input:  `SELECT jcol, JSON_STORAGE_SIZE(N'{"a":"10","b":"15","x":"25"}') AS Size FROM jtable`,
+		output: `select jcol, json_storage_size(N'{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') as Size from jtable`,
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
+	}, {
+		input:  `SELECT JSON_STORAGE_SIZE('[100, "sakila", [1, 3, 5], 425.05]') AS A, JSON_STORAGE_SIZE('{"a": 1000, "b": "a", "c": "[1, 3, 5, 7]"}') AS B, JSON_STORAGE_SIZE('{"a": 1000, "b": "wxyz", "c": "[1, 3, 5, 7]"}') AS C,JSON_STORAGE_SIZE('[100, "json", [[10, 20, 30], 3, 5], 425.05]') AS D`,
+		output: `select json_storage_size('[100, \"sakila\", [1, 3, 5], 425.05]') as A, json_storage_size('{\"a\": 1000, \"b\": \"a\", \"c\": \"[1, 3, 5, 7]\"}') as B, json_storage_size('{\"a\": 1000, \"b\": \"wxyz\", \"c\": \"[1, 3, 5, 7]\"}') as C, json_storage_size('[100, \"json\", [[10, 20, 30], 3, 5], 425.05]') as D from dual`,
+	}, {
+		input:  "SELECT JSON_STORAGE_SIZE(@j)",
+		output: "select json_storage_size(@j) from dual",
+	}, {
+		input:  "SELECT JSON_STORAGE_FREE(jcol) FROM jtable",
+		output: "select json_storage_free(jcol) from jtable",
+	}, {
+		input:  `SELECT JSON_STORAGE_FREE('{"a":"10","b":"15","x":"25"}')`,
+		output: `select json_storage_free('{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
+	}, {
+		input:  `SELECT JSON_STORAGE_FREE(N'{"a":"10","b":"15","x":"25"}')`,
+		output: `select json_storage_free(N'{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
+	}, {
+		input:  "SELECT JSON_STORAGE_FREE(@j)",
+		output: "select json_storage_free(@j) from dual",
+	}, {
 		input:  "SELECT LTRIM('abc')",
 		output: "select ltrim('abc') from dual",
 	}, {
@@ -2327,6 +2434,112 @@ var (
 		input:  "SELECT TRIM(BOTH 'a' FROM 'abc')",
 		output: "select trim(both 'a' from 'abc') from dual",
 	}, {
+		input: `SELECT * FROM JSON_TABLE('[ {"c1": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt`,
+		output: `select * from json_table('[ {\"c1\": null} ]', '$[*]' columns(
+	c1 INT path '$.c1' error on error 
+	)
+) as jt`,
+	}, {
+		input: `SELECT * FROM  JSON_TABLE(    '[{"a": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}]', '$[*]' COLUMNS(a INT PATH '$.a', NESTED PATH '$.b[*]' COLUMNS (b1 INT PATH '$'), NESTED PATH '$.b[*]' COLUMNS (b2 INT PATH '$'))) AS jt`,
+		output: `select * from json_table('[{\"a\": 1, \"b\": [11,111]}, {\"a\": 2, \"b\": [22,222]}]', '$[*]' columns(
+	a INT path '$.a' ,
+	nested path '$.b[*]' columns(
+	b1 INT path '$' 
+),
+	nested path '$.b[*]' columns(
+	b2 INT path '$' 
+)
+	)
+) as jt`,
+	}, {
+		input: `SELECT * FROM JSON_TABLE('[ {"c1": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt`,
+		output: `select * from json_table('[ {\"c1\": null} ]', '$[*]' columns(
+	c1 INT path '$.c1' error on error 
+	)
+) as jt`,
+	}, {
+		input: `SELECT * FROM JSON_TABLE('[{"a":"3"},{"a":2},{"b":1},{"a":0},{"a":[1,2]}]', "$[*]" COLUMNS(rowid FOR ORDINALITY, ac VARCHAR(100) PATH "$.a" DEFAULT '111' ON EMPTY DEFAULT '999' ON ERROR,  aj JSON PATH "$.a" DEFAULT '{"x": 333}' ON EMPTY, bx INT EXISTS PATH "$.b" ) ) AS tt`,
+		output: `select * from json_table('[{\"a\":\"3\"},{\"a\":2},{\"b\":1},{\"a\":0},{\"a\":[1,2]}]', '$[*]' columns(
+	rowid for ordinality,
+	ac VARCHAR(100) path '$.a' default '111' on empty default '999' on error ,
+	aj JSON path '$.a' default '{\"x\": 333}' on empty ,
+	bx INT exists path '$.b' 
+	)
+) as tt`,
+	}, {
+		input: `SELECT * FROM  JSON_TABLE(    '[ {"a": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3}]',    '$[*]' COLUMNS(            a INT PATH '$.a',            NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$')           )   ) AS jt WHERE b IS NOT NULL`,
+		output: `select * from json_table('[ {\"a\": 1, \"b\": [11,111]}, {\"a\": 2, \"b\": [22,222]}, {\"a\":3}]', '$[*]' columns(
+	a INT path '$.a' ,
+	nested path '$.b[*]' columns(
+	b INT path '$' 
+)
+	)
+) as jt where b is not null`,
+	}, {
+		input: `SELECT * FROM  JSON_TABLE(    '[{"x":2,"y":"8"},{"x":"3","y":"7"},{"x":"4","y":6}]',    "$[1]" COLUMNS(      xval VARCHAR(100) PATH "$.x",      yval VARCHAR(100) PATH "$.y"    )  ) AS  jt1`,
+		output: `select * from json_table('[{\"x\":2,\"y\":\"8\"},{\"x\":\"3\",\"y\":\"7\"},{\"x\":\"4\",\"y\":6}]', '$[1]' columns(
+	xval VARCHAR(100) path '$.x' ,
+	yval VARCHAR(100) path '$.y' 
+	)
+) as jt1`,
+	}, {
+		input: `SELECT * FROM  JSON_TABLE(    '[{"a": "a_val","b": [{"c": "c_val", "l": [1,2]}]},{"a": "a_val", "b": [{"c": "c_val","l": [11]}, {"c": "c_val", "l": [22]}]}]',    '$[*]' COLUMNS(      top_ord FOR ORDINALITY,      apath VARCHAR(10) PATH '$.a',      NESTED PATH '$.b[*]' COLUMNS (        bpath VARCHAR(10) PATH '$.c',        ord FOR ORDINALITY,        NESTED PATH '$.l[*]' COLUMNS (lpath varchar(10) PATH '$')        )    )) as jt`,
+		output: `select * from json_table('[{\"a\": \"a_val\",\"b\": [{\"c\": \"c_val\", \"l\": [1,2]}]},{\"a\": \"a_val\", \"b\": [{\"c\": \"c_val\",\"l\": [11]}, {\"c\": \"c_val\", \"l\": [22]}]}]', '$[*]' columns(
+	top_ord for ordinality,
+	apath VARCHAR(10) path '$.a' ,
+	nested path '$.b[*]' columns(
+	bpath VARCHAR(10) path '$.c' ,
+	ord for ordinality,
+	nested path '$.l[*]' columns(
+	lpath varchar(10) path '$' 
+)
+)
+	)
+) as jt`,
+	}, {
+		input: `SELECT * FROM JSON_TABLE('[{"x":2,"y":"8"},{"x":"3","y":"7"},{"x":"4","y":6}]', "$[1]" COLUMNS( xval VARCHAR(100) PATH "$.x", yval VARCHAR(100) PATH "$.y")) AS  jt1;`,
+		output: `select * from json_table('[{\"x\":2,\"y\":\"8\"},{\"x\":\"3\",\"y\":\"7\"},{\"x\":\"4\",\"y\":6}]', '$[1]' columns(
+	xval VARCHAR(100) path '$.x' ,
+	yval VARCHAR(100) path '$.y' 
+	)
+) as jt1`,
+	}, {
+		input:  "SELECT JSON_ARRAY()",
+		output: "select json_array() from dual",
+	}, {
+		input:  "SELECT JSON_ARRAY(1)",
+		output: "select json_array(1) from dual",
+	}, {
+		input:  "SELECT JSON_ARRAY('abc')",
+		output: "select json_array('abc') from dual",
+	}, {
+		input:  "SELECT JSON_ARRAY(BIN(11))",
+		output: "select json_array(BIN(11)) from dual",
+	}, {
+		input:  `SELECT JSON_ARRAY(1, "abc", NULL, TRUE, CURTIME());`,
+		output: `select json_array(1, 'abc', null, true, CURTIME()) from dual`,
+	}, {
+		input:  "SELECT JSON_OBJECT(1,2)",
+		output: "select json_object(1, 2) from dual",
+	}, {
+		input:  "SELECT JSON_OBJECT(1,'abc')",
+		output: "select json_object(1, 'abc') from dual",
+	}, {
+		input:  "SELECT JSON_OBJECT('abc',1)",
+		output: "select json_object('abc', 1) from dual",
+	}, {
+		input:  "SELECT JSON_OBJECT(BIN(1),2)",
+		output: "select json_object(BIN(1), 2) from dual",
+	}, {
+		input:  "SELECT JSON_OBJECT(BIN(1),2,'abc',ASCII(4))",
+		output: "select json_object(BIN(1), 2, 'abc', ASCII(4)) from dual",
+	}, {
+		input:  "SELECT JSON_QUOTE(BIN(11))",
+		output: "select json_quote(BIN(11)) from dual",
+	}, {
+		input:  `SELECT JSON_QUOTE('null'), JSON_QUOTE('"null"')`,
+		output: `select json_quote('null'), json_quote('\"null\"') from dual`,
+	}, {
 		input:  "select t1.a, dt.a from t1, lateral (select t1.a+t2.a as a from t2) dt",
 		output: "select t1.a, dt.a from t1, lateral (select t1.a + t2.a as a from t2) as dt",
 	}, {
@@ -2356,6 +2569,81 @@ var (
 	}, {
 		input:  `SELECT JSON_SCHEMA_VALIDATION_REPORT(N'{"type":"string","pattern":"("}', '"abc"')`,
 		output: `select json_schema_validation_report(N'{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual`,
+	}, {
+		input:  `SELECT JSON_CONTAINS('{"a": 1, "b": 2, "c": {"d": 4}}', '1')`,
+		output: `select json_contains('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1') from dual`,
+	}, {
+		input:  "SELECT JSON_CONTAINS(@j, @j2)",
+		output: "select json_contains(@j, @j2) from dual",
+	}, {
+		input:  "SELECT JSON_CONTAINS(@j, @j2,'$.a', @j)",
+		output: "select json_contains(@j, @j2, '$.a', @j) from dual",
+	}, {
+		input:  "SELECT JSON_CONTAINS_PATH(@j, 'one', '$.a', '$.e')",
+		output: "select json_contains_path(@j, 'one', '$.a', '$.e') from dual",
+	}, {
+		input:  `SELECT JSON_CONTAINS_PATH('{"a": 1, "b": 2, "c": {"d": 4}}', 'one', '$.a', '$.e')`,
+		output: `select json_contains_path('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e') from dual`,
+	}, {
+		input:  "SELECT JSON_CONTAINS_PATH(@j, TRIM('one'), '$.a', '$.e')",
+		output: "select json_contains_path(@j, trim('one'), '$.a', '$.e') from dual",
+	}, {
+		input:  "SELECT JSON_CONTAINS_PATH(@j, @k, '$.a', @i)",
+		output: "select json_contains_path(@j, @k, '$.a', @i) from dual",
+	}, {
+		input:  "SELECT JSON_EXTRACT(@j, '$.a')",
+		output: "select json_extract(@j, '$.a') from dual",
+	}, {
+		input:  `SELECT c, JSON_EXTRACT(c, "$.id"), g FROM jemp WHERE JSON_EXTRACT(c, "$.id") > 1 ORDER BY JSON_EXTRACT(c, "$.name")`,
+		output: "select c, json_extract(c, '$.id'), g from jemp where json_extract(c, '$.id') > 1 order by json_extract(c, '$.name') asc",
+	}, {
+		input:  `SELECT JSON_EXTRACT('{"a": 1, "b": 2, "c": {"d": 4}}', '$.a', @j)`,
+		output: `select json_extract('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a', @j) from dual`,
+	}, {
+		input:  `SELECT JSON_KEYS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a')`,
+		output: `select json_keys('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a') from dual`,
+	}, {
+		input:  `SELECT JSON_KEYS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}')`,
+		output: `select json_keys('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}') from dual`,
+	}, {
+		input:  `SELECT JSON_OVERLAPS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a')`,
+		output: `select json_overlaps('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a') from dual`,
+	}, {
+		input:  "SELECT JSON_OVERLAPS(@j, @k)",
+		output: "select json_overlaps(@j, @k) from dual",
+	}, {
+		input:  "SELECT JSON_OVERLAPS(@j, BIN(1))",
+		output: "select json_overlaps(@j, BIN(1)) from dual",
+	}, {
+		input:  "SELECT JSON_SEARCH(@j, 'one', 'abc')",
+		output: "select json_search(@j, 'one', 'abc') from dual",
+	}, {
+		input:  `SELECT JSON_SEARCH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', @j, BIN(2))`,
+		output: `select json_search('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', @j, BIN(2)) from dual`,
+	}, {
+		input:  `SELECT JSON_SEARCH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'all', '10', NULL)`,
+		output: `select json_search('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'all', '10', null) from dual`,
+	}, {
+		input:  "SELECT JSON_SEARCH(@j, 'all', '%b%', '', '$[3]')",
+		output: "select json_search(@j, 'all', '%b%', '', '$[3]') from dual",
+	}, {
+		input:  "SELECT JSON_SEARCH(@j, 'all', '%b%', 'a', '$[3]')",
+		output: "select json_search(@j, 'all', '%b%', 'a', '$[3]') from dual",
+	}, {
+		input:  `SELECT JSON_VALUE('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a')`,
+		output: `select json_value('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a') from dual`,
+	}, {
+		input:  `SELECT JSON_VALUE(@j, @k)`,
+		output: `select json_value(@j, @k) from dual`,
+	}, {
+		input:  `SELECT 17 MEMBER OF ('[23, "abc", 17, "ab", 10]')`,
+		output: `select 17 member of ('[23, \"abc\", 17, \"ab\", 10]') from dual`,
+	}, {
+		input:  "SELECT @j MEMBER OF (@k)",
+		output: "select @j member of (@k) from dual",
+	}, {
+		input:  `SELECT 17 MEMBER OF('[23, "abc", "17", "ab", 10]'), "17" MEMBER OF('[23, "abc", 17, "ab", 10]')`,
+		output: `select 17 member of ('[23, \"abc\", \"17\", \"ab\", 10]'), '17' member of ('[23, \"abc\", 17, \"ab\", 10]') from dual`,
 	}}
 )
 
@@ -2460,6 +2748,24 @@ func TestInvalid(t *testing.T) {
 		input: "select 1, next value from seq",
 		err:   "syntax error",
 	}, {
+		input: "SELECT jcol, JSON_PRETTY(jcol, jcol) from jtable",
+		err:   "syntax error at position 31",
+	}, {
+		input: "SELECT JSON_ARRAY(1,)",
+		err:   "syntax error at position 22",
+	}, {
+		input: "SELECT JSON_OBJECT(1)",
+		err:   "syntax error at position 22",
+	}, {
+		input: "SELECT JSON_OBJECT(1,2,)",
+		err:   "syntax error at position 25",
+	}, {
+		input: "SELECT JSON_OBJECT(1,)",
+		err:   "syntax error at position 23",
+	}, {
+		input: "SELECT JSON_QUOTE()",
+		err:   "syntax error at position 20",
+	}, {
 		input: "select from t1, lateral (with qn as (select t1.a) select (select max(a) from qn)) as dt",
 		err:   "syntax error at position 12 near 'from'",
 	}, {
@@ -2468,6 +2774,21 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: `SELECT JSON_SCHEMA_VALIDATION_REPORT('{"type":"string","pattern":"("}')`,
 		err:   `syntax error at position 72`,
+	}, {
+		input: "SELECT JSON_CONTAINS(@j, @j2, )",
+		err:   "syntax error at position 32",
+	}, {
+		input: "SELECT JSON_CONTAINS_PATH(@j, @j2)",
+		err:   "syntax error at position 35",
+	}, {
+		input: "SELECT JSON_EXTRACT(@k, TRIM('abc'))",
+		err:   "syntax error at position 30",
+	}, {
+		input: "SELECT JSON_EXTRACT(@k)",
+		err:   "syntax error at position 24",
+	}, {
+		input: `SELECT JSON_KEYS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}',)`,
+		err:   `syntax error at position 61`,
 	}}
 
 	for _, tcase := range invalidSQL {

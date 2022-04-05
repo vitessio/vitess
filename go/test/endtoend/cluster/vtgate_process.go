@@ -50,7 +50,6 @@ type VtgateProcess struct {
 	Cell                  string
 	CellsToWatch          string
 	TabletTypesToWait     string
-	GatewayImplementation string
 	ServiceMap            string
 	MySQLAuthServerImpl   string
 	Directory             string
@@ -58,7 +57,7 @@ type VtgateProcess struct {
 	VSchemaURL            string
 	SysVarSetEnabled      bool
 	PlannerVersion        plancontext.PlannerVersion
-	//Extra Args to be set before starting the vtgate process
+	// Extra Args to be set before starting the vtgate process
 	ExtraArgs []string
 
 	proc *exec.Cmd
@@ -83,7 +82,6 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--cell", vtgate.Cell,
 		"--cells_to_watch", vtgate.CellsToWatch,
 		"--tablet_types_to_wait", vtgate.TabletTypesToWait,
-		"--gateway_implementation", vtgate.GatewayImplementation,
 		"--service_map", vtgate.ServiceMap,
 		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
 	}
@@ -244,7 +242,6 @@ func VtgateProcessInstance(
 		Cell:                  cell,
 		CellsToWatch:          cellsToWatch,
 		TabletTypesToWait:     tabletTypesToWait,
-		GatewayImplementation: "tabletgateway",
 		CommonArg:             *vtctl,
 		MySQLAuthServerImpl:   "none",
 		ExtraArgs:             extraArgs,

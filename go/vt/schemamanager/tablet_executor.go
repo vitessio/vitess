@@ -430,7 +430,18 @@ func (exec *TabletExecutor) executeOneTablet(
 		result, err = exec.tmc.ExecuteQuery(ctx, tablet, []byte(sql), 10)
 	} else {
 		if exec.ddlStrategySetting != nil && exec.ddlStrategySetting.IsAllowZeroInDateFlag() {
-			sql = fmt.Sprintf("set @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', ''); %s", sql)
+			// --allow-zero-in-date Applies to DDLs
+			stmt, err := sqlparser.Parse(string(sql))
+			if err != nil {
+				errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}
+				return
+			}
+			if ddlStmt, ok := stmt.(sqlparser.DDLStatement); ok {
+				// Add comments directive to allow zero in date
+				const directive = `/*vt+ allowZeroInDate=true */`
+				ddlStmt.SetComments(ddlStmt.GetParsedComments().Prepend(directive))
+				sql = sqlparser.String(ddlStmt)
+			}
 		}
 		result, err = exec.tmc.ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 10, false, true)
 	}

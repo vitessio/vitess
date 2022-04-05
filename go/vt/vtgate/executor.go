@@ -434,7 +434,7 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 		case sqlparser.LastInsertIDName:
 			bindVars[sqlparser.LastInsertIDName] = sqltypes.Uint64BindVariable(session.GetLastInsertId())
 		case sqlparser.FoundRowsName:
-			bindVars[sqlparser.FoundRowsName] = sqltypes.Uint64BindVariable(session.FoundRows)
+			bindVars[sqlparser.FoundRowsName] = sqltypes.Int64BindVariable(int64(session.FoundRows))
 		case sqlparser.RowCountName:
 			bindVars[sqlparser.RowCountName] = sqltypes.Int64BindVariable(session.RowCount)
 		}
@@ -1184,7 +1184,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, show *sqlpar
 			replLastError := ""
 			replLag := int64(-1)
 			sql := "show slave status"
-			results, err := e.txConn.gateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
+			results, err := e.txConn.tabletGateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
 			if err != nil || results == nil {
 				log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
 			} else if row := results.Named().Row(); row != nil {
