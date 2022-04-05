@@ -294,6 +294,7 @@ const (
 	VitessShardsStr            = " vitess_shards"
 	VitessTabletsStr           = " vitess_tablets"
 	VitessTargetStr            = " vitess_target"
+	VitessVariablesStr         = " vitess_metadata variables"
 	VschemaTablesStr           = " vschema tables"
 	VschemaVindexesStr         = " vschema vindexes"
 	WarningsStr                = " warnings"
@@ -627,6 +628,7 @@ const (
 	VitessShards
 	VitessTablets
 	VitessTarget
+	VitessVariables
 	VschemaTables
 	VschemaVindexes
 	Warnings

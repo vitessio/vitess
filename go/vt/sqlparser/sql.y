@@ -3427,8 +3427,7 @@ show_statement:
   }
 | SHOW VITESS_METADATA VARIABLES like_opt
   {
-    showTablesOpt := &ShowTablesOpt{Filter: $4}
-    $$ = &Show{&ShowLegacy{Scope: VitessMetadataScope, Type: string($3), ShowTablesOpt: showTablesOpt}}
+    $$ = &Show{&ShowBasic{Command: VitessVariables, Filter: $4}}
   }
 | SHOW VITESS_MIGRATIONS from_database_opt like_or_where_opt
   {

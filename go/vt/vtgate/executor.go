@@ -777,20 +777,20 @@ func (e *Executor) handleSetVitessMetadata(ctx context.Context, name, value stri
 	return &sqltypes.Result{}, nil
 }
 
-func (e *Executor) handleShowVitessMetadata(ctx context.Context, opt *sqlparser.ShowTablesOpt) (*sqltypes.Result, error) {
+func (e *Executor) showVitessMetadata(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
 	ts, err := e.serv.GetTopoServer()
 	if err != nil {
 		return nil, err
 	}
 
 	var metadata map[string]string
-	if opt.Filter == nil {
+	if filter == nil {
 		metadata, err = ts.GetMetadata(ctx, "")
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		metadata, err = ts.GetMetadata(ctx, opt.Filter.Like)
+		metadata, err = ts.GetMetadata(ctx, filter.Like)
 		if err != nil {
 			return nil, err
 		}
@@ -813,24 +813,9 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 	if err != nil {
 		return nil, err
 	}
-	showOuter, ok := stmt.(*sqlparser.Show)
-	if !ok {
-		// This code is unreachable.
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unrecognized SHOW statement: %v", sql)
-	}
-	show, ok := showOuter.Internal.(*sqlparser.ShowLegacy)
-	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] This should only be SHOW Legacy statement type: %v", sql)
-	}
 	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
 	execStart := time.Now()
 	defer func() { logStats.ExecuteTime = time.Since(execStart) }()
-	switch strings.ToLower(show.Type) {
-	case sqlparser.KeywordString(sqlparser.VARIABLES):
-		if show.Scope == sqlparser.VitessMetadataScope {
-			return e.handleShowVitessMetadata(ctx, show.ShowTablesOpt)
-		}
-	}
 
 	// Any other show statement is passed through
 	return e.handleOther(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats, ignoreMaxMemoryRows)
