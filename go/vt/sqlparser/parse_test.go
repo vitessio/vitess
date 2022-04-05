@@ -2513,6 +2513,38 @@ func TestValid(t *testing.T) {
 	}
 }
 
+func TestGeneratedColumns(t *testing.T) {
+	tests := []parseTest{
+		{
+			input:  "create table t (i int, j int as (i + 1))",
+			output: "create table t (\n\ti int,\n\tj int generated always as (i + 1) virtual\n)",
+		},
+		{
+			input:  "create table t (i int, j int as (i + 1) virtual)",
+			output: "create table t (\n\ti int,\n\tj int generated always as (i + 1) virtual\n)",
+		},
+		{
+			input:  "create table t (i int, j int as (i + 1) stored)",
+			output: "create table t (\n\ti int,\n\tj int generated always as (i + 1) stored\n)",
+		},
+		{
+			input:  "create table t (i int, j int generated always as (i + 1))",
+			output: "create table t (\n\ti int,\n\tj int generated always as (i + 1) virtual\n)",
+		},
+		{
+			input:  "create table t (i int, j int generated always as (i + 1) virtual)",
+			output: "create table t (\n\ti int,\n\tj int generated always as (i + 1) virtual\n)",
+		},
+		{
+			input:  "create table t (i int, j int generated always as (i + 1) stored)",
+			output: "create table t (\n\ti int,\n\tj int generated always as (i + 1) stored\n)",
+		},
+	}
+	for _, tcase := range tests {
+		runParseTestCase(t, tcase)
+	}
+}
+
 // Will throw syntax errors, but shouldn't
 func TestNotWorkingIdentifiersStartingWithNumbers(t *testing.T) {
 	tests := []parseTest{
@@ -3357,9 +3389,6 @@ func TestKeywords(t *testing.T) {
 		}, {
 			input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
 			output: "select /* share and mode as cols */ `share`, `mode` from t where `share` = 'foo'",
-		}, {
-			input:  "select /* unused keywords as cols */ write, virtual from t where varcharacter = 'foo'",
-			output: "select /* unused keywords as cols */ `write`, `virtual` from t where `varcharacter` = 'foo'",
 		}, {
 			input:  "insert into x (status) values (42)",
 			output: "insert into x(`status`) values (42)",

@@ -2043,6 +2043,10 @@ type ColumnType struct {
 
 	// Key specification
 	KeyOpt ColumnKeyOption
+
+	// Generated columns
+	GeneratedExpr Expr    // The expression used to generate this column
+	Stored        BoolVal // Default is Virtual (not stored)
 }
 
 func (ct *ColumnType) merge(other ColumnType) error {
@@ -2086,6 +2090,18 @@ func (ct *ColumnType) merge(other ColumnType) error {
 			return errors.New("cannot include more than one comment for a column definition")
 		}
 		ct.Comment = other.Comment
+	}
+
+	if other.GeneratedExpr != nil {
+		// Generated expression already defined for column
+		if ct.GeneratedExpr != nil {
+			return errors.New("cannot defined GENERATED expression more than once")
+		}
+		ct.GeneratedExpr = other.GeneratedExpr
+	}
+
+	if other.Stored {
+		ct.Stored = true
 	}
 
 	return nil
@@ -2151,6 +2167,14 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 	if ct.KeyOpt == colKeyFulltextKey {
 		opts = append(opts, keywordStrings[FULLTEXT])
+	}
+	if ct.GeneratedExpr != nil {
+		opts = append(opts, keywordStrings[GENERATED], keywordStrings[ALWAYS], keywordStrings[AS], "("+String(ct.GeneratedExpr)+")")
+		if ct.Stored {
+			opts = append(opts, keywordStrings[STORED])
+		} else {
+			opts = append(opts, keywordStrings[VIRTUAL])
+		}
 	}
 
 	if len(opts) != 0 {
