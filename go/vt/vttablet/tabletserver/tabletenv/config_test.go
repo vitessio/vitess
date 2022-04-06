@@ -350,4 +350,14 @@ func TestFlags(t *testing.T) {
 	Init()
 	want.GracePeriods.TransitionSeconds = 4
 	assert.Equal(t, want, currentConfig)
+
+	currentConfig.SanitizeLogMessages = false
+	Init()
+	want.SanitizeLogMessages = false
+	assert.Equal(t, want, currentConfig)
+
+	currentConfig.SanitizeLogMessages = true
+	Init()
+	want.SanitizeLogMessages = true
+	assert.Equal(t, want, currentConfig)
 }
