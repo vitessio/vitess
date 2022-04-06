@@ -170,7 +170,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/cellalias"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "12",
+			"Shard": "13",
 			"RetryMax": 3,
 			"Tags": []
 		},
