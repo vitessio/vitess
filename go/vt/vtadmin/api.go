@@ -253,11 +253,17 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						if err == nil {
 							api.clusterMap[clusterID] = c
 							api.clusters = append(api.clusters, c)
+							sort.ClustersBy(func(c1, c2 *cluster.Cluster) bool {
+								return c1.ID < c2.ID
+							}).Sort(api.clusters)
+
 							err = api.clusterCache.Add(clusterID, c, cache.DefaultExpiration)
 							if err != nil {
 								log.Infof("could not add dynamic cluster %s to cluster cache: %+v", clusterID, err)
 							}
 						}
+					} else {
+						log.Infof("API already has cluster with id %s, using that instead", clusterID)
 					}
 
 					selectedCluster := api.clusterMap[clusterID]
