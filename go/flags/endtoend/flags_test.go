@@ -12,17 +12,12 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-
-This test cell aliases feature
-
-We start with no aliases and assert that vtgates can't route to replicas/rondly tablets.
-Then we add an alias, and these tablets should be routable
 */
 
 package flags
 
 // These tests ensure that we are changing flags intentionally and do not accidentally make
-// changes such as removing a flag by accident. Since there's no way to test the command-line
+// changes such as removing a flag. Since there's no way to test the command-line
 // flag handling portion explicitly in the unit tests we do so here.
 
 import (
