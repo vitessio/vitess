@@ -3,6 +3,7 @@ package dynamic
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 )
@@ -10,6 +11,10 @@ import (
 // DiscoveryImpl is the name of the discovery implementation used by clusters
 // unpacked from ClusterFromString.
 const DiscoveryImpl = "dynamic"
+
+// ErrNoID is returned from ClusterFromString when a cluster spec has a missing
+// or empty id.
+var ErrNoID = errors.New("cannot have cluster without an id")
 
 // ClusterJSON is a struct to unmarshal json strings into dynamic cluster
 // configurations.
@@ -51,6 +56,9 @@ func ClusterFromString(s string) (c *cluster.Cluster, id string, err error) {
 	}
 
 	id = spec.Name
+	if id == "" {
+		return nil, "", ErrNoID
+	}
 	cfg := &cluster.Config{
 		ID:            id,
 		Name:          id,
