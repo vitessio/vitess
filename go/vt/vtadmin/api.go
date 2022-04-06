@@ -89,10 +89,6 @@ type Options struct {
 	EnableDynamicClusters bool
 }
 
-type DynamicClusterJSON struct {
-	ClusterName string `json:"name,omitempty"`
-}
-
 // NewAPI returns a new API, configured to service the given set of clusters,
 // and configured with the given options.
 //
