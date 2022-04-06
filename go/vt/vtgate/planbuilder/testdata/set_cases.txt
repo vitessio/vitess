@@ -531,3 +531,14 @@ Gen4 plan same as above
 "set socket = ''"
 "variable 'socket' is a read only variable"
 Gen4 plan same as above
+
+# set transaction
+"set transaction read only"
+{
+  "QueryType": "SET",
+  "Original": "set transaction read only",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+Gen4 plan same as above
