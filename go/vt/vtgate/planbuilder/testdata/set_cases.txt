@@ -542,3 +542,25 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# set vitess_metadata
+"set @@vitess_metadata.app_v1= '1'"
+{
+  "QueryType": "SET",
+  "Original": "set @@vitess_metadata.app_v1= '1'",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Name": "app_v1",
+        "Value": "1"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
