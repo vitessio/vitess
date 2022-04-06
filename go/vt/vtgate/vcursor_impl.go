@@ -76,6 +76,7 @@ type iExecute interface {
 	showShards(ctx context.Context, filter *sqlparser.ShowFilter, destTabletType topodatapb.TabletType) (*sqltypes.Result, error)
 	showTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
 	showVitessMetadata(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
+	setVitessMetadata(ctx context.Context, name, value string) error
 
 	// TODO: remove when resolver is gone
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
@@ -951,4 +952,8 @@ func (vc *vcursorImpl) GetVSchema() *vindexes.VSchema {
 
 func (vc *vcursorImpl) GetSrvVschema() *vschemapb.SrvVSchema {
 	return vc.vm.GetCurrentSrvVschema()
+}
+
+func (vc *vcursorImpl) SetExec(name string, value string) error {
+	return vc.executor.setVitessMetadata(vc.ctx, name, value)
 }

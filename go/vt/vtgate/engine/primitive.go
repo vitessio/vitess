@@ -118,6 +118,7 @@ type (
 		VStream(rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
 
 		ShowExec(command sqlparser.ShowCommandType, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
+		SetExec(name string, value string) error
 	}
 
 	//SessionActions gives primitives ability to interact with the session state

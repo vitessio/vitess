@@ -59,7 +59,7 @@ func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, 
 	case *sqlparser.ShowOther:
 		return buildShowOtherPlan(sql, vschema)
 	default:
-		return nil, ErrPlanNotSupported
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: undefined show type: %T", stmt.Internal)
 	}
 }
 

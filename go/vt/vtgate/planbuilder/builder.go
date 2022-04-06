@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"sort"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -73,9 +72,6 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 	return BuildFromStmt(query, result.AST, reservedVars, vschema, result.BindVarNeeds, true, true)
 }
-
-// ErrPlanNotSupported is an error for plan building not supported
-var ErrPlanNotSupported = errors.New("plan building not supported")
 
 // BuildFromStmt builds a plan based on the AST provided.
 func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, bindVarNeeds *sqlparser.BindVarNeeds, enableOnlineDDL, enableDirectDDL bool) (*engine.Plan, error) {
