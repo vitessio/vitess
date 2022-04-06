@@ -1,5 +1,3 @@
-//go:build gc && !wasm
-
 /*
 Copyright 2021 The Vitess Authors.
 
