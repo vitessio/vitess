@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -367,52 +366,8 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		qr = result
 		return nil
 	})
-	if err == planbuilder.ErrPlanNotSupported {
-		return e.legacyExecute(ctx, safeSession, sql, logStats)
-	}
+
 	return stmtType, qr, err
-}
-
-func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
-	// Start an implicit transaction if necessary.
-	if !safeSession.Autocommit && !safeSession.InTransaction() {
-		if err := e.txConn.Begin(ctx, safeSession); err != nil {
-			return 0, nil, err
-		}
-	}
-
-	destKeyspace, destTabletType, _, err := e.ParseDestinationTarget(safeSession.TargetString)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	logStats.Keyspace = destKeyspace
-	logStats.TabletType = destTabletType.String()
-
-	stmtType := sqlparser.Preview(sql)
-	logStats.StmtType = stmtType.String()
-
-	// Mysql warnings are scoped to the current session, but are
-	// cleared when a "non-diagnostic statement" is executed:
-	// https://dev.mysql.com/doc/refman/8.0/en/show-warnings.html
-	//
-	// To emulate this behavior, clear warnings from the session
-	// for all statements _except_ SHOW, so that SHOW WARNINGS
-	// can actually return them.
-	if stmtType != sqlparser.StmtShow {
-		safeSession.ClearWarnings()
-	}
-
-	switch stmtType {
-	case sqlparser.StmtSelect, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate,
-		sqlparser.StmtDelete, sqlparser.StmtDDL, sqlparser.StmtUse, sqlparser.StmtExplain,
-		sqlparser.StmtOther, sqlparser.StmtFlush, sqlparser.StmtComment:
-		return 0, nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] not reachable, should be handled with plan execute")
-	case sqlparser.StmtSet:
-		qr, err := e.handleSet(ctx, sql, logStats)
-		return sqlparser.StmtSet, qr, err
-	}
-	return 0, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] statement not handled: %s", sql)
 }
 
 // addNeededBindVars adds bind vars that are needed by the plan
@@ -650,117 +605,23 @@ func (e *Executor) CloseSession(ctx context.Context, safeSession *SafeSession) e
 	return e.txConn.ReleaseAll(ctx, safeSession)
 }
 
-func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats) (*sqltypes.Result, error) {
-	stmt, reserved, err := sqlparser.Parse2(sql)
-	if err != nil {
-		return nil, err
-	}
-	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "", sqlparser.SQLSelectLimitUnset, "", nil)
-	if err != nil {
-		return nil, err
-	}
-	set, ok := rewrittenAST.AST.(*sqlparser.Set)
-	if !ok {
-		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "unexpected statement type")
-	}
-
-	execStart := time.Now()
-	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-	defer func() {
-		logStats.ExecuteTime = time.Since(execStart)
-	}()
-
-	var value any
-	for _, expr := range set.Exprs {
-		// This is what correctly allows us to handle queries such as "set @@session.`autocommit`=1"
-		// it will remove backticks and double quotes that might surround the part after the first period
-		_, name := sqlparser.NewStringTokenizer(expr.Name.Lowered()).Scan()
-		switch expr.Scope {
-		case sqlparser.VitessMetadataScope:
-			value, err = getValueFor(expr)
-			if err != nil {
-				return nil, err
-			}
-			val, ok := value.(string)
-			if !ok {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "unexpected value type for '%s': %v", name, value)
-			}
-			_, err = e.handleSetVitessMetadata(ctx, name, val)
-		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable statement: %s", sql)
-
-		}
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return &sqltypes.Result{}, nil
-}
-
-func getValueFor(expr *sqlparser.SetExpr) (any, error) {
-	switch expr := expr.Expr.(type) {
-	case *sqlparser.Literal:
-		switch expr.Type {
-		case sqlparser.StrVal:
-			return strings.ToLower(expr.Val), nil
-		case sqlparser.IntVal:
-			num, err := strconv.ParseInt(expr.Val, 0, 64)
-			if err != nil {
-				return nil, err
-			}
-			return num, nil
-		case sqlparser.FloatVal, sqlparser.DecimalVal:
-			num, err := strconv.ParseFloat(expr.Val, 64)
-			if err != nil {
-				return nil, err
-			}
-			return num, nil
-		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid value type: %v", sqlparser.String(expr))
-		}
-	case sqlparser.BoolVal:
-		var val int64
-		if expr {
-			val = 1
-		}
-		return val, nil
-	case *sqlparser.NullVal:
-		return nil, nil
-	case *sqlparser.ColName:
-		return expr.Name.String(), nil
-	case *sqlparser.Default:
-		return "default", nil
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid syntax: %s", sqlparser.String(expr))
-	}
-}
-
-func (e *Executor) handleSetVitessMetadata(ctx context.Context, name, value string) (*sqltypes.Result, error) {
+func (e *Executor) setVitessMetadata(ctx context.Context, name, value string) error {
 	// TODO(kalfonso): move to its own acl check and consolidate into an acl component that can handle multiple operations (vschema, metadata)
 	user := callerid.ImmediateCallerIDFromContext(ctx)
 	allowed := vschemaacl.Authorized(user)
 	if !allowed {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' not authorized to perform vitess metadata operations", user.GetUsername())
+		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' not authorized to perform vitess metadata operations", user.GetUsername())
 	}
 
 	ts, err := e.serv.GetTopoServer()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if value == "" {
-		err = ts.DeleteMetadata(ctx, name)
-	} else {
-		err = ts.UpsertMetadata(ctx, name, value)
+		return ts.DeleteMetadata(ctx, name)
 	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &sqltypes.Result{}, nil
+	return ts.UpsertMetadata(ctx, name, value)
 }
 
 func (e *Executor) showVitessMetadata(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {

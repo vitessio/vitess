@@ -1202,6 +1202,20 @@ func (cached *VindexValues) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *VitessMetadata) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Name string
+	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
+	// field Value string
+	size += hack.RuntimeAllocSize(int64(len(cached.Value)))
+	return size
+}
 
 //go:nocheckptr
 func (cached *shardRoute) CachedSize(alloc bool) int64 {
