@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -42,7 +43,7 @@ func TestUpdBindingColName(t *testing.T) {
 			ts := semTable.TableSetFor(t1)
 			assert.Equal(t, SingleTableSet(0), ts)
 
-			updExpr := extractFromUpdate(upd, 0)
+			updExpr := extractFromUpdateSet(upd, 0)
 			recursiveDeps := semTable.RecursiveDeps(updExpr.Name)
 			assert.Equal(t, T1, recursiveDeps, query)
 			assert.Equal(t, T1, semTable.DirectDeps(updExpr.Name), query)
@@ -70,7 +71,7 @@ func TestUpdBindingExpr(t *testing.T) {
 			ts := semTable.TableSetFor(t1)
 			assert.Equal(t, SingleTableSet(0), ts)
 
-			updExpr := extractFromUpdate(upd, 0)
+			updExpr := extractFromUpdateSet(upd, 0)
 			recursiveDeps := semTable.RecursiveDeps(updExpr.Name)
 			assert.Equal(t, T1, recursiveDeps, query)
 			assert.Equal(t, T1, semTable.DirectDeps(updExpr.Name), query)
@@ -84,6 +85,93 @@ func TestUpdBindingExpr(t *testing.T) {
 	}
 }
 
-func extractFromUpdate(in *sqlparser.Update, idx int) *sqlparser.UpdateExpr {
+func TestUpdSetSubquery(t *testing.T) {
+	queries := []string{
+		"update tabl set col = (select id from a)",
+		"update tabl set col = (select id from a)+1",
+		"update tabl set col = 1 IN (select id from a)",
+		"update tabl set col = (select id from a), t = (select x from a)",
+	}
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, query, "d")
+			upd, _ := stmt.(*sqlparser.Update)
+			t1 := upd.TableExprs[0].(*sqlparser.AliasedTableExpr)
+			ts := semTable.TableSetFor(t1)
+			assert.Equal(t, SingleTableSet(0), ts)
+
+			updExpr := extractFromUpdateSet(upd, 0)
+			recursiveDeps := semTable.RecursiveDeps(updExpr.Name)
+			assert.Equal(t, T1, recursiveDeps, query)
+			assert.Equal(t, T1, semTable.DirectDeps(updExpr.Name), query)
+			assert.Equal(t, 1, recursiveDeps.NumberOfTables(), "number of tables is wrong")
+
+			extractedSubqs := semTable.SubqueryMap[upd]
+			require.Len(t, extractedSubqs, len(upd.Exprs))
+
+			for _, esubq := range extractedSubqs {
+				subq := esubq.Subquery
+				extractedSubq := semTable.SubqueryRef[subq]
+				assert.True(t, sqlparser.EqualsExpr(extractedSubq.Subquery, subq))
+			}
+		})
+	}
+}
+
+func TestUpdWhereSubquery(t *testing.T) {
+	queries := []string{
+		"update tabl set col = 1 where id = (select id from a)",
+		"update tabl set col = 1 where id IN (select id from a)",
+		"update tabl set col = 1 where exists (select id from a)",
+		"update tabl set col = 1 where 1 = (select id from a)",
+		"update tabl set col = 1 where exists (select id from a) and id > (select name from city) and col < (select i from a)",
+	}
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, query, "d")
+			upd, _ := stmt.(*sqlparser.Update)
+			t1 := upd.TableExprs[0].(*sqlparser.AliasedTableExpr)
+			ts := semTable.TableSetFor(t1)
+			assert.Equal(t, SingleTableSet(0), ts)
+
+			extractedSubqs := semTable.SubqueryMap[upd]
+			require.Len(t, extractedSubqs, len(sqlparser.SplitAndExpression(nil, upd.Where.Expr)))
+
+			for _, esubq := range extractedSubqs {
+				subq := esubq.Subquery
+				extractedSubq := semTable.SubqueryRef[subq]
+				assert.True(t, sqlparser.EqualsExpr(extractedSubq.Subquery, subq))
+			}
+		})
+	}
+}
+
+func TestUpdSetAndWhereSubquery(t *testing.T) {
+	queries := []string{
+		"update tabl set col = (select b from alpha) where id = (select id from a)",
+		"update tabl set col = (select b from alpha) where exists (select id from a)",
+		"update tabl set col = 1+(select b from alpha) where 1 > (select id from a)",
+	}
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, query, "d")
+			upd, _ := stmt.(*sqlparser.Update)
+			t1 := upd.TableExprs[0].(*sqlparser.AliasedTableExpr)
+			ts := semTable.TableSetFor(t1)
+			assert.Equal(t, SingleTableSet(0), ts)
+
+			extractedSubqs := semTable.SubqueryMap[upd]
+			require.Len(t, extractedSubqs, len(sqlparser.SplitAndExpression(nil, upd.Where.Expr))+len(upd.Exprs))
+
+			for _, esubq := range extractedSubqs {
+				subq := esubq.Subquery
+				extractedSubq := semTable.SubqueryRef[subq]
+				assert.True(t, sqlparser.EqualsExpr(extractedSubq.Subquery, subq))
+			}
+		})
+	}
+}
+
+func extractFromUpdateSet(in *sqlparser.Update, idx int) *sqlparser.UpdateExpr {
 	return in.Exprs[idx]
 }
