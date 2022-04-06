@@ -84,6 +84,9 @@ type Options struct {
 	GRPCOpts grpcserver.Options
 	HTTPOpts vtadminhttp.Options
 	RBAC     *rbac.Config
+	// EnableDynamicClusters makes it so that clients can pass clusters dynamically
+	// in a session-like way, either via HTTP cookies or gRPC metadata.
+	EnableDynamicClusters bool
 }
 
 type DynamicClusterJSON struct {
@@ -145,9 +148,7 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 		authz:      authz,
 	}
 
-	// TODO: this is no longer an http opt. Should rename the flag and move up
-	// to the struct top-level.
-	if opts.HTTPOpts.EnableDynamicClusters {
+	if opts.EnableDynamicClusters {
 		api.clusterCache = cache.New(24*time.Hour, 24*time.Hour)
 		api.clusterCache.OnEvicted(api.EjectDynamicCluster)
 
@@ -227,7 +228,7 @@ func (api *API) ListenAndServe() error {
 // Primarily, it sets up a dynamic API if HttpOpts.EnableDynamicClusters is set
 // to true.
 func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !api.options.HTTPOpts.EnableDynamicClusters {
+	if !api.options.EnableDynamicClusters {
 		api.Handler().ServeHTTP(w, r)
 		return
 	}
