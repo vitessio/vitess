@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 var _ stmtPlanner = gen4Planner("apa", 0)
@@ -251,6 +252,11 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 		return nil, err
 	}
 
+	err = rewriteRoutedTables(updStmt, vschema)
+	if err != nil {
+		return nil, err
+	}
+
 	edml := engine.NewDML()
 	if ks := semTable.SingleUnshardedKeyspace(); ks != nil {
 		edml.Keyspace = ks
@@ -259,25 +265,17 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 		return &engine.Update{DML: edml}, nil
 	}
 
+	subqueries := semTable.SubqueryMap[updStmt]
+	if len(subqueries) > 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: subqueries in sharded DML")
+	}
+
 	if semTable.NotUnshardedErr != nil {
 		return nil, semTable.NotUnshardedErr
 	}
 
 	edml.Table = semTable.Tables[0].GetVindexTable()
 	edml.Keyspace = edml.Table.Keyspace
-
-	// Rewrite routed tables
-	aliasTbl := updStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
-	tableName := aliasTbl.Expr.(sqlparser.TableName)
-	if edml.Table.Name.String() != tableName.Name.String() {
-		name := tableName.Name
-		if aliasTbl.As.IsEmpty() {
-			// if the user hasn't specified an alias, we'll insert one here so the old table name still works
-			aliasTbl.As = sqlparser.NewTableIdent(name.String())
-		}
-		tableName.Name = sqlparser.NewTableIdent(edml.Table.Name.String())
-		aliasTbl.Expr = tableName
-	}
 
 	directives := updStmt.GetParsedComments().Directives()
 	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
@@ -312,6 +310,38 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 		up.KsidLength = len(ksidVindex.Columns)
 	}
 	return up, nil
+}
+
+func rewriteRoutedTables(updStmt *sqlparser.Update, vschema plancontext.VSchema) (err error) {
+	// Rewrite routed tables
+	_ = sqlparser.Rewrite(updStmt, func(cursor *sqlparser.Cursor) bool {
+		aliasTbl, isAlias := cursor.Node().(*sqlparser.AliasedTableExpr)
+		if !isAlias {
+			return err == nil
+		}
+		tableName, ok := aliasTbl.Expr.(sqlparser.TableName)
+		if !ok {
+			return err == nil
+		}
+		var vschemaTable *vindexes.Table
+		vschemaTable, _, _, _, _, err = vschema.FindTableOrVindex(tableName)
+		if err != nil {
+			return false
+		}
+
+		if vschemaTable.Name.String() != tableName.Name.String() {
+			name := tableName.Name
+			if aliasTbl.As.IsEmpty() {
+				// if the user hasn't specified an alias, we'll insert one here so the old table name still works
+				aliasTbl.As = sqlparser.NewTableIdent(name.String())
+			}
+			tableName.Name = sqlparser.NewTableIdent(vschemaTable.Name.String())
+			aliasTbl.Expr = tableName
+		}
+
+		return err == nil
+	}, nil)
+	return
 }
 
 func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
