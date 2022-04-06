@@ -1723,7 +1723,7 @@ func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
 		json.NewEncoder(w).Encode(appThrottle)
 	})
 	tsv.exporter.HandleFunc("/throttler/throttled-apps", func(w http.ResponseWriter, r *http.Request) {
-		throttledApps := tsv.lagThrottler.ThrottledAppsSnapshot()
+		throttledApps := tsv.lagThrottler.ThrottledApps()
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(throttledApps)
