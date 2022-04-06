@@ -165,9 +165,9 @@ func testString(op Operator) string {
 		}
 		return fmt.Sprintf("Concatenate%s {\n%s\n}", dist, strings.Join(inners, ",\n"))
 	case *Update:
-		tbl := "table: " + op.tbl.testString()
+		tbl := "table: " + op.Table.testString()
 		var assignments []string
-		for name, expr := range op.assignments {
+		for name, expr := range op.Assignments {
 			assignments = append(assignments, fmt.Sprintf("\t%s = %s", name, sqlparser.String(expr)))
 		}
 		return fmt.Sprintf("Update {\n\t%s\nassignments:\n%s\n}", tbl, strings.Join(assignments, "\n"))

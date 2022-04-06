@@ -14,46 +14,51 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package abstract
+package physical
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type Update struct {
-	Table       *QueryTable
+	QTable      *abstract.QueryTable
+	VTable      *vindexes.Table
 	Assignments map[string]sqlparser.Expr
 }
 
-var _ LogicalOperator = (*Update)(nil)
+var _ abstract.PhysicalOperator = (*Update)(nil)
 
-// TableID implements the LogicalOperator interface
+// TableID implements the PhysicalOperator interface
 func (u *Update) TableID() semantics.TableSet {
-	return u.Table.ID
+	return u.QTable.ID
 }
 
-// UnsolvedPredicates implements the LogicalOperator interface
+// UnsolvedPredicates implements the PhysicalOperator interface
 func (u *Update) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	return nil
 }
 
-// CheckValid implements the LogicalOperator interface
+// CheckValid implements the PhysicalOperator interface
 func (u *Update) CheckValid() error {
 	return nil
 }
 
-// iLogical implements the LogicalOperator interface
-func (u *Update) iLogical() {}
+// IPhysical implements the PhysicalOperator interface
+func (u *Update) IPhysical() {}
 
-// PushPredicate implements the LogicalOperator interface
-func (u *Update) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't accept predicates")
+// Cost implements the PhysicalOperator interface
+func (u *Update) Cost() int {
+	return 1
 }
 
-// Compact implements the LogicalOperator interface
-func (u *Update) Compact(semTable *semantics.SemTable) (LogicalOperator, error) {
-	return u, nil
+// Clone implements the PhysicalOperator interface
+func (u *Update) Clone() abstract.PhysicalOperator {
+	return &Update{
+		QTable:      u.QTable,
+		VTable:      u.VTable,
+		Assignments: u.Assignments,
+	}
 }

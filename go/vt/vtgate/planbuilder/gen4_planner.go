@@ -287,11 +287,18 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 		return nil, err
 	}
 
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+
+	physOp, err := physical.CreatePhysicalOperator(ctx, logical)
+	if err != nil {
+		return nil, err
+	}
+
 	_, err = buildShardedUpdatePrimitive(updStmt, semTable)
 	if err != nil {
 		return nil, err
 	}
-	panic(logical)
+	panic(physOp)
 	// return up, nil
 }
 

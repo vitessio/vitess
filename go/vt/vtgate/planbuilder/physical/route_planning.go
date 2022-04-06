@@ -100,6 +100,19 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 		filter.Source = src
 
 		return filter, nil
+	case *abstract.Update:
+		vschemaTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(op.Table.Table)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Route{
+			Source: &Update{
+				QTable:      op.Table,
+				VTable:      vschemaTable,
+				Assignments: op.Assignments,
+			},
+		}, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
 	}

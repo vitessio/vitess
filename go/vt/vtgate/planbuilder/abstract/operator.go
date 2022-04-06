@@ -273,7 +273,7 @@ func createOperatorFromUpdate(updStmt *sqlparser.Update, semTable *semantics.Sem
 		assignments[set.Name.Name.String()] = set.Expr
 	}
 
-	return &Update{tbl: qt, assignments: assignments}, nil
+	return &Update{Table: qt, Assignments: assignments}, nil
 }
 
 func addColumnEquality(semTable *semantics.SemTable, expr sqlparser.Expr) {
