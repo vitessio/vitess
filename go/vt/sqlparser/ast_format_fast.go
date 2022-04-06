@@ -1053,63 +1053,6 @@ func (node *Show) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *ShowLegacy) formatFast(buf *TrackedBuffer) {
-	nodeType := strings.ToLower(node.Type)
-	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes" ||
-		nodeType == "databases" || nodeType == "schemas" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_replication_status" ||
-		nodeType == "vitess_shards" || nodeType == "vitess_tablets") && node.ShowTablesOpt != nil {
-		opt := node.ShowTablesOpt
-		if node.Extended != "" {
-			buf.WriteString("show ")
-			buf.WriteString(node.Extended)
-			buf.WriteString(nodeType)
-		} else {
-			buf.WriteString("show ")
-			buf.WriteString(opt.Full)
-			buf.WriteString(nodeType)
-		}
-		if (nodeType == "columns" || nodeType == "fields") && node.HasOnTable() {
-			buf.WriteString(" from ")
-			node.OnTable.formatFast(buf)
-		}
-		if (nodeType == "index" || nodeType == "keys" || nodeType == "indexes") && node.HasOnTable() {
-			buf.WriteString(" from ")
-			node.OnTable.formatFast(buf)
-		}
-		if opt.DbName != "" {
-			buf.WriteString(" from ")
-			buf.WriteString(opt.DbName)
-		}
-		opt.Filter.formatFast(buf)
-		return
-	}
-	if node.Scope == ImplicitScope {
-		buf.WriteString("show ")
-		buf.WriteString(nodeType)
-	} else {
-		buf.WriteString("show ")
-		buf.WriteString(node.Scope.ToString())
-		buf.WriteByte(' ')
-		buf.WriteString(nodeType)
-	}
-	if node.HasOnTable() {
-		buf.WriteString(" on ")
-		node.OnTable.formatFast(buf)
-	}
-	if nodeType == "collation" && node.ShowCollationFilterOpt != nil {
-		buf.WriteString(" where ")
-		node.ShowCollationFilterOpt.formatFast(buf)
-	}
-	if nodeType == "charset" && node.ShowTablesOpt != nil {
-		node.ShowTablesOpt.Filter.formatFast(buf)
-	}
-	if node.HasTable() {
-		buf.WriteByte(' ')
-		node.Table.formatFast(buf)
-	}
-}
-
-// formatFast formats the node.
 func (node *ShowFilter) formatFast(buf *TrackedBuffer) {
 	if node == nil {
 		return
@@ -2079,6 +2022,12 @@ func (node *ShowCreate) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.Command.ToString())
 	buf.WriteByte(' ')
 	node.Op.formatFast(buf)
+}
+
+// formatFast formats the node.
+func (node *ShowOther) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("show ")
+	buf.WriteString(node.Command)
 }
 
 // formatFast formats the node.

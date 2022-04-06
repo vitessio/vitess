@@ -213,7 +213,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 		// Empty by design. Not executed by a plan
 		return nil, nil
 	case *sqlparser.Show:
-		return buildRoutePlan(stmt, reservedVars, vschema, buildShowPlan)
+		return buildShowPlan(query, stmt, reservedVars, vschema)
 	case *sqlparser.LockTables:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildLockPlan)
 	case *sqlparser.UnlockTables:

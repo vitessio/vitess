@@ -3385,37 +3385,13 @@ show_statement:
   {
     $$ = &Show{&ShowCreate{Command: CreateV, Op: $4}}
   }
-| SHOW CREATE USER ddl_skip_to_end
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
-   }
-|  SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY ... */
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
-  }
-|  SHOW BINARY LOGS ddl_skip_to_end /* SHOW BINARY LOGS */
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
-  }
 | SHOW ENGINES
   {
     $$ = &Show{&ShowBasic{Command: Engines}}
   }
-| SHOW FUNCTION CODE table_name
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
-  }
 | SHOW PLUGINS
   {
     $$ = &Show{&ShowBasic{Command: Plugins}}
-  }
-| SHOW PROCEDURE CODE table_name
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
-  }
-| SHOW full_opt PROCESSLIST from_database_opt like_or_where_opt
-  {
-      $$ = &Show{&ShowLegacy{Type: string($3), Scope: ImplicitScope}}
   }
 | SHOW GLOBAL GTID_EXECUTED from_database_opt
   {
@@ -3471,22 +3447,42 @@ show_statement:
   }
 /*
  * Catch-all for show statements without vitess keywords:
- *
- *  SHOW BINARY LOGS
- *  SHOW INVALID
- *  SHOW VITESS_TARGET
  */
 | SHOW id_or_var ddl_skip_to_end
   {
-    $$ = &Show{&ShowLegacy{Type: string($2.String()), Scope: ImplicitScope}}
+    $$ = &Show{&ShowOther{Command: string($2.String())}}
+  }
+| SHOW CREATE USER ddl_skip_to_end
+  {
+    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3)}}
+   }
+| SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY ... */
+  {
+    $$ = &Show{&ShowOther{Command: string($2) + " " + $3.String()}}
+  }
+| SHOW BINARY LOGS ddl_skip_to_end /* SHOW BINARY LOGS */
+  {
+    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3)}}
   }
 | SHOW ENGINE ddl_skip_to_end
   {
-    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
+    $$ = &Show{&ShowOther{Command: string($2)}}
+  }
+| SHOW FUNCTION CODE table_name
+  {
+    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3) + " " + String($4)}}
+  }
+| SHOW PROCEDURE CODE table_name
+  {
+    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3) + " " + String($4)}}
+  }
+| SHOW full_opt PROCESSLIST from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowOther{Command: string($3)}}
   }
 | SHOW STORAGE ddl_skip_to_end
   {
-    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
+    $$ = &Show{&ShowOther{Command: string($2)}}
   }
 
 extended_opt:
