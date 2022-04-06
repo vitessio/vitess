@@ -6,7 +6,7 @@ Gen4 plan same as above
 # TODO: Implement support for select with a target destination
 "select * from `user[-]`.user_metadata"
 "unsupported: SELECT with a target destination"
-Gen4 plan same as above
+Gen4 error: unsupported: table with a target destination `user[-]`.user_metadata
 
 # Unsupported INSERT statement with a target destination
 "insert into `user[-]`.user_metadata (a, b) values (1,2)"
@@ -21,7 +21,7 @@ Gen4 plan same as above
 # Unsupported update statement with a replica target destination
 "update `user[-]@replica`.user_metadata set id=2"
 "unsupported: update statement with a replica target"
-Gen4 plan same as above
+Gen4 error: unsupported: table with a target destination `user[-]@replica`.user_metadata
 
 # scatter order by with * expression
 "select * from user order by id"
@@ -151,12 +151,12 @@ Gen4 plan same as above
 # sharded subqueries in unsharded update
 "update unsharded set col = (select id from user)"
 "unsupported: sharded subqueries in DML"
-Gen4 plan same as above
+Gen4 error: unsupported: subqueries in sharded DML
 
 # sharded join unsharded subqueries in unsharded update
 "update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)"
 "unsupported: sharded subqueries in DML"
-Gen4 plan same as above
+Gen4 error: unsupported: subqueries in sharded DML
 
 # subqueries in delete
 "delete from user where col = (select id from unsharded)"
@@ -226,17 +226,17 @@ Gen4 plan same as above
 # cross-shard update tables
 "update (select id from user) as u set id = 4"
 "unsupported: subqueries in sharded DML"
-Gen4 plan same as above
+Gen4 error: unsupported: multiple tables in update
 
 # join in update tables
 "update user join user_extra on user.id = user_extra.id set user.name = 'foo'"
 "unsupported: multi-shard or vindex write statement"
-Gen4 plan same as above
+Gen4 error: unsupported: multiple tables in update
 
 # multiple tables in update
 "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id"
 "unsupported: multi-shard or vindex write statement"
-Gen4 plan same as above
+Gen4 error: unsupported: multiple tables in update
 
 # unsharded insert, unqualified names and auto-inc combined
 "insert into unsharded_auto select col from unsharded"

@@ -96,7 +96,7 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 				return err
 			}
 			if target != nil {
-				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: SELECT with a target destination")
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: table with a target destination %s", sqlparser.String(t))
 			}
 			if tbl == nil && vindex != nil {
 				tbl = newVindexTable(t.Name)

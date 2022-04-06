@@ -1791,7 +1791,7 @@ Gen4 plan same as above
     "Table": "user_extra"
   }
 }
-Gen4 plan same as above
+Gen4 error: unsupported: table with a target destination `user[-]`.user_extra
 
 # update with no primary vindex on where clause (scatter update)   - multi shard autocommit
 "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */  user_extra set val = 1"
@@ -2526,7 +2526,7 @@ Gen4 plan same as above
     "Table": "user"
   }
 }
-Gen4 plan same as above
+Gen4 error: unsupported: table with a target destination `user[-]`.`user`
 
 # update with shard targeting without vindex
 "update `user[-]`.user_extra set val = 1"
@@ -2546,7 +2546,7 @@ Gen4 plan same as above
     "Table": "user_extra"
   }
 }
-Gen4 plan same as above
+Gen4 error: unsupported: table with a target destination `user[-]`.user_extra
 
 # multi-table delete with single table
 "delete u.* from user u where u.id * u.col = u.foo"
