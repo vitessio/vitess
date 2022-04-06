@@ -313,10 +313,10 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfShowCreate(in)
 	case *ShowFilter:
 		return CloneRefOfShowFilter(in)
-	case *ShowLegacy:
-		return CloneRefOfShowLegacy(in)
 	case *ShowMigrationLogs:
 		return CloneRefOfShowMigrationLogs(in)
+	case *ShowOther:
+		return CloneRefOfShowOther(in)
 	case *StarExpr:
 		return CloneRefOfStarExpr(in)
 	case *Stream:
@@ -1876,19 +1876,6 @@ func CloneRefOfShowFilter(n *ShowFilter) *ShowFilter {
 	return &out
 }
 
-// CloneRefOfShowLegacy creates a deep clone of the input.
-func CloneRefOfShowLegacy(n *ShowLegacy) *ShowLegacy {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.OnTable = CloneTableName(n.OnTable)
-	out.Table = CloneTableName(n.Table)
-	out.ShowTablesOpt = CloneRefOfShowTablesOpt(n.ShowTablesOpt)
-	out.ShowCollationFilterOpt = CloneExpr(n.ShowCollationFilterOpt)
-	return &out
-}
-
 // CloneRefOfShowMigrationLogs creates a deep clone of the input.
 func CloneRefOfShowMigrationLogs(n *ShowMigrationLogs) *ShowMigrationLogs {
 	if n == nil {
@@ -1896,6 +1883,15 @@ func CloneRefOfShowMigrationLogs(n *ShowMigrationLogs) *ShowMigrationLogs {
 	}
 	out := *n
 	out.Comments = CloneRefOfParsedComments(n.Comments)
+	return &out
+}
+
+// CloneRefOfShowOther creates a deep clone of the input.
+func CloneRefOfShowOther(n *ShowOther) *ShowOther {
+	if n == nil {
+		return nil
+	}
+	out := *n
 	return &out
 }
 
@@ -2781,8 +2777,8 @@ func CloneShowInternal(in ShowInternal) ShowInternal {
 		return CloneRefOfShowBasic(in)
 	case *ShowCreate:
 		return CloneRefOfShowCreate(in)
-	case *ShowLegacy:
-		return CloneRefOfShowLegacy(in)
+	case *ShowOther:
+		return CloneRefOfShowOther(in)
 	default:
 		// this should never happen
 		return nil
@@ -3219,16 +3215,6 @@ func CloneSliceOfCharacteristic(n []Characteristic) []Characteristic {
 		res = append(res, CloneCharacteristic(x))
 	}
 	return res
-}
-
-// CloneRefOfShowTablesOpt creates a deep clone of the input.
-func CloneRefOfShowTablesOpt(n *ShowTablesOpt) *ShowTablesOpt {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Filter = CloneRefOfShowFilter(n.Filter)
-	return &out
 }
 
 // CloneRefOfTableIdent creates a deep clone of the input.

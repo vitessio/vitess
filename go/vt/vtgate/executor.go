@@ -368,12 +368,12 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		return nil
 	})
 	if err == planbuilder.ErrPlanNotSupported {
-		return e.legacyExecute(ctx, safeSession, sql, bindVars, logStats)
+		return e.legacyExecute(ctx, safeSession, sql, logStats)
 	}
 	return stmtType, qr, err
 }
 
-func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
+func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
 	// Start an implicit transaction if necessary.
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
 		if err := e.txConn.Begin(ctx, safeSession); err != nil {
@@ -381,16 +381,13 @@ func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, 
 		}
 	}
 
-	destKeyspace, destTabletType, dest, err := e.ParseDestinationTarget(safeSession.TargetString)
+	destKeyspace, destTabletType, _, err := e.ParseDestinationTarget(safeSession.TargetString)
 	if err != nil {
 		return 0, nil, err
 	}
 
 	logStats.Keyspace = destKeyspace
 	logStats.TabletType = destTabletType.String()
-	if bindVars == nil {
-		bindVars = make(map[string]*querypb.BindVariable)
-	}
 
 	stmtType := sqlparser.Preview(sql)
 	logStats.StmtType = stmtType.String()
@@ -414,9 +411,6 @@ func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, 
 	case sqlparser.StmtSet:
 		qr, err := e.handleSet(ctx, sql, logStats)
 		return sqlparser.StmtSet, qr, err
-	case sqlparser.StmtShow:
-		qr, err := e.handleShow(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
-		return sqlparser.StmtShow, qr, err
 	}
 	return 0, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] statement not handled: %s", sql)
 }
@@ -808,19 +802,6 @@ func (e *Executor) showVitessMetadata(ctx context.Context, filter *sqlparser.Sho
 	}, nil
 }
 
-func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
-	stmt, err := sqlparser.Parse(sql)
-	if err != nil {
-		return nil, err
-	}
-	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
-	execStart := time.Now()
-	defer func() { logStats.ExecuteTime = time.Since(execStart) }()
-
-	// Any other show statement is passed through
-	return e.handleOther(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats, ignoreMaxMemoryRows)
-}
-
 // (tablet, servingState, mtst) -> bool
 type tabletFilter func(*topodatapb.Tablet, string, int64) bool
 
@@ -1049,47 +1030,6 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 		Fields: buildVarCharFields("Keyspace", "Shard", "TabletType", "Alias", "Hostname", "ReplicationSource", "ReplicationHealth", "ReplicationLag", "ThrottlerStatus"),
 		Rows:   rows,
 	}, nil
-}
-
-func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats, ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
-	if destKeyspace == "" {
-		return nil, errNoKeyspace
-	}
-	if dest == nil {
-		// shardExec will re-resolve this a bit later.
-		rss, err := e.resolver.resolver.ResolveDestination(ctx, destKeyspace, destTabletType, key.DestinationAnyShard{})
-		if err != nil {
-			return nil, err
-		}
-		if len(rss) != 1 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "keyspace %s has no shards", destKeyspace)
-		}
-		destKeyspace, dest = rss[0].Target.Keyspace, key.DestinationShard(rss[0].Target.Shard)
-	}
-
-	switch dest.(type) {
-	case key.DestinationKeyspaceID:
-		rss, err := e.resolver.resolver.ResolveDestination(ctx, destKeyspace, destTabletType, dest)
-		if err != nil {
-			return nil, err
-		}
-		if len(rss) != 1 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %s, got: %v", sql, dest)
-		}
-		destKeyspace, dest = rss[0].Target.Keyspace, key.DestinationShard(rss[0].Target.Shard)
-	case key.DestinationShard:
-	// noop
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Destination can only be a single shard for statement: %s, got: %v", sql, dest)
-	}
-
-	execStart := time.Now()
-	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats, ignoreMaxMemoryRows)
-
-	e.updateQueryCounts("Other", "", "", int64(logStats.ShardQueries))
-
-	logStats.ExecuteTime = time.Since(execStart)
-	return result, err
 }
 
 // MessageStream is part of the vtgate service API. This is a V2 level API that's sent
@@ -1402,11 +1342,6 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 		}
 	}
 
-	destKeyspace, destTabletType, dest, err := e.ParseDestinationTarget(safeSession.TargetString)
-	if err != nil {
-		return nil, err
-	}
-
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
@@ -1426,20 +1361,8 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 	}
 
 	switch stmtType {
-	case sqlparser.StmtSelect:
+	case sqlparser.StmtSelect, sqlparser.StmtShow:
 		return e.handlePrepare(ctx, safeSession, sql, bindVars, logStats)
-	case sqlparser.StmtShow:
-		qr, err := e.handlePrepare(ctx, safeSession, sql, bindVars, logStats)
-		if err == nil {
-			return qr, nil
-		}
-		if err == planbuilder.ErrPlanNotSupported {
-			res, err := e.handleShow(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
-			if err == nil {
-				return res.Fields, nil
-			}
-		}
-		return nil, err
 	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
 		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment, sqlparser.StmtExplain, sqlparser.StmtFlush:
 		return nil, nil

@@ -46,16 +46,34 @@ const (
 	charset = "charset"
 )
 
-func buildShowPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
-	showStmt := stmt.(*sqlparser.Show)
-	switch show := showStmt.Internal.(type) {
+func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+	if vschema.Destination() != nil {
+		return buildByPassDDLPlan(sql, vschema)
+	}
+
+	switch show := stmt.Internal.(type) {
 	case *sqlparser.ShowBasic:
 		return buildShowBasicPlan(show, vschema)
 	case *sqlparser.ShowCreate:
 		return buildShowCreatePlan(show, vschema)
+	case *sqlparser.ShowOther:
+		return buildShowOtherPlan(sql, vschema)
 	default:
 		return nil, ErrPlanNotSupported
 	}
+}
+
+func buildShowOtherPlan(sql string, vschema plancontext.VSchema) (engine.Primitive, error) {
+	ks, err := vschema.AnyKeyspace()
+	if err != nil {
+		return nil, err
+	}
+	return &engine.Send{
+		Keyspace:          ks,
+		TargetDestination: key.DestinationAnyShard{},
+		Query:             sql,
+		SingleShardOnly:   true,
+	}, nil
 }
 
 func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
