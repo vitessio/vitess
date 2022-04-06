@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -1701,7 +1702,15 @@ func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
 			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
 			return
 		}
-		appThrottle := tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(d), 1)
+		var ratio = 1.0
+		if ratioParam := r.URL.Query().Get("ratio"); ratioParam != "" {
+			ratio, err = strconv.ParseFloat(ratioParam, 64)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
+				return
+			}
+		}
+		appThrottle := tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(d), ratio)
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(appThrottle)
@@ -1712,6 +1721,12 @@ func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(appThrottle)
+	})
+	tsv.exporter.HandleFunc("/throttler/throttled-apps", func(w http.ResponseWriter, r *http.Request) {
+		throttledApps := tsv.lagThrottler.ThrottledAppsSnapshot()
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(throttledApps)
 	})
 }
 
