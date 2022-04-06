@@ -245,9 +245,9 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 
 				dynamicAPI = api.WithCluster(c, id)
+			} else {
+				log.Warningf("failed to unmarshal dynamic cluster spec from cookie; falling back to static API; error: %s", err)
 			}
-
-			log.Warningf("failed to unmarshal dynamic cluster spec from cookie; falling back to static API; error: %s", err)
 		}
 	}
 
