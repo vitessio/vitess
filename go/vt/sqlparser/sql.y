@@ -426,7 +426,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <characteristic> transaction_char
 %type <characteristics> transaction_chars
 %type <isolationLevel> isolation_level
-%type <str> for_from
+%type <str> for_from from_or_on
 %type <str> default_opt
 %type <ignore> ignore_opt
 %type <str> columns_or_fields extended_opt storage_opt
@@ -3449,7 +3449,7 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: VschemaVindexes}}
   }
-| SHOW VSCHEMA VINDEXES ON table_name
+| SHOW VSCHEMA VINDEXES from_or_on table_name
   {
     $$ = &Show{&ShowBasic{Command: VschemaVindexes, Tbl: $5}}
   }
@@ -3569,6 +3569,16 @@ session_or_local_opt:
 | LOCAL
   {
     $$ = struct{}{}
+  }
+
+from_or_on:
+  FROM
+  {
+    $$ = string($1)
+  }
+| ON
+  {
+    $$ = string($1)
   }
 
 use_statement:
