@@ -119,7 +119,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 			result: dmlResult,
 		}},
 		resultWant: dmlResult,
-		planWant:   "OtherRead",
+		planWant:   "Show",
 		logWant:    "show engines",
 	}, {
 		input: "repair t",
