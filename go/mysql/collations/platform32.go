@@ -1,7 +1,7 @@
-//go:build gc && !wasm
+//go:build 386 || arm || mips || mipsle || wasm
 
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,25 +16,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package hack
+package collations
 
-import (
-	"testing"
+// 4-byte constants for hashing in 32-bit systems
+const (
+	m1 = 0x78bd642f
+	m2 = 0xa0b428db
+	m3 = 0x9c88c6e3
+	m4 = 0x75374cc3
+	m5 = 0xc47d124f
 )
 
-func TestByteToString(t *testing.T) {
-	v1 := []byte("1234")
-	if s := String(v1); s != "1234" {
-		t.Errorf("String(\"1234\"): %q, want 1234", s)
-	}
-
-	v1 = []byte("")
-	if s := String(v1); s != "" {
-		t.Errorf("String(\"\"): %q, want empty", s)
-	}
-
-	v1 = nil
-	if s := String(v1); s != "" {
-		t.Errorf("String(\"\"): %q, want empty", s)
-	}
-}
+// Generate all the metadata used for collations from the JSON data dumped from MySQL
+// In 32 bit systems, do not use memory embedding, it's not worth it
+//go:generate go run ./tools/makecolldata/ -embed=false
