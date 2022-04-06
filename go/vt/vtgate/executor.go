@@ -662,15 +662,7 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 	}
 	set, ok := rewrittenAST.AST.(*sqlparser.Set)
 	if !ok {
-		_, ok := rewrittenAST.AST.(*sqlparser.SetTransaction)
-		if !ok {
-			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "unexpected statement type")
-		}
-		// Parser ensures set transaction is well-formed.
-
-		// TODO: This is a NOP, modeled off of tx_isolation and tx_read_only.  It's incredibly
-		// dangerous that it's a NOP, but fixing that is left to.
-		return &sqltypes.Result{}, nil
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "unexpected statement type")
 	}
 
 	execStart := time.Now()

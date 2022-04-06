@@ -208,7 +208,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 	case sqlparser.DBDDLStatement:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildDBDDLPlan)
 	case *sqlparser.SetTransaction:
-		return nil, ErrPlanNotSupported
+		return buildRoutePlan(stmt, reservedVars, vschema, buildSetTxPlan)
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release:
 		// Empty by design. Not executed by a plan
 		return nil, nil
@@ -267,6 +267,13 @@ func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema
 		return engine.NewDBDDL(ksName, true, queryTimeout(dbDDL.Comments.Directives())), nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] database ddl not recognized: %s", sqlparser.String(dbDDLstmt))
+}
+
+func buildSetTxPlan(_ sqlparser.Statement, _ *sqlparser.ReservedVars, _ plancontext.VSchema) (engine.Primitive, error) {
+	// TODO: This is a NOP, modeled off of tx_isolation and tx_read_only.
+	// It's incredibly dangerous that it's a NOP, this will be fixed when it will be implemented.
+	// This is currently the refactor of existing setup.
+	return engine.NewRowsPrimitive(nil, nil), nil
 }
 
 func buildLoadPlan(query string, vschema plancontext.VSchema) (engine.Primitive, error) {
