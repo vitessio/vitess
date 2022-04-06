@@ -256,23 +256,23 @@ func (s *Schema) Diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err 
 			diff, err := fromEntity.Diff(e, hints)
 
 			switch {
-			case err == nil:
-				// No error, let's check the diff:
-				if diff != nil && !diff.IsEmpty() {
-					diffs = append(diffs, diff)
-				}
 			case err != nil && errors.Is(err, ErrEntityTypeMismatch):
 				// e.g. comparing a table with a view
 				// there's no single "diff", ie no single ALTER statement to convert from one to another,
 				// hence the error.
-				// But in our context, we know better. We know we should DROP the one, CREATE the other.
+				// But in our schema context, we know better. We know we should DROP the one, CREATE the other.
 				// We proceed to do that, and implicitly ignore the error
 				diffs = append(diffs, fromEntity.Drop())
 				diffs = append(diffs, e.Create())
 				// And we're good. We can move on to comparing next entity.
-			default:
+			case err != nil:
 				// Any other kind of error
 				return nil, err
+			default:
+				// No error, let's check the diff:
+				if diff != nil && !diff.IsEmpty() {
+					diffs = append(diffs, diff)
+				}
 			}
 		} else { // !ok
 			// Added entity
