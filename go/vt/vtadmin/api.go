@@ -260,7 +260,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						if err == nil {
 							api.clusterMap[clusterID] = c
 							api.clusters = append(api.clusters, c)
-							err = api.clusterCache.Add(clusterID, c, 24*time.Hour)
+							err = api.clusterCache.Add(clusterID, c, cache.DefaultExpiration)
 							if err != nil {
 								log.Infof("could not add dynamic cluster %s to cluster cache: %+v", clusterID, err)
 							}
