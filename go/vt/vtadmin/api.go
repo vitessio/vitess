@@ -242,22 +242,24 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				err = json.Unmarshal(decoded, &clusterJSON)
 				if err == nil {
 					clusterID := clusterJSON.ClusterName
-					c, err := cluster.Config{
-						ID:            clusterID,
-						Name:          clusterID,
-						DiscoveryImpl: "dynamic",
-						DiscoveryFlagsByImpl: cluster.FlagsByImpl{
-							"dynamic": map[string]string{
-								"discovery": string(decoded),
+					if _, exists := api.clusterMap[clusterID]; !exists {
+						c, err := cluster.Config{
+							ID:            clusterID,
+							Name:          clusterID,
+							DiscoveryImpl: "dynamic",
+							DiscoveryFlagsByImpl: cluster.FlagsByImpl{
+								"dynamic": map[string]string{
+									"discovery": string(decoded),
+								},
 							},
-						},
-					}.Cluster()
-					if err == nil {
-						api.clusterMap[clusterID] = c
-						api.clusters = append(api.clusters, c)
-						err = api.clusterCache.Add(clusterID, c, 24*time.Hour)
-						if err != nil {
-							log.Infof("could not add dynamic cluster %s to cluster cache: %+v", clusterID, err)
+						}.Cluster()
+						if err == nil {
+							api.clusterMap[clusterID] = c
+							api.clusters = append(api.clusters, c)
+							err = api.clusterCache.Add(clusterID, c, cache.DefaultExpiration)
+							if err != nil {
+								log.Infof("could not add dynamic cluster %s to cluster cache: %+v", clusterID, err)
+							}
 						}
 					}
 					selectedCluster := api.clusterMap[clusterID]
@@ -334,6 +336,16 @@ func (api *API) EjectDynamicCluster(key string, value any) {
 	if ok {
 		delete(api.clusterMap, key)
 	}
+
+	// Maintain order of clusters when removing dynamic cluster
+	clusterIndex := stdsort.Search(len(api.clusters), func(i int) bool { return api.clusters[i].ID == key })
+	if clusterIndex >= len(api.clusters) || clusterIndex < 0 {
+		log.Errorf("Cannot remove cluster %s from api.clusters. Cluster index %d is out of range for clusters slice of %d length.", key, clusterIndex, len(api.clusters))
+	}
+
+	api.clusters[0] = api.clusters[clusterIndex]
+
+	api.clusters = api.clusters[1:]
 }
 
 // CreateKeyspace is part of the vtadminpb.VTAdminServer interface.
