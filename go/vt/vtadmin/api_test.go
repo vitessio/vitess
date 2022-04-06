@@ -4893,7 +4893,7 @@ func TestServeHTTP(t *testing.T) {
 			},
 		},
 		{
-			name:                  "multiple clusters with dynamic clusters",
+			name:                  "multiple clusters with dynamic clusters - no duplicates",
 			enableDynamicClusters: true,
 			cookie:                `{"name": "dynamiccluster1", "vtctlds": [{"host":{"fqdn": "localhost:15000", "hostname": "localhost:15999"}}], "vtgates": [{"host": {"hostname": "localhost:15991"}}]}`,
 			clusters: []*cluster.Cluster{
