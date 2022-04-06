@@ -2487,6 +2487,15 @@ func TestExecutorShowVitessMigrations(t *testing.T) {
 	assert.Contains(t, sbc2.StringQueries(), "SELECT * FROM _vt.schema_migrations")
 }
 
+func TestExecutorDescHash(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	showQuery := "desc hash_index"
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	ctx := context.Background()
+	_, err := executor.Execute(ctx, "", session, showQuery, nil)
+	require.NoError(t, err)
+}
+
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {
 	return executor.Execute(context.Background(), "TestExecute", session, sql, nil)
 }
