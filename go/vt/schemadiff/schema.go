@@ -245,31 +245,39 @@ func (s *Schema) Diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err 
 	for _, e := range s.Entities() {
 		if _, ok := other.named[e.Name()]; !ok {
 			// other schema does not have the entity
-			diff, err := e.Drop()
-			if err != nil {
-				return nil, err
-			}
-			diffs = append(diffs, diff)
+			diffs = append(diffs, e.Drop())
 		}
 	}
+	// We iterate by order of "other" schema because we need to construct queries that will be valid
+	// for that schema (we need to maintain view dependencies according to target, not according to source)
 	for _, e := range other.Entities() {
 		if fromEntity, ok := s.named[e.Name()]; ok {
 			// entities exist by same name in both schemas. Let's diff them.
 			diff, err := fromEntity.Diff(e, hints)
-			if err != nil {
+
+			switch {
+			case err == nil:
+				// No error, let's check the diff:
+				if diff != nil && !diff.IsEmpty() {
+					diffs = append(diffs, diff)
+				}
+			case err != nil && errors.Is(err, ErrEntityTypeMismatch):
+				// e.g. comparing a table with a view
+				// there's no single "diff", ie no single ALTER statement to convert from one to another,
+				// hence the error.
+				// But in our context, we know better. We know we should DROP the one, CREATE the other.
+				// We proceed to do that, and implicitly ignore the error
+				diffs = append(diffs, fromEntity.Drop())
+				diffs = append(diffs, e.Create())
+				// And we're good. We can move on to comparing next entity.
+			default:
+				// Any other kind of error
 				return nil, err
 			}
-			if diff != nil && !diff.IsEmpty() {
-				diffs = append(diffs, diff)
-			}
-		} else {
+		} else { // !ok
 			// Added entity
 			// this schema does not have the entity
-			diff, err := e.Create()
-			if err != nil {
-				return nil, err
-			}
-			diffs = append(diffs, diff)
+			diffs = append(diffs, e.Create())
 		}
 	}
 	return diffs, err

@@ -59,9 +59,9 @@ func DiffTables(create1 *sqlparser.CreateTable, create2 *sqlparser.CreateTable, 
 	case create1 == nil && create2 == nil:
 		return nil, nil
 	case create1 == nil:
-		return NewCreateTableEntity(create2).Create()
+		return NewCreateTableEntity(create2).Create(), nil
 	case create2 == nil:
-		return NewCreateTableEntity(create1).Drop()
+		return NewCreateTableEntity(create1).Drop(), nil
 	default:
 		c1 := NewCreateTableEntity(create1)
 		c2 := NewCreateTableEntity(create2)
@@ -113,9 +113,9 @@ func DiffViews(create1 *sqlparser.CreateView, create2 *sqlparser.CreateView, hin
 	case create1 == nil && create2 == nil:
 		return nil, nil
 	case create1 == nil:
-		return NewCreateViewEntity(create2).Create()
+		return NewCreateViewEntity(create2).Create(), nil
 	case create2 == nil:
-		return NewCreateViewEntity(create1).Drop()
+		return NewCreateViewEntity(create1).Drop(), nil
 	default:
 		c1 := NewCreateViewEntity(create1)
 		c2 := NewCreateViewEntity(create2)

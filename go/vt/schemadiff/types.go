@@ -47,9 +47,9 @@ type Entity interface {
 	// Diff returns an entitty diff given another entity. The diff direction is from this entity and to the other entity.
 	Diff(other Entity, hints *DiffHints) (diff EntityDiff, err error)
 	// Create returns an entity diff that describes how to create this entity
-	Create() (diff EntityDiff, err error)
+	Create() EntityDiff
 	// Create returns an entity diff that describes how to drop this entity
-	Drop() (diff EntityDiff, err error)
+	Drop() EntityDiff
 }
 
 // EntityDiff represents the diff between two entities

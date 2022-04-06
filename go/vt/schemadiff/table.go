@@ -679,14 +679,14 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 }
 
 // Create implements Entity interface
-func (c *CreateTableEntity) Create() (diff EntityDiff, err error) {
-	return &CreateTableEntityDiff{createTable: &c.CreateTable}, nil
+func (c *CreateTableEntity) Create() EntityDiff {
+	return &CreateTableEntityDiff{createTable: &c.CreateTable}
 }
 
 // Drop implements Entity interface
-func (c *CreateTableEntity) Drop() (diff EntityDiff, err error) {
+func (c *CreateTableEntity) Drop() EntityDiff {
 	dropTable := &sqlparser.DropTable{
 		FromTables: []sqlparser.TableName{c.Table},
 	}
-	return &DropTableEntityDiff{dropTable: dropTable}, nil
+	return &DropTableEntityDiff{dropTable: dropTable}
 }

@@ -153,14 +153,14 @@ func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, hints *DiffHints) (
 }
 
 // Create implements Entity interface
-func (c *CreateViewEntity) Create() (diff EntityDiff, err error) {
-	return &CreateViewEntityDiff{createView: &c.CreateView}, nil
+func (c *CreateViewEntity) Create() EntityDiff {
+	return &CreateViewEntityDiff{createView: &c.CreateView}
 }
 
 // Drop implements Entity interface
-func (c *CreateViewEntity) Drop() (diff EntityDiff, err error) {
+func (c *CreateViewEntity) Drop() EntityDiff {
 	dropView := &sqlparser.DropView{
 		FromTables: []sqlparser.TableName{c.ViewName},
 	}
-	return &DropViewEntityDiff{dropView: dropView}, nil
+	return &DropViewEntityDiff{dropView: dropView}
 }

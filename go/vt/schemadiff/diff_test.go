@@ -302,16 +302,22 @@ func TestDiffSchemas(t *testing.T) {
 			expectError: ErrViewDependencyUnresolved.Error(),
 		},
 		{
-			name:        "fail convert table to view",
-			from:        "create table t(id int); create table v1 (id int))",
-			to:          "create table t(id int); create view v1 as select * from t",
-			expectError: ErrEntityTypeMismatch.Error(),
+			name: "convert table to view",
+			from: "create table t(id int); create table v1 (id int)",
+			to:   "create table t(id int); create view v1 as select * from t",
+			diffs: []string{
+				"drop table v1",
+				"create view v1 as select * from t",
+			},
 		},
 		{
-			name:        "fail convert view to table",
-			from:        "create table t(id int); create view v1 as select * from t",
-			to:          "create table t(id int); create table v1 (id int))",
-			expectError: ErrEntityTypeMismatch.Error(),
+			name: "convert view to table",
+			from: "create table t(id int); create view v1 as select * from t",
+			to:   "create table t(id int); create table v1 (id int)",
+			diffs: []string{
+				"drop view v1",
+				"create table v1 (\n\tid int\n)",
+			},
 		},
 		{
 			name:        "unsupported statement",
@@ -338,7 +344,7 @@ func TestDiffSchemas(t *testing.T) {
 		t.Run(ts.name, func(t *testing.T) {
 			diffs, err := DiffSchemasSQL(ts.from, ts.to, hints)
 			if ts.expectError != "" {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), ts.expectError)
 			} else {
 				assert.NoError(t, err)
