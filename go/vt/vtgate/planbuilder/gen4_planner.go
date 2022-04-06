@@ -195,7 +195,7 @@ func newBuildSelectPlan(
 	}
 
 	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
-	logical, err := abstract.CreateOperatorFromAST(selStmt, semTable)
+	logical, err := abstract.CreateLogicalOperatorFromAST(selStmt, semTable)
 	if err != nil {
 		return nil, err
 	}
@@ -257,16 +257,15 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 		return nil, err
 	}
 
-	edml := engine.NewDML()
 	if ks := semTable.SingleUnshardedKeyspace(); ks != nil {
+		edml := engine.NewDML()
 		edml.Keyspace = ks
 		edml.Opcode = engine.Unsharded
 		edml.Query = generateQuery(updStmt)
 		return &engine.Update{DML: edml}, nil
 	}
 
-	subqueries := semTable.SubqueryMap[updStmt]
-	if len(subqueries) > 0 {
+	if len(semTable.SubqueryMap[updStmt]) > 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: subqueries in sharded DML")
 	}
 
@@ -274,6 +273,30 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 		return nil, semTable.NotUnshardedErr
 	}
 
+	err = queryRewrite(semTable, reservedVars, updStmt)
+	if err != nil {
+		return nil, err
+	}
+
+	logical, err := abstract.CreateLogicalOperatorFromAST(updStmt, semTable)
+	if err != nil {
+		return nil, err
+	}
+	err = logical.CheckValid()
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = buildShardedUpdatePrimitive(updStmt, semTable)
+	if err != nil {
+		return nil, err
+	}
+	panic(logical)
+	// return up, nil
+}
+
+func buildShardedUpdatePrimitive(updStmt *sqlparser.Update, semTable *semantics.SemTable) (*engine.Update, error) {
+	edml := engine.NewDML()
 	edml.Table = semTable.Tables[0].GetVindexTable()
 	edml.Keyspace = edml.Table.Keyspace
 
