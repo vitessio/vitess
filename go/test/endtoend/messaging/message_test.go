@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"testing"
 	"time"
 
@@ -270,9 +269,9 @@ func TestReparenting(t *testing.T) {
 	_, err = stream.MessageStream(userKeyspace, "", nil, name)
 	require.Nil(t, err)
 
-	assert.Equal(t, 1, getClientCount(shard0Primary))
-	assert.Equal(t, 0, getClientCount(shard0Replica))
-	assert.Equal(t, 1, getClientCount(shard1Primary))
+	assertClientCount(t, 1, shard0Primary)
+	assertClientCount(t, 0, shard0Replica)
+	assertClientCount(t, 1, shard1Primary)
 
 	// do planned reparenting, make one replica as primary
 	// and validate client connection count in correspond tablets
@@ -289,9 +288,9 @@ func TestReparenting(t *testing.T) {
 	// wait before retrying: that is 30s/5 where 30s is the default
 	// message_stream_grace_period.
 	time.Sleep(10 * time.Second)
-	assert.Equal(t, 0, getClientCount(shard0Primary))
-	assert.Equal(t, 1, getClientCount(shard0Replica))
-	assert.Equal(t, 1, getClientCount(shard1Primary))
+	assertClientCount(t, 0, shard0Primary)
+	assertClientCount(t, 1, shard0Replica)
+	assertClientCount(t, 1, shard1Primary)
 	session := stream.Session("@primary", nil)
 	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (3,'hello world 3')")
 
@@ -307,9 +306,9 @@ func TestReparenting(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err)
 	time.Sleep(10 * time.Second)
-	assert.Equal(t, 1, getClientCount(shard0Primary))
-	assert.Equal(t, 0, getClientCount(shard0Replica))
-	assert.Equal(t, 1, getClientCount(shard1Primary))
+	assertClientCount(t, 1, shard0Primary)
+	assertClientCount(t, 0, shard0Replica)
+	assertClientCount(t, 1, shard1Primary)
 
 	_, err = session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (3) and time_acked is null", nil)
 	require.Nil(t, err)
@@ -326,8 +325,8 @@ func TestConnection(t *testing.T) {
 
 	// create two grpc connection with vtgate and verify
 	// client connection count in vttablet of the primary
-	assert.Equal(t, 0, getClientCount(shard0Primary))
-	assert.Equal(t, 0, getClientCount(shard1Primary))
+	assertClientCount(t, 0, shard0Primary)
+	assertClientCount(t, 0, shard1Primary)
 
 	ctx := context.Background()
 	// first connection with vtgate
@@ -337,8 +336,8 @@ func TestConnection(t *testing.T) {
 	require.Nil(t, err)
 	// validate client count of vttablet
 	time.Sleep(time.Second)
-	assert.Equal(t, 1, getClientCount(shard0Primary))
-	assert.Equal(t, 1, getClientCount(shard1Primary))
+	assertClientCount(t, 1, shard0Primary)
+	assertClientCount(t, 1, shard1Primary)
 	// second connection with vtgate, secont connection
 	// will only be used for client connection counts
 	stream1, err := VtgateGrpcConn(ctx, clusterInstance)
@@ -347,8 +346,8 @@ func TestConnection(t *testing.T) {
 	require.Nil(t, err)
 	// validate client count of vttablet
 	time.Sleep(time.Second)
-	assert.Equal(t, 2, getClientCount(shard0Primary))
-	assert.Equal(t, 2, getClientCount(shard1Primary))
+	assertClientCount(t, 2, shard0Primary)
+	assertClientCount(t, 2, shard1Primary)
 
 	// insert data in primary and validate that we receive this
 	// in message stream
@@ -367,8 +366,8 @@ func TestConnection(t *testing.T) {
 	// After closing one stream, ensure vttablets have dropped it.
 	stream.Close()
 	time.Sleep(time.Second)
-	assert.Equal(t, 1, getClientCount(shard0Primary))
-	assert.Equal(t, 1, getClientCount(shard1Primary))
+	assertClientCount(t, 1, shard0Primary)
+	assertClientCount(t, 1, shard1Primary)
 
 	stream1.Close()
 }
@@ -505,47 +504,33 @@ func (stream *VTGateStream) Next() (*sqltypes.Result, error) {
 	}
 }
 
-// getClientCount read connected client count from the vttablet debug vars.
-func getClientCount(vttablet *cluster.Vttablet) int {
-	vars, err := getVar(vttablet)
-	if err != nil {
-		return 0
+// assertClientCount read connected client count from the vttablet debug vars.
+func assertClientCount(t *testing.T, expected int, vttablet *cluster.Vttablet) {
+	var vars struct {
+		Messages map[string]int
 	}
 
-	msg, ok := vars["Messages"]
-	if !ok {
-		return 0
-	}
+	parseDebugVars(t, &vars, vttablet)
 
-	v, ok := msg.(map[string]any)
-	if !ok {
-		return 0
+	got := vars.Messages["sharded_message.ClientCount"]
+	if got != expected {
+		t.Fatalf("wrong number of clients: got %d, expected %d. messages:\n%#v", got, expected, vars.Messages)
 	}
-
-	countStr, ok := v["sharded_message.ClientCount"]
-	if !ok {
-		return 0
-	}
-
-	i, err := strconv.ParseInt(fmt.Sprint(countStr), 10, 16)
-	if err != nil {
-		return 0
-	}
-
-	return int(i)
 }
 
-// getVar read debug vars from the vttablet.
-func getVar(vttablet *cluster.Vttablet) (map[string]any, error) {
-	resp, err := http.Get(fmt.Sprintf("http://%s:%d/debug/vars", vttablet.VttabletProcess.TabletHostname, vttablet.HTTPPort))
+func parseDebugVars(t *testing.T, output interface{}, vttablet *cluster.Vttablet) {
+	debugVarUrl := fmt.Sprintf("http://%s:%d/debug/vars", vttablet.VttabletProcess.TabletHostname, vttablet.HTTPPort)
+	resp, err := http.Get(debugVarUrl)
 	if err != nil {
-		return nil, err
+		t.Fatalf("failed to fetch %q: %v", debugVarUrl, err)
 	}
-	if resp.StatusCode == 200 {
-		resultMap := make(map[string]any)
-		respByte, _ := io.ReadAll(resp.Body)
-		err := json.Unmarshal(respByte, &resultMap)
-		return resultMap, err
+
+	respByte, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		t.Fatalf("status code %d while fetching %q:\n%s", resp.StatusCode, debugVarUrl, respByte)
 	}
-	return nil, nil
+
+	if err := json.Unmarshal(respByte, output); err != nil {
+		t.Fatalf("failed to unmarshal JSON from %q: %v", debugVarUrl, err)
+	}
 }
