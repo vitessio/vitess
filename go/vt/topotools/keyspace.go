@@ -52,9 +52,19 @@ func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.Ta
 
 	// Any errors from this point onward are ignored.
 	var (
-		m  sync.Mutex
-		wg sync.WaitGroup
+		m              sync.Mutex
+		wg             sync.WaitGroup
+		refreshTimeout = 60 * time.Second
 	)
+
+	// If there's a timeout set on the context, use what's left of it instead of the 60s default.
+	if deadline, ok := ctx.Deadline(); ok {
+		timeLeft := time.Until(deadline)
+		if timeLeft > 0 {
+			refreshTimeout = time.Until(deadline)
+		}
+	}
+
 	for _, ti := range tabletMap {
 		if ti.Hostname == "" {
 			// The tablet is not running, we don't have the host
@@ -66,12 +76,11 @@ func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.Ta
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
 			defer wg.Done()
-			logger.Infof("Calling RefreshState on tablet %v", ti.AliasString())
+			grctx, grcancel := context.WithTimeout(ctx, refreshTimeout)
+			defer grcancel()
+			logger.Infof("Calling RefreshState on tablet %v with a timeout of %v", ti.AliasString(), refreshTimeout)
 
-			ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-			defer cancel()
-
-			if err := tmc.RefreshState(ctx, ti.Tablet); err != nil {
+			if err := tmc.RefreshState(grctx, ti.Tablet); err != nil {
 				logger.Warningf("RefreshTabletsByShard: failed to refresh %v: %v", ti.AliasString(), err)
 				m.Lock()
 				isPartialRefresh = true

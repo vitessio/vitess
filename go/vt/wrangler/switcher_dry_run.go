@@ -21,9 +21,15 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/fatih/color"
+	"github.com/pkg/errors"
+
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -220,7 +226,11 @@ func (dr *switcherDryRun) cancelMigration(ctx context.Context, sm *workflow.Stre
 
 func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string) (context.Context, func(*error), error) {
 	dr.drLog.Log(fmt.Sprintf("Lock keyspace %s", keyspace))
+	warning := color.New(color.FgRed).SprintFunc()
 	return ctx, func(e *error) {
+		if err := dr.refreshRelatedTabletStatus(ctx); err != nil {
+			dr.drLog.Log(fmt.Sprintf("%s: %s", warning("WARNING"), err.Error()))
+		}
 		dr.drLog.Log(fmt.Sprintf("Unlock keyspace %s", keyspace))
 	}, nil
 }
@@ -361,5 +371,35 @@ func (dr *switcherDryRun) dropTargetShards(ctx context.Context) error {
 		dr.drLog.LogSlice(logs)
 	}
 
+	return nil
+}
+
+// refreshRelatedTabletStatus refreshes the status of all tablets in both the source and target shards.
+// This helps to detect potential issues that may be encountered when performing the live operation as
+// the cluster is not fully healthy.
+func (dr *switcherDryRun) refreshRelatedTabletStatus(ctx context.Context) error {
+	logs := make([]string, 0)
+	var wg sync.WaitGroup
+	rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
+	defer cancel()
+	refreshTablets := func(shards []*topo.ShardInfo, stype string) {
+		defer wg.Done()
+		for _, si := range shards {
+			if partial, err := topotools.RefreshTabletsByShard(rtbsCtx, dr.ts.wr.ts, dr.ts.wr.tmc, si, nil, dr.ts.wr.Logger()); err != nil || partial {
+				logs = append(logs, fmt.Sprintf("  Failed to successfully refresh the status of all tablets in the %s/%s %s shard (%v)",
+					si.Keyspace(), si.ShardName(), stype, err))
+			}
+		}
+	}
+	wg.Add(1)
+	go refreshTablets(dr.ts.SourceShards(), "source")
+	wg.Add(1)
+	go refreshTablets(dr.ts.TargetShards(), "target")
+	wg.Wait()
+	if len(logs) > 0 {
+		dr.drLog.Log("Could not get a status update from all of the tablets potentially involved in the operation:")
+		dr.drLog.LogSlice(logs)
+		return errors.New("failures or delays could be encountered if the operation is performed")
+	}
 	return nil
 }
