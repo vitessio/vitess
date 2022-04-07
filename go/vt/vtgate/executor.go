@@ -655,8 +655,7 @@ func (e *Executor) showVitessMetadata(ctx context.Context, filter *sqlparser.Sho
 	}, nil
 }
 
-// (tablet, servingState, mtst) -> bool
-type tabletFilter func(*topodatapb.Tablet, string, int64) bool
+type tabletFilter func(tablet *topodatapb.Tablet, servingState string, primaryTermStartTime int64) bool
 
 func (e *Executor) showShards(ctx context.Context, filter *sqlparser.ShowFilter, destTabletType topodatapb.TabletType) (*sqltypes.Result, error) {
 	showVitessShardsFilters := func(filter *sqlparser.ShowFilter) ([]func(string) bool, []func(string, *topodatapb.ShardReference) bool) {
@@ -744,7 +743,7 @@ func (e *Executor) showShards(ctx context.Context, filter *sqlparser.ShowFilter,
 
 func (e *Executor) showTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
 	getTabletFilters := func(filter *sqlparser.ShowFilter) []tabletFilter {
-		filters := []tabletFilter{}
+		var filters []tabletFilter
 
 		if filter == nil {
 			return filters
@@ -753,7 +752,7 @@ func (e *Executor) showTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, 
 		if filter.Like != "" {
 			tabletRegexp := sqlparser.LikeToRegexp(filter.Like)
 
-			f := func(tablet *topodatapb.Tablet, servingState string, PrimaryTermStartTime int64) bool {
+			f := func(tablet *topodatapb.Tablet, servingState string, primaryTermStartTime int64) bool {
 				return tabletRegexp.MatchString(tablet.Hostname)
 			}
 
@@ -778,16 +777,16 @@ func (e *Executor) showTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, 
 			if !ts.Serving {
 				state = "NOT_SERVING"
 			}
-			mtst := ts.PrimaryTermStartTime
-			mtstStr := ""
-			if mtst > 0 {
+			ptst := ts.PrimaryTermStartTime
+			ptstStr := ""
+			if ptst > 0 {
 				// this code depends on the fact that PrimaryTermStartTime is the seconds since epoch start
-				mtstStr = time.Unix(mtst, 0).UTC().Format(time.RFC3339)
+				ptstStr = time.Unix(ptst, 0).UTC().Format(time.RFC3339)
 			}
 
 			skipTablet := false
 			for _, filter := range tabletFilters {
-				if !filter(ts.Tablet, state, mtst) {
+				if !filter(ts.Tablet, state, ptst) {
 					skipTablet = true
 					break
 				}
@@ -805,7 +804,7 @@ func (e *Executor) showTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, 
 				state,
 				topoproto.TabletAliasString(ts.Tablet.Alias),
 				ts.Tablet.Hostname,
-				mtstStr,
+				ptstStr,
 			))
 		}
 	}
