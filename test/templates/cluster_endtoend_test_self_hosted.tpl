@@ -19,7 +19,15 @@ jobs:
         with:
           filters: |
             end_to_end:
-              - 'go/**'
+              - 'go/**/*.go'
+              - 'test.go'
+              - 'Makefile'
+              - 'build.env'
+              - 'go.[sumod]'
+              - 'proto/*.proto'
+              - 'tools/**'
+              - 'config/**'
+              - '.github/docker/**'
 
       - name: Build Docker Image
         if: steps.changes.outputs.end_to_end == 'true'
