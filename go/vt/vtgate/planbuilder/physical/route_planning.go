@@ -101,18 +101,56 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 
 		return filter, nil
 	case *abstract.Update:
-		vschemaTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(op.Table.Table)
+		vindexTable := op.TableInfo.GetVindexTable()
+		primaryVindex, vindexAndPredicates, err := getVindexInformation(op.TableID(), op.Table.Predicates, vindexTable)
 		if err != nil {
 			return nil, err
 		}
 
-		return &Route{
+		cvv, ovq, err := buildChangedVindexesValues(op.AST, vindexTable, primaryVindex.Columns)
+		if err != nil {
+			return nil, err
+		}
+
+		r := &Route{
 			Source: &Update{
-				QTable:      op.Table,
-				VTable:      vschemaTable,
-				Assignments: op.Assignments,
+				QTable:              op.Table,
+				VTable:              vindexTable,
+				Assignments:         op.Assignments,
+				ChangedVindexValues: cvv,
+				OwnedVindexQuery:    ovq,
 			},
-		}, nil
+			Keyspace:    vindexTable.Keyspace,
+			VindexPreds: vindexAndPredicates,
+		}
+
+		found := false
+		for _, predicate := range op.Table.Predicates {
+			cmp, ok := predicate.(*sqlparser.ComparisonExpr)
+			if !ok {
+				continue
+			}
+
+			canUse, exitEarly, err := r.planComparison(ctx, cmp)
+			found = found || canUse
+			if err != nil {
+				return nil, err
+			}
+			if exitEarly {
+				break
+			}
+		}
+		if !found {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not find predicate to use for update")
+		}
+		r.PickBestAvailableVindex()
+
+		if r.RouteOpCode == engine.Scatter && op.AST.Limit != nil {
+			// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard update with limit is not supported")
+		}
+
+		return r, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
 	}
@@ -382,7 +420,7 @@ func getJoinFor(ctx *plancontext.PlanningContext, cm opCacheMap, lhs, rhs abstra
 func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs abstract.PhysicalOperator, joinPredicates []sqlparser.Expr, inner bool) (abstract.PhysicalOperator, error) {
 
 	merger := func(a, b *Route) (*Route, error) {
-		return createRouteOperatorForJoin(ctx, a, b, joinPredicates, inner)
+		return createRouteOperatorForJoin(a, b, joinPredicates, inner)
 	}
 
 	newPlan, _ := tryMerge(ctx, lhs, rhs, joinPredicates, merger)
@@ -400,7 +438,7 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs abstract.PhysicalOpe
 	return pushJoinPredicates(ctx, joinPredicates, join)
 }
 
-func createRouteOperatorForJoin(ctx *plancontext.PlanningContext, aRoute, bRoute *Route, joinPredicates []sqlparser.Expr, inner bool) (*Route, error) {
+func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparser.Expr, inner bool) (*Route, error) {
 	// append system table names from both the routes.
 	sysTableName := aRoute.SysTableTableName
 	if sysTableName == nil {
@@ -647,7 +685,7 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a *Route, exp sqlparser.
 	var singCol vindexes.SingleColumn
 
 	// for each equality expression that exp has with other column name, we check if it
-	// can be solved by any table in our routeTree a. If an equality expression can be solved,
+	// can be solved by any table in our routeTree. If an equality expression can be solved,
 	// we check if the equality expression and our table share the same vindex, if they do:
 	// the method will return the associated vindexes.SingleColumn.
 	for _, expr := range ctx.SemTable.GetExprAndEqualities(exp) {
@@ -703,7 +741,7 @@ func VisitOperators(op abstract.PhysicalOperator, f func(tbl abstract.PhysicalOp
 	}
 
 	switch op := op.(type) {
-	case *Table, *Vindex:
+	case *Table, *Vindex, *Update:
 		// leaf - no children to visit
 	case *Route:
 		err := VisitOperators(op.Source, f)

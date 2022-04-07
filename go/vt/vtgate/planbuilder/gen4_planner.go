@@ -59,7 +59,7 @@ func gen4UpdateStmtPlanner(
 	if err != nil {
 		return nil, err
 	}
-	return update, nil
+	return update.Primitive(), nil
 }
 
 func gen4SelectStmtPlanner(
@@ -242,7 +242,7 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
-) (engine.Primitive, error) {
+) (logicalPlan, error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
@@ -251,6 +251,8 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 	if err != nil {
 		return nil, err
 	}
+	// record any warning as planner warning.
+	vschema.PlannerWarning(semTable.Warning)
 
 	err = rewriteRoutedTables(updStmt, vschema)
 	if err != nil {
@@ -262,7 +264,7 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 		edml.Keyspace = ks
 		edml.Opcode = engine.Unsharded
 		edml.Query = generateQuery(updStmt)
-		return &engine.Update{DML: edml}, nil
+		panic("need to turn this engine into a logical plan")
 	}
 
 	if len(semTable.SubqueryMap[updStmt]) > 0 {
@@ -294,52 +296,21 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 		return nil, err
 	}
 
-	_, err = buildShardedUpdatePrimitive(updStmt, semTable)
+	plan, err := transformToLogicalPlan(ctx, physOp, true)
 	if err != nil {
 		return nil, err
 	}
-	panic(physOp)
-	// return up, nil
-}
 
-func buildShardedUpdatePrimitive(updStmt *sqlparser.Update, semTable *semantics.SemTable) (*engine.Update, error) {
-	edml := engine.NewDML()
-	edml.Table = semTable.Tables[0].GetVindexTable()
-	edml.Keyspace = edml.Table.Keyspace
-
-	directives := updStmt.GetParsedComments().Directives()
-	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
-		edml.MultiShardAutocommit = true
+	if err := plan.WireupGen4(semTable); err != nil {
+		return nil, err
 	}
-	edml.QueryTimeout = queryTimeout(directives)
 
-	routingType, ksidVindex, vindex, values, err := getDMLRouting(updStmt.Where, edml.Table)
+	plan, err = pushCommentDirectivesOnPlan(plan, updStmt)
 	if err != nil {
 		return nil, err
 	}
-	edml.Opcode = routingType
-	if routingType == engine.Scatter {
-		if updStmt.Limit != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard update with limit is not supported")
-		}
-	} else {
-		edml.Vindex = vindex
-		edml.Values = values
-	}
-	edml.Query = generateQuery(updStmt)
-	up := &engine.Update{DML: edml}
 
-	cvv, ovq, err := buildChangedVindexesValues(updStmt, up.Table, ksidVindex.Columns)
-	if err != nil {
-		return nil, err
-	}
-	up.ChangedVindexValues = cvv
-	up.OwnedVindexQuery = ovq
-	if len(up.ChangedVindexValues) != 0 {
-		up.KsidVindex = ksidVindex.Vindex
-		up.KsidLength = len(ksidVindex.Columns)
-	}
-	return up, nil
+	return plan, nil
 }
 
 func rewriteRoutedTables(updStmt *sqlparser.Update, vschema plancontext.VSchema) (err error) {
@@ -455,8 +426,15 @@ func planOrderByOnUnion(ctx *plancontext.PlanningContext, plan logicalPlan, unio
 	return plan, nil
 }
 
-func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.SelectStatement) (logicalPlan, error) {
-	directives := sqlparser.GetFirstSelect(stmt).Comments.Directives()
+func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) (logicalPlan, error) {
+	var directives sqlparser.CommentDirectives
+	cmt, ok := stmt.(sqlparser.Commented)
+	if ok {
+		directives = cmt.GetParsedComments().Directives()
+	} else {
+		directives = make(sqlparser.CommentDirectives)
+	}
+
 	scatterAsWarns := directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings)
 	queryTimeout := queryTimeout(directives)
 

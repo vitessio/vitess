@@ -25,7 +25,9 @@ import (
 
 type Update struct {
 	Table       *QueryTable
+	TableInfo   semantics.TableInfo
 	Assignments map[string]sqlparser.Expr
+	AST         *sqlparser.Update
 }
 
 var _ LogicalOperator = (*Update)(nil)

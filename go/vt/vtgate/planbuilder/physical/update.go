@@ -18,15 +18,18 @@ package physical
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type Update struct {
-	QTable      *abstract.QueryTable
-	VTable      *vindexes.Table
-	Assignments map[string]sqlparser.Expr
+	QTable              *abstract.QueryTable
+	VTable              *vindexes.Table
+	Assignments         map[string]sqlparser.Expr
+	ChangedVindexValues map[string]*engine.VindexValues
+	OwnedVindexQuery    string
 }
 
 var _ abstract.PhysicalOperator = (*Update)(nil)
