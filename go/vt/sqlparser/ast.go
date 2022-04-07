@@ -2396,88 +2396,106 @@ type (
 		Value   Expr
 		JSONArr Expr
 	}
+
+	// JSONSchemaValidFuncExpr represents the structure of JSON_SCHEMA_VALID()
+	// More information available on https://dev.mysql.com/doc/refman/8.0/en/json-validation-functions.html#function_json-schema-valid
+	JSONSchemaValidFuncExpr struct {
+		Schema   Expr
+		Document Expr
+	}
+
+	// JSONSchemaValidationReportFuncExpr represents the structure of JSON_SCHEMA_VALIDATION_REPORT()
+	// More information available on https://dev.mysql.com/doc/refman/8.0/en/json-validation-functions.html#function_json-schema-validation-report
+	JSONSchemaValidationReportFuncExpr struct {
+		Schema   Expr
+		Document Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
-func (*AndExpr) iExpr()              {}
-func (*OrExpr) iExpr()               {}
-func (*XorExpr) iExpr()              {}
-func (*NotExpr) iExpr()              {}
-func (*ComparisonExpr) iExpr()       {}
-func (*BetweenExpr) iExpr()          {}
-func (*IsExpr) iExpr()               {}
-func (*ExistsExpr) iExpr()           {}
-func (*Literal) iExpr()              {}
-func (Argument) iExpr()              {}
-func (*NullVal) iExpr()              {}
-func (BoolVal) iExpr()               {}
-func (*ColName) iExpr()              {}
-func (ValTuple) iExpr()              {}
-func (*Subquery) iExpr()             {}
-func (ListArg) iExpr()               {}
-func (*BinaryExpr) iExpr()           {}
-func (*UnaryExpr) iExpr()            {}
-func (*IntroducerExpr) iExpr()       {}
-func (*IntervalExpr) iExpr()         {}
-func (*CollateExpr) iExpr()          {}
-func (*FuncExpr) iExpr()             {}
-func (*TimestampFuncExpr) iExpr()    {}
-func (*ExtractFuncExpr) iExpr()      {}
-func (*WeightStringFuncExpr) iExpr() {}
-func (*CurTimeFuncExpr) iExpr()      {}
-func (*CaseExpr) iExpr()             {}
-func (*ValuesFuncExpr) iExpr()       {}
-func (*ConvertExpr) iExpr()          {}
-func (*SubstrExpr) iExpr()           {}
-func (*ConvertUsingExpr) iExpr()     {}
-func (*MatchExpr) iExpr()            {}
-func (*GroupConcatExpr) iExpr()      {}
-func (*Default) iExpr()              {}
-func (*ExtractedSubquery) iExpr()    {}
-func (*JSONPrettyExpr) iExpr()       {}
-func (*JSONStorageFreeExpr) iExpr()  {}
-func (*JSONStorageSizeExpr) iExpr()  {}
-func (*TrimFuncExpr) iExpr()         {}
-func (Offset) iExpr()                {}
-func (*JSONContainsExpr) iExpr()     {}
-func (*JSONContainsPathExpr) iExpr() {}
-func (*JSONExtractExpr) iExpr()      {}
-func (*JSONKeysExpr) iExpr()         {}
-func (*JSONOverlapsExpr) iExpr()     {}
-func (*JSONSearchExpr) iExpr()       {}
-func (*JSONValueExpr) iExpr()        {}
-func (*JSONArrayExpr) iExpr()        {}
-func (*JSONObjectExpr) iExpr()       {}
-func (*JSONQuoteExpr) iExpr()        {}
-func (*MemberOfExpr) iExpr()         {}
+func (*AndExpr) iExpr()                            {}
+func (*OrExpr) iExpr()                             {}
+func (*XorExpr) iExpr()                            {}
+func (*NotExpr) iExpr()                            {}
+func (*ComparisonExpr) iExpr()                     {}
+func (*BetweenExpr) iExpr()                        {}
+func (*IsExpr) iExpr()                             {}
+func (*ExistsExpr) iExpr()                         {}
+func (*Literal) iExpr()                            {}
+func (Argument) iExpr()                            {}
+func (*NullVal) iExpr()                            {}
+func (BoolVal) iExpr()                             {}
+func (*ColName) iExpr()                            {}
+func (ValTuple) iExpr()                            {}
+func (*Subquery) iExpr()                           {}
+func (ListArg) iExpr()                             {}
+func (*BinaryExpr) iExpr()                         {}
+func (*UnaryExpr) iExpr()                          {}
+func (*IntroducerExpr) iExpr()                     {}
+func (*IntervalExpr) iExpr()                       {}
+func (*CollateExpr) iExpr()                        {}
+func (*FuncExpr) iExpr()                           {}
+func (*TimestampFuncExpr) iExpr()                  {}
+func (*ExtractFuncExpr) iExpr()                    {}
+func (*WeightStringFuncExpr) iExpr()               {}
+func (*CurTimeFuncExpr) iExpr()                    {}
+func (*CaseExpr) iExpr()                           {}
+func (*ValuesFuncExpr) iExpr()                     {}
+func (*ConvertExpr) iExpr()                        {}
+func (*SubstrExpr) iExpr()                         {}
+func (*ConvertUsingExpr) iExpr()                   {}
+func (*MatchExpr) iExpr()                          {}
+func (*GroupConcatExpr) iExpr()                    {}
+func (*Default) iExpr()                            {}
+func (*ExtractedSubquery) iExpr()                  {}
+func (*TrimFuncExpr) iExpr()                       {}
+func (*JSONSchemaValidFuncExpr) iExpr()            {}
+func (*JSONSchemaValidationReportFuncExpr) iExpr() {}
+func (Offset) iExpr()                              {}
+func (*JSONPrettyExpr) iExpr()                     {}
+func (*JSONStorageFreeExpr) iExpr()                {}
+func (*JSONStorageSizeExpr) iExpr()                {}
+func (*JSONContainsExpr) iExpr()                   {}
+func (*JSONContainsPathExpr) iExpr()               {}
+func (*JSONExtractExpr) iExpr()                    {}
+func (*JSONKeysExpr) iExpr()                       {}
+func (*JSONOverlapsExpr) iExpr()                   {}
+func (*JSONSearchExpr) iExpr()                     {}
+func (*JSONValueExpr) iExpr()                      {}
+func (*JSONArrayExpr) iExpr()                      {}
+func (*JSONObjectExpr) iExpr()                     {}
+func (*JSONQuoteExpr) iExpr()                      {}
+func (*MemberOfExpr) iExpr()                       {}
 
 // iCallable marks all expressions that represent function calls
-func (*FuncExpr) iCallable()             {}
-func (*TimestampFuncExpr) iCallable()    {}
-func (*ExtractFuncExpr) iCallable()      {}
-func (*WeightStringFuncExpr) iCallable() {}
-func (*CurTimeFuncExpr) iCallable()      {}
-func (*ValuesFuncExpr) iCallable()       {}
-func (*ConvertExpr) iCallable()          {}
-func (*TrimFuncExpr) iCallable()         {}
-func (*SubstrExpr) iCallable()           {}
-func (*ConvertUsingExpr) iCallable()     {}
-func (*MatchExpr) iCallable()            {}
-func (*GroupConcatExpr) iCallable()      {}
-func (*JSONPrettyExpr) iCallable()       {}
-func (*JSONStorageFreeExpr) iCallable()  {}
-func (*JSONStorageSizeExpr) iCallable()  {}
-func (*JSONArrayExpr) iCallable()        {}
-func (*JSONObjectExpr) iCallable()       {}
-func (*JSONQuoteExpr) iCallable()        {}
-func (*JSONContainsExpr) iCallable()     {}
-func (*JSONContainsPathExpr) iCallable() {}
-func (*JSONExtractExpr) iCallable()      {}
-func (*JSONKeysExpr) iCallable()         {}
-func (*JSONValueExpr) iCallable()        {}
-func (*JSONSearchExpr) iCallable()       {}
-func (*JSONOverlapsExpr) iCallable()     {}
-func (*MemberOfExpr) iCallable()         {}
+func (*FuncExpr) iCallable()                           {}
+func (*TimestampFuncExpr) iCallable()                  {}
+func (*ExtractFuncExpr) iCallable()                    {}
+func (*WeightStringFuncExpr) iCallable()               {}
+func (*CurTimeFuncExpr) iCallable()                    {}
+func (*ValuesFuncExpr) iCallable()                     {}
+func (*ConvertExpr) iCallable()                        {}
+func (*TrimFuncExpr) iCallable()                       {}
+func (*SubstrExpr) iCallable()                         {}
+func (*ConvertUsingExpr) iCallable()                   {}
+func (*MatchExpr) iCallable()                          {}
+func (*GroupConcatExpr) iCallable()                    {}
+func (*JSONSchemaValidFuncExpr) iCallable()            {}
+func (*JSONSchemaValidationReportFuncExpr) iCallable() {}
+func (*JSONPrettyExpr) iCallable()                     {}
+func (*JSONStorageFreeExpr) iCallable()                {}
+func (*JSONStorageSizeExpr) iCallable()                {}
+func (*JSONArrayExpr) iCallable()                      {}
+func (*JSONObjectExpr) iCallable()                     {}
+func (*JSONQuoteExpr) iCallable()                      {}
+func (*JSONContainsExpr) iCallable()                   {}
+func (*JSONContainsPathExpr) iCallable()               {}
+func (*JSONExtractExpr) iCallable()                    {}
+func (*JSONKeysExpr) iCallable()                       {}
+func (*JSONValueExpr) iCallable()                      {}
+func (*JSONSearchExpr) iCallable()                     {}
+func (*JSONOverlapsExpr) iCallable()                   {}
+func (*MemberOfExpr) iCallable()                       {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

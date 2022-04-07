@@ -190,6 +190,10 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfJSONPrettyExpr(in, f)
 	case *JSONQuoteExpr:
 		return VisitRefOfJSONQuoteExpr(in, f)
+	case *JSONSchemaValidFuncExpr:
+		return VisitRefOfJSONSchemaValidFuncExpr(in, f)
+	case *JSONSchemaValidationReportFuncExpr:
+		return VisitRefOfJSONSchemaValidationReportFuncExpr(in, f)
 	case *JSONSearchExpr:
 		return VisitRefOfJSONSearchExpr(in, f)
 	case *JSONStorageFreeExpr:
@@ -1577,6 +1581,36 @@ func VisitRefOfJSONQuoteExpr(in *JSONQuoteExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.StringArg, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJSONSchemaValidFuncExpr(in *JSONSchemaValidFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Schema, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Document, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJSONSchemaValidationReportFuncExpr(in *JSONSchemaValidationReportFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Schema, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Document, f); err != nil {
 		return err
 	}
 	return nil
@@ -3000,6 +3034,10 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfJSONPrettyExpr(in, f)
 	case *JSONQuoteExpr:
 		return VisitRefOfJSONQuoteExpr(in, f)
+	case *JSONSchemaValidFuncExpr:
+		return VisitRefOfJSONSchemaValidFuncExpr(in, f)
+	case *JSONSchemaValidationReportFuncExpr:
+		return VisitRefOfJSONSchemaValidationReportFuncExpr(in, f)
 	case *JSONSearchExpr:
 		return VisitRefOfJSONSearchExpr(in, f)
 	case *JSONStorageFreeExpr:
@@ -3192,6 +3230,10 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfJSONPrettyExpr(in, f)
 	case *JSONQuoteExpr:
 		return VisitRefOfJSONQuoteExpr(in, f)
+	case *JSONSchemaValidFuncExpr:
+		return VisitRefOfJSONSchemaValidFuncExpr(in, f)
+	case *JSONSchemaValidationReportFuncExpr:
+		return VisitRefOfJSONSchemaValidationReportFuncExpr(in, f)
 	case *JSONSearchExpr:
 		return VisitRefOfJSONSearchExpr(in, f)
 	case *JSONStorageFreeExpr:
@@ -3320,6 +3362,10 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfJSONPrettyExpr(in, f)
 	case *JSONQuoteExpr:
 		return VisitRefOfJSONQuoteExpr(in, f)
+	case *JSONSchemaValidFuncExpr:
+		return VisitRefOfJSONSchemaValidFuncExpr(in, f)
+	case *JSONSchemaValidationReportFuncExpr:
+		return VisitRefOfJSONSchemaValidationReportFuncExpr(in, f)
 	case *JSONSearchExpr:
 		return VisitRefOfJSONSearchExpr(in, f)
 	case *JSONStorageFreeExpr:
