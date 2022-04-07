@@ -55,6 +55,11 @@ type noopVCursor struct {
 	ctx context.Context
 }
 
+// SetContextWithValue implements VCursor interface.
+func (t *noopVCursor) SetContextWithValue(key, value interface{}) func() {
+	return func() {}
+}
+
 // ConnCollation implements VCursor
 func (t *noopVCursor) ConnCollation() collations.ID {
 	return collations.CollationUtf8mb4ID
