@@ -185,6 +185,20 @@ func bindVariable(yylex yyLexer, bvar string) {
   jtOnResponse	*JtOnResponse
 }
 
+// These precedence rules are there to handle shift-reduce conflicts.
+%nonassoc <str> MEMBER
+// FUNCTION_CALL_NON_KEYWORD is used to resolve shift-reduce conflicts occuring due to function_call_generic symbol and
+// having special parsing for functions whose names are non-reserved keywords. The shift-reduce conflict occurrs because
+// after seeing a non-reserved keyword, if we see '(', then we can either shift to use the special parsing grammar rule or
+// reduce the non-reserved keyword into sql_id and eventually use a rule from function_call_generic.
+// The way to fix this conflict is to give shifting higher precedence than reducing.
+// Adding no precedence also works, since shifting is the default, but it reports a large number of conflicts
+// Shifting on '(' already has an assigned precedence.
+// All we need to add is a lower precedence to reducing the grammar symbol to non-reserved keywords.
+// In order to ensure lower precedence of reduction, this rule has to come before the precedence declaration of '('.
+// This precedence should not be used anywhere else other than with function names that are non-reserved-keywords.
+%nonassoc <str> FUNCTION_CALL_NON_KEYWORD
+
 %token LEX_ERROR
 %left <str> UNION
 %token <str> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
@@ -217,7 +231,6 @@ func bindVariable(yylex yyLexer, bvar string) {
 // * NOTE: If you change anything here, update precedence.go as well *
 %nonassoc <str> LOWER_THAN_CHARSET
 %nonassoc <str> CHARSET
-%nonassoc <str> MEMBER
 // Resolve column attribute ambiguity.
 %right <str> UNIQUE KEY
 %left <str> EXPRESSION_PREC_SETTER
@@ -6288,21 +6301,21 @@ non_reserved_keyword:
 | INDEXES
 | ISOLATION
 | JSON
-| JSON_ARRAY
-| JSON_CONTAINS
-| JSON_CONTAINS_PATH
-| JSON_EXTRACT
-| JSON_KEYS
-| JSON_OBJECT
-| JSON_OVERLAPS
-| JSON_PRETTY
-| JSON_QUOTE
-| JSON_SEARCH
-| JSON_STORAGE_FREE
-| JSON_STORAGE_SIZE
-| JSON_VALUE
-| JSON_SCHEMA_VALID
-| JSON_SCHEMA_VALIDATION_REPORT
+| JSON_ARRAY %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_CONTAINS %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_CONTAINS_PATH %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_EXTRACT %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_KEYS %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_OBJECT %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_OVERLAPS %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_PRETTY %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_QUOTE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_SEARCH %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_STORAGE_FREE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_STORAGE_SIZE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_VALUE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_SCHEMA_VALID %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_SCHEMA_VALIDATION_REPORT %prec FUNCTION_CALL_NON_KEYWORD
 | KEY_BLOCK_SIZE
 | KEYS
 | KEYSPACES
@@ -6320,7 +6333,7 @@ non_reserved_keyword:
 | LOGS
 | LONGBLOB
 | LONGTEXT
-| LTRIM
+| LTRIM %prec FUNCTION_CALL_NON_KEYWORD
 | MANIFEST
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
@@ -6403,7 +6416,7 @@ non_reserved_keyword:
 | ROLE
 | ROLLBACK
 | ROW_FORMAT
-| RTRIM
+| RTRIM %prec FUNCTION_CALL_NON_KEYWORD
 | S3
 | SECONDARY
 | SECONDARY_ENGINE
@@ -6449,7 +6462,7 @@ non_reserved_keyword:
 | TREE
 | TRIGGER
 | TRIGGERS
-| TRIM
+| TRIM %prec FUNCTION_CALL_NON_KEYWORD
 | TRUNCATE
 | UNBOUNDED
 | UNCOMMITTED
@@ -6502,7 +6515,7 @@ non_reserved_keyword:
 | SECOND
 | SECOND_MICROSECOND
 | YEAR_MONTH
-| WEIGHT_STRING
+| WEIGHT_STRING %prec FUNCTION_CALL_NON_KEYWORD
 
 openb:
   '('
