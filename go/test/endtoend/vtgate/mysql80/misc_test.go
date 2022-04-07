@@ -255,4 +255,14 @@ JSON_ARRAY(4,5) MEMBER OF('[[3,4],[4,5]]')`,
 JSON_SCHEMA_VALIDATION_REPORT('{"type":"string","pattern":"("}', '"abc"'), 
 JSON_SCHEMA_VALID('{"type":"string","pattern":"("}', '"abc"');`,
 		`[[JSON("{\"valid\": true}") INT64(1)]]`)
+
+	utils.Exec(t, conn, "create table jt(a JSON, b INT)")
+	utils.Exec(t, conn, `INSERT INTO jt (a, b) VALUES ("[3,10,5,\"x\",44]", 33), ("[3,10,5,17,[22,44,66]]", 0)`)
+	defer func() {
+		utils.Exec(t, conn, "drop table jt")
+	}()
+
+	utils.AssertMatches(t, conn,
+		`SELECT a->"$[4]", a->>"$[3]" FROM jt`,
+		`[[JSON("44") BLOB("x")] [JSON("[22, 44, 66]") BLOB("17")]]`)
 }
