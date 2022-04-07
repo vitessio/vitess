@@ -331,6 +331,8 @@ var keywords = []keyword{
 	{"json_quote", JSON_QUOTE},
 	{"json_table", JSON_TABLE},
 	{"json_value", JSON_VALUE},
+	{"json_schema_valid", JSON_SCHEMA_VALID},
+	{"json_schema_validation_report", JSON_SCHEMA_VALIDATION_REPORT},
 	{"key", KEY},
 	{"keys", KEYS},
 	{"keyspaces", KEYSPACES},

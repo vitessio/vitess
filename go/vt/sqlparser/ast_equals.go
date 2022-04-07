@@ -530,6 +530,18 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfJSONQuoteExpr(a, b)
+	case *JSONSchemaValidFuncExpr:
+		b, ok := inB.(*JSONSchemaValidFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidFuncExpr(a, b)
+	case *JSONSchemaValidationReportFuncExpr:
+		b, ok := inB.(*JSONSchemaValidationReportFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidationReportFuncExpr(a, b)
 	case *JSONSearchExpr:
 		b, ok := inB.(*JSONSearchExpr)
 		if !ok {
@@ -2142,6 +2154,30 @@ func EqualsRefOfJSONQuoteExpr(a, b *JSONQuoteExpr) bool {
 	return EqualsExpr(a.StringArg, b.StringArg)
 }
 
+// EqualsRefOfJSONSchemaValidFuncExpr does deep equals between the two objects.
+func EqualsRefOfJSONSchemaValidFuncExpr(a, b *JSONSchemaValidFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Schema, b.Schema) &&
+		EqualsExpr(a.Document, b.Document)
+}
+
+// EqualsRefOfJSONSchemaValidationReportFuncExpr does deep equals between the two objects.
+func EqualsRefOfJSONSchemaValidationReportFuncExpr(a, b *JSONSchemaValidationReportFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Schema, b.Schema) &&
+		EqualsExpr(a.Document, b.Document)
+}
+
 // EqualsRefOfJSONSearchExpr does deep equals between the two objects.
 func EqualsRefOfJSONSearchExpr(a, b *JSONSearchExpr) bool {
 	if a == b {
@@ -3536,6 +3572,18 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfJSONQuoteExpr(a, b)
+	case *JSONSchemaValidFuncExpr:
+		b, ok := inB.(*JSONSchemaValidFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidFuncExpr(a, b)
+	case *JSONSchemaValidationReportFuncExpr:
+		b, ok := inB.(*JSONSchemaValidationReportFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidationReportFuncExpr(a, b)
 	case *JSONSearchExpr:
 		b, ok := inB.(*JSONSearchExpr)
 		if !ok {
@@ -4007,6 +4055,18 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfJSONQuoteExpr(a, b)
+	case *JSONSchemaValidFuncExpr:
+		b, ok := inB.(*JSONSchemaValidFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidFuncExpr(a, b)
+	case *JSONSchemaValidationReportFuncExpr:
+		b, ok := inB.(*JSONSchemaValidationReportFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidationReportFuncExpr(a, b)
 	case *JSONSearchExpr:
 		b, ok := inB.(*JSONSearchExpr)
 		if !ok {
@@ -4361,6 +4421,18 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfJSONQuoteExpr(a, b)
+	case *JSONSchemaValidFuncExpr:
+		b, ok := inB.(*JSONSchemaValidFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidFuncExpr(a, b)
+	case *JSONSchemaValidationReportFuncExpr:
+		b, ok := inB.(*JSONSchemaValidationReportFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidationReportFuncExpr(a, b)
 	case *JSONSearchExpr:
 		b, ok := inB.(*JSONSearchExpr)
 		if !ok {
