@@ -173,6 +173,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return in
 	case *JSONArrayExpr:
 		return CloneRefOfJSONArrayExpr(in)
+	case *JSONAttributesExpr:
+		return CloneRefOfJSONAttributesExpr(in)
 	case *JSONContainsExpr:
 		return CloneRefOfJSONContainsExpr(in)
 	case *JSONContainsPathExpr:
@@ -1164,6 +1166,17 @@ func CloneRefOfJSONArrayExpr(n *JSONArrayExpr) *JSONArrayExpr {
 	}
 	out := *n
 	out.Params = CloneExprs(n.Params)
+	return &out
+}
+
+// CloneRefOfJSONAttributesExpr creates a deep clone of the input.
+func CloneRefOfJSONAttributesExpr(n *JSONAttributesExpr) *JSONAttributesExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.JSONDoc = CloneExpr(n.JSONDoc)
+	out.Path = CloneJSONPathParam(n.Path)
 	return &out
 }
 
@@ -2361,6 +2374,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfGroupConcatExpr(in)
 	case *JSONArrayExpr:
 		return CloneRefOfJSONArrayExpr(in)
+	case *JSONAttributesExpr:
+		return CloneRefOfJSONAttributesExpr(in)
 	case *JSONContainsExpr:
 		return CloneRefOfJSONContainsExpr(in)
 	case *JSONContainsPathExpr:
@@ -2571,6 +2586,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfIsExpr(in)
 	case *JSONArrayExpr:
 		return CloneRefOfJSONArrayExpr(in)
+	case *JSONAttributesExpr:
+		return CloneRefOfJSONAttributesExpr(in)
 	case *JSONContainsExpr:
 		return CloneRefOfJSONContainsExpr(in)
 	case *JSONContainsPathExpr:
@@ -2707,6 +2724,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfIsExpr(in)
 	case *JSONArrayExpr:
 		return CloneRefOfJSONArrayExpr(in)
+	case *JSONAttributesExpr:
+		return CloneRefOfJSONAttributesExpr(in)
 	case *JSONContainsExpr:
 		return CloneRefOfJSONContainsExpr(in)
 	case *JSONContainsPathExpr:

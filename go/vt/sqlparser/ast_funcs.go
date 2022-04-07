@@ -1350,6 +1350,22 @@ func (ty TrimType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty JSONAttributeType) ToString() string {
+	switch ty {
+	case DepthAttributeType:
+		return DepthAttributeStr
+	case ValidAttributeType:
+		return ValidAttributeStr
+	case TypeAttributeType:
+		return TypeAttributeStr
+	case LengthAttributeType:
+		return LengthAttributeStr
+	default:
+		return "Unknown JSONAttributeType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty ExplainType) ToString() string {
 	switch ty {
 	case EmptyType:

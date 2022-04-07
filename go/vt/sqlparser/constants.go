@@ -305,6 +305,12 @@ const (
 	LTrimStr      = "ltrim"
 	RTrimStr      = "rtrim"
 
+	// JSONAttributeType strings
+	DepthAttributeStr  = "json_depth"
+	ValidAttributeStr  = "json_valid"
+	TypeAttributeStr   = "json_type"
+	LengthAttributeStr = "json_length"
+
 	// LockOptionType strings
 	NoneTypeStr      = "none"
 	SharedTypeStr    = "shared"
@@ -402,6 +408,14 @@ const (
 	NormalTrimType TrimFuncType = iota
 	LTrimType
 	RTrimType
+)
+
+// Constants for Enum Type - JSONAttributeType
+const (
+	DepthAttributeType JSONAttributeType = iota
+	ValidAttributeType
+	TypeAttributeType
+	LengthAttributeType
 )
 
 // Constants for Enum Type - WhereType

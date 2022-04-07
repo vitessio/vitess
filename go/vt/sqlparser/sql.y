@@ -122,6 +122,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   revertMigration *RevertMigration
   alterMigration  *AlterMigration
   trimType        TrimType
+  jsonAttributeType JSONAttributeType
 
   whens         []*When
   columnDefinitions []*ColumnDefinition
@@ -312,6 +313,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> WEIGHT_STRING
 %token <str> LTRIM RTRIM TRIM
 %token <str> JSON_ARRAY JSON_OBJECT JSON_QUOTE
+%token <str> JSON_DEPTH JSON_TYPE JSON_LENGTH JSON_VALID
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -372,6 +374,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> wild_opt check_option_opt cascade_or_local_opt restrict_or_cascade_opt
 %type <explainType> explain_format_opt
 %type <trimType> trim_type
+%type <jsonAttributeType> json_attribute_type
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
 %type <partitionOption> partitions_options_opt partitions_options_beginning
@@ -5010,6 +5013,33 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONValueExpr{JSONDoc: $3, Path: $5}
   }
+| json_attribute_type openb expression closeb
+  {
+    $$ = &JSONAttributesExpr{Type:$1, JSONDoc:$3}
+  }
+| JSON_LENGTH openb expression closeb
+  {
+    $$ = &JSONAttributesExpr{Type:LengthAttributeType, JSONDoc:$3 }
+  }
+| JSON_LENGTH openb expression ',' json_path_param closeb
+  {
+    $$ = &JSONAttributesExpr{Type:LengthAttributeType, JSONDoc:$3, Path: $5 }
+  }
+
+// JSON_LENGTH has 2 possible definitions so we use it separately and not add in this
+json_attribute_type:
+  JSON_DEPTH
+  {
+    $$ = DepthAttributeType
+  }
+| JSON_VALID
+  {
+    $$ = ValidAttributeType
+  }
+| JSON_TYPE
+  {
+    $$ = TypeAttributeType
+  }
 
 json_path_param_list_opt:
   {
@@ -6304,6 +6334,7 @@ non_reserved_keyword:
 | JSON_ARRAY %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_CONTAINS %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_CONTAINS_PATH %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_DEPTH %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_EXTRACT %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_KEYS %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_OBJECT %prec FUNCTION_CALL_NON_KEYWORD
@@ -6313,6 +6344,8 @@ non_reserved_keyword:
 | JSON_SEARCH %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_STORAGE_FREE %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_STORAGE_SIZE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_TYPE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_VALID %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_VALUE %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_SCHEMA_VALID %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_SCHEMA_VALIDATION_REPORT %prec FUNCTION_CALL_NON_KEYWORD

@@ -172,6 +172,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitIsolationLevel(in, f)
 	case *JSONArrayExpr:
 		return VisitRefOfJSONArrayExpr(in, f)
+	case *JSONAttributesExpr:
+		return VisitRefOfJSONAttributesExpr(in, f)
 	case *JSONContainsExpr:
 		return VisitRefOfJSONContainsExpr(in, f)
 	case *JSONContainsPathExpr:
@@ -1442,6 +1444,21 @@ func VisitRefOfJSONArrayExpr(in *JSONArrayExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExprs(in.Params, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJSONAttributesExpr(in *JSONAttributesExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.JSONDoc, f); err != nil {
+		return err
+	}
+	if err := VisitJSONPathParam(in.Path, f); err != nil {
 		return err
 	}
 	return nil
@@ -3018,6 +3035,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *JSONArrayExpr:
 		return VisitRefOfJSONArrayExpr(in, f)
+	case *JSONAttributesExpr:
+		return VisitRefOfJSONAttributesExpr(in, f)
 	case *JSONContainsExpr:
 		return VisitRefOfJSONContainsExpr(in, f)
 	case *JSONContainsPathExpr:
@@ -3214,6 +3233,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfIsExpr(in, f)
 	case *JSONArrayExpr:
 		return VisitRefOfJSONArrayExpr(in, f)
+	case *JSONAttributesExpr:
+		return VisitRefOfJSONAttributesExpr(in, f)
 	case *JSONContainsExpr:
 		return VisitRefOfJSONContainsExpr(in, f)
 	case *JSONContainsPathExpr:
@@ -3346,6 +3367,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfIsExpr(in, f)
 	case *JSONArrayExpr:
 		return VisitRefOfJSONArrayExpr(in, f)
+	case *JSONAttributesExpr:
+		return VisitRefOfJSONAttributesExpr(in, f)
 	case *JSONContainsExpr:
 		return VisitRefOfJSONContainsExpr(in, f)
 	case *JSONContainsPathExpr:

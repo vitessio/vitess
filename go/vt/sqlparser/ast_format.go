@@ -2133,3 +2133,13 @@ func (node *JSONValueExpr) Format(buf *TrackedBuffer) {
 func (node *MemberOfExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v member of (%v)", node.Value, node.JSONArr)
 }
+
+// Format formats the node
+func (node *JSONAttributesExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(", node.Type.ToString())
+	buf.astPrintf(node, "%v", node.JSONDoc)
+	if node.Path != nil {
+		buf.astPrintf(node, ", %v", node.Path)
+	}
+	buf.WriteString(")")
+}

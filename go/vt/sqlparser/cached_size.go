@@ -1344,6 +1344,24 @@ func (cached *JSONArrayExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *JSONAttributesExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field JSONDoc vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONDoc.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Path vitess.io/vitess/go/vt/sqlparser.JSONPathParam
+	if cc, ok := cached.Path.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *JSONContainsExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

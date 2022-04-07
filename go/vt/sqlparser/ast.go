@@ -2410,6 +2410,18 @@ type (
 		Schema   Expr
 		Document Expr
 	}
+
+	// JSONAttributesExpr represents the argument and function for functions returning JSON value attributes
+	// More information available on https://dev.mysql.com/doc/refman/8.0/en/json-attribute-functions.html
+	JSONAttributesExpr struct {
+		Type    JSONAttributeType
+		JSONDoc Expr
+		Path    JSONPathParam
+	}
+
+	// JSONAttributeType is an enum to get types of TrimFunc.
+	// TrimFunc stand for one of the following: JSON_DEPTH JSON_TYPE JSON_VALID ENUM
+	JSONAttributeType int8
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2465,6 +2477,7 @@ func (*JSONValueExpr) iExpr()                      {}
 func (*JSONArrayExpr) iExpr()                      {}
 func (*JSONObjectExpr) iExpr()                     {}
 func (*JSONQuoteExpr) iExpr()                      {}
+func (*JSONAttributesExpr) iExpr()                 {}
 func (*MemberOfExpr) iExpr()                       {}
 
 // iCallable marks all expressions that represent function calls
@@ -2495,6 +2508,7 @@ func (*JSONKeysExpr) iCallable()                       {}
 func (*JSONValueExpr) iCallable()                      {}
 func (*JSONSearchExpr) iCallable()                     {}
 func (*JSONOverlapsExpr) iCallable()                   {}
+func (*JSONAttributesExpr) iCallable()                 {}
 func (*MemberOfExpr) iCallable()                       {}
 
 // Exprs represents a list of value expressions.

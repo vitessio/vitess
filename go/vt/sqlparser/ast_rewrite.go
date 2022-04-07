@@ -172,6 +172,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteIsolationLevel(parent, node, replacer)
 	case *JSONArrayExpr:
 		return a.rewriteRefOfJSONArrayExpr(parent, node, replacer)
+	case *JSONAttributesExpr:
+		return a.rewriteRefOfJSONAttributesExpr(parent, node, replacer)
 	case *JSONContainsExpr:
 		return a.rewriteRefOfJSONContainsExpr(parent, node, replacer)
 	case *JSONContainsPathExpr:
@@ -2673,6 +2675,38 @@ func (a *application) rewriteRefOfJSONArrayExpr(parent SQLNode, node *JSONArrayE
 	}
 	if !a.rewriteExprs(node, node.Params, func(newNode, parent SQLNode) {
 		parent.(*JSONArrayExpr).Params = newNode.(Exprs)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONAttributesExpr(parent SQLNode, node *JSONAttributesExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
+		parent.(*JSONAttributesExpr).JSONDoc = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteJSONPathParam(node, node.Path, func(newNode, parent SQLNode) {
+		parent.(*JSONAttributesExpr).Path = newNode.(JSONPathParam)
 	}) {
 		return false
 	}
@@ -6134,6 +6168,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case *JSONArrayExpr:
 		return a.rewriteRefOfJSONArrayExpr(parent, node, replacer)
+	case *JSONAttributesExpr:
+		return a.rewriteRefOfJSONAttributesExpr(parent, node, replacer)
 	case *JSONContainsExpr:
 		return a.rewriteRefOfJSONContainsExpr(parent, node, replacer)
 	case *JSONContainsPathExpr:
@@ -6330,6 +6366,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
 	case *JSONArrayExpr:
 		return a.rewriteRefOfJSONArrayExpr(parent, node, replacer)
+	case *JSONAttributesExpr:
+		return a.rewriteRefOfJSONAttributesExpr(parent, node, replacer)
 	case *JSONContainsExpr:
 		return a.rewriteRefOfJSONContainsExpr(parent, node, replacer)
 	case *JSONContainsPathExpr:
@@ -6462,6 +6500,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
 	case *JSONArrayExpr:
 		return a.rewriteRefOfJSONArrayExpr(parent, node, replacer)
+	case *JSONAttributesExpr:
+		return a.rewriteRefOfJSONAttributesExpr(parent, node, replacer)
 	case *JSONContainsExpr:
 		return a.rewriteRefOfJSONContainsExpr(parent, node, replacer)
 	case *JSONContainsPathExpr:

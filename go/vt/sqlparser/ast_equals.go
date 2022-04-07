@@ -476,6 +476,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfJSONArrayExpr(a, b)
+	case *JSONAttributesExpr:
+		b, ok := inB.(*JSONAttributesExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONAttributesExpr(a, b)
 	case *JSONContainsExpr:
 		b, ok := inB.(*JSONContainsExpr)
 		if !ok {
@@ -2053,6 +2059,19 @@ func EqualsRefOfJSONArrayExpr(a, b *JSONArrayExpr) bool {
 	return EqualsExprs(a.Params, b.Params)
 }
 
+// EqualsRefOfJSONAttributesExpr does deep equals between the two objects.
+func EqualsRefOfJSONAttributesExpr(a, b *JSONAttributesExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsExpr(a.JSONDoc, b.JSONDoc) &&
+		EqualsJSONPathParam(a.Path, b.Path)
+}
+
 // EqualsRefOfJSONContainsExpr does deep equals between the two objects.
 func EqualsRefOfJSONContainsExpr(a, b *JSONContainsExpr) bool {
 	if a == b {
@@ -3524,6 +3543,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfJSONArrayExpr(a, b)
+	case *JSONAttributesExpr:
+		b, ok := inB.(*JSONAttributesExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONAttributesExpr(a, b)
 	case *JSONContainsExpr:
 		b, ok := inB.(*JSONContainsExpr)
 		if !ok {
@@ -4007,6 +4032,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfJSONArrayExpr(a, b)
+	case *JSONAttributesExpr:
+		b, ok := inB.(*JSONAttributesExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONAttributesExpr(a, b)
 	case *JSONContainsExpr:
 		b, ok := inB.(*JSONContainsExpr)
 		if !ok {
@@ -4373,6 +4404,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfJSONArrayExpr(a, b)
+	case *JSONAttributesExpr:
+		b, ok := inB.(*JSONAttributesExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONAttributesExpr(a, b)
 	case *JSONContainsExpr:
 		b, ok := inB.(*JSONContainsExpr)
 		if !ok {
