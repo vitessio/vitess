@@ -8,7 +8,7 @@ jobs:
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
 
-    - name: Check for changes in relevant files
+    - name: Check for changes in Go files
       uses: dorny/paths-filter@v2
       id: changes
       with:
@@ -16,6 +16,7 @@ jobs:
           go_files:
             - '**/*.go'
             - '*.go'
+            - 'go.[sumod]'
 
     - name: Set up Go
       if: steps.changes.outputs.go_files == 'true'
