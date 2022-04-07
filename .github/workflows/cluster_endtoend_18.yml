@@ -15,27 +15,39 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v2
 
+      - name: Check for changes in relevant files
+        uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          filters: |
+            end_to_end:
+              - 'go/**'
+
       - name: Build Docker Image
+        if: steps.changes.outputs.end_to_end == 'true'
         run: docker build -f ./.github/docker/cluster_test_18/Dockerfile -t cluster_test_18:$GITHUB_SHA  .
 
       - name: Run test
+        if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 30
         run: docker run --name "cluster_test_18_$GITHUB_SHA" cluster_test_18:$GITHUB_SHA /bin/bash -c 'source build.env && go run test.go -keep-data=true -docker=false -print-log -follow -shard 18 -- -- --keep-data=true'
 
       - name: Print Volume Used
-        if: ${{ always() }}
+        if: always() && steps.changes.outputs.end_to_end == 'true'
         run: |
           docker inspect -f '{{ (index .Mounts 0).Name }}' cluster_test_18_$GITHUB_SHA
 
       - name: Cleanup Docker Volume
+        if: steps.changes.outputs.end_to_end == 'true'
         run: |
           docker rm -v cluster_test_18_$GITHUB_SHA
 
       - name: Cleanup Docker Container
-        if: ${{ always() }}
+        if: always() && steps.changes.outputs.end_to_end == 'true'
         run: |
           docker rm -f cluster_test_18_$GITHUB_SHA
 
       - name: Cleanup Docker Image
+        if: steps.changes.outputs.end_to_end == 'true'
         run: |
           docker image rm cluster_test_18:$GITHUB_SHA

@@ -31,8 +31,7 @@ jobs:
         run: docker run --name "{{.ImageName}}_$GITHUB_SHA" {{.ImageName}}:$GITHUB_SHA /bin/bash -c 'source build.env && go run test.go -keep-data=true -docker=false -print-log -follow -shard {{.Shard}} -- -- --keep-data=true'
 
       - name: Print Volume Used
-        if: steps.changes.outputs.end_to_end == 'true'
-        if: ${{"{{ always() }}"}}
+        if: always() && steps.changes.outputs.end_to_end == 'true'
         run: |
           docker inspect -f '{{"{{ (index .Mounts 0).Name }}"}}' {{.ImageName}}_$GITHUB_SHA
 
@@ -42,8 +41,7 @@ jobs:
           docker rm -v {{.ImageName}}_$GITHUB_SHA
 
       - name: Cleanup Docker Container
-        if: steps.changes.outputs.end_to_end == 'true'
-        if: ${{"{{ always() }}"}}
+        if: always() && steps.changes.outputs.end_to_end == 'true'
         run: |
           docker rm -f {{.ImageName}}_$GITHUB_SHA
 
