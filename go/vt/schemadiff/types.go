@@ -32,15 +32,34 @@ var (
 	ErrNotFullyParsed                 = errors.New("unable to fully parse statement")
 	ErrExpectedCreateTable            = errors.New("expected a CREATE TABLE statement")
 	ErrExpectedCreateView             = errors.New("expected a CREATE VIEW statement")
+	ErrUnsupportedEntity              = errors.New("Unsupported entity type")
+	ErrUnsupportedStatement           = errors.New("Unsupported statement")
+	ErrDuplicateName                  = errors.New("Duplicate name")
+	ErrViewDependencyUnresolved       = errors.New("Views have unresolved/loop dependencies")
 )
 
+// Entity stands for a database object we can diff:
+// - A table
+// - A view
 type Entity interface {
+	// Name of entity, ie table name, view name, etc.
+	Name() string
+	// Diff returns an entitty diff given another entity. The diff direction is from this entity and to the other entity.
 	Diff(other Entity, hints *DiffHints) (diff EntityDiff, err error)
+	// Create returns an entity diff that describes how to create this entity
+	Create() EntityDiff
+	// Create returns an entity diff that describes how to drop this entity
+	Drop() EntityDiff
 }
 
+// EntityDiff represents the diff between two entities
 type EntityDiff interface {
+	// IsEmpty returns true when the two entities are considered identical
 	IsEmpty() bool
+	// Statement returns a valid SQL statement that applies the diff, e.g. an ALTER TABLE ...
+	// It returns nil if the diff is empty
 	Statement() sqlparser.Statement
+	// StatementString "stringifies" the this diff's Statement(). It returns an empty string if the diff is empty
 	StatementString() string
 }
 
@@ -50,6 +69,7 @@ const (
 	AutoIncrementApplyAlways
 )
 
+// DiffHints is an assortment of rules for diffing entities
 type DiffHints struct {
 	StrictIndexOrdering   bool
 	AutoIncrementStrategy int

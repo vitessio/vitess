@@ -271,7 +271,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> TIME TIMESTAMP DATETIME YEAR
 %token <str> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
 %token <str> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
-%token <str> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON ENUM
+%token <str> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON JSON_SCHEMA_VALID JSON_SCHEMA_VALIDATION_REPORT ENUM
 %token <str> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
 %token <str> ASCII UNICODE // used in CONVERT/CAST types
 
@@ -1657,7 +1657,6 @@ INTEGRAL
   {
     $$ = NewDecimalLiteral($1)
   }
-
 
 text_literal:
 STRING
@@ -4943,6 +4942,14 @@ UTC_DATE func_paren_opt
   {
     $$ = &TrimFuncExpr{TrimArg:$3, StringArg: $5}
   }
+| JSON_SCHEMA_VALID openb expression ',' expression closeb
+  {
+    $$ = &JSONSchemaValidFuncExpr{ Schema: $3, Document: $5}
+  }
+| JSON_SCHEMA_VALIDATION_REPORT openb expression ',' expression closeb
+  {
+    $$ = &JSONSchemaValidationReportFuncExpr{ Schema: $3, Document: $5}
+  }
 | JSON_ARRAY openb expression_list_opt closeb
   {
     $$ = &JSONArrayExpr{ Params:$3 }
@@ -6291,6 +6298,8 @@ non_reserved_keyword:
 | JSON_STORAGE_FREE
 | JSON_STORAGE_SIZE
 | JSON_VALUE
+| JSON_SCHEMA_VALID
+| JSON_SCHEMA_VALIDATION_REPORT
 | KEY_BLOCK_SIZE
 | KEYS
 | KEYSPACES

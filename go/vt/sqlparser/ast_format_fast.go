@@ -2573,6 +2573,24 @@ func (node Offset) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *JSONSchemaValidFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_schema_valid(")
+	buf.printExpr(node, node.Schema, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Document, true)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
+func (node *JSONSchemaValidationReportFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_schema_validation_report(")
+	buf.printExpr(node, node.Schema, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Document, true)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
 func (node *JSONArrayExpr) formatFast(buf *TrackedBuffer) {
 	//buf.astPrintf(node,"%s(,"node.Name.Lowered())
 	buf.WriteString("json_array(")

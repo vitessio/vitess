@@ -173,6 +173,9 @@ func (shard *GRShard) diagnoseLocked(ctx context.Context) (DiagnoseType, error) 
 	// if no, we should bootstrap one
 	mysqlGroup := shard.shardAgreedGroupName()
 	if mysqlGroup == "" {
+		if len(shard.sqlGroup.views) != shard.sqlGroup.expectedBootstrapSize {
+			return DiagnoseTypeError, fmt.Errorf("fail to diagnose ShardHasNoGroup with %v nodes", len(shard.sqlGroup.views))
+		}
 		return DiagnoseTypeShardHasNoGroup, nil
 	}
 	// We handle the case where the shard has an agreed group name but all nodes are offline
@@ -180,6 +183,15 @@ func (shard *GRShard) diagnoseLocked(ctx context.Context) (DiagnoseType, error) 
 	// old group for the shard
 	if shard.isAllOfflineOrError() {
 		shard.logger.Info("Found all members are OFFLINE or ERROR")
+		// On rebootstrap, we always want to make sure _all_ the nodes in topo are reachable
+		// unless we override the rebootstrap size
+		desiredRebootstrapSize := len(shard.instances)
+		if shard.sqlGroup.rebootstrapSize != 0 {
+			desiredRebootstrapSize = shard.sqlGroup.rebootstrapSize
+		}
+		if len(shard.sqlGroup.views) != desiredRebootstrapSize {
+			return DiagnoseTypeError, fmt.Errorf("fail to diagnose ShardHasInactiveGroup with %v nodes expecting %v", len(shard.sqlGroup.views), desiredRebootstrapSize)
+		}
 		return DiagnoseTypeShardHasInactiveGroup, nil
 	}
 
