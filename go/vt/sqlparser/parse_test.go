@@ -1909,6 +1909,8 @@ var (
 		input:  "show vitess_keyspaces like '%'",
 		output: "show keyspaces like '%'",
 	}, {
+		input: "show vitess_metadata variables",
+	}, {
 		input: "show vitess_replication_status",
 	}, {
 		input: "show vitess_replication_status like '%'",
@@ -1922,6 +1924,8 @@ var (
 		input: "show vitess_tablets like '%'",
 	}, {
 		input: "show vitess_tablets where hostname = 'some-tablet'",
+	}, {
+		input: "show vitess_targets",
 	}, {
 		input: "show vschema tables",
 	}, {
