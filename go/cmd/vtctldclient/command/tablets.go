@@ -73,6 +73,14 @@ Note: hook names may not contain slash (/) characters.
 		Args:                  cobra.MinimumNArgs(2),
 		RunE:                  commandExecuteHook,
 	}
+	// GetPermissions makes a GetPermissions gRPC call to a vtctld.
+	GetPermissions = &cobra.Command{
+		Use:                   "GetPermissions <tablet_alias>",
+		Short:                 "Displays the permissions for a tablet.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetPermissions,
+	}
 	// GetTablet makes a GetTablet gRPC call to a vtctld.
 	GetTablet = &cobra.Command{
 		Use:                   "GetTablet <alias>",
@@ -288,6 +296,29 @@ func commandExecuteHook(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("%s\n", data)
+	return nil
+}
+
+func commandGetPermissions(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.GetPermissions(commandCtx, &vtctldatapb.GetPermissionsRequest{
+		TabletAlias: alias,
+	})
+	if err != nil {
+		return err
+	}
+	p, err := cli.MarshalJSON(resp.Permissions)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s\n", p)
+
 	return nil
 }
 
@@ -565,6 +596,7 @@ func init() {
 	Root.AddCommand(DeleteTablets)
 
 	Root.AddCommand(ExecuteHook)
+	Root.AddCommand(GetPermissions)
 	Root.AddCommand(GetTablet)
 
 	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.TabletAliasStrings, "tablet-alias", "t", nil, "List of tablet aliases to filter by")

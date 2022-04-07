@@ -555,6 +555,14 @@ message GetKeyspaceResponse {
   Keyspace keyspace = 1;
 }
 
+message GetPermissionsRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message GetPermissionsResponse {
+  tabletmanagerdata.Permissions permissions = 1;
+}
+
 message GetRoutingRulesRequest {
 }
 
