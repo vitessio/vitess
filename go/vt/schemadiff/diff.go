@@ -141,18 +141,11 @@ func DiffSchemasSQL(sql1 string, sql2 string, hints *DiffHints) ([]EntityDiff, e
 // DiffSchemasSQL compares two schemas and returns the list of diffs that turn
 // 1st schema into 2nd. Any of the schemas may be nil.
 func DiffSchemas(schema1 *Schema, schema2 *Schema, hints *DiffHints) ([]EntityDiff, error) {
-	var err error
 	if schema1 == nil {
-		schema1, err = NewSchemaFromStatements(nil)
-		if err != nil {
-			return nil, err
-		}
+		schema1 = newEmptySchema()
 	}
 	if schema2 == nil {
-		schema2, err = NewSchemaFromStatements(nil)
-		if err != nil {
-			return nil, err
-		}
+		schema2 = newEmptySchema()
 	}
 	return schema1.Diff(schema2, hints)
 }
