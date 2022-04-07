@@ -222,12 +222,37 @@ func BenchmarkReservedConnWhenSettingSysVar(b *testing.B) {
 	}
 }
 
-func TestJsonValueCreators(t *testing.T) {
+func TestJsonFunctions(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.AssertMatches(t, conn, `SELECT JSON_QUOTE('null'), JSON_QUOTE('"null"'), JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), JSON_ARRAY(1, "abc", NULL, TRUE)`, `[[VARBINARY("\"null\"") VARBINARY("\"\\\"null\\\"\"") JSON("{\"1\": 2, \"abc\": 52}") JSON("[1, \"abc\", null, true]")]]`)
+	utils.AssertMatches(t, conn,
+		`SELECT 
+JSON_QUOTE('null'), 
+JSON_QUOTE('"null"'), 
+JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), 
+JSON_ARRAY(1, "abc", NULL, TRUE)`,
+		`[[VARBINARY("\"null\"") VARBINARY("\"\\\"null\\\"\"") JSON("{\"1\": 2, \"abc\": 52}") JSON("[1, \"abc\", null, true]")]]`)
+
+	utils.AssertMatches(t, conn,
+		`SELECT 
+JSON_CONTAINS('{"a": 1, "b": 2, "c": {"d": 4}}', '1'), 
+JSON_CONTAINS_PATH('{"a": 1, "b": 2, "c": {"d": 4}}', 'one', '$.a', '$.e'), 
+JSON_EXTRACT('[10, 20, [30, 40]]', '$[1]'), 
+JSON_UNQUOTE(JSON_EXTRACT('["a","b"]', '$[1]')), 
+JSON_KEYS('{"a": 1, "b": {"c": 30}}'), 
+JSON_OVERLAPS("[1,3,5,7]", "[2,5,7]"), 
+JSON_SEARCH('["abc"]', 'one', 'abc'), 
+JSON_VALUE('{"fname": "Joe", "lname": "Palmer"}', '$.fname'), 
+JSON_ARRAY(4,5) MEMBER OF('[[3,4],[4,5]]')`,
+		`[[INT64(0) INT64(1) JSON("20") BLOB("b") JSON("[\"a\", \"b\"]") INT64(1) JSON("\"$[0]\"") VARBINARY("Joe") INT64(1)]]`)
+
+	utils.AssertMatches(t, conn,
+		`SELECT 
+JSON_SCHEMA_VALIDATION_REPORT('{"type":"string","pattern":"("}', '"abc"'), 
+JSON_SCHEMA_VALID('{"type":"string","pattern":"("}', '"abc"');`,
+		`[[JSON("{\"valid\": true}") INT64(1)]]`)
 }
