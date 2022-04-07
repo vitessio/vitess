@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
@@ -72,8 +73,11 @@ func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 	mtwf.ws.WritesSwitched = true
 	require.Errorf(t, mtwf.Cancel(), ErrWorkflowPartiallySwitched)
 
+	tabletTypes, _, err := discovery.ParseTabletTypesAndOrder(mtwf.params.TabletTypes)
+	require.NoError(t, err)
+
 	require.ElementsMatch(t, mtwf.getCellsAsArray(), []string{"cell1", "cell2"})
-	require.ElementsMatch(t, mtwf.getTabletTypes(), []topodata.TabletType{topodata.TabletType_REPLICA, topodata.TabletType_RDONLY})
+	require.ElementsMatch(t, tabletTypes, []topodata.TabletType{topodata.TabletType_REPLICA, topodata.TabletType_RDONLY})
 	hasReplica, hasRdonly, hasPrimary, err := mtwf.parseTabletTypes()
 	require.NoError(t, err)
 	require.True(t, hasReplica)
@@ -81,7 +85,9 @@ func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 	require.False(t, hasPrimary)
 
 	mtwf.params.TabletTypes = "replica,rdonly,primary"
-	require.ElementsMatch(t, mtwf.getTabletTypes(),
+	tabletTypes, _, err = discovery.ParseTabletTypesAndOrder(mtwf.params.TabletTypes)
+	require.NoError(t, err)
+	require.ElementsMatch(t, tabletTypes,
 		[]topodata.TabletType{topodata.TabletType_REPLICA, topodata.TabletType_RDONLY, topodata.TabletType_PRIMARY})
 
 	hasReplica, hasRdonly, hasPrimary, err = mtwf.parseTabletTypes()
