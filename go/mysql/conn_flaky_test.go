@@ -817,6 +817,14 @@ func (t testRun) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sq
 	panic("implement me")
 }
 
+func (t testRun) ComRegisterReplica(c *Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error {
+	panic("implement me")
+}
+
+func (t testRun) ComBinlogDump(c *Conn, logFile string, binlogPos uint32) error {
+	panic("implement me")
+}
+
 func (t testRun) ComBinlogDumpGTID(c *Conn, gtidSet GTIDSet) error {
 	panic("implement me")
 }

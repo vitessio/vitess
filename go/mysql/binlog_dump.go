@@ -27,6 +27,21 @@ var (
 	readPacketErr      = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error reading BinlogDumpGTID packet")
 )
 
+func (c *Conn) parseComBinlogDump(data []byte) (logFile string, binlogPos uint32, err error) {
+	pos := 1
+
+	binlogPos, pos, ok := readUint32(data, pos)
+	if !ok {
+		return logFile, binlogPos, readPacketErr
+	}
+
+	pos += 2 // flags
+	pos += 4 // server-id
+
+	logFile = string(data[pos:])
+	return logFile, binlogPos, nil
+}
+
 func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint64, position Position, err error) {
 	pos := 1
 	pos += 2 // flags

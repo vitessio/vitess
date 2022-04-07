@@ -64,6 +64,14 @@ func (th *testHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData,
 	return nil
 }
 
+func (th *testHandler) ComRegisterReplica(c *mysql.Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error {
+	return nil
+}
+
+func (th *testHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos uint32) error {
+	return nil
+}
+
 func (th *testHandler) ComBinlogDumpGTID(c *mysql.Conn, gtidSet mysql.GTIDSet) error {
 	return nil
 }

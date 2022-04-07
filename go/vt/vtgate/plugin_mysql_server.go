@@ -338,6 +338,16 @@ func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {
 	return uint16(len(vh.session(c).GetWarnings()))
 }
 
+// ComRegisterReplica is part of the mysql.Handler interface.
+func (vh *vtgateHandler) ComRegisterReplica(c *mysql.Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error {
+	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ComRegisterReplica")
+}
+
+// ComBinlogDump is part of the mysql.Handler interface.
+func (vh *vtgateHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos uint32) error {
+	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ComBinlogDump")
+}
+
 // ComBinlogDumpGTID is part of the mysql.Handler interface.
 func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, gtidSet mysql.GTIDSet) error {
 	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ComBinlogDumpGTID")

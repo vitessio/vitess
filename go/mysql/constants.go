@@ -243,6 +243,10 @@ const (
 	// ComBinlogDumpGTID is COM_BINLOG_DUMP_GTID.
 	ComBinlogDumpGTID = 0x1e
 
+	// ComRegisterReplica is COM_REGISTER_SLAVE
+	// https://dev.mysql.com/doc/internals/en/com-register-slave.html
+	ComRegisterReplica = 0x15
+
 	// OKPacket is the header of the OK packet.
 	OKPacket = 0x00
 

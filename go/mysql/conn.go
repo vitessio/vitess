@@ -915,8 +915,12 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "command handling not implemented yet: %v", data[0]) {
 			return false
 		}
+	case ComBinlogDump:
+		return c.handleComBinlogDump(handler, data)
 	case ComBinlogDumpGTID:
 		return c.handleComBinlogDumpGTID(handler, data)
+	case ComRegisterReplica:
+		return c.handleComRegisterReplica(handler, data)
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
 		c.recycleReadPacket()
@@ -924,6 +928,46 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 			return false
 		}
 	}
+
+	return true
+}
+
+func (c *Conn) handleComRegisterReplica(handler Handler, data []byte) (kontinue bool) {
+	c.recycleReadPacket()
+
+	replicaHost, replicaPort, replicaUser, replicaPassword, err := c.parseComRegisterReplica(data)
+	if err != nil {
+		log.Errorf("conn %v: parseComRegisterReplica failed: %v", c.ID(), err)
+		return false
+	}
+	if err := handler.ComRegisterReplica(c, replicaHost, replicaPort, replicaUser, replicaPassword); err != nil {
+		c.writeErrorPacketFromError(err)
+		return false
+	}
+	if err := c.writeOKPacket(&PacketOK{}); err != nil {
+		c.writeErrorPacketFromError(err)
+	}
+
+	return true
+}
+
+func (c *Conn) handleComBinlogDump(handler Handler, data []byte) (kontinue bool) {
+	defer c.recycleReadPacket()
+
+	c.startWriterBuffering()
+	defer func() {
+		if err := c.endWriterBuffering(); err != nil {
+			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+			kontinue = false
+		}
+	}()
+
+	logfile, binlogPos, err := c.parseComBinlogDump(data)
+	if err != nil {
+		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
+		kontinue = false
+	}
+	handler.ComBinlogDump(c, logfile, binlogPos)
 
 	return true
 }

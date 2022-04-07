@@ -188,6 +188,11 @@ func readEOFString(data []byte, pos int) (string, int, bool) {
 	return string(data[pos:]), len(data) - pos, true
 }
 
+func readUint8(data []byte, pos int) (uint8, int, bool) {
+	b, pos, ok := readByte(data, pos)
+	return uint8(b), pos, ok
+}
+
 func readUint16(data []byte, pos int) (uint16, int, bool) {
 	if pos+1 >= len(data) {
 		return 0, 0, false
