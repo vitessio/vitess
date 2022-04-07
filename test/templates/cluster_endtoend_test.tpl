@@ -24,7 +24,7 @@ jobs:
       with:
         filters: |
           end_to_end:
-            - 'go/**'
+            - '**/endtoend/**.go'
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'
