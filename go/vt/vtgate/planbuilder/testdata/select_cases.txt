@@ -3172,3 +3172,60 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+
+# json schema validation functions
+"SELECT JSON_SCHEMA_VALID('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), JSON_SCHEMA_VALIDATION_REPORT('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"')"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT JSON_SCHEMA_VALID('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), JSON_SCHEMA_VALIDATION_REPORT('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_schema_valid('{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"(\\\"}', '\\\"abc\\\"'), json_schema_validation_report('{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"(\\\"}', '\\\"abc\\\"') from dual where 1 != 1",
+    "Query": "select json_schema_valid('{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"(\\\"}', '\\\"abc\\\"'), json_schema_validation_report('{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"(\\\"}', '\\\"abc\\\"') from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+
+# json search functions
+"SELECT JSON_CONTAINS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), JSON_CONTAINS_PATH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), JSON_EXTRACT('[10, 20, [30, 40]]', '$[1]'), JSON_UNQUOTE(JSON_EXTRACT('[\"a\",\"b\"]', '$[1]')), JSON_KEYS('{\"a\": 1, \"b\": {\"c\": 30}}'), JSON_OVERLAPS(\"[1,3,5,7]\", \"[2,5,7]\"), JSON_SEARCH('[\"abc\"]', 'one', 'abc'), JSON_VALUE('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), JSON_ARRAY(4,5) MEMBER OF('[[3,4],[4,5]]')"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT JSON_CONTAINS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), JSON_CONTAINS_PATH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), JSON_EXTRACT('[10, 20, [30, 40]]', '$[1]'), JSON_UNQUOTE(JSON_EXTRACT('[\"a\",\"b\"]', '$[1]')), JSON_KEYS('{\"a\": 1, \"b\": {\"c\": 30}}'), JSON_OVERLAPS(\"[1,3,5,7]\", \"[2,5,7]\"), JSON_SEARCH('[\"abc\"]', 'one', 'abc'), JSON_VALUE('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), JSON_ARRAY(4,5) MEMBER OF('[[3,4],[4,5]]')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_contains('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', '1'), json_contains_path('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), JSON_UNQUOTE(json_extract('[\\\"a\\\",\\\"b\\\"]', '$[1]')), json_keys('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\\\"abc\\\"]', 'one', 'abc'), json_value('{\\\"fname\\\": \\\"Joe\\\", \\\"lname\\\": \\\"Palmer\\\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual where 1 != 1",
+    "Query": "select json_contains('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', '1'), json_contains_path('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), JSON_UNQUOTE(json_extract('[\\\"a\\\",\\\"b\\\"]', '$[1]')), json_keys('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\\\"abc\\\"]', 'one', 'abc'), json_value('{\\\"fname\\\": \\\"Joe\\\", \\\"lname\\\": \\\"Palmer\\\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+
+# Json extract and json unquote shorthands
+"SELECT a->\"$[4]\", a->>\"$[3]\" FROM user"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT a-\u003e\"$[4]\", a-\u003e\u003e\"$[3]\" FROM user",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select a -\u003e '$[4]', a -\u003e\u003e '$[3]' from `user` where 1 != 1",
+    "Query": "select a -\u003e '$[4]', a -\u003e\u003e '$[3]' from `user`",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above

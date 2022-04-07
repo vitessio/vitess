@@ -190,6 +190,10 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
 	case *JSONQuoteExpr:
 		return a.rewriteRefOfJSONQuoteExpr(parent, node, replacer)
+	case *JSONSchemaValidFuncExpr:
+		return a.rewriteRefOfJSONSchemaValidFuncExpr(parent, node, replacer)
+	case *JSONSchemaValidationReportFuncExpr:
+		return a.rewriteRefOfJSONSchemaValidationReportFuncExpr(parent, node, replacer)
 	case *JSONSearchExpr:
 		return a.rewriteRefOfJSONSearchExpr(parent, node, replacer)
 	case *JSONStorageFreeExpr:
@@ -2969,6 +2973,70 @@ func (a *application) rewriteRefOfJSONQuoteExpr(parent SQLNode, node *JSONQuoteE
 	}
 	if !a.rewriteExpr(node, node.StringArg, func(newNode, parent SQLNode) {
 		parent.(*JSONQuoteExpr).StringArg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONSchemaValidFuncExpr(parent SQLNode, node *JSONSchemaValidFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Schema, func(newNode, parent SQLNode) {
+		parent.(*JSONSchemaValidFuncExpr).Schema = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Document, func(newNode, parent SQLNode) {
+		parent.(*JSONSchemaValidFuncExpr).Document = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONSchemaValidationReportFuncExpr(parent SQLNode, node *JSONSchemaValidationReportFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Schema, func(newNode, parent SQLNode) {
+		parent.(*JSONSchemaValidationReportFuncExpr).Schema = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Document, func(newNode, parent SQLNode) {
+		parent.(*JSONSchemaValidationReportFuncExpr).Document = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -6069,6 +6137,10 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
 	case *JSONQuoteExpr:
 		return a.rewriteRefOfJSONQuoteExpr(parent, node, replacer)
+	case *JSONSchemaValidFuncExpr:
+		return a.rewriteRefOfJSONSchemaValidFuncExpr(parent, node, replacer)
+	case *JSONSchemaValidationReportFuncExpr:
+		return a.rewriteRefOfJSONSchemaValidationReportFuncExpr(parent, node, replacer)
 	case *JSONSearchExpr:
 		return a.rewriteRefOfJSONSearchExpr(parent, node, replacer)
 	case *JSONStorageFreeExpr:
@@ -6261,6 +6333,10 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
 	case *JSONQuoteExpr:
 		return a.rewriteRefOfJSONQuoteExpr(parent, node, replacer)
+	case *JSONSchemaValidFuncExpr:
+		return a.rewriteRefOfJSONSchemaValidFuncExpr(parent, node, replacer)
+	case *JSONSchemaValidationReportFuncExpr:
+		return a.rewriteRefOfJSONSchemaValidationReportFuncExpr(parent, node, replacer)
 	case *JSONSearchExpr:
 		return a.rewriteRefOfJSONSearchExpr(parent, node, replacer)
 	case *JSONStorageFreeExpr:
@@ -6389,6 +6465,10 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
 	case *JSONQuoteExpr:
 		return a.rewriteRefOfJSONQuoteExpr(parent, node, replacer)
+	case *JSONSchemaValidFuncExpr:
+		return a.rewriteRefOfJSONSchemaValidFuncExpr(parent, node, replacer)
+	case *JSONSchemaValidationReportFuncExpr:
+		return a.rewriteRefOfJSONSchemaValidationReportFuncExpr(parent, node, replacer)
 	case *JSONSearchExpr:
 		return a.rewriteRefOfJSONSearchExpr(parent, node, replacer)
 	case *JSONStorageFreeExpr:

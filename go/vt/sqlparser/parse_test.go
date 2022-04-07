@@ -2553,6 +2553,36 @@ var (
 		input:  "select b from v1 vq1, lateral (select count(*) from v1 vq2 having vq1.b = 3) dt",
 		output: "select b from v1 as vq1, lateral (select count(*) from v1 as vq2 having vq1.b = 3) as dt",
 	}, {
+		input:  `SELECT JSON_SCHEMA_VALID('{"type":"string","pattern":"("}', '"abc"')`,
+		output: `select json_schema_valid('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual`,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALID('{"type":"string","pattern":"("}', @a)`,
+		output: `select json_schema_valid('{\"type\":\"string\",\"pattern\":\"(\"}', @a) from dual`,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALID(@b, BIN(1))`,
+		output: `select json_schema_valid(@b, BIN(1)) from dual`,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALID(N'{"type":"string","pattern":"("}', '"abc"')`,
+		output: `select json_schema_valid(N'{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual`,
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALIDATION_REPORT('{"type":"string","pattern":"("}', '"abc"')`,
+		output: `select json_schema_validation_report('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual`,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALIDATION_REPORT('{"type":"string","pattern":"("}', @a)`,
+		output: `select json_schema_validation_report('{\"type\":\"string\",\"pattern\":\"(\"}', @a) from dual`,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALIDATION_REPORT(@b, BIN(1))`,
+		output: `select json_schema_validation_report(@b, BIN(1)) from dual`,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALIDATION_REPORT(N'{"type":"string","pattern":"("}', '"abc"')`,
+		output: `select json_schema_validation_report(N'{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual`,
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
+	}, {
 		input:  `SELECT JSON_CONTAINS('{"a": 1, "b": 2, "c": {"d": 4}}', '1')`,
 		output: `select json_contains('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1') from dual`,
 	}, {
@@ -2751,6 +2781,12 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "select from t1, lateral (with qn as (select t1.a) select (select max(a) from qn)) as dt",
 		err:   "syntax error at position 12 near 'from'",
+	}, {
+		input: `SELECT JSON_SCHEMA_VALID('{"type":"string","pattern":"("}')`,
+		err:   `syntax error at position 60`,
+	}, {
+		input: `SELECT JSON_SCHEMA_VALIDATION_REPORT('{"type":"string","pattern":"("}')`,
+		err:   `syntax error at position 72`,
 	}, {
 		input: "SELECT JSON_CONTAINS(@j, @j2, )",
 		err:   "syntax error at position 32",

@@ -1965,6 +1965,16 @@ func (node Offset) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *JSONSchemaValidFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_schema_valid(%v, %v)", node.Schema, node.Document)
+}
+
+// Format formats the node.
+func (node *JSONSchemaValidationReportFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_schema_validation_report(%v, %v)", node.Schema, node.Document)
+}
+
+// Format formats the node.
 func (node *JSONArrayExpr) Format(buf *TrackedBuffer) {
 	//buf.astPrintf(node,"%s(,"node.Name.Lowered())
 	buf.WriteString("json_array(")

@@ -96,13 +96,18 @@ func (d *DropViewEntityDiff) StatementString() (s string) {
 	return s
 }
 
-//
+// CreateViewEntity stands for a VIEW construct. It contains the view's CREATE statement.
 type CreateViewEntity struct {
 	sqlparser.CreateView
 }
 
 func NewCreateViewEntity(c *sqlparser.CreateView) *CreateViewEntity {
 	return &CreateViewEntity{CreateView: *c}
+}
+
+// Name implements Entity interface
+func (c *CreateViewEntity) Name() string {
+	return c.CreateView.GetTable().Name.String()
 }
 
 // Diff implements Entity interface function
@@ -145,4 +150,17 @@ func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, hints *DiffHints) (
 		CheckOption: otherStmt.CheckOption,
 	}
 	return &AlterViewEntityDiff{alterView: alterView}, nil
+}
+
+// Create implements Entity interface
+func (c *CreateViewEntity) Create() EntityDiff {
+	return &CreateViewEntityDiff{createView: &c.CreateView}
+}
+
+// Drop implements Entity interface
+func (c *CreateViewEntity) Drop() EntityDiff {
+	dropView := &sqlparser.DropView{
+		FromTables: []sqlparser.TableName{c.ViewName},
+	}
+	return &DropViewEntityDiff{dropView: dropView}
 }

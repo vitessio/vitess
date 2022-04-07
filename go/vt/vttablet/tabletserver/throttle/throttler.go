@@ -327,9 +327,18 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric() *mysql.MySQLThrottleMe
 	return metric
 }
 
-// ThrottledAppsSnapshot returns a snapshot (a copy) of current throttled apps
-func (throttler *Throttler) ThrottledAppsSnapshot() map[string]cache.Item {
+// throttledAppsSnapshot returns a snapshot (a copy) of current throttled apps
+func (throttler *Throttler) throttledAppsSnapshot() map[string]cache.Item {
 	return throttler.throttledApps.Items()
+}
+
+// ThrottledAppsSnapshot returns a snapshot (a copy) of current throttled apps
+func (throttler *Throttler) ThrottledApps() (result []base.AppThrottle) {
+	for _, item := range throttler.throttledAppsSnapshot() {
+		appThrottle, _ := item.Object.(*base.AppThrottle)
+		result = append(result, *appThrottle)
+	}
+	return result
 }
 
 // isDormant returns true when the last check was more than dormantPeriod ago

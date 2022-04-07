@@ -191,6 +191,10 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfJSONPrettyExpr(in)
 	case *JSONQuoteExpr:
 		return CloneRefOfJSONQuoteExpr(in)
+	case *JSONSchemaValidFuncExpr:
+		return CloneRefOfJSONSchemaValidFuncExpr(in)
+	case *JSONSchemaValidationReportFuncExpr:
+		return CloneRefOfJSONSchemaValidationReportFuncExpr(in)
 	case *JSONSearchExpr:
 		return CloneRefOfJSONSearchExpr(in)
 	case *JSONStorageFreeExpr:
@@ -1252,6 +1256,28 @@ func CloneRefOfJSONQuoteExpr(n *JSONQuoteExpr) *JSONQuoteExpr {
 	}
 	out := *n
 	out.StringArg = CloneExpr(n.StringArg)
+	return &out
+}
+
+// CloneRefOfJSONSchemaValidFuncExpr creates a deep clone of the input.
+func CloneRefOfJSONSchemaValidFuncExpr(n *JSONSchemaValidFuncExpr) *JSONSchemaValidFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Schema = CloneExpr(n.Schema)
+	out.Document = CloneExpr(n.Document)
+	return &out
+}
+
+// CloneRefOfJSONSchemaValidationReportFuncExpr creates a deep clone of the input.
+func CloneRefOfJSONSchemaValidationReportFuncExpr(n *JSONSchemaValidationReportFuncExpr) *JSONSchemaValidationReportFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Schema = CloneExpr(n.Schema)
+	out.Document = CloneExpr(n.Document)
 	return &out
 }
 
@@ -2347,6 +2373,10 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfJSONPrettyExpr(in)
 	case *JSONQuoteExpr:
 		return CloneRefOfJSONQuoteExpr(in)
+	case *JSONSchemaValidFuncExpr:
+		return CloneRefOfJSONSchemaValidFuncExpr(in)
+	case *JSONSchemaValidationReportFuncExpr:
+		return CloneRefOfJSONSchemaValidationReportFuncExpr(in)
 	case *JSONSearchExpr:
 		return CloneRefOfJSONSearchExpr(in)
 	case *JSONStorageFreeExpr:
@@ -2553,6 +2583,10 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfJSONPrettyExpr(in)
 	case *JSONQuoteExpr:
 		return CloneRefOfJSONQuoteExpr(in)
+	case *JSONSchemaValidFuncExpr:
+		return CloneRefOfJSONSchemaValidFuncExpr(in)
+	case *JSONSchemaValidationReportFuncExpr:
+		return CloneRefOfJSONSchemaValidationReportFuncExpr(in)
 	case *JSONSearchExpr:
 		return CloneRefOfJSONSearchExpr(in)
 	case *JSONStorageFreeExpr:
@@ -2685,6 +2719,10 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfJSONPrettyExpr(in)
 	case *JSONQuoteExpr:
 		return CloneRefOfJSONQuoteExpr(in)
+	case *JSONSchemaValidFuncExpr:
+		return CloneRefOfJSONSchemaValidFuncExpr(in)
+	case *JSONSchemaValidationReportFuncExpr:
+		return CloneRefOfJSONSchemaValidationReportFuncExpr(in)
 	case *JSONSearchExpr:
 		return CloneRefOfJSONSearchExpr(in)
 	case *JSONStorageFreeExpr:

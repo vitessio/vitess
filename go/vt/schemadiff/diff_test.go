@@ -64,7 +64,7 @@ func TestDiffTables(t *testing.T) {
 	}
 	hints := &DiffHints{}
 	for _, ts := range tt {
-		t.Run(ts.name, func(*testing.T) {
+		t.Run(ts.name, func(t *testing.T) {
 			var fromCreateTable *sqlparser.CreateTable
 			if ts.from != "" {
 				fromStmt, err := sqlparser.Parse(ts.from)
@@ -158,7 +158,7 @@ func TestDiffViews(t *testing.T) {
 	}
 	hints := &DiffHints{}
 	for _, ts := range tt {
-		t.Run(ts.name, func(*testing.T) {
+		t.Run(ts.name, func(t *testing.T) {
 			var fromCreateView *sqlparser.CreateView
 			if ts.from != "" {
 				fromStmt, err := sqlparser.Parse(ts.from)
@@ -208,6 +208,155 @@ func TestDiffViews(t *testing.T) {
 				require.False(t, dq.IsEmpty())
 				diff = dq.StatementString()
 				assert.Equal(t, ts.diff, diff)
+			}
+		})
+	}
+}
+
+func TestDiffSchemas(t *testing.T) {
+	tt := []struct {
+		name        string
+		from        string
+		to          string
+		diffs       []string
+		expectError string
+	}{
+		{
+			name: "identical tables",
+			from: "create table t(id int primary key)",
+			to:   "create table t(id int primary key)",
+		},
+		{
+			name: "change of table columns",
+			from: "create table t(id int primary key)",
+			to:   "create table t(id int primary key, i int)",
+			diffs: []string{
+				"alter table t add column i int",
+			},
+		},
+		{
+			name: "create table",
+			to:   "create table t(id int primary key)",
+			diffs: []string{
+				"create table t (\n\tid int primary key\n)",
+			},
+		},
+		{
+			name: "create table (2)",
+			from: ";;; ; ;    ;;;",
+			to:   "create table t(id int primary key)",
+			diffs: []string{
+				"create table t (\n\tid int primary key\n)",
+			},
+		},
+		{
+			name: "drop table",
+			from: "create table t(id int primary key)",
+			diffs: []string{
+				"drop table t",
+			},
+		},
+		{
+			name: "create, alter, drop tables",
+			from: "create table t1(id int primary key); create table t2(id int primary key); create table t3(id int primary key)",
+			to:   "create table t4(id int primary key); create table t2(id bigint primary key); create table t3(id int primary key)",
+			diffs: []string{
+				"drop table t1",
+				"alter table t2 modify column id bigint primary key",
+				"create table t4 (\n\tid int primary key\n)",
+			},
+		},
+		{
+			name: "identical views",
+			from: "create table t(id int); create view v1 as select * from t",
+			to:   "create table t(id int); create view v1 as select * from t",
+		},
+		{
+			name: "modified view",
+			from: "create table t(id int); create view v1 as select * from t",
+			to:   "create table t(id int); create view v1 as select id from t",
+			diffs: []string{
+				"alter view v1 as select id from t",
+			},
+		},
+		{
+			name: "drop view",
+			from: "create table t(id int); create view v1 as select * from t",
+			to:   "create table t(id int);",
+			diffs: []string{
+				"drop view v1",
+			},
+		},
+		{
+			name: "create view",
+			from: "create table t(id int)",
+			to:   "create table t(id int); create view v1 as select id from t",
+			diffs: []string{
+				"create view v1 as select id from t",
+			},
+		},
+		{
+			name:        "create view: unresolved dependencies",
+			from:        "create table t(id int)",
+			to:          "create table t(id int); create view v1 as select id from t2",
+			expectError: ErrViewDependencyUnresolved.Error(),
+		},
+		{
+			name: "convert table to view",
+			from: "create table t(id int); create table v1 (id int)",
+			to:   "create table t(id int); create view v1 as select * from t",
+			diffs: []string{
+				"drop table v1",
+				"create view v1 as select * from t",
+			},
+		},
+		{
+			name: "convert view to table",
+			from: "create table t(id int); create view v1 as select * from t",
+			to:   "create table t(id int); create table v1 (id int)",
+			diffs: []string{
+				"drop view v1",
+				"create table v1 (\n\tid int\n)",
+			},
+		},
+		{
+			name:        "unsupported statement",
+			from:        "create table t(id int)",
+			to:          "drop table t",
+			expectError: ErrUnsupportedStatement.Error(),
+		},
+		{
+			name: "create, alter, drop tables and views",
+			from: "create view v1 as select * from t1; create table t1(id int primary key); create table t2(id int primary key); create view v2 as select * from t2; create table t3(id int primary key);",
+			to:   "create view v0 as select * from v2, t2; create table t4(id int primary key); create view v2 as select id from t2; create table t2(id bigint primary key); create table t3(id int primary key)",
+			diffs: []string{
+				"drop table t1",
+				"drop view v1",
+				"alter table t2 modify column id bigint primary key",
+				"create table t4 (\n\tid int primary key\n)",
+				"alter view v2 as select id from t2",
+				"create view v0 as select * from v2, t2",
+			},
+		},
+	}
+	hints := &DiffHints{}
+	for _, ts := range tt {
+		t.Run(ts.name, func(t *testing.T) {
+			diffs, err := DiffSchemasSQL(ts.from, ts.to, hints)
+			if ts.expectError != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), ts.expectError)
+			} else {
+				assert.NoError(t, err)
+				statements := []string{}
+				for _, d := range diffs {
+					statement := sqlparser.String(d.Statement())
+					statements = append(statements, statement)
+				}
+				if ts.diffs == nil {
+					ts.diffs = []string{}
+				}
+				assert.Equal(t, ts.diffs, statements)
 			}
 		})
 	}

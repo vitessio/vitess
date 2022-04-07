@@ -58,6 +58,7 @@ type CollationMetadata struct {
 }
 
 var Mysqldata = flag.String("mysqldata", "testdata/mysqldata", "")
+var Embed = flag.Bool("embed", false, "")
 
 func loadMysqlMetadata() (all AllMetadata) {
 	mysqdata, err := filepath.Glob(path.Join(*Mysqldata, "*.json"))
@@ -106,7 +107,7 @@ const PkgCharset codegen.Package = "vitess.io/vitess/go/mysql/collations/interna
 func main() {
 	flag.Parse()
 	metadata := loadMysqlMetadata()
-	maketables(".", metadata)
+	maketables(*Embed, ".", metadata)
 	makeversions(".")
 	makemysqldata(".", metadata)
 }
