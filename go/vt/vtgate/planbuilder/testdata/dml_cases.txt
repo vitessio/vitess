@@ -4180,3 +4180,109 @@ Gen4 plan same as above
     ]
   }
 }
+
+# sharded subquery in unsharded update, not the same shard
+"update unsharded set col = (select id from user)"
+"unsupported: sharded subqueries in DML"
+{
+  "QueryType": "UPDATE",
+  "Original": "update unsharded set col = (select id from user)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update unsharded set col = :__sq1",
+        "Table": "unsharded"
+      }
+    ]
+  }
+}
+
+# sharded join unsharded subqueries in unsharded update
+"update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)"
+"unsupported: sharded subqueries in DML"
+{
+  "QueryType": "UPDATE",
+  "Original": "update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "unsharded_id": 0
+        },
+        "TableName": "unsharded_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+            "Query": "select unsharded.id from unsharded",
+            "Table": "unsharded"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where `user`.id = :unsharded_id",
+            "Table": "`user`",
+            "Values": [
+              ":unsharded_id"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update unsharded set col = :__sq1",
+        "Table": "unsharded"
+      }
+    ]
+  }
+}

@@ -102,12 +102,8 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 		return filter, nil
 	case *abstract.Update:
 		vindexTable := op.TableInfo.GetVindexTable()
-		primaryVindex, vindexAndPredicates, err := getVindexInformation(op.TableID(), op.Table.Predicates, vindexTable)
-		if err != nil {
-			return nil, err
-		}
 
-		cvv, ovq, err := buildChangedVindexesValues(op.AST, vindexTable, primaryVindex.Columns)
+		vp, cvv, ovq, err := getUpdateVindexInformation(op, vindexTable)
 		if err != nil {
 			return nil, err
 		}
@@ -128,7 +124,7 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 			},
 			RouteOpCode: opCode,
 			Keyspace:    vindexTable.Keyspace,
-			VindexPreds: vindexAndPredicates,
+			VindexPreds: vp,
 		}
 
 		found := false
@@ -160,6 +156,22 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
 	}
+}
+
+func getUpdateVindexInformation(op *abstract.Update, vindexTable *vindexes.Table) ([]*VindexPlusPredicates, map[string]*engine.VindexValues, string, error) {
+	if !vindexTable.Keyspace.Sharded {
+		return nil, nil, "", nil
+	}
+	primaryVindex, vindexAndPredicates, err := getVindexInformation(op.TableID(), op.Table.Predicates, vindexTable)
+	if err != nil {
+		return nil, nil, "", err
+	}
+
+	changedVindexValues, ownedVindexQuery, err := buildChangedVindexesValues(op.AST, vindexTable, primaryVindex.Columns)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	return vindexAndPredicates, changedVindexValues, ownedVindexQuery, nil
 }
 
 /*
