@@ -122,7 +122,6 @@ func bindVariable(yylex yyLexer, bvar string) {
   revertMigration *RevertMigration
   alterMigration  *AlterMigration
   trimType        TrimType
-  jsonAttributeType JSONAttributeType
 
   whens         []*When
   columnDefinitions []*ColumnDefinition
@@ -374,7 +373,6 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> wild_opt check_option_opt cascade_or_local_opt restrict_or_cascade_opt
 %type <explainType> explain_format_opt
 %type <trimType> trim_type
-%type <jsonAttributeType> json_attribute_type
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
 %type <partitionOption> partitions_options_opt partitions_options_beginning
@@ -5013,9 +5011,17 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONValueExpr{JSONDoc: $3, Path: $5}
   }
-| json_attribute_type openb expression closeb
+| JSON_DEPTH openb expression closeb
   {
-    $$ = &JSONAttributesExpr{Type:$1, JSONDoc:$3}
+    $$ = &JSONAttributesExpr{Type:DepthAttributeType, JSONDoc:$3}
+  }
+| JSON_VALID openb expression closeb
+  {
+    $$ = &JSONAttributesExpr{Type:ValidAttributeType, JSONDoc:$3}
+  }
+| JSON_TYPE openb expression closeb
+  {
+    $$ = &JSONAttributesExpr{Type:TypeAttributeType, JSONDoc:$3}
   }
 | JSON_LENGTH openb expression closeb
   {
@@ -5024,21 +5030,6 @@ UTC_DATE func_paren_opt
 | JSON_LENGTH openb expression ',' json_path_param closeb
   {
     $$ = &JSONAttributesExpr{Type:LengthAttributeType, JSONDoc:$3, Path: $5 }
-  }
-
-// JSON_LENGTH has 2 possible definitions so we use it separately and not add in this
-json_attribute_type:
-  JSON_DEPTH
-  {
-    $$ = DepthAttributeType
-  }
-| JSON_VALID
-  {
-    $$ = ValidAttributeType
-  }
-| JSON_TYPE
-  {
-    $$ = TypeAttributeType
   }
 
 json_path_param_list_opt:
