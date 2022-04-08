@@ -1416,7 +1416,7 @@ max_rate_approach_threshold: 0.9
   --vreplication_store_compressed_gtid
 	Store compressed gtids in the pos column of _vt.vreplication
   --vreplication_tablet_type string
-	comma separated list of tablet types used as a source (default PRIMARY,REPLICA)
+	comma separated list of tablet types used as a source (default in_order:REPLICA,PRIMARY)
   --vstream_dynamic_packet_size
 	Enable dynamic packet sizing for VReplication. This will adjust the packet size during replication to improve performance. (default true)
   --vstream_packet_size int
