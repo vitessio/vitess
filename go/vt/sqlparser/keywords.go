@@ -587,6 +587,7 @@ var keywords = []keyword{
 	{"vitess_replication_status", VITESS_REPLICATION_STATUS},
 	{"vitess_shards", VITESS_SHARDS},
 	{"vitess_tablets", VITESS_TABLETS},
+	{"vitess_target", VITESS_TARGET},
 	{"vschema", VSCHEMA},
 	{"vstream", VSTREAM},
 	{"warnings", WARNINGS},

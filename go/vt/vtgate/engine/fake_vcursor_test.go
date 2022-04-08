@@ -54,6 +54,14 @@ type noopVCursor struct {
 	ctx context.Context
 }
 
+func (t *noopVCursor) SetExec(name string, value string) error {
+	panic("implement me")
+}
+
+func (t *noopVCursor) ShowExec(command sqlparser.ShowCommandType, filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
+	panic("implement me")
+}
+
 // SetContextWithValue implements VCursor interface.
 func (t *noopVCursor) SetContextWithValue(key, value interface{}) func() {
 	return func() {}

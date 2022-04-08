@@ -908,18 +908,18 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfShowFilter(a, b)
-	case *ShowLegacy:
-		b, ok := inB.(*ShowLegacy)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfShowLegacy(a, b)
 	case *ShowMigrationLogs:
 		b, ok := inB.(*ShowMigrationLogs)
 		if !ok {
 			return false
 		}
 		return EqualsRefOfShowMigrationLogs(a, b)
+	case *ShowOther:
+		b, ok := inB.(*ShowOther)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowOther(a, b)
 	case *StarExpr:
 		b, ok := inB.(*StarExpr)
 		if !ok {
@@ -2899,23 +2899,6 @@ func EqualsRefOfShowFilter(a, b *ShowFilter) bool {
 		EqualsExpr(a.Filter, b.Filter)
 }
 
-// EqualsRefOfShowLegacy does deep equals between the two objects.
-func EqualsRefOfShowLegacy(a, b *ShowLegacy) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Extended == b.Extended &&
-		a.Type == b.Type &&
-		EqualsTableName(a.OnTable, b.OnTable) &&
-		EqualsTableName(a.Table, b.Table) &&
-		EqualsRefOfShowTablesOpt(a.ShowTablesOpt, b.ShowTablesOpt) &&
-		a.Scope == b.Scope &&
-		EqualsExpr(a.ShowCollationFilterOpt, b.ShowCollationFilterOpt)
-}
-
 // EqualsRefOfShowMigrationLogs does deep equals between the two objects.
 func EqualsRefOfShowMigrationLogs(a, b *ShowMigrationLogs) bool {
 	if a == b {
@@ -2926,6 +2909,17 @@ func EqualsRefOfShowMigrationLogs(a, b *ShowMigrationLogs) bool {
 	}
 	return a.UUID == b.UUID &&
 		EqualsRefOfParsedComments(a.Comments, b.Comments)
+}
+
+// EqualsRefOfShowOther does deep equals between the two objects.
+func EqualsRefOfShowOther(a, b *ShowOther) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Command == b.Command
 }
 
 // EqualsRefOfStarExpr does deep equals between the two objects.
@@ -4646,12 +4640,12 @@ func EqualsShowInternal(inA, inB ShowInternal) bool {
 			return false
 		}
 		return EqualsRefOfShowCreate(a, b)
-	case *ShowLegacy:
-		b, ok := inB.(*ShowLegacy)
+	case *ShowOther:
+		b, ok := inB.(*ShowOther)
 		if !ok {
 			return false
 		}
-		return EqualsRefOfShowLegacy(a, b)
+		return EqualsRefOfShowOther(a, b)
 	default:
 		// this should never happen
 		return false
@@ -5340,19 +5334,6 @@ func EqualsSliceOfCharacteristic(a, b []Characteristic) bool {
 		}
 	}
 	return true
-}
-
-// EqualsRefOfShowTablesOpt does deep equals between the two objects.
-func EqualsRefOfShowTablesOpt(a, b *ShowTablesOpt) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Full == b.Full &&
-		a.DbName == b.DbName &&
-		EqualsRefOfShowFilter(a.Filter, b.Filter)
 }
 
 // EqualsRefOfTableIdent does deep equals between the two objects.

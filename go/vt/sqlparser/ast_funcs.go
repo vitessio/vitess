@@ -353,17 +353,6 @@ var _ ConstraintInfo = &CheckConstraintDefinition{}
 
 func (c *CheckConstraintDefinition) iConstraintInfo() {}
 
-// HasOnTable returns true if the show statement has an "on" clause
-func (node *ShowLegacy) HasOnTable() bool {
-	return node.OnTable.Name.v != ""
-}
-
-// HasTable returns true if the show statement has a parsed table name.
-// Not all show statements parse table names.
-func (node *ShowLegacy) HasTable() bool {
-	return node.Table.Name.v != ""
-}
-
 // FindColumn finds a column in the column list, returning
 // the index if it exists or -1 otherwise
 func (node Columns) FindColumn(col ColIdent) int {
@@ -1484,6 +1473,8 @@ func (ty ShowCommandType) ToString() string {
 		return CreateVStr
 	case Database:
 		return DatabaseStr
+	case Engines:
+		return EnginesStr
 	case FunctionC:
 		return FunctionCStr
 	case Function:
@@ -1494,6 +1485,8 @@ func (ty ShowCommandType) ToString() string {
 		return IndexStr
 	case OpenTable:
 		return OpenTableStr
+	case Plugins:
+		return PluginsStr
 	case Privilege:
 		return PrivilegeStr
 	case ProcedureC:
@@ -1518,6 +1511,20 @@ func (ty ShowCommandType) ToString() string {
 		return VGtidExecGlobalStr
 	case VitessMigrations:
 		return VitessMigrationsStr
+	case VitessReplicationStatus:
+		return VitessReplicationStatusStr
+	case VitessShards:
+		return VitessShardsStr
+	case VitessTablets:
+		return VitessTabletsStr
+	case VitessTarget:
+		return VitessTargetStr
+	case VitessVariables:
+		return VitessVariablesStr
+	case VschemaTables:
+		return VschemaTablesStr
+	case VschemaVindexes:
+		return VschemaVindexesStr
 	case Warnings:
 		return WarningsStr
 	case Keyspace:
