@@ -130,6 +130,10 @@ func (r *Route) Clone() abstract.PhysicalOperator {
 
 func (r *Route) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	r.SeenPredicates = append(r.SeenPredicates, expr)
+	return r.tryImprovingVindex(ctx, expr)
+}
+
+func (r *Route) tryImprovingVindex(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	if r.canImprove() {
 		newVindexFound, err := r.searchForNewVindexes(ctx, expr)
 		if err != nil {
@@ -606,7 +610,7 @@ func (r *Route) resetRoutingSelections(ctx *plancontext.PlanningContext) error {
 	}
 
 	for _, predicate := range r.SeenPredicates {
-		err := r.UpdateRoutingLogic(ctx, predicate)
+		err := r.tryImprovingVindex(ctx, predicate)
 		if err != nil {
 			return err
 		}

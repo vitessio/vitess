@@ -127,24 +127,11 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 			VindexPreds: vp,
 		}
 
-		found := false
 		for _, predicate := range op.Table.Predicates {
-			cmp, ok := predicate.(*sqlparser.ComparisonExpr)
-			if !ok {
-				continue
-			}
-
-			canUse, exitEarly, err := r.planComparison(ctx, cmp)
-			found = found || canUse
+			err := r.UpdateRoutingLogic(ctx, predicate)
 			if err != nil {
 				return nil, err
 			}
-			if exitEarly {
-				break
-			}
-		}
-		if found {
-			r.PickBestAvailableVindex()
 		}
 
 		if r.RouteOpCode == engine.Scatter && op.AST.Limit != nil {

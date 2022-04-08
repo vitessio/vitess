@@ -138,7 +138,7 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *physical.ApplyJ
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *physical.Route) (logicalPlan, error) {
 	upd, isUpdate := op.Source.(*physical.Update)
 	if isUpdate {
-		return transformUpdatePlan(op, upd)
+		return transformUpdatePlan(ctx, op, upd)
 	}
 	tableNames, err := getAllTableNames(op)
 	if err != nil {
@@ -203,15 +203,17 @@ func (p *primitiveWrapper) OutputColumns() []sqlparser.SelectExpr {
 
 var _ logicalPlan = (*primitiveWrapper)(nil)
 
-func transformUpdatePlan(op *physical.Route, upd *physical.Update) (logicalPlan, error) {
+func transformUpdatePlan(ctx *plancontext.PlanningContext, op *physical.Route, upd *physical.Update) (logicalPlan, error) {
 	var vindex vindexes.Vindex
 	var values []evalengine.Expr
 	if op.Selected != nil {
 		vindex = op.Selected.FoundVindex
 		values = op.Selected.Values
 	}
+	ast := upd.AST
+	replaceSubQuery(ctx, ast)
 	edml := &engine.DML{
-		Query:            generateQuery(upd.AST),
+		Query:            generateQuery(ast),
 		Table:            upd.VTable,
 		OwnedVindexQuery: upd.OwnedVindexQuery,
 		RoutingParameters: &engine.RoutingParameters{
@@ -242,7 +244,7 @@ func transformUpdatePlan(op *physical.Route, upd *physical.Update) (logicalPlan,
 	return &primitiveWrapper{prim: e}, nil
 }
 
-func replaceSubQuery(ctx *plancontext.PlanningContext, sel sqlparser.SelectStatement) {
+func replaceSubQuery(ctx *plancontext.PlanningContext, sel sqlparser.Statement) {
 	extractedSubqueries := ctx.SemTable.GetSubqueryNeedingRewrite()
 	if len(extractedSubqueries) == 0 {
 		return
