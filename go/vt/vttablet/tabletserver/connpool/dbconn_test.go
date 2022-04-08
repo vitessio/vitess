@@ -261,7 +261,7 @@ func TestDBConnKill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("should not get an error, err: %v", err)
 	}
-	query := fmt.Sprintf("kill %d", dbConn.ID())
+	query := fmt.Sprintf("kill query %d", dbConn.ID())
 	db.AddQuery(query, &sqltypes.Result{})
 	// Kill failed because we are not able to connect to the database
 	db.EnableConnFail()
@@ -282,7 +282,7 @@ func TestDBConnKill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reconnect should succeed, but got error: %v", err)
 	}
-	newKillQuery := fmt.Sprintf("kill %d", dbConn.ID())
+	newKillQuery := fmt.Sprintf("kill query %d", dbConn.ID())
 	// Kill failed because "kill query_id" failed
 	db.AddRejectedQuery(newKillQuery, errors.New("rejected"))
 	err = dbConn.Kill("test kill", 0)
@@ -290,34 +290,6 @@ func TestDBConnKill(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Exec: %v, want %s", err, want)
 	}
-}
-
-// TestDBConnClose tests that an Exec returns immediately if a connection
-// is asynchronously killed (and closed) in the middle of an execution.
-func TestDBConnClose(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-	defer connPool.Close()
-	dbConn, err := NewDBConn(context.Background(), connPool, db.ConnParams())
-	require.NoError(t, err)
-	defer dbConn.Close()
-
-	query := "sleep"
-	db.AddQuery(query, &sqltypes.Result{})
-	db.SetBeforeFunc(query, func() {
-		time.Sleep(100 * time.Millisecond)
-	})
-
-	start := time.Now()
-	go func() {
-		time.Sleep(10 * time.Millisecond)
-		dbConn.Kill("test kill", 0)
-	}()
-	_, err = dbConn.Exec(context.Background(), query, 1, false)
-	assert.Contains(t, err.Error(), "(errno 2013) due to")
-	assert.True(t, time.Since(start) < 100*time.Millisecond, "%v %v", time.Since(start), 100*time.Millisecond)
 }
 
 func TestDBNoPoolConnKill(t *testing.T) {
@@ -332,7 +304,7 @@ func TestDBNoPoolConnKill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("should not get an error, err: %v", err)
 	}
-	query := fmt.Sprintf("kill %d", dbConn.ID())
+	query := fmt.Sprintf("kill query %d", dbConn.ID())
 	db.AddQuery(query, &sqltypes.Result{})
 	// Kill failed because we are not able to connect to the database
 	db.EnableConnFail()
@@ -353,7 +325,7 @@ func TestDBNoPoolConnKill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reconnect should succeed, but got error: %v", err)
 	}
-	newKillQuery := fmt.Sprintf("kill %d", dbConn.ID())
+	newKillQuery := fmt.Sprintf("kill query %d", dbConn.ID())
 	// Kill failed because "kill query_id" failed
 	db.AddRejectedQuery(newKillQuery, errors.New("rejected"))
 	err = dbConn.Kill("test kill", 0)
