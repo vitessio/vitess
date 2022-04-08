@@ -112,6 +112,11 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 			return nil, err
 		}
 
+		opCode := engine.Unsharded
+		if vindexTable.Keyspace.Sharded {
+			opCode = engine.Scatter
+		}
+
 		r := &Route{
 			Source: &Update{
 				QTable:              op.Table,
@@ -121,6 +126,7 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 				OwnedVindexQuery:    ovq,
 				AST:                 op.AST,
 			},
+			RouteOpCode: opCode,
 			Keyspace:    vindexTable.Keyspace,
 			VindexPreds: vindexAndPredicates,
 		}
@@ -141,10 +147,9 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 				break
 			}
 		}
-		if !found {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not find predicate to use for update")
+		if found {
+			r.PickBestAvailableVindex()
 		}
-		r.PickBestAvailableVindex()
 
 		if r.RouteOpCode == engine.Scatter && op.AST.Limit != nil {
 			// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)

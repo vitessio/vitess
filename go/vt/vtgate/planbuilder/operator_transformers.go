@@ -138,7 +138,7 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *physical.ApplyJ
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *physical.Route) (logicalPlan, error) {
 	upd, isUpdate := op.Source.(*physical.Update)
 	if isUpdate {
-		return transformUpdatePlan(ctx, op, upd)
+		return transformUpdatePlan(op, upd)
 	}
 	tableNames, err := getAllTableNames(op)
 	if err != nil {
@@ -203,14 +203,12 @@ func (p *primitiveWrapper) OutputColumns() []sqlparser.SelectExpr {
 
 var _ logicalPlan = (*primitiveWrapper)(nil)
 
-func transformUpdatePlan(
-	ctx *plancontext.PlanningContext,
-	op *physical.Route,
-	upd *physical.Update,
-) (logicalPlan, error) {
-
-	if op.Selected == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "could not find useful vindex")
+func transformUpdatePlan(op *physical.Route, upd *physical.Update) (logicalPlan, error) {
+	var vindex vindexes.Vindex
+	var values []evalengine.Expr
+	if op.Selected != nil {
+		vindex = op.Selected.FoundVindex
+		values = op.Selected.Values
 	}
 	edml := &engine.DML{
 		Query:            generateQuery(upd.AST),
@@ -219,8 +217,8 @@ func transformUpdatePlan(
 		RoutingParameters: &engine.RoutingParameters{
 			Opcode:   op.RouteOpCode,
 			Keyspace: op.Keyspace,
-			Vindex:   op.Selected.FoundVindex,
-			Values:   op.Selected.Values,
+			Vindex:   vindex,
+			Values:   values,
 		},
 	}
 	e := &engine.Update{
@@ -228,9 +226,10 @@ func transformUpdatePlan(
 	}
 	e.DML = edml
 
-	if len(upd.ChangedVindexValues) > 0 {
-		e.DML.KsidVindex = op.SelectedVindex()
-		e.DML.KsidLength = len(op.VindexPreds[0].ColVindex.Columns)
+	if op.RouteOpCode != engine.Unsharded && len(upd.ChangedVindexValues) > 0 {
+		primary := upd.VTable.ColumnVindexes[0]
+		e.DML.KsidVindex = primary.Vindex
+		e.DML.KsidLength = len(primary.Columns)
 	}
 
 	return &primitiveWrapper{prim: e}, nil

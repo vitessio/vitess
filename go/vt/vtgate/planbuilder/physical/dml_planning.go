@@ -42,21 +42,20 @@ func getVindexInformation(
 		return primaryVindex, nil, nil
 	}
 
-	// go over the vindexes in the order of increasing cost
+	var vindexesAndPredicates []*VindexPlusPredicates
 	for _, colVindex := range table.Ordered {
 		if lu, isLu := colVindex.Vindex.(vindexes.LookupBackfill); isLu && lu.IsBackfilling() {
 			// Checking if the Vindex is currently backfilling or not, if it isn't we can read from the vindex table
 			// and we will be able to do a delete equal. Otherwise, we continue to look for next best vindex.
 			continue
 		}
-		// get the best vindex option that can be used for this vindexes.ColumnVindex
-		vindexesAndPrediates := []*VindexPlusPredicates{{
-			ColVindex: primaryVindex,
+
+		vindexesAndPredicates = append(vindexesAndPredicates, &VindexPlusPredicates{
+			ColVindex: colVindex,
 			TableID:   id,
-		}}
-		return primaryVindex, vindexesAndPrediates, nil
+		})
 	}
-	return primaryVindex, nil, nil
+	return primaryVindex, vindexesAndPredicates, nil
 }
 
 // buildChangedVindexesValues adds to the plan all the lookup vindexes that are changing.
