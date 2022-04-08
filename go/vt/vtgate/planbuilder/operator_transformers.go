@@ -221,6 +221,13 @@ func transformUpdatePlan(op *physical.Route, upd *physical.Update) (logicalPlan,
 			Values:   values,
 		},
 	}
+
+	directives := upd.AST.GetParsedComments().Directives()
+	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
+		edml.MultiShardAutocommit = true
+	}
+	edml.QueryTimeout = queryTimeout(directives)
+
 	e := &engine.Update{
 		ChangedVindexValues: upd.ChangedVindexValues,
 	}
