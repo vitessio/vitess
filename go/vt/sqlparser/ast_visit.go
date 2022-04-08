@@ -326,10 +326,10 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfShowCreate(in, f)
 	case *ShowFilter:
 		return VisitRefOfShowFilter(in, f)
-	case *ShowLegacy:
-		return VisitRefOfShowLegacy(in, f)
 	case *ShowMigrationLogs:
 		return VisitRefOfShowMigrationLogs(in, f)
+	case *ShowOther:
+		return VisitRefOfShowOther(in, f)
 	case *StarExpr:
 		return VisitRefOfStarExpr(in, f)
 	case *Stream:
@@ -2507,24 +2507,6 @@ func VisitRefOfShowFilter(in *ShowFilter, f Visit) error {
 	}
 	return nil
 }
-func VisitRefOfShowLegacy(in *ShowLegacy, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitTableName(in.OnTable, f); err != nil {
-		return err
-	}
-	if err := VisitTableName(in.Table, f); err != nil {
-		return err
-	}
-	if err := VisitExpr(in.ShowCollationFilterOpt, f); err != nil {
-		return err
-	}
-	return nil
-}
 func VisitRefOfShowMigrationLogs(in *ShowMigrationLogs, f Visit) error {
 	if in == nil {
 		return nil
@@ -2533,6 +2515,15 @@ func VisitRefOfShowMigrationLogs(in *ShowMigrationLogs, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfShowOther(in *ShowOther, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
 	return nil
@@ -3566,8 +3557,8 @@ func VisitShowInternal(in ShowInternal, f Visit) error {
 		return VisitRefOfShowBasic(in, f)
 	case *ShowCreate:
 		return VisitRefOfShowCreate(in, f)
-	case *ShowLegacy:
-		return VisitRefOfShowLegacy(in, f)
+	case *ShowOther:
+		return VisitRefOfShowOther(in, f)
 	default:
 		// this should never happen
 		return nil

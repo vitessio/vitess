@@ -294,7 +294,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 // SHOW tokens
 %token <str> CODE COLLATION COLUMNS DATABASES ENGINES EVENT EXTENDED FIELDS FULL FUNCTION GTID_EXECUTED
 %token <str> KEYSPACES OPEN PLUGINS PRIVILEGES PROCESSLIST SCHEMAS TABLES TRIGGERS USER
-%token <str> VGTID_EXECUTED VITESS_KEYSPACES VITESS_METADATA VITESS_MIGRATIONS VITESS_REPLICATION_STATUS VITESS_SHARDS VITESS_TABLETS VSCHEMA
+%token <str> VGTID_EXECUTED VITESS_KEYSPACES VITESS_METADATA VITESS_MIGRATIONS VITESS_REPLICATION_STATUS VITESS_SHARDS VITESS_TABLETS VITESS_TARGET VSCHEMA
 
 // SET tokens
 %token <str> NAMES GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -441,7 +441,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <characteristic> transaction_char
 %type <characteristics> transaction_chars
 %type <isolationLevel> isolation_level
-%type <str> for_from
+%type <str> for_from from_or_on
 %type <str> default_opt
 %type <ignore> ignore_opt
 %type <str> columns_or_fields extended_opt storage_opt
@@ -496,7 +496,6 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
 %type <str> database_or_schema column_opt insert_method_options row_format_options
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
-%type <str> vitess_topo
 %type <tableAndLockTypes> lock_table_list
 %type <tableAndLockType> lock_table
 %type <lockType> lock_type
@@ -3400,37 +3399,13 @@ show_statement:
   {
     $$ = &Show{&ShowCreate{Command: CreateV, Op: $4}}
   }
-| SHOW CREATE USER ddl_skip_to_end
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
-   }
-|  SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY ... */
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
-  }
-|  SHOW BINARY LOGS ddl_skip_to_end /* SHOW BINARY LOGS */
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
-  }
 | SHOW ENGINES
   {
-    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
-  }
-| SHOW FUNCTION CODE table_name
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
+    $$ = &Show{&ShowBasic{Command: Engines}}
   }
 | SHOW PLUGINS
   {
-    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
-  }
-| SHOW PROCEDURE CODE table_name
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
-  }
-| SHOW full_opt PROCESSLIST from_database_opt like_or_where_opt
-  {
-      $$ = &Show{&ShowLegacy{Type: string($3), Scope: ImplicitScope}}
+    $$ = &Show{&ShowBasic{Command: Plugins}}
   }
 | SHOW GLOBAL GTID_EXECUTED from_database_opt
   {
@@ -3442,8 +3417,7 @@ show_statement:
   }
 | SHOW VITESS_METADATA VARIABLES like_opt
   {
-    showTablesOpt := &ShowTablesOpt{Filter: $4}
-    $$ = &Show{&ShowLegacy{Scope: VitessMetadataScope, Type: string($3), ShowTablesOpt: showTablesOpt}}
+    $$ = &Show{&ShowBasic{Command: VitessVariables, Filter: $4}}
   }
 | SHOW VITESS_MIGRATIONS from_database_opt like_or_where_opt
   {
@@ -3455,61 +3429,74 @@ show_statement:
   }
 | SHOW VITESS_REPLICATION_STATUS like_opt
   {
-    showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope, ShowTablesOpt: showTablesOpt}}
+    $$ = &Show{&ShowBasic{Command: VitessReplicationStatus, Filter: $3}}
   }
 | SHOW VSCHEMA TABLES
   {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
+    $$ = &Show{&ShowBasic{Command: VschemaTables}}
   }
 | SHOW VSCHEMA VINDEXES
   {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
+    $$ = &Show{&ShowBasic{Command: VschemaVindexes}}
   }
-| SHOW VSCHEMA VINDEXES ON table_name
+| SHOW VSCHEMA VINDEXES from_or_on table_name
   {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), OnTable: $5, Scope: ImplicitScope}}
+    $$ = &Show{&ShowBasic{Command: VschemaVindexes, Tbl: $5}}
   }
 | SHOW WARNINGS
   {
     $$ = &Show{&ShowBasic{Command: Warnings}}
   }
-/* vitess_topo supports SHOW VITESS_SHARDS / SHOW VITESS_TABLETS */
-| SHOW vitess_topo like_or_where_opt
+| SHOW VITESS_SHARDS like_or_where_opt
   {
-    // This should probably be a different type (ShowVitessTopoOpt), but
-    // just getting the thing working for now
-    showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{&ShowLegacy{Type: $2, ShowTablesOpt: showTablesOpt}}
+    $$ = &Show{&ShowBasic{Command: VitessShards, Filter: $3}}
+  }
+| SHOW VITESS_TABLETS like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: VitessTablets, Filter: $3}}
+  }
+| SHOW VITESS_TARGET
+  {
+    $$ = &Show{&ShowBasic{Command: VitessTarget}}
   }
 /*
  * Catch-all for show statements without vitess keywords:
- *
- *  SHOW BINARY LOGS
- *  SHOW INVALID
- *  SHOW VITESS_TARGET
  */
 | SHOW id_or_var ddl_skip_to_end
   {
-    $$ = &Show{&ShowLegacy{Type: string($2.String()), Scope: ImplicitScope}}
+    $$ = &Show{&ShowOther{Command: string($2.String())}}
+  }
+| SHOW CREATE USER ddl_skip_to_end
+  {
+    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3)}}
+   }
+| SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY ... */
+  {
+    $$ = &Show{&ShowOther{Command: string($2) + " " + $3.String()}}
+  }
+| SHOW BINARY LOGS ddl_skip_to_end /* SHOW BINARY LOGS */
+  {
+    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3)}}
   }
 | SHOW ENGINE ddl_skip_to_end
   {
-    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
+    $$ = &Show{&ShowOther{Command: string($2)}}
+  }
+| SHOW FUNCTION CODE table_name
+  {
+    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3) + " " + String($4)}}
+  }
+| SHOW PROCEDURE CODE table_name
+  {
+    $$ = &Show{&ShowOther{Command: string($2) + " " + string($3) + " " + String($4)}}
+  }
+| SHOW full_opt PROCESSLIST from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowOther{Command: string($3)}}
   }
 | SHOW STORAGE ddl_skip_to_end
   {
-    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
-  }
-
-vitess_topo:
-  VITESS_TABLETS
-  {
-    $$ = string($1)
-  }
-| VITESS_SHARDS
-  {
-    $$ = string($1)
+    $$ = &Show{&ShowOther{Command: string($2)}}
   }
 
 extended_opt:
@@ -3592,6 +3579,16 @@ session_or_local_opt:
 | LOCAL
   {
     $$ = struct{}{}
+  }
+
+from_or_on:
+  FROM
+  {
+    $$ = string($1)
+  }
+| ON
+  {
+    $$ = string($1)
   }
 
 use_statement:
@@ -6566,6 +6563,7 @@ non_reserved_keyword:
 | VITESS_REPLICATION_STATUS
 | VITESS_SHARDS
 | VITESS_TABLETS
+| VITESS_TARGET
 | VSCHEMA
 | WARNINGS
 | WITHOUT

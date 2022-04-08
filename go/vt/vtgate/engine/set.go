@@ -93,6 +93,11 @@ type (
 		Name string
 		Expr evalengine.Expr
 	}
+
+	// VitessMetadata implements the SetOp interface and will write the changes variable into the topo server
+	VitessMetadata struct {
+		Name, Value string
+	}
 )
 
 var _ Primitive = (*Set)(nil)
@@ -580,4 +585,14 @@ func (svss *SysVarSetAware) setBoolSysVar(env *evalengine.ExpressionEnv, setter 
 // VariableName implements the SetOp interface method
 func (svss *SysVarSetAware) VariableName() string {
 	return svss.Name
+}
+
+var _ SetOp = (*VitessMetadata)(nil)
+
+func (v *VitessMetadata) Execute(vcursor VCursor, env *evalengine.ExpressionEnv) error {
+	return vcursor.SetExec(v.Name, v.Value)
+}
+
+func (v *VitessMetadata) VariableName() string {
+	return v.Name
 }

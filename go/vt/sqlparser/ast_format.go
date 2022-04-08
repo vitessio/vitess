@@ -770,49 +770,6 @@ func (node *Show) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *ShowLegacy) Format(buf *TrackedBuffer) {
-	nodeType := strings.ToLower(node.Type)
-	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes" ||
-		nodeType == "databases" || nodeType == "schemas" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_replication_status" ||
-		nodeType == "vitess_shards" || nodeType == "vitess_tablets") && node.ShowTablesOpt != nil {
-		opt := node.ShowTablesOpt
-		if node.Extended != "" {
-			buf.astPrintf(node, "show %s%s", node.Extended, nodeType)
-		} else {
-			buf.astPrintf(node, "show %s%s", opt.Full, nodeType)
-		}
-		if (nodeType == "columns" || nodeType == "fields") && node.HasOnTable() {
-			buf.astPrintf(node, " from %v", node.OnTable)
-		}
-		if (nodeType == "index" || nodeType == "keys" || nodeType == "indexes") && node.HasOnTable() {
-			buf.astPrintf(node, " from %v", node.OnTable)
-		}
-		if opt.DbName != "" {
-			buf.astPrintf(node, " from %s", opt.DbName)
-		}
-		buf.astPrintf(node, "%v", opt.Filter)
-		return
-	}
-	if node.Scope == ImplicitScope {
-		buf.astPrintf(node, "show %s", nodeType)
-	} else {
-		buf.astPrintf(node, "show %s %s", node.Scope.ToString(), nodeType)
-	}
-	if node.HasOnTable() {
-		buf.astPrintf(node, " on %v", node.OnTable)
-	}
-	if nodeType == "collation" && node.ShowCollationFilterOpt != nil {
-		buf.astPrintf(node, " where %v", node.ShowCollationFilterOpt)
-	}
-	if nodeType == "charset" && node.ShowTablesOpt != nil {
-		buf.astPrintf(node, "%v", node.ShowTablesOpt.Filter)
-	}
-	if node.HasTable() {
-		buf.astPrintf(node, " %v", node.Table)
-	}
-}
-
-// Format formats the node.
 func (node *ShowFilter) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
@@ -1578,6 +1535,11 @@ func (node *ShowBasic) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *ShowCreate) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "show%s %v", node.Command.ToString(), node.Op)
+}
+
+// Format formats the node.
+func (node *ShowOther) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show %s", node.Command)
 }
 
 // Format formats the node.
