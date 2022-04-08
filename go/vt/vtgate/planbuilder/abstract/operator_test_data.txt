@@ -459,3 +459,20 @@ assignments:
 	col1 = 'apa'
 	col2 = 1337
 }
+
+update user set u = 1 where id = (select id from user_extra where id = 42)
+SubQuery: {
+	SubQueries: [
+	{
+		Type: PulloutValue
+		Query: 	QueryGraph: {
+		Tables:
+			TableSet{1}:user_extra where id = 42
+		}
+	}]
+	Outer: 	Update {
+		table: 	TableSet{0}:`user` where id = (select id from user_extra where id = 42)
+	assignments:
+		u = 1
+	}
+}

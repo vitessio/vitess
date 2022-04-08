@@ -143,11 +143,6 @@ Gen4 plan same as above
 "unsupported: in scatter query: complex order by expression: 1 collate utf8_general_ci"
 Gen4 error: unsupported: in scatter query: complex order by expression: a collate utf8_general_ci
 
-# subqueries in update
-"update user set col = (select id from unsharded)"
-"unsupported: subqueries in sharded DML"
-Gen4 plan same as above
-
 # sharded subqueries in unsharded update
 "update unsharded set col = (select id from user)"
 "unsupported: sharded subqueries in DML"

@@ -201,19 +201,9 @@ func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable
 
 // createOperatorFromSelect creates an operator tree that represents the input SELECT query
 func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (LogicalOperator, error) {
-	var resultantOp *SubQuery
-	if len(semTable.SubqueryMap[sel]) > 0 {
-		resultantOp = &SubQuery{}
-		for _, sq := range semTable.SubqueryMap[sel] {
-			opInner, err := CreateLogicalOperatorFromAST(sq.Subquery.Select, semTable)
-			if err != nil {
-				return nil, err
-			}
-			resultantOp.Inner = append(resultantOp.Inner, &SubQueryInner{
-				ExtractedSubquery: sq,
-				Inner:             opInner,
-			})
-		}
+	subq, err := createSubqueryFromStatement(sel, semTable)
+	if err != nil {
+		return nil, err
 	}
 	op, err := crossJoin(sel.From, semTable)
 	if err != nil {
@@ -229,14 +219,18 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 			addColumnEquality(semTable, expr)
 		}
 	}
-	if resultantOp == nil {
+	if subq == nil {
 		return op, nil
 	}
-	resultantOp.Outer = op
-	return resultantOp, nil
+	subq.Outer = op
+	return subq, nil
 }
 
 func createOperatorFromUpdate(updStmt *sqlparser.Update, semTable *semantics.SemTable) (LogicalOperator, error) {
+	subq, err := createSubqueryFromStatement(updStmt, semTable)
+	if err != nil {
+		return nil, err
+	}
 	alTbl, ok := updStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AliasedTableExpr")
@@ -273,7 +267,35 @@ func createOperatorFromUpdate(updStmt *sqlparser.Update, semTable *semantics.Sem
 		assignments[set.Name.Name.String()] = set.Expr
 	}
 
-	return &Update{Table: qt, Assignments: assignments, AST: updStmt, TableInfo: tableInfo}, nil
+	u := &Update{
+		Table:       qt,
+		Assignments: assignments,
+		AST:         updStmt,
+		TableInfo:   tableInfo,
+	}
+	if subq == nil {
+		return u, nil
+	}
+	subq.Outer = u
+	return subq, nil
+}
+
+func createSubqueryFromStatement(stmt sqlparser.Statement, semTable *semantics.SemTable) (*SubQuery, error) {
+	if len(semTable.SubqueryMap[stmt]) == 0 {
+		return nil, nil
+	}
+	subq := &SubQuery{}
+	for _, sq := range semTable.SubqueryMap[stmt] {
+		opInner, err := CreateLogicalOperatorFromAST(sq.Subquery.Select, semTable)
+		if err != nil {
+			return nil, err
+		}
+		subq.Inner = append(subq.Inner, &SubQueryInner{
+			ExtractedSubquery: sq,
+			Inner:             opInner,
+		})
+	}
+	return subq, nil
 }
 
 func addColumnEquality(semTable *semantics.SemTable, expr sqlparser.Expr) {

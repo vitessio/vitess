@@ -4140,3 +4140,43 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# unsharded subquery in sharded update, not the same shard between outer and inner
+"update user set col = (select id from unsharded)"
+"unsupported: subqueries in sharded DML"
+{
+  "QueryType": "UPDATE",
+  "Original": "update user set col = (select id from unsharded)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select id from unsharded where 1 != 1",
+        "Query": "select id from unsharded",
+        "Table": "unsharded"
+      },
+      {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update `user` set col = :__sq1",
+        "Table": "user"
+      }
+    ]
+  }
+}

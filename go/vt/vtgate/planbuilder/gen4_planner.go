@@ -268,10 +268,6 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 		return &primitiveWrapper{prim: upd}, nil
 	}
 
-	if len(semTable.SubqueryMap[updStmt]) > 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: subqueries in sharded DML")
-	}
-
 	if semTable.NotUnshardedErr != nil {
 		return nil, semTable.NotUnshardedErr
 	}
