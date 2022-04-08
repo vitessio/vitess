@@ -74,12 +74,7 @@ type TabletPicker struct {
 
 // NewTabletPicker returns a TabletPicker.
 func NewTabletPicker(ts *topo.Server, cells []string, keyspace, shard, tabletTypesStr string) (*TabletPicker, error) {
-	inOrder := false
-	if strings.HasPrefix(tabletTypesStr, inOrderHint) {
-		inOrder = true
-		tabletTypesStr = tabletTypesStr[len(inOrderHint):]
-	}
-	tabletTypes, err := topoproto.ParseTabletTypes(tabletTypesStr)
+	tabletTypes, inOrder, err := ParseTabletTypesAndOrder(tabletTypesStr)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to parse list of tablet types: %v", tabletTypesStr)
 	}
