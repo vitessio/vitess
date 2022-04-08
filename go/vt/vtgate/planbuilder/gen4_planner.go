@@ -264,7 +264,7 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 		edml.Keyspace = ks
 		edml.Opcode = engine.Unsharded
 		edml.Query = generateQuery(updStmt)
-		panic("need to turn this engine into a logical plan")
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "need to turn this engine into a logical plan")
 	}
 
 	if len(semTable.SubqueryMap[updStmt]) > 0 {

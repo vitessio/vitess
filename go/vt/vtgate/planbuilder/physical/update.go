@@ -30,6 +30,7 @@ type Update struct {
 	Assignments         map[string]sqlparser.Expr
 	ChangedVindexValues map[string]*engine.VindexValues
 	OwnedVindexQuery    string
+	AST                 *sqlparser.Update
 }
 
 var _ abstract.PhysicalOperator = (*Update)(nil)
@@ -60,8 +61,11 @@ func (u *Update) Cost() int {
 // Clone implements the PhysicalOperator interface
 func (u *Update) Clone() abstract.PhysicalOperator {
 	return &Update{
-		QTable:      u.QTable,
-		VTable:      u.VTable,
-		Assignments: u.Assignments,
+		QTable:              u.QTable,
+		VTable:              u.VTable,
+		Assignments:         u.Assignments,
+		ChangedVindexValues: u.ChangedVindexValues,
+		OwnedVindexQuery:    u.OwnedVindexQuery,
+		AST:                 u.AST,
 	}
 }

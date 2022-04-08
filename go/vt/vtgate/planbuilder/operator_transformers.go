@@ -21,6 +21,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -133,7 +135,11 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *physical.ApplyJ
 	}, nil
 }
 
-func transformRoutePlan(ctx *plancontext.PlanningContext, op *physical.Route) (*routeGen4, error) {
+func transformRoutePlan(ctx *plancontext.PlanningContext, op *physical.Route) (logicalPlan, error) {
+	upd, isUpdate := op.Source.(*physical.Update)
+	if isUpdate {
+		return transformUpdatePlan(ctx, op, upd)
+	}
 	tableNames, err := getAllTableNames(op)
 	if err != nil {
 		return nil, err
@@ -164,6 +170,70 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *physical.Route) (*
 		condition: condition,
 	}, nil
 
+}
+
+type primitiveWrapper struct {
+	prim engine.Primitive
+	gen4Plan
+}
+
+func (p *primitiveWrapper) WireupGen4(semTable *semantics.SemTable) error {
+	return nil
+}
+
+func (p *primitiveWrapper) Primitive() engine.Primitive {
+	return p.prim
+}
+
+func (p *primitiveWrapper) Inputs() []logicalPlan {
+	return nil
+}
+
+func (p *primitiveWrapper) Rewrite(inputs ...logicalPlan) error {
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't rewrite")
+}
+
+func (p *primitiveWrapper) ContainsTables() semantics.TableSet {
+	return semantics.EmptyTableSet()
+}
+
+func (p *primitiveWrapper) OutputColumns() []sqlparser.SelectExpr {
+	return nil
+}
+
+var _ logicalPlan = (*primitiveWrapper)(nil)
+
+func transformUpdatePlan(
+	ctx *plancontext.PlanningContext,
+	op *physical.Route,
+	upd *physical.Update,
+) (logicalPlan, error) {
+
+	if op.Selected == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "could not find useful vindex")
+	}
+	edml := &engine.DML{
+		Query:            generateQuery(upd.AST),
+		Table:            upd.VTable,
+		OwnedVindexQuery: upd.OwnedVindexQuery,
+		RoutingParameters: &engine.RoutingParameters{
+			Opcode:   op.RouteOpCode,
+			Keyspace: op.Keyspace,
+			Vindex:   op.Selected.FoundVindex,
+			Values:   op.Selected.Values,
+		},
+	}
+	e := &engine.Update{
+		ChangedVindexValues: upd.ChangedVindexValues,
+	}
+	e.DML = edml
+
+	if len(upd.ChangedVindexValues) > 0 {
+		e.DML.KsidVindex = op.SelectedVindex()
+		e.DML.KsidLength = len(op.VindexPreds[0].ColVindex.Columns)
+	}
+
+	return &primitiveWrapper{prim: e}, nil
 }
 
 func replaceSubQuery(ctx *plancontext.PlanningContext, sel sqlparser.SelectStatement) {

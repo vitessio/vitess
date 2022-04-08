@@ -119,6 +119,7 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 				Assignments:         op.Assignments,
 				ChangedVindexValues: cvv,
 				OwnedVindexQuery:    ovq,
+				AST:                 op.AST,
 			},
 			Keyspace:    vindexTable.Keyspace,
 			VindexPreds: vindexAndPredicates,

@@ -144,7 +144,26 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update route1 set a=1 where id=1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update `user` as route1 set a = 1 where id = 1",
+    "Table": "user",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # update: routing rules for subquery.
 "update unsharded_a set a=(select a from route2)"
@@ -206,7 +225,26 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update user set val = 1 where id = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update `user` set val = 1 where id = 1",
+    "Table": "user",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # update by primary keyspace id with alias
 "update user as user_alias set val = 1 where user_alias.id = 1"
@@ -230,7 +268,26 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update user as user_alias set val = 1 where user_alias.id = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update `user` as user_alias set val = 1 where user_alias.id = 1",
+    "Table": "user",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # update by primary keyspace id with parenthesized expression
 "update user set val = 1 where (id = 1)"
@@ -254,7 +311,26 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update user set val = 1 where (id = 1)",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update `user` set val = 1 where id = 1",
+    "Table": "user",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # update by primary keyspace id with multi-part where clause with parens
 "update user set val = 1 where (name = 'foo' and id = 1)"
@@ -278,7 +354,26 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update user set val = 1 where (name = 'foo' and id = 1)",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update `user` set val = 1 where `name` = 'foo' and id = 1",
+    "Table": "user",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # update by primary keyspace id, changing one vindex column
 "update user_metadata set email = 'juan@vitess.io' where user_id = 1"
@@ -308,7 +403,32 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "ChangedVindexValues": [
+      "email_user_map:3"
+    ],
+    "KsidLength": 1,
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select user_id, email, address, email = 'juan@vitess.io' from user_metadata where user_id = 1 for update",
+    "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
+    "Table": "user_metadata",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # update by primary keyspace id, changing same vindex twice
 "update user_metadata set email = 'a', email = 'b' where user_id = 1"
@@ -344,7 +464,33 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "ChangedVindexValues": [
+      "address_user_map:4",
+      "email_user_map:3"
+    ],
+    "KsidLength": 1,
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select user_id, email, address, email = 'juan@vitess.io', address = '155 5th street' from user_metadata where user_id = 1 for update",
+    "Query": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
+    "Table": "user_metadata",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # update by primary keyspace id, changing one vindex column, using order by and limit
 "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10"
@@ -374,7 +520,32 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "ChangedVindexValues": [
+      "email_user_map:3"
+    ],
+    "KsidLength": 1,
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select user_id, email, address, email = 'juan@vitess.io' from user_metadata where user_id = 1 order by user_id asc limit 10 for update",
+    "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
+    "Table": "user_metadata",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # update by primary keyspace id, stray where clause
 "update user set val = 1 where id = id2 and id = 1"
@@ -398,7 +569,26 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update user set val = 1 where id = id2 and id = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update `user` set val = 1 where id = id2 and id = 1",
+    "Table": "user",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # update by primary keyspace id, stray where clause with conversion error
 "update user set val = 1 where id = 18446744073709551616 and id = 1"
@@ -422,7 +612,26 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update user set val = 1 where id = 18446744073709551616 and id = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update `user` set val = 1 where id = 18446744073709551616 and id = 1",
+    "Table": "user",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # delete from by primary keyspace id
 "delete from user where id = 1"
@@ -1720,7 +1929,32 @@ Gen4 plan same as above
     "Vindex": "kid_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "ChangedVindexValues": [
+      "colb_colc_map:4"
+    ],
+    "KsidLength": 1,
+    "KsidVindex": "kid_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_b = 1 and column_c = 2 from multicolvin where kid = 1 for update",
+    "Query": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
+    "Table": "multicolvin",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "kid_index"
+  }
+}
 
 # update multiple vindexes, with multi column vindex
 "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1"
@@ -1751,7 +1985,33 @@ Gen4 plan same as above
     "Vindex": "kid_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "ChangedVindexValues": [
+      "cola_map:4",
+      "colb_colc_map:5"
+    ],
+    "KsidLength": 1,
+    "KsidVindex": "kid_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_a = 0, column_b = 1 and column_c = 2 from multicolvin where kid = 1 for update",
+    "Query": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
+    "Table": "multicolvin",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "kid_index"
+  }
+}
 
 # update with no primary vindex on where clause (scatter update)
 "update user_extra set val = 1"
@@ -2149,7 +2409,32 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update user set name = null where id = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "ChangedVindexValues": [
+      "name_user_map:3"
+    ],
+    "KsidLength": 1,
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from `user` where id = 1 for update",
+    "Query": "update `user` set `name` = null where id = 1",
+    "Table": "user",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # insert using last_insert_id
 "insert into unsharded values(last_insert_id(), 2)"
@@ -2424,7 +2709,32 @@ Gen4 plan same as above
     "Vindex": "kid_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update multicolvin set column_c = 2 where kid = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "ChangedVindexValues": [
+      "colb_colc_map:4"
+    ],
+    "KsidLength": 1,
+    "KsidVindex": "kid_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_c = 2 from multicolvin where kid = 1 for update",
+    "Query": "update multicolvin set column_c = 2 where kid = 1",
+    "Table": "multicolvin",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "kid_index"
+  }
+}
 
 # update with binary value
 "update user set name = _binary 'abc' where id = 1"
@@ -2454,7 +2764,32 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update user set name = _binary 'abc' where id = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "ChangedVindexValues": [
+      "name_user_map:3"
+    ],
+    "KsidLength": 1,
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = _binary 'abc' from `user` where id = 1 for update",
+    "Query": "update `user` set `name` = _binary 'abc' where id = 1",
+    "Table": "user",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # delete with binary value
 "delete from user where name = _binary 'abc'"
@@ -2840,7 +3175,27 @@ Gen4 plan same as above
     "Vindex": "multicolIdx"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update multicol_tbl set x = 1 where cola = 1 and colb = 2",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update multicol_tbl set x = 1 where cola = 1 and colb = 2",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)",
+      "INT64(2)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
 
 # update with a multicol vindex - reverse order
 "update multicol_tbl set x = 1 where colb = 2 and cola = 1"
@@ -2865,7 +3220,27 @@ Gen4 plan same as above
     "Vindex": "multicolIdx"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update multicol_tbl set x = 1 where colb = 2 and cola = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update multicol_tbl set x = 1 where colb = 2 and cola = 1",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)",
+      "INT64(2)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
 
 # update with a multicol vindex using an IN clause
 "update multicol_tbl set x = 1 where colb IN (1,2) and cola = 1"
@@ -3058,7 +3433,33 @@ Gen4 plan same as above
     "Vindex": "multicolIdx"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update multicol_tbl set colc = 1 where cola = 1 and colb = 2",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "ChangedVindexValues": [
+      "colc_map:4"
+    ],
+    "KsidLength": 2,
+    "KsidVindex": "multicolIdx",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select cola, colb, colc, `name`, colc = 1 from multicol_tbl where cola = 1 and colb = 2 for update",
+    "Query": "update multicol_tbl set colc = 1 where cola = 1 and colb = 2",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)",
+      "INT64(2)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
 
 # update with routing using non-unique lookup vindex
 "update multicol_tbl set x = 42 where name = 'foo'"
