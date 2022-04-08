@@ -27,6 +27,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/dbconfigs"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
 
@@ -95,6 +102,30 @@ func TestTxKillerKillsTransactionThreeSecondsAfterCreation(t *testing.T) {
 		StopAfter: 6 * time.Second,
 		PollEvery: time.Second,
 	})
+}
+
+func TestTxKillsReuseConnection(t *testing.T) {
+	config := tabletenv.NewDefaultConfig()
+	env := tabletenv.NewEnv(config, "foobar")
+	scp := tabletserver.NewStatefulConnPool(env)
+	defer scp.Close()
+
+	scp.Open(dbconfigs.New(&connParams), dbconfigs.New(&connParams), dbconfigs.New(&connAppDebugParams))
+	sconn, err := scp.NewConn(context.Background(), &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	require.NoError(t, err)
+	conn := sconn.UnderlyingDBConn()
+	id := conn.ID()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(1)*time.Second)
+	_, err = sconn.Exec(ctx, "select sleep(2)", 1, false)
+	cancel()
+	require.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
+	require.False(t, sconn.IsClosed())
+	conn.Recycle()
+	// we should be able to reuse the same connection
+	_, err = sconn.Exec(context.Background(), "select 1", 1, false)
+	require.NoError(t, err)
+	require.Equal(t, id, conn.ID())
 }
 
 func assertIsNotKilledOver5Second(t *testing.T, client *framework.QueryClient) {

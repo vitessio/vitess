@@ -327,6 +327,9 @@ func (dbc *DBConn) Recycle() {
 	case dbc.conn.IsClosed():
 		dbc.pool.Put(nil)
 	default:
+		dbc.errmu.Lock()
+		dbc.err = nil
+		dbc.errmu.Unlock()
 		dbc.pool.Put(dbc)
 	}
 }
@@ -351,7 +354,9 @@ func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 	dbc.errmu.Lock()
 	dbc.err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "(errno 2013) due to %s, elapsed time: %v, killing query ID %v", reason, elapsed, dbc.conn.ID())
 	dbc.errmu.Unlock()
-	dbc.conn.Close()
+	// Starting from Mysql 5.7, KILL QUERY just kills the active query without
+	// terminating the underly connection so we are not closing the underlying
+	// mysql connection so that it could be re-used later.
 
 	// Server side action. Kill the session.
 	killConn, err := dbc.dbaPool.Get(context.TODO())
@@ -360,7 +365,7 @@ func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 		return err
 	}
 	defer killConn.Recycle()
-	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
+	sql := fmt.Sprintf("kill query %d", dbc.conn.ID())
 	_, err = killConn.ExecuteFetch(sql, 10000, false)
 	if err != nil {
 		log.Errorf("Could not kill query ID %v %s: %v", dbc.conn.ID(),
