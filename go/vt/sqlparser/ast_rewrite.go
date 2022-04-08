@@ -316,10 +316,10 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfShowCreate(parent, node, replacer)
 	case *ShowFilter:
 		return a.rewriteRefOfShowFilter(parent, node, replacer)
-	case *ShowLegacy:
-		return a.rewriteRefOfShowLegacy(parent, node, replacer)
 	case *ShowMigrationLogs:
 		return a.rewriteRefOfShowMigrationLogs(parent, node, replacer)
+	case *ShowOther:
+		return a.rewriteRefOfShowOther(parent, node, replacer)
 	case *StarExpr:
 		return a.rewriteRefOfStarExpr(parent, node, replacer)
 	case *Stream:
@@ -4868,43 +4868,6 @@ func (a *application) rewriteRefOfShowFilter(parent SQLNode, node *ShowFilter, r
 	}
 	return true
 }
-func (a *application) rewriteRefOfShowLegacy(parent SQLNode, node *ShowLegacy, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteTableName(node, node.OnTable, func(newNode, parent SQLNode) {
-		parent.(*ShowLegacy).OnTable = newNode.(TableName)
-	}) {
-		return false
-	}
-	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
-		parent.(*ShowLegacy).Table = newNode.(TableName)
-	}) {
-		return false
-	}
-	if !a.rewriteExpr(node, node.ShowCollationFilterOpt, func(newNode, parent SQLNode) {
-		parent.(*ShowLegacy).ShowCollationFilterOpt = newNode.(Expr)
-	}) {
-		return false
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
 func (a *application) rewriteRefOfShowMigrationLogs(parent SQLNode, node *ShowMigrationLogs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4926,6 +4889,30 @@ func (a *application) rewriteRefOfShowMigrationLogs(parent SQLNode, node *ShowMi
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfShowOther(parent SQLNode, node *ShowOther, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -6568,8 +6555,8 @@ func (a *application) rewriteShowInternal(parent SQLNode, node ShowInternal, rep
 		return a.rewriteRefOfShowBasic(parent, node, replacer)
 	case *ShowCreate:
 		return a.rewriteRefOfShowCreate(parent, node, replacer)
-	case *ShowLegacy:
-		return a.rewriteRefOfShowLegacy(parent, node, replacer)
+	case *ShowOther:
+		return a.rewriteRefOfShowOther(parent, node, replacer)
 	default:
 		// this should never happen
 		return true

@@ -259,36 +259,45 @@ const (
 	LowPriorityWriteStr = "low_priority write"
 
 	// ShowCommand Types
-	CharsetStr          = " charset"
-	CollationStr        = " collation"
-	ColumnStr           = " columns"
-	CreateDbStr         = " create database"
-	CreateEStr          = " create event"
-	CreateFStr          = " create function"
-	CreateProcStr       = " create procedure"
-	CreateTblStr        = " create table"
-	CreateTrStr         = " create trigger"
-	CreateVStr          = " create view"
-	DatabaseStr         = " databases"
-	FunctionCStr        = " function code"
-	FunctionStr         = " function status"
-	GtidExecGlobalStr   = " global gtid_executed"
-	IndexStr            = " indexes"
-	OpenTableStr        = " open tables"
-	PrivilegeStr        = " privileges"
-	ProcedureCStr       = " procedure code"
-	ProcedureStr        = " procedure status"
-	StatusGlobalStr     = " global status"
-	StatusSessionStr    = " status"
-	TableStr            = " tables"
-	TableStatusStr      = " table status"
-	TriggerStr          = " triggers"
-	VariableGlobalStr   = " global variables"
-	VariableSessionStr  = " variables"
-	VGtidExecGlobalStr  = " global vgtid_executed"
-	KeyspaceStr         = " keyspaces"
-	VitessMigrationsStr = " vitess_migrations"
-	WarningsStr         = " warnings"
+	CharsetStr                 = " charset"
+	CollationStr               = " collation"
+	ColumnStr                  = " columns"
+	CreateDbStr                = " create database"
+	CreateEStr                 = " create event"
+	CreateFStr                 = " create function"
+	CreateProcStr              = " create procedure"
+	CreateTblStr               = " create table"
+	CreateTrStr                = " create trigger"
+	CreateVStr                 = " create view"
+	DatabaseStr                = " databases"
+	EnginesStr                 = " engines"
+	FunctionCStr               = " function code"
+	FunctionStr                = " function status"
+	GtidExecGlobalStr          = " global gtid_executed"
+	IndexStr                   = " indexes"
+	OpenTableStr               = " open tables"
+	PluginsStr                 = " plugins"
+	PrivilegeStr               = " privileges"
+	ProcedureCStr              = " procedure code"
+	ProcedureStr               = " procedure status"
+	StatusGlobalStr            = " global status"
+	StatusSessionStr           = " status"
+	TableStr                   = " tables"
+	TableStatusStr             = " table status"
+	TriggerStr                 = " triggers"
+	VariableGlobalStr          = " global variables"
+	VariableSessionStr         = " variables"
+	VGtidExecGlobalStr         = " global vgtid_executed"
+	KeyspaceStr                = " keyspaces"
+	VitessMigrationsStr        = " vitess_migrations"
+	VitessReplicationStatusStr = " vitess_replication_status"
+	VitessShardsStr            = " vitess_shards"
+	VitessTabletsStr           = " vitess_tablets"
+	VitessTargetStr            = " vitess_target"
+	VitessVariablesStr         = " vitess_metadata variables"
+	VschemaTablesStr           = " vschema tables"
+	VschemaVindexesStr         = " vschema vindexes"
+	WarningsStr                = " warnings"
 
 	// DropKeyType strings
 	PrimaryKeyTypeStr = "primary key"
@@ -596,11 +605,13 @@ const (
 	CreateTr
 	CreateV
 	Database
+	Engines
 	FunctionC
 	Function
 	GtidExecGlobal
 	Index
 	OpenTable
+	Plugins
 	Privilege
 	ProcedureC
 	Procedure
@@ -613,6 +624,13 @@ const (
 	VariableSession
 	VGtidExecGlobal
 	VitessMigrations
+	VitessReplicationStatus
+	VitessShards
+	VitessTablets
+	VitessTarget
+	VitessVariables
+	VschemaTables
+	VschemaVindexes
 	Warnings
 	Keyspace
 )

@@ -1554,17 +1554,6 @@ type (
 		SQLNode
 	}
 
-	// ShowLegacy is of ShowInternal type, holds the legacy show ast struct.
-	ShowLegacy struct {
-		Extended               string
-		Type                   string
-		OnTable                TableName
-		Table                  TableName
-		ShowTablesOpt          *ShowTablesOpt
-		Scope                  Scope
-		ShowCollationFilterOpt Expr
-	}
-
 	// ShowCommandType represents the show statement type.
 	ShowCommandType int8
 
@@ -1582,11 +1571,16 @@ type (
 		Command ShowCommandType
 		Op      TableName
 	}
+
+	// ShowOther is of ShowInternal type, holds show queries that is not handled specially.
+	ShowOther struct {
+		Command string
+	}
 )
 
-func (*ShowLegacy) isShowInternal() {}
 func (*ShowBasic) isShowInternal()  {}
 func (*ShowCreate) isShowInternal() {}
+func (*ShowOther) isShowInternal()  {}
 
 // InsertRows represents the rows for an INSERT statement.
 type InsertRows interface {
