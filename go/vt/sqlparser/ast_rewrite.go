@@ -192,6 +192,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
 	case *JSONQuoteExpr:
 		return a.rewriteRefOfJSONQuoteExpr(parent, node, replacer)
+	case *JSONRemoveExpr:
+		return a.rewriteRefOfJSONRemoveExpr(parent, node, replacer)
 	case *JSONSchemaValidFuncExpr:
 		return a.rewriteRefOfJSONSchemaValidFuncExpr(parent, node, replacer)
 	case *JSONSchemaValidationReportFuncExpr:
@@ -204,8 +206,14 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfJSONStorageSizeExpr(parent, node, replacer)
 	case *JSONTableExpr:
 		return a.rewriteRefOfJSONTableExpr(parent, node, replacer)
+	case *JSONUnquoteExpr:
+		return a.rewriteRefOfJSONUnquoteExpr(parent, node, replacer)
 	case *JSONValueExpr:
 		return a.rewriteRefOfJSONValueExpr(parent, node, replacer)
+	case *JSONValueMergeExpr:
+		return a.rewriteRefOfJSONValueMergeExpr(parent, node, replacer)
+	case *JSONValueModifierExpr:
+		return a.rewriteRefOfJSONValueModifierExpr(parent, node, replacer)
 	case *JoinCondition:
 		return a.rewriteRefOfJoinCondition(parent, node, replacer)
 	case *JoinTableExpr:
@@ -3020,6 +3028,38 @@ func (a *application) rewriteRefOfJSONQuoteExpr(parent SQLNode, node *JSONQuoteE
 	}
 	return true
 }
+func (a *application) rewriteRefOfJSONRemoveExpr(parent SQLNode, node *JSONRemoveExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
+		parent.(*JSONRemoveExpr).JSONDoc = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExprs(node, node.PathList, func(newNode, parent SQLNode) {
+		parent.(*JSONRemoveExpr).PathList = newNode.(Exprs)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfJSONSchemaValidFuncExpr(parent SQLNode, node *JSONSchemaValidFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3235,6 +3275,33 @@ func (a *application) rewriteRefOfJSONTableExpr(parent SQLNode, node *JSONTableE
 	}
 	return true
 }
+func (a *application) rewriteRefOfJSONUnquoteExpr(parent SQLNode, node *JSONUnquoteExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.JSONValue, func(newNode, parent SQLNode) {
+		parent.(*JSONUnquoteExpr).JSONValue = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfJSONValueExpr(parent SQLNode, node *JSONValueExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3256,6 +3323,74 @@ func (a *application) rewriteRefOfJSONValueExpr(parent SQLNode, node *JSONValueE
 		parent.(*JSONValueExpr).Path = newNode.(JSONPathParam)
 	}) {
 		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONValueMergeExpr(parent SQLNode, node *JSONValueMergeExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
+		parent.(*JSONValueMergeExpr).JSONDoc = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExprs(node, node.JSONDocList, func(newNode, parent SQLNode) {
+		parent.(*JSONValueMergeExpr).JSONDocList = newNode.(Exprs)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONValueModifierExpr(parent SQLNode, node *JSONValueModifierExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
+		parent.(*JSONValueModifierExpr).JSONDoc = newNode.(Expr)
+	}) {
+		return false
+	}
+	for x, el := range node.Params {
+		if !a.rewriteRefOfJSONObjectParam(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*JSONValueModifierExpr).Params[idx] = newNode.(*JSONObjectParam)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6186,6 +6321,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
 	case *JSONQuoteExpr:
 		return a.rewriteRefOfJSONQuoteExpr(parent, node, replacer)
+	case *JSONRemoveExpr:
+		return a.rewriteRefOfJSONRemoveExpr(parent, node, replacer)
 	case *JSONSchemaValidFuncExpr:
 		return a.rewriteRefOfJSONSchemaValidFuncExpr(parent, node, replacer)
 	case *JSONSchemaValidationReportFuncExpr:
@@ -6196,8 +6333,14 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfJSONStorageFreeExpr(parent, node, replacer)
 	case *JSONStorageSizeExpr:
 		return a.rewriteRefOfJSONStorageSizeExpr(parent, node, replacer)
+	case *JSONUnquoteExpr:
+		return a.rewriteRefOfJSONUnquoteExpr(parent, node, replacer)
 	case *JSONValueExpr:
 		return a.rewriteRefOfJSONValueExpr(parent, node, replacer)
+	case *JSONValueMergeExpr:
+		return a.rewriteRefOfJSONValueMergeExpr(parent, node, replacer)
+	case *JSONValueModifierExpr:
+		return a.rewriteRefOfJSONValueModifierExpr(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *MemberOfExpr:
@@ -6384,6 +6527,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
 	case *JSONQuoteExpr:
 		return a.rewriteRefOfJSONQuoteExpr(parent, node, replacer)
+	case *JSONRemoveExpr:
+		return a.rewriteRefOfJSONRemoveExpr(parent, node, replacer)
 	case *JSONSchemaValidFuncExpr:
 		return a.rewriteRefOfJSONSchemaValidFuncExpr(parent, node, replacer)
 	case *JSONSchemaValidationReportFuncExpr:
@@ -6394,8 +6539,14 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfJSONStorageFreeExpr(parent, node, replacer)
 	case *JSONStorageSizeExpr:
 		return a.rewriteRefOfJSONStorageSizeExpr(parent, node, replacer)
+	case *JSONUnquoteExpr:
+		return a.rewriteRefOfJSONUnquoteExpr(parent, node, replacer)
 	case *JSONValueExpr:
 		return a.rewriteRefOfJSONValueExpr(parent, node, replacer)
+	case *JSONValueMergeExpr:
+		return a.rewriteRefOfJSONValueMergeExpr(parent, node, replacer)
+	case *JSONValueModifierExpr:
+		return a.rewriteRefOfJSONValueModifierExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
@@ -6518,6 +6669,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfJSONPrettyExpr(parent, node, replacer)
 	case *JSONQuoteExpr:
 		return a.rewriteRefOfJSONQuoteExpr(parent, node, replacer)
+	case *JSONRemoveExpr:
+		return a.rewriteRefOfJSONRemoveExpr(parent, node, replacer)
 	case *JSONSchemaValidFuncExpr:
 		return a.rewriteRefOfJSONSchemaValidFuncExpr(parent, node, replacer)
 	case *JSONSchemaValidationReportFuncExpr:
@@ -6528,8 +6681,14 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfJSONStorageFreeExpr(parent, node, replacer)
 	case *JSONStorageSizeExpr:
 		return a.rewriteRefOfJSONStorageSizeExpr(parent, node, replacer)
+	case *JSONUnquoteExpr:
+		return a.rewriteRefOfJSONUnquoteExpr(parent, node, replacer)
 	case *JSONValueExpr:
 		return a.rewriteRefOfJSONValueExpr(parent, node, replacer)
+	case *JSONValueMergeExpr:
+		return a.rewriteRefOfJSONValueMergeExpr(parent, node, replacer)
+	case *JSONValueModifierExpr:
+		return a.rewriteRefOfJSONValueModifierExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:

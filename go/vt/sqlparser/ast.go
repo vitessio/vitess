@@ -2266,7 +2266,7 @@ type (
 		Params Exprs
 	}
 
-	// JSONObjectExpr represents JSON_ARRAY()
+	// JSONObjectExpr represents JSON_OB()
 	// More information on https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-object
 	JSONObjectExpr struct {
 		Params []*JSONObjectParam
@@ -2422,6 +2422,41 @@ type (
 	// JSONAttributeType is an enum to get types of TrimFunc.
 	// TrimFunc stand for one of the following: JSON_DEPTH JSON_TYPE JSON_VALID ENUM
 	JSONAttributeType int8
+
+	JSONValueModifierExpr struct {
+		Type    JSONValueModifierType
+		JSONDoc Expr
+		Params  []*JSONObjectParam
+	}
+
+	// JSONValueModifierType is an enum to get types of TrimFunc.
+	// TrimFunc stand for one of the following: JSON_DEPTH JSON_TYPE JSON_VALID ENUM
+	JSONValueModifierType int8
+
+	// JSONValueMergeExpr represents the json value modifier functions which merges documents.
+	// Functions falling under this class: JSON_MERGE, JSON_MERGE_PATCH, JSON_MERGE_PRESERVE
+	JSONValueMergeExpr struct {
+		Type        JSONValueMergeType
+		JSONDoc     Expr
+		JSONDocList Exprs
+	}
+
+	// JSONValueModifierType is an enum to get types of TrimFunc.
+	// TrimFunc stand for one of the following: JSON_DEPTH JSON_TYPE JSON_VALID ENUM
+	JSONValueMergeType int8
+
+	// JSONRemoveExpr represents the JSON_REMOVE()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/json-modification-functions.html#function_json-remove
+	JSONRemoveExpr struct {
+		JSONDoc  Expr
+		PathList Exprs
+	}
+
+	// JSONRemoveExpr represents the JSON_UNQUOTE()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/json-modification-functions.html#function_json-unquote
+	JSONUnquoteExpr struct {
+		JSONValue Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2478,6 +2513,10 @@ func (*JSONArrayExpr) iExpr()                      {}
 func (*JSONObjectExpr) iExpr()                     {}
 func (*JSONQuoteExpr) iExpr()                      {}
 func (*JSONAttributesExpr) iExpr()                 {}
+func (*JSONValueModifierExpr) iExpr()              {}
+func (*JSONValueMergeExpr) iExpr()                 {}
+func (*JSONRemoveExpr) iExpr()                     {}
+func (*JSONUnquoteExpr) iExpr()                    {}
 func (*MemberOfExpr) iExpr()                       {}
 
 // iCallable marks all expressions that represent function calls
@@ -2509,6 +2548,10 @@ func (*JSONValueExpr) iCallable()                      {}
 func (*JSONSearchExpr) iCallable()                     {}
 func (*JSONOverlapsExpr) iCallable()                   {}
 func (*JSONAttributesExpr) iCallable()                 {}
+func (*JSONValueModifierExpr) iCallable()              {}
+func (*JSONValueMergeExpr) iCallable()                 {}
+func (*JSONRemoveExpr) iCallable()                     {}
+func (*JSONUnquoteExpr) iCallable()                    {}
 func (*MemberOfExpr) iCallable()                       {}
 
 // Exprs represents a list of value expressions.

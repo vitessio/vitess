@@ -192,6 +192,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfJSONPrettyExpr(in, f)
 	case *JSONQuoteExpr:
 		return VisitRefOfJSONQuoteExpr(in, f)
+	case *JSONRemoveExpr:
+		return VisitRefOfJSONRemoveExpr(in, f)
 	case *JSONSchemaValidFuncExpr:
 		return VisitRefOfJSONSchemaValidFuncExpr(in, f)
 	case *JSONSchemaValidationReportFuncExpr:
@@ -204,8 +206,14 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfJSONStorageSizeExpr(in, f)
 	case *JSONTableExpr:
 		return VisitRefOfJSONTableExpr(in, f)
+	case *JSONUnquoteExpr:
+		return VisitRefOfJSONUnquoteExpr(in, f)
 	case *JSONValueExpr:
 		return VisitRefOfJSONValueExpr(in, f)
+	case *JSONValueMergeExpr:
+		return VisitRefOfJSONValueMergeExpr(in, f)
+	case *JSONValueModifierExpr:
+		return VisitRefOfJSONValueModifierExpr(in, f)
 	case *JoinCondition:
 		return VisitRefOfJoinCondition(in, f)
 	case *JoinTableExpr:
@@ -1602,6 +1610,21 @@ func VisitRefOfJSONQuoteExpr(in *JSONQuoteExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfJSONRemoveExpr(in *JSONRemoveExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.JSONDoc, f); err != nil {
+		return err
+	}
+	if err := VisitExprs(in.PathList, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfJSONSchemaValidFuncExpr(in *JSONSchemaValidFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1705,6 +1728,18 @@ func VisitRefOfJSONTableExpr(in *JSONTableExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfJSONUnquoteExpr(in *JSONUnquoteExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.JSONValue, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfJSONValueExpr(in *JSONValueExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1717,6 +1752,38 @@ func VisitRefOfJSONValueExpr(in *JSONValueExpr, f Visit) error {
 	}
 	if err := VisitJSONPathParam(in.Path, f); err != nil {
 		return err
+	}
+	return nil
+}
+func VisitRefOfJSONValueMergeExpr(in *JSONValueMergeExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.JSONDoc, f); err != nil {
+		return err
+	}
+	if err := VisitExprs(in.JSONDocList, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfJSONValueModifierExpr(in *JSONValueModifierExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.JSONDoc, f); err != nil {
+		return err
+	}
+	for _, el := range in.Params {
+		if err := VisitRefOfJSONObjectParam(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -3053,6 +3120,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfJSONPrettyExpr(in, f)
 	case *JSONQuoteExpr:
 		return VisitRefOfJSONQuoteExpr(in, f)
+	case *JSONRemoveExpr:
+		return VisitRefOfJSONRemoveExpr(in, f)
 	case *JSONSchemaValidFuncExpr:
 		return VisitRefOfJSONSchemaValidFuncExpr(in, f)
 	case *JSONSchemaValidationReportFuncExpr:
@@ -3063,8 +3132,14 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfJSONStorageFreeExpr(in, f)
 	case *JSONStorageSizeExpr:
 		return VisitRefOfJSONStorageSizeExpr(in, f)
+	case *JSONUnquoteExpr:
+		return VisitRefOfJSONUnquoteExpr(in, f)
 	case *JSONValueExpr:
 		return VisitRefOfJSONValueExpr(in, f)
+	case *JSONValueMergeExpr:
+		return VisitRefOfJSONValueMergeExpr(in, f)
+	case *JSONValueModifierExpr:
+		return VisitRefOfJSONValueModifierExpr(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
@@ -3251,6 +3326,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfJSONPrettyExpr(in, f)
 	case *JSONQuoteExpr:
 		return VisitRefOfJSONQuoteExpr(in, f)
+	case *JSONRemoveExpr:
+		return VisitRefOfJSONRemoveExpr(in, f)
 	case *JSONSchemaValidFuncExpr:
 		return VisitRefOfJSONSchemaValidFuncExpr(in, f)
 	case *JSONSchemaValidationReportFuncExpr:
@@ -3261,8 +3338,14 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfJSONStorageFreeExpr(in, f)
 	case *JSONStorageSizeExpr:
 		return VisitRefOfJSONStorageSizeExpr(in, f)
+	case *JSONUnquoteExpr:
+		return VisitRefOfJSONUnquoteExpr(in, f)
 	case *JSONValueExpr:
 		return VisitRefOfJSONValueExpr(in, f)
+	case *JSONValueMergeExpr:
+		return VisitRefOfJSONValueMergeExpr(in, f)
+	case *JSONValueModifierExpr:
+		return VisitRefOfJSONValueModifierExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:
@@ -3385,6 +3468,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfJSONPrettyExpr(in, f)
 	case *JSONQuoteExpr:
 		return VisitRefOfJSONQuoteExpr(in, f)
+	case *JSONRemoveExpr:
+		return VisitRefOfJSONRemoveExpr(in, f)
 	case *JSONSchemaValidFuncExpr:
 		return VisitRefOfJSONSchemaValidFuncExpr(in, f)
 	case *JSONSchemaValidationReportFuncExpr:
@@ -3395,8 +3480,14 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfJSONStorageFreeExpr(in, f)
 	case *JSONStorageSizeExpr:
 		return VisitRefOfJSONStorageSizeExpr(in, f)
+	case *JSONUnquoteExpr:
+		return VisitRefOfJSONUnquoteExpr(in, f)
 	case *JSONValueExpr:
 		return VisitRefOfJSONValueExpr(in, f)
+	case *JSONValueMergeExpr:
+		return VisitRefOfJSONValueMergeExpr(in, f)
+	case *JSONValueModifierExpr:
+		return VisitRefOfJSONValueModifierExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:

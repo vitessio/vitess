@@ -2811,3 +2811,54 @@ func (node *JSONAttributesExpr) formatFast(buf *TrackedBuffer) {
 	}
 	buf.WriteString(")")
 }
+
+// formatFast formats the node.
+func (node *JSONValueModifierExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Type.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.JSONDoc, true)
+	buf.WriteString(", ")
+	var prefix string
+	for _, n := range node.Params {
+		buf.WriteString(prefix)
+		n.formatFast(buf)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// formatFast formats the node.
+func (node *JSONValueMergeExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Type.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.JSONDoc, true)
+	buf.WriteString(", ")
+	var prefix string
+	for _, n := range node.JSONDocList {
+		buf.WriteString(prefix)
+		buf.printExpr(node, n, true)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// formatFast formats the node.
+func (node *JSONRemoveExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_remove(")
+	buf.printExpr(node, node.JSONDoc, true)
+	buf.WriteString(", ")
+	var prefix string
+	for _, n := range node.PathList {
+		buf.WriteString(prefix)
+		buf.printExpr(node, n, true)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// formatFast formats the node.
+func (node *JSONUnquoteExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_unquote(")
+	buf.printExpr(node, node.JSONValue, true)
+	buf.WriteString(")")
+}

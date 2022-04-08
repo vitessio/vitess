@@ -1366,6 +1366,38 @@ func (ty JSONAttributeType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty JSONValueModifierType) ToString() string {
+	switch ty {
+	case JSONArrayAppendType:
+		return JSONArrayAppendStr
+	case JSONArrayInsertType:
+		return JSONArrayInsertStr
+	case JSONInsertType:
+		return JSONInsertStr
+	case JSONReplaceType:
+		return JSONReplaceStr
+	case JSONSetType:
+		return JSONSetStr
+	default:
+		return "Unknown JSONValueModifierType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty JSONValueMergeType) ToString() string {
+	switch ty {
+	case JSONMergeType:
+		return JSONMergeStr
+	case JSONMergePatchType:
+		return JSONMergePatchStr
+	case JSONMergePreserveType:
+		return JSONMergePreserveStr
+	default:
+		return "Unknown JSONValueMergeType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty ExplainType) ToString() string {
 	switch ty {
 	case EmptyType:
