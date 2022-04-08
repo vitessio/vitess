@@ -3309,7 +3309,26 @@ Gen4 plan same as above
     "Vindex": "multicolIdx"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update multicol_tbl set x = 1 where colb IN (1,2) and cola = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update multicol_tbl set x = 1 where colb in (1, 2) and cola = 1",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
 
 # update with a multicol vindex using an IN clause
 "update multicol_tbl set x = 1 where colb IN (1,2) and cola IN (3,4)"
