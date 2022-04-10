@@ -32,6 +32,7 @@ jobs:
             - 'proto/*.proto'
             - 'tools/**'
             - 'config/**'
+            - 'bootstrap.sh'
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'

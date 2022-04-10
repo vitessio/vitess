@@ -16,8 +16,10 @@ jobs:
         filters: |
           parser_changes:
             - 'go/vt/sqlparser/**'
-            - 'tools/check_make_parser.sh'
             - 'go.[sumod]'
+            - 'build.env'
+            - 'bootstrap.sh'
+            - 'tools/**'
 
     - name: Set up Go
       uses: actions/setup-go@v2

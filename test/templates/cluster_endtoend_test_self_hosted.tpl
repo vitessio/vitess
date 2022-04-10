@@ -28,6 +28,7 @@ jobs:
               - 'tools/**'
               - 'config/**'
               - '.github/docker/**'
+              - 'bootstrap.sh'
 
       - name: Build Docker Image
         if: steps.changes.outputs.end_to_end == 'true'
