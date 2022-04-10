@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 )
 
 type planExec func(plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
@@ -68,9 +67,6 @@ func (e *Executor) newExecute(
 		safeSession,
 		logStats,
 	)
-	if err == planbuilder.ErrPlanNotSupported {
-		return err
-	}
 	execStart := e.logPlanningFinished(logStats, plan)
 
 	if err != nil {

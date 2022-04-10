@@ -214,6 +214,8 @@ type VtctldClient interface {
 	GetKeyspace(ctx context.Context, in *vtctldata.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.GetKeyspaceResponse, error)
 	// GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
 	GetKeyspaces(ctx context.Context, in *vtctldata.GetKeyspacesRequest, opts ...grpc.CallOption) (*vtctldata.GetKeyspacesResponse, error)
+	// GetPermissions returns the permissions set on the remote tablet.
+	GetPermissions(ctx context.Context, in *vtctldata.GetPermissionsRequest, opts ...grpc.CallOption) (*vtctldata.GetPermissionsResponse, error)
 	// GetRoutingRules returns the VSchema routing rules.
 	GetRoutingRules(ctx context.Context, in *vtctldata.GetRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.GetRoutingRulesResponse, error)
 	// GetSchema returns the schema for a tablet, or just the schema for the
@@ -682,6 +684,15 @@ func (c *vtctldClient) GetKeyspace(ctx context.Context, in *vtctldata.GetKeyspac
 func (c *vtctldClient) GetKeyspaces(ctx context.Context, in *vtctldata.GetKeyspacesRequest, opts ...grpc.CallOption) (*vtctldata.GetKeyspacesResponse, error) {
 	out := new(vtctldata.GetKeyspacesResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetKeyspaces", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) GetPermissions(ctx context.Context, in *vtctldata.GetPermissionsRequest, opts ...grpc.CallOption) (*vtctldata.GetPermissionsResponse, error) {
+	out := new(vtctldata.GetPermissionsResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetPermissions", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1252,6 +1263,8 @@ type VtctldServer interface {
 	GetKeyspace(context.Context, *vtctldata.GetKeyspaceRequest) (*vtctldata.GetKeyspaceResponse, error)
 	// GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
 	GetKeyspaces(context.Context, *vtctldata.GetKeyspacesRequest) (*vtctldata.GetKeyspacesResponse, error)
+	// GetPermissions returns the permissions set on the remote tablet.
+	GetPermissions(context.Context, *vtctldata.GetPermissionsRequest) (*vtctldata.GetPermissionsResponse, error)
 	// GetRoutingRules returns the VSchema routing rules.
 	GetRoutingRules(context.Context, *vtctldata.GetRoutingRulesRequest) (*vtctldata.GetRoutingRulesResponse, error)
 	// GetSchema returns the schema for a tablet, or just the schema for the
@@ -1514,6 +1527,9 @@ func (UnimplementedVtctldServer) GetKeyspace(context.Context, *vtctldata.GetKeys
 }
 func (UnimplementedVtctldServer) GetKeyspaces(context.Context, *vtctldata.GetKeyspacesRequest) (*vtctldata.GetKeyspacesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetKeyspaces not implemented")
+}
+func (UnimplementedVtctldServer) GetPermissions(context.Context, *vtctldata.GetPermissionsRequest) (*vtctldata.GetPermissionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPermissions not implemented")
 }
 func (UnimplementedVtctldServer) GetRoutingRules(context.Context, *vtctldata.GetRoutingRulesRequest) (*vtctldata.GetRoutingRulesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRoutingRules not implemented")
@@ -2169,6 +2185,24 @@ func _Vtctld_GetKeyspaces_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).GetKeyspaces(ctx, req.(*vtctldata.GetKeyspacesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetPermissions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetPermissionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetPermissions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetPermissions",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetPermissions(ctx, req.(*vtctldata.GetPermissionsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3200,6 +3234,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetKeyspaces",
 			Handler:    _Vtctld_GetKeyspaces_Handler,
+		},
+		{
+			MethodName: "GetPermissions",
+			Handler:    _Vtctld_GetPermissions_Handler,
 		},
 		{
 			MethodName: "GetRoutingRules",

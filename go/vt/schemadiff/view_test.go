@@ -130,7 +130,7 @@ func TestCreateViewDiff(t *testing.T) {
 	}
 	hints := &DiffHints{}
 	for _, ts := range tt {
-		t.Run(ts.name, func(*testing.T) {
+		t.Run(ts.name, func(t *testing.T) {
 			fromStmt, err := sqlparser.Parse(ts.from)
 			assert.NoError(t, err)
 			fromCreateView, ok := fromStmt.(*sqlparser.CreateView)

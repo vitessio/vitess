@@ -967,6 +967,18 @@ func (cached *Set) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *ShowExec) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field ShowFilter *vitess.io/vitess/go/vt/sqlparser.ShowFilter
+	size += cached.ShowFilter.CachedSize(true)
+	return size
+}
 func (cached *SimpleProjection) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1188,6 +1200,20 @@ func (cached *VindexValues) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
+	return size
+}
+func (cached *VitessMetadata) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Name string
+	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
+	// field Value string
+	size += hack.RuntimeAllocSize(int64(len(cached.Value)))
 	return size
 }
 

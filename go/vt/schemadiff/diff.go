@@ -59,12 +59,9 @@ func DiffTables(create1 *sqlparser.CreateTable, create2 *sqlparser.CreateTable, 
 	case create1 == nil && create2 == nil:
 		return nil, nil
 	case create1 == nil:
-		return &CreateTableEntityDiff{createTable: create2}, nil
+		return NewCreateTableEntity(create2).Create(), nil
 	case create2 == nil:
-		dropTable := &sqlparser.DropTable{
-			FromTables: []sqlparser.TableName{create1.Table},
-		}
-		return &DropTableEntityDiff{dropTable: dropTable}, nil
+		return NewCreateTableEntity(create1).Drop(), nil
 	default:
 		c1 := NewCreateTableEntity(create1)
 		c2 := NewCreateTableEntity(create2)
@@ -116,15 +113,39 @@ func DiffViews(create1 *sqlparser.CreateView, create2 *sqlparser.CreateView, hin
 	case create1 == nil && create2 == nil:
 		return nil, nil
 	case create1 == nil:
-		return &CreateViewEntityDiff{createView: create2}, nil
+		return NewCreateViewEntity(create2).Create(), nil
 	case create2 == nil:
-		dropView := &sqlparser.DropView{
-			FromTables: []sqlparser.TableName{create1.ViewName},
-		}
-		return &DropViewEntityDiff{dropView: dropView}, nil
+		return NewCreateViewEntity(create1).Drop(), nil
 	default:
 		c1 := NewCreateViewEntity(create1)
 		c2 := NewCreateViewEntity(create2)
 		return c1.Diff(c2, hints)
 	}
+}
+
+// DiffSchemasSQL compares two schemas and returns the list of diffs that turn
+// 1st schema into 2nd. Schemas are build from SQL, each of which can contain an arbitrary number of
+// CREATE TABLE and CREATE VIEW statements.
+func DiffSchemasSQL(sql1 string, sql2 string, hints *DiffHints) ([]EntityDiff, error) {
+	schema1, err := NewSchemaFromSQL(sql1)
+	if err != nil {
+		return nil, err
+	}
+	schema2, err := NewSchemaFromSQL(sql2)
+	if err != nil {
+		return nil, err
+	}
+	return schema1.Diff(schema2, hints)
+}
+
+// DiffSchemasSQL compares two schemas and returns the list of diffs that turn
+// 1st schema into 2nd. Any of the schemas may be nil.
+func DiffSchemas(schema1 *Schema, schema2 *Schema, hints *DiffHints) ([]EntityDiff, error) {
+	if schema1 == nil {
+		schema1 = newEmptySchema()
+	}
+	if schema2 == nil {
+		schema2 = newEmptySchema()
+	}
+	return schema1.Diff(schema2, hints)
 }

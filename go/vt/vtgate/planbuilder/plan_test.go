@@ -28,6 +28,7 @@ import (
 	"strings"
 	"testing"
 
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -477,6 +478,24 @@ type vschemaWrapper struct {
 	dest          key.Destination
 	sysVarEnabled bool
 	version       plancontext.PlannerVersion
+}
+
+func (vw *vschemaWrapper) GetVSchema() *vindexes.VSchema {
+	return vw.v
+}
+
+func (vw *vschemaWrapper) GetSrvVschema() *vschemapb.SrvVSchema {
+	return &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"user": {
+				Sharded:  true,
+				Vindexes: map[string]*vschemapb.Vindex{},
+				Tables: map[string]*vschemapb.Table{
+					"user": {},
+				},
+			},
+		},
+	}
 }
 
 func (vw *vschemaWrapper) ConnCollation() collations.ID {

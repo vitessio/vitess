@@ -510,12 +510,11 @@ const (
 			AND TABLES.TABLE_NAME=%a
 			AND AUTO_INCREMENT IS NOT NULL
 		`
-	sqlAlterTableAutoIncrement      = "ALTER TABLE `%s` AUTO_INCREMENT=%a"
-	sqlImpossibleSelectVreplication = "SELECT no_such_column__init_ddl FROM _vt.vreplication LIMIT 1"
-	sqlStartVReplStream             = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
-	sqlStopVReplStream              = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
-	sqlDeleteVReplStream            = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
-	sqlReadVReplStream              = `SELECT
+	sqlAlterTableAutoIncrement = "ALTER TABLE `%s` AUTO_INCREMENT=%a"
+	sqlStartVReplStream        = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
+	sqlStopVReplStream         = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
+	sqlDeleteVReplStream       = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
+	sqlReadVReplStream         = `SELECT
 			id,
 			workflow,
 			source,

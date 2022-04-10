@@ -46,6 +46,9 @@ mysql --table < show_initial_data.sql
 sleep 5 # Give reshard time to finish copying
 
 # SwitchReads
+
+sleep 5 # wait for workflow to run
+
 ./204_switch_reads.sh
 
 # SwitchWrites

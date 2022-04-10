@@ -116,6 +116,11 @@ type (
 		MessageStream(rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error
 
 		VStream(rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
+
+		// ShowExec takes in show command and use executor to execute the query, they are used when topo access is involved.
+		ShowExec(command sqlparser.ShowCommandType, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
+		// SetExec takes in k,v pair and use executor to set them in topo metadata.
+		SetExec(name string, value string) error
 	}
 
 	//SessionActions gives primitives ability to interact with the session state

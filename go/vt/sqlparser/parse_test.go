@@ -1909,6 +1909,8 @@ var (
 		input:  "show vitess_keyspaces like '%'",
 		output: "show keyspaces like '%'",
 	}, {
+		input: "show vitess_metadata variables",
+	}, {
 		input: "show vitess_replication_status",
 	}, {
 		input: "show vitess_replication_status like '%'",
@@ -1923,11 +1925,16 @@ var (
 	}, {
 		input: "show vitess_tablets where hostname = 'some-tablet'",
 	}, {
+		input: "show vitess_targets",
+	}, {
 		input: "show vschema tables",
 	}, {
 		input: "show vschema vindexes",
 	}, {
-		input: "show vschema vindexes on t",
+		input: "show vschema vindexes from t",
+	}, {
+		input:  "show vschema vindexes on t",
+		output: "show vschema vindexes from t",
 	}, {
 		input: "show vitess_migrations",
 	}, {
@@ -2545,6 +2552,111 @@ var (
 	}, {
 		input:  "select b from v1 vq1, lateral (select count(*) from v1 vq2 having vq1.b = 3) dt",
 		output: "select b from v1 as vq1, lateral (select count(*) from v1 as vq2 having vq1.b = 3) as dt",
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALID('{"type":"string","pattern":"("}', '"abc"')`,
+		output: `select json_schema_valid('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual`,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALID('{"type":"string","pattern":"("}', @a)`,
+		output: `select json_schema_valid('{\"type\":\"string\",\"pattern\":\"(\"}', @a) from dual`,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALID(@b, BIN(1))`,
+		output: `select json_schema_valid(@b, BIN(1)) from dual`,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALID(N'{"type":"string","pattern":"("}', '"abc"')`,
+		output: `select json_schema_valid(N'{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual`,
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALIDATION_REPORT('{"type":"string","pattern":"("}', '"abc"')`,
+		output: `select json_schema_validation_report('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual`,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALIDATION_REPORT('{"type":"string","pattern":"("}', @a)`,
+		output: `select json_schema_validation_report('{\"type\":\"string\",\"pattern\":\"(\"}', @a) from dual`,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALIDATION_REPORT(@b, BIN(1))`,
+		output: `select json_schema_validation_report(@b, BIN(1)) from dual`,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALIDATION_REPORT(N'{"type":"string","pattern":"("}', '"abc"')`,
+		output: `select json_schema_validation_report(N'{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual`,
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
+	}, {
+		input:  `SELECT JSON_CONTAINS('{"a": 1, "b": 2, "c": {"d": 4}}', '1')`,
+		output: `select json_contains('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1') from dual`,
+	}, {
+		input:  "SELECT JSON_CONTAINS(@j, @j2)",
+		output: "select json_contains(@j, @j2) from dual",
+	}, {
+		input:  "SELECT JSON_CONTAINS(@j, @j2,'$.a', @j)",
+		output: "select json_contains(@j, @j2, '$.a', @j) from dual",
+	}, {
+		input:  "SELECT JSON_CONTAINS_PATH(@j, 'one', '$.a', '$.e')",
+		output: "select json_contains_path(@j, 'one', '$.a', '$.e') from dual",
+	}, {
+		input:  `SELECT JSON_CONTAINS_PATH('{"a": 1, "b": 2, "c": {"d": 4}}', 'one', '$.a', '$.e')`,
+		output: `select json_contains_path('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e') from dual`,
+	}, {
+		input:  "SELECT JSON_CONTAINS_PATH(@j, TRIM('one'), '$.a', '$.e')",
+		output: "select json_contains_path(@j, trim('one'), '$.a', '$.e') from dual",
+	}, {
+		input:  "SELECT JSON_CONTAINS_PATH(@j, @k, '$.a', @i)",
+		output: "select json_contains_path(@j, @k, '$.a', @i) from dual",
+	}, {
+		input:  "SELECT JSON_EXTRACT(@j, '$.a')",
+		output: "select json_extract(@j, '$.a') from dual",
+	}, {
+		input:  `SELECT c, JSON_EXTRACT(c, "$.id"), g FROM jemp WHERE JSON_EXTRACT(c, "$.id") > 1 ORDER BY JSON_EXTRACT(c, "$.name")`,
+		output: "select c, json_extract(c, '$.id'), g from jemp where json_extract(c, '$.id') > 1 order by json_extract(c, '$.name') asc",
+	}, {
+		input:  `SELECT JSON_EXTRACT('{"a": 1, "b": 2, "c": {"d": 4}}', '$.a', @j)`,
+		output: `select json_extract('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a', @j) from dual`,
+	}, {
+		input:  `SELECT JSON_KEYS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a')`,
+		output: `select json_keys('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a') from dual`,
+	}, {
+		input:  `SELECT JSON_KEYS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}')`,
+		output: `select json_keys('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}') from dual`,
+	}, {
+		input:  `SELECT JSON_OVERLAPS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a')`,
+		output: `select json_overlaps('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a') from dual`,
+	}, {
+		input:  "SELECT JSON_OVERLAPS(@j, @k)",
+		output: "select json_overlaps(@j, @k) from dual",
+	}, {
+		input:  "SELECT JSON_OVERLAPS(@j, BIN(1))",
+		output: "select json_overlaps(@j, BIN(1)) from dual",
+	}, {
+		input:  "SELECT JSON_SEARCH(@j, 'one', 'abc')",
+		output: "select json_search(@j, 'one', 'abc') from dual",
+	}, {
+		input:  `SELECT JSON_SEARCH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', @j, BIN(2))`,
+		output: `select json_search('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', @j, BIN(2)) from dual`,
+	}, {
+		input:  `SELECT JSON_SEARCH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'all', '10', NULL)`,
+		output: `select json_search('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'all', '10', null) from dual`,
+	}, {
+		input:  "SELECT JSON_SEARCH(@j, 'all', '%b%', '', '$[3]')",
+		output: "select json_search(@j, 'all', '%b%', '', '$[3]') from dual",
+	}, {
+		input:  "SELECT JSON_SEARCH(@j, 'all', '%b%', 'a', '$[3]')",
+		output: "select json_search(@j, 'all', '%b%', 'a', '$[3]') from dual",
+	}, {
+		input:  `SELECT JSON_VALUE('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a')`,
+		output: `select json_value('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a') from dual`,
+	}, {
+		input:  `SELECT JSON_VALUE(@j, @k)`,
+		output: `select json_value(@j, @k) from dual`,
+	}, {
+		input:  `SELECT 17 MEMBER OF ('[23, "abc", 17, "ab", 10]')`,
+		output: `select 17 member of ('[23, \"abc\", 17, \"ab\", 10]') from dual`,
+	}, {
+		input:  "SELECT @j MEMBER OF (@k)",
+		output: "select @j member of (@k) from dual",
+	}, {
+		input:  `SELECT 17 MEMBER OF('[23, "abc", "17", "ab", 10]'), "17" MEMBER OF('[23, "abc", 17, "ab", 10]')`,
+		output: `select 17 member of ('[23, \"abc\", \"17\", \"ab\", 10]'), '17' member of ('[23, \"abc\", 17, \"ab\", 10]') from dual`,
 	}}
 )
 
@@ -2669,6 +2781,27 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "select from t1, lateral (with qn as (select t1.a) select (select max(a) from qn)) as dt",
 		err:   "syntax error at position 12 near 'from'",
+	}, {
+		input: `SELECT JSON_SCHEMA_VALID('{"type":"string","pattern":"("}')`,
+		err:   `syntax error at position 60`,
+	}, {
+		input: `SELECT JSON_SCHEMA_VALIDATION_REPORT('{"type":"string","pattern":"("}')`,
+		err:   `syntax error at position 72`,
+	}, {
+		input: "SELECT JSON_CONTAINS(@j, @j2, )",
+		err:   "syntax error at position 32",
+	}, {
+		input: "SELECT JSON_CONTAINS_PATH(@j, @j2)",
+		err:   "syntax error at position 35",
+	}, {
+		input: "SELECT JSON_EXTRACT(@k, TRIM('abc'))",
+		err:   "syntax error at position 30",
+	}, {
+		input: "SELECT JSON_EXTRACT(@k)",
+		err:   "syntax error at position 24",
+	}, {
+		input: `SELECT JSON_KEYS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}',)`,
+		err:   `syntax error at position 61`,
 	}}
 
 	for _, tcase := range invalidSQL {

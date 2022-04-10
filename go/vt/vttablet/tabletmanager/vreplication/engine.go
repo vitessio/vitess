@@ -84,7 +84,7 @@ func init() {
 
 // this are the default tablet_types that will be used by the tablet picker to find sources for a vreplication stream
 // it can be overridden by passing a different list to the MoveTables or Reshard commands
-var tabletTypesStr = flag.String("vreplication_tablet_type", "PRIMARY,REPLICA", "comma separated list of tablet types used as a source")
+var tabletTypesStr = flag.String("vreplication_tablet_type", "in_order:REPLICA,PRIMARY", "comma separated list of tablet types used as a source")
 
 // waitRetryTime can be changed to a smaller value for tests.
 // A VReplication stream can be created by sending an insert statement
@@ -210,26 +210,7 @@ func (vre *Engine) Open(ctx context.Context) {
 	}
 }
 
-// ensureValidSchema runs a "fake" query using WithDDL, which always fails, forcing WithDDL to run all its DDLs resulting
-// in the desired schema. This is a workaround, protecting against queries to vreplication tables that
-// don't use the recommended WithDDL.Exec() mechanism. Adding this function makes the use of WithDDL.Exec() unnecessary.
-// We plan to refactor so that we remove WithDDL, just define the list of DDLs required to reach the desired
-// and execute vreplication queries normally.
-func (vre *Engine) ensureValidSchema(ctx context.Context) error {
-	dbClient := vre.dbClientFactoryFiltered()
-	if err := dbClient.Connect(); err != nil {
-		return err
-	}
-	defer dbClient.Close()
-	_, _ = withDDL.ExecIgnore(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch)
-	return nil
-}
-
 func (vre *Engine) openLocked(ctx context.Context) error {
-
-	if err := vre.ensureValidSchema(ctx); err != nil {
-		return err
-	}
 
 	rows, err := vre.readAllRows(ctx)
 	if err != nil {

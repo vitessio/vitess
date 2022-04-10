@@ -770,49 +770,6 @@ func (node *Show) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *ShowLegacy) Format(buf *TrackedBuffer) {
-	nodeType := strings.ToLower(node.Type)
-	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes" ||
-		nodeType == "databases" || nodeType == "schemas" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_replication_status" ||
-		nodeType == "vitess_shards" || nodeType == "vitess_tablets") && node.ShowTablesOpt != nil {
-		opt := node.ShowTablesOpt
-		if node.Extended != "" {
-			buf.astPrintf(node, "show %s%s", node.Extended, nodeType)
-		} else {
-			buf.astPrintf(node, "show %s%s", opt.Full, nodeType)
-		}
-		if (nodeType == "columns" || nodeType == "fields") && node.HasOnTable() {
-			buf.astPrintf(node, " from %v", node.OnTable)
-		}
-		if (nodeType == "index" || nodeType == "keys" || nodeType == "indexes") && node.HasOnTable() {
-			buf.astPrintf(node, " from %v", node.OnTable)
-		}
-		if opt.DbName != "" {
-			buf.astPrintf(node, " from %s", opt.DbName)
-		}
-		buf.astPrintf(node, "%v", opt.Filter)
-		return
-	}
-	if node.Scope == ImplicitScope {
-		buf.astPrintf(node, "show %s", nodeType)
-	} else {
-		buf.astPrintf(node, "show %s %s", node.Scope.ToString(), nodeType)
-	}
-	if node.HasOnTable() {
-		buf.astPrintf(node, " on %v", node.OnTable)
-	}
-	if nodeType == "collation" && node.ShowCollationFilterOpt != nil {
-		buf.astPrintf(node, " where %v", node.ShowCollationFilterOpt)
-	}
-	if nodeType == "charset" && node.ShowTablesOpt != nil {
-		buf.astPrintf(node, "%v", node.ShowTablesOpt.Filter)
-	}
-	if node.HasTable() {
-		buf.astPrintf(node, " %v", node.Table)
-	}
-}
-
-// Format formats the node.
 func (node *ShowFilter) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
@@ -1581,6 +1538,11 @@ func (node *ShowCreate) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *ShowOther) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show %s", node.Command)
+}
+
+// Format formats the node.
 func (node *SelectInto) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
@@ -2003,6 +1965,16 @@ func (node Offset) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *JSONSchemaValidFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_schema_valid(%v, %v)", node.Schema, node.Document)
+}
+
+// Format formats the node.
+func (node *JSONSchemaValidationReportFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_schema_validation_report(%v, %v)", node.Schema, node.Document)
+}
+
+// Format formats the node.
 func (node *JSONArrayExpr) Format(buf *TrackedBuffer) {
 	//buf.astPrintf(node,"%s(,"node.Name.Lowered())
 	buf.WriteString("json_array(")
@@ -2040,4 +2012,86 @@ func (node JSONObjectParam) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *JSONQuoteExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "json_quote(%v)", node.StringArg)
+}
+
+// Format formats the node
+func (node *JSONContainsExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_contains(%v, %v", node.Target, node.Candidate)
+	if len(node.PathList) > 0 {
+		buf.WriteString(", ")
+	}
+	var prefix string
+	for _, n := range node.PathList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node
+func (node *JSONContainsPathExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_contains_path(%v, %v, ", node.JSONDoc, node.OneOrAll)
+	var prefix string
+	for _, n := range node.PathList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node
+func (node *JSONExtractExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_extract(%v, ", node.JSONDoc)
+	var prefix string
+	for _, n := range node.PathList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node
+func (node *JSONKeysExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_keys(%v", node.JSONDoc)
+	if len(node.PathList) > 0 {
+		buf.WriteString(", ")
+	}
+	var prefix string
+	for _, n := range node.PathList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node
+func (node *JSONOverlapsExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_overlaps(%v, %v)", node.JSONDoc1, node.JSONDoc2)
+}
+
+// Format formats the node
+func (node *JSONSearchExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_search(%v, %v, %v", node.JSONDoc, node.OneOrAll, node.SearchStr)
+	if node.EscapeChar != nil {
+		buf.astPrintf(node, ", %v", node.EscapeChar)
+	}
+	if len(node.PathList) > 0 {
+		buf.WriteString(", ")
+	}
+	var prefix string
+	for _, n := range node.PathList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node
+func (node *JSONValueExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_value(%v, %v)", node.JSONDoc, node.Path)
+}
+
+// Format formats the node
+func (node *MemberOfExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%v member of (%v)", node.Value, node.JSONArr)
 }

@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"sort"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -73,9 +72,6 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 	return BuildFromStmt(query, result.AST, reservedVars, vschema, result.BindVarNeeds, true, true)
 }
-
-// ErrPlanNotSupported is an error for plan building not supported
-var ErrPlanNotSupported = errors.New("plan building not supported")
 
 // BuildFromStmt builds a plan based on the AST provided.
 func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, bindVarNeeds *sqlparser.BindVarNeeds, enableOnlineDDL, enableDirectDDL bool) (*engine.Plan, error) {
@@ -212,12 +208,12 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 	case sqlparser.DBDDLStatement:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildDBDDLPlan)
 	case *sqlparser.SetTransaction:
-		return nil, ErrPlanNotSupported
+		return buildRoutePlan(stmt, reservedVars, vschema, buildSetTxPlan)
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release:
 		// Empty by design. Not executed by a plan
 		return nil, nil
 	case *sqlparser.Show:
-		return buildRoutePlan(stmt, reservedVars, vschema, buildShowPlan)
+		return buildShowPlan(query, stmt, reservedVars, vschema)
 	case *sqlparser.LockTables:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildLockPlan)
 	case *sqlparser.UnlockTables:
@@ -271,6 +267,13 @@ func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema
 		return engine.NewDBDDL(ksName, true, queryTimeout(dbDDL.Comments.Directives())), nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] database ddl not recognized: %s", sqlparser.String(dbDDLstmt))
+}
+
+func buildSetTxPlan(_ sqlparser.Statement, _ *sqlparser.ReservedVars, _ plancontext.VSchema) (engine.Primitive, error) {
+	// TODO: This is a NOP, modeled off of tx_isolation and tx_read_only.
+	// It's incredibly dangerous that it's a NOP, this will be fixed when it will be implemented.
+	// This is currently the refactor of existing setup.
+	return engine.NewRowsPrimitive(nil, nil), nil
 }
 
 func buildLoadPlan(query string, vschema plancontext.VSchema) (engine.Primitive, error) {

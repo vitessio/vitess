@@ -64,9 +64,10 @@ import (
 type API struct {
 	vtadminpb.UnimplementedVTAdminServer
 
+	clusterMu    sync.Mutex // guards `clusters` and `clusterMap`
 	clusters     []*cluster.Cluster
-	clusterCache *cache.Cache
 	clusterMap   map[string]*cluster.Cluster
+	clusterCache *cache.Cache
 	serv         *grpcserver.Server
 	router       *mux.Router
 
@@ -105,10 +106,6 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	sort.ClustersBy(func(c1, c2 *cluster.Cluster) bool {
 		return c1.ID < c2.ID
 	}).Sort(clusters)
-
-	if opts.GRPCOpts.Services == nil {
-		opts.GRPCOpts.Services = []string{"vtadmin.VTAdminServer"}
-	}
 
 	var (
 		authn rbac.Authenticator
@@ -226,15 +223,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dynamicAPI := &API{
-		clusters:   api.clusters,
-		clusterMap: api.clusterMap,
-		router:     api.router,
-		serv:       api.serv,
-		authz:      api.authz,
-		options:    api.options,
-	}
-
+	var dynamicAPI *API
 	clusterCookie, err := r.Cookie("cluster")
 
 	if err == nil {
@@ -245,31 +234,58 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				var clusterJSON DynamicClusterJSON
 				err = json.Unmarshal(decoded, &clusterJSON)
 				if err == nil {
+
+					api.clusterMu.Lock()
+
 					clusterID := clusterJSON.ClusterName
-					c, err := cluster.Config{
-						ID:            clusterID,
-						Name:          clusterID,
-						DiscoveryImpl: "dynamic",
-						DiscoveryFlagsByImpl: cluster.FlagsByImpl{
-							"dynamic": map[string]string{
-								"discovery": string(decoded),
+					if _, exists := api.clusterMap[clusterID]; !exists {
+						c, err := cluster.Config{
+							ID:            clusterID,
+							Name:          clusterID,
+							DiscoveryImpl: "dynamic",
+							DiscoveryFlagsByImpl: cluster.FlagsByImpl{
+								"dynamic": map[string]string{
+									"discovery": string(decoded),
+								},
 							},
-						},
-					}.Cluster()
-					if err == nil {
-						api.clusterMap[clusterID] = c
-						api.clusters = append(api.clusters, c)
-						err = api.clusterCache.Add(clusterID, c, 24*time.Hour)
-						if err != nil {
-							log.Infof("could not add dynamic cluster %s to cluster cache: %+v", clusterID, err)
+						}.Cluster()
+
+						if err == nil {
+							api.clusterMap[clusterID] = c
+							api.clusters = append(api.clusters, c)
+							sort.ClustersBy(func(c1, c2 *cluster.Cluster) bool {
+								return c1.ID < c2.ID
+							}).Sort(api.clusters)
+
+							err = api.clusterCache.Add(clusterID, c, cache.DefaultExpiration)
+							if err != nil {
+								log.Infof("could not add dynamic cluster %s to cluster cache: %+v", clusterID, err)
+							}
 						}
+					} else {
+						log.Infof("API already has cluster with id %s, using that instead", clusterID)
 					}
+
 					selectedCluster := api.clusterMap[clusterID]
-					dynamicAPI.clusters = []*cluster.Cluster{selectedCluster}
-					dynamicAPI.clusterMap = map[string]*cluster.Cluster{clusterID: selectedCluster}
+
+					api.clusterMu.Unlock()
+
+					dynamicAPI = &API{
+						clusters:     []*cluster.Cluster{selectedCluster},
+						clusterMap:   map[string]*cluster.Cluster{clusterID: selectedCluster},
+						clusterCache: api.clusterCache,
+						serv:         api.serv,
+						router:       api.router,
+						authz:        api.authz,
+						options:      api.options,
+					}
 				}
 			}
 		}
+	}
+
+	if dynamicAPI == nil {
+		dynamicAPI = api
 	}
 
 	defer dynamicAPI.Close()
@@ -333,11 +349,24 @@ func (api *API) Handler() http.Handler {
 }
 
 func (api *API) EjectDynamicCluster(key string, value any) {
+	api.clusterMu.Lock()
+	defer api.clusterMu.Unlock()
+
 	// Delete dynamic clusters from clusterMap when they are expired from clusterCache
 	_, ok := api.clusterMap[key]
 	if ok {
 		delete(api.clusterMap, key)
 	}
+
+	// Maintain order of clusters when removing dynamic cluster
+	clusterIndex := stdsort.Search(len(api.clusters), func(i int) bool { return api.clusters[i].ID == key })
+	if clusterIndex >= len(api.clusters) || clusterIndex < 0 {
+		log.Errorf("Cannot remove cluster %s from api.clusters. Cluster index %d is out of range for clusters slice of %d length.", key, clusterIndex, len(api.clusters))
+	}
+
+	api.clusters[0] = api.clusters[clusterIndex]
+
+	api.clusters = api.clusters[1:]
 }
 
 // CreateKeyspace is part of the vtadminpb.VTAdminServer interface.
@@ -577,9 +606,11 @@ func (api *API) GetClusters(ctx context.Context, req *vtadminpb.GetClustersReque
 	span, _ := trace.NewSpan(ctx, "API.GetClusters")
 	defer span.Finish()
 
-	vcs := make([]*vtadminpb.Cluster, 0, len(api.clusters))
+	clusters, _ := api.getClustersForRequest(nil)
 
-	for _, c := range api.clusters {
+	vcs := make([]*vtadminpb.Cluster, 0, len(clusters))
+
+	for _, c := range clusters {
 		if !api.authz.IsAuthorized(ctx, c.ID, rbac.ClusterResource, rbac.GetAction) {
 			continue
 		}
@@ -648,9 +679,9 @@ func (api *API) GetKeyspace(ctx context.Context, req *vtadminpb.GetKeyspaceReque
 	span, ctx := trace.NewSpan(ctx, "API.GetKeyspace")
 	defer span.Finish()
 
-	c, ok := api.clusterMap[req.ClusterId]
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
 	}
 
 	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.GetAction) {
@@ -933,9 +964,9 @@ func (api *API) GetSrvVSchema(ctx context.Context, req *vtadminpb.GetSrvVSchemaR
 	span.Annotate("cluster_id", req.ClusterId)
 	span.Annotate("cell", req.Cell)
 
-	c, ok := api.clusterMap[req.ClusterId]
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
 	}
 
 	if !api.authz.IsAuthorized(ctx, c.ID, rbac.SrvVSchemaResource, rbac.GetAction) {
@@ -1010,9 +1041,9 @@ func (api *API) DeleteTablet(ctx context.Context, req *vtadminpb.DeleteTabletReq
 		return nil, err
 	}
 
-	c, ok := api.clusterMap[tablet.Cluster.Id]
-	if !ok {
-		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	c, err := api.getClusterForRequest(tablet.Cluster.Id)
+	if err != nil {
+		return nil, err
 	}
 
 	cluster.AnnotateSpan(c, span)
@@ -1043,9 +1074,9 @@ func (api *API) ReparentTablet(ctx context.Context, req *vtadminpb.ReparentTable
 		return nil, err
 	}
 
-	c, ok := api.clusterMap[tablet.Cluster.Id]
-	if !ok {
-		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	c, err := api.getClusterForRequest(tablet.Cluster.Id)
+	if err != nil {
+		return nil, err
 	}
 
 	cluster.AnnotateSpan(c, span)
@@ -1075,9 +1106,9 @@ func (api *API) RunHealthCheck(ctx context.Context, req *vtadminpb.RunHealthChec
 		return nil, err
 	}
 
-	c, ok := api.clusterMap[tablet.Cluster.Id]
-	if !ok {
-		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	c, err := api.getClusterForRequest(tablet.Cluster.Id)
+	if err != nil {
+		return nil, err
 	}
 
 	cluster.AnnotateSpan(c, span)
@@ -1107,9 +1138,9 @@ func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest
 		return nil, err
 	}
 
-	c, ok := api.clusterMap[tablet.Cluster.Id]
-	if !ok {
-		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	c, err := api.getClusterForRequest(tablet.Cluster.Id)
+	if err != nil {
+		return nil, err
 	}
 
 	cluster.AnnotateSpan(c, span)
@@ -1139,9 +1170,9 @@ func (api *API) SetReadOnly(ctx context.Context, req *vtadminpb.SetReadOnlyReque
 		return nil, err
 	}
 
-	c, ok := api.clusterMap[tablet.Cluster.Id]
-	if !ok {
-		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	c, err := api.getClusterForRequest(tablet.Cluster.Id)
+	if err != nil {
+		return nil, err
 	}
 
 	cluster.AnnotateSpan(c, span)
@@ -1172,9 +1203,9 @@ func (api *API) SetReadWrite(ctx context.Context, req *vtadminpb.SetReadWriteReq
 		return nil, err
 	}
 
-	c, ok := api.clusterMap[tablet.Cluster.Id]
-	if !ok {
-		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	c, err := api.getClusterForRequest(tablet.Cluster.Id)
+	if err != nil {
+		return nil, err
 	}
 
 	cluster.AnnotateSpan(c, span)
@@ -1205,9 +1236,9 @@ func (api *API) StartReplication(ctx context.Context, req *vtadminpb.StartReplic
 		return nil, err
 	}
 
-	c, ok := api.clusterMap[tablet.Cluster.Id]
-	if !ok {
-		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	c, err := api.getClusterForRequest(tablet.Cluster.Id)
+	if err != nil {
+		return nil, err
 	}
 
 	cluster.AnnotateSpan(c, span)
@@ -1237,9 +1268,9 @@ func (api *API) StopReplication(ctx context.Context, req *vtadminpb.StopReplicat
 		return nil, err
 	}
 
-	c, ok := api.clusterMap[tablet.Cluster.Id]
-	if !ok {
-		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	c, err := api.getClusterForRequest(tablet.Cluster.Id)
+	if err != nil {
+		return nil, err
 	}
 
 	cluster.AnnotateSpan(c, span)
@@ -1311,9 +1342,9 @@ func (api *API) GetVSchema(ctx context.Context, req *vtadminpb.GetVSchemaRequest
 	span, ctx := trace.NewSpan(ctx, "API.GetVSchema")
 	defer span.Finish()
 
-	c, ok := api.clusterMap[req.ClusterId]
-	if !ok {
-		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
 	}
 
 	cluster.AnnotateSpan(c, span)
@@ -1482,9 +1513,9 @@ func (api *API) GetWorkflow(ctx context.Context, req *vtadminpb.GetWorkflowReque
 	span, ctx := trace.NewSpan(ctx, "API.GetWorkflow")
 	defer span.Finish()
 
-	c, ok := api.clusterMap[req.ClusterId]
-	if !ok {
-		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
 	}
 
 	cluster.AnnotateSpan(c, span)
@@ -1562,9 +1593,9 @@ func (api *API) RefreshState(ctx context.Context, req *vtadminpb.RefreshStateReq
 		return nil, err
 	}
 
-	c, ok := api.clusterMap[tablet.Cluster.Id]
-	if !ok {
-		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	c, err := api.getClusterForRequest(tablet.Cluster.Id)
+	if err != nil {
+		return nil, err
 	}
 
 	cluster.AnnotateSpan(c, span)
@@ -1589,9 +1620,9 @@ func (api *API) ValidateKeyspace(ctx context.Context, req *vtadminpb.ValidateKey
 	span, ctx := trace.NewSpan(ctx, "API.ValidateKeyspace")
 	defer span.Finish()
 
-	c, ok := api.clusterMap[req.ClusterId]
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
 	}
 
 	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.PutAction) {
@@ -1615,9 +1646,9 @@ func (api *API) ValidateSchemaKeyspace(ctx context.Context, req *vtadminpb.Valid
 	span, ctx := trace.NewSpan(ctx, "API.ValidateSchemaKeyspace")
 	defer span.Finish()
 
-	c, ok := api.clusterMap[req.ClusterId]
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
 	}
 
 	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.PutAction) {
@@ -1644,9 +1675,9 @@ func (api *API) ValidateVersionKeyspace(ctx context.Context, req *vtadminpb.Vali
 	span, ctx := trace.NewSpan(ctx, "API.ValidateVersionKeyspace")
 	defer span.Finish()
 
-	c, ok := api.clusterMap[req.ClusterId]
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
 	}
 
 	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.PutAction) {
@@ -1685,9 +1716,9 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		return nil, fmt.Errorf("%w: SQL query is required", errors.ErrInvalidRequest)
 	}
 
-	c, ok := api.clusterMap[req.Cluster]
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.Cluster)
+	c, err := api.getClusterForRequest(req.Cluster)
+	if err != nil {
+		return nil, err
 	}
 
 	span.Annotate("keyspace", req.Keyspace)
@@ -1845,6 +1876,9 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 }
 
 func (api *API) getClusterForRequest(id string) (*cluster.Cluster, error) {
+	api.clusterMu.Lock()
+	defer api.clusterMu.Unlock()
+
 	c, ok := api.clusterMap[id]
 	if !ok {
 		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, id)
@@ -1854,6 +1888,9 @@ func (api *API) getClusterForRequest(id string) (*cluster.Cluster, error) {
 }
 
 func (api *API) getClustersForRequest(ids []string) ([]*cluster.Cluster, []string) {
+	api.clusterMu.Lock()
+	defer api.clusterMu.Unlock()
+
 	if len(ids) == 0 {
 		clusterIDs := make([]string, 0, len(api.clusters))
 
