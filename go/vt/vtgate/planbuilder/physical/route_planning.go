@@ -701,12 +701,12 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a *Route, exp sqlparser.
 		leftDep := ctx.SemTable.RecursiveDeps(expr)
 
 		_ = VisitOperators(a, func(rel abstract.PhysicalOperator) (bool, error) {
-			to, isTableOp := rel.(*Table)
+			to, isTableOp := rel.(abstract.IntroducesTable)
 			if !isTableOp {
 				return true, nil
 			}
-			if leftDep.IsSolvedBy(to.QTable.ID) {
-				for _, vindex := range to.VTable.ColumnVindexes {
+			if leftDep.IsSolvedBy(to.GetQTable().ID) {
+				for _, vindex := range to.GetVTable().ColumnVindexes {
 					sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
 					if isSingle && vindex.Columns[0].Equal(col.Name) {
 						singCol = sC

@@ -34,6 +34,7 @@ type Update struct {
 }
 
 var _ abstract.PhysicalOperator = (*Update)(nil)
+var _ abstract.IntroducesTable = (*Update)(nil)
 
 // TableID implements the PhysicalOperator interface
 func (u *Update) TableID() semantics.TableSet {
@@ -68,4 +69,14 @@ func (u *Update) Clone() abstract.PhysicalOperator {
 		OwnedVindexQuery:    u.OwnedVindexQuery,
 		AST:                 u.AST,
 	}
+}
+
+// GetQTable implements the IntroducesTable interface
+func (u *Update) GetQTable() *abstract.QueryTable {
+	return u.QTable
+}
+
+// GetVTable implements the IntroducesTable interface
+func (u *Update) GetVTable() *vindexes.Table {
+	return u.VTable
 }

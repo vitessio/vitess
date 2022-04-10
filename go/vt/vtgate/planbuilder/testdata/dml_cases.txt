@@ -4329,3 +4329,46 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+
+# merge through correlated subquery
+"update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id = 5"
+"unsupported: subqueries in sharded DML"
+{
+  "QueryType": "UPDATE",
+  "Original": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id = 5",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update `user` set col = (select count(*) from user_extra where user_extra.user_id = `user`.id) where id = 5",
+    "Table": "user",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  }
+}
+
+# merge through correlated subquery #2
+"update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id > 5"
+{
+  "QueryType": "UPDATE",
+  "Original": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id \u003e 5",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update `user` set col = (select count(*) from user_extra where user_extra.user_id = `user`.id) where id \u003e 5",
+    "Table": "user"
+  }
+}
