@@ -19,17 +19,24 @@ jobs:
       id: changes
       with:
         filters: |
-          end_to_end:
+          unit_tests:
             - 'go/**'
+            - 'test.go'
+            - 'Makefile'
+            - 'build.env'
+            - 'go.[sumod]'
+            - 'proto/*.proto'
+            - 'tools/**'
+            - 'config/**'
 
     - name: Set up Go
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.unit_tests == 'true'
       uses: actions/setup-go@v2
       with:
         go-version: 1.18
 
     - name: Tune the OS
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.unit_tests == 'true'
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
         # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
@@ -37,7 +44,7 @@ jobs:
         sudo sysctl -p /etc/sysctl.conf
 
     - name: Get dependencies
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.unit_tests == 'true'
       run: |
         export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
@@ -74,12 +81,12 @@ jobs:
         go install golang.org/x/tools/cmd/goimports@latest
 
     - name: Run make tools
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.unit_tests == 'true'
       run: |
         make tools
 
     - name: Run test
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: steps.changes.outputs.unit_tests == 'true'
       timeout-minutes: 30
       run: |
         eatmydata -- make unit_test
