@@ -339,7 +339,7 @@ func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {
 }
 
 // ComBinlogDumpGTID is part of the mysql.Handler interface.
-func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, gtidSet mysql.GTIDSet) error {
+func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet mysql.GTIDSet) error {
 	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ComBinlogDumpGTID")
 }
 

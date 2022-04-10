@@ -64,7 +64,7 @@ func (th *testHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData,
 	return nil
 }
 
-func (th *testHandler) ComBinlogDumpGTID(c *mysql.Conn, gtidSet mysql.GTIDSet) error {
+func (th *testHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet mysql.GTIDSet) error {
 	return nil
 }
 

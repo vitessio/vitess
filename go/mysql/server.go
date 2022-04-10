@@ -117,7 +117,7 @@ type Handler interface {
 	ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error
 
 	// ComBinlogDumpGTID is called when a connection receives a ComBinlogDumpGTID request
-	ComBinlogDumpGTID(c *Conn, gtidSet GTIDSet) error
+	ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet GTIDSet) error
 
 	// WarningCount is called at the end of each query to obtain
 	// the value to be returned to the client in the EOF packet.

@@ -939,12 +939,12 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 		}
 	}()
 
-	_, _, position, err := c.parseComBinlogDumpGTID(data)
+	logFile, logPos, position, err := c.parseComBinlogDumpGTID(data)
 	if err != nil {
 		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
 		kontinue = false
 	}
-	handler.ComBinlogDumpGTID(c, position.GTIDSet)
+	handler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet)
 
 	return true
 }

@@ -225,7 +225,7 @@ func (th *testHandler) ComPrepare(c *Conn, query string, bindVars map[string]*qu
 func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
 	return nil
 }
-func (th *testHandler) ComBinlogDumpGTID(c *Conn, gtidSet GTIDSet) error {
+func (th *testHandler) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet GTIDSet) error {
 	return nil
 }
 
