@@ -153,9 +153,6 @@ func main() {
 	rootCmd.Flags().Var(&clusterFileConfig, "cluster-config", "path to a yaml cluster configuration. see clusters.example.yaml") // (TODO:@amason) provide example config.
 	rootCmd.Flags().Var(&defaultClusterConfig, "cluster-defaults", "default options for all clusters")
 	rootCmd.Flags().BoolVar(&enableDynamicClusters, "enable-dynamic-clusters", false, "whether to enable dynamic clusters that are set by request header cookies or gRPC metadata")
-	// TODO: (ajm188) delete in next PR
-	rootCmd.Flags().BoolVar(&enableDynamicClusters, "http-enable-dynamic-clusters", false, "whether to enable dynamic clusters that are set by request header cookies")
-	rootCmd.Flags().MarkDeprecated("http-enable-dynamic-clusters", "Replaced by `--enable-dynamic-clusters`")
 
 	// Tracing flags
 	rootCmd.Flags().AddGoFlag(flag.Lookup("tracer"))                 // defined in go/vt/trace
