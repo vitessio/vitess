@@ -118,13 +118,11 @@ func (r *Rewriter) replaceAstfmtCalls(cursor *astutil.Cursor) bool {
 }
 
 func (r *Rewriter) methodName(n *ast.CallExpr) string {
-	s, ok := n.Fun.(*ast.SelectorExpr)
-	if !ok {
-		return ""
-	}
-	id := s.Sel
-	if id != nil && !r.pkg.TypesInfo.Types[id].IsType() {
-		return id.Name
+	if call, ok := n.Fun.(*ast.SelectorExpr); ok {
+		id := call.Sel
+		if id != nil && !r.pkg.TypesInfo.Types[id].IsType() {
+			return id.Name
+		}
 	}
 	return ""
 }
