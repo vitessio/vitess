@@ -52,19 +52,19 @@ update user set name='alicia' where name='alice'
 8 ks_sharded/c0-: commit
 
 ----------------------------------------------------------------------
-update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set has_nickname=1 where nickname != ''
+update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set info='apa' where name != 'hog'
 
 1 ks_sharded/-40: begin
-1 ks_sharded/-40: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set has_nickname = 1 where nickname != '' limit 10001
+1 ks_sharded/-40: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set info = 'apa' where `name` != 'hog' limit 10001
 1 ks_sharded/-40: commit
 1 ks_sharded/40-80: begin
-1 ks_sharded/40-80: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set has_nickname = 1 where nickname != '' limit 10001
+1 ks_sharded/40-80: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set info = 'apa' where `name` != 'hog' limit 10001
 1 ks_sharded/40-80: commit
 1 ks_sharded/80-c0: begin
-1 ks_sharded/80-c0: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set has_nickname = 1 where nickname != '' limit 10001
+1 ks_sharded/80-c0: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set info = 'apa' where `name` != 'hog' limit 10001
 1 ks_sharded/80-c0: commit
 1 ks_sharded/c0-: begin
-1 ks_sharded/c0-: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set has_nickname = 1 where nickname != '' limit 10001
+1 ks_sharded/c0-: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set info = 'apa' where `name` != 'hog' limit 10001
 1 ks_sharded/c0-: commit
 
 ----------------------------------------------------------------------
