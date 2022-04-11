@@ -281,12 +281,14 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	if err := plan.WireupGen4(semTable); err != nil {
+	plan, err = pushCommentDirectivesOnPlan(plan, updStmt)
+	if err != nil {
 		return nil, err
 	}
 
-	plan, err = pushCommentDirectivesOnPlan(plan, updStmt)
-	if err != nil {
+	setLockOnAllSelect(err, plan)
+
+	if err := plan.WireupGen4(semTable); err != nil {
 		return nil, err
 	}
 
@@ -323,6 +325,17 @@ func rewriteRoutedTables(updStmt *sqlparser.Update, vschema plancontext.VSchema)
 		return err == nil
 	}, nil)
 	return
+}
+
+func setLockOnAllSelect(err error, plan logicalPlan) {
+	_, _ = visit(plan, func(plan logicalPlan) (bool, logicalPlan, error) {
+		switch node := plan.(type) {
+		case *routeGen4:
+			node.Select.SetLock(sqlparser.ShareModeLock)
+			return true, node, nil
+		}
+		return true, plan, nil
+	})
 }
 
 func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {

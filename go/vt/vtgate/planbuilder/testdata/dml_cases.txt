@@ -4181,7 +4181,7 @@ Gen4 plan same as above
           "Sharded": false
         },
         "FieldQuery": "select id from unsharded where 1 != 1",
-        "Query": "select id from unsharded",
+        "Query": "select id from unsharded lock in share mode",
         "Table": "unsharded"
       },
       {
@@ -4221,7 +4221,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user`",
+        "Query": "select id from `user` lock in share mode",
         "Table": "`user`"
       },
       {
@@ -4270,7 +4270,7 @@ Gen4 plan same as above
               "Sharded": false
             },
             "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-            "Query": "select unsharded.id from unsharded",
+            "Query": "select unsharded.id from unsharded lock in share mode",
             "Table": "unsharded"
           },
           {
@@ -4281,7 +4281,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where `user`.id = :unsharded_id",
+            "Query": "select id from `user` where `user`.id = :unsharded_id lock in share mode",
             "Table": "`user`",
             "Values": [
               ":unsharded_id"
