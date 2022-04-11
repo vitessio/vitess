@@ -26,6 +26,7 @@ jobs:
               - 'proto/*.proto'
               - 'tools/**'
               - 'config/**'
+              - 'bootstrap.sh'
 
       - name: Build Docker Image
         if: steps.changes.outputs.unit_tests == 'true'
