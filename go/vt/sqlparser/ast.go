@@ -1435,8 +1435,17 @@ func (node *DBDDL) Format(buf *TrackedBuffer) {
 	}
 }
 
+type ViewSpec struct {
+	ViewName  TableName
+	Algorithm string
+	Definer   string
+	Security  string
+	ViewExpr  SelectStatement
+}
+
 type TriggerSpec struct {
 	TrigName TriggerName
+	Definer  string
 	Time     string // BeforeStr, AfterStr
 	Event    string // UpdateStr, InsertStr, DeleteStr
 	Order    *TriggerOrder
@@ -1555,9 +1564,8 @@ type DDL struct {
 	// Table is set if Action is other than RenameStr or DropStr.
 	Table TableName
 
-	// View name.
-	View     TableName
-	ViewExpr SelectStatement
+	// ViewSpec is set for CREATE VIEW operations.
+	ViewSpec *ViewSpec
 
 	// This exposes the start and end index of the string that makes up the sub statement of the query given.
 	// Meaning is specific to the different kinds of statements with sub statements, e.g. views, trigger definitions.
@@ -1643,21 +1651,35 @@ const (
 func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CreateStr:
-		if !node.View.IsEmpty() {
-			orReplace := ""
+		if node.ViewSpec != nil {
+			view := node.ViewSpec
+			afterCreate := ""
 			if node.OrReplace {
-				orReplace = "or replace "
+				afterCreate = "or replace "
 			}
-			buf.Myprintf("%s %sview %v as %v", node.Action, orReplace, node.View, node.ViewExpr)
+			if view.Algorithm != "" {
+				afterCreate = fmt.Sprintf("%salgorithm = %s ", afterCreate, strings.ToLower(view.Algorithm))
+			}
+			if view.Definer != "" {
+				afterCreate = fmt.Sprintf("%sdefiner = %s ", afterCreate, view.Definer)
+			}
+			if view.Security != "" {
+				afterCreate = fmt.Sprintf("%ssql security %s ", afterCreate, strings.ToLower(view.Security))
+			}
+			buf.Myprintf("%s %sview %v as %v", node.Action, afterCreate, view.ViewName, view.ViewExpr)
 		} else if node.TriggerSpec != nil {
 			trigger := node.TriggerSpec
+			triggerDef := ""
+			if trigger.Definer != "" {
+				triggerDef = fmt.Sprintf("%sdefiner = %s ", triggerDef, trigger.Definer)
+			}
 			triggerOrder := ""
 			if trigger.Order != nil {
 				triggerOrder = fmt.Sprintf("%s %s ", trigger.Order.PrecedesOrFollows, trigger.Order.OtherTriggerName)
 			}
 			triggerName := fmt.Sprintf("%s", trigger.TrigName)
-			buf.Myprintf("%s trigger %s %s %s on %v for each row %s%v",
-				node.Action, triggerName, trigger.Time, trigger.Event, node.Table, triggerOrder, trigger.Body)
+			buf.Myprintf("%s %strigger %s %s %s on %v for each row %s%v",
+				node.Action, triggerDef, triggerName, trigger.Time, trigger.Event, node.Table, triggerOrder, trigger.Body)
 		} else if node.ProcedureSpec != nil {
 			proc := node.ProcedureSpec
 			sb := strings.Builder{}

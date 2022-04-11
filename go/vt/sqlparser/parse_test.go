@@ -1262,6 +1262,27 @@ var (
 			input:  "create spatial index a using btree on b (id)",
 			output: "alter table b add spatial index a using btree (id)",
 		}, {
+			input:  "create ALGORITHM=UNDEFINED DEFINER=`UserName`@`localhost` SQL SECURITY DEFINER view a as select current_timestamp()",
+			output: "create algorithm = undefined definer = `UserName`@`localhost` sql security definer view a as select current_timestamp() from dual",
+		}, {
+			input:  "create ALGORITHM=UNDEFINED SQL SECURITY DEFINER view a as select current_timestamp()",
+			output: "create algorithm = undefined sql security definer view a as select current_timestamp() from dual",
+		}, {
+			input:  "create ALGORITHM=UNDEFINED DEFINER=UserName@localhost view a as select current_timestamp()",
+			output: "create algorithm = undefined definer = `UserName`@`localhost` view a as select current_timestamp() from dual",
+		}, {
+			input:  "create ALGORITHM=MERGE DEFINER=UserName@localhost SQL SECURITY INVOKER view a as select current_timestamp()",
+			output: "create algorithm = merge definer = `UserName`@`localhost` sql security invoker view a as select current_timestamp() from dual",
+		}, {
+			input:  "create ALGORITHM=TEMPTABLE DEFINER=UserName@localhost SQL SECURITY DEFINER view a as select current_timestamp()",
+			output: "create algorithm = temptable definer = `UserName`@`localhost` sql security definer view a as select current_timestamp() from dual",
+		}, {
+			input:  "create DEFINER=`nameUser`@`localhost` SQL SECURITY DEFINER view a as select current_timestamp()",
+			output: "create definer = `nameUser`@`localhost` sql security definer view a as select current_timestamp() from dual",
+		}, {
+			input:  "create SQL SECURITY INVOKER view a as select current_timestamp()",
+			output: "create sql security invoker view a as select current_timestamp() from dual",
+		}, {
 			input:  "create view a as select current_timestamp()",
 			output: "create view a as select current_timestamp() from dual",
 		}, {
@@ -1286,11 +1307,14 @@ var (
 		}, {
 			input: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 		}, {
+			input:  "create DEFINER=`root`@`localhost` trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+			output: "create definer = `root`@`localhost` trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+		}, {
 			input:  "create definer = me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
-			output: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+			output: "create definer = `me`@`%` trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 		}, {
 			input:  "create definer=me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
-			output: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+			output: "create definer = `me`@`%` trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 		}, {
 			input:  "rename table a to b",
 			output: "rename table a to b",
@@ -2083,6 +2107,9 @@ var (
 		}, {
 			input: "drop procedure dbName.p1",
 		}, {
+			input:  "CREATE DEFINER=`root`@`localhost` PROCEDURE p2() SELECT RAND()",
+			output: "create definer = `root`@`localhost` procedure p2 () select RAND() from dual",
+		}, {
 			input:  "create procedure mydb.p1() select rand()",
 			output: "create procedure mydb.p1 () select rand() from dual",
 		}, {
@@ -2093,10 +2120,10 @@ var (
 			output: "create procedure p1 () language sql deterministic sql security invoker select 1 + 1 from dual",
 		}, {
 			input:  "create definer = me procedure p1(v1 int) select now()",
-			output: "create definer = me procedure p1 (in v1 int) select now() from dual",
+			output: "create definer = `me`@`%` procedure p1 (in v1 int) select now() from dual",
 		}, {
 			input:  "create definer = me procedure p1(v1 int) comment 'some_comment' not deterministic select now()",
-			output: "create definer = me procedure p1 (in v1 int) comment 'some_comment' not deterministic select now() from dual",
+			output: "create definer = `me`@`%` procedure p1 (in v1 int) comment 'some_comment' not deterministic select now() from dual",
 		}, {
 			input:                      "SELECT FORMAT(45124,2) FROM test",
 			output:                     "select FORMAT(45124,2) from test",
