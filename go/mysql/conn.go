@@ -942,11 +942,14 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 	logFile, logPos, position, err := c.parseComBinlogDumpGTID(data)
 	if err != nil {
 		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
-		kontinue = false
+		return false
 	}
-	handler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet)
+	if err := handler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet); err != nil {
+		log.Error(err.Error())
+		return false
+	}
 
-	return true
+	return kontinue
 }
 
 func (c *Conn) handleComResetConnection(handler Handler) {
