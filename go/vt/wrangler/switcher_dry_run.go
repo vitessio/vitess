@@ -228,7 +228,7 @@ func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string) 
 	dr.drLog.Log(fmt.Sprintf("Lock keyspace %s", keyspace))
 	warning := color.New(color.FgRed).SprintFunc()
 	return ctx, func(e *error) {
-		if err := dr.refreshRelatedTabletStatus(ctx); err != nil {
+		if err := dr.refreshRelatedTablets(ctx); err != nil {
 			dr.drLog.Log(fmt.Sprintf("%s: %s", warning("WARNING"), err.Error()))
 		}
 		dr.drLog.Log(fmt.Sprintf("Unlock keyspace %s", keyspace))
@@ -374,10 +374,10 @@ func (dr *switcherDryRun) dropTargetShards(ctx context.Context) error {
 	return nil
 }
 
-// refreshRelatedTabletStatus refreshes the status of all tablets in both the source and target shards.
-// This helps to detect potential issues that may be encountered when performing the live operation as
-// the cluster is not fully healthy.
-func (dr *switcherDryRun) refreshRelatedTabletStatus(ctx context.Context) error {
+// refreshRelatedTablets refreshes all tablets in both the source and target shards.
+// This helps to detect potential issues that may be encountered when performing the
+// live operation as the cluster is not fully healthy and up to date.
+func (dr *switcherDryRun) refreshRelatedTablets(ctx context.Context) error {
 	logs := make([]string, 0)
 	var wg sync.WaitGroup
 	rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
@@ -386,7 +386,7 @@ func (dr *switcherDryRun) refreshRelatedTabletStatus(ctx context.Context) error 
 		defer wg.Done()
 		for _, si := range shards {
 			if partial, err := topotools.RefreshTabletsByShard(rtbsCtx, dr.ts.wr.ts, dr.ts.wr.tmc, si, nil, dr.ts.wr.Logger()); err != nil || partial {
-				logs = append(logs, fmt.Sprintf("  Failed to successfully refresh the status of all tablets in the %s/%s %s shard (%v)",
+				logs = append(logs, fmt.Sprintf("  Failed to successfully refresh all tablets in the %s/%s %s shard (%v)",
 					si.Keyspace(), si.ShardName(), stype, err))
 			}
 		}
@@ -397,7 +397,7 @@ func (dr *switcherDryRun) refreshRelatedTabletStatus(ctx context.Context) error 
 	go refreshTablets(dr.ts.TargetShards(), "target")
 	wg.Wait()
 	if len(logs) > 0 {
-		dr.drLog.Log("Could not get a status update from all of the tablets potentially involved in the operation:")
+		dr.drLog.Log("Could not refresh all of the tablets potentially involved in the operation:")
 		dr.drLog.LogSlice(logs)
 		return errors.New("failures or delays could be encountered if the operation is performed")
 	}
