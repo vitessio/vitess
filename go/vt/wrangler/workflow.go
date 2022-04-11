@@ -471,7 +471,7 @@ const (
 	cannotSwitchError                      = "workflow has errors"
 	cannotSwitchCopyIncomplete             = "copy is still in progress"
 	cannotSwitchHighLag                    = "replication lag %ds is higher than allowed lag %ds"
-	cannotSwitchFailedPrimaryTabletRefresh = "failed to get primary tablet status updates in the %s shard"
+	cannotSwitchFailedPrimaryTabletRefresh = "failed to refresh primary tablets in the %s shard"
 	cannotSwitchFrozen                     = "workflow is frozen"
 )
 
