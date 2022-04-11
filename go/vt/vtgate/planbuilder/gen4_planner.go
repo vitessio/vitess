@@ -37,43 +37,21 @@ func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVers
 		case sqlparser.SelectStatement:
 			return gen4SelectStmtPlanner(query, plannerVersion, stmt, reservedVars, vschema)
 		case *sqlparser.Update:
-			return gen4UpdateStmtPlanner(query, plannerVersion, stmt, reservedVars, vschema)
+			return gen4UpdateStmtPlanner(plannerVersion, stmt, reservedVars, vschema)
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
 		}
 	}
 }
 
-func gen4UpdateStmtPlanner(
-	query string,
-	version querypb.ExecuteOptions_PlannerVersion,
-	stmt *sqlparser.Update,
-	vars *sqlparser.ReservedVars,
-	vschema plancontext.VSchema,
-) (engine.Primitive, error) {
-	if stmt.With != nil {
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in update statement")
-	}
-
-	update, err := newBuildUpdatePlan(stmt, vars, vschema, version)
-	if err != nil {
-		return nil, err
-	}
-	return update.Primitive(), nil
-}
-
 func gen4SelectStmtPlanner(
 	query string,
 	plannerVersion querypb.ExecuteOptions_PlannerVersion,
-	stmt sqlparser.Statement,
+	stmt sqlparser.SelectStatement,
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 ) (engine.Primitive, error) {
-	selStatement, ok := stmt.(sqlparser.SelectStatement)
-	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
-	}
-	switch node := selStatement.(type) {
+	switch node := stmt.(type) {
 	case *sqlparser.Select:
 		if node.With != nil {
 			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in select statement")
@@ -84,7 +62,7 @@ func gen4SelectStmtPlanner(
 		}
 	}
 
-	sel, isSel := selStatement.(*sqlparser.Select)
+	sel, isSel := stmt.(*sqlparser.Select)
 	if isSel {
 		// handle dual table for processing at vtgate.
 		p, err := handleDualSelects(sel, vschema)
@@ -103,7 +81,7 @@ func gen4SelectStmtPlanner(
 		return newBuildSelectPlan(selStatement, reservedVars, vschema, plannerVersion)
 	}
 
-	plan, err := getPlan(selStatement)
+	plan, err := getPlan(stmt)
 	if err != nil {
 		return nil, err
 	}
@@ -238,11 +216,16 @@ func newBuildSelectPlan(
 	return plan, nil
 }
 
-func newBuildUpdatePlan(updStmt *sqlparser.Update,
+func gen4UpdateStmtPlanner(
+	version querypb.ExecuteOptions_PlannerVersion,
+	updStmt *sqlparser.Update,
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
-	version querypb.ExecuteOptions_PlannerVersion,
-) (logicalPlan, error) {
+) (engine.Primitive, error) {
+	if updStmt.With != nil {
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in update statement")
+	}
+
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
@@ -265,7 +248,7 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 		edml.Opcode = engine.Unsharded
 		edml.Query = generateQuery(updStmt)
 		upd := &engine.Update{DML: edml}
-		return &primitiveWrapper{prim: upd}, nil
+		return upd, nil
 	}
 
 	if semTable.NotUnshardedErr != nil {
@@ -307,7 +290,7 @@ func newBuildUpdatePlan(updStmt *sqlparser.Update,
 		return nil, err
 	}
 
-	return plan, nil
+	return plan.Primitive(), nil
 }
 
 func rewriteRoutedTables(updStmt *sqlparser.Update, vschema plancontext.VSchema) (err error) {
