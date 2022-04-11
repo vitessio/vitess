@@ -149,10 +149,25 @@ func initialQuery(ksidCols []sqlparser.ColIdent, table *vindexes.Table) (*sqlpar
 
 // extractValueFromUpdate given an UpdateExpr, builds an evalengine.Expr
 func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (evalengine.Expr, error) {
-	pv, err := evalengine.Translate(upd.Expr, semantics.EmptySemTable())
-	if err != nil || sqlparser.IsSimpleTuple(upd.Expr) {
-		err := vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Only values are supported. Invalid update on column: `%s` with expr: [%s]", upd.Name.Name.String(), sqlparser.String(upd.Expr))
-		return nil, err
+	expr := upd.Expr
+	if sq, ok := expr.(*sqlparser.ExtractedSubquery); ok {
+		// if we are planning an update that needs one or more values from the outside, we can trust that they have
+		// been correctly extracted from this query before we reach this far
+		// if NeedsRewrite is true, it means that this subquery was happily merged with the outer.
+		// But in that case we should not be here, so we fail
+		if sq.NeedsRewrite {
+			return nil, invalidUpdateExpr(upd, expr)
+		}
+		expr = sqlparser.NewArgument(sq.GetArgName())
+	}
+
+	pv, err := evalengine.Translate(expr, semantics.EmptySemTable())
+	if err != nil || sqlparser.IsSimpleTuple(expr) {
+		return nil, invalidUpdateExpr(upd, expr)
 	}
 	return pv, nil
+}
+
+func invalidUpdateExpr(upd *sqlparser.UpdateExpr, expr sqlparser.Expr) error {
+	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Only values are supported. Invalid update on column: `%s` with expr: [%s]", upd.Name.Name.String(), sqlparser.String(expr))
 }
