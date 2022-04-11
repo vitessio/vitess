@@ -36,14 +36,45 @@ type TrackedBuffer struct {
 	*strings.Builder
 	bindLocations []bindLocation
 	nodeFormatter NodeFormatter
+	literal       func(string) (int, error)
+	escape        bool
+	fast          bool
 }
 
 // NewTrackedBuffer creates a new TrackedBuffer.
 func NewTrackedBuffer(nodeFormatter NodeFormatter) *TrackedBuffer {
-	return &TrackedBuffer{
+	buf := &TrackedBuffer{
 		Builder:       new(strings.Builder),
 		nodeFormatter: nodeFormatter,
 	}
+	buf.literal = buf.WriteString
+	buf.fast = nodeFormatter == nil
+	return buf
+}
+
+func (buf *TrackedBuffer) literalUpcase(lit string) (int, error) {
+	return buf.WriteString(strings.ToUpper(lit))
+}
+
+// SetUpperCase sets whether all SQL statements formatted by this TrackedBuffer will be normalized into
+// uppercase. By default, formatted statements are normalized into lowercase.
+// Enabling this option will prevent the optimized fastFormat routines from running.
+func (buf *TrackedBuffer) SetUpperCase(enable bool) {
+	buf.fast = false
+	if enable {
+		buf.literal = buf.literalUpcase
+	} else {
+		buf.literal = buf.WriteString
+	}
+}
+
+// SetEscapeAllIdentifiers sets whether ALL identifiers in the serialized SQL query should be quoted
+// and escaped. By default, identifiers are only escaped if they match the name of a SQL keyword or they
+// contain characters that must be escaped.
+// Enabling this option will prevent the optimized fastFormat routines from running.
+func (buf *TrackedBuffer) SetEscapeAllIdentifiers(enable bool) {
+	buf.fast = false
+	buf.escape = enable
 }
 
 // WriteNode function, initiates the writing of a single SQLNode tree by passing
@@ -98,7 +129,7 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 			i++
 		}
 		if i > lasti {
-			buf.WriteString(format[lasti:i])
+			buf.literal(format[lasti:i])
 		}
 		if i >= end {
 			break
@@ -164,10 +195,13 @@ func getExpressionForParensEval(checkParens bool, value any) Expr {
 }
 
 func (buf *TrackedBuffer) formatter(node SQLNode) {
-	if buf.nodeFormatter == nil {
+	switch {
+	case buf.fast:
 		node.formatFast(buf)
-	} else {
+	case buf.nodeFormatter != nil:
 		buf.nodeFormatter(buf, node)
+	default:
+		node.Format(buf)
 	}
 }
 
