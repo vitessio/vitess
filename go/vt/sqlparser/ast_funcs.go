@@ -778,7 +778,7 @@ func containEscapableChars(s string, at AtCount) bool {
 
 func formatID(buf *TrackedBuffer, original string, at AtCount) {
 	_, isKeyword := keywordLookupTable.LookupString(original)
-	if isKeyword || containEscapableChars(original, at) {
+	if buf.escape || isKeyword || containEscapableChars(original, at) {
 		writeEscapedString(buf, original)
 	} else {
 		buf.WriteString(original)
