@@ -50,5 +50,6 @@ jobs:
         make minimaltools
 
     - name: check_make_proto
+      if: steps.changes.outputs.proto_changes == 'true'
       run: |
         tools/check_make_proto.sh
