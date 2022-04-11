@@ -931,6 +931,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue bool) {
 	defer c.recycleReadPacket()
 
+	kontinue = true
 	c.startWriterBuffering()
 	defer func() {
 		if err := c.endWriterBuffering(); err != nil {
