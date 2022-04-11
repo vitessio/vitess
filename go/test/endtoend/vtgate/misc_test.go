@@ -36,8 +36,6 @@ func TestSelectNull(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	// test modifying a file
-
 	utils.Exec(t, conn, "begin")
 	utils.Exec(t, conn, "insert into t5_null_vindex(id, idx) values(1, 'a'), (2, 'b'), (3, null)")
 	utils.Exec(t, conn, "commit")
