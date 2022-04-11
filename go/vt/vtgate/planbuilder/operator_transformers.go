@@ -21,8 +21,6 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -171,37 +169,6 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *physical.Route) (l
 	}, nil
 
 }
-
-type primitiveWrapper struct {
-	prim engine.Primitive
-	gen4Plan
-}
-
-func (p *primitiveWrapper) WireupGen4(semTable *semantics.SemTable) error {
-	return nil
-}
-
-func (p *primitiveWrapper) Primitive() engine.Primitive {
-	return p.prim
-}
-
-func (p *primitiveWrapper) Inputs() []logicalPlan {
-	return nil
-}
-
-func (p *primitiveWrapper) Rewrite(inputs ...logicalPlan) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't rewrite")
-}
-
-func (p *primitiveWrapper) ContainsTables() semantics.TableSet {
-	return semantics.EmptyTableSet()
-}
-
-func (p *primitiveWrapper) OutputColumns() []sqlparser.SelectExpr {
-	return nil
-}
-
-var _ logicalPlan = (*primitiveWrapper)(nil)
 
 func transformUpdatePlan(ctx *plancontext.PlanningContext, op *physical.Route, upd *physical.Update) (logicalPlan, error) {
 	var vindex vindexes.Vindex
