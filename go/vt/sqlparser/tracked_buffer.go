@@ -52,8 +52,17 @@ func NewTrackedBuffer(nodeFormatter NodeFormatter) *TrackedBuffer {
 	return buf
 }
 
-func (buf *TrackedBuffer) literalUpcase(lit string) (int, error) {
-	return buf.WriteString(strings.ToUpper(lit))
+func (buf *TrackedBuffer) writeStringUpperCase(lit string) (int, error) {
+	// Upcasing is performed for ASCII only, following MySQL's behavior
+	buf.Grow(len(lit))
+	for i := 0; i < len(lit); i++ {
+		c := lit[i]
+		if 'a' <= c && c <= 'z' {
+			c -= 'a' - 'A'
+		}
+		buf.WriteByte(c)
+	}
+	return len(lit), nil
 }
 
 // SetUpperCase sets whether all SQL statements formatted by this TrackedBuffer will be normalized into
@@ -62,7 +71,7 @@ func (buf *TrackedBuffer) literalUpcase(lit string) (int, error) {
 func (buf *TrackedBuffer) SetUpperCase(enable bool) {
 	buf.fast = false
 	if enable {
-		buf.literal = buf.literalUpcase
+		buf.literal = buf.writeStringUpperCase
 	} else {
 		buf.literal = buf.WriteString
 	}
