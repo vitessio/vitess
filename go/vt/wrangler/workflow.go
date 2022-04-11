@@ -468,10 +468,11 @@ type TableCopyProgress struct {
 type CopyProgress map[string]*TableCopyProgress
 
 const (
-	cannotSwitchError          = "workflow has errors"
-	cannotSwitchCopyIncomplete = "copy is still in progress"
-	cannotSwitchHighLag        = "replication lag %ds is higher than allowed lag %ds"
-	cannotSwitchFrozen         = "workflow is frozen"
+	cannotSwitchError                      = "workflow has errors"
+	cannotSwitchCopyIncomplete             = "copy is still in progress"
+	cannotSwitchHighLag                    = "replication lag %ds is higher than allowed lag %ds"
+	cannotSwitchFailedPrimaryTabletRefresh = "failed to get primary tablet status updates in the %s shard"
+	cannotSwitchFrozen                     = "workflow is frozen"
 )
 
 func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reason string, err error) {
@@ -505,6 +506,15 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 	}
 	if result.MaxVReplicationTransactionLag > vrw.params.MaxAllowedTransactionLagSeconds {
 		return fmt.Sprintf(cannotSwitchHighLag, result.MaxVReplicationTransactionLag, vrw.params.MaxAllowedTransactionLagSeconds), nil
+	}
+
+	// Ensure that the primary tablets on both sides are in good shape as we make this same call in the process
+	// and an error will cause us to backout
+	if vrw.wr.refreshPrimaryTablets(vrw.ctx, vrw.ts.SourceShards()) != nil {
+		return fmt.Sprintf(cannotSwitchFailedPrimaryTabletRefresh, "source"), nil
+	}
+	if vrw.wr.refreshPrimaryTablets(vrw.ctx, vrw.ts.TargetShards()) != nil {
+		return fmt.Sprintf(cannotSwitchFailedPrimaryTabletRefresh, "target"), nil
 	}
 	return "", nil
 }

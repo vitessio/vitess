@@ -120,6 +120,8 @@ require (
 	sigs.k8s.io/yaml v1.2.0
 )
 
+require github.com/fatih/color v1.9.0
+
 require (
 	cloud.google.com/go v0.81.0 // indirect
 	github.com/BurntSushi/toml v0.3.1 // indirect
@@ -133,7 +135,6 @@ require (
 	github.com/cyphar/filepath-securejoin v0.2.3 // indirect
 	github.com/daaku/go.zipexe v1.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/fatih/color v1.9.0 // indirect
 	github.com/felixge/httpsnoop v1.0.1 // indirect
 	github.com/go-logr/logr v0.2.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
