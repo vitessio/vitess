@@ -58,8 +58,9 @@ type Visit func(node SQLNode) (kontinue bool, err error)
 func Append(buf *strings.Builder, node SQLNode) {
 	tbuf := &TrackedBuffer{
 		Builder: buf,
+		fast:    true,
 	}
-	node.Format(tbuf)
+	node.formatFast(tbuf)
 }
 
 // IndexColumn describes a column in an index definition with optional length

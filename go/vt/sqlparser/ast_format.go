@@ -553,7 +553,7 @@ func (col *ColumnDefinition) Format(buf *TrackedBuffer) {
 
 // Format returns a canonical string representation of the type and all relevant options
 func (ct *ColumnType) Format(buf *TrackedBuffer) {
-	buf.astPrintf(ct, "%s", ct.Type)
+	buf.astPrintf(ct, "%#s", ct.Type)
 
 	if ct.Length != nil && ct.Scale != nil {
 		buf.astPrintf(ct, "(%v,%v)", ct.Length, ct.Scale)
@@ -1669,9 +1669,9 @@ func (node *AlterView) Format(buf *TrackedBuffer) {
 }
 
 func (definer *Definer) Format(buf *TrackedBuffer) {
-	formatID(buf, definer.Name, NoAt)
+	buf.astPrintf(definer, "%#s", definer.Name)
 	if definer.Address != "" {
-		buf.astPrintf(definer, "@%s", definer.Address)
+		buf.astPrintf(definer, "@%#s", definer.Address)
 	}
 }
 

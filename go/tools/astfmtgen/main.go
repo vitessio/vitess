@@ -180,6 +180,10 @@ func (r *Rewriter) rewriteAstPrintf(cursor *astutil.Cursor, expr *ast.CallExpr) 
 			break
 		}
 		i++ // '%'
+		if format[i] == '#' {
+			i++
+		}
+
 		token := format[i]
 		switch token {
 		case 'c':
