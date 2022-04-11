@@ -2197,7 +2197,7 @@ func (node *AlterView) formatFast(buf *TrackedBuffer) {
 }
 
 func (definer *Definer) formatFast(buf *TrackedBuffer) {
-	formatID(buf, definer.Name, NoAt)
+	buf.WriteString(definer.Name)
 	if definer.Address != "" {
 		buf.WriteByte('@')
 		buf.WriteString(definer.Address)

@@ -129,14 +129,20 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 			i++
 		}
 		if i > lasti {
-			buf.literal(format[lasti:i])
+			_, _ = buf.literal(format[lasti:i])
 		}
 		if i >= end {
 			break
 		}
 		i++ // '%'
-		token := format[i]
-		switch token {
+
+		alternate := false
+		if format[i] == '#' {
+			alternate = true
+			i++
+		}
+
+		switch format[i] {
 		case 'c':
 			switch v := values[fieldnum].(type) {
 			case byte:
@@ -148,15 +154,17 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 			}
 		case 's':
 			switch v := values[fieldnum].(type) {
-			case []byte:
-				buf.Write(v)
 			case string:
-				buf.WriteString(v)
+				if alternate {
+					buf.WriteString(v)
+				} else {
+					_, _ = buf.literal(v)
+				}
 			default:
 				panic(fmt.Sprintf("unexpected TrackedBuffer type %T", v))
 			}
 		case 'l', 'r', 'v':
-			left := token != 'r'
+			left := format[i] != 'r'
 			value := values[fieldnum]
 			expr := getExpressionForParensEval(checkParens, value)
 

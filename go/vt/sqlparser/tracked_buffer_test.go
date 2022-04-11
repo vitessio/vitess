@@ -72,25 +72,25 @@ func TestParseFlags(t *testing.T) {
 		{
 			"create algorithm = merge sql security definer view a (b,c,d) as select * from e with cascaded check option",
 			map[flags]string{
-				{escape: true, upcase: true}: "CREATE ALGORITHM = merge SQL SECURITY definer VIEW `a`(`b`, `c`, `d`) AS SELECT * FROM `e` WITH cascaded CHECK OPTION",
+				{escape: true, upcase: true}: "CREATE ALGORITHM = MERGE SQL SECURITY DEFINER VIEW `a`(`b`, `c`, `d`) AS SELECT * FROM `e` WITH CASCADED CHECK OPTION",
 			},
 		},
 		{
 			"create or replace algorithm = temptable definer = a@b.c.d sql security definer view a(b,c,d) as select * from e with local check option",
 			map[flags]string{
-				{escape: true, upcase: true}: "CREATE OR REPLACE ALGORITHM = temptable DEFINER = `a`@`b.c.d` SQL SECURITY definer VIEW `a`(`b`, `c`, `d`) AS SELECT * FROM `e` WITH local CHECK OPTION",
+				{escape: true, upcase: true}: "CREATE OR REPLACE ALGORITHM = TEMPTABLE DEFINER = a@`b.c.d` SQL SECURITY DEFINER VIEW `a`(`b`, `c`, `d`) AS SELECT * FROM `e` WITH LOCAL CHECK OPTION",
 			},
 		},
 		{
 			"create table `a`(`id` int, primary key(`id`))",
 			map[flags]string{
-				{escape: true, upcase: true}: "CREATE TABLE `a` (\n\t`id` int,\n\tprimary key (`id`)\n)",
+				{escape: true, upcase: true}: "CREATE TABLE `a` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 			},
 		},
 		{
 			"create table `insert`(`update` int, primary key(`delete`))",
 			map[flags]string{
-				{escape: true, upcase: true}: "CREATE TABLE `insert` (\n\t`update` int,\n\tprimary key (`delete`)\n)",
+				{escape: true, upcase: true}: "CREATE TABLE `insert` (\n\t`update` int,\n\tPRIMARY KEY (`delete`)\n)",
 			},
 		},
 	}
@@ -115,7 +115,7 @@ func TestParseFlags(t *testing.T) {
 
 				out := buf.String()
 				if out != expected {
-					t.Errorf("expected %q, got %q", expected, out)
+					t.Errorf("bad serialization.\nwant: %s\n got: %s", expected, out)
 				}
 			}
 		})
