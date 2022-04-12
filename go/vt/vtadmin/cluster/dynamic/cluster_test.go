@@ -20,13 +20,17 @@ func TestClusterFromString(t *testing.T) {
 		shouldErr  bool
 	}{
 		{
-			name:       "ok",
-			s:          `{"name": "dynamic_cluster"}`,
+			name: "ok",
+			s: `{
+				"id": "dynamic_cluster",
+				"discovery": "dynamic",
+				"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"localhost:15991\" } } ] }"
+			}`,
 			expectedID: "dynamic_cluster",
 		},
 		{
 			name:      "empty id",
-			s:         `{"name": ""}`,
+			s:         `{"id": ""}`,
 			shouldErr: true,
 		},
 		{
