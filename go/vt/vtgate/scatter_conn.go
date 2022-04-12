@@ -725,23 +725,23 @@ func wasConnectionClosed(err error) bool {
 	}
 }
 
+// requireNewQS this checks if we need to fallback to new tablet.
 func requireNewQS(err error, target *querypb.Target) bool {
 	code := vterrors.Code(err)
 	msg := err.Error()
-	if (code == vtrpcpb.Code_FAILED_PRECONDITION && vterrors.RxWrongTablet.MatchString(msg)) ||
-		(code == vtrpcpb.Code_CLUSTER_EVENT && ((target != nil && target.TabletType == topodatapb.TabletType_PRIMARY) || vterrors.RxOp.MatchString(msg))) ||
-		(code == vtrpcpb.Code_UNAVAILABLE && vterrors.RxTxEngineClosed.MatchString(msg)) {
+	switch code {
+	// when the tablet or mysql is unavailable for any reason.
+	case vtrpcpb.Code_UNAVAILABLE:
 		return true
+	// when received wrong tablet error message.
+	case vtrpcpb.Code_FAILED_PRECONDITION:
+		return vterrors.RxWrongTablet.MatchString(msg)
+	// when received cluster_event from tablet and tablet is not operational.
+	// this will also help in buffering the query if needed.
+	case vtrpcpb.Code_CLUSTER_EVENT:
+		return (target != nil && target.TabletType == topodatapb.TabletType_PRIMARY) || vterrors.RxOp.MatchString(msg)
 	}
-
-	sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-
-	switch sqlErr.Number() {
-	case mysql.CRConnectionError, mysql.CRConnHostError:
-		return true
-	default:
-		return false
-	}
+	return false
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
