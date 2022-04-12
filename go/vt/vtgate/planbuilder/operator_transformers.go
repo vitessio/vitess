@@ -184,10 +184,11 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *physical.Route, u
 		Table:            upd.VTable,
 		OwnedVindexQuery: upd.OwnedVindexQuery,
 		RoutingParameters: &engine.RoutingParameters{
-			Opcode:   op.RouteOpCode,
-			Keyspace: op.Keyspace,
-			Vindex:   vindex,
-			Values:   values,
+			Opcode:            op.RouteOpCode,
+			Keyspace:          op.Keyspace,
+			Vindex:            vindex,
+			Values:            values,
+			TargetDestination: op.TargetDestination,
 		},
 	}
 

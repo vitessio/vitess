@@ -6,7 +6,7 @@ Gen4 plan same as above
 # TODO: Implement support for select with a target destination
 "select * from `user[-]`.user_metadata"
 "unsupported: SELECT with a target destination"
-Gen4 error: unsupported: table with a target destination `user[-]`.user_metadata
+Gen4 plan same as above
 
 # Unsupported INSERT statement with a target destination
 "insert into `user[-]`.user_metadata (a, b) values (1,2)"
@@ -21,7 +21,7 @@ Gen4 plan same as above
 # Unsupported update statement with a replica target destination
 "update `user[-]@replica`.user_metadata set id=2"
 "unsupported: update statement with a replica target"
-Gen4 error: unsupported: table with a target destination `user[-]@replica`.user_metadata
+Gen4 plan same as above
 
 # scatter order by with * expression
 "select * from user order by id"

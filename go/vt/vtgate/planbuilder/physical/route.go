@@ -17,6 +17,7 @@ limitations under the License.
 package physical
 
 import (
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -48,6 +49,10 @@ type (
 		// SeenPredicates contains all the predicates that have had a chance to influence routing.
 		// If we need to replan routing, we'll use this list
 		SeenPredicates []sqlparser.Expr
+
+		// TargetTabletType specifies an explicit target destination tablet type
+		// this is only used in conjunction with TargetDestination
+		TargetDestination key.Destination
 	}
 
 	// VindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query

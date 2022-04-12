@@ -21,6 +21,9 @@ import (
 	"fmt"
 	"io"
 
+	"vitess.io/vitess/go/vt/key"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -101,16 +104,34 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 
 		return filter, nil
 	case *abstract.Update:
+		var typ topodatapb.TabletType
+		var dest key.Destination
+
 		vindexTable := op.TableInfo.GetVindexTable()
+		opCode := engine.Unsharded
+		if vindexTable.Keyspace.Sharded {
+			opCode = engine.Scatter
+		}
+
+		tblName, ok := op.Table.Alias.Expr.(sqlparser.TableName)
+		if ok {
+			var err error
+			_, _, _, typ, dest, err = ctx.VSchema.FindTableOrVindex(tblName)
+			if err != nil {
+				return nil, err
+			}
+			if dest != nil {
+				if typ != topodatapb.TabletType_PRIMARY {
+					return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.InnodbReadOnly, "unsupported: update statement with a replica target")
+				}
+				// we are dealing with an explicitly targeted UPDATE
+				opCode = engine.ByDestination
+			}
+		}
 
 		vp, cvv, ovq, err := getUpdateVindexInformation(op, vindexTable)
 		if err != nil {
 			return nil, err
-		}
-
-		opCode := engine.Unsharded
-		if vindexTable.Keyspace.Sharded {
-			opCode = engine.Scatter
 		}
 
 		r := &Route{
@@ -122,9 +143,10 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 				OwnedVindexQuery:    ovq,
 				AST:                 op.AST,
 			},
-			RouteOpCode: opCode,
-			Keyspace:    vindexTable.Keyspace,
-			VindexPreds: vp,
+			RouteOpCode:       opCode,
+			Keyspace:          vindexTable.Keyspace,
+			VindexPreds:       vp,
+			TargetDestination: dest,
 		}
 
 		for _, predicate := range op.Table.Predicates {
@@ -229,7 +251,10 @@ func createRoute(ctx *plancontext.PlanningContext, table *abstract.QueryTable, s
 	if table.IsInfSchema {
 		return createInfSchemaRoute(ctx, table)
 	}
-	vschemaTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(table.Table)
+	vschemaTable, _, _, _, target, err := ctx.VSchema.FindTableOrVindex(table.Table)
+	if target != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: SELECT with a target destination")
+	}
 	if err != nil {
 		return nil, err
 	}
