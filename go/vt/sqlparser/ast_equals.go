@@ -5369,7 +5369,6 @@ func EqualsRefOfTableOption(a, b *TableOption) bool {
 	}
 	return a.Name == b.Name &&
 		a.String == b.String &&
-		a.CaseSensitive == b.CaseSensitive &&
 		EqualsRefOfLiteral(a.Value, b.Value) &&
 		EqualsTableNames(a.Tables, b.Tables)
 }

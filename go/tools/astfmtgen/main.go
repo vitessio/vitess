@@ -104,27 +104,24 @@ func (r *Rewriter) replaceAstfmtCalls(cursor *astutil.Cursor) bool {
 		}
 	case *ast.ExprStmt:
 		if call, ok := v.X.(*ast.CallExpr); ok {
-			switch r.methodName(call) {
-			case "astPrintf":
+			if r.isPrintfCall(call) {
 				return r.rewriteAstPrintf(cursor, call)
-			case "literal":
-				callexpr := call.Fun.(*ast.SelectorExpr)
-				callexpr.Sel.Name = "WriteString"
-				return true
 			}
 		}
 	}
 	return true
 }
 
-func (r *Rewriter) methodName(n *ast.CallExpr) string {
-	if call, ok := n.Fun.(*ast.SelectorExpr); ok {
-		id := call.Sel
-		if id != nil && !r.pkg.TypesInfo.Types[id].IsType() {
-			return id.Name
-		}
+func (r *Rewriter) isPrintfCall(n *ast.CallExpr) bool {
+	s, ok := n.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
 	}
-	return ""
+	id := s.Sel
+	if id != nil && !r.pkg.TypesInfo.Types[id].IsType() {
+		return id.Name == "astPrintf"
+	}
+	return false
 }
 
 func (r *Rewriter) rewriteLiteral(rcv ast.Expr, method string, arg ast.Expr) ast.Stmt {
@@ -141,10 +138,7 @@ func (r *Rewriter) rewriteLiteral(rcv ast.Expr, method string, arg ast.Expr) ast
 func (r *Rewriter) rewriteAstPrintf(cursor *astutil.Cursor, expr *ast.CallExpr) bool {
 	callexpr := expr.Fun.(*ast.SelectorExpr)
 	lit := expr.Args[1].(*ast.BasicLit)
-	format, err := strconv.Unquote(lit.Value)
-	if err != nil {
-		panic("bad literal argument")
-	}
+	format, _ := strconv.Unquote(lit.Value)
 
 	end := len(format)
 	fieldnum := 0
@@ -178,10 +172,6 @@ func (r *Rewriter) rewriteAstPrintf(cursor *astutil.Cursor, expr *ast.CallExpr) 
 			break
 		}
 		i++ // '%'
-		if format[i] == '#' {
-			i++
-		}
-
 		token := format[i]
 		switch token {
 		case 'c':

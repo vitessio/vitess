@@ -58,9 +58,8 @@ type Visit func(node SQLNode) (kontinue bool, err error)
 func Append(buf *strings.Builder, node SQLNode) {
 	tbuf := &TrackedBuffer{
 		Builder: buf,
-		fast:    true,
 	}
-	node.formatFast(tbuf)
+	node.Format(tbuf)
 }
 
 // IndexColumn describes a column in an index definition with optional length
@@ -86,11 +85,10 @@ type IndexOption struct {
 
 // TableOption is used for create table options like AUTO_INCREMENT, INSERT_METHOD, etc
 type TableOption struct {
-	Name          string
-	Value         *Literal
-	String        string
-	Tables        TableNames
-	CaseSensitive bool
+	Name   string
+	Value  *Literal
+	String string
+	Tables TableNames
 }
 
 // ColumnKeyOption indicates whether or not the given column is defined as an
@@ -780,7 +778,7 @@ func containEscapableChars(s string, at AtCount) bool {
 
 func formatID(buf *TrackedBuffer, original string, at AtCount) {
 	_, isKeyword := keywordLookupTable.LookupString(original)
-	if buf.escape || isKeyword || containEscapableChars(original, at) {
+	if isKeyword || containEscapableChars(original, at) {
 		writeEscapedString(buf, original)
 	} else {
 		buf.WriteString(original)

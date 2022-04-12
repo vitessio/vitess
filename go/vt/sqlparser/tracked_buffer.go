@@ -36,54 +36,14 @@ type TrackedBuffer struct {
 	*strings.Builder
 	bindLocations []bindLocation
 	nodeFormatter NodeFormatter
-	literal       func(string) (int, error)
-	escape        bool
-	fast          bool
 }
 
 // NewTrackedBuffer creates a new TrackedBuffer.
 func NewTrackedBuffer(nodeFormatter NodeFormatter) *TrackedBuffer {
-	buf := &TrackedBuffer{
+	return &TrackedBuffer{
 		Builder:       new(strings.Builder),
 		nodeFormatter: nodeFormatter,
 	}
-	buf.literal = buf.WriteString
-	buf.fast = nodeFormatter == nil
-	return buf
-}
-
-func (buf *TrackedBuffer) writeStringUpperCase(lit string) (int, error) {
-	// Upcasing is performed for ASCII only, following MySQL's behavior
-	buf.Grow(len(lit))
-	for i := 0; i < len(lit); i++ {
-		c := lit[i]
-		if 'a' <= c && c <= 'z' {
-			c -= 'a' - 'A'
-		}
-		buf.WriteByte(c)
-	}
-	return len(lit), nil
-}
-
-// SetUpperCase sets whether all SQL statements formatted by this TrackedBuffer will be normalized into
-// uppercase. By default, formatted statements are normalized into lowercase.
-// Enabling this option will prevent the optimized fastFormat routines from running.
-func (buf *TrackedBuffer) SetUpperCase(enable bool) {
-	buf.fast = false
-	if enable {
-		buf.literal = buf.writeStringUpperCase
-	} else {
-		buf.literal = buf.WriteString
-	}
-}
-
-// SetEscapeAllIdentifiers sets whether ALL identifiers in the serialized SQL query should be quoted
-// and escaped. By default, identifiers are only escaped if they match the name of a SQL keyword or they
-// contain characters that must be escaped.
-// Enabling this option will prevent the optimized fastFormat routines from running.
-func (buf *TrackedBuffer) SetEscapeAllIdentifiers(enable bool) {
-	buf.fast = false
-	buf.escape = enable
 }
 
 // WriteNode function, initiates the writing of a single SQLNode tree by passing
@@ -138,20 +98,14 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 			i++
 		}
 		if i > lasti {
-			_, _ = buf.literal(format[lasti:i])
+			buf.WriteString(format[lasti:i])
 		}
 		if i >= end {
 			break
 		}
 		i++ // '%'
-
-		caseSensitive := false
-		if format[i] == '#' {
-			caseSensitive = true
-			i++
-		}
-
-		switch format[i] {
+		token := format[i]
+		switch token {
 		case 'c':
 			switch v := values[fieldnum].(type) {
 			case byte:
@@ -163,17 +117,15 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 			}
 		case 's':
 			switch v := values[fieldnum].(type) {
+			case []byte:
+				buf.Write(v)
 			case string:
-				if caseSensitive {
-					buf.WriteString(v)
-				} else {
-					_, _ = buf.literal(v)
-				}
+				buf.WriteString(v)
 			default:
 				panic(fmt.Sprintf("unexpected TrackedBuffer type %T", v))
 			}
 		case 'l', 'r', 'v':
-			left := format[i] != 'r'
+			left := token != 'r'
 			value := values[fieldnum]
 			expr := getExpressionForParensEval(checkParens, value)
 
@@ -212,13 +164,10 @@ func getExpressionForParensEval(checkParens bool, value any) Expr {
 }
 
 func (buf *TrackedBuffer) formatter(node SQLNode) {
-	switch {
-	case buf.fast:
+	if buf.nodeFormatter == nil {
 		node.formatFast(buf)
-	case buf.nodeFormatter != nil:
+	} else {
 		buf.nodeFormatter(buf, node)
-	default:
-		node.Format(buf)
 	}
 }
 
@@ -291,29 +240,4 @@ func BuildParsedQuery(in string, vars ...any) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
 	buf.Myprintf(in, vars...)
 	return buf.ParsedQuery()
-}
-
-// String returns a string representation of an SQLNode.
-func String(node SQLNode) string {
-	if node == nil {
-		return "<nil>"
-	}
-
-	buf := NewTrackedBuffer(nil)
-	node.formatFast(buf)
-	return buf.String()
-}
-
-// CanonicalString returns a canonical string representation of an SQLNode where all identifiers
-// are always escaped and all SQL syntax is in uppercase. This matches the canonical output from MySQL.
-func CanonicalString(node SQLNode) string {
-	if node == nil {
-		return "" // do not return '<nil>', which is Go syntax.
-	}
-
-	buf := NewTrackedBuffer(nil)
-	buf.SetUpperCase(true)
-	buf.SetEscapeAllIdentifiers(true)
-	node.Format(buf)
-	return buf.String()
 }
