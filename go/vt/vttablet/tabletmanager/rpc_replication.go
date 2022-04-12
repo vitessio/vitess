@@ -789,7 +789,7 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
 	// SetTabletType only stops the replication manager ticks since we are going to promote this tablet
 	// to primary. We should do this before making any changes to MySQL, otherwise any replication manager
 	// tick would change the replication source, etc settings back.
-	tm.replManager.SetTabletType(topodatapb.TabletType_PRIMARY)
+	tm.replManager.SetTabletType(topodatapb.TabletType_MASTER)
 	defer func() {
 		// If PromoteReplica was successful, then this would be a no-op, since we have already stopped
 		// the replication manager ticks. But, in case we are unsuccessful, we must restart the ticks
