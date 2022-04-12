@@ -145,9 +145,9 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 		}
 		i++ // '%'
 
-		alternate := false
+		caseSensitive := false
 		if format[i] == '#' {
-			alternate = true
+			caseSensitive = true
 			i++
 		}
 
@@ -164,7 +164,7 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 		case 's':
 			switch v := values[fieldnum].(type) {
 			case string:
-				if alternate {
+				if caseSensitive {
 					buf.WriteString(v)
 				} else {
 					_, _ = buf.literal(v)
@@ -291,4 +291,29 @@ func BuildParsedQuery(in string, vars ...any) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
 	buf.Myprintf(in, vars...)
 	return buf.ParsedQuery()
+}
+
+// String returns a string representation of an SQLNode.
+func String(node SQLNode) string {
+	if node == nil {
+		return "<nil>"
+	}
+
+	buf := NewTrackedBuffer(nil)
+	node.formatFast(buf)
+	return buf.String()
+}
+
+// CanonicalString returns a canonical string representation of an SQLNode where all identifiers
+// are always escaped and all SQL syntax is in uppercase. This matches the canonical output from MySQL.
+func CanonicalString(node SQLNode) string {
+	if node == nil {
+		return "" // do not return '<nil>', which is Go syntax.
+	}
+
+	buf := NewTrackedBuffer(nil)
+	buf.SetUpperCase(true)
+	buf.SetEscapeAllIdentifiers(true)
+	node.Format(buf)
+	return buf.String()
 }
