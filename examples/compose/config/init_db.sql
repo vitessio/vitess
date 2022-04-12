@@ -39,8 +39,8 @@ GRANT GRANT OPTION ON *.* TO 'vt_dba'@'localhost';
 CREATE USER 'vt_app'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
-  LOCK TABLES, EXECUTE, CREATE VIEW, SHOW VIEW, CREATE ROUTINE,
-  REPLICATION CLIENT, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
+  LOCK TABLES, EXECUTE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW,
+  CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
   ON *.* TO 'vt_app'@'localhost';
 # User for app debug traffic, with global read access.
 CREATE USER 'vt_appdebug'@'localhost';
@@ -53,11 +53,11 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
   SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
   ON *.* TO 'vt_allprivs'@'localhost';
-# User for slave replication connections and by the binlog streamer (vstreamer).
+# User for slave replication connections.
 # TODO: Should we set a password on this since it allows remote connections?
 CREATE USER 'vt_repl'@'%';
-GRANT REPLICATION CLIENT, REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';
-# User for Vitess filtered replication (binlog player).
+GRANT REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';
+# User for Vitess filtered replication (binlog streamer and player).
 # Same permissions as vt_app.
 CREATE USER 'vt_filtered'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,

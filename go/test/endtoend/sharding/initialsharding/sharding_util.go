@@ -657,10 +657,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
   SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
   ON *.* TO 'vt_allprivs'@'127.0.0.1';
-# User for slave replication connections and by the binlogstreamer (vstreamer).
-CREATE USER 'vt_repl'@'127.0.0.1' IDENTIFIED BY 'VtReplPass';
-GRANT REPLICATION CLIENT, REPLICATION SLAVE ON *.* TO 'vt_repl'@'127.0.0.1';
-# User for Vitess filtered replication (binlog player).
+# User for Vitess filtered replication (binlog streamer and player).
 # Same permissions as vt_app.
 CREATE USER 'vt_filtered'@'127.0.0.1' IDENTIFIED BY 'VtFilteredPass';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,

@@ -163,12 +163,12 @@ stringData:
       SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
       ON *.* TO 'vt_allprivs'@'localhost';
 
-    # User for slave replication connections and by the binlog streamer (vstreamer).
+    # User for slave replication connections.
     # TODO: Should we set a password on this since it allows remote connections?
     CREATE USER 'vt_repl'@'%';
-    GRANT REPLICATION CLIENT, REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';
+    GRANT REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';
 
-    # User for Vitess filtered replication (binlog player).
+    # User for Vitess filtered replication (binlog streamer and player).
     # Same permissions as vt_app.
     CREATE USER 'vt_filtered'@'localhost';
     GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
