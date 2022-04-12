@@ -3230,10 +3230,11 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-"select u.id, u.age from user u order by u.id"
+# groupe by with non aggregated columns and table alias
+"select u.id, u.age from user u group by u.id"
 {
   "QueryType": "SELECT",
-  "Original": "select u.id, u.age from user u order by u.id",
+  "Original": "select u.id, u.age from user u group by u.id",
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "Scatter",
@@ -3241,50 +3242,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select u.id, u.age, weight_string(u.id) from `user` as u where 1 != 1",
-    "OrderBy": "(0|2) ASC",
-    "Query": "select u.id, u.age, weight_string(u.id) from `user` as u order by u.id asc",
-    "ResultColumns": 2,
-    "Table": "`user`"
-  }
-}
-Gen4 plan same as above
-
-"select u.id, u.age from (select id, name, age from user) u order by u.id"
-{
-  "QueryType": "SELECT",
-  "Original": "select u.id, u.age from (select id, name, age from user) u order by u.id",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "Scatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select u.id, u.age, weight_string(u.id) from (select id, `name`, age from `user` where 1 != 1) as u where 1 != 1",
-    "OrderBy": "(0|2) ASC",
-    "Query": "select u.id, u.age, weight_string(u.id) from (select id, `name`, age from `user`) as u order by u.id asc",
-    "ResultColumns": 2,
-    "Table": "`user`"
-  }
-}
-Gen4 plan same as above
-
-"select u.age from (select id, name, age from user) u order by u.age"
-{
-  "QueryType": "SELECT",
-  "Original": "select u.age from (select id, name, age from user) u order by u.age",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "Scatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select u.age, weight_string(u.age) from (select id, `name`, age from `user` where 1 != 1) as u where 1 != 1",
-    "OrderBy": "(0|1) ASC",
-    "Query": "select u.age, weight_string(u.age) from (select id, `name`, age from `user`) as u order by u.age asc",
-    "ResultColumns": 1,
+    "FieldQuery": "select u.id, u.age from `user` as u where 1 != 1 group by u.id",
+    "Query": "select u.id, u.age from `user` as u group by u.id",
     "Table": "`user`"
   }
 }
