@@ -573,11 +573,11 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		buf.astPrintf(ct, " %s", keywordStrings[ZEROFILL])
 	}
 	if ct.Charset != "" {
-		buf.astPrintf(ct, " %s %s %s", keywordStrings[CHARACTER], keywordStrings[SET], ct.Charset)
+		buf.astPrintf(ct, " %s %s %#s", keywordStrings[CHARACTER], keywordStrings[SET], ct.Charset)
 	}
 	if ct.Options != nil {
 		if ct.Options.Collate != "" {
-			buf.astPrintf(ct, " %s %s", keywordStrings[COLLATE], ct.Options.Collate)
+			buf.astPrintf(ct, " %s %#s", keywordStrings[COLLATE], ct.Options.Collate)
 		}
 		if ct.Options.Null != nil && ct.Options.As == nil {
 			if *ct.Options.Null {
@@ -1242,7 +1242,7 @@ func (node *CurTimeFuncExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CollateExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v collate %s", node.Expr, node.Collation)
+	buf.astPrintf(node, "%v collate %#s", node.Expr, node.Collation)
 }
 
 // Format formats the node.
@@ -1473,6 +1473,9 @@ func (node OnDup) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node ColIdent) Format(buf *TrackedBuffer) {
+	if node.IsEmpty() {
+		return
+	}
 	for i := NoAt; i < node.at; i++ {
 		buf.WriteByte('@')
 	}
@@ -1791,9 +1794,9 @@ func (node *ModifyColumn) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *AlterCharset) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "convert to character set %s", node.CharacterSet)
+	buf.astPrintf(node, "convert to character set %#s", node.CharacterSet)
 	if node.Collate != "" {
-		buf.astPrintf(node, " collate %s", node.Collate)
+		buf.astPrintf(node, " collate %#s", node.Collate)
 	}
 }
 
@@ -1875,11 +1878,16 @@ func (node TableOptions) Format(buf *TrackedBuffer) {
 			buf.WriteByte(' ')
 		}
 		buf.astPrintf(node, "%s", option.Name)
-		if option.String != "" {
-			buf.astPrintf(node, " %s", option.String)
-		} else if option.Value != nil {
+		switch {
+		case option.String != "":
+			if option.CaseSensitive {
+				buf.astPrintf(node, " %#s", option.String)
+			} else {
+				buf.astPrintf(node, " %s", option.String)
+			}
+		case option.Value != nil:
 			buf.astPrintf(node, " %v", option.Value)
-		} else {
+		default:
 			buf.astPrintf(node, " (%v)", option.Tables)
 		}
 	}
