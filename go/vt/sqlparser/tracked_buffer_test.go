@@ -193,7 +193,7 @@ func TestParseFlags(t *testing.T) {
 			}
 			require.NoError(t, err, tc.in)
 
-			for flags, expected := range tc.output {
+			generateOutput := func(stmt Statement, flags flags) string {
 				buf := NewTrackedBuffer(nil)
 				if flags.escape {
 					buf.SetEscapeAllIdentifiers(true)
@@ -201,12 +201,21 @@ func TestParseFlags(t *testing.T) {
 				if flags.upcase {
 					buf.SetUpperCase(true)
 				}
-				buf.Myprintf("%v", tree)
+				buf.Myprintf("%v", stmt)
 
 				out := buf.String()
-				if out != expected {
-					t.Errorf("bad serialization.\nwant: %s\n got: %s", expected, out)
-				}
+				return out
+			}
+
+			for flags, expected := range tc.output {
+				out := generateOutput(tree, flags)
+				require.Equal(t, expected, out, "bad serialization")
+
+				// Make sure we've generated a valid query!
+				rereadStmt, err := Parse(out)
+				require.NoError(t, err, out)
+				out = generateOutput(rereadStmt, flags)
+				require.Equal(t, expected, out, "bad serialization")
 			}
 		})
 	}
