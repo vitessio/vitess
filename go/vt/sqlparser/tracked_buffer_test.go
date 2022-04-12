@@ -88,9 +88,45 @@ func TestParseFlags(t *testing.T) {
 			},
 		},
 		{
+			"create table `a`(`id` int primary key)",
+			map[flags]string{
+				{escape: true, upcase: true}: "CREATE TABLE `a` (\n\t`id` int PRIMARY KEY\n)",
+			},
+		},
+		{
+			"create table a (id int not null auto_increment, v varchar(32) default null, v2 varchar(62) charset utf8mb4 collate utf8mb4_0900_ai_ci, key v_idx(v(16)))",
+			map[flags]string{
+				{escape: true, upcase: true}: "CREATE TABLE `a` (\n\t`id` int NOT NULL AUTO_INCREMENT,\n\t`v` varchar(32) DEFAULT NULL,\n\t`v2` varchar(62) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,\n\tKEY `v_idx` (`v`(16))\n)",
+			},
+		},
+		{
+			"create table a (id int not null primary key, dt datetime default current_timestamp)",
+			map[flags]string{
+				{escape: true, upcase: true}: "CREATE TABLE `a` (\n\t`id` int NOT NULL PRIMARY KEY,\n\t`dt` datetime DEFAULT CURRENT_TIMESTAMP()\n)",
+			},
+		},
+		{
 			"create table `insert`(`update` int, primary key(`delete`))",
 			map[flags]string{
 				{escape: true, upcase: true}: "CREATE TABLE `insert` (\n\t`update` int,\n\tPRIMARY KEY (`delete`)\n)",
+			},
+		},
+		{
+			"alter table a engine=innodb",
+			map[flags]string{
+				{escape: true, upcase: true}: "ALTER TABLE `a` ENGINE INNODB",
+			},
+		},
+		{
+			"alter table a comment='a b c'",
+			map[flags]string{
+				{escape: true, upcase: true}: "ALTER TABLE `a` COMMENT 'a b c'",
+			},
+		},
+		{
+			"alter table a add column c char not null default 'x'",
+			map[flags]string{
+				{escape: true, upcase: true}: "ALTER TABLE `a` ADD COLUMN `c` char NOT NULL DEFAULT 'x'",
 			},
 		},
 	}
