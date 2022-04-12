@@ -31,9 +31,6 @@ type Options struct {
 	// CORSOrigins is the list of origins to allow via CORS. An empty or nil
 	// slice disables CORS entirely.
 	CORSOrigins []string
-	// EnableDynamicClusters makes it so that clients can pass clusters dynamically
-	// in a session-like way
-	EnableDynamicClusters bool
 	// EnableTracing specifies whether to install a tracing middleware on the
 	// API subrouter.
 	EnableTracing bool
