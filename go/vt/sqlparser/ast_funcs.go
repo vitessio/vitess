@@ -86,10 +86,11 @@ type IndexOption struct {
 
 // TableOption is used for create table options like AUTO_INCREMENT, INSERT_METHOD, etc
 type TableOption struct {
-	Name   string
-	Value  *Literal
-	String string
-	Tables TableNames
+	Name          string
+	Value         *Literal
+	String        string
+	Tables        TableNames
+	CaseSensitive bool
 }
 
 // ColumnKeyOption indicates whether or not the given column is defined as an

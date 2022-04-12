@@ -1955,6 +1955,9 @@ func (node OnDup) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node ColIdent) formatFast(buf *TrackedBuffer) {
+	if node.IsEmpty() {
+		return
+	}
 	for i := NoAt; i < node.at; i++ {
 		buf.WriteByte('@')
 	}
@@ -2451,13 +2454,19 @@ func (node TableOptions) formatFast(buf *TrackedBuffer) {
 			buf.WriteByte(' ')
 		}
 		buf.WriteString(option.Name)
-		if option.String != "" {
-			buf.WriteByte(' ')
-			buf.WriteString(option.String)
-		} else if option.Value != nil {
+		switch {
+		case option.String != "":
+			if option.CaseSensitive {
+				buf.WriteByte(' ')
+				buf.WriteString(option.String)
+			} else {
+				buf.WriteByte(' ')
+				buf.WriteString(option.String)
+			}
+		case option.Value != nil:
 			buf.WriteByte(' ')
 			option.Value.formatFast(buf)
-		} else {
+		default:
 			buf.WriteString(" (")
 			option.Tables.formatFast(buf)
 			buf.WriteByte(')')
