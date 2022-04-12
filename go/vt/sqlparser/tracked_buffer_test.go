@@ -129,6 +129,60 @@ func TestParseFlags(t *testing.T) {
 				{escape: true, upcase: true}: "ALTER TABLE `a` ADD COLUMN `c` char NOT NULL DEFAULT 'x'",
 			},
 		},
+		{
+			"alter table t2 modify column id bigint unsigned primary key",
+			map[flags]string{
+				{escape: true, upcase: true}: "ALTER TABLE `t2` MODIFY COLUMN `id` bigint UNSIGNED PRIMARY KEY",
+			},
+		},
+		{
+			"alter table t1 modify column a int first, modify column b int after a",
+			map[flags]string{
+				{escape: true, upcase: true}: "ALTER TABLE `t1` MODIFY COLUMN `a` int FIRST, MODIFY COLUMN `b` int AFTER `a`",
+			},
+		},
+		{
+			"alter table t1 drop key `PRIMARY`, add primary key (id,n)",
+			map[flags]string{
+				{escape: true, upcase: true}: "ALTER TABLE `t1` DROP KEY `PRIMARY`, ADD PRIMARY KEY (`id`, `n`)",
+			},
+		},
+		{
+			"alter table t1 drop foreign key f",
+			map[flags]string{
+				{escape: true, upcase: true}: "ALTER TABLE `t1` DROP FOREIGN KEY `f`",
+			},
+		},
+		{
+			"alter table t1 add constraint f foreign key (i) references parent (id) on delete cascade on update set null",
+			map[flags]string{
+				{escape: true, upcase: true}: "ALTER TABLE `t1` ADD CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) ON DELETE CASCADE ON UPDATE SET NULL",
+			},
+		},
+		{
+			"alter table t1 remove partitioning",
+			map[flags]string{
+				{escape: true, upcase: true}: "ALTER TABLE `t1` REMOVE PARTITIONING",
+			},
+		},
+		{
+			"alter table t1 partition by hash (id) partitions 5",
+			map[flags]string{
+				{escape: true, upcase: true}: "ALTER TABLE `t1` PARTITION BY HASH (`id`) PARTITIONS 5",
+			},
+		},
+		{
+			"alter table t1 partition by list (id) (partition p1 values in (11, 21), partition p2 values in (12, 22))",
+			map[flags]string{
+				{escape: true, upcase: true}: "ALTER TABLE `t1` PARTITION BY LIST (`id`) (PARTITION `p1` VALUES IN (11, 21), PARTITION `p2` VALUES IN (12, 22))",
+			},
+		},
+		{
+			"alter table t1 row_format=compressed, character set=utf8",
+			map[flags]string{
+				{escape: true, upcase: true}: "ALTER TABLE `t1` ROW_FORMAT COMPRESSED, CHARSET utf8",
+			},
+		},
 	}
 
 	for _, tc := range testcases {
