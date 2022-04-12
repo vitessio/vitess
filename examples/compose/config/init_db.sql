@@ -53,7 +53,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
   SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
   ON *.* TO 'vt_allprivs'@'localhost';
-# User for slave replication connections.
+# User for slave replication connections and by the binlog streamer (vstreamer).
 # TODO: Should we set a password on this since it allows remote connections?
 CREATE USER 'vt_repl'@'%';
 GRANT REPLICATION CLIENT, REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';
