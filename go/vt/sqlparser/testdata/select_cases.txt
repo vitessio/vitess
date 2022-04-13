@@ -6932,7 +6932,7 @@ INPUT
 select visitor_id,max(ts) as mts from t1 group by visitor_id having DATE_ADD(mts,INTERVAL 3 MONTH) < NOW();
 END
 OUTPUT
-select visitor_id, max(ts) as mts from t1 group by visitor_id having DATE_ADD(mts, interval 3 MONTH) < NOW()
+select visitor_id, max(ts) as mts from t1 group by visitor_id having DATE_ADD(mts, interval 3 MONTH) < now()
 END
 INPUT
 select @category3_id:= 10003;
@@ -16094,7 +16094,7 @@ INPUT
 select visitor_id,max(ts) as mts from t1 group by visitor_id having mts < DATE_SUB(NOW(),INTERVAL 3 MONTH);
 END
 OUTPUT
-select visitor_id, max(ts) as mts from t1 group by visitor_id having mts < DATE_SUB(NOW(), interval 3 MONTH)
+select visitor_id, max(ts) as mts from t1 group by visitor_id having mts < DATE_SUB(now(), interval 3 MONTH)
 END
 INPUT
 select f1, f2, if(f1, 40.0, 5.00) from t1 group by f1 order by f2;

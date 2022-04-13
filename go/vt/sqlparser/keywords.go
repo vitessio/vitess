@@ -382,6 +382,7 @@ var keywords = []keyword{
 	{"no", NO},
 	{"none", NONE},
 	{"not", NOT},
+	{"now", NOW},
 	{"no_write_to_binlog", NO_WRITE_TO_BINLOG},
 	{"nth_value", UNUSED},
 	{"ntile", UNUSED},

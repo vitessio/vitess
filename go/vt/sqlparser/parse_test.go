@@ -46,6 +46,15 @@ var (
 		output:     "create table x",
 		partialDDL: true,
 	}, {
+		input:  "create table t (id int primary key, dt datetime DEFAULT (CURRENT_TIMESTAMP))",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default current_timestamp()\n)",
+	}, {
+		input:  "create table t (id int primary key, dt datetime DEFAULT now())",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default now()\n)",
+	}, {
+		input:  "create table t (id int primary key, dt datetime DEFAULT (now()))",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default now()\n)",
+	}, {
 		input:  "create table x (e enum('red','yellow') null collate 'utf8_bin')",
 		output: "create table x (\n\te enum('red', 'yellow') collate 'utf8_bin' null\n)",
 	}, {
@@ -3283,6 +3292,7 @@ func TestCreateTable(t *testing.T) {
 	s2 varchar default 'this is a string',
 	s3 varchar default null,
 	s4 timestamp default current_timestamp,
+	s41 timestamp default now,
 	s5 bit(1) default B'0'
 )`,
 			output: `create table t (
@@ -3293,6 +3303,7 @@ func TestCreateTable(t *testing.T) {
 	s2 varchar default 'this is a string',
 	` + "`" + `s3` + "`" + ` varchar default null,
 	s4 timestamp default current_timestamp(),
+	s41 timestamp default now(),
 	s5 bit(1) default B'0'
 )`,
 		}, {
@@ -3336,6 +3347,24 @@ func TestCreateTable(t *testing.T) {
 	time3 timestamp default current_timestamp() on update current_timestamp(),
 	time4 timestamp default current_timestamp() on update current_timestamp(),
 	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)
+)`,
+		}, {
+			// test now with and without ()
+			input: `create table t (
+	time1 timestamp default now,
+	time2 timestamp default now(),
+	time3 timestamp default (now()),
+	time4 timestamp default now on update now,
+	time5 timestamp default now() on update now(),
+	time6 timestamp(3) default now(3) on update now(3)
+)`,
+			output: `create table t (
+	time1 timestamp default now(),
+	time2 timestamp default now(),
+	time3 timestamp default now(),
+	time4 timestamp default now() on update now(),
+	time5 timestamp default now() on update now(),
+	time6 timestamp(3) default now(3) on update now(3)
 )`,
 		}, {
 			// test localtime with and without ()
