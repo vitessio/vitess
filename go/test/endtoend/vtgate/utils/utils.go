@@ -39,6 +39,13 @@ func AssertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	}
 }
 
+func AssertContainsError(t *testing.T, conn *mysql.Conn, query, expected string) {
+	t.Helper()
+	_, err := ExecAllowError(t, conn, query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), expected, "actual error: %s", err.Error())
+}
+
 func AssertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := Exec(t, conn, query)
@@ -82,4 +89,9 @@ func Exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err, "for query: "+query)
 	return qr
+}
+
+func ExecAllowError(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
+	t.Helper()
+	return conn.ExecuteFetch(query, 1000, true)
 }
