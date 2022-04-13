@@ -6,7 +6,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Check out code
-      if: needs.check_relevant_files.outputs.go_files == 'true'
       uses: actions/checkout@v2
 
     - name: Check for changes in Go files

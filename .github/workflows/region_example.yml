@@ -19,7 +19,7 @@ jobs:
       id: changes
       with:
         filters: |
-          example:
+          examples:
             - 'go/**/*.go'
             - 'test.go'
             - 'Makefile'
@@ -32,18 +32,18 @@ jobs:
             - 'examples/**'
 
     - name: Set up Go
-      if: steps.changes.outputs.example == 'true'
+      if: steps.changes.outputs.examples == 'true'
       uses: actions/setup-go@v2
       with:
         go-version: 1.18
 
     - name: Tune the OS
-      if: steps.changes.outputs.example == 'true'
+      if: steps.changes.outputs.examples == 'true'
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
 
     - name: Get dependencies
-      if: steps.changes.outputs.example == 'true'
+      if: steps.changes.outputs.examples == 'true'
       run: |
         if [ ${{matrix.os}} = "ubuntu-latest" ]; then
           # Setup MySQL 8.0
@@ -65,17 +65,17 @@ jobs:
         go mod download
 
     - name: Run make minimaltools
-      if: steps.changes.outputs.example == 'true'
+      if: steps.changes.outputs.examples == 'true'
       run: |
         make minimaltools
 
     - name: Build
-      if: steps.changes.outputs.example == 'true'
+      if: steps.changes.outputs.examples == 'true'
       run: |
         make build
 
     - name: region_example
-      if: steps.changes.outputs.example == 'true'
+      if: steps.changes.outputs.examples == 'true'
       timeout-minutes: 30
       run: |
         export TOPO=${{matrix.topo}}
