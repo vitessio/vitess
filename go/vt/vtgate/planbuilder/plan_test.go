@@ -334,6 +334,18 @@ func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
 func (vw *vschemaWrapper) Planner() PlannerVersion {
 	return vw.version
 }
+
+// FindKeyspace implements the VSchema interface
+func (vw *vschemaWrapper) FindKeyspace(keyspace string) (*vindexes.Keyspace, error) {
+	if vw.keyspace == nil {
+		return nil, errors.New("keyspace not available")
+	}
+	if vw.keyspace.Name == keyspace {
+		return vw.keyspace, nil
+	}
+	return nil, nil
+}
+
 func (vw *vschemaWrapper) GetSemTable() *semantics.SemTable {
 	return nil
 }
