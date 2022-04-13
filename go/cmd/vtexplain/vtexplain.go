@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"os"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -145,7 +147,7 @@ func parseAndRun() error {
 		return err
 	}
 
-	plannerVersion := querypb.ExecuteOptions_PlannerVersion(querypb.ExecuteOptions_PlannerVersion_value[*plannerVersionStr])
+	plannerVersion, _ := plancontext.PlannerNameToVersion(*plannerVersionStr)
 	if plannerVersion != querypb.ExecuteOptions_V3 && plannerVersion != querypb.ExecuteOptions_Gen4 {
 		return fmt.Errorf("invalid value specified for planner-version of '%s' -- valid values are V3 and Gen4", *plannerVersionStr)
 	}
