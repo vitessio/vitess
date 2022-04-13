@@ -17,7 +17,7 @@ jobs:
 
       - name: Get latest Vitess tag
         run: |
-          last_major_releases=$(git show-ref --tags | grep -E 'refs/tags/v[0-9]*.[0-9]*.0$' | sed 's/[a-z0-9]* refs\/tags\/v//' | sort -nr | head -n3)
+          last_major_releases=$(git show-ref --tags | grep -E 'refs/tags/v[0-9]*.[0-9]*.0$' | sed 's/[a-z0-9]* refs\/tags\/v//' | sort -nr | head -n4 | tail -n3)
           last_major_release_nb=$(echo "$last_major_releases" | head -n1 | sed 's/.[0-9]*.[0-9]*$//')
           last_minor_release=$(git show-ref --tags | grep -E "refs/tags/v$last_major_release_nb.[0-9]*.[1-9]*$" | sed 's/[a-z0-9]* refs\/tags\/v//' | sort -nr | head -n1)
           major_and_minor_releases=$last_major_releases
