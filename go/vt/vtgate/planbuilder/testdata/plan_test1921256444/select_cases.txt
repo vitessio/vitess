@@ -3004,7 +3004,7 @@ Gen4 plan same as above
 }
 
 # json_quote, json_object and json_array
-"SELECT JSON_QUOTE('null'), JSON_QUOTE('\"null\"'), JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), JSON_ARRAY(1, \"abc\", NULL, TRUE, CURTIME())"
+"SELECT JSON_QUOTE('null'), JSON_QUOTE('"null"'), JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), JSON_ARRAY(1, "abc", NULL, TRUE, CURTIME())"
 {
   "QueryType": "SELECT",
   "Original": "SELECT JSON_QUOTE('null'), JSON_QUOTE('\"null\"'), JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), JSON_ARRAY(1, \"abc\", NULL, TRUE, CURTIME())",
@@ -3174,7 +3174,7 @@ Gen4 plan same as above
 }
 
 # json schema validation functions
-"SELECT JSON_SCHEMA_VALID('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), JSON_SCHEMA_VALIDATION_REPORT('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"')"
+"SELECT JSON_SCHEMA_VALID('{"type":"string","pattern":"("}', '"abc"'), JSON_SCHEMA_VALIDATION_REPORT('{"type":"string","pattern":"("}', '"abc"')"
 {
   "QueryType": "SELECT",
   "Original": "SELECT JSON_SCHEMA_VALID('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), JSON_SCHEMA_VALIDATION_REPORT('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"')",
@@ -3193,7 +3193,7 @@ Gen4 plan same as above
 Gen4 plan same as above
 
 # json search functions
-"SELECT JSON_CONTAINS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), JSON_CONTAINS_PATH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), JSON_EXTRACT('[10, 20, [30, 40]]', '$[1]'), JSON_UNQUOTE(JSON_EXTRACT('[\"a\",\"b\"]', '$[1]')), JSON_KEYS('{\"a\": 1, \"b\": {\"c\": 30}}'), JSON_OVERLAPS(\"[1,3,5,7]\", \"[2,5,7]\"), JSON_SEARCH('[\"abc\"]', 'one', 'abc'), JSON_VALUE('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), JSON_ARRAY(4,5) MEMBER OF('[[3,4],[4,5]]')"
+"SELECT JSON_CONTAINS('{"a": 1, "b": 2, "c": {"d": 4}}', '1'), JSON_CONTAINS_PATH('{"a": 1, "b": 2, "c": {"d": 4}}', 'one', '$.a', '$.e'), JSON_EXTRACT('[10, 20, [30, 40]]', '$[1]'), JSON_UNQUOTE(JSON_EXTRACT('["a","b"]', '$[1]')), JSON_KEYS('{"a": 1, "b": {"c": 30}}'), JSON_OVERLAPS("[1,3,5,7]", "[2,5,7]"), JSON_SEARCH('["abc"]', 'one', 'abc'), JSON_VALUE('{"fname": "Joe", "lname": "Palmer"}', '$.fname'), JSON_ARRAY(4,5) MEMBER OF('[[3,4],[4,5]]')"
 {
   "QueryType": "SELECT",
   "Original": "SELECT JSON_CONTAINS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), JSON_CONTAINS_PATH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), JSON_EXTRACT('[10, 20, [30, 40]]', '$[1]'), JSON_UNQUOTE(JSON_EXTRACT('[\"a\",\"b\"]', '$[1]')), JSON_KEYS('{\"a\": 1, \"b\": {\"c\": 30}}'), JSON_OVERLAPS(\"[1,3,5,7]\", \"[2,5,7]\"), JSON_SEARCH('[\"abc\"]', 'one', 'abc'), JSON_VALUE('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), JSON_ARRAY(4,5) MEMBER OF('[[3,4],[4,5]]')",
@@ -3212,7 +3212,7 @@ Gen4 plan same as above
 Gen4 plan same as above
 
 # Json extract and json unquote shorthands
-"SELECT a->\"$[4]\", a->>\"$[3]\" FROM user"
+"SELECT a->"$[4]", a->>"$[3]" FROM user"
 {
   "QueryType": "SELECT",
   "Original": "SELECT a-\u003e\"$[4]\", a-\u003e\u003e\"$[3]\" FROM user",

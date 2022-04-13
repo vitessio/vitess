@@ -1,0 +1,55 @@
+# Begin
+"begin"
+{
+  "QueryType": "BEGIN",
+  "Original": "begin"
+}
+Gen4 plan same as above
+
+# Start Transaction
+"start transaction"
+{
+  "QueryType": "BEGIN",
+  "Original": "start transaction"
+}
+Gen4 plan same as above
+
+# Commit
+"commit"
+{
+  "QueryType": "COMMIT",
+  "Original": "commit"
+}
+Gen4 plan same as above
+
+# Rollback
+"rollback"
+{
+  "QueryType": "ROLLBACK",
+  "Original": "rollback"
+}
+Gen4 plan same as above
+
+# Savepoint
+"savepoint a"
+{
+  "QueryType": "SAVEPOINT",
+  "Original": "savepoint a"
+}
+Gen4 plan same as above
+
+# Savepoint rollback
+"rollback work to savepoint a"
+{
+  "QueryType": "SAVEPOINT_ROLLBACK",
+  "Original": "rollback work to savepoint a"
+}
+Gen4 plan same as above
+
+# Savepoint release
+"release savepoint a"
+{
+  "QueryType": "RELEASE",
+  "Original": "release savepoint a"
+}
+Gen4 plan same as above
