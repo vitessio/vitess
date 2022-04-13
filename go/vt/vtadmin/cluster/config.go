@@ -18,11 +18,16 @@ package cluster
 
 import (
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
+	"io"
 	"strconv"
 	"time"
 
+	"github.com/spf13/viper"
+
 	"vitess.io/vitess/go/pools"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
 )
 
@@ -85,6 +90,64 @@ func (cfg *Config) Set(value string) error {
 	}
 
 	return parseFlag(cfg, value)
+}
+
+// ErrNoConfigID is returned from LoadConfig when a cluster spec has a missing
+// or empty id.
+var ErrNoConfigID = stderrors.New("loaded config has no id")
+
+// LoadConfig reads an io.Reader into viper and tries unmarshal a Config.
+//
+// The second parameter is used to instruct viper what config type it will read,
+// so it knows what Unmarshaller to use. If no config type is given, LoadConfig
+// defaults to "json". It is the callers responsibility to pass a configType
+// value that viper can use, which, at the time of writing, include "json",
+// "yaml", "toml", "ini", "hcl", "tfvars", "env", and "props".
+//
+// Any error that occurs during viper's initial read results in a return value
+// of (nil, "", <the error>), and a triple of this shape should indicate to the
+// caller complete failure. If viper is able to read the config, and get a
+// non-empty cluster ID, then the returned id will be non-empty, but the
+// returned Config and error values may or may not be nil, depending on if the
+// Config can be fully unmarshalled or not.
+//
+// See dynamic.ClusterFromString for additional details on this three-tuple and
+// how callers should expect to use it.
+func LoadConfig(r io.Reader, configType string) (cfg *Config, id string, err error) {
+	v := viper.New()
+	if configType == "" {
+		log.Warning("no configType specified, defaulting to 'json'")
+		configType = "json"
+	}
+
+	v.SetConfigType(configType)
+
+	if err := v.ReadConfig(r); err != nil {
+		return nil, "", err
+	}
+
+	id = v.GetString("id")
+	if id == "" {
+		return nil, "", ErrNoConfigID
+	}
+
+	tmp := map[string]string{}
+	if err := v.Unmarshal(&tmp); err != nil {
+		return nil, id, err
+	}
+
+	cfg = &Config{
+		ID:                   id,
+		DiscoveryFlagsByImpl: map[string]map[string]string{},
+		VtSQLFlags:           map[string]string{},
+		VtctldFlags:          map[string]string{},
+	}
+
+	if err := cfg.unmarshalMap(tmp); err != nil {
+		return nil, id, err
+	}
+
+	return cfg, id, nil
 }
 
 func (cfg *Config) unmarshalMap(attributes map[string]string) error {

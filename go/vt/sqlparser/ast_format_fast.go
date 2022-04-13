@@ -19,7 +19,6 @@ package sqlparser
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -84,13 +83,13 @@ func (node *Union) formatFast(buf *TrackedBuffer) {
 		node.Left.formatFast(buf)
 	}
 
-	buf.WriteString(" ")
+	buf.WriteByte(' ')
 	if node.Distinct {
 		buf.WriteString(UnionStr)
 	} else {
 		buf.WriteString(UnionAllStr)
 	}
-	buf.WriteString(" ")
+	buf.WriteByte(' ')
 
 	if requiresParen(node.Right) {
 		buf.WriteByte('(')
@@ -662,7 +661,7 @@ func (node *PartitionOption) formatFast(buf *TrackedBuffer) {
 			}
 			pd.formatFast(buf)
 		}
-		buf.WriteString(")")
+		buf.WriteByte(')')
 	}
 }
 
@@ -1246,7 +1245,7 @@ func (node Columns) formatFast(buf *TrackedBuffer) {
 		n.formatFast(buf)
 		prefix = ", "
 	}
-	buf.WriteString(")")
+	buf.WriteByte(')')
 }
 
 // formatFast formats the node
@@ -1260,7 +1259,7 @@ func (node Partitions) formatFast(buf *TrackedBuffer) {
 		n.formatFast(buf)
 		prefix = ", "
 	}
-	buf.WriteString(")")
+	buf.WriteByte(')')
 }
 
 // formatFast formats the node.
@@ -1617,7 +1616,7 @@ func (node *TrimFuncExpr) formatFast(buf *TrackedBuffer) {
 		buf.WriteString("from ")
 	}
 	buf.printExpr(node, node.StringArg, true)
-	buf.WriteString(")")
+	buf.WriteByte(')')
 }
 
 // formatFast formats the node.
@@ -1819,9 +1818,9 @@ func (node *CaseExpr) formatFast(buf *TrackedBuffer) {
 func (node *Default) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("default")
 	if node.ColName != "" {
-		buf.WriteString("(")
+		buf.WriteByte('(')
 		formatID(buf, node.ColName, NoAt)
-		buf.WriteString(")")
+		buf.WriteByte(')')
 	}
 }
 
@@ -1925,7 +1924,7 @@ func (node SetExprs) formatFast(buf *TrackedBuffer) {
 func (node *SetExpr) formatFast(buf *TrackedBuffer) {
 	if node.Scope != ImplicitScope {
 		buf.WriteString(node.Scope.ToString())
-		buf.WriteString(" ")
+		buf.WriteByte(' ')
 	}
 	// We don't have to backtick set variable names.
 	switch {
@@ -1956,6 +1955,9 @@ func (node OnDup) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node ColIdent) formatFast(buf *TrackedBuffer) {
+	if node.IsEmpty() {
+		return
+	}
 	for i := NoAt; i < node.at; i++ {
 		buf.WriteByte('@')
 	}
@@ -2061,7 +2063,8 @@ func (node *CreateDatabase) formatFast(buf *TrackedBuffer) {
 				buf.WriteString(" default")
 			}
 			buf.WriteString(createOption.Type.ToString())
-			buf.WriteString(" " + createOption.Value)
+			buf.WriteByte(' ')
+			buf.WriteString(createOption.Value)
 		}
 	}
 }
@@ -2082,7 +2085,8 @@ func (node *AlterDatabase) formatFast(buf *TrackedBuffer) {
 				buf.WriteString(" default")
 			}
 			buf.WriteString(createOption.Type.ToString())
-			buf.WriteString(" " + createOption.Value)
+			buf.WriteByte(' ')
+			buf.WriteString(createOption.Value)
 		}
 	}
 }
@@ -2245,7 +2249,7 @@ func (node *AlterTable) formatFast(buf *TrackedBuffer) {
 	prefix := ""
 	for i, option := range node.AlterOptions {
 		if i != 0 {
-			buf.WriteString(",")
+			buf.WriteByte(',')
 		}
 		buf.WriteByte(' ')
 		option.formatFast(buf)
@@ -2300,7 +2304,7 @@ func (node *AddColumns) formatFast(buf *TrackedBuffer) {
 				col.formatFast(buf)
 			}
 		}
-		buf.WriteString(")")
+		buf.WriteByte(')')
 	}
 }
 
@@ -2447,16 +2451,22 @@ func (node *Validation) formatFast(buf *TrackedBuffer) {
 func (node TableOptions) formatFast(buf *TrackedBuffer) {
 	for i, option := range node {
 		if i != 0 {
-			buf.WriteString(" ")
+			buf.WriteByte(' ')
 		}
 		buf.WriteString(option.Name)
-		if option.String != "" {
-			buf.WriteByte(' ')
-			buf.WriteString(option.String)
-		} else if option.Value != nil {
+		switch {
+		case option.String != "":
+			if option.CaseSensitive {
+				buf.WriteByte(' ')
+				buf.WriteString(option.String)
+			} else {
+				buf.WriteByte(' ')
+				buf.WriteString(option.String)
+			}
+		case option.Value != nil:
 			buf.WriteByte(' ')
 			option.Value.formatFast(buf)
-		} else {
+		default:
 			buf.WriteString(" (")
 			option.Tables.formatFast(buf)
 			buf.WriteByte(')')
@@ -2567,9 +2577,9 @@ func (node *JtOnResponse) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node Offset) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("[")
-	buf.WriteString(strconv.Itoa(int(node)))
-	buf.WriteString("]")
+	buf.WriteByte('[')
+	buf.WriteString(fmt.Sprintf("%d", int(node)))
+	buf.WriteByte(']')
 }
 
 // formatFast formats the node.
@@ -2602,7 +2612,7 @@ func (node *JSONArrayExpr) formatFast(buf *TrackedBuffer) {
 			prefix = ", "
 		}
 	}
-	buf.WriteString(")")
+	buf.WriteByte(')')
 }
 
 // formatFast formats the node.
@@ -2618,7 +2628,7 @@ func (node *JSONObjectExpr) formatFast(buf *TrackedBuffer) {
 			p.formatFast(buf)
 		}
 	}
-	buf.WriteString(")")
+	buf.WriteByte(')')
 }
 
 // formatFast formats the node.
@@ -2650,7 +2660,7 @@ func (node *JSONContainsExpr) formatFast(buf *TrackedBuffer) {
 		buf.printExpr(node, n, true)
 		prefix = ", "
 	}
-	buf.WriteString(")")
+	buf.WriteByte(')')
 }
 
 // formatFast formats the node
@@ -2666,7 +2676,7 @@ func (node *JSONContainsPathExpr) formatFast(buf *TrackedBuffer) {
 		buf.printExpr(node, n, true)
 		prefix = ", "
 	}
-	buf.WriteString(")")
+	buf.WriteByte(')')
 }
 
 // formatFast formats the node
@@ -2680,7 +2690,7 @@ func (node *JSONExtractExpr) formatFast(buf *TrackedBuffer) {
 		buf.printExpr(node, n, true)
 		prefix = ", "
 	}
-	buf.WriteString(")")
+	buf.WriteByte(')')
 }
 
 // formatFast formats the node
@@ -2696,7 +2706,7 @@ func (node *JSONKeysExpr) formatFast(buf *TrackedBuffer) {
 		buf.printExpr(node, n, true)
 		prefix = ", "
 	}
-	buf.WriteString(")")
+	buf.WriteByte(')')
 }
 
 // formatFast formats the node
@@ -2729,7 +2739,7 @@ func (node *JSONSearchExpr) formatFast(buf *TrackedBuffer) {
 		buf.printExpr(node, n, true)
 		prefix = ", "
 	}
-	buf.WriteString(")")
+	buf.WriteByte(')')
 }
 
 // formatFast formats the node

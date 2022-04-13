@@ -247,7 +247,7 @@ func subquerySelectPlan(ins *sqlparser.Insert, vschema plancontext.VSchema, rese
 func getStatementAndPlanner(
 	ins *sqlparser.Insert,
 	vschema plancontext.VSchema,
-) (selectStmt sqlparser.SelectStatement, configuredPlanner selectPlanner, err error) {
+) (selectStmt sqlparser.SelectStatement, configuredPlanner stmtPlanner, err error) {
 	switch stmt := ins.Rows.(type) {
 	case *sqlparser.Select:
 		configuredPlanner, err = getConfiguredPlanner(vschema, buildSelectPlan, stmt, "")

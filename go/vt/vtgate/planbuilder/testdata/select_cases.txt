@@ -3229,3 +3229,22 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# groupe by with non aggregated columns and table alias
+"select u.id, u.age from user u group by u.id"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id, u.age from user u group by u.id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u.id, u.age from `user` as u where 1 != 1 group by u.id",
+    "Query": "select u.id, u.age from `user` as u group by u.id",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above

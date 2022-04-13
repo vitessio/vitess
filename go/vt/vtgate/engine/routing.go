@@ -110,7 +110,7 @@ type RoutingParameters struct {
 
 	// TargetDestination specifies an explicit target destination to send the query to.
 	// This will bypass the routing logic.
-	TargetDestination key.Destination
+	TargetDestination key.Destination // update `user[-]@replica`.user set ....
 
 	// Vindex specifies the vindex to be used.
 	Vindex vindexes.Vindex

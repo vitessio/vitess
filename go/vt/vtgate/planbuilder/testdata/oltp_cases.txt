@@ -197,7 +197,26 @@ Gen4 plan same as above
     "Vindex": "hash"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "UPDATE sbtest6 SET k=k+1 WHERE id=5",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update sbtest6 set k = k + 1 where id = 5",
+    "Table": "sbtest6",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "hash"
+  }
+}
 
 # OLTP non index update
 "UPDATE sbtest9 SET c=7 WHERE id=8"
@@ -221,7 +240,26 @@ Gen4 plan same as above
     "Vindex": "hash"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "UPDATE sbtest9 SET c=7 WHERE id=8",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update sbtest9 set c = 7 where id = 8",
+    "Table": "sbtest9",
+    "Values": [
+      "INT64(8)"
+    ],
+    "Vindex": "hash"
+  }
+}
 
 # OLTP delete
 "DELETE FROM sbtest15 WHERE id=7525"

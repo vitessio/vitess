@@ -91,7 +91,20 @@ func TestSubqueryInINClause(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	defer mcmp.Exec(`delete from t1`)
 	mcmp.Exec("insert into t1(id1, id2) values(0,0),(1,1)")
 	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE id1 IN (SELECT 1 FROM dual)`, `[[INT64(1)]]`)
+}
+
+func TestSubqueryInUpdate(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	conn := mcmp.VtConn
+
+	utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 10), (2, 20), (3, 30), (4, 40), (5, 50)`)
+	utils.Exec(t, conn, `insert into t2(id3, id4) values (1, 3), (2, 4)`)
+	utils.AssertMatches(t, conn, `SELECT id2, keyspace_id FROM t1_id2_idx WHERE id2 IN (2,10)`, `[[INT64(10) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
+	utils.Exec(t, conn, `update /*vt+ PLANNER=gen4 */ t1 set id2 = (select count(*) from t2) where id1 = 1`)
+	utils.AssertMatches(t, conn, `SELECT id2 FROM t1 WHERE id1 = 1`, `[[INT64(2)]]`)
+	utils.AssertMatches(t, conn, `SELECT id2, keyspace_id FROM t1_id2_idx WHERE id2 IN (2,10)`, `[[INT64(2) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
 }

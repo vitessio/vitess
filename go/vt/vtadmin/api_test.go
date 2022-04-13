@@ -4871,7 +4871,7 @@ func TestServeHTTP(t *testing.T) {
 		{
 			name:                  "multiple clusters with dynamic clusters",
 			enableDynamicClusters: true,
-			cookie:                `{"name": "dynamiccluster1", "vtctlds": [{"host":{"fqdn": "localhost:15000", "hostname": "localhost:15999"}}], "vtgates": [{"host": {"hostname": "localhost:15991"}}]}`,
+			cookie:                `{"id": "dynamiccluster1", "name": "dynamiccluster1", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}"}`,
 			clusters: []*cluster.Cluster{
 				{
 					ID:        "c1",
@@ -4894,7 +4894,7 @@ func TestServeHTTP(t *testing.T) {
 		{
 			name:                  "multiple clusters with dynamic clusters - no duplicates",
 			enableDynamicClusters: true,
-			cookie:                `{"name": "dynamiccluster1", "vtctlds": [{"host":{"fqdn": "localhost:15000", "hostname": "localhost:15999"}}], "vtgates": [{"host": {"hostname": "localhost:15991"}}]}`,
+			cookie:                `{"id": "dynamiccluster1", "name": "dynamiccluster1", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}"}`,
 			clusters: []*cluster.Cluster{
 				{
 					ID:        "c1",
@@ -4918,7 +4918,7 @@ func TestServeHTTP(t *testing.T) {
 		{
 			name:                  "multiple clusters with invalid json cookie and dynamic clusters",
 			enableDynamicClusters: true,
-			cookie:                `{"name "dynamiccluster1", "vtctlds": [{"host":{"fqdn": "localhost:15000", "hostname": "localhost:15999"}}], "vtgates": [{"host": {"hostname": "localhost:15991"}}]}`,
+			cookie:                `{"id "dynamiccluster1", "name": "dynamiccluster1", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}"}`,
 			clusters: []*cluster.Cluster{
 				{
 					ID:        "c1",
