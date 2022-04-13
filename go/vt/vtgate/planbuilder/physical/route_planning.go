@@ -238,7 +238,85 @@ func createRoute(ctx *plancontext.PlanningContext, table *abstract.QueryTable, s
 		}
 	}
 
+	if plan.RouteOpCode == engine.Scatter && len(table.Predicates) > 0 {
+		// If we have a scatter query, it's worth spending a little extra time seeing if we can't improve it
+		for _, pred := range table.Predicates {
+			rewritten := tryRewriteOrToIn(pred)
+			if rewritten != nil {
+				err = plan.UpdateRoutingLogic(ctx, rewritten)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
 	return plan, nil
+}
+
+func tryRewriteOrToIn(expr sqlparser.Expr) sqlparser.Expr {
+	rewrote := false
+	newPred := sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
+		_, ok := cursor.Node().(*sqlparser.OrExpr)
+		return ok
+	}, func(cursor *sqlparser.Cursor) bool {
+		// we are looking for the pattern WHERE c = 1 or c = 2
+		switch or := cursor.Node().(type) {
+		case *sqlparser.OrExpr:
+			lftCmp, ok := or.Left.(*sqlparser.ComparisonExpr)
+			if !ok {
+				return true
+			}
+			rgtCmp, ok := or.Right.(*sqlparser.ComparisonExpr)
+			if !ok {
+				return true
+			}
+
+			col, ok := lftCmp.Left.(*sqlparser.ColName)
+			if !ok || !sqlparser.EqualsExpr(lftCmp.Left, rgtCmp.Left) {
+				return true
+			}
+
+			var tuple sqlparser.ValTuple
+			switch lftCmp.Operator {
+			case sqlparser.EqualOp:
+				tuple = sqlparser.ValTuple{lftCmp.Right}
+			case sqlparser.InOp:
+				lft, ok := lftCmp.Right.(sqlparser.ValTuple)
+				if !ok {
+					return true
+				}
+				tuple = lft
+			default:
+				return true
+			}
+
+			switch rgtCmp.Operator {
+			case sqlparser.EqualOp:
+				tuple = append(tuple, rgtCmp.Right)
+			case sqlparser.InOp:
+				lft, ok := rgtCmp.Right.(sqlparser.ValTuple)
+				if !ok {
+					return true
+				}
+				tuple = append(tuple, lft...)
+			default:
+				return true
+			}
+
+			rewrote = true
+			cursor.Replace(&sqlparser.ComparisonExpr{
+				Operator: sqlparser.InOp,
+				Left:     col,
+				Right:    tuple,
+			})
+		}
+		return true
+	})
+	if rewrote {
+		return newPred.(sqlparser.Expr)
+	}
+	return nil
 }
 
 func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *abstract.QueryTable) (*Route, error) {
