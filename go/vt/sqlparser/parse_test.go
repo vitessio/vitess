@@ -3793,16 +3793,18 @@ func TestCreateTable(t *testing.T) {
 			input: `create table t (
 	time1 timestamp default now,
 	time2 timestamp default now(),
-	time3 timestamp default now on update now,
-	time4 timestamp default now() on update now(),
-	time5 timestamp(3) default now(3) on update now(3)
+	time3 timestamp default (now()),
+	time4 timestamp default now on update now,
+	time5 timestamp default now() on update now(),
+	time6 timestamp(3) default now(3) on update now(3)
 )`,
 			output: `create table t (
 	time1 timestamp default now(),
 	time2 timestamp default now(),
-	time3 timestamp default now() on update now(),
+	time3 timestamp default now(),
 	time4 timestamp default now() on update now(),
-	time5 timestamp(3) default now(3) on update now(3)
+	time5 timestamp default now() on update now(),
+	time6 timestamp(3) default now(3) on update now(3)
 )`,
 		}, {
 			// test localtime with and without ()
