@@ -260,9 +260,9 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		if !isAlias {
 			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multiple tables in update")}
 		}
-		_, isTblName := alias.Expr.(sqlparser.TableName)
-		if !isTblName {
-			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multiple tables in update")}
+		_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
+		if isDerived {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUpdateableTable, "The target table %s of the UPDATE is not updatable", alias.As.String())
 		}
 	case *sqlparser.Select:
 		parent := cursor.Parent()

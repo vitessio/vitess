@@ -208,10 +208,10 @@ Gen4 plan same as above
 "unsupported: Need to provide order by clause when using limit. Invalid update on vindex: email_user_map"
 Gen4 plan same as above
 
-# cross-shard update tables
+# update with derived table
 "update (select id from user) as u set id = 4"
 "unsupported: subqueries in sharded DML"
-Gen4 error: unsupported: multiple tables in update
+Gen4 error: The target table u of the UPDATE is not updatable
 
 # join in update tables
 "update user join user_extra on user.id = user_extra.id set user.name = 'foo'"
