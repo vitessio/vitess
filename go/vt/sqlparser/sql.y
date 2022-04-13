@@ -268,7 +268,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> NAMES GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
 
 // Functions
-%token <str> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
+%token <str> CURRENT_TIMESTAMP DATABASE CURRENT_DATE NOW
 %token <str> CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
 %token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP
 %token <str> DAY DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND HOUR HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND MICROSECOND MINUTE MINUTE_MICROSECOND MINUTE_SECOND MONTH QUARTER SECOND SECOND_MICROSECOND YEAR_MONTH WEEK
@@ -1326,6 +1326,10 @@ CURRENT_TIMESTAMP func_datetime_precision
 | UTC_TIMESTAMP func_datetime_precision
   {
     $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_timestamp"), Fsp:$2}
+  }
+| NOW func_datetime_precision
+  {
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("now"), Fsp: $2}
   }
 
 
@@ -5621,6 +5625,7 @@ reserved_keyword:
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
 | NO_WRITE_TO_BINLOG
 | NOT
+| NOW
 | NTH_VALUE
 | NTILE
 | NULL
