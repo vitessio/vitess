@@ -100,7 +100,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "insert into orders1(o_id, o_d_id, o_w_id, o_c_id, o_entry_d, o_ol_cnt, o_all_local) values (334983, 59896, :_o_w_id_0, 156, NOW(), 781038, 'hello')",
+    "Query": "insert into orders1(o_id, o_d_id, o_w_id, o_c_id, o_entry_d, o_ol_cnt, o_all_local) values (334983, 59896, :_o_w_id_0, 156, now(), 781038, 'hello')",
     "TableName": "orders1",
     "VindexValues": {
       "hash": "INT64(99)"
@@ -473,7 +473,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "insert into history1(h_c_d_id, h_c_w_id, h_c_id, h_d_id, h_w_id, h_date, h_amount, h_data) values (6809887, 38748, 8746, 210, :_h_w_id_0, NOW(), 8907, 'data')",
+    "Query": "insert into history1(h_c_d_id, h_c_w_id, h_c_id, h_d_id, h_w_id, h_date, h_amount, h_data) values (6809887, 38748, 8746, 210, :_h_w_id_0, now(), 8907, 'data')",
     "TableName": "history1",
     "VindexValues": {
       "hash": "INT64(8)"
@@ -705,7 +705,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update order_line1 set ol_delivery_d = NOW() where ol_o_id = 235 and ol_d_id = 315 and ol_w_id = 8",
+    "Query": "update order_line1 set ol_delivery_d = now() where ol_o_id = 235 and ol_d_id = 315 and ol_w_id = 8",
     "Table": "order_line1",
     "Values": [
       "INT64(8)"
