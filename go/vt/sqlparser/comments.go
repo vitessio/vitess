@@ -255,6 +255,9 @@ func (c *ParsedComments) Prepend(comment string) Comments {
 // IsSet checks the directive map for the named directive and returns
 // true if the directive is set and has a true/false or 0/1 value
 func (d CommentDirectives) IsSet(key string) bool {
+	if d == nil {
+		return false
+	}
 	val, ok := d[key]
 	if !ok {
 		return false
