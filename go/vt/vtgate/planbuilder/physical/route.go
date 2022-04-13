@@ -50,8 +50,7 @@ type (
 		// If we need to replan routing, we'll use this list
 		SeenPredicates []sqlparser.Expr
 
-		// TargetTabletType specifies an explicit target destination tablet type
-		// this is only used in conjunction with TargetDestination
+		// TargetDestination specifies an explicit target destination tablet type
 		TargetDestination key.Destination
 	}
 

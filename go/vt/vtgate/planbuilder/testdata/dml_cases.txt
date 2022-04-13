@@ -4160,7 +4160,7 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-# unsharded subquery in sharded update, not the same shard between outer and inner
+# unsharded subquery in sharded update, not the same keyspace between outer and inner
 "update user set col = (select id from unsharded)"
 "unsupported: subqueries in sharded DML"
 {
@@ -4200,7 +4200,7 @@ Gen4 plan same as above
   }
 }
 
-# sharded subquery in unsharded update, not the same shard
+# sharded subquery in unsharded update, not the same keyspace
 "update unsharded set col = (select id from user)"
 "unsupported: sharded subqueries in DML"
 {

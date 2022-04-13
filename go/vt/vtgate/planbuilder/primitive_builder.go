@@ -17,12 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // primitiveBuilder is the top level type for building plans.
@@ -42,34 +37,3 @@ func newPrimitiveBuilder(vschema plancontext.VSchema, jt *jointab) *primitiveBui
 		jt:      jt,
 	}
 }
-
-type primitiveWrapper struct {
-	prim engine.Primitive
-	gen4Plan
-}
-
-func (p *primitiveWrapper) WireupGen4(semTable *semantics.SemTable) error {
-	return nil
-}
-
-func (p *primitiveWrapper) Primitive() engine.Primitive {
-	return p.prim
-}
-
-func (p *primitiveWrapper) Inputs() []logicalPlan {
-	return nil
-}
-
-func (p *primitiveWrapper) Rewrite(inputs ...logicalPlan) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't rewrite")
-}
-
-func (p *primitiveWrapper) ContainsTables() semantics.TableSet {
-	return semantics.EmptyTableSet()
-}
-
-func (p *primitiveWrapper) OutputColumns() []sqlparser.SelectExpr {
-	return nil
-}
-
-var _ logicalPlan = (*primitiveWrapper)(nil)
