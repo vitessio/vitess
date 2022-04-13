@@ -19,7 +19,7 @@ jobs:
       id: changes
       with:
         filters: |
-          example:
+          examples:
             - 'go/**/*.go'
             - 'test.go'
             - 'Makefile'
