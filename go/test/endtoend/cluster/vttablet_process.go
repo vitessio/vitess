@@ -373,6 +373,21 @@ func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
 	return err
 }
 
+// QueryTabletWithSet lets you execute a query in this tablet, with a local set statement, and get the result
+func (vttablet *VttabletProcess) QueryTabletWithSet(query string, keyspace string, useDb bool, setStatement string) (*sqltypes.Result, error) {
+	if !useDb {
+		keyspace = ""
+	}
+	dbParams := NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), keyspace)
+	conn, err := vttablet.conn(&dbParams)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	conn.ExecuteFetch(setStatement, 1, false)
+	return executeQuery(conn, query)
+}
+
 // QueryTablet lets you execute a query in this tablet and get the result
 func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
 	if !useDb {
