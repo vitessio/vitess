@@ -157,16 +157,22 @@ func visit(node logicalPlan, visitor planVisitor) (logicalPlan, error) {
 		node = newNode
 	}
 	inputs := node.Inputs()
+	rewrite := false
 	for i, input := range inputs {
 		newInput, err := visit(input, visitor)
 		if err != nil {
 			return nil, err
 		}
+		if newInput != input {
+			rewrite = true
+		}
 		inputs[i] = newInput
 	}
-	err := node.Rewrite(inputs...)
-	if err != nil {
-		return nil, err
+	if rewrite {
+		err := node.Rewrite(inputs...)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return node, nil
@@ -182,7 +188,7 @@ func first(input logicalPlan) logicalPlan {
 	return first(inputs[0])
 }
 
-//-------------------------------------------------------------------------
+// -------------------------------------------------------------------------
 
 // logicalPlanCommon implements some common functionality of builders.
 // Make sure to override in case behavior needs to be changed.
@@ -252,7 +258,7 @@ func (bc *logicalPlanCommon) OutputColumns() []sqlparser.SelectExpr {
 	return bc.input.OutputColumns()
 }
 
-//-------------------------------------------------------------------------
+// -------------------------------------------------------------------------
 
 // resultsBuilder is a superset of logicalPlanCommon. It also handles
 // resultsColumn functionality.
@@ -321,4 +327,4 @@ func (rsb *resultsBuilder) SupplyWeightString(colNumber int, alsoAddToGroupBy bo
 	return weightcolNumber, nil
 }
 
-//-------------------------------------------------------------------------
+// -------------------------------------------------------------------------

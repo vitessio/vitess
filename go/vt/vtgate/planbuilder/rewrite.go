@@ -31,7 +31,7 @@ type rewriter struct {
 	err          error
 }
 
-func queryRewrite(semTable *semantics.SemTable, reservedVars *sqlparser.ReservedVars, statement sqlparser.SelectStatement) error {
+func queryRewrite(semTable *semantics.SemTable, reservedVars *sqlparser.ReservedVars, statement sqlparser.Statement) error {
 	r := rewriter{
 		semTable:     semTable,
 		reservedVars: reservedVars,

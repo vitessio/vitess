@@ -10,7 +10,7 @@ update user set name='alicia' where name='alice';
 /* update name_info set has_nickname=1 where nickname != ''; */
 
 /* scatter update autocommit */
-update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set has_nickname=1 where nickname != '';
+update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set info='apa' where name != 'hog';
 
 /* multi-shard update by secondary vindex */
 update user set pet='rover' where name='alice';
