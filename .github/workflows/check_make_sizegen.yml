@@ -6,6 +6,9 @@ jobs:
     name: Check Make Sizegen
     runs-on: ubuntu-latest
     steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+
     - name: Check for changes in relevant files
       uses: dorny/paths-filter@v2
       id: changes
@@ -30,10 +33,6 @@ jobs:
       if: steps.changes.outputs.sizegen == 'true'
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
-
-    - name: Check out code
-      if: steps.changes.outputs.sizegen == 'true'
-      uses: actions/checkout@v2
 
     - name: Get dependencies
       if: steps.changes.outputs.sizegen == 'true'
