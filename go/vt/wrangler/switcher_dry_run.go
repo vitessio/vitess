@@ -226,13 +226,14 @@ func (dr *switcherDryRun) cancelMigration(ctx context.Context, sm *workflow.Stre
 
 func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string) (context.Context, func(*error), error) {
 	dr.drLog.Log(fmt.Sprintf("Lock keyspace %s", keyspace))
+	var err error
 	return ctx, func(e *error) {
-		if err := dr.refreshRelatedTablets(ctx); err != nil {
+		if err = dr.refreshRelatedTablets(ctx); err != nil {
 			warning := color.New(color.FgRed, color.Bold).SprintFunc()
 			dr.drLog.Log(fmt.Sprintf("%s: %s", warning("WARNING"), err.Error()))
 		}
 		dr.drLog.Log(fmt.Sprintf("Unlock keyspace %s", keyspace))
-	}, nil
+	}, err
 }
 
 func (dr *switcherDryRun) removeSourceTables(ctx context.Context, removalType workflow.TableRemovalType) error {

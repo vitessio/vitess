@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -468,11 +471,11 @@ type TableCopyProgress struct {
 type CopyProgress map[string]*TableCopyProgress
 
 const (
-	cannotSwitchError                      = "workflow has errors"
-	cannotSwitchCopyIncomplete             = "copy is still in progress"
-	cannotSwitchHighLag                    = "replication lag %ds is higher than allowed lag %ds"
-	cannotSwitchFailedPrimaryTabletRefresh = "failed to refresh primary tablets in the %s shard"
-	cannotSwitchFrozen                     = "workflow is frozen"
+	cannotSwitchError               = "workflow has errors"
+	cannotSwitchCopyIncomplete      = "copy is still in progress"
+	cannotSwitchHighLag             = "replication lag %ds is higher than allowed lag %ds"
+	cannotSwitchFailedTabletRefresh = "could not refresh all of the tablets involved in the operation:\n%s"
+	cannotSwitchFrozen              = "workflow is frozen"
 )
 
 func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reason string, err error) {
@@ -508,13 +511,28 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 		return fmt.Sprintf(cannotSwitchHighLag, result.MaxVReplicationTransactionLag, vrw.params.MaxAllowedTransactionLagSeconds), nil
 	}
 
-	// Ensure that the primary tablets on both sides are in good shape as we make this same call in the process
+	// Ensure that the tablets on both sides are in good shape as we make this same call in the process
 	// and an error will cause us to backout
-	if vrw.wr.refreshPrimaryTablets(vrw.ctx, vrw.ts.SourceShards()) != nil {
-		return fmt.Sprintf(cannotSwitchFailedPrimaryTabletRefresh, "source"), nil
+	refreshErrors := strings.Builder{}
+	var wg sync.WaitGroup
+	rtbsCtx, cancel := context.WithTimeout(vrw.ctx, shardTabletRefreshTimeout)
+	defer cancel()
+	refreshTablets := func(shards []*topo.ShardInfo, stype string) {
+		defer wg.Done()
+		for _, si := range shards {
+			if partial, err := topotools.RefreshTabletsByShard(rtbsCtx, vrw.wr.ts, vrw.wr.tmc, si, nil, vrw.wr.Logger()); err != nil || partial {
+				refreshErrors.WriteString(fmt.Sprintf("  failed to successfully refresh all tablets in the %s/%s %s shard (%v)\n",
+					si.Keyspace(), si.ShardName(), stype, err))
+			}
+		}
 	}
-	if vrw.wr.refreshPrimaryTablets(vrw.ctx, vrw.ts.TargetShards()) != nil {
-		return fmt.Sprintf(cannotSwitchFailedPrimaryTabletRefresh, "target"), nil
+	wg.Add(1)
+	go refreshTablets(vrw.ts.SourceShards(), "source")
+	wg.Add(1)
+	go refreshTablets(vrw.ts.TargetShards(), "target")
+	wg.Wait()
+	if refreshErrors.Len() > 0 {
+		return fmt.Sprintf(cannotSwitchFailedTabletRefresh, refreshErrors.String()), nil
 	}
 	return "", nil
 }
