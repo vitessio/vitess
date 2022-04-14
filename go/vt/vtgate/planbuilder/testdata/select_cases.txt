@@ -3267,3 +3267,22 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# Json array functions
+"select JSON_ARRAY_APPEND('{\"a\": 1}', '$', 'z'), JSON_ARRAY_INSERT('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), JSON_INSERT('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', CAST('[true, false]' AS JSON))"
+{
+  "QueryType": "SELECT",
+  "Original": "select JSON_ARRAY_APPEND('{\"a\": 1}', '$', 'z'), JSON_ARRAY_INSERT('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), JSON_INSERT('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', CAST('[true, false]' AS JSON))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', convert('[true, false]', JSON)) from dual where 1 != 1",
+    "Query": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', convert('[true, false]', JSON)) from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above

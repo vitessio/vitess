@@ -269,4 +269,11 @@ JSON_SCHEMA_VALID('{"type":"string","pattern":"("}', '"abc"');`,
 	utils.AssertMatches(t, conn,
 		`select JSON_DEPTH('{}'), JSON_LENGTH('{"a": 1, "b": {"c": 30}}', '$.b'), JSON_TYPE(JSON_EXTRACT('{"a": [10, true]}', '$.a')), JSON_VALID('{"a": 1}');`,
 		`[[INT64(1) INT64(1) VARBINARY("ARRAY") INT64(1)]]`)
+
+	utils.AssertMatches(t, conn,
+		`select 
+JSON_ARRAY_APPEND('{"a": 1}', '$', 'z'), 
+JSON_ARRAY_INSERT('["a", {"b": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), 
+JSON_INSERT('{ "a": 1, "b": [2, 3]}', '$.a', 10, '$.c', CAST('[true, false]' AS JSON))`,
+		`[[JSON("[{\"a\": 1}, \"z\"]") JSON("[\"x\", \"a\", {\"b\": [1, 2]}, [3, 4]]") JSON("{\"a\": 1, \"b\": [2, 3], \"c\": [true, false]}")]]`)
 }
