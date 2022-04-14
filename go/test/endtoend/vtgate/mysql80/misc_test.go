@@ -276,4 +276,11 @@ JSON_ARRAY_APPEND('{"a": 1}', '$', 'z'),
 JSON_ARRAY_INSERT('["a", {"b": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), 
 JSON_INSERT('{ "a": 1, "b": [2, 3]}', '$.a', 10, '$.c', CAST('[true, false]' AS JSON))`,
 		`[[JSON("[{\"a\": 1}, \"z\"]") JSON("[\"x\", \"a\", {\"b\": [1, 2]}, [3, 4]]") JSON("{\"a\": 1, \"b\": [2, 3], \"c\": [true, false]}")]]`)
+
+	utils.AssertMatches(t, conn,
+		`select 
+JSON_MERGE('[1, 2]', '[true, false]'), 
+JSON_MERGE_PATCH('{"name": "x"}', '{"id": 47}'),
+JSON_MERGE_PRESERVE('[1, 2]', '{"id": 47}')`,
+		`[[JSON("[1, 2, true, false]") JSON("{\"id\": 47, \"name\": \"x\"}") JSON("[1, 2, {\"id\": 47}]")]]`)
 }

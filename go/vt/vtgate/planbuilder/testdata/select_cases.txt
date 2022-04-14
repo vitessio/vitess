@@ -3286,3 +3286,22 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# Json merge functions
+"select JSON_MERGE('[1, 2]', '[true, false]'), JSON_MERGE_PATCH('{\"name\": \"x\"}', '{\"id\": 47}'), JSON_MERGE_PRESERVE('[1, 2]', '{\"id\": 47}')"
+{
+  "QueryType": "SELECT",
+  "Original": "select JSON_MERGE('[1, 2]', '[true, false]'), JSON_MERGE_PATCH('{\"name\": \"x\"}', '{\"id\": 47}'), JSON_MERGE_PRESERVE('[1, 2]', '{\"id\": 47}')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_merge('[1, 2]', '[true, false]'), json_merge_patch('{\\\"name\\\": \\\"x\\\"}', '{\\\"id\\\": 47}'), json_merge_preserve('[1, 2]', '{\\\"id\\\": 47}') from dual where 1 != 1",
+    "Query": "select json_merge('[1, 2]', '[true, false]'), json_merge_patch('{\\\"name\\\": \\\"x\\\"}', '{\\\"id\\\": 47}'), json_merge_preserve('[1, 2]', '{\\\"id\\\": 47}') from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
