@@ -283,4 +283,12 @@ JSON_MERGE('[1, 2]', '[true, false]'),
 JSON_MERGE_PATCH('{"name": "x"}', '{"id": 47}'),
 JSON_MERGE_PRESERVE('[1, 2]', '{"id": 47}')`,
 		`[[JSON("[1, 2, true, false]") JSON("{\"id\": 47, \"name\": \"x\"}") JSON("[1, 2, {\"id\": 47}]")]]`)
+
+	utils.AssertMatches(t, conn,
+		`select 
+JSON_REMOVE('[1, [2, 3], 4]', '$[1]'), 
+JSON_REPLACE('{ "a": 1, "b": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), 
+JSON_SET('{ "a": 1, "b": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), 
+JSON_UNQUOTE('"abc"')`,
+		`[[JSON("[1, 4]") JSON("{\"a\": 10, \"b\": [2, 3]}") JSON("{\"a\": 10, \"b\": [2, 3], \"c\": \"[true, false]\"}") VARBINARY("abc")]]`)
 }
