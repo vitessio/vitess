@@ -2260,7 +2260,7 @@ type (
 		Params Exprs
 	}
 
-	// JSONObjectExpr represents JSON_OB()
+	// JSONObjectExpr represents JSON_OBJECT()
 	// More information on https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-object
 	JSONObjectExpr struct {
 		Params []*JSONObjectParam
