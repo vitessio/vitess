@@ -2102,3 +2102,52 @@ func (node *JSONValueExpr) Format(buf *TrackedBuffer) {
 func (node *MemberOfExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v member of (%v)", node.Value, node.JSONArr)
 }
+
+// Format formats the node
+func (node *JSONAttributesExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(", node.Type.ToString())
+	buf.astPrintf(node, "%v", node.JSONDoc)
+	if node.Path != nil {
+		buf.astPrintf(node, ", %v", node.Path)
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node.
+func (node *JSONValueModifierExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v, ", node.Type.ToString(), node.JSONDoc)
+	var prefix string
+	for _, n := range node.Params {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node.
+func (node *JSONValueMergeExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v, ", node.Type.ToString(), node.JSONDoc)
+	var prefix string
+	for _, n := range node.JSONDocList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node.
+func (node *JSONRemoveExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_remove(%v, ", node.JSONDoc)
+	var prefix string
+	for _, n := range node.PathList {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// Format formats the node.
+func (node *JSONUnquoteExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "json_unquote(%v", node.JSONValue)
+	buf.WriteString(")")
+}

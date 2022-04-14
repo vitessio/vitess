@@ -312,6 +312,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> WEIGHT_STRING
 %token <str> LTRIM RTRIM TRIM
 %token <str> JSON_ARRAY JSON_OBJECT JSON_QUOTE
+%token <str> JSON_DEPTH JSON_TYPE JSON_LENGTH JSON_VALID
+%token <str> JSON_ARRAY_APPEND JSON_ARRAY_INSERT JSON_INSERT JSON_MERGE JSON_MERGE_PATCH JSON_MERGE_PRESERVE JSON_REMOVE JSON_REPLACE JSON_SET JSON_UNQUOTE
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -5011,6 +5013,66 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONValueExpr{JSONDoc: $3, Path: $5}
   }
+| JSON_DEPTH openb expression closeb
+  {
+    $$ = &JSONAttributesExpr{Type:DepthAttributeType, JSONDoc:$3}
+  }
+| JSON_VALID openb expression closeb
+  {
+    $$ = &JSONAttributesExpr{Type:ValidAttributeType, JSONDoc:$3}
+  }
+| JSON_TYPE openb expression closeb
+  {
+    $$ = &JSONAttributesExpr{Type:TypeAttributeType, JSONDoc:$3}
+  }
+| JSON_LENGTH openb expression closeb
+  {
+    $$ = &JSONAttributesExpr{Type:LengthAttributeType, JSONDoc:$3 }
+  }
+| JSON_LENGTH openb expression ',' json_path_param closeb
+  {
+    $$ = &JSONAttributesExpr{Type:LengthAttributeType, JSONDoc:$3, Path: $5 }
+  }
+| JSON_ARRAY_APPEND openb expression ',' json_object_param_list closeb
+  {
+    $$ = &JSONValueModifierExpr{Type:JSONArrayAppendType ,JSONDoc:$3, Params:$5}
+  }
+| JSON_ARRAY_INSERT openb expression ',' json_object_param_list closeb
+  {
+    $$ = &JSONValueModifierExpr{Type:JSONArrayInsertType ,JSONDoc:$3, Params:$5}
+  }
+| JSON_INSERT openb expression ',' json_object_param_list closeb
+  {
+    $$ = &JSONValueModifierExpr{Type:JSONInsertType ,JSONDoc:$3, Params:$5}
+  }
+| JSON_REPLACE openb expression ',' json_object_param_list closeb
+  {
+    $$ = &JSONValueModifierExpr{Type:JSONReplaceType ,JSONDoc:$3, Params:$5}
+  }
+| JSON_SET openb expression ',' json_object_param_list closeb
+  {
+    $$ = &JSONValueModifierExpr{Type:JSONSetType ,JSONDoc:$3, Params:$5}
+  }
+| JSON_MERGE openb expression ',' expression_list closeb
+  {
+    $$ = &JSONValueMergeExpr{Type: JSONMergeType, JSONDoc: $3, JSONDocList: $5}
+  }
+| JSON_MERGE_PATCH openb expression ',' expression_list closeb
+  {
+    $$ = &JSONValueMergeExpr{Type: JSONMergePatchType, JSONDoc: $3, JSONDocList: $5}
+  }
+| JSON_MERGE_PRESERVE openb expression ',' expression_list closeb
+  {
+    $$ = &JSONValueMergeExpr{Type: JSONMergePreserveType, JSONDoc: $3, JSONDocList: $5}
+  }
+| JSON_REMOVE openb expression ',' expression_list closeb
+  {
+    $$ = &JSONRemoveExpr{JSONDoc:$3, PathList: $5}
+  }
+| JSON_UNQUOTE openb expression closeb
+  {
+    $$ = &JSONUnquoteExpr{JSONValue:$3}
+  }
 
 json_path_param_list_opt:
   {
@@ -6304,20 +6366,33 @@ non_reserved_keyword:
 | ISOLATION
 | JSON
 | JSON_ARRAY %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_ARRAY_APPEND %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_ARRAY_INSERT %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_CONTAINS %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_CONTAINS_PATH %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_DEPTH %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_EXTRACT %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_INSERT %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_KEYS %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_MERGE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_MERGE_PATCH %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_MERGE_PRESERVE %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_OBJECT %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_OVERLAPS %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_PRETTY %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_QUOTE %prec FUNCTION_CALL_NON_KEYWORD
-| JSON_SEARCH %prec FUNCTION_CALL_NON_KEYWORD
-| JSON_STORAGE_FREE %prec FUNCTION_CALL_NON_KEYWORD
-| JSON_STORAGE_SIZE %prec FUNCTION_CALL_NON_KEYWORD
-| JSON_VALUE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_REMOVE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_REPLACE %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_SCHEMA_VALID %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_SCHEMA_VALIDATION_REPORT %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_SEARCH %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_SET %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_STORAGE_FREE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_STORAGE_SIZE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_TYPE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_VALID %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_VALUE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_UNQUOTE %prec FUNCTION_CALL_NON_KEYWORD
 | KEY_BLOCK_SIZE
 | KEYS
 | KEYSPACES

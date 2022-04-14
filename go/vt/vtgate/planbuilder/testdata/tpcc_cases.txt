@@ -858,7 +858,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update order_line1 set ol_delivery_d = NOW() where ol_o_id = 235 and ol_d_id = 315 and ol_w_id = 8",
+    "Query": "update order_line1 set ol_delivery_d = now() where ol_o_id = 235 and ol_d_id = 315 and ol_w_id = 8",
     "Table": "order_line1",
     "Values": [
       "INT64(8)"
