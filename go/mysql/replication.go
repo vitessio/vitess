@@ -116,6 +116,27 @@ func (c *Conn) SendSemiSyncAck(binlogFilename string, binlogPos uint64) error {
 
 }
 
+// WriteBinlogEvent writes a binlog event as part of a replication stream
+// https://dev.mysql.com/doc/internals/en/binlog-network-stream.html
+// https://dev.mysql.com/doc/internals/en/binlog-event.html
+func (c *Conn) WriteBinlogEvent(ev BinlogEvent, semiSyncEnabled bool) error {
+	extraBytes := 1 // OK packet
+	if semiSyncEnabled {
+		extraBytes += 2
+	}
+	data, pos := c.startEphemeralPacketWithHeader(len(ev.Bytes()) + extraBytes)
+	pos = writeByte(data, pos, 0) // "OK" prefix
+	if semiSyncEnabled {
+		pos = writeByte(data, pos, 0xef) // semi sync indicator
+		pos = writeByte(data, pos, 0)    // no ack expected
+	}
+	_ = writeEOFString(data, pos, string(ev.Bytes()))
+	if err := c.writeEphemeralPacket(); err != nil {
+		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
+	}
+	return nil
+}
+
 // SemiSyncExtensionLoaded checks if the semisync extension has been loaded.
 // It should work for both MariaDB and MySQL.
 func (c *Conn) SemiSyncExtensionLoaded() bool {

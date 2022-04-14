@@ -157,8 +157,37 @@ func NewRotateEvent(f BinlogFormat, s *FakeBinlogStream, position uint64, filena
 		len(filename)
 	data := make([]byte, length)
 	binary.LittleEndian.PutUint64(data[0:8], position)
+	copy(data[8:], filename)
 
 	ev := s.Packetize(f, eRotateEvent, 0, data)
+	ev[0] = 0
+	ev[1] = 0
+	ev[2] = 0
+	ev[3] = 0
+	return NewMysql56BinlogEvent(ev)
+}
+
+// NewRotateEvent returns a RotateEvent.
+// The timestamp of such an event should be zero, so we patch it in.
+func NewFakeRotateEvent(f BinlogFormat, s *FakeBinlogStream, filename string) BinlogEvent {
+	length := 8 + // position
+		len(filename)
+	data := make([]byte, length)
+	binary.LittleEndian.PutUint64(data[0:8], 4)
+	copy(data[8:], filename)
+
+	ev := s.Packetize(f, eRotateEvent, 0, data)
+	ev[0] = 0
+	ev[1] = 0
+	ev[2] = 0
+	ev[3] = 0
+	return NewMysql56BinlogEvent(ev)
+}
+
+// NewHeartbeatEvent returns a HeartbeatEvent.
+// see https://dev.mysql.com/doc/internals/en/heartbeat-event.html
+func NewHeartbeatEvent(f BinlogFormat, s *FakeBinlogStream) BinlogEvent {
+	ev := s.Packetize(f, eHeartbeatEvent, 0, []byte{})
 	ev[0] = 0
 	ev[1] = 0
 	ev[2] = 0

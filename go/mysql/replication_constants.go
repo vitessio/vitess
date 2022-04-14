@@ -190,7 +190,7 @@ const (
 	eDeleteRowsEventV1 = 25
 	// Unused
 	//eIncidentEvent          = 26
-	//eHeartbeatEvent         = 27
+	eHeartbeatEvent = 27
 	// Unused
 	//eIgnorableEvent         = 28
 	// Unused
