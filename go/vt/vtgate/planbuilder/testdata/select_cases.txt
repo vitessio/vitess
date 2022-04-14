@@ -3248,3 +3248,22 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# Functions that return JSON value attributes
+"select JSON_DEPTH('{}'), JSON_LENGTH('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), JSON_TYPE(JSON_EXTRACT('{\"a\": [10, true]}', '$.a')), JSON_VALID('{\"a\": 1}')"
+{
+  "QueryType": "SELECT",
+  "Original": "select JSON_DEPTH('{}'), JSON_LENGTH('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), JSON_TYPE(JSON_EXTRACT('{\"a\": [10, true]}', '$.a')), JSON_VALID('{\"a\": 1}')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_depth('{}'), json_length('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}', '$.b'), json_type(json_extract('{\\\"a\\\": [10, true]}', '$.a')), json_valid('{\\\"a\\\": 1}') from dual where 1 != 1",
+    "Query": "select json_depth('{}'), json_length('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}', '$.b'), json_type(json_extract('{\\\"a\\\": [10, true]}', '$.a')), json_valid('{\\\"a\\\": 1}') from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above

@@ -265,4 +265,8 @@ JSON_SCHEMA_VALID('{"type":"string","pattern":"("}', '"abc"');`,
 	utils.AssertMatches(t, conn,
 		`SELECT a->"$[4]", a->>"$[3]" FROM jt`,
 		`[[JSON("44") BLOB("x")] [JSON("[22, 44, 66]") BLOB("17")]]`)
+
+	utils.AssertMatches(t, conn,
+		`select JSON_DEPTH('{}'), JSON_LENGTH('{"a": 1, "b": {"c": 30}}', '$.b'), JSON_TYPE(JSON_EXTRACT('{"a": [10, true]}', '$.a')), JSON_VALID('{"a": 1}');`,
+		`[[INT64(1) INT64(1) VARBINARY("ARRAY") INT64(1)]]`)
 }
