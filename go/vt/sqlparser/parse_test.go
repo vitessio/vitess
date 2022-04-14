@@ -2666,6 +2666,225 @@ var (
 	}, {
 		input:  `SELECT 17 MEMBER OF('[23, "abc", "17", "ab", 10]'), "17" MEMBER OF('[23, "abc", 17, "ab", 10]')`,
 		output: `select 17 member of ('[23, \"abc\", \"17\", \"ab\", 10]'), '17' member of ('[23, \"abc\", 17, \"ab\", 10]') from dual`,
+	}, {
+		input:  `SELECT JSON_DEPTH('{}'), JSON_DEPTH('[]'), JSON_DEPTH('true')`,
+		output: `select json_depth('{}'), json_depth('[]'), json_depth('true') from dual`,
+	}, {
+		input:  `SELECT JSON_LENGTH('{"a": 1, "b": {"c": 30}}')`,
+		output: `select json_length('{\"a\": 1, \"b\": {\"c\": 30}}') from dual`,
+	}, {
+		input:  `SELECT JSON_LENGTH('{"a": 1, "b": {"c": 30}}', '$.b');`,
+		output: `select json_length('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b') from dual`,
+	}, {
+		input:  `SELECT JSON_LENGTH('{\"a\": 1, \"b\": {\"c\": 30}}', @j);`,
+		output: `select json_length('{\"a\": 1, \"b\": {\"c\": 30}}', @j) from dual`,
+	}, {
+		input:  `SELECT jcol, JSON_LENGTH(jcol)`,
+		output: `select jcol, json_length(jcol) from dual`,
+	}, {
+		input:  "SELECT JSON_TYPE(@j)",
+		output: "select json_type(@j) from dual",
+	}, {
+		input:  `SELECT JSON_TYPE(JSON_EXTRACT(@j, '$.a[0]'))`,
+		output: `select json_type(json_extract(@j, '$.a[0]')) from dual`,
+	}, {
+		input:  `SELECT JSON_VALID('{\"a\": 1}')`,
+		output: `select json_valid('{\"a\": 1}') from dual`,
+	}, {
+		input:  "SELECT JSON_VALID(@j)",
+		output: "select json_valid(@j) from dual",
+	}, {
+		input:  `SELECT JSON_ARRAY_APPEND('{ "a": 1, "b": [2, 3]}','$[1]', 'x')`,
+		output: `select json_array_append('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x') from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_APPEND('{ "a": 1, "b": [2, 3]}','$[1]', 'x', '$[2]', 1)`,
+		output: `select json_array_append('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', '$[2]', 1) from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_APPEND('{ "a": 1, "b": [2, 3]}','$[1]', 'x', @i, @j)`,
+		output: `select json_array_append('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', @i, @j) from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_APPEND('{ "a": 1, "b": [2, 3]}', @j, 1)`,
+		output: `select json_array_append('{ \"a\": 1, \"b\": [2, 3]}', @j, 1) from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_APPEND('{ "a": 1, "b": [2, 3]}', '$[1]', @j)`,
+		output: `select json_array_append('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', @j) from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_APPEND('{ "a": 1, "b": [2, 3]}', @j, @k)`,
+		output: `select json_array_append('{ \"a\": 1, \"b\": [2, 3]}', @j, @k) from dual`,
+	}, {
+		input:  "SELECT JSON_ARRAY_APPEND(@i,@j,@k)",
+		output: `select json_array_append(@i, @j, @k) from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_INSERT('{ "a": 1, "b": [2, 3]}','$[1]', 'x')`,
+		output: `select json_array_insert('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x') from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_INSERT('{ "a": 1, "b": [2, 3]}','$[1]', 'x', '$[2]', 1)`,
+		output: `select json_array_insert('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', '$[2]', 1) from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_INSERT('{ "a": 1, "b": [2, 3]}','$[1]', 'x', @i, @j)`,
+		output: `select json_array_insert('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', @i, @j) from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_INSERT('{ "a": 1, "b": [2, 3]}', @j, 1)`,
+		output: `select json_array_insert('{ \"a\": 1, \"b\": [2, 3]}', @j, 1) from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_INSERT('{ "a": 1, "b": [2, 3]}', '$[1]', @j)`,
+		output: `select json_array_insert('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', @j) from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_INSERT('{ "a": 1, "b": [2, 3]}', @j, @k)`,
+		output: `select json_array_insert('{ \"a\": 1, \"b\": [2, 3]}', @j, @k) from dual`,
+	}, {
+		input:  "SELECT JSON_ARRAY_INSERT(@i,@j,@k)",
+		output: "select json_array_insert(@i, @j, @k) from dual",
+	}, {
+		input:  "SELECT JSON_ARRAY_INSERT(@j, '$[0]', 'x', '$[2][1]', 'y')",
+		output: "select json_array_insert(@j, '$[0]', 'x', '$[2][1]', 'y') from dual",
+	}, {
+		input:  `SELECT JSON_INSERT('{ "a": 1, "b": [2, 3]}','$[1]', 'x')`,
+		output: `select json_insert('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x') from dual`,
+	}, {
+		input:  `SELECT JSON_INSERT('{ "a": 1, "b": [2, 3]}','$[1]', 'x', '$[2]', 1)`,
+		output: `select json_insert('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', '$[2]', 1) from dual`,
+	}, {
+		input:  `SELECT JSON_INSERT('{ "a": 1, "b": [2, 3]}','$[1]', 'x', @i, @j)`,
+		output: `select json_insert('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', @i, @j) from dual`,
+	}, {
+		input:  `SELECT JSON_INSERT('{ "a": 1, "b": [2, 3]}', @j, 1)`,
+		output: `select json_insert('{ \"a\": 1, \"b\": [2, 3]}', @j, 1) from dual`,
+	}, {
+		input:  `SELECT JSON_INSERT('{ "a": 1, "b": [2, 3]}', '$[1]', @j)`,
+		output: `select json_insert('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', @j) from dual`,
+	}, {
+		input:  `SELECT JSON_INSERT('{ "a": 1, "b": [2, 3]}', @j, @k)`,
+		output: `select json_insert('{ \"a\": 1, \"b\": [2, 3]}', @j, @k) from dual`,
+	}, {
+		input:  "SELECT JSON_INSERT(@i,@j,@k)",
+		output: "select json_insert(@i, @j, @k) from dual",
+	}, {
+		input:  "SELECT JSON_INSERT(@j, '$.a', 10, '$.c', '[true, false]')",
+		output: "select json_insert(@j, '$.a', 10, '$.c', '[true, false]') from dual",
+	}, {
+		input:  `SELECT JSON_REPLACE('{ "a": 1, "b": [2, 3]}','$[1]', 'x')`,
+		output: `select json_replace('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x') from dual`,
+	}, {
+		input:  `SELECT JSON_REPLACE('{ "a": 1, "b": [2, 3]}','$[1]', 'x', '$[2]', 1)`,
+		output: `select json_replace('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', '$[2]', 1) from dual`,
+	}, {
+		input:  `SELECT JSON_REPLACE('{ "a": 1, "b": [2, 3]}','$[1]', 'x', @i, @j)`,
+		output: `select json_replace('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', @i, @j) from dual`,
+	}, {
+		input:  `SELECT JSON_REPLACE('{ "a": 1, "b": [2, 3]}', @j, 1)`,
+		output: `select json_replace('{ \"a\": 1, \"b\": [2, 3]}', @j, 1) from dual`,
+	}, {
+		input:  `SELECT JSON_REPLACE('{ "a": 1, "b": [2, 3]}', '$[1]', @j)`,
+		output: `select json_replace('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', @j) from dual`,
+	}, {
+		input:  `SELECT JSON_REPLACE('{ "a": 1, "b": [2, 3]}', @j, @k)`,
+		output: `select json_replace('{ \"a\": 1, \"b\": [2, 3]}', @j, @k) from dual`,
+	}, {
+		input:  "SELECT JSON_REPLACE(@i,@j,@k)",
+		output: "select json_replace(@i, @j, @k) from dual",
+	}, {
+		input:  "SELECT JSON_REPLACE(@j, '$.a', 10, '$.c', '[true, false]')",
+		output: "select json_replace(@j, '$.a', 10, '$.c', '[true, false]') from dual",
+	}, {
+		input:  `SELECT JSON_SET('{ "a": 1, "b": [2, 3]}','$[1]', 'x')`,
+		output: `select json_set('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x') from dual`,
+	}, {
+		input:  `SELECT JSON_SET('{ "a": 1, "b": [2, 3]}','$[1]', 'x', '$[2]', 1)`,
+		output: `select json_set('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', '$[2]', 1) from dual`,
+	}, {
+		input:  `SELECT JSON_SET('{ "a": 1, "b": [2, 3]}','$[1]', 'x', @i, @j)`,
+		output: `select json_set('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', @i, @j) from dual`,
+	}, {
+		input:  `SELECT JSON_SET('{ "a": 1, "b": [2, 3]}', @j, 1)`,
+		output: `select json_set('{ \"a\": 1, \"b\": [2, 3]}', @j, 1) from dual`,
+	}, {
+		input:  `SELECT JSON_SET('{ "a": 1, "b": [2, 3]}', '$[1]', @j)`,
+		output: `select json_set('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', @j) from dual`,
+	}, {
+		input:  `SELECT JSON_SET('{ "a": 1, "b": [2, 3]}', @j, @k)`,
+		output: `select json_set('{ \"a\": 1, \"b\": [2, 3]}', @j, @k) from dual`,
+	}, {
+		input:  "SELECT JSON_SET(@i,@j,@k)",
+		output: "select json_set(@i, @j, @k) from dual",
+	}, {
+		input:  "SELECT JSON_SET(@j, '$.a', 10, '$.c', '[true, false]')",
+		output: "select json_set(@j, '$.a', 10, '$.c', '[true, false]') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE('[1, 2]', '[true, false]')",
+		output: "select json_merge('[1, 2]', '[true, false]') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE('[1, 2]', '[true, false]', 'hello')",
+		output: "select json_merge('[1, 2]', '[true, false]', 'hello') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE('[1, 2]', @i)",
+		output: "select json_merge('[1, 2]', @i) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE(@i, @j)",
+		output: "select json_merge(@i, @j) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE(@i, @j, @k)",
+		output: "select json_merge(@i, @j, @k) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE(@i, '[true, false]')",
+		output: "select json_merge(@i, '[true, false]') from dual",
+	}, {
+		input:  `SELECT JSON_MERGE_PATCH('{"name": "x"}', '{"id": 47}')`,
+		output: `select json_merge_patch('{\"name\": \"x\"}', '{\"id\": 47}') from dual`,
+	}, {
+		input:  `SELECT JSON_MERGE_PATCH('{ "a": 1, "b":2 }','{ "a": 3, "c":4 }','{ "a": 5, "d":6 }');`,
+		output: `select json_merge_patch('{ \"a\": 1, \"b\":2 }', '{ \"a\": 3, \"c\":4 }', '{ \"a\": 5, \"d\":6 }') from dual`,
+	}, {
+		input:  "SELECT JSON_MERGE_PATCH('[1, 2]', '[true, false]', 'hello')",
+		output: "select json_merge_patch('[1, 2]', '[true, false]', 'hello') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PATCH('[1, 2]', @i)",
+		output: "select json_merge_patch('[1, 2]', @i) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PATCH(@i, @j)",
+		output: "select json_merge_patch(@i, @j) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PATCH(@i, '[true, false]')",
+		output: "select json_merge_patch(@i, '[true, false]') from dual",
+	}, {
+		input:  `SELECT JSON_MERGE_PRESERVE('{"name": "x"}', '{"id": 47}')`,
+		output: `select json_merge_preserve('{\"name\": \"x\"}', '{\"id\": 47}') from dual`,
+	}, {
+		input:  `SELECT JSON_MERGE_PRESERVE('{ "a": 1, "b":2 }','{ "a": 3, "c":4 }','{ "a": 5, "d":6 }');`,
+		output: `select json_merge_preserve('{ \"a\": 1, \"b\":2 }', '{ \"a\": 3, \"c\":4 }', '{ \"a\": 5, \"d\":6 }') from dual`,
+	}, {
+		input:  "SELECT JSON_MERGE_PRESERVE('[1, 2]', '[true, false]', 'hello')",
+		output: "select json_merge_preserve('[1, 2]', '[true, false]', 'hello') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PRESERVE('[1, 2]', @i)",
+		output: "select json_merge_preserve('[1, 2]', @i) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PRESERVE(@i, @j)",
+		output: "select json_merge_preserve(@i, @j) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PRESERVE(@i, '[true, false]')",
+		output: "select json_merge_preserve(@i, '[true, false]') from dual",
+	}, {
+		input:  "SELECT JSON_REMOVE(@i, '$[1]')",
+		output: "select json_remove(@i, '$[1]') from dual",
+	}, {
+		input:  `SELECT JSON_REMOVE('["a", ["b", "c"], "d"]', '$[1]')`,
+		output: `select json_remove('[\"a\", [\"b\", \"c\"], \"d\"]', '$[1]') from dual`,
+	}, {
+		input:  `SELECT JSON_REMOVE('["a", ["b", "c"], "d"]', @i)`,
+		output: `select json_remove('[\"a\", [\"b\", \"c\"], \"d\"]', @i) from dual`,
+	}, {
+		input:  `SELECT JSON_REMOVE('["a", ["b", "c"], "d"]', @i, @j, '$[0]', '$[1]','$[2]')`,
+		output: `select json_remove('[\"a\", [\"b\", \"c\"], \"d\"]', @i, @j, '$[0]', '$[1]', '$[2]') from dual`,
+	}, {
+		input:  "SELECT JSON_UNQUOTE('abc')",
+		output: "select json_unquote('abc') from dual",
+	}, {
+		input:  `SELECT JSON_UNQUOTE('\"\\\\t\\\\u0032\"')`,
+		output: `select json_unquote('\"\\\\t\\\\u0032\"') from dual`,
+	}, {
+		input:  "SELECT JSON_UNQUOTE(@j)",
+		output: "select json_unquote(@j) from dual",
 	}}
 )
 
@@ -2811,6 +3030,48 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: `SELECT JSON_KEYS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}',)`,
 		err:   `syntax error at position 61`,
+	}, {
+		input: "SELECT JSON_ARRAY_APPEND('{ \"a\": 1, \"b\": [2, 3]}')",
+		err:   "syntax error at position 51",
+	}, {
+		input: "SELECT JSON_ARRAY_APPEND('{ \"a\": 1, \"b\": [2, 3]}','$[1]',)",
+		err:   "syntax error at position 59",
+	}, {
+		input: "SELECT JSON_ARRAY_INSERT('{ \"a\": 1, \"b\": [2, 3]}')",
+		err:   "syntax error at position 51",
+	}, {
+		input: "SELECT JSON_ARRAY_INSERT('{ \"a\": 1, \"b\": [2, 3]}','$[1]',)",
+		err:   "syntax error at position 59",
+	}, {
+		input: "SELECT JSON_INSERT('{ \"a\": 1, \"b\": [2, 3]}')",
+		err:   "syntax error at position 45",
+	}, {
+		input: "SELECT JSON_INSERT('{ \"a\": 1, \"b\": [2, 3]}','$[1]',)",
+		err:   "syntax error at position 53",
+	}, {
+		input: "SELECT JSON_REPLACE('{ \"a\": 1, \"b\": [2, 3]}')",
+		err:   "syntax error at position 46",
+	}, {
+		input: "SELECT JSON_REPLACE('{ \"a\": 1, \"b\": [2, 3]}','$[1]',)",
+		err:   "syntax error at position 54",
+	}, {
+		input: "SELECT JSON_SET('{ \"a\": 1, \"b\": [2, 3]}')",
+		err:   "syntax error at position 42",
+	}, {
+		input: "SELECT JSON_SET('{ \"a\": 1, \"b\": [2, 3]}','$[1]',)",
+		err:   "syntax error at position 50",
+	}, {
+		input: "SELECT JSON_MERGE('[1, 2]')",
+		err:   "syntax error at position 28",
+	}, {
+		input: "SELECT JSON_MERGE_PATCH('[1, 2]')",
+		err:   "syntax error at position 34",
+	}, {
+		input: "SELECT JSON_MERGE_PRESERVE('[1, 2]')",
+		err:   "syntax error at position 37",
+	}, {
+		input: "SELECT JSON_REMOVE('[\"a\", [\"b\", \"c\"], \"d\"]')",
+		err:   "syntax error at position 45",
 	}}
 
 	for _, tcase := range invalidSQL {
