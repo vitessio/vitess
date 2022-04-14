@@ -49,8 +49,7 @@ export CGO_CFLAGS := -O1
 
 # regenerate rice-box.go when any of the .cnf files change
 embed_config:
-	cd go/vt/mysqlctl && go run github.com/GeertJohan/go.rice/rice embed-go
-	cd go/vt/mysqlctl && go build .
+	cd go/vt/mysqlctl && go run github.com/GeertJohan/go.rice/rice embed-go && go build .
 
 # build the vitess binaries with dynamic dependency on libc
 build-dyn:
