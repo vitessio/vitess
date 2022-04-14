@@ -12,6 +12,13 @@
 # Equivalent of mysql_secure_installation
 ###############################################################################
 
+# We need to ensure that super_read_only is disabled so that we can execute
+# these commands. Note that disabling it does NOT disable read_only.
+# We save the current value so that we only re-enable it at the end if it was
+# enabled before.
+SET @original_super_read_only=@@global.super_read_only;
+SET GLOBAL super_read_only=OFF;
+
 # Changes during the init db should not make it to the binlog.
 # They could potentially create errant transactions on replicas.
 SET sql_log_bin = 0;
@@ -63,7 +70,6 @@ CREATE USER 'vt_appdebug'@'localhost';
 GRANT SELECT, SHOW DATABASES, PROCESS ON *.* TO 'vt_appdebug'@'localhost';
 
 # User for administrative operations that need to be executed as non-SUPER.
-# Same permissions as vt_app here.
 CREATE USER 'vt_allprivs'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
@@ -101,3 +107,6 @@ FLUSH PRIVILEGES;
 
 RESET SLAVE ALL;
 RESET MASTER;
+
+# We need to set super_read_only back to what it was before
+SET @@global.super_read_only=@original_super_read_only;

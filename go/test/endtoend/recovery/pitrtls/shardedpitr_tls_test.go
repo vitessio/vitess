@@ -164,11 +164,13 @@ func initializeCluster(t *testing.T) {
 	}
 
 	queryCmds := []string{
+		"SET GLOBAL super_read_only=OFF;",
 		fmt.Sprintf("CREATE USER '%s'@'%%' IDENTIFIED BY '%s';", mysqlUserName, mysqlPassword),
 		fmt.Sprintf("GRANT ALL ON *.* TO '%s'@'%%';", mysqlUserName),
 		fmt.Sprintf("GRANT GRANT OPTION ON *.* TO '%s'@'%%';", mysqlUserName),
 		fmt.Sprintf("create database %s;", "vt_ks"),
 		"FLUSH PRIVILEGES;",
+		"SET GLOBAL super_read_only=ON;",
 	}
 
 	for _, tablet := range []*cluster.Vttablet{primary, replica, shard0Primary, shard0Replica, shard1Primary, shard1Replica} {

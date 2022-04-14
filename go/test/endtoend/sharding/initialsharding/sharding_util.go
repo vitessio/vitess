@@ -636,6 +636,7 @@ func writeInitDBFile() {
 	sql := string(initDb)
 	newInitDbFile = path.Join(ClusterInstance.TmpDirectory, "init_db_with_passwords.sql")
 	sql = sql + GetPasswordUpdateSQL(ClusterInstance) + `
+SET GLOBAL super_read_only=OFF;
 # connecting through a port requires 127.0.0.1
 # --host=localhost will connect through socket
 CREATE USER 'vt_dba'@'127.0.0.1' IDENTIFIED BY 'VtDbaPass';
@@ -664,6 +665,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
   ON *.* TO 'vt_filtered'@'127.0.0.1';
 FLUSH PRIVILEGES;
+SET GLOBAL super_read_only=ON;
 `
 	os.WriteFile(newInitDbFile, []byte(sql), 0666)
 
@@ -686,6 +688,7 @@ func WriteDbCredentialToTmp(tmpDir string) string {
 // GetPasswordUpdateSQL returns the sql for password update
 func GetPasswordUpdateSQL(localCluster *cluster.LocalProcessCluster) string {
 	pwdChangeCmd := `
+					SET GLOBAL super_read_only=OFF;
 					# Set real passwords for all users.
 					UPDATE mysql.user SET %s = PASSWORD('RootPass')
 					  WHERE User = 'root' AND Host = 'localhost';
@@ -700,6 +703,7 @@ func GetPasswordUpdateSQL(localCluster *cluster.LocalProcessCluster) string {
 					UPDATE mysql.user SET %s = PASSWORD('VtFilteredPass')
 					  WHERE User = 'vt_filtered' AND Host = 'localhost';
 					FLUSH PRIVILEGES;
+					SET GLOBAL super_read_only=ON;
 					`
 	pwdCol, _ := getPasswordField(localCluster)
 	return fmt.Sprintf(pwdChangeCmd, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol)
