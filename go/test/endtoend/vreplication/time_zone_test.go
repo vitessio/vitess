@@ -64,9 +64,13 @@ func TestTZ(t *testing.T) {
 	customerTab.QueryTabletWithDB(string(timeZoneSQL), "mysql")
 	require.NoError(t, err)
 	time.Sleep(5 * time.Second) // todo: replace sleep with actual check
+	_, err = customerTab.QueryTablet("SET GLOBAL time_zone = 'UTC';", "", false)
+	require.NoError(t, err)
 
 	tables := "datze"
-	moveTables(t, "zone1", workflow, sourceKs, targetKs, tables)
+
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("MoveTables", "--", "--source", sourceKs, "--tables", tables, "--source_time_zone", "US/Pacific", "Create", ksWorkflow)
+	require.NoError(t, err, output)
 
 	catchup(t, customerTab, workflow, "MoveTables")
 
@@ -76,7 +80,7 @@ func TestTZ(t *testing.T) {
 	qr, err := productTab.QueryTablet(query, "product", true)
 	require.NoError(t, err)
 	require.NotNil(t, qr)
-	log.Infof("Product US/Pacific:\n")
+	log.Infof("Source: US/Pacific:\n")
 	for _, row := range qr.Rows {
 		log.Infof("%+v", row)
 	}
@@ -84,17 +88,17 @@ func TestTZ(t *testing.T) {
 	qr, err = customerTab.QueryTablet(query, "customer", true)
 	require.NoError(t, err)
 	require.NotNil(t, qr)
-	log.Infof("Customer UTC:\n")
+	log.Infof("Target: UTC:\n")
 	for _, row := range qr.Rows {
 		log.Infof("%+v", row)
 	}
 
-	setStatement := "set session time_zone='US/Pacific'"
-	query = "select id, convert_tz(dt1, 'UTC', 'US/Pacific') dt1, convert_tz(dt2, 'UTC', 'US/Pacific') dt2, ts1 from datze"
+	setStatement := "" //"set session time_zone='US/Pacific'"
+	query = "select id, convert_tz(dt1, 'UTC', 'US/Pacific') dt1, convert_tz(dt2, 'UTC', 'US/Pacific') dt2, convert_tz(ts1, 'UTC', 'US/Pacific') ts1 from datze"
 	qr, err = customerTab.QueryTabletWithSet(query, "customer", true, setStatement)
 	require.NoError(t, err)
 	require.NotNil(t, qr)
-	log.Infof("Customer US/Pacific:\n")
+	log.Infof("Target: US/Pacific:\n")
 	for _, row := range qr.Rows {
 		log.Infof("%+v", row)
 	}

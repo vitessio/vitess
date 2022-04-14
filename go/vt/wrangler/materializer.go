@@ -119,7 +119,7 @@ func shouldInclude(table string, excludes []string) bool {
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
-	externalCluster string, dropForeignKeys bool) error {
+	externalCluster string, dropForeignKeys bool, sourceTimeZone string) error {
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
@@ -243,6 +243,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		TabletTypes:           tabletTypes,
 		StopAfterCopy:         stopAfterCopy,
 		ExternalCluster:       externalCluster,
+		SourceTimeZone:        sourceTimeZone,
 	}
 
 	createDDLMode := createDDLAsCopy
@@ -935,6 +936,7 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	if err != nil {
 		return nil, err
 	}
+
 	return &materializer{
 		wr:            wr,
 		ms:            ms,
@@ -1143,6 +1145,7 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 			Filter:          &binlogdatapb.Filter{},
 			StopAfterCopy:   mz.ms.StopAfterCopy,
 			ExternalCluster: mz.ms.ExternalCluster,
+			SourceTimeZone:  mz.ms.SourceTimeZone,
 		}
 		for _, ts := range mz.ms.TableSettings {
 			rule := &binlogdatapb.Rule{

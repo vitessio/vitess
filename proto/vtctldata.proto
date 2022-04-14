@@ -85,6 +85,8 @@ message MaterializeSettings {
   string external_cluster = 8;
   // MaterializationIntent is used to identify the reason behind the materialization workflow: eg. MoveTables, CreateLookupVindex
   MaterializationIntent materialization_intent = 9;
+  //
+  string source_time_zone =10;
 }
 
 /* Data types for VtctldServer */

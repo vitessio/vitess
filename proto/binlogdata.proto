@@ -250,6 +250,8 @@ message BinlogSource {
   // ExternalCluster is the name of the mounted cluster which has the source keyspace/db for this workflow
   // it is of the type <cluster_type.cluster_name>
   string external_cluster = 10;
+
+  string source_time_zone = 11;
 }
 
 // VEventType enumerates the event types. Many of these types

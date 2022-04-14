@@ -384,7 +384,9 @@ func (vttablet *VttabletProcess) QueryTabletWithSet(query string, keyspace strin
 		return nil, err
 	}
 	defer conn.Close()
-	conn.ExecuteFetch(setStatement, 1, false)
+	if setStatement != "" {
+		conn.ExecuteFetch(setStatement, 1, false)
+	}
 	return executeQuery(conn, query)
 }
 
