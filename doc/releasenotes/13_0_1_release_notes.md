@@ -18,8 +18,9 @@
 #### VReplication
 * VPlayer use stored/binlogged ENUM index value in WHERE clauses #9868
 ### CI/Build
-#### General
+#### Security
 * Upgrade to `go1.17.9` #10088
+  The `go1.17.9` version, released 2022-04-12, includes security fixes to the `crypto/elliptic` and `encoding/pem` packages, as well as bug fixes to the linker and runtime). More information [here](https://go.dev/doc/devel/release#go1.17.minor).
 ### Enhancement
 #### Query Serving
 * Fix allow multiple distinct columns on single shards #10047
