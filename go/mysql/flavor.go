@@ -255,7 +255,8 @@ func (c *Conn) StartReplicationUntilAfterCommand(pos Position) string {
 	return c.flavor.startReplicationUntilAfter(pos)
 }
 
-// StartReplicationSQLUntilAfterCommand returns the command to start the replication's SQL thread.
+// StartReplicationSQLUntilAfterCommand returns the command to start the replication's SQL
+// thread and have it run until it has reached the given position, at which point it will stop.
 func (c *Conn) StartReplicationSQLUntilAfterCommand(pos Position) string {
 	return c.flavor.startReplicationSQLUntilAfter(pos)
 }

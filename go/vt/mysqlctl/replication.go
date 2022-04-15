@@ -264,11 +264,12 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 		}
 
 		// If the SQL_thread is not already running -- e.g. in the case of EmergencyReparentShard where the
-		// instance is transitioning to PRIMARY but we need it to catch up by executing all of the queued
-		// binary log events before it starts serving traffic for the shard to minimize potential data
-		// loss -- then we try to start the SQL Thread before waiting for position to be reached, since the
-		// replicas can only make forward progress if the SQL thread is started and we have already
-		// verified that the replica is not already as advanced as we want it to be
+		// instance is transitioning to PRIMARY but we need it to catch up by executing all of the locally
+		// queued binary log events (in the existing relay logs) before it starts serving traffic for the
+		// shard to minimize potential data loss -- then we try to start the SQL Thread(s) before waiting for
+		// the position to be reached at which point the SQL Thread(s) will be stopped again, since the
+		// replicas can only make forward progress if the SQL thread is started and we have already verified
+		// that the replica is not already as advanced as we want it to be
 		if !replicationStatus.SQLHealthy() {
 			if err = mysqld.StartReplicationSQLUntilAfter(ctx, targetPos); err != nil {
 				return vterrors.Wrap(err,
