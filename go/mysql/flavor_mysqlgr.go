@@ -61,6 +61,11 @@ func (mysqlGRFlavor) startReplicationUntilAfter(pos Position) string {
 	return ""
 }
 
+// startReplicationSQLUntilAfter is disabled in mysqlGRFlavor
+func (mysqlGRFlavor) startReplicationSQLUntilAfter(pos Position) string {
+	return ""
+}
+
 // stopReplicationCommand returns the command to stop the replication.
 // we return empty here since `STOP GROUP_REPLICATION` should be called by
 // the external orchestrator

@@ -70,6 +70,10 @@ type flavor interface {
 	// to run until `pos` is reached. After reaching pos, replication will be stopped again
 	startReplicationUntilAfter(pos Position) string
 
+	// startReplicationSQLUntilAfter will restart replication's SQL_thread, but only allow it
+	// to run until `pos` is reached. After reaching pos, it will be stopped again
+	startReplicationSQLUntilAfter(pos Position) string
+
 	// stopReplicationCommand returns the command to stop the replication.
 	stopReplicationCommand() string
 
@@ -249,6 +253,11 @@ func (c *Conn) RestartReplicationCommands() []string {
 // StartReplicationUntilAfterCommand returns the command to start the replication.
 func (c *Conn) StartReplicationUntilAfterCommand(pos Position) string {
 	return c.flavor.startReplicationUntilAfter(pos)
+}
+
+// StartReplicationSQLUntilAfterCommand returns the command to start the replication's SQL thread.
+func (c *Conn) StartReplicationSQLUntilAfterCommand(pos Position) string {
+	return c.flavor.startReplicationSQLUntilAfter(pos)
 }
 
 // StopReplicationCommand returns the command to stop the replication.

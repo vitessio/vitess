@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"context"
@@ -93,6 +94,19 @@ func (mysqld *Mysqld) StartReplicationUntilAfter(ctx context.Context, targetPos 
 	defer conn.Recycle()
 
 	queries := []string{conn.StartReplicationUntilAfterCommand(targetPos)}
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, queries)
+}
+
+// StartReplicationSQLUntilAfter starts replication's SQL_thread until replication has come to `targetPos`, then it stops it
+func (mysqld *Mysqld) StartReplicationSQLUntilAfter(ctx context.Context, targetPos mysql.Position) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	queries := []string{conn.StartReplicationSQLUntilAfterCommand(targetPos)}
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, queries)
 }
@@ -210,6 +224,11 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 	}
 	defer conn.Recycle()
 
+	replicationStatus, err := conn.ShowReplicationStatus()
+	if err != nil && !errors.Is(err, mysql.ErrNotReplica) {
+		return err
+	}
+
 	// First check if filePos flavored Position was passed in. If so, we can't defer to the flavor in the connection,
 	// unless that flavor is also filePos.
 	waitCommandName := "WaitUntilPositionCommand"
@@ -244,12 +263,17 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 			return nil
 		}
 
-		// Start the SQL Thread before waiting for position to be reached, since the replicas
-		// can only make forward progress if the SQL thread is started and we have already verified
-		// that the replica is not already as advanced as we want it to be
-		err = mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StartSQLThreadCommand()})
-		if err != nil {
-			return err
+		// If the SQL_thread is not already running -- e.g. in the case of EmergencyReparentShard where the
+		// instance is transitioning to PRIMARY but we need it to catch up by executing all of the queued
+		// binary log events before it starts serving traffic for the shard to minimize potential data
+		// loss -- then we try to start the SQL Thread before waiting for position to be reached, since the
+		// replicas can only make forward progress if the SQL thread is started and we have already
+		// verified that the replica is not already as advanced as we want it to be
+		if !replicationStatus.SQLHealthy() {
+			if err = mysqld.StartReplicationSQLUntilAfter(ctx, targetPos); err != nil {
+				return vterrors.Wrap(err,
+					fmt.Sprintf("the SQL_thread was stopped and we could not force start it in order to wait for the target position of %v", targetPos))
+			}
 		}
 
 		// Find the query to run, run it.
