@@ -225,7 +225,7 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 	defer conn.Recycle()
 
 	replicationStatus, err := conn.ShowReplicationStatus()
-	if err != nil {
+	if err != nil && !errors.Is(err, mysql.ErrNotReplica) {
 		return err
 	}
 
