@@ -288,7 +288,8 @@ func TestWorkflowListStreams(t *testing.T) {
 			"TabletControls": null,
 			"PrimaryIsServing": true
 		}
-	}
+	},
+	"SourceTimeZone": ""
 }
 
 `

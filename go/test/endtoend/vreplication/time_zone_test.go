@@ -22,14 +22,22 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/cluster"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
 )
 
+// TestMoveTablesTZ tests the conversion of datetime based on the source timezone passed to the MoveTables workflow
 func TestMoveTablesTZ(t *testing.T) {
 	allCellNames = "zone1"
 	defaultCellName := "zone1"
+	workflow := "tz"
+	sourceKs := "product"
+	targetKs := "customer"
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
+
 	vc = NewVitessCluster(t, "TestCellAliasVreplicationWorkflow", []string{"zone1"}, mainClusterConfig)
 	require.NotNil(t, vc)
 	defaultCell = vc.Cells[defaultCellName]
@@ -38,11 +46,7 @@ func TestMoveTablesTZ(t *testing.T) {
 	defer vc.TearDown(t)
 
 	cell1 := vc.Cells["zone1"]
-	vc.AddKeyspace(t, []*Cell{cell1}, "product", "0", initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)
-
-	// Add cell alias containing only zone2
-	result, err := vc.VtctlClient.ExecuteCommandWithOutput("AddCellsAlias", "--", "--cells", "zone2", "alias")
-	require.NoError(t, err, "command failed with output: %v", result)
+	vc.AddKeyspace(t, []*Cell{cell1}, sourceKs, "0", initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)
 
 	vtgate = cell1.Vtgates[0]
 	require.NotNil(t, vtgate)
@@ -52,21 +56,34 @@ func TestMoveTablesTZ(t *testing.T) {
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
-	productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
-	timeZoneSQL, _ := os.ReadFile("tz.sql")
-	_, err = productTab.QueryTabletWithDB(string(timeZoneSQL), "mysql")
-	require.NoError(t, err)
-	time.Sleep(5 * time.Second) // todo: replace sleep with actual check
-	_, err = productTab.QueryTablet("SET GLOBAL time_zone = 'US/Pacific';", "", false)
-	require.NoError(t, err)
+	productTab := vc.Cells[defaultCell.Name].Keyspaces[sourceKs].Shards["0"].Tablets["zone1-100"].Vttablet
+	timeZoneSQLBytes, _ := os.ReadFile("tz.sql")
+	timeZoneSQL := string(timeZoneSQLBytes)
+
+	// it seems to take some time for the mysql server to load time zone info after the tables in mysql db have been populated
+	loadTimeZoneInfo := func(tab *cluster.VttabletProcess, sql, timezone string) {
+		_, err := tab.QueryTabletWithDB(timeZoneSQL, "mysql")
+		require.NoError(t, err)
+		timer := time.NewTimer(5 * time.Second)
+		for {
+			select {
+			case <-timer.C:
+				require.Fail(t, "could not load time zone info")
+			default:
+			}
+			_, err = tab.QueryTablet(fmt.Sprintf("SET GLOBAL time_zone = '%s';", timezone), "", false)
+			if err == nil {
+				timer.Stop()
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	loadTimeZoneInfo(productTab, timeZoneSQL, "US/Pacific")
 
 	insertInitialData(t)
 
-	workflow := "tz"
-	sourceKs := "product"
-	targetKs := "customer"
-	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
-	if _, err := vc.AddKeyspace(t, cells, "customer", "0", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, targetKsOpts); err != nil {
+	if _, err := vc.AddKeyspace(t, cells, targetKs, "0", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, targetKsOpts); err != nil {
 		t.Fatal(err)
 	}
 	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "0"), 1); err != nil {
@@ -74,36 +91,32 @@ func TestMoveTablesTZ(t *testing.T) {
 	}
 
 	defaultCell := vc.Cells["zone1"]
-	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
+	custKs := vc.Cells[defaultCell.Name].Keyspaces[targetKs]
 	customerTab := custKs.Shards["0"].Tablets["zone1-200"].Vttablet
 
-	customerTab.QueryTabletWithDB(string(timeZoneSQL), "mysql")
-	require.NoError(t, err)
-	time.Sleep(5 * time.Second) // todo: replace sleep with actual check
-	_, err = customerTab.QueryTablet("SET GLOBAL time_zone = 'UTC';", "", false)
-	require.NoError(t, err)
+	loadTimeZoneInfo(customerTab, timeZoneSQL, "UTC")
 
 	tables := "datze"
 
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("MoveTables", "--", "--source", sourceKs, "--tables", tables, "--source_time_zone", "US/Pacific", "Create", ksWorkflow)
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("MoveTables", "--", "--source", sourceKs, "--tables",
+		tables, "--source_time_zone", "US/Pacific", "Create", ksWorkflow)
 	require.NoError(t, err, output)
 
 	catchup(t, customerTab, workflow, "MoveTables")
 
-	time.Sleep(2 * time.Second)
-	_, err = vtgateConn.ExecuteFetch("insert into datze(id, dt2) values (11, '2022-01-01 10:20:30')", 1, false)
+	_, err = vtgateConn.ExecuteFetch("insert into datze(id, dt2) values (11, '2022-01-01 10:20:30')", 1, false) // standard time
 	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch("insert into datze(id, dt2) values (12, '2022-04-01 5:06:07')", 1, false)
+	_, err = vtgateConn.ExecuteFetch("insert into datze(id, dt2) values (12, '2022-04-01 5:06:07')", 1, false) // dst
 	require.NoError(t, err)
 
 	vdiff(t, ksWorkflow, "")
 
 	query := "select * from datze"
-	qrSourceUSPacific, err := productTab.QueryTablet(query, "product", true)
+	qrSourceUSPacific, err := productTab.QueryTablet(query, sourceKs, true)
 	require.NoError(t, err)
 	require.NotNil(t, qrSourceUSPacific)
 
-	qrTargetUTC, err := customerTab.QueryTablet(query, "customer", true)
+	qrTargetUTC, err := customerTab.QueryTablet(query, targetKs, true)
 	require.NoError(t, err)
 	require.NotNil(t, qrTargetUTC)
 
@@ -122,12 +135,13 @@ func TestMoveTablesTZ(t *testing.T) {
 		require.NotEqual(t, row.AsString("dt2", ""), qrTargetUTC.Named().Rows[i].AsString("dt2", ""))
 		require.NotEqual(t, row.AsString("ts1", ""), qrTargetUTC.Named().Rows[i].AsString("ts1", ""))
 
+		dtLayout := "2006-01-02 15:04:05"
 		// now compare times b/w source and target (actual). VDiff has already compared, but we want to validate that vdiff is right too!
-		dt2a, err := time.Parse("2006-01-02 15:04:05", qrTargetUTC.Named().Rows[i].AsString("dt2", ""))
+		dt2a, err := time.Parse(dtLayout, qrTargetUTC.Named().Rows[i].AsString("dt2", ""))
 		require.NoError(t, err)
 		targetUTCTUnix := dt2a.Unix()
 
-		dt2b, err := time.Parse("2006-01-02 15:04:05", qrSourceUSPacific.Named().Rows[i].AsString("dt2", ""))
+		dt2b, err := time.Parse(dtLayout, qrSourceUSPacific.Named().Rows[i].AsString("dt2", ""))
 		require.NoError(t, err)
 		sourceUSPacific := dt2b.Unix()
 
@@ -141,7 +155,7 @@ func TestMoveTablesTZ(t *testing.T) {
 		}
 		// extra logging, so that we can spot any issues in CI test runs
 		log.Infof("times are %s, %s, hours behind %d", dt2a, dt2b, hoursBehind)
-		require.Equal(t, int64(hoursBehind*3600), targetUTCTUnix-sourceUSPacific)
+		require.Equal(t, hoursBehind*3600, targetUTCTUnix-sourceUSPacific)
 	}
 
 	// user should be either running this query or have set their location in their driver to map from the time in Vitess/UTC to local
