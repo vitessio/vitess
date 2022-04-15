@@ -291,6 +291,17 @@ func (fs *fuzzStore) callExecuteFetchAsApp() error {
 	return nil
 }
 
+// callInitPrimary implements a wrapper
+// for fuzzing InitPrimary
+func (fs *fuzzStore) callInitPrimary() error {
+	tablet, err := fs.getTablet()
+	if err != nil {
+		return err
+	}
+	_, _ = fs.client.InitPrimary(context.Background(), tablet, false)
+	return nil
+}
+
 // callResetReplication implements a wrapper
 // for fuzzing ResetReplication
 func (fs *fuzzStore) callResetReplication() error {
@@ -335,6 +346,17 @@ func (fs *fuzzStore) callStopReplication() error {
 	return nil
 }
 
+// callPrimaryPosition implements a wrapper
+// for fuzzing PrimaryPosition
+func (fs *fuzzStore) callPrimaryPosition() error {
+	tablet, err := fs.getTablet()
+	if err != nil {
+		return err
+	}
+	_, _ = fs.client.PrimaryPosition(context.Background(), tablet)
+	return nil
+}
+
 // callReplicationStatus implements a wrapper
 // for fuzzing ReplicationStatus
 func (fs *fuzzStore) callReplicationStatus() error {
@@ -343,6 +365,17 @@ func (fs *fuzzStore) callReplicationStatus() error {
 		return err
 	}
 	_, _ = fs.client.ReplicationStatus(context.Background(), tablet)
+	return nil
+}
+
+// callPrimaryStatus implements a wrapper
+// for fuzzing PrimaryStatus
+func (fs *fuzzStore) callPrimaryStatus() error {
+	tablet, err := fs.getTablet()
+	if err != nil {
+		return err
+	}
+	_, _ = fs.client.PrimaryStatus(context.Background(), tablet)
 	return nil
 }
 
@@ -488,6 +521,29 @@ func (fs *fuzzStore) callVReplicationWaitForPos() error {
 	return nil
 }
 
+// callSetReplicationSource implements a wrapper
+// for fuzzing SetReplicationSource
+func (fs *fuzzStore) callSetReplicationSource() error {
+	tablet, err := fs.getTablet()
+	if err != nil {
+		return err
+	}
+	pos, err := fs.getString()
+	if err != nil {
+		return err
+	}
+	timeCreatedNS, err := fs.getInt()
+	if err != nil {
+		return err
+	}
+	parent, err := fs.getTabletAlias()
+	if err != nil {
+		return err
+	}
+	_ = fs.client.SetReplicationSource(context.Background(), tablet, parent, int64(timeCreatedNS), pos, false, false)
+	return nil
+}
+
 // callInitReplica implements a wrapper
 // for fuzzing InitReplica
 func (fs *fuzzStore) callInitReplica() error {
@@ -545,6 +601,8 @@ func (fs *fuzzStore) executeInRandomOrder() {
 	for _, execInt := range fs.executionOrder {
 		var err error
 		switch execInt % maxTargets {
+		case 0:
+			err = fs.callInitPrimary()
 		case 1:
 			err = fs.callResetReplication()
 		case 2:
@@ -553,8 +611,12 @@ func (fs *fuzzStore) executeInRandomOrder() {
 			err = fs.callStartReplication()
 		case 4:
 			err = fs.callStopReplication()
+		case 5:
+			err = fs.callPrimaryPosition()
 		case 7:
 			err = fs.callReplicationStatus()
+		case 8:
+			err = fs.callPrimaryStatus()
 		case 9:
 			err = fs.callDemotePrimary()
 		case 11:
@@ -577,6 +639,8 @@ func (fs *fuzzStore) executeInRandomOrder() {
 			err = fs.callExecuteFetchAsApp()
 		case 20:
 			err = fs.callVReplicationWaitForPos()
+		case 21:
+			err = fs.callSetReplicationSource()
 		case 22:
 			err = fs.callInitReplica()
 		case 23:
