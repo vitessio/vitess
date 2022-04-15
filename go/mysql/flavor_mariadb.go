@@ -57,6 +57,10 @@ func (mariadbFlavor) startReplicationUntilAfter(pos Position) string {
 	return fmt.Sprintf("START SLAVE UNTIL master_gtid_pos = \"%s\"", pos)
 }
 
+func (mariadbFlavor) startReplicationSQLUntilAfter(pos Position) string {
+	return fmt.Sprintf("START SLAVE SQL_THREAD UNTIL master_gtid_pos = \"%s\"", pos)
+}
+
 func (mariadbFlavor) startReplicationCommand() string {
 	return "START SLAVE"
 }

@@ -269,6 +269,10 @@ func (*filePosFlavor) startReplicationUntilAfter(pos Position) string {
 	return "unsupported"
 }
 
+func (*filePosFlavor) startReplicationSQLUntilAfter(pos Position) string {
+	return "unsupported"
+}
+
 // enableBinlogPlaybackCommand is part of the Flavor interface.
 func (*filePosFlavor) enableBinlogPlaybackCommand() string {
 	return ""
