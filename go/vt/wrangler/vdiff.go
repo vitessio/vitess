@@ -102,6 +102,7 @@ type vdiff struct {
 	workflow       string
 	targetKeyspace string
 	tables         []string
+	sourceTimeZone string
 }
 
 // compareColInfo contains the metadata for a column of the table being diffed
@@ -204,6 +205,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		workflow:       workflowName,
 		targetKeyspace: targetKeyspace,
 		tables:         includeTables,
+		sourceTimeZone: ts.sourceTimeZone,
 	}
 	for shard, source := range ts.Sources() {
 		df.sources[shard] = &shardStreamer{
@@ -511,16 +513,71 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 			return nil, fmt.Errorf("unexpected: %v", sqlparser.String(statement))
 		}
 	}
+
 	fields := make(map[string]querypb.Type)
 	for _, field := range table.Fields {
 		fields[strings.ToLower(field.Name)] = field.Type
+	}
+
+	// If SourceTimeZone is defined in the BinlogSource, the VReplication workflow would have converted the datetime
+	// columns expecting the source to have been in the SourceTimeZone and target to be UTC. We need to do the reverse
+	// conversion in VDiff before comparing to the source
+	if df.sourceTimeZone != "" {
+		log.Infof("found source time zone %s", df.sourceTimeZone)
+		var newSelectExprs sqlparser.SelectExprs
+		var modified bool
+		for _, expr := range targetSelect.SelectExprs {
+			converted := false
+			switch selExpr := expr.(type) {
+			case *sqlparser.AliasedExpr:
+				if colAs, ok := selExpr.Expr.(*sqlparser.ColName); ok {
+					var convertTZFuncExpr *sqlparser.FuncExpr
+					colName := colAs.Name.Lowered()
+					fieldType := fields[colName]
+					if strings.EqualFold(fieldType.String(), "DATETIME") {
+						convertTZFuncExpr = &sqlparser.FuncExpr{
+							Name: sqlparser.NewColIdent("convert_tz"),
+							Exprs: sqlparser.SelectExprs{
+								expr,
+								&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral("UTC")},
+								&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(df.sourceTimeZone)},
+							},
+						}
+						log.Infof("converting datetime column %s using convert_tz()", colName)
+						newSelectExprs = append(newSelectExprs, &sqlparser.AliasedExpr{Expr: convertTZFuncExpr, As: colAs.Name})
+						converted = true
+						modified = true
+					}
+				}
+			}
+			if !converted { // not datetime
+				newSelectExprs = append(newSelectExprs, expr)
+			}
+		}
+		if modified { // at least one datetime was found
+			log.Infof("Found datetime columns when SourceTimeZone was set, resetting target SelectExprs after convert_tz()")
+			targetSelect.SelectExprs = newSelectExprs
+		}
 	}
 
 	// Start with adding all columns for comparison.
 	td.compareCols = make([]compareColInfo, len(sourceSelect.SelectExprs))
 	for i := range td.compareCols {
 		td.compareCols[i].colIndex = i
-		colname := targetSelect.SelectExprs[i].(*sqlparser.AliasedExpr).Expr.(*sqlparser.ColName).Name.Lowered()
+
+		selExpr := targetSelect.SelectExprs[i]
+		aliasedExpr := selExpr.(*sqlparser.AliasedExpr)
+		expr := aliasedExpr.Expr
+		var colname string
+		switch t := expr.(type) {
+		case *sqlparser.ColName:
+			colname = t.Name.Lowered()
+		case *sqlparser.FuncExpr: // only in case datetime was converted using convert_tz()
+			colname = aliasedExpr.As.String()
+		default:
+			return nil, fmt.Errorf("found target SelectExpr which was neither ColName or FuncExpr: %+v", aliasedExpr)
+		}
+
 		_, ok := fields[colname]
 		if !ok {
 			return nil, fmt.Errorf("column %v not found in table %v", colname, table.Name)

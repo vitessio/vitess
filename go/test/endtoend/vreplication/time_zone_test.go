@@ -74,32 +74,71 @@ func TestTZ(t *testing.T) {
 
 	catchup(t, customerTab, workflow, "MoveTables")
 
+	time.Sleep(2 * time.Second)
+	_, err = vtgateConn.ExecuteFetch("insert into datze(id, dt2) values (11, '2022-01-01 10:20:30')", 1, false)
+	require.NoError(t, err)
+	_, err = vtgateConn.ExecuteFetch("insert into datze(id, dt2) values (12, '2022-04-01 5:06:07')", 1, false)
+	require.NoError(t, err)
+
 	vdiff(t, ksWorkflow, "")
 
 	query := "select * from datze"
-	qr, err := productTab.QueryTablet(query, "product", true)
+	qrSourceUSPacific, err := productTab.QueryTablet(query, "product", true)
 	require.NoError(t, err)
-	require.NotNil(t, qr)
-	log.Infof("Source: US/Pacific:\n")
-	for _, row := range qr.Rows {
-		log.Infof("%+v", row)
+	require.NotNil(t, qrSourceUSPacific)
+
+	qrTargetUTC, err := customerTab.QueryTablet(query, "customer", true)
+	require.NoError(t, err)
+	require.NotNil(t, qrTargetUTC)
+
+	require.Equal(t, len(qrSourceUSPacific.Rows), len(qrTargetUTC.Rows))
+
+	pst, err := time.LoadLocation("US/Pacific")
+	require.NoError(t, err)
+
+	// for reference the columns in the test are as follows:
+	//  * dt1 datetime default current_timestamp, constant for all rows
+	//  * dt2 datetime, different values. First row is in standard time, rest with daylight savings including times around the time zone switch
+	//  * ts1 timestamp default current_timestamp, constant for all rows
+	for i, row := range qrSourceUSPacific.Named().Rows {
+		// source and UTC results must differ since source is in US/Pacific
+		require.NotEqual(t, row.AsString("dt1", ""), qrTargetUTC.Named().Rows[i].AsString("dt1", ""))
+		require.NotEqual(t, row.AsString("dt2", ""), qrTargetUTC.Named().Rows[i].AsString("dt2", ""))
+		require.NotEqual(t, row.AsString("ts1", ""), qrTargetUTC.Named().Rows[i].AsString("ts1", ""))
+
+		// now compare times b/w source and target (actual). VDiff has already compared, but we want to validate that vdiff is right too!
+		dt2a, err := time.Parse("2006-01-02 15:04:05", qrTargetUTC.Named().Rows[i].AsString("dt2", ""))
+		require.NoError(t, err)
+		targetUTCTUnix := dt2a.Unix()
+
+		dt2b, err := time.Parse("2006-01-02 15:04:05", qrSourceUSPacific.Named().Rows[i].AsString("dt2", ""))
+		require.NoError(t, err)
+		sourceUSPacific := dt2b.Unix()
+
+		dtt := dt2b.In(pst)
+		zone, _ := dtt.Zone()
+		var hoursBehind int64
+		if zone == "PDT" { // daylight savings is on
+			hoursBehind = 7
+		} else {
+			hoursBehind = 8
+		}
+		// extra logging, so that we can spot any issues in CI test runs
+		log.Infof("times are %s, %s, hours behind %d", dt2a, dt2b, hoursBehind)
+		require.Equal(t, int64(hoursBehind*3600), targetUTCTUnix-sourceUSPacific)
 	}
 
-	qr, err = customerTab.QueryTablet(query, "customer", true)
-	require.NoError(t, err)
-	require.NotNil(t, qr)
-	log.Infof("Target: UTC:\n")
-	for _, row := range qr.Rows {
-		log.Infof("%+v", row)
-	}
-
-	setStatement := "" //"set session time_zone='US/Pacific'"
+	// user should be either running this query or have set their location in their driver to map from the time in Vitess/UTC to local
 	query = "select id, convert_tz(dt1, 'UTC', 'US/Pacific') dt1, convert_tz(dt2, 'UTC', 'US/Pacific') dt2, convert_tz(ts1, 'UTC', 'US/Pacific') ts1 from datze"
-	qr, err = customerTab.QueryTabletWithSet(query, "customer", true, setStatement)
+	qrTargetUSPacific, err := customerTab.QueryTablet(query, "customer", true)
 	require.NoError(t, err)
-	require.NotNil(t, qr)
-	log.Infof("Target: US/Pacific:\n")
-	for _, row := range qr.Rows {
-		log.Infof("%+v", row)
+	require.NotNil(t, qrTargetUSPacific)
+	require.Equal(t, len(qrSourceUSPacific.Rows), len(qrTargetUSPacific.Rows))
+
+	for i, row := range qrSourceUSPacific.Named().Rows {
+		// source and target results must match since source is in US/Pacific and we are converting target columns explicitly to US/Pacific
+		require.Equal(t, row.AsString("dt1", ""), qrTargetUSPacific.Named().Rows[i].AsString("dt1", ""))
+		require.Equal(t, row.AsString("dt2", ""), qrTargetUSPacific.Named().Rows[i].AsString("dt2", ""))
+		require.Equal(t, row.AsString("ts1", ""), qrTargetUSPacific.Named().Rows[i].AsString("ts1", ""))
 	}
 }

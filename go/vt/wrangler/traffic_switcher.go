@@ -102,6 +102,7 @@ type trafficSwitcher struct {
 	optTabletTypes   string //tabletTypes option passed to MoveTables/Reshard
 	externalCluster  string
 	externalTopo     *topo.Server
+	sourceTimeZone   string
 }
 
 /*
@@ -132,6 +133,7 @@ func (ts *trafficSwitcher) Tables() []string                               { ret
 func (ts *trafficSwitcher) TargetKeyspaceName() string                     { return ts.targetKeyspace }
 func (ts *trafficSwitcher) Targets() map[string]*workflow.MigrationTarget  { return ts.targets }
 func (ts *trafficSwitcher) WorkflowName() string                           { return ts.workflow }
+func (ts *trafficSwitcher) SourceTimeZone() string                         { return ts.sourceTimeZone }
 
 func (ts *trafficSwitcher) ForAllSources(f func(source *workflow.MigrationSource) error) error {
 	var wg sync.WaitGroup
@@ -808,6 +810,7 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 		for _, bls := range target.Sources {
 			if ts.sourceKeyspace == "" {
 				ts.sourceKeyspace = bls.Keyspace
+				ts.sourceTimeZone = bls.SourceTimeZone
 				ts.externalCluster = bls.ExternalCluster
 				if ts.externalCluster != "" {
 					externalTopo, err := wr.ts.OpenExternalVitessClusterServer(ctx, ts.externalCluster)

@@ -22,8 +22,6 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -683,12 +681,10 @@ func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bv
 			case querypb.Type_DATETIME:
 				sourceTZ := tpb.source.GetSourceTimeZone()
 				if sourceTZ != "" {
-					log.Infof("sourceTZ is %s", sourceTZ)
 					buf.Myprintf("convert_tz(%v, '%s', '%s')", cexpr.expr, sourceTZ, "UTC")
 				} else {
 					buf.Myprintf("%v", cexpr.expr)
 				}
-
 			default:
 				buf.Myprintf("%v", cexpr.expr)
 			}
