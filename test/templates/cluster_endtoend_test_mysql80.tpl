@@ -38,7 +38,7 @@ jobs:
       if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v2
       with:
-        go-version: 1.18
+        go-version: 1.18.1
 
     - name: Set up python
       if: steps.changes.outputs.end_to_end == 'true'
