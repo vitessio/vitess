@@ -98,15 +98,15 @@ func (mysqld *Mysqld) StartReplicationUntilAfter(ctx context.Context, targetPos 
 	return mysqld.executeSuperQueryListConn(ctx, conn, queries)
 }
 
-// StartReplicationSQLUntilAfter starts replication's SQL_thread until replication has come to `targetPos`, then it stops it
-func (mysqld *Mysqld) StartReplicationSQLUntilAfter(ctx context.Context, targetPos mysql.Position) error {
+// StartSQLThreadUntilAfter starts replication's SQL thread(s) until replication has come to `targetPos`, then it stops it
+func (mysqld *Mysqld) StartSQLThreadUntilAfter(ctx context.Context, targetPos mysql.Position) error {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return err
 	}
 	defer conn.Recycle()
 
-	queries := []string{conn.StartReplicationSQLUntilAfterCommand(targetPos)}
+	queries := []string{conn.StartSQLThreadUntilAfterCommand(targetPos)}
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, queries)
 }
@@ -137,6 +137,17 @@ func (mysqld *Mysqld) StopIOThread(ctx context.Context) error {
 	defer conn.Recycle()
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopIOThreadCommand()})
+}
+
+// StopSQLThread stops a replica's SQL thread(s) only.
+func (mysqld *Mysqld) StopSQLThread(ctx context.Context) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopSQLThreadCommand()})
 }
 
 // RestartReplication stops, resets and starts replication.
@@ -229,6 +240,14 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 		return err
 	}
 
+	// These statements will be run when leaving the function / stack frame
+	// and will allow us to ensure that we reset any intermediate state
+	resetStmts := []string{}
+	resetState := func() {
+		mysqld.executeSuperQueryListConn(ctx, conn, resetStmts)
+	}
+	defer resetState()
+
 	// First check if filePos flavored Position was passed in. If so, we can't defer to the flavor in the connection,
 	// unless that flavor is also filePos.
 	waitCommandName := "WaitUntilPositionCommand"
@@ -263,17 +282,22 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 			return nil
 		}
 
-		// If the SQL_thread is not already running -- e.g. in the case of EmergencyReparentShard where the
-		// instance is transitioning to PRIMARY but we need it to catch up by executing all of the locally
-		// queued binary log events (in the existing relay logs) before it starts serving traffic for the
-		// shard to minimize potential data loss -- then we try to start the SQL Thread(s) before waiting for
-		// the position to be reached at which point the SQL Thread(s) will be stopped again, since the
-		// replicas can only make forward progress if the SQL thread is started and we have already verified
-		// that the replica is not already as advanced as we want it to be
+		// If the SQL thread(s) is not already running -- e.g. in the case of EmergencyReparentShard where the
+		// instance is transitioning to PRIMARY (elect) and we can no longer talk to the old PRIMARY, we need
+		// it to catch up as much as possible by executing all of the locally queued binary log events (in
+		// the existing relay logs) before it starts serving traffic for the shard to minimize potential data
+		// loss -- then we try to start the SQL Thread(s) before waiting for the position to be reached at
+		// which point the SQL thread(s) will be stopped again, since the replicas can only make forward
+		// progress if the SQL thread is started and we have already verified that the replica is not already
+		// as advanced as we want it to be
 		if !replicationStatus.SQLHealthy() {
-			if err = mysqld.StartReplicationSQLUntilAfter(ctx, targetPos); err != nil {
+			// Let's ensure the replication state is put back to what it was when we started.
+			// Doing this in a deferred function ensures that we do so even if we timeout while waiting.
+			resetStmts = append(resetStmts, conn.StopSQLThreadCommand())
+			if err = mysqld.StartSQLThreadUntilAfter(ctx, targetPos); err != nil {
 				return vterrors.Wrap(err,
-					fmt.Sprintf("the SQL_thread was stopped and we could not force start it in order to wait for the target position of %v", targetPos))
+					fmt.Sprintf("the replication SQL thread(s) was stopped and we could not temporarily start it in order to wait for the target position of %v",
+						targetPos))
 			}
 		}
 

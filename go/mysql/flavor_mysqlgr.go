@@ -61,8 +61,8 @@ func (mysqlGRFlavor) startReplicationUntilAfter(pos Position) string {
 	return ""
 }
 
-// startReplicationSQLUntilAfter is disabled in mysqlGRFlavor
-func (mysqlGRFlavor) startReplicationSQLUntilAfter(pos Position) string {
+// startSQLThreadUntilAfter is disabled in mysqlGRFlavor
+func (mysqlGRFlavor) startSQLThreadUntilAfter(pos Position) string {
 	return ""
 }
 
@@ -75,6 +75,11 @@ func (mysqlGRFlavor) stopReplicationCommand() string {
 
 // stopIOThreadCommand is disabled in mysqlGRFlavor
 func (mysqlGRFlavor) stopIOThreadCommand() string {
+	return ""
+}
+
+// stopSQLThreadCommand is disabled in mysqlGRFlavor
+func (mysqlGRFlavor) stopSQLThreadCommand() string {
 	return ""
 }
 

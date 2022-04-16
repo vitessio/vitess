@@ -72,7 +72,7 @@ func (mysqlFlavor) startReplicationUntilAfter(pos Position) string {
 	return fmt.Sprintf("START SLAVE UNTIL SQL_AFTER_GTIDS = '%s'", pos)
 }
 
-func (mysqlFlavor) startReplicationSQLUntilAfter(pos Position) string {
+func (mysqlFlavor) startSQLThreadUntilAfter(pos Position) string {
 	return fmt.Sprintf("START SLAVE SQL_THREAD UNTIL SQL_AFTER_GTIDS = '%s'", pos)
 }
 
@@ -82,6 +82,10 @@ func (mysqlFlavor) stopReplicationCommand() string {
 
 func (mysqlFlavor) stopIOThreadCommand() string {
 	return "STOP SLAVE IO_THREAD"
+}
+
+func (mysqlFlavor) stopSQLThreadCommand() string {
+	return "STOP SLAVE SQL_THREAD"
 }
 
 func (mysqlFlavor) startSQLThreadCommand() string {
