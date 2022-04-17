@@ -235,19 +235,6 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 	}
 	defer conn.Recycle()
 
-	replicationStatus, err := conn.ShowReplicationStatus()
-	if err != nil && !errors.Is(err, mysql.ErrNotReplica) {
-		return err
-	}
-
-	// These statements will be run when leaving the function / stack frame
-	// and will allow us to ensure that we reset any intermediate state
-	resetStmts := []string{}
-	resetState := func() {
-		mysqld.executeSuperQueryListConn(ctx, conn, resetStmts)
-	}
-	defer resetState()
-
 	// First check if filePos flavored Position was passed in. If so, we can't defer to the flavor in the connection,
 	// unless that flavor is also filePos.
 	waitCommandName := "WaitUntilPositionCommand"
@@ -282,6 +269,11 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 			return nil
 		}
 
+		replicationStatus, err := conn.ShowReplicationStatus()
+		if err != nil && !errors.Is(err, mysql.ErrNotReplica) {
+			return err
+		}
+
 		// If the SQL thread(s) is not already running -- e.g. in the case of EmergencyReparentShard where the
 		// instance is transitioning to PRIMARY (elect) and we can no longer talk to the old PRIMARY, we need
 		// it to catch up as much as possible by executing all of the locally queued binary log events (in
@@ -293,7 +285,9 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 		if !replicationStatus.SQLHealthy() {
 			// Let's ensure the replication state is put back to what it was when we started.
 			// Doing this in a deferred function ensures that we do so even if we timeout while waiting.
-			resetStmts = append(resetStmts, conn.StopSQLThreadCommand())
+			defer func() {
+				mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopSQLThreadCommand()})
+			}()
 			if err = mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StartSQLThreadCommand()}); err != nil {
 				return vterrors.Wrap(err,
 					fmt.Sprintf("the replication SQL thread(s) was stopped and we could not temporarily start it in order to wait for the target position of %v",
