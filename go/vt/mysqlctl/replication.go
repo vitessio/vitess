@@ -294,7 +294,7 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 			// Let's ensure the replication state is put back to what it was when we started.
 			// Doing this in a deferred function ensures that we do so even if we timeout while waiting.
 			resetStmts = append(resetStmts, conn.StopSQLThreadCommand())
-			if err = mysqld.StartSQLThreadUntilAfter(ctx, targetPos); err != nil {
+			if err = mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StartSQLThreadCommand()}); err != nil {
 				return vterrors.Wrap(err,
 					fmt.Sprintf("the replication SQL thread(s) was stopped and we could not temporarily start it in order to wait for the target position of %v",
 						targetPos))
