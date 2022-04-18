@@ -18,9 +18,11 @@ package topotools
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -38,6 +40,7 @@ import (
 // RPC will cause a boolean flag to be returned indicating only partial success.
 func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, si *topo.ShardInfo, cells []string, logger logutil.Logger) (isPartialRefresh bool, err error) {
 	logger.Infof("RefreshTabletsByShard called on shard %v/%v", si.Keyspace(), si.ShardName())
+	refreshErrors := &concurrency.AllErrorRecorder{}
 
 	tabletMap, err := ts.GetTabletMapForShardByCell(ctx, si.Keyspace(), si.ShardName(), cells)
 	switch {
@@ -82,15 +85,20 @@ func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.Ta
 
 			if err := tmc.RefreshState(grctx, ti.Tablet); err != nil {
 				logger.Warningf("RefreshTabletsByShard: failed to refresh %v: %v", ti.AliasString(), err)
+				refreshErrors.RecordError(fmt.Errorf("failed to refresh %v: %v", ti.AliasString(), err))
 				m.Lock()
 				isPartialRefresh = true
 				m.Unlock()
 			}
 		}(ti)
 	}
-
 	wg.Wait()
-	return isPartialRefresh, nil
+
+	if refreshErrors.HasErrors() {
+		err = refreshErrors.Error()
+	}
+
+	return isPartialRefresh, err
 }
 
 // UpdateShardRecords updates the shard records based on 'from' or 'to'

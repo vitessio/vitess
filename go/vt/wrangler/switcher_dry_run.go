@@ -387,7 +387,7 @@ func (dr *switcherDryRun) refreshRelatedTablets(ctx context.Context) error {
 		defer wg.Done()
 		for _, si := range shards {
 			if partial, err := topotools.RefreshTabletsByShard(rtbsCtx, dr.ts.wr.ts, dr.ts.wr.tmc, si, nil, dr.ts.wr.Logger()); err != nil || partial {
-				logs = append(logs, fmt.Sprintf("  Failed to successfully refresh all tablets in the %s/%s %s shard (%v)",
+				logs = append(logs, fmt.Sprintf("Failed to successfully refresh all tablets in the %s/%s %s shard:\n  %v\n\n",
 					si.Keyspace(), si.ShardName(), stype, err))
 			}
 		}
