@@ -78,6 +78,10 @@ func (flv *filePosFlavor) stopIOThreadCommand() string {
 	return "unsupported"
 }
 
+func (flv *filePosFlavor) stopSQLThreadCommand() string {
+	return "unsupported"
+}
+
 func (flv *filePosFlavor) startSQLThreadCommand() string {
 	return "unsupported"
 }
@@ -266,6 +270,10 @@ func (flv *filePosFlavor) waitUntilPositionCommand(ctx context.Context, pos Posi
 }
 
 func (*filePosFlavor) startReplicationUntilAfter(pos Position) string {
+	return "unsupported"
+}
+
+func (*filePosFlavor) startSQLThreadUntilAfter(pos Position) string {
 	return "unsupported"
 }
 

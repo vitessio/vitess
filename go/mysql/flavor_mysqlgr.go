@@ -61,6 +61,11 @@ func (mysqlGRFlavor) startReplicationUntilAfter(pos Position) string {
 	return ""
 }
 
+// startSQLThreadUntilAfter is disabled in mysqlGRFlavor
+func (mysqlGRFlavor) startSQLThreadUntilAfter(pos Position) string {
+	return ""
+}
+
 // stopReplicationCommand returns the command to stop the replication.
 // we return empty here since `STOP GROUP_REPLICATION` should be called by
 // the external orchestrator
@@ -70,6 +75,11 @@ func (mysqlGRFlavor) stopReplicationCommand() string {
 
 // stopIOThreadCommand is disabled in mysqlGRFlavor
 func (mysqlGRFlavor) stopIOThreadCommand() string {
+	return ""
+}
+
+// stopSQLThreadCommand is disabled in mysqlGRFlavor
+func (mysqlGRFlavor) stopSQLThreadCommand() string {
 	return ""
 }
 
