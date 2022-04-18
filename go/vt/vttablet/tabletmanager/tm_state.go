@@ -242,7 +242,6 @@ func (ts *tmState) UpdateTablet(update func(tablet *topodatapb.Tablet)) {
 	update(ts.tablet)
 	ts.publishForDisplay()
 }
-
 func (ts *tmState) updateLocked(ctx context.Context) {
 	span, ctx := trace.NewSpan(ctx, "tmState.update")
 	defer span.Finish()

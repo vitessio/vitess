@@ -440,23 +440,25 @@ func (fmd *FakeMysqlDaemon) Promote(hookExtraEnv map[string]string) (mysql.Posit
 func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queryList []string) error {
 	for _, query := range queryList {
 		// test we still have a query to compare
-		if fmd.ExpectedExecuteSuperQueryCurrent >= len(fmd.ExpectedExecuteSuperQueryList) {
-			return fmt.Errorf("unexpected extra query in ExecuteSuperQueryList: %v", query)
-		}
-
-		// compare the query
-		expected := fmd.ExpectedExecuteSuperQueryList[fmd.ExpectedExecuteSuperQueryCurrent]
-		fmd.ExpectedExecuteSuperQueryCurrent++
-		if strings.HasPrefix(expected, "SUB") {
-			// remove the SUB from the expected,
-			// and truncate the query to length(expected)
-			expected = expected[3:]
-			if len(query) > len(expected) {
-				query = query[:len(expected)]
+		if fmd.ExpectedExecuteSuperQueryList != nil {
+			if fmd.ExpectedExecuteSuperQueryCurrent >= len(fmd.ExpectedExecuteSuperQueryList) {
+				return fmt.Errorf("unexpected extra query in ExecuteSuperQueryList: %v", query)
 			}
-		}
-		if expected != query {
-			return fmt.Errorf("wrong query for ExecuteSuperQueryList: expected %v got %v", expected, query)
+
+			// compare the query
+			expected := fmd.ExpectedExecuteSuperQueryList[fmd.ExpectedExecuteSuperQueryCurrent]
+			fmd.ExpectedExecuteSuperQueryCurrent++
+			if strings.HasPrefix(expected, "SUB") {
+				// remove the SUB from the expected,
+				// and truncate the query to length(expected)
+				expected = expected[3:]
+				if len(query) > len(expected) {
+					query = query[:len(expected)]
+				}
+			}
+			if expected != query {
+				return fmt.Errorf("wrong query for ExecuteSuperQueryList: expected %v got %v", expected, query)
+			}
 		}
 
 		// intercept some queries to update our status

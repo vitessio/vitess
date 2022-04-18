@@ -24,10 +24,7 @@ import (
 	"flag"
 	"fmt"
 	"hash"
-	"hash/crc32"
 	"io"
-	"os"
-	"path"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -43,38 +40,39 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 const (
-	builtinBackupEngineName = "builtin"
-	writerBufferSize        = 2 * 1024 * 1024
-	dataDictionaryFile      = "mysql.ibd"
+	sqlCloneBackupEngineName = "sqlclonebackup"
+	// sqlCloneWriterBufferSize = 2 * 1024 * 1024
 )
 
 var (
 	// BuiltinBackupMysqldTimeout is how long ExecuteBackup should wait for response from mysqld.Shutdown.
 	// It can later be extended for other calls to mysqld during backup functions.
 	// Exported for testing.
-	BuiltinBackupMysqldTimeout = flag.Duration("builtinbackup_mysqld_timeout", 10*time.Minute, "how long to wait for mysqld to shutdown at the start of the backup")
+	// sqlCloneBackupMysqldTimeout = flag.Duration("sqlclonebackup_mysqld_timeout", 10*time.Minute, "how long to wait for mysqld to shutdown at the start of the backup")
 
-	builtinBackupProgress = flag.Duration("builtinbackup_progress", 5*time.Second, "how often to send progress updates when backing up large files")
+	sqlCloneBackupProgress = flag.Duration("sqlclonebackup_progress", 5*time.Second, "how often to send progress updates when backing up large files")
+	// path where backup is stored
+	sqlCloneBackupEnginePath = flag.String("sqlclonebackup_root_path", "/tmp/clone", "directory location of the xtrabackup and xbstream executables, e.g., /usr/bin")
+
+	sqlCloneBackupEngineDonorHost = flag.String("sqlclonebackup_donor_host", "localhost", "host address of donor machine")
+	sqlCloneBackupEngineDonorPort = flag.String("sqlclonebackup_donor_port", "17100", "port address of donor machine")
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
 // it implements the BackupEngine interface and contains all the logic
 // required to implement a backup/restore by copying files from and to
 // the correct location / storage bucket
-type BuiltinBackupEngine struct {
+type SQLCloneBackupEngine struct {
 }
 
 // builtinBackupManifest represents the backup. It lists all the files, the
 // Position that the backup was taken at, and the transform hook used,
 // if any.
-type builtinBackupManifest struct {
+type sqlCloneBackupManifest struct {
 	// BackupManifest is an anonymous embedding of the base manifest struct.
 	BackupManifest
 
@@ -91,93 +89,21 @@ type builtinBackupManifest struct {
 	SkipCompress bool
 }
 
-// FileEntry is one file to backup
-type FileEntry struct {
-	// Base is one of:
-	// - backupInnodbDataHomeDir for files that go into Mycnf.InnodbDataHomeDir
-	// - backupInnodbLogGroupHomeDir for files that go into Mycnf.InnodbLogGroupHomeDir
-	// - backupData for files that go into Mycnf.DataDir
-	Base string
-
-	// Name is the file name, relative to Base
-	Name string
-
-	// Hash is the hash of the final data (transformed and
-	// compressed if specified) stored in the BackupStorage.
-	Hash string
-}
-
-func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
-	// find the root to use
-	var root string
-	switch fe.Base {
-	case backupInnodbDataHomeDir:
-		root = cnf.InnodbDataHomeDir
-	case backupInnodbLogGroupHomeDir:
-		root = cnf.InnodbLogGroupHomeDir
-	case backupData:
-		root = cnf.DataDir
-	default:
-		return nil, vterrors.Errorf(vtrpc.Code_UNKNOWN, "unknown base: %v", fe.Base)
-	}
-
-	// and open the file
-	name := path.Join(root, fe.Name)
-	var fd *os.File
-	var err error
-	if readOnly {
-		if fd, err = os.Open(name); err != nil {
-			return nil, vterrors.Wrapf(err, "cannot open source file %v", name)
-		}
-	} else {
-		dir := path.Dir(name)
-		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-			return nil, vterrors.Wrapf(err, "cannot create destination directory %v", dir)
-		}
-		if fd, err = os.Create(name); err != nil {
-			return nil, vterrors.Wrapf(err, "cannot create destination file %v", name)
-		}
-	}
-	return fd, nil
-}
-
-func (fe *FileEntry) freeOpen(cnf *Mycnf, readOnly bool) (*os.File, error) {
-	// and open the file
-	name := path.Join(fe.Base, fe.Name)
-	fmt.Println("backing up file location: ", name)
-	var fd *os.File
-	var err error
-	if readOnly {
-		if fd, err = os.Open(name); err != nil {
-			return nil, vterrors.Wrapf(err, "cannot open source file %v", name)
-		}
-	} else {
-		dir := path.Dir(name)
-		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-			return nil, vterrors.Wrapf(err, "cannot create destination directory %v", dir)
-		}
-		if fd, err = os.Create(name); err != nil {
-			return nil, vterrors.Wrapf(err, "cannot create destination file %v", name)
-		}
-	}
-	return fd, nil
-}
-
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
-func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
+func (be *SQLCloneBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
 
 	params.Logger.Infof("Hook: %v, Compress: %v", *backupStorageHook, *backupStorageCompress)
 
 	// Save initial state so we can restore.
-	replicaStartRequired := false
+	//replicaStartRequired := false
 	sourceIsPrimary := false
 	readOnly := true //nolint
 	var replicationPosition mysql.Position
-	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled()
+	//semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled()
 
 	// See if we need to restart replication after backup.
-	params.Logger.Infof("getting current replication status")
+	/*params.Logger.Infof("getting current replication status")
 	replicaStatus, err := params.Mysqld.ReplicationStatus()
 	switch err {
 	case nil:
@@ -187,10 +113,10 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 		sourceIsPrimary = true
 	default:
 		return false, vterrors.Wrap(err, "can't get replica status")
-	}
+	}*/
 
 	// get the read-only flag
-	readOnly, err = params.Mysqld.IsReadOnly()
+	readOnly, err := params.Mysqld.IsReadOnly()
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't get read-only status")
 	}
@@ -221,11 +147,18 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	params.Logger.Infof("using replication position: %v", replicationPosition)
 
 	// shutdown mysqld
-	shutdownCtx, cancel := context.WithTimeout(ctx, *BuiltinBackupMysqldTimeout)
+	/*shutdownCtx, cancel := context.WithTimeout(ctx, *BuiltinBackupMysqldTimeout)
 	err = params.Mysqld.Shutdown(shutdownCtx, params.Cnf, true)
 	defer cancel()
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't shutdown mysqld")
+	}*/
+
+	params.Logger.Infof("path for backup is %s", *sqlCloneBackupEnginePath)
+	//_, err = slqLocalCloneCall(ctx, params)
+	_, err = slqRemoteCloneCall(ctx, params)
+	if err != nil {
+		return false, vterrors.Wrap(err, "error running clone plugin")
 	}
 
 	// Backup everything, capture the error.
@@ -233,7 +166,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	usable := backupErr == nil
 
 	// Try to restart mysqld, use background context in case we timed out the original context
-	err = params.Mysqld.Start(context.Background(), params.Cnf)
+	/*err = params.Mysqld.Start(context.Background(), params.Cnf)
 	if err != nil {
 		return usable, vterrors.Wrap(err, "can't restart mysqld")
 	}
@@ -242,10 +175,10 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	params.Logger.Infof("resetting mysqld read-only to %v", readOnly)
 	if err := params.Mysqld.SetReadOnly(readOnly); err != nil {
 		return usable, err
-	}
+	}*/
 
 	// Restore original mysqld state that we saved above.
-	if semiSyncSource || semiSyncReplica {
+	/*if semiSyncSource || semiSyncReplica {
 		// Only do this if one of them was on, since both being off could mean
 		// the plugin isn't even loaded, and the server variables don't exist.
 		params.Logger.Infof("restoring semi-sync settings from before backup: primary=%v, replica=%v",
@@ -278,7 +211,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 		remoteCtx, remoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 		defer remoteCancel()
 
-		pos, err := getPrimaryPosition(remoteCtx, tmc, params.TopoServer, params.Keyspace, params.Shard)
+		pos, err := sqllCloneGetPrimaryPosition(remoteCtx, tmc, params.TopoServer, params.Keyspace, params.Shard)
 		// If we are unable to get the primary's position, return error.
 		if err != nil {
 			return usable, err
@@ -299,21 +232,25 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 				time.Sleep(1 * time.Second)
 			}
 		}
-	}
+	}*/
 
 	return usable, backupErr
 }
 
 // backupFiles finds the list of files to backup, and creates the backup.
-func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, replicationPosition mysql.Position) (finalErr error) {
+func (be *SQLCloneBackupEngine) backupFiles(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, replicationPosition mysql.Position) (finalErr error) {
 
 	// Get the files to backup.
 	// We don't care about totalSize because we add each file separately.
-	fes, _, err := findFilesToBackup(params.Cnf)
+	fes, size, err := SQLCloneFindFilesToBackup(params.Cnf)
 	if err != nil {
 		return vterrors.Wrap(err, "can't find files to backup")
 	}
-	params.Logger.Infof("found %v files to backup", len(fes))
+	params.Logger.Infof("found %v files to backup. Total size is %d", len(fes), size)
+	params.Logger.Infof("***** Listing all files *****")
+	for i := range fes {
+		params.Logger.Infof("%s", fes[i])
+	}
 
 	// Backup with the provided concurrency.
 	sema := sync2.NewSemaphore(params.Concurrency, 0)
@@ -333,6 +270,7 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 
 			// Backup the individual file.
 			name := fmt.Sprintf("%v", i)
+			params.Logger.Infof("backing file %s into %s", fes[i], name)
 			bh.RecordError(be.backupFile(ctx, params, bh, &fes[i], name))
 			//fileName := filepath.Base(fes[i].Name)
 			//bh.RecordError(be.backupFile(ctx, params, bh, &fes[i], fileName))
@@ -365,10 +303,10 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 	}()
 
 	// JSON-encode and write the MANIFEST
-	bm := &builtinBackupManifest{
+	bm := &sqlCloneBackupManifest{
 		// Common base fields
 		BackupManifest: BackupManifest{
-			BackupMethod: builtinBackupEngineName,
+			BackupMethod: sqlCloneBackupEngineName,
 			Position:     replicationPosition,
 			BackupTime:   params.BackupTime.UTC().Format(time.RFC3339),
 			FinishedTime: time.Now().UTC().Format(time.RFC3339),
@@ -390,7 +328,7 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 	return nil
 }
 
-type backupPipe struct {
+type sqlCloneBackupPipe struct {
 	filename string
 	maxSize  int64
 
@@ -403,7 +341,7 @@ type backupPipe struct {
 	closed int32
 }
 
-func newBackupWriter(filename string, maxSize int64, w io.Writer) *backupPipe {
+/*func sqlCloneNewBackupWriter(filename string, maxSize int64, w io.Writer) *backupPipe {
 	return &backupPipe{
 		crc32:    crc32.NewIEEE(),
 		w:        bufio.NewWriterSize(w, writerBufferSize),
@@ -411,32 +349,32 @@ func newBackupWriter(filename string, maxSize int64, w io.Writer) *backupPipe {
 		maxSize:  maxSize,
 		done:     make(chan struct{}),
 	}
-}
+}*/
 
-func newBackupReader(filename string, r io.Reader) *backupPipe {
+/*func sqlCloneNewBackupReader(filename string, r io.Reader) *backupPipe {
 	return &backupPipe{
 		crc32:    crc32.NewIEEE(),
 		r:        r,
 		filename: filename,
 		done:     make(chan struct{}),
 	}
-}
+}*/
 
-func (bp *backupPipe) Read(p []byte) (int, error) {
+func (bp *sqlCloneBackupPipe) Read(p []byte) (int, error) {
 	nn, err := bp.r.Read(p)
 	_, _ = bp.crc32.Write(p[:nn])
 	atomic.AddInt64(&bp.nn, int64(nn))
 	return nn, err
 }
 
-func (bp *backupPipe) Write(p []byte) (int, error) {
+func (bp *sqlCloneBackupPipe) Write(p []byte) (int, error) {
 	nn, err := bp.w.Write(p)
 	_, _ = bp.crc32.Write(p[:nn])
 	atomic.AddInt64(&bp.nn, int64(nn))
 	return nn, err
 }
 
-func (bp *backupPipe) Close() error {
+func (bp *sqlCloneBackupPipe) Close() error {
 	if atomic.CompareAndSwapInt32(&bp.closed, 0, 1) {
 		close(bp.done)
 		if bp.w != nil {
@@ -448,11 +386,11 @@ func (bp *backupPipe) Close() error {
 	return nil
 }
 
-func (bp *backupPipe) HashString() string {
+func (bp *sqlCloneBackupPipe) HashString() string {
 	return hex.EncodeToString(bp.crc32.Sum(nil))
 }
 
-func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger) {
+func (bp *sqlCloneBackupPipe) SQLCloneReportProgress(period time.Duration, logger logutil.Logger) {
 	tick := time.NewTicker(period)
 	defer tick.Stop()
 
@@ -473,9 +411,9 @@ func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger
 }
 
 // backupFile backs up an individual file.
-func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, fe *FileEntry, name string) (finalErr error) {
+func (be *SQLCloneBackupEngine) backupFile(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, fe *FileEntry, name string) (finalErr error) {
 	// Open the source file for reading.
-	source, err := fe.open(params.Cnf, true)
+	source, err := fe.freeOpen(params.Cnf, true)
 	if err != nil {
 		return err
 	}
@@ -486,7 +424,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		return err
 	}
 
-	params.Logger.Infof("Backing up file: %v", path.Join(fe.Base, fe.Name))
+	params.Logger.Infof("Backing up file: %v", fe.Name)
 	// Open the destination file for writing, and a buffer.
 	wc, err := bh.AddFile(ctx, name, fi.Size())
 	if err != nil {
@@ -504,7 +442,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}(name, fe.Name)
 
 	bw := newBackupWriter(fe.Name, fi.Size(), wc)
-	go bw.ReportProgress(*builtinBackupProgress, params.Logger)
+	go bw.ReportProgress(*sqlCloneBackupProgress, params.Logger)
 
 	var writer io.Writer = bw
 
@@ -572,7 +510,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 // ExecuteRestore restores from a backup. If the restore is successful
 // we return the position from which replication should start
 // otherwise an error is returned
-func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
+func (be *SQLCloneBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
 
 	var bm builtinBackupManifest
 
@@ -602,7 +540,7 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 
 // restoreFiles will copy all the files from the BackupStorage to the
 // right place.
-func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
+func (be *SQLCloneBackupEngine) restoreFiles(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
 	fes := bm.FileEntries
 	sema := sync2.NewSemaphore(params.Concurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
@@ -634,7 +572,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 }
 
 // restoreFile restores an individual file.
-func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, fe *FileEntry, transformHook string, compress bool, name string) (finalErr error) {
+func (be *SQLCloneBackupEngine) restoreFile(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, fe *FileEntry, transformHook string, compress bool, name string) (finalErr error) {
 	// Open the source file for reading.
 	source, err := bh.ReadFile(ctx, name)
 	if err != nil {
@@ -644,6 +582,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 
 	// Open the destination file for writing.
 	dstFile, err := fe.open(params.Cnf, false)
+	params.Logger.Infof("backing up file location: ", dstFile.Name())
 	if err != nil {
 		return vterrors.Wrap(err, "can't open destination file for writing")
 	}
@@ -659,7 +598,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	}()
 
 	bp := newBackupReader(name, source)
-	go bp.ReportProgress(*builtinBackupProgress, params.Logger)
+	go bp.ReportProgress(*sqlCloneBackupProgress, params.Logger)
 
 	dst := bufio.NewWriterSize(dstFile, writerBufferSize)
 	var reader io.Reader = bp
@@ -677,6 +616,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 
 	// Create the uncompresser if needed.
 	if compress {
+		params.Logger.Infof("inside unzip")
 		gz, err := pgzip.NewReader(reader)
 		if err != nil {
 			return vterrors.Wrap(err, "can't open gzip decompressor")
@@ -730,11 +670,60 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 
 // ShouldDrainForBackup satisfies the BackupEngine interface
 // backup requires query service to be stopped, hence true
-func (be *BuiltinBackupEngine) ShouldDrainForBackup() bool {
+func (be *SQLCloneBackupEngine) ShouldDrainForBackup() bool {
 	return true
 }
 
-func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, keyspace, shard string) (mysql.Position, error) {
+func SQLCloneFindFilesToBackup(cnf *Mycnf) ([]FileEntry, int64, error) {
+	var err error
+	var result []FileEntry
+	var totalSize int64
+
+	// first add inno db files
+	result, totalSize, err = addAllFiles(result, *sqlCloneBackupEnginePath)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return result, totalSize, nil
+}
+
+/*func slqLocalCloneCall(ctx context.Context, params BackupParams) (complete bool, finalErr error) {
+	//ctx := context.Background()
+	conn, err := params.Mysqld.GetDbaConnection(ctx)
+	//conn, err := mysql.Connect(ctx, &vtParams)
+	if conn != nil && err == nil {
+		defer conn.Close()
+	}
+
+	if err != nil {
+		return false, vterrors.Wrap(err, "unable to obtain a connection to the database")
+	}
+	insertSmt := fmt.Sprintf("CLONE LOCAL DATA DIRECTORY = '%s';", *sqlCloneBackupEnginePath)
+	_, err = conn.ExecuteFetch(insertSmt, 1000, true)
+
+	return true, err
+}*/
+
+func slqRemoteCloneCall(ctx context.Context, params BackupParams) (complete bool, finalErr error) {
+	//ctx := context.Background()
+	conn, err := params.Mysqld.GetDbaConnection(ctx)
+	//conn, err := mysql.Connect(ctx, &vtParams)
+	if conn != nil && err == nil {
+		defer conn.Close()
+	}
+
+	if err != nil {
+		return false, vterrors.Wrap(err, "unable to obtain a connection to the database")
+	}
+	insertSmt := fmt.Sprintf("CLONE INSTANCE FROM 'donor_clone_user'@'%s':%s IDENTIFIED BY '' DATA DIRECTORY = '%s';", *sqlCloneBackupEngineDonorHost, *sqlCloneBackupEngineDonorPort, *sqlCloneBackupEnginePath)
+	params.Logger.Infof(fmt.Sprintf("query is %s", insertSmt))
+	_, err = conn.ExecuteFetch(insertSmt, 1000, true)
+
+	return true, err
+}
+
+/*func sqllCloneGetPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, keyspace, shard string) (mysql.Position, error) {
 	si, err := ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return mysql.Position{}, vterrors.Wrap(err, "can't read shard")
@@ -755,8 +744,8 @@ func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, t
 		return mysql.Position{}, fmt.Errorf("can't decode primary replication position %q: %v", posStr, err)
 	}
 	return pos, nil
-}
+}*/
 
 func init() {
-	BackupRestoreEngineMap[builtinBackupEngineName] = &BuiltinBackupEngine{}
+	BackupRestoreEngineMap[sqlCloneBackupEngineName] = &SQLCloneBackupEngine{}
 }

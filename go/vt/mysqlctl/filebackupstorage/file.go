@@ -102,6 +102,7 @@ func (fbh *FileBackupHandle) ReadFile(ctx context.Context, filename string) (io.
 		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
 	}
 	p := path.Join(*FileBackupStorageRoot, fbh.dir, fbh.name, filename)
+	fmt.Printf("path to open file is : %s \n", p)
 	return os.Open(p)
 }
 

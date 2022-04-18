@@ -2,7 +2,8 @@
 
 # MySQL 8.0 enables binlog by default with sync_binlog and TABLE info repositories
 # It does not enable GTIDs or enforced GTID consistency
-
+bind-address = 127.0.0.1
+mysqlx-bind-address = 127.0.0.1
 gtid_mode = ON
 enforce_gtid_consistency
 relay_log_recovery = 1
@@ -25,6 +26,7 @@ default_authentication_plugin = mysql_native_password
 # at the proper time when replication is set up, or when a primary is
 # promoted or demoted.
 plugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so
+plugin-load-add=mysql_clone.so
 
 # MySQL 8.0 will not load plugins during --initialize
 # which makes these options unknown. Prefixing with --loose

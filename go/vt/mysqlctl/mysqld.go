@@ -252,6 +252,7 @@ func ParseVersionString(version string) (flavor MySQLFlavor, ver ServerVersion, 
 // network and no grant tables.
 func (mysqld *Mysqld) RunMysqlUpgrade() error {
 	// Execute as remote action on mysqlctld if requested.
+	log.Infof("RunMysqlUpgrade() start...")
 	if *socketFile != "" {
 		log.Infof("executing Mysqld.RunMysqlUpgrade() remotely via mysqlctld server: %v", *socketFile)
 		client, err := mysqlctlclient.New("unix", *socketFile)

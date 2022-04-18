@@ -79,7 +79,7 @@ var (
 	// backupStorageCompress can be set to false to not use gzip
 	// on the backups. Usually would be set if a hook is used, and
 	// the hook compresses the data.
-	backupStorageCompress = flag.Bool("backup_storage_compress", true, "if set, the backup files will be compressed (default is true). Set to false for instance if a backup_storage_hook is specified and it compresses the data.")
+	backupStorageCompress = flag.Bool("backup_storage_compress", false, "if set, the backup files will be compressed (default is true). Set to false for instance if a backup_storage_hook is specified and it compresses the data.")
 
 	// backupCompressBlockSize is the splitting size for each
 	// compressed block
@@ -251,6 +251,7 @@ func removeExistingFiles(cnf *Mycnf) error {
 // and returns whether a restore action should be performed
 func ShouldRestore(ctx context.Context, params RestoreParams) (bool, error) {
 	if params.DeleteBeforeRestore || RestoreWasInterrupted(params.Cnf) {
+		params.Logger.Infof("Restore: %v file found, existing data is present", RestoreState)
 		return true, nil
 	}
 	params.Logger.Infof("Restore: No %v file found, checking no existing data is present", RestoreState)
@@ -351,9 +352,10 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	}
 
 	params.Logger.Infof("Restore: running mysql_upgrade")
-	if err := params.Mysqld.RunMysqlUpgrade(); err != nil {
+	/*if err := params.Mysqld.RunMysqlUpgrade(); err != nil {
 		return nil, vterrors.Wrap(err, "mysql_upgrade failed")
-	}
+	}*/
+	params.Logger.Infof("Restore: done running mysql_upgrade")
 
 	// Add backupTime and restorePosition to LocalMetadata
 	params.LocalMetadata["RestoredBackupTime"] = manifest.BackupTime

@@ -209,6 +209,7 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 		"--user=" + *xtrabackupUser,
 		"--target-dir=" + params.Cnf.TmpDir,
 	}
+
 	if *xtrabackupStreamMode != "" {
 		flagsToExec = append(flagsToExec, "--stream="+*xtrabackupStreamMode)
 	}

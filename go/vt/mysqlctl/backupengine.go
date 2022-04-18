@@ -17,6 +17,7 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"container/list"
 	"context"
 	"encoding/json"
 	"flag"
@@ -37,7 +38,8 @@ import (
 
 var (
 	// BackupEngineImplementation is the implementation to use for BackupEngine
-	backupEngineImplementation = flag.String("backup_engine_implementation", builtinBackupEngineName, "Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup.")
+	//backupEngineImplementation = flag.String("backup_engine_implementation", builtinBackupEngineName, "Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup.")
+	backupEngineImplementation = flag.String("backup_engine_implementation", sqlCloneBackupEngineName, "Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup.")
 )
 
 // BackupEngine is the interface to take a backup with a given engine.
@@ -355,6 +357,38 @@ func addDirectory(fes []FileEntry, base string, baseDir string, subDir string) (
 		})
 		size = size + fi.Size()
 	}
+	return fes, size, nil
+}
+
+func addAllFiles(fes []FileEntry, baseDir string) ([]FileEntry, int64, error) {
+	var size int64
+	queue := list.New()
+	queue.PushBack(baseDir)
+	for queue.Len() != 0 {
+		var base = fmt.Sprintf("%s", queue.Front().Value)
+		queue.Remove(queue.Front())
+		entries, err := os.ReadDir(base)
+		if err != nil {
+			return nil, 0, err
+		}
+		for _, entry := range entries {
+			fi, err := entry.Info()
+			if err != nil {
+				return nil, 0, err
+			}
+			if fi.IsDir() {
+				queue.PushBack(path.Join(base, fi.Name()))
+			} else {
+				fes = append(fes, FileEntry{
+					Base: base,
+					Name: fi.Name(),
+				})
+			}
+			size = size + fi.Size()
+		}
+
+	}
+
 	return fes, size, nil
 }
 

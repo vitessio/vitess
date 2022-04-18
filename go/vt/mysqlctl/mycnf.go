@@ -118,11 +118,13 @@ func (cnf *Mycnf) TabletDir() string {
 }
 
 func (cnf *Mycnf) lookup(key string) string {
+	// fmt.Printf("key for lookup: %s", key)
 	key = normKey([]byte(key))
 	return cnf.mycnfMap[key]
 }
 
 func (cnf *Mycnf) lookupWithDefault(key, defaultVal string) (string, error) {
+	// fmt.Printf("key for lookup: %s", key)
 	val := cnf.lookup(key)
 	if val == "" {
 		if defaultVal == "" {
