@@ -353,3 +353,41 @@ func TestSemiSync(t *testing.T) {
 		}
 	}
 }
+
+// TestVtorcWithPrs tests that VTOrc works fine even when PRS is called from vtctld
+func TestVtorcWithPrs(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 4, 0, nil, "test_config.json")
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+
+	// find primary from topo
+	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+
+	// find any replica tablet other than the current primary
+	var replica *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Alias != curPrimary.Alias {
+			replica = tablet
+			break
+		}
+	}
+	assert.NotNil(t, replica, "could not find any replica tablet")
+
+	// check that the replication is setup correctly before we failover
+	utils.CheckReplication(t, clusterInfo, curPrimary, shard0.Vttablets, 10*time.Second)
+
+	output, err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
+		"PlannedReparentShard",
+		"-keyspace_shard", fmt.Sprintf("%s/%s", keyspace.Name, shard0.Name),
+		"-wait_replicas_timeout", "31s",
+		"-new_primary", replica.Alias)
+	require.NoError(t, err, "error in PlannedReparentShard output - %s", output)
+
+	time.Sleep(40 * time.Second)
+
+	// check that the replica gets promoted
+	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
+	utils.VerifyWritesSucceed(t, clusterInfo, replica, shard0.Vttablets, 10*time.Second)
+}
