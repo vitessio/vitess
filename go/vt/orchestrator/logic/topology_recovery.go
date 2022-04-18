@@ -707,24 +707,6 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	return true, topologyRecovery, err
 }
 
-// checkAndSetIfERSInProgress checks if an ERS is already in progress. If it is not in progress, then we set it to be in progress.
-func checkAndSetIfERSInProgress() bool {
-	ersInProgressMutex.Lock()
-	defer ersInProgressMutex.Unlock()
-	if ersInProgress {
-		return true
-	}
-	ersInProgress = true
-	return false
-}
-
-// setERSCompleted sets the variable tracking if an ers is in progress to false.
-func setERSCompleted() {
-	ersInProgressMutex.Lock()
-	defer ersInProgressMutex.Unlock()
-	ersInProgress = false
-}
-
 func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.ReplicationAnalysis, skipProcesses bool, promotedReplica *inst.Instance) {
 	if promotedReplica != nil {
 		message := fmt.Sprintf("promoted replica: %+v", promotedReplica.Key)
