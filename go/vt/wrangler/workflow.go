@@ -523,7 +523,7 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 		for _, si := range shards {
 			if partial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, vrw.wr.ts, vrw.wr.tmc, si, nil, vrw.wr.Logger()); err != nil || partial {
 				m.Lock()
-				refreshErrors.WriteString(fmt.Sprintf("Failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
+				refreshErrors.WriteString(fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
 					si.Keyspace(), si.ShardName(), stype, err, partialDetails))
 				m.Unlock()
 			}
