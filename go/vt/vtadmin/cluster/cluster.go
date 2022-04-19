@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -917,6 +918,9 @@ type GetSchemaOptions struct {
 	//
 	// If empty, GetSchema will first call (*Cluster).FindTablets() to fetch all
 	// tablets for the keyspace.
+	//
+	// DEPRECATED: this is currently used only for Cluster.GetSchema, and is
+	// being phased out. Do not depend on this field.
 	Tablets []*vtadminpb.Tablet
 	// BaseRequest is used to share some common parameters to use for the
 	// individual tablet GetSchema RPCs made by (*Cluster).GetSchema, which
@@ -1024,6 +1028,148 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 	}
 
 	return c.getSchemaFromTablets(ctx, keyspace, tabletsToQuery, opts)
+}
+
+// GetSchemas returns all of the schemas across all keyspaces in the cluster.
+func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vtadminpb.Schema, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetSchemas")
+	defer span.Finish()
+
+	if opts.TableSizeOptions == nil {
+		opts.TableSizeOptions = &vtadminpb.GetSchemaTableSizeOptions{
+			AggregateSizes:          false,
+			IncludeNonServingShards: false,
+		}
+	}
+
+	if opts.BaseRequest == nil {
+		opts.BaseRequest = &vtctldatapb.GetSchemaRequest{}
+	}
+
+	if opts.TableSizeOptions.AggregateSizes && opts.BaseRequest.TableNamesOnly {
+		log.Warningf("GetSchemas(cluster = %s) size aggregation is incompatible with TableNamesOnly, ignoring the latter in favor of aggregating sizes", c.ID)
+		opts.BaseRequest.TableNamesOnly = false
+	}
+
+	AnnotateSpan(c, span)
+	annotateGetSchemaRequest(opts.BaseRequest, span)
+	vtadminproto.AnnotateSpanWithGetSchemaTableSizeOptions(opts.TableSizeOptions, span)
+
+	var (
+		m   sync.Mutex
+		wg  sync.WaitGroup
+		rec concurrency.AllErrorRecorder
+
+		tablets   []*vtadminpb.Tablet
+		keyspaces []*vtadminpb.Keyspace
+
+		schemas []*vtadminpb.Schema
+	)
+
+	// Start by collecting the tablets and keyspace names concurrently.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		var err error
+		tablets, err = c.GetTablets(ctx)
+		if err != nil {
+			rec.RecordError(err)
+			return
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		// TODO: (ajm188) we can't use c.GetKeyspaces because it also makes a
+		// FindAllShardsInKeyspace call for each keyspace, which we may or may
+		// not need. Refactor that method so we can get better code reuse.
+		span, ctx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
+		defer span.Finish()
+
+		if err := c.Vtctld.Dial(ctx); err != nil {
+			rec.RecordError(fmt.Errorf("Vtctld.Dial(cluster=%s) failed: %w", c.ID, err))
+			return
+		}
+
+		if err := c.topoReadPool.Acquire(ctx); err != nil {
+			rec.RecordError(fmt.Errorf("GetKeyspaces() failed to acquire topoReadPool: %w", err))
+			return
+		}
+
+		resp, err := c.Vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
+		c.topoReadPool.Release()
+
+		if err != nil {
+			rec.RecordError(err)
+			return
+		}
+
+		keyspaces = make([]*vtadminpb.Keyspace, len(resp.Keyspaces))
+		for i, ks := range resp.Keyspaces {
+			keyspaces[i] = &vtadminpb.Keyspace{
+				Cluster:  c.ToProto(),
+				Keyspace: ks,
+			}
+		}
+	}()
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	opts.Tablets = tablets
+
+	// Now, fan out to collect the schemas.
+	for _, ks := range keyspaces {
+		wg.Add(1)
+		go func(ctx context.Context, ks *vtadminpb.Keyspace) {
+			defer wg.Done()
+
+			tablets, err := c.getTabletsToQueryForSchemas(ctx, ks.Keyspace.Name, opts)
+			if err != nil {
+				// Ignore keyspaces without any serving tablets.
+				if stderrors.Is(err, errors.ErrNoServingTablet) {
+					log.Infof(err.Error())
+					return
+				}
+
+				rec.RecordError(fmt.Errorf("opts %+v, err: %w", opts, err))
+				return
+			}
+
+			schema, err := c.getSchemaFromTablets(ctx, ks.Keyspace.Name, tablets, opts)
+			if err != nil {
+				rec.RecordError(err)
+				return
+			}
+
+			// Ignore keyspaces without schemas
+			if schema == nil {
+				log.Infof("No schemas for %s", ks.Keyspace.Name)
+				return
+			}
+
+			if len(schema.TableDefinitions) == 0 {
+				log.Infof("No tables in schema for %s", ks.Keyspace.Name)
+				return
+			}
+
+			m.Lock()
+			schemas = append(schemas, schema)
+			m.Unlock()
+		}(ctx, ks)
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return schemas, nil
 }
 
 // Note that for this function we use the tablets parameter, ignoring the
