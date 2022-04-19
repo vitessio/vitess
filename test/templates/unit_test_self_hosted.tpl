@@ -16,6 +16,7 @@ jobs:
         uses: dorny/paths-filter@v2
         id: changes
         with:
+          token: "${{`{{ github.token}}`}}"
           filters: |
             unit_tests:
               - 'go/**'

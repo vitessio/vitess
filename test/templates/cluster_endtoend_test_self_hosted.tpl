@@ -17,6 +17,7 @@ jobs:
         uses: dorny/paths-filter@v2
         id: changes
         with:
+          token: "${{`{{ github.token}}`}}"
           filters: |
             end_to_end:
               - 'go/**/*.go'
