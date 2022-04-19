@@ -1664,9 +1664,7 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	go func(c *cluster.Cluster) {
 		defer wg.Done()
 
-		res, err := c.GetSchema(ctx, req.Keyspace, cluster.GetSchemaOptions{
-			Tablets: []*vtadminpb.Tablet{tablet},
-		})
+		res, err := c.GetSchema(ctx, req.Keyspace, cluster.GetSchemaOptions{})
 		if err != nil {
 			er.RecordError(fmt.Errorf("GetSchema(%s): %w", topoproto.TabletAliasString(tablet.Tablet.Alias), err))
 			return
