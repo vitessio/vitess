@@ -19,7 +19,6 @@ package vtadmin
 import (
 	"context"
 	"encoding/json"
-	stderrors "errors"
 	"fmt"
 	"net/http"
 	"net/http/pprof"
@@ -492,27 +491,11 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 		go func(c *cluster.Cluster) {
 			defer wg.Done()
 
-			tablets, err := c.FindTablets(ctx, func(t *vtadminpb.Tablet) bool {
-				// Filter out all the non-serving tablets once, to make the
-				// later, per-keyspace filtering slightly faster (fewer
-				// potentially-redundant iterations).
-				return t.State == vtadminpb.Tablet_SERVING
-			}, -1)
-			if err != nil {
-				err := fmt.Errorf("could not find any serving tablets for cluster %s: %w", c.ID, err)
-				rec.RecordError(err)
-
-				return
-			}
-
-			schemas, err := api.getSchemas(ctx, c, cluster.GetSchemaOptions{
-				Tablets:          tablets,
+			schemas, err := c.GetSchemas(ctx, cluster.GetSchemaOptions{
 				TableSizeOptions: req.TableSizeOptions,
 			})
 			if err != nil {
-				err := fmt.Errorf("%w: while collecting schemas for cluster %s", err, c.ID)
 				rec.RecordError(err)
-
 				return
 			}
 
@@ -800,16 +783,7 @@ func (api *API) GetSchemas(ctx context.Context, req *vtadminpb.GetSchemasRequest
 		go func(c *cluster.Cluster) {
 			defer wg.Done()
 
-			// Since tablets are per-cluster, we can fetch them once
-			// and use them throughout the other waitgroups.
-			tablets, err := c.GetTablets(ctx)
-			if err != nil {
-				er.RecordError(err)
-				return
-			}
-
-			ss, err := api.getSchemas(ctx, c, cluster.GetSchemaOptions{
-				Tablets:          tablets,
+			ss, err := c.GetSchemas(ctx, cluster.GetSchemaOptions{
 				TableSizeOptions: req.TableSizeOptions,
 			})
 			if err != nil {
@@ -836,75 +810,6 @@ func (api *API) GetSchemas(ctx context.Context, req *vtadminpb.GetSchemasRequest
 	return &vtadminpb.GetSchemasResponse{
 		Schemas: schemas,
 	}, nil
-}
-
-// getSchemas returns all of the schemas across all keyspaces in the given cluster.
-func (api *API) getSchemas(ctx context.Context, c *cluster.Cluster, opts cluster.GetSchemaOptions) ([]*vtadminpb.Schema, error) {
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
-	getKeyspacesSpan, getKeyspacesCtx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
-	cluster.AnnotateSpan(c, getKeyspacesSpan)
-
-	resp, err := c.Vtctld.GetKeyspaces(getKeyspacesCtx, &vtctldatapb.GetKeyspacesRequest{})
-	if err != nil {
-		getKeyspacesSpan.Finish()
-		return nil, err
-	}
-
-	getKeyspacesSpan.Finish()
-
-	var (
-		schemas []*vtadminpb.Schema
-		wg      sync.WaitGroup
-		er      concurrency.AllErrorRecorder
-		m       sync.Mutex
-	)
-
-	for _, ks := range resp.Keyspaces {
-		wg.Add(1)
-
-		// Get schemas for the cluster/keyspace
-		go func(c *cluster.Cluster, ks *vtctldatapb.Keyspace) {
-			defer wg.Done()
-
-			ss, err := c.GetSchema(ctx, ks.Name, opts)
-			if err != nil {
-				// Ignore keyspaces without any serving tablets.
-				if stderrors.Is(err, errors.ErrNoServingTablet) {
-					log.Infof(err.Error())
-					return
-				}
-
-				er.RecordError(err)
-				return
-			}
-
-			// Ignore keyspaces without schemas
-			if ss == nil {
-				log.Infof("No schemas for %s", ks.Name)
-				return
-			}
-
-			if len(ss.TableDefinitions) == 0 {
-				log.Infof("No tables in schema for %s", ks.Name)
-				return
-			}
-
-			m.Lock()
-			schemas = append(schemas, ss)
-			m.Unlock()
-		}(c, ks)
-	}
-
-	wg.Wait()
-
-	if er.HasErrors() {
-		return nil, er.Error()
-	}
-
-	return schemas, nil
 }
 
 // GetShardReplicationPositions is part of the vtadminpb.VTAdminServer interface.
