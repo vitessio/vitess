@@ -12,7 +12,7 @@ jobs:
       uses: dorny/paths-filter@v2
       id: changes
       with:
-        token: ${{ github.token }}
+        token: ''
         filters: |
           go_files:
             - '**/*.go'
