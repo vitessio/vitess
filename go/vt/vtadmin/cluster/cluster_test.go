@@ -1365,7 +1365,7 @@ func TestGetSchema(t *testing.T) {
 					Name: fmt.Sprintf("cluster%d", i),
 				},
 				VtctldClient: tt.vtctld,
-				Tablets:      nil,
+				Tablets:      []*vtadminpb.Tablet{tt.tablet},
 				DBConfig:     testutil.Dbcfg{},
 			})
 
@@ -2232,9 +2232,10 @@ func TestGetSchema(t *testing.T) {
 							Tablet: &topodatapb.Tablet{
 								Alias: &topodatapb.TabletAlias{
 									Cell: "zone1",
-									Uid:  200,
+									Uid:  300,
 								},
-								Keyspace: "testkeyspace",
+								// Note this is for another keyspace, so we fail to find a tablet for testkeyspace/-80.
+								Keyspace: "otherkeyspace",
 								Shard:    "80-",
 							},
 							State: vtadminpb.Tablet_SERVING,
