@@ -19,10 +19,10 @@ package topotools
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -37,10 +37,12 @@ import (
 // any tablets without a .Hostname set in the topology are skipped.
 //
 // However, on partial errors from the topology, or errors from a RefreshState
-// RPC will cause a boolean flag to be returned indicating only partial success.
-func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, si *topo.ShardInfo, cells []string, logger logutil.Logger) (isPartialRefresh bool, err error) {
+// RPC will cause a boolean flag to be returned indicating only partial success
+// along with a string detailing why we had a partial refresh.
+func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, si *topo.ShardInfo, cells []string, logger logutil.Logger) (isPartialRefresh bool, partialRefreshDetails string, err error) {
 	logger.Infof("RefreshTabletsByShard called on shard %v/%v", si.Keyspace(), si.ShardName())
-	refreshErrors := &concurrency.AllErrorRecorder{}
+	// Causes and details if we have a partial refresh
+	prd := strings.Builder{}
 
 	tabletMap, err := ts.GetTabletMapForShardByCell(ctx, si.Keyspace(), si.ShardName(), cells)
 	switch {
@@ -48,9 +50,10 @@ func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.Ta
 		// keep going
 	case topo.IsErrType(err, topo.PartialResult):
 		logger.Warningf("RefreshTabletsByShard: got partial result for shard %v/%v, may not refresh all tablets everywhere", si.Keyspace(), si.ShardName())
+		prd.WriteString(fmt.Sprintf("got partial results from topo server for shard %v/%v: %v", si.Keyspace(), si.ShardName(), err))
 		isPartialRefresh = true
 	default:
-		return false, err
+		return false, "", err
 	}
 
 	// Any errors from this point onward are ignored.
@@ -85,8 +88,8 @@ func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.Ta
 
 			if err := tmc.RefreshState(grctx, ti.Tablet); err != nil {
 				logger.Warningf("RefreshTabletsByShard: failed to refresh %v: %v", ti.AliasString(), err)
-				refreshErrors.RecordError(fmt.Errorf("failed to refresh %v: %v", ti.AliasString(), err))
 				m.Lock()
+				prd.WriteString(fmt.Sprintf("failed to refresh tablet %v: %v", ti.AliasString(), err))
 				isPartialRefresh = true
 				m.Unlock()
 			}
@@ -94,11 +97,7 @@ func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.Ta
 	}
 	wg.Wait()
 
-	if refreshErrors.HasErrors() {
-		err = refreshErrors.Error()
-	}
-
-	return isPartialRefresh, err
+	return isPartialRefresh, prd.String(), err
 }
 
 // UpdateShardRecords updates the shard records based on 'from' or 'to'
@@ -138,7 +137,7 @@ func UpdateShardRecords(
 		// For 'to' shards, refresh to make them serve. The 'from' shards will
 		// be refreshed after traffic has migrated.
 		if !isFrom {
-			if _, err := RefreshTabletsByShard(ctx, ts, tmc, si, cells, logger); err != nil {
+			if _, _, err := RefreshTabletsByShard(ctx, ts, tmc, si, cells, logger); err != nil {
 				logger.Warningf("RefreshTabletsByShard(%v/%v, cells=%v) failed with %v; continuing ...", si.Keyspace(), si.ShardName(), cells, err)
 			}
 		}
