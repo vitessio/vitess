@@ -215,7 +215,7 @@ func (tc *splitCloneTestCase) setUpWithConcurrency(v3 bool, concurrency, writeQu
 				},
 			},
 		}
-		sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+		sourceRdonly.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 			GTIDSet: mysql.MariadbGTIDSet{12: mysql.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}},
 		}
 		sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -310,7 +310,7 @@ type testQueryService struct {
 	t *testing.T
 
 	// target is used in the log output.
-	target querypb.Target
+	target *querypb.Target
 	*fakes.StreamHealthQueryService
 	shardIndex int
 	shardCount int
@@ -332,7 +332,7 @@ type testQueryService struct {
 	errorCallback func()
 }
 
-func newTestQueryService(t *testing.T, target querypb.Target, shqs *fakes.StreamHealthQueryService, shardIndex, shardCount int, alias string, omitKeyspaceID bool) *testQueryService {
+func newTestQueryService(t *testing.T, target *querypb.Target, shqs *fakes.StreamHealthQueryService, shardIndex, shardCount int, alias string, omitKeyspaceID bool) *testQueryService {
 	fields := v2Fields
 	if omitKeyspaceID {
 		fields = v3Fields

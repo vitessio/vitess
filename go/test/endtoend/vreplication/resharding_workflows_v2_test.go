@@ -94,7 +94,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	} else {
 		args = append(args, "Reshard")
 	}
-	args = append(args, "-v2")
+
 	switch action {
 	case workflowActionCreate:
 		if currentWorkflowType == wrangler.MoveTablesWorkflow {
@@ -233,7 +233,7 @@ func getCurrentState(t *testing.T) string {
 func TestBasicV2Workflows(t *testing.T) {
 	vc = setupCluster(t)
 	defer vtgateConn.Close()
-	defer vc.TearDown()
+	defer vc.TearDown(t)
 
 	testMoveTablesV2Workflow(t)
 	testReshardV2Workflow(t)
@@ -438,7 +438,7 @@ func setupCustomerKeyspace(t *testing.T) {
 
 func TestSwitchReadsWritesInAnyOrder(t *testing.T) {
 	vc = setupCluster(t)
-	defer vc.TearDown()
+	defer vc.TearDown(t)
 	moveCustomerTableSwitchFlows(t, []*Cell{vc.Cells["zone1"]}, "zone1")
 }
 

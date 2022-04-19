@@ -18,15 +18,16 @@ package engine
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 
-	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/sqltypes"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -305,7 +306,7 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		HasDistinct: true,
+		PreProcess: true,
 		Aggregates: []AggregateParams{{
 			Opcode: AggregateCountDistinct,
 			Col:    1,
@@ -381,7 +382,7 @@ func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		HasDistinct: true,
+		PreProcess: true,
 		Aggregates: []AggregateParams{{
 			Opcode: AggregateCountDistinct,
 			Col:    1,
@@ -469,7 +470,7 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		HasDistinct: true,
+		PreProcess: true,
 		Aggregates: []AggregateParams{{
 			Opcode: AggregateSumDistinct,
 			Col:    1,
@@ -518,7 +519,7 @@ func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		HasDistinct: true,
+		PreProcess: true,
 		Aggregates: []AggregateParams{{
 			Opcode: AggregateSumDistinct,
 			Col:    1,
@@ -714,7 +715,7 @@ func TestNoInputAndNoGroupingKeys(outer *testing.T) {
 			}
 
 			oa := &OrderedAggregate{
-				HasDistinct: true,
+				PreProcess: true,
 				Aggregates: []AggregateParams{{
 					Opcode: test.opcode,
 					Col:    0,
@@ -737,4 +738,55 @@ func TestNoInputAndNoGroupingKeys(outer *testing.T) {
 			assert.Equal(wantResult, result)
 		})
 	}
+}
+
+func TestOrderedAggregateExecuteGtid(t *testing.T) {
+	vgtid := binlogdatapb.VGtid{}
+	vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{
+		Keyspace: "ks",
+		Shard:    "-80",
+		Gtid:     "a",
+	})
+	vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{
+		Keyspace: "ks",
+		Shard:    "80-",
+		Gtid:     "b",
+	})
+	fmt.Println(vgtid.String())
+
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"keyspace|gtid|shard",
+				"varchar|varchar|varchar",
+			),
+			"ks|a|-40",
+			"ks|b|40-80",
+			"ks|c|80-c0",
+			"ks|d|c0-",
+		)},
+	}
+
+	oa := &OrderedAggregate{
+		PreProcess: true,
+		Aggregates: []AggregateParams{{
+			Opcode: AggregateGtid,
+			Col:    1,
+			Alias:  "vgtid",
+		}},
+		TruncateColumnCount: 2,
+		Input:               fp,
+	}
+
+	result, err := oa.Execute(nil, nil, false)
+	require.NoError(t, err)
+
+	wantResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"keyspace|vgtid",
+			"varchar|varchar",
+		),
+		`ks|shard_gtids:{keyspace:"ks" shard:"-40" gtid:"a"} shard_gtids:{keyspace:"ks" shard:"40-80" gtid:"b"} shard_gtids:{keyspace:"ks" shard:"80-c0" gtid:"c"} shard_gtids:{keyspace:"ks" shard:"c0-" gtid:"d"}`,
+	)
+	assert.Equal(t, wantResult, result)
 }

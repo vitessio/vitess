@@ -212,6 +212,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfRangeCond(in, f)
 	case ReferenceAction:
 		return VisitReferenceAction(in, f)
+	case *ReferenceDefinition:
+		return VisitRefOfReferenceDefinition(in, f)
 	case *Release:
 		return VisitRefOfRelease(in, f)
 	case *RenameIndex:
@@ -252,6 +254,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfShowFilter(in, f)
 	case *ShowLegacy:
 		return VisitRefOfShowLegacy(in, f)
+	case *ShowMigrationLogs:
+		return VisitRefOfShowMigrationLogs(in, f)
 	case *StarExpr:
 		return VisitRefOfStarExpr(in, f)
 	case *Stream:
@@ -460,6 +464,9 @@ func VisitRefOfAlterTable(in *AlterTable, f Visit) error {
 		}
 	}
 	if err := VisitRefOfPartitionSpec(in.PartitionSpec, f); err != nil {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
 		return err
 	}
 	return nil
@@ -820,6 +827,9 @@ func VisitRefOfCreateTable(in *CreateTable, f Visit) error {
 	if err := VisitRefOfOptLike(in.OptLike, f); err != nil {
 		return err
 	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfCreateView(in *CreateView, f Visit) error {
@@ -955,6 +965,9 @@ func VisitRefOfDropTable(in *DropTable, f Visit) error {
 	if err := VisitTableNames(in.FromTables, f); err != nil {
 		return err
 	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfDropView(in *DropView, f Visit) error {
@@ -1050,16 +1063,10 @@ func VisitRefOfForeignKeyDefinition(in *ForeignKeyDefinition, f Visit) error {
 	if err := VisitColumns(in.Source, f); err != nil {
 		return err
 	}
-	if err := VisitTableName(in.ReferencedTable, f); err != nil {
+	if err := VisitColIdent(in.IndexName, f); err != nil {
 		return err
 	}
-	if err := VisitColumns(in.ReferencedColumns, f); err != nil {
-		return err
-	}
-	if err := VisitReferenceAction(in.OnDelete, f); err != nil {
-		return err
-	}
-	if err := VisitReferenceAction(in.OnUpdate, f); err != nil {
+	if err := VisitRefOfReferenceDefinition(in.ReferenceDefinition, f); err != nil {
 		return err
 	}
 	return nil
@@ -1201,7 +1208,7 @@ func VisitRefOfIsExpr(in *IsExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExpr(in.Expr, f); err != nil {
+	if err := VisitExpr(in.Left, f); err != nil {
 		return err
 	}
 	return nil
@@ -1259,10 +1266,6 @@ func VisitRefOfLimit(in *Limit, f Visit) error {
 		return err
 	}
 	return nil
-}
-func VisitListArg(in ListArg, f Visit) error {
-	_, err := f(in)
-	return err
 }
 func VisitRefOfLiteral(in *Literal, f Visit) error {
 	if in == nil {
@@ -1557,6 +1560,27 @@ func VisitRefOfRangeCond(in *RangeCond, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfReferenceDefinition(in *ReferenceDefinition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.ReferencedTable, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.ReferencedColumns, f); err != nil {
+		return err
+	}
+	if err := VisitReferenceAction(in.OnDelete, f); err != nil {
+		return err
+	}
+	if err := VisitReferenceAction(in.OnUpdate, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfRelease(in *Release, f Visit) error {
 	if in == nil {
 		return nil
@@ -1612,6 +1636,9 @@ func VisitRefOfRevertMigration(in *RevertMigration, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfRollback(in *Rollback, f Visit) error {
@@ -1654,13 +1681,15 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	for _, el := range in.From {
+		if err := VisitTableExpr(el, f); err != nil {
+			return err
+		}
+	}
 	if err := VisitComments(in.Comments, f); err != nil {
 		return err
 	}
 	if err := VisitSelectExprs(in.SelectExprs, f); err != nil {
-		return err
-	}
-	if err := VisitTableExprs(in.From, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfWhere(in.Where, f); err != nil {
@@ -1838,6 +1867,18 @@ func VisitRefOfShowLegacy(in *ShowLegacy, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.ShowCollationFilterOpt, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfShowMigrationLogs(in *ShowMigrationLogs, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
 		return err
 	}
 	return nil
@@ -2659,6 +2700,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfSetTransaction(in, f)
 	case *Show:
 		return VisitRefOfShow(in, f)
+	case *ShowMigrationLogs:
+		return VisitRefOfShowMigrationLogs(in, f)
 	case *Stream:
 		return VisitRefOfStream(in, f)
 	case *TruncateTable:
@@ -2711,6 +2754,10 @@ func VisitBoolVal(in BoolVal, f Visit) error {
 	return err
 }
 func VisitIsolationLevel(in IsolationLevel, f Visit) error {
+	_, err := f(in)
+	return err
+}
+func VisitListArg(in ListArg, f Visit) error {
 	_, err := f(in)
 	return err
 }

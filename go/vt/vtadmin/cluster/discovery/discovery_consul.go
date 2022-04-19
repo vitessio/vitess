@@ -17,7 +17,6 @@ limitations under the License.
 package discovery
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"math/rand"
@@ -28,6 +27,7 @@ import (
 	consul "github.com/hashicorp/consul/api"
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/trace"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -49,11 +49,13 @@ type ConsulDiscovery struct {
 	vtgateCellTag             string
 	vtgateKeyspacesToWatchTag string
 	vtgateAddrTmpl            *template.Template
+	vtgateFQDNTmpl            *template.Template
 
 	/* vtctld options */
 	vtctldDatacenter string
 	vtctldService    string
 	vtctldAddrTmpl   *template.Template
+	vtctldFQDNTmpl   *template.Template
 }
 
 // NewConsul returns a ConsulDiscovery for the given cluster. Args are a slice
@@ -91,30 +93,46 @@ func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) 
 		"consul service tag identifying -keyspaces_to_watch for vtgates")
 
 	vtgateAddrTmplStr := flags.String("vtgate-addr-tmpl", "{{ .Hostname }}",
-		"Go template string to produce a dialable address from a *vtadminpb.VTGate")
+		"Go template string to produce a dialable address from a *vtadminpb.VTGate "+
+			"NOTE: the .FQDN field will never be set in the addr template context.")
 	vtgateDatacenterTmplStr := flags.String("vtgate-datacenter-tmpl", "",
 		"Go template string to generate the datacenter for vtgate consul queries. "+
 			"The meta information about the cluster is provided to the template via {{ .Cluster }}. "+
 			"Used once during initialization.")
+	vtgateFQDNTmplStr := flags.String("vtgate-fqdn-tmpl", "",
+		"Optional Go template string to produce an FQDN to access the vtgate from a browser. "+
+			"E.g. \"{{ .Hostname }}.example.com\".")
 
 	/* vtctld discovery config options */
 	flags.StringVar(&disco.vtctldService, "vtctld-service-name", "vtctld", "consul service name vtctlds register as")
 
 	vtctldAddrTmplStr := flags.String("vtctld-addr-tmpl", "{{ .Hostname }}",
-		"Go template string to produce a dialable address from a *vtadminpb.Vtctld")
+		"Go template string to produce a dialable address from a *vtadminpb.Vtctld "+
+			"NOTE: the .FQDN field will never be set in the addr template context.")
 	vtctldDatacenterTmplStr := flags.String("vtctld-datacenter-tmpl", "",
 		"Go template string to generate the datacenter for vtgate consul queries. "+
 			"The cluster name is provided to the template via {{ .Cluster }}. "+
 			"Used once during initialization.")
+	vtctldFQDNTmplStr := flags.String("vtctld-fqdn-tmpl", "",
+		"Optional Go template string to produce an FQDN to access the vtctld from a browser. "+
+			"E.g. \"{{ .Hostname }}.example.com\".")
 
 	if err := flags.Parse(args); err != nil {
 		return nil, err
 	}
 
+	/* gates options */
 	if *vtgateDatacenterTmplStr != "" {
 		disco.vtgateDatacenter, err = generateConsulDatacenter("vtgate", cluster, *vtgateDatacenterTmplStr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate vtgate consul datacenter from template: %w", err)
+		}
+	}
+
+	if *vtgateFQDNTmplStr != "" {
+		disco.vtgateFQDNTmpl, err = template.New("consul-vtgate-fqdn-template-" + cluster.Id).Parse(*vtgateFQDNTmplStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse vtgate FQDN template %s: %w", *vtgateFQDNTmplStr, err)
 		}
 	}
 
@@ -123,10 +141,18 @@ func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) 
 		return nil, fmt.Errorf("failed to parse vtgate host address template %s: %w", *vtgateAddrTmplStr, err)
 	}
 
+	/* vtctld options */
 	if *vtctldDatacenterTmplStr != "" {
 		disco.vtctldDatacenter, err = generateConsulDatacenter("vtctld", cluster, *vtctldDatacenterTmplStr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate vtctld consul datacenter from template: %w", err)
+		}
+	}
+
+	if *vtctldFQDNTmplStr != "" {
+		disco.vtctldFQDNTmpl, err = template.New("consul-vtctld-fqdn-template-" + cluster.Id).Parse(*vtctldFQDNTmplStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse vtctld FQDN template %s: %w", *vtctldFQDNTmplStr, err)
 		}
 	}
 
@@ -144,8 +170,7 @@ func generateConsulDatacenter(component string, cluster *vtadminpb.Cluster, tmpl
 		return "", fmt.Errorf("error parsing template %s: %w", tmplStr, err)
 	}
 
-	buf := bytes.NewBuffer(nil)
-	err = tmpl.Execute(buf, &struct {
+	dc, err := textutil.ExecuteTemplate(tmpl, &struct {
 		Cluster *vtadminpb.Cluster
 	}{
 		Cluster: cluster,
@@ -155,7 +180,7 @@ func generateConsulDatacenter(component string, cluster *vtadminpb.Cluster, tmpl
 		return "", fmt.Errorf("failed to execute template: %w", err)
 	}
 
-	return buf.String(), nil
+	return dc, nil
 }
 
 // DiscoverVTGate is part of the Discovery interface.
@@ -163,11 +188,15 @@ func (c *ConsulDiscovery) DiscoverVTGate(ctx context.Context, tags []string) (*v
 	span, ctx := trace.NewSpan(ctx, "ConsulDiscovery.DiscoverVTGate")
 	defer span.Finish()
 
-	return c.discoverVTGate(ctx, tags)
+	executeFQDNTemplate := true
+
+	return c.discoverVTGate(ctx, tags, executeFQDNTemplate)
 }
 
-func (c *ConsulDiscovery) discoverVTGate(ctx context.Context, tags []string) (*vtadminpb.VTGate, error) {
-	vtgates, err := c.discoverVTGates(ctx, tags)
+// discoverVTGate calls discoverVTGates and then returns a random VTGate from
+// the result. see discoverVTGates for further documentation.
+func (c *ConsulDiscovery) discoverVTGate(ctx context.Context, tags []string, executeFQDNTemplate bool) (*vtadminpb.VTGate, error) {
+	vtgates, err := c.discoverVTGates(ctx, tags, executeFQDNTemplate)
 	if err != nil {
 		return nil, err
 	}
@@ -184,17 +213,19 @@ func (c *ConsulDiscovery) DiscoverVTGateAddr(ctx context.Context, tags []string)
 	span, ctx := trace.NewSpan(ctx, "ConsulDiscovery.DiscoverVTGateAddr")
 	defer span.Finish()
 
-	vtgate, err := c.discoverVTGate(ctx, tags)
+	executeFQDNTemplate := false
+
+	vtgate, err := c.discoverVTGate(ctx, tags, executeFQDNTemplate)
 	if err != nil {
 		return "", err
 	}
 
-	buf := bytes.NewBuffer(nil)
-	if err := c.vtgateAddrTmpl.Execute(buf, vtgate); err != nil {
+	addr, err := textutil.ExecuteTemplate(c.vtgateAddrTmpl, vtgate)
+	if err != nil {
 		return "", fmt.Errorf("failed to execute vtgate address template for %v: %w", vtgate, err)
 	}
 
-	return buf.String(), nil
+	return addr, nil
 }
 
 // DiscoverVTGates is part of the Discovery interface.
@@ -202,10 +233,15 @@ func (c *ConsulDiscovery) DiscoverVTGates(ctx context.Context, tags []string) ([
 	span, ctx := trace.NewSpan(ctx, "ConsulDiscovery.DiscoverVTGates")
 	defer span.Finish()
 
-	return c.discoverVTGates(ctx, tags)
+	executeFQDNTemplate := true
+
+	return c.discoverVTGates(ctx, tags, executeFQDNTemplate)
 }
 
-func (c *ConsulDiscovery) discoverVTGates(_ context.Context, tags []string) ([]*vtadminpb.VTGate, error) {
+// discoverVTGates does the actual work of discovering VTGate hosts from a
+// consul datacenter. executeFQDNTemplate is boolean to allow an optimization
+// for DiscoverVTGateAddr (the only function that sets the boolean to false).
+func (c *ConsulDiscovery) discoverVTGates(_ context.Context, tags []string, executeFQDNTemplate bool) ([]*vtadminpb.VTGate, error) {
 	opts := c.getQueryOptions()
 	opts.Datacenter = c.vtgateDatacenter
 
@@ -252,6 +288,15 @@ func (c *ConsulDiscovery) discoverVTGates(_ context.Context, tags []string) ([]*
 			vtgate.Keyspaces = strings.Split(keyspaces, ",")
 		}
 
+		if executeFQDNTemplate {
+			if c.vtgateFQDNTmpl != nil {
+				vtgate.FQDN, err = textutil.ExecuteTemplate(c.vtgateFQDNTmpl, vtgate)
+				if err != nil {
+					return nil, fmt.Errorf("failed to execute vtgate fqdn template for %v: %w", vtgate, err)
+				}
+			}
+		}
+
 		vtgates[i] = vtgate
 	}
 
@@ -263,11 +308,15 @@ func (c *ConsulDiscovery) DiscoverVtctld(ctx context.Context, tags []string) (*v
 	span, ctx := trace.NewSpan(ctx, "ConsulDiscovery.DiscoverVtctld")
 	defer span.Finish()
 
-	return c.discoverVtctld(ctx, tags)
+	executeFQDNTemplate := true
+
+	return c.discoverVtctld(ctx, tags, executeFQDNTemplate)
 }
 
-func (c *ConsulDiscovery) discoverVtctld(ctx context.Context, tags []string) (*vtadminpb.Vtctld, error) {
-	vtctlds, err := c.discoverVtctlds(ctx, tags)
+// discoverVtctld calls discoverVtctlds and then returns a random vtctld from
+// the result. see discoverVtctlds for further documentation.
+func (c *ConsulDiscovery) discoverVtctld(ctx context.Context, tags []string, executeFQDNTemplate bool) (*vtadminpb.Vtctld, error) {
+	vtctlds, err := c.discoverVtctlds(ctx, tags, executeFQDNTemplate)
 	if err != nil {
 		return nil, err
 	}
@@ -284,17 +333,19 @@ func (c *ConsulDiscovery) DiscoverVtctldAddr(ctx context.Context, tags []string)
 	span, ctx := trace.NewSpan(ctx, "ConsulDiscovery.DiscoverVtctldAddr")
 	defer span.Finish()
 
-	vtctld, err := c.discoverVtctld(ctx, tags)
+	executeFQDNTemplate := false
+
+	vtctld, err := c.discoverVtctld(ctx, tags, executeFQDNTemplate)
 	if err != nil {
 		return "", err
 	}
 
-	buf := bytes.NewBuffer(nil)
-	if err := c.vtctldAddrTmpl.Execute(buf, vtctld); err != nil {
+	addr, err := textutil.ExecuteTemplate(c.vtctldAddrTmpl, vtctld)
+	if err != nil {
 		return "", fmt.Errorf("failed to execute vtctld address template for %v: %w", vtctld, err)
 	}
 
-	return buf.String(), nil
+	return addr, nil
 }
 
 // DiscoverVtctlds is part of the Discovery interface.
@@ -302,10 +353,15 @@ func (c *ConsulDiscovery) DiscoverVtctlds(ctx context.Context, tags []string) ([
 	span, ctx := trace.NewSpan(ctx, "ConsulDiscovery.DiscoverVtctlds")
 	defer span.Finish()
 
-	return c.discoverVtctlds(ctx, tags)
+	executeFQDNTemplate := true
+
+	return c.discoverVtctlds(ctx, tags, executeFQDNTemplate)
 }
 
-func (c *ConsulDiscovery) discoverVtctlds(_ context.Context, tags []string) ([]*vtadminpb.Vtctld, error) {
+// discoverVtctlds does the actual work of discovering Vtctld hosts from a
+// consul datacenter. executeFQDNTemplate is boolean to allow an optimization
+// for DiscoverVtctldAddr (the only function that sets the boolean to false).
+func (c *ConsulDiscovery) discoverVtctlds(_ context.Context, tags []string, executeFQDNTemplate bool) ([]*vtadminpb.Vtctld, error) {
 	opts := c.getQueryOptions()
 	opts.Datacenter = c.vtctldDatacenter
 
@@ -323,6 +379,15 @@ func (c *ConsulDiscovery) discoverVtctlds(_ context.Context, tags []string) ([]*
 				Name: c.cluster.Name,
 			},
 			Hostname: entry.Node.Node,
+		}
+
+		if executeFQDNTemplate {
+			if c.vtctldFQDNTmpl != nil {
+				vtctld.FQDN, err = textutil.ExecuteTemplate(c.vtctldFQDNTmpl, vtctld)
+				if err != nil {
+					return nil, fmt.Errorf("failed to execute vtctld fqdn template for %v: %w", vtctld, err)
+				}
+			}
 		}
 
 		vtctlds[i] = vtctld

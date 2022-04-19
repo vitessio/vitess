@@ -262,7 +262,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 			return nil, 0, err
 		}
 		oa.extraDistinct = col
-		oa.eaggr.HasDistinct = true
+		oa.eaggr.PreProcess = true
 		var alias string
 		if expr.As.IsEmpty() {
 			alias = sqlparser.String(expr.Expr)
@@ -334,11 +334,7 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 	for i, colNumber := range oa.eaggr.Keys {
 		rc := oa.resultColumns[colNumber]
 		if sqltypes.IsText(rc.column.typ) {
-			if weightcolNumber, ok := oa.weightStrings[rc]; ok {
-				oa.eaggr.Keys[i] = weightcolNumber
-				continue
-			}
-			weightcolNumber, err := oa.input.SupplyWeightString(colNumber)
+			weightcolNumber, err := oa.input.SupplyWeightString(colNumber, oa.eaggr.FromGroupBy[i])
 			if err != nil {
 				_, isUnsupportedErr := err.(UnsupportedSupplyWeightString)
 				if isUnsupportedErr {
@@ -354,6 +350,6 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 	return oa.input.Wireup(plan, jt)
 }
 
-func (oa *orderedAggregate) WireupV4(semTable *semantics.SemTable) error {
-	return oa.input.WireupV4(semTable)
+func (oa *orderedAggregate) WireupGen4(semTable *semantics.SemTable) error {
+	return oa.input.WireupGen4(semTable)
 }

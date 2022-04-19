@@ -19,9 +19,9 @@ package workflow
 import (
 	"sync"
 
-	"context"
+	"google.golang.org/protobuf/proto"
 
-	"github.com/golang/protobuf/proto"
+	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 

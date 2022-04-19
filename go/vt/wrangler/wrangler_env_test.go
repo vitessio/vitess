@@ -63,12 +63,12 @@ func init() {
 	tabletconn.RegisterDialer("WranglerTest", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		wranglerEnv.mu.Lock()
 		defer wranglerEnv.mu.Unlock()
-		fmt.Println("In WranglerTest dialer")
 		if qs, ok := wranglerEnv.tablets[int(tablet.Alias.Uid)]; ok {
-			fmt.Printf("query service is %v", qs)
 			return qs, nil
 		}
-		return nil, fmt.Errorf("tablet %d not found", tablet.Alias.Uid)
+		// some tests don't require the query service. Earlier we were returning an error for such cases but the tablet picker
+		// now logs a warning and spams the logs. Hence we return a fake service instead
+		return newFakeTestWranglerTablet(), nil
 	})
 }
 
@@ -146,7 +146,7 @@ func newWranglerTestEnv(sourceShards, targetShards []string, query string, posit
 		result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|message",
 			"int64|varchar|varchar|varchar|int64|varchar|varchar|int64|int64|varchar"),
-			fmt.Sprintf("1|%v|pos||0|Running|vt_target|%d|0|", bls, timeUpdated),
+			fmt.Sprintf("1|%v|MySQL56/14b68925-696a-11ea-aee7-fec597a91f5e:1-3||0|Running|vt_target|%d|0|", bls, timeUpdated),
 		)
 		env.tmc.setVRResults(master.tablet, "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message from _vt.vreplication where db_name = 'vt_target' and workflow = 'wrWorkflow'", result)
 		env.tmc.setVRResults(
@@ -209,6 +209,24 @@ func (env *testWranglerEnv) close() {
 		env.topoServ.DeleteTablet(context.Background(), t.tablet.Alias)
 	}
 	env.tablets = nil
+}
+
+func newFakeTestWranglerTablet() *testWranglerTablet {
+	id := 999
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "fake",
+			Uid:  uint32(id),
+		},
+		Keyspace: "fake",
+		Shard:    "fake",
+		KeyRange: &topodatapb.KeyRange{},
+		Type:     topodatapb.TabletType_MASTER,
+		PortMap: map[string]int32{
+			"test": int32(id),
+		},
+	}
+	return newTestWranglerTablet(tablet)
 }
 
 func (env *testWranglerEnv) addTablet(id int, keyspace, shard string, tabletType topodatapb.TabletType) *testWranglerTablet {
@@ -316,13 +334,12 @@ func (tmc *testWranglerTMClient) VReplicationExec(ctx context.Context, tablet *t
 }
 
 func (tmc *testWranglerTMClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int) (*querypb.QueryResult, error) {
-	// fmt.Printf("tablet: %d query: %s\n", tablet.Alias.Uid, string(query))
 	t := wranglerEnv.tablets[int(tablet.Alias.Uid)]
 	t.gotQueries = append(t.gotQueries, string(query))
 	result, ok := t.queryResults[string(query)]
 	if !ok {
 		result = &querypb.QueryResult{}
-		log.Errorf("QUery: %s, Result :%v\n", query, result)
+		log.Errorf("Query: %s, Result :%v\n", query, result)
 	}
 	return result, nil
 }

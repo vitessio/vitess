@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -403,6 +404,17 @@ func TestFixedPointRewriteToCNF(in *testing.T) {
 			expr := stmt.(*Select).Where.Expr
 			output := RewriteToCNF(expr)
 			assert.Equal(t, tc.expected, String(output))
+		})
+	}
+}
+
+func TestReservedVars(t *testing.T) {
+	for _, prefix := range []string{"vtg", "bv"} {
+		t.Run("prefix_"+prefix, func(t *testing.T) {
+			reserved := NewReservedVars(prefix, make(BindVars))
+			for i := 1; i < 1000; i++ {
+				require.Equal(t, fmt.Sprintf("%s%d", prefix, i), reserved.nextUnusedVar())
+			}
 		})
 	}
 }

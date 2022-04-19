@@ -161,9 +161,9 @@ func ReadPEMData(pemFile string, pemPass []byte) ([]byte, error) {
 		log.Warning("Didn't parse all of", pemFile)
 	}
 
-	if x509.IsEncryptedPEMBlock(pemBlock) {
+	if x509.IsEncryptedPEMBlock(pemBlock) { //nolint SA1019
 		// Decrypt and get the ASN.1 DER bytes here
-		pemData, err = x509.DecryptPEMBlock(pemBlock, pemPass)
+		pemData, err = x509.DecryptPEMBlock(pemBlock, pemPass) //nolint SA1019
 		if err != nil {
 			return pemData, err
 		} else {
@@ -201,7 +201,7 @@ func IsEncryptedPEM(pemFile string) bool {
 	if len(pemBlock.Bytes) == 0 {
 		return false
 	}
-	return x509.IsEncryptedPEMBlock(pemBlock)
+	return x509.IsEncryptedPEMBlock(pemBlock) //nolint SA1019
 }
 
 // ListenAndServeTLS acts identically to http.ListenAndServeTLS, except that it

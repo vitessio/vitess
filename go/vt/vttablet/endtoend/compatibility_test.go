@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -89,7 +91,7 @@ func TestCharaterSet(t *testing.T) {
 			},
 		},
 	}
-	mustMatch(t, want, qr)
+	utils.MustMatch(t, want, qr)
 }
 
 func TestInts(t *testing.T) {
@@ -250,7 +252,7 @@ func TestInts(t *testing.T) {
 			},
 		},
 	}
-	mustMatch(t, want, qr)
+	utils.MustMatch(t, want, qr)
 
 	// This test was added because the following query causes mysql to
 	// return flags with both binary and unsigned set. The test ensures
@@ -275,7 +277,7 @@ func TestInts(t *testing.T) {
 			},
 		},
 	}
-	mustMatch(t, want, qr)
+	utils.MustMatch(t, want, qr)
 
 }
 
@@ -368,7 +370,7 @@ func TestFractionals(t *testing.T) {
 			},
 		},
 	}
-	mustMatch(t, want, qr)
+	utils.MustMatch(t, want, qr)
 }
 
 func TestStrings(t *testing.T) {
@@ -515,7 +517,7 @@ func TestStrings(t *testing.T) {
 			},
 		},
 	}
-	mustMatch(t, want, qr)
+	utils.MustMatch(t, want, qr)
 }
 
 func TestMiscTypes(t *testing.T) {
@@ -614,7 +616,7 @@ func TestMiscTypes(t *testing.T) {
 			},
 		},
 	}
-	mustMatch(t, want, qr)
+	utils.MustMatch(t, want, qr)
 }
 
 func TestNull(t *testing.T) {
@@ -638,7 +640,7 @@ func TestNull(t *testing.T) {
 			},
 		},
 	}
-	mustMatch(t, want, qr)
+	utils.MustMatch(t, want, qr)
 }
 
 func TestJSONType(t *testing.T) {
@@ -699,7 +701,7 @@ func TestJSONType(t *testing.T) {
 		want2.Fields[1].Type = sqltypes.Blob
 		want2.Fields[1].Charset = 33
 		want2.Rows[0][1] = sqltypes.TestValue(sqltypes.Blob, "{\"foo\": \"bar\"}")
-		mustMatch(t, want2, qr)
+		utils.MustMatch(t, want2, qr)
 	}
 
 }

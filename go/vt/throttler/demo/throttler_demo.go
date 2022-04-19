@@ -111,7 +111,7 @@ func newReplica(lagUpdateInterval, degrationInterval, degrationDuration time.Dur
 		topodatapb.TabletType_REPLICA, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	fakeTablet.StartActionLoop(t, wr)
 
-	target := querypb.Target{
+	target := &querypb.Target{
 		Keyspace:   "ks",
 		Shard:      "-80",
 		TabletType: topodatapb.TabletType_REPLICA,

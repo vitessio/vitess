@@ -46,6 +46,9 @@ var statsBackend = flag.String("stats_backend", "", "The name of the registered 
 var combineDimensions = flag.String("stats_combine_dimensions", "", `List of dimensions to be combined into a single "all" value in exported stats vars`)
 var dropVariables = flag.String("stats_drop_variables", "", `Variables to be dropped from the list of exported variables.`)
 
+// CommonTags is a comma-separated list of common tags for stats backends
+var CommonTags = flag.String("stats_common_tags", "", `Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2`)
+
 // StatsAllStr is the consolidated name if a dimension gets combined.
 const StatsAllStr = "all"
 
@@ -316,4 +319,19 @@ func isVarDropped(name string) bool {
 		}
 	}
 	return droppedVars[name]
+}
+
+// ParseCommonTags parses a comma-separated string into map of tags
+// If you want to global service values like host, service name, git revision, etc,
+// this is the place to do it.
+func ParseCommonTags(s string) map[string]string {
+	inputs := strings.Split(s, ",")
+	tags := make(map[string]string)
+	for _, input := range inputs {
+		if strings.Contains(input, ":") {
+			tag := strings.Split(input, ":")
+			tags[strings.TrimSpace(tag[0])] = strings.TrimSpace(tag[1])
+		}
+	}
+	return tags
 }

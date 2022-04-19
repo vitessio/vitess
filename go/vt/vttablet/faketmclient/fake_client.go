@@ -152,6 +152,11 @@ func (client *FakeTabletManagerClient) ApplySchema(ctx context.Context, tablet *
 	return &tabletmanagerdatapb.SchemaChangeResult{}, nil
 }
 
+// ExecuteQuery is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxrows int) (*querypb.QueryResult, error) {
+	return &querypb.QueryResult{}, nil
+}
+
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
 	return &querypb.QueryResult{}, nil

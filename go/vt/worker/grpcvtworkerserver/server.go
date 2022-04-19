@@ -37,12 +37,13 @@ import (
 
 // VtworkerServer is our RPC server
 type VtworkerServer struct {
+	vtworkerservicepb.UnimplementedVtworkerServer
 	wi *worker.Instance
 }
 
 // NewVtworkerServer returns a new VtworkerServer for the given vtworker instance.
 func NewVtworkerServer(wi *worker.Instance) *VtworkerServer {
-	return &VtworkerServer{wi}
+	return &VtworkerServer{wi: wi}
 }
 
 // ExecuteVtworkerCommand is part of the vtworkerdatapb.VtworkerServer interface

@@ -708,7 +708,7 @@ func validateKeyspaceJSON(t *testing.T, keyspaceJSON string, cellsArr []string) 
 						assert.Contains(t, strings.Join(servedFrom.GetCells(), " "), eachCell)
 					}
 				} else {
-					assert.Equal(t, []string{}, servedFrom.GetCells())
+					assert.Empty(t, servedFrom.GetCells())
 				}
 			}
 		}

@@ -142,40 +142,39 @@ func TestWarnings(t *testing.T) {
 	ctx := context.Background()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nilf(t, err, "unable to connect mysql: %v", err)
+	require.NoError(t, err)
 	defer conn.Close()
 
-	// validate warning with invalid_field error as warning
-	qr, err := conn.ExecuteFetch("SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ invalid_field from vt_insert_test;", 1, false)
-	require.Nilf(t, err, "select error : %v", err)
+	// using CALL will produce a warning saying this only works in unsharded
+	qr, err := conn.ExecuteFetch("CALL testing()", 1, false)
+	require.NoError(t, err)
 	assert.Empty(t, qr.Rows, "number of rows")
 
 	qr, err = conn.ExecuteFetch("SHOW WARNINGS;", 1, false)
-	require.Nilf(t, err, "SHOW WARNINGS; execution failed: %v", err)
+	require.NoError(t, err, "SHOW WARNINGS")
 	assert.EqualValues(t, 1, len(qr.Rows), "number of rows")
 	assert.Contains(t, qr.Rows[0][0].String(), "VARCHAR(\"Warning\")", qr.Rows)
-	assert.Contains(t, qr.Rows[0][1].String(), "UINT16(1054)", qr.Rows)
-	assert.Contains(t, qr.Rows[0][2].String(), "Unknown column", qr.Rows)
-
-	// validate warning with query_timeout error as warning
-	qr, err = conn.ExecuteFetch("SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS QUERY_TIMEOUT_MS=1 */ sleep(1) from vt_insert_test;", 1, false)
-	require.Nilf(t, err, "insertion error : %v", err)
-	assert.Empty(t, qr.Rows, "number of rows")
-
-	qr, err = conn.ExecuteFetch("SHOW WARNINGS;", 1, false)
-	require.Nilf(t, err, "SHOW WARNINGS; execution failed: %v", err)
-	assert.EqualValues(t, 1, len(qr.Rows), "number of rows")
-	assert.Contains(t, qr.Rows[0][0].String(), "VARCHAR(\"Warning\")", qr.Rows)
-	assert.Contains(t, qr.Rows[0][1].String(), "UINT16(1317)", qr.Rows)
-	assert.Contains(t, qr.Rows[0][2].String(), "context deadline exceeded", qr.Rows)
+	assert.Contains(t, qr.Rows[0][1].String(), "UINT16(1235)", qr.Rows)
+	assert.Contains(t, qr.Rows[0][2].String(), "'CALL' not supported in sharded mode", qr.Rows)
 
 	// validate with 0 warnings
 	_, err = conn.ExecuteFetch("SELECT 1 from vt_insert_test limit 1", 1, false)
-	require.Nilf(t, err, "select error: %v", err)
+	require.NoError(t, err)
 
 	qr, err = conn.ExecuteFetch("SHOW WARNINGS;", 1, false)
-	require.Nilf(t, err, "SHOW WARNINGS; execution failed: %v", err)
-	assert.Empty(t, len(qr.Rows), "number of rows")
+	require.NoError(t, err)
+	assert.Empty(t, qr.Rows)
+
+	// verify that show warnings are empty if another statement is run before calling it
+	qr, err = conn.ExecuteFetch("CALL testing()", 1, false)
+	require.NoError(t, err)
+	assert.Empty(t, qr.Rows, "number of rows")
+	_, err = conn.ExecuteFetch("SELECT 1 from vt_insert_test limit 1", 1, false)
+	require.NoError(t, err)
+
+	qr, err = conn.ExecuteFetch("SHOW WARNINGS;", 1, false)
+	require.NoError(t, err)
+	assert.Empty(t, qr.Rows)
 }
 
 // TestSelectWithUnauthorizedUser verifies that an unauthorized user

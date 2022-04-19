@@ -303,24 +303,3 @@ Gen4 plan same as above
 
 "select none from user_index where id = :id"
 "symbol `none` not found in table or subquery"
-
-"select * from samecolvin where col = :col"
-{
-  "QueryType": "SELECT",
-  "Original": "select * from samecolvin where col = :col",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select col from samecolvin where 1 != 1",
-    "Query": "select col from samecolvin where col = :col",
-    "Table": "samecolvin",
-    "Values": [
-      ":col"
-    ],
-    "Vindex": "vindex1"
-  }
-}

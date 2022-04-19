@@ -44,7 +44,7 @@ import (
 
 var (
 	// Target is the target info for the server.
-	Target querypb.Target
+	Target *querypb.Target
 	// Server is the TabletServer for the framework.
 	Server *tabletserver.TabletServer
 	// ServerAddress is the http URL for the server.
@@ -70,14 +70,14 @@ func StartCustomServer(connParams, connAppDebugParams mysql.ConnParams, dbName s
 
 	dbcfgs := dbconfigs.NewTestDBConfigs(connParams, connAppDebugParams, dbName)
 
-	Target = querypb.Target{
+	Target = &querypb.Target{
 		Keyspace:   "vttest",
 		Shard:      "0",
 		TabletType: topodatapb.TabletType_MASTER,
 	}
 	TopoServer = memorytopo.NewServer("")
 
-	Server = tabletserver.NewTabletServer("", config, TopoServer, topodatapb.TabletAlias{})
+	Server = tabletserver.NewTabletServer("", config, TopoServer, &topodatapb.TabletAlias{})
 	Server.Register()
 	err := Server.StartService(Target, dbcfgs, nil /* mysqld */)
 	if err != nil {
@@ -114,6 +114,8 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.TrackSchemaVersions = true
 	config.GracePeriods.ShutdownSeconds = 2
+	config.SignalSchemaChangeReloadIntervalSeconds = tabletenv.Seconds(2.1)
+	config.SignalWhenSchemaChange = true
 	gotBytes, _ := yaml2.Marshal(config)
 	log.Infof("Config:\n%s", gotBytes)
 	return StartCustomServer(connParams, connAppDebugParams, dbName, config)

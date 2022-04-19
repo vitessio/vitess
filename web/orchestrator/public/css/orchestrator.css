@@ -21,6 +21,7 @@ body {
 .orchestrator-brand img {
   padding: 0px;
   padding-right: 8px;
+  display: inline;
 }
 
 .table {

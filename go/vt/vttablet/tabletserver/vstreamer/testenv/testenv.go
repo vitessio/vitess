@@ -100,7 +100,7 @@ func Init() (*Env, error) {
 	config.DB = te.Dbcfgs
 	te.TabletEnv = tabletenv.NewEnv(config, "VStreamerTest")
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
-	pos, _ := te.Mysqld.MasterPosition()
+	pos, _ := te.Mysqld.PrimaryPosition()
 	te.Flavor = pos.GTIDSet.Flavor()
 
 	te.SchemaEngine = schema.NewEngine(te.TabletEnv)

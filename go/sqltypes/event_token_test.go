@@ -19,7 +19,7 @@ package sqltypes
 import (
 	"testing"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )

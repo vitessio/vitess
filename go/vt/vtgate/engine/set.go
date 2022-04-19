@@ -408,7 +408,7 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 		if err != nil {
 			return err
 		}
-		if _, _, err := schema.ParseDDLStrategy(str); err != nil {
+		if _, err := schema.ParseDDLStrategy(str); err != nil {
 			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "invalid DDL strategy: %s", str)
 		}
 		vcursor.Session().SetDDLStrategy(str)
@@ -424,7 +424,7 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 			// do nothing
 			break
 		default:
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "unexpected value for charset/names: %v", str)
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "charset/name %v is not supported", str)
 		}
 	case sysvars.ReadAfterWriteGTID.Name:
 		str, err := svss.evalAsString(env)
@@ -449,10 +449,10 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 		case "own_gtid":
 			vcursor.Session().SetSessionTrackGTIDs(true)
 		default:
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "Variable 'session_track_gtids' can't be set to the value of '%s'", str)
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "variable 'session_track_gtids' can't be set to the value of '%s'", str)
 		}
 	default:
-		return vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownSystemVariable, "Unknown system variable '%s'", svss.Name)
+		return vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownSystemVariable, "unknown system variable '%s'", svss.Name)
 	}
 
 	return err
@@ -466,7 +466,7 @@ func (svss *SysVarSetAware) evalAsInt64(env evalengine.ExpressionEnv) (int64, er
 
 	v := value.Value()
 	if !v.IsIntegral() {
-		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "Incorrect argument type to variable '%s': %s", svss.Name, value.Value().Type().String())
+		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "incorrect argument type to variable '%s': %s", svss.Name, value.Value().Type().String())
 	}
 	intValue, err := v.ToInt64()
 	if err != nil {
@@ -484,7 +484,7 @@ func (svss *SysVarSetAware) evalAsFloat(env evalengine.ExpressionEnv) (float64, 
 	v := value.Value()
 	floatValue, err := v.ToFloat64()
 	if err != nil {
-		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "Incorrect argument type to variable '%s': %s", svss.Name, value.Value().Type().String())
+		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "incorrect argument type to variable '%s': %s", svss.Name, value.Value().Type().String())
 	}
 	return floatValue, nil
 }
@@ -496,7 +496,7 @@ func (svss *SysVarSetAware) evalAsString(env evalengine.ExpressionEnv) (string, 
 	}
 	v := value.Value()
 	if !v.IsText() && !v.IsBinary() {
-		return "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "Incorrect argument type to variable '%s': %s", svss.Name, value.Value().Type().String())
+		return "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "incorrect argument type to variable '%s': %s", svss.Name, value.Value().Type().String())
 	}
 
 	return v.ToString(), nil
@@ -509,7 +509,7 @@ func (svss *SysVarSetAware) setBoolSysVar(env evalengine.ExpressionEnv, setter f
 	}
 	boolValue, err := value.ToBooleanStrict()
 	if err != nil {
-		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "Variable '%s' can't be set to the value: %s", svss.Name, err.Error())
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "variable '%s' can't be set to the value: %s", svss.Name, err.Error())
 	}
 	return setter(boolValue)
 }

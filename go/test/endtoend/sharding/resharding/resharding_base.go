@@ -505,13 +505,13 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 	assert.Equal(t, 1, len(qr.Rows))
 	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), "SplitClone")
-	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), `"keyspace:\"ks\" shard:\"80-\" key_range:<start:\"\\200\" end:\"\\300\" > "`)
+	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), `"keyspace:\"ks\" shard:\"80-\" key_range:{start:\"\\x80\" end:\"\\xc0\"}"`)
 
 	qr, err = shard3.MasterTablet().VttabletProcess.QueryTabletWithDB("select * from vreplication", "_vt")
 	require.Nil(t, err)
 	assert.Equal(t, 1, len(qr.Rows))
 	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), "SplitClone")
-	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), `"keyspace:\"ks\" shard:\"80-\" key_range:<start:\"\\300\" > "`)
+	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), `"keyspace:\"ks\" shard:\"80-\" key_range:{start:\"\\xc0\"}"`)
 
 	// check the binlog players are running and exporting vars
 	sharding.CheckDestinationMaster(t, *shard2Master, []string{shard1Ks}, *clusterInstance)

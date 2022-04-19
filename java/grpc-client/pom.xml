@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>io.vitess</groupId>
     <artifactId>vitess-parent</artifactId>
-    <version>10.0.2</version>
+    <version>11.0.4</version>
   </parent>
   <artifactId>vitess-grpc-client</artifactId>
 
@@ -104,10 +104,10 @@
         <version>2.22.1</version>
         <configuration>
           <!-- <argLine>${surefireArgLine}</argLine> -->
-		  <useManifestOnlyJar>false</useManifestOnlyJar>
-		  <useSystemClassLoader>true</useSystemClassLoader>
+          <useManifestOnlyJar>false</useManifestOnlyJar>
+          <useSystemClassLoader>true</useSystemClassLoader>
         </configuration>
-      </plugin>	  
+      </plugin>
       <plugin>
         <groupId>org.xolstice.maven.plugins</groupId>
         <artifactId>protobuf-maven-plugin</artifactId>

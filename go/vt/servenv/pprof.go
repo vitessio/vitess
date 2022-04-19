@@ -19,6 +19,7 @@ package servenv
 import (
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/signal"
@@ -164,11 +165,7 @@ func stopCallback(stop func()) func() {
 	}
 }
 
-// init returns a start function that begins the configured profiling process and
-// returns a cleanup function that must be executed before process termination to
-// flush the profile to disk.
-// Based on the profiling code in github.com/pkg/profile
-func (prof *profile) init() (start func(), stop func()) {
+func (prof *profile) mkprofile() io.WriteCloser {
 	var (
 		path string
 		err  error
@@ -196,20 +193,32 @@ func (prof *profile) init() (start func(), stop func()) {
 	}
 	logf("pprof: %s profiling enabled, %s", string(prof.mode), fn)
 
+	return f
+}
+
+// init returns a start function that begins the configured profiling process and
+// returns a cleanup function that must be executed before process termination to
+// flush the profile to disk.
+// Based on the profiling code in github.com/pkg/profile
+func (prof *profile) init() (start func(), stop func()) {
+	var pf io.WriteCloser
+
 	switch prof.mode {
 	case profileCPU:
 		start = startCallback(func() {
-			pprof.StartCPUProfile(f)
+			pf = prof.mkprofile()
+			pprof.StartCPUProfile(pf)
 		})
 		stop = stopCallback(func() {
 			pprof.StopCPUProfile()
-			f.Close()
+			pf.Close()
 		})
 		return start, stop
 
 	case profileMemHeap, profileMemAllocs:
 		old := runtime.MemProfileRate
 		start = startCallback(func() {
+			pf = prof.mkprofile()
 			runtime.MemProfileRate = prof.rate
 		})
 		stop = stopCallback(func() {
@@ -217,65 +226,72 @@ func (prof *profile) init() (start func(), stop func()) {
 			if prof.mode == profileMemAllocs {
 				tt = "allocs"
 			}
-			pprof.Lookup(tt).WriteTo(f, 0)
-			f.Close()
+			pprof.Lookup(tt).WriteTo(pf, 0)
+			pf.Close()
 			runtime.MemProfileRate = old
 		})
 		return start, stop
 
 	case profileMutex:
 		start = startCallback(func() {
+			pf = prof.mkprofile()
 			runtime.SetMutexProfileFraction(prof.rate)
 		})
 		stop = stopCallback(func() {
 			if mp := pprof.Lookup("mutex"); mp != nil {
-				mp.WriteTo(f, 0)
+				mp.WriteTo(pf, 0)
 			}
-			f.Close()
+			pf.Close()
 			runtime.SetMutexProfileFraction(0)
 		})
 		return start, stop
 
 	case profileBlock:
 		start = startCallback(func() {
+			pf = prof.mkprofile()
 			runtime.SetBlockProfileRate(prof.rate)
 		})
 		stop = stopCallback(func() {
-			pprof.Lookup("block").WriteTo(f, 0)
-			f.Close()
+			pprof.Lookup("block").WriteTo(pf, 0)
+			pf.Close()
 			runtime.SetBlockProfileRate(0)
 		})
 		return start, stop
 
 	case profileThreads:
-		start = startCallback(func() {})
+		start = startCallback(func() {
+			pf = prof.mkprofile()
+		})
 		stop = stopCallback(func() {
 			if mp := pprof.Lookup("threadcreate"); mp != nil {
-				mp.WriteTo(f, 0)
+				mp.WriteTo(pf, 0)
 			}
-			f.Close()
+			pf.Close()
 		})
 		return start, stop
 
 	case profileTrace:
 		start = startCallback(func() {
-			if err := trace.Start(f); err != nil {
+			pf = prof.mkprofile()
+			if err := trace.Start(pf); err != nil {
 				log.Fatalf("pprof: could not start trace: %v", err)
 			}
 		})
 		stop = stopCallback(func() {
 			trace.Stop()
-			f.Close()
+			pf.Close()
 		})
 		return start, stop
 
 	case profileGoroutine:
-		start = startCallback(func() {})
+		start = startCallback(func() {
+			pf = prof.mkprofile()
+		})
 		stop = stopCallback(func() {
 			if mp := pprof.Lookup("goroutine"); mp != nil {
-				mp.WriteTo(f, 0)
+				mp.WriteTo(pf, 0)
 			}
-			f.Close()
+			pf.Close()
 		})
 		return start, stop
 

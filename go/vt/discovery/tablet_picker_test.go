@@ -24,9 +24,9 @@ import (
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -329,6 +329,7 @@ func TestPickError(t *testing.T) {
 	defer cancel()
 	_, err = tp.PickForStreaming(ctx)
 	require.EqualError(t, err, "context has expired")
+	require.Greater(t, globalTPStats.noTabletFoundError.Counts()["cell.ks.0.replica"], int64(0))
 }
 
 type pickerTestEnv struct {

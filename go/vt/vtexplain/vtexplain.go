@@ -155,10 +155,11 @@ func Init(vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options) error {
 		return fmt.Errorf("parseSchema: %v", err)
 	}
 
-	err = initTabletEnvironment(parsedDDLs, opts)
+	tabletEnv, err := newTabletEnvironment(parsedDDLs, opts)
 	if err != nil {
 		return fmt.Errorf("initTabletEnvironment: %v", err)
 	}
+	setGlobalTabletEnv(tabletEnv)
 
 	err = initVtgateExecutor(vSchemaStr, ksShardMapStr, opts)
 	if err != nil {

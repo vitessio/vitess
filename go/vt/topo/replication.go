@@ -21,7 +21,7 @@ import (
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -89,10 +89,10 @@ func UpdateShardReplicationRecord(ctx context.Context, ts *Server, keyspace, sha
 	return ts.UpdateShardReplicationFields(ctx, tabletAlias.Cell, keyspace, shard, func(sr *topodatapb.ShardReplication) error {
 		// Not very efficient, but easy to read, and allows us
 		// to remove duplicate entries if any.
-		nodes := make([]*topodatapb.ShardReplication_Node, 0, len(sr.Nodes)+1)
+		nodes := make([]*topodatapb.ShardReplication_Node, 0, len((*sr).Nodes)+1)
 		found := false
 		modified := false
-		for _, node := range sr.Nodes {
+		for _, node := range (*sr).Nodes {
 			if proto.Equal(node.TabletAlias, tabletAlias) {
 				if found {
 					log.Warningf("Found a second ShardReplication_Node for tablet %v, deleting it", tabletAlias)
@@ -110,7 +110,7 @@ func UpdateShardReplicationRecord(ctx context.Context, ts *Server, keyspace, sha
 		if !modified {
 			return NewError(NoUpdateNeeded, tabletAlias.String())
 		}
-		sr.Nodes = nodes
+		(*sr).Nodes = nodes
 		return nil
 	})
 }
@@ -119,13 +119,13 @@ func UpdateShardReplicationRecord(ctx context.Context, ts *Server, keyspace, sha
 // entry from the ShardReplication object.
 func RemoveShardReplicationRecord(ctx context.Context, ts *Server, cell, keyspace, shard string, tabletAlias *topodatapb.TabletAlias) error {
 	err := ts.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(sr *topodatapb.ShardReplication) error {
-		nodes := make([]*topodatapb.ShardReplication_Node, 0, len(sr.Nodes))
-		for _, node := range sr.Nodes {
+		nodes := make([]*topodatapb.ShardReplication_Node, 0, len((*sr).Nodes))
+		for _, node := range (*sr).Nodes {
 			if !proto.Equal(node.TabletAlias, tabletAlias) {
 				nodes = append(nodes, node)
 			}
 		}
-		sr.Nodes = nodes
+		(*sr).Nodes = nodes
 		return nil
 	})
 	return err

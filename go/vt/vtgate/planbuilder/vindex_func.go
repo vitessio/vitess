@@ -99,7 +99,7 @@ func (vf *vindexFunc) Wireup(logicalPlan, *jointab) error {
 }
 
 // Wireup2 implements the logicalPlan interface
-func (vf *vindexFunc) WireupV4(*semantics.SemTable) error {
+func (vf *vindexFunc) WireupGen4(*semantics.SemTable) error {
 	return nil
 }
 
@@ -142,7 +142,7 @@ func (err UnsupportedSupplyWeightString) Error() string {
 }
 
 // SupplyWeightString implements the logicalPlan interface
-func (vf *vindexFunc) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+func (vf *vindexFunc) SupplyWeightString(int, bool) (weightcolNumber int, err error) {
 	return 0, UnsupportedSupplyWeightString{Type: "vindex function"}
 }
 

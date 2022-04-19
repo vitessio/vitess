@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -119,7 +120,7 @@ type Throttler struct {
 	mysqlInventory *mysql.Inventory
 
 	metricsQuery     string
-	metricsThreshold float64
+	MetricsThreshold sync2.AtomicFloat64
 	metricsQueryType mysql.MetricsQueryType
 
 	mysqlClusterThresholds *cache.Cache
@@ -172,7 +173,7 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 		mysqlInventory:         mysql.NewInventory(),
 
 		metricsQuery:     replicationLagQuery,
-		metricsThreshold: throttleThreshold.Seconds(),
+		MetricsThreshold: sync2.NewAtomicFloat64(throttleThreshold.Seconds()),
 
 		throttledApps:          cache.New(cache.NoExpiration, 10*time.Second),
 		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
@@ -235,7 +236,7 @@ func (throttler *Throttler) initConfig(password string) {
 		throttler.metricsQuery = *throttleMetricQuery
 	}
 	if *throttleMetricThreshold != math.MaxFloat64 {
-		throttler.metricsThreshold = *throttleMetricThreshold
+		throttler.MetricsThreshold = sync2.NewAtomicFloat64(*throttleMetricThreshold)
 	}
 	throttler.metricsQueryType = mysql.GetMetricsQueryType(throttler.metricsQuery)
 
@@ -243,7 +244,7 @@ func (throttler *Throttler) initConfig(password string) {
 		User:              "", // running on local tablet server, will use vttablet DBA user
 		Password:          "", // running on local tablet server, will use vttablet DBA user
 		MetricQuery:       throttler.metricsQuery,
-		ThrottleThreshold: throttler.metricsThreshold,
+		ThrottleThreshold: throttler.MetricsThreshold.Get(),
 		IgnoreHostsCount:  0,
 	}
 	if password != "" {
@@ -251,7 +252,7 @@ func (throttler *Throttler) initConfig(password string) {
 			User:              throttlerUser,
 			Password:          password,
 			MetricQuery:       throttler.metricsQuery,
-			ThrottleThreshold: throttler.metricsThreshold,
+			ThrottleThreshold: throttler.MetricsThreshold.Get(),
 			IgnoreHostsCount:  0,
 		}
 	}
@@ -330,8 +331,6 @@ func (throttler *Throttler) createThrottlerUser(ctx context.Context) (password s
 		// any query that writes to the binary log, CREATE USER does not hang.
 		// The simplest such query is FLUSH STATUS. Other options are FLUSH PRIVILEGES or similar.
 		// The bug was found in MySQL 8.0.21, and not found in 5.7.30
-		// at this time, Vitess only supports 5.7 an ddoes not support 8.0,
-		// but please keep this code in anticipation of supporting 8.0
 		// - shlomi
 		simpleBinlogQuery := `FLUSH STATUS`
 		if _, err := conn.ExecuteFetch(simpleBinlogQuery, 0, false); err != nil {

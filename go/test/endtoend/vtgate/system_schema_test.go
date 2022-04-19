@@ -78,6 +78,8 @@ func TestInformationSchemaQuery(t *testing.T) {
 	assertResultIsEmpty(t, conn, "table_schema = 'PERFORMANCE_SCHEMA'")
 	assertSingleRowIsReturned(t, conn, "table_schema = 'performance_schema' and table_name = 'users'", "performance_schema")
 	assertResultIsEmpty(t, conn, "table_schema = 'performance_schema' and table_name = 'foo'")
+	assertSingleRowIsReturned(t, conn, "table_schema = 'vt_ks' and table_name = 't1'", "vt_ks")
+	assertSingleRowIsReturned(t, conn, "table_schema = 'ks' and table_name = 't1'", "vt_ks")
 }
 
 func assertResultIsEmpty(t *testing.T, conn *mysql.Conn, pre string) {
@@ -212,5 +214,5 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", KeyspaceName, KeyspaceName, "a")
 	_, err = conn.ExecuteFetch(query, 1000, true)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "two predicates for specifying the database are not supported")
+	require.Contains(t, err.Error(), "specifying two different database in the query is not supported")
 }

@@ -10,6 +10,10 @@ relay-log-index =  {{.RelayLogIndexPath}}
 pid-file = {{.PidFile}}
 port = {{.MysqlPort}}
 
+{{if .SecureFilePriv}}
+secure-file-priv = {{.SecureFilePriv}}
+{{end}}
+
 # all db instances should start in read-only mode - once the db is started and
 # fully functional, we'll push it into read-write mode
 read-only

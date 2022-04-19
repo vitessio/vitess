@@ -19,8 +19,6 @@ package sqlparser
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
 )
 
@@ -57,37 +55,15 @@ func TestParseTable(t *testing.T) {
 	}, {
 		input: "k.t.",
 		err:   true,
-	}, {
-		input:    "k.language",
-		keyspace: "k",
-		table:    "language",
-	}, {
-		input:    "language",
-		keyspace: "",
-		table:    "language",
-	}, {
-		input:    "language.tables",
-		keyspace: "language",
-		table:    "tables",
-	}, {
-		input:    "language.t",
-		keyspace: "language",
-		table:    "t",
-	}, {
-		input:    "`from`.`table`",
-		keyspace: "from",
-		table:    "table",
 	}}
 	for _, tcase := range testcases {
-		t.Run(tcase.input, func(t *testing.T) {
-			keyspace, table, err := ParseTable(tcase.input)
-			if tcase.err {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
-			assert.Equal(t, tcase.keyspace, keyspace)
-			assert.Equal(t, tcase.table, table)
-		})
+		keyspace, table, err := ParseTable(tcase.input)
+		assert.Equal(t, tcase.keyspace, keyspace)
+		assert.Equal(t, tcase.table, table)
+		if tcase.err {
+			assert.Error(t, err)
+		} else {
+			assert.NoError(t, err)
+		}
 	}
 }

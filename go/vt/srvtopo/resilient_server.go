@@ -20,7 +20,6 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
-	"net/url"
 	"sort"
 	"sync"
 	"time"
@@ -48,7 +47,7 @@ var (
 	// setting the watch fails, we will use the last known value until
 	// srv_topo_cache_ttl elapses and we only try to re-establish the watch
 	// once every srv_topo_cache_refresh interval.
-	srvTopoTimeout      = flag.Duration("srv_topo_timeout", 1*time.Second, "topo server timeout")
+	srvTopoTimeout      = flag.Duration("srv_topo_timeout", 5*time.Second, "topo server timeout")
 	srvTopoCacheTTL     = flag.Duration("srv_topo_cache_ttl", 1*time.Second, "how long to use cached entries for topology")
 	srvTopoCacheRefresh = flag.Duration("srv_topo_cache_refresh", 1*time.Second, "how frequently to refresh the topology for cached entries")
 )
@@ -467,11 +466,12 @@ func (server *ResilientServer) watchSrvKeyspace(callerCtx context.Context, entry
 		}
 
 		server.counts.Add(errorCategory, 1)
-		log.Errorf("Initial WatchSrvKeyspace failed for %v/%v: %v", cell, keyspace, current.Err)
+		log.Errorf("Initial WatchSrvKeyspace failed for %v/%v: %T %v", cell, keyspace, current.Err, current.Err)
 
 		// This watcher will able to continue to return the last value till it is not able to connect to the topo server even if the cache TTL is reached.
-		_, netErr := current.Err.(*url.Error)
-		if !netErr && time.Since(entry.lastValueTime) > server.cacheTTL {
+		// TTL cache is only checked if the error is a known error i.e topo.Error.
+		_, topoErr := current.Err.(topo.Error)
+		if topoErr && time.Since(entry.lastValueTime) > server.cacheTTL {
 			log.Errorf("WatchSrvKeyspace clearing cached entry for %v/%v", cell, keyspace)
 			entry.value = nil
 		}

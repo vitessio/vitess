@@ -1,0 +1,66 @@
+/**
+ * Copyright 2021 The Vitess Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+a.tab {
+  background: var(--backgroundPrimary);
+  border: solid 1px transparent;
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  color: var(--textColorSecondary);
+  display: block;
+  flex: 0 0 auto;
+  font-weight: 500;
+  line-height: 1.6em;
+  margin: 0 0.2em 0 0;
+  min-width: 7.2rem;
+  padding: 0.8em 1.2em 0.5em 1.2em;
+  position: relative;
+  white-space: nowrap;
+
+  &.active {
+    border-color: var(--colorScaffoldingHighlight);
+    border-bottom-color: var(--backgroundPrimary);
+    color: var(--textColorPrimary);
+    z-index: var(--zIndexLow);
+  }
+
+  .count {
+    background-color: var(--backgroundSecondaryHighlight);
+    border-radius: 20px;
+    color: var(--textColorSecondary);
+    display: inline-block;
+    font-size: 0.85em;
+    line-height: 1em;
+    margin: 0 0 0 0.5em;
+    padding: 0.5em 0.75em;
+    vertical-align: baseline;
+  }
+
+  &:hover {
+    color: var(--colorPrimary);
+
+    .count {
+      background-color: var(--backgroundPrimaryHighlight);
+      color: var(--colorPrimary);
+    }
+  }
+}
+
+.pip {
+  height: 0.5em;
+  margin-right: 0.5em;
+  vertical-align: middle;
+  width: 0.5em;
+}

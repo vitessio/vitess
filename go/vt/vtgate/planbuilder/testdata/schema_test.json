@@ -78,6 +78,9 @@
         "vindex2": {
           "type": "lookup_test",
           "owner": "samecolvin"
+        },
+        "cfc": {
+          "type": "cfc"
         }
       },
       "tables": {
@@ -255,6 +258,24 @@
             {
               "column": "a`b*c",
               "name": "user_index"
+            }
+          ]
+        },
+        "cfc_vindex_col": {
+          "column_vindexes": [
+            {
+              "column": "c1",
+              "name": "cfc"
+            }
+          ],
+          "columns": [
+            {
+              "name": "c1",
+              "type": "VARCHAR"
+            },
+            {
+              "name": "c2",
+              "type": "VARCHAR"
             }
           ]
         }

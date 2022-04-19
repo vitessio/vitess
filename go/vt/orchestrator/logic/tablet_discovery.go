@@ -25,9 +25,10 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/orchestrator/config"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 
-	"github.com/golang/protobuf/proto"
+	"vitess.io/vitess/go/vt/orchestrator/config"
 
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
@@ -204,7 +205,7 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []in
 		}
 		if !latestInstances[curKey] {
 			tablet := &topodatapb.Tablet{}
-			if err := proto.UnmarshalText(row.GetString("info"), tablet); err != nil {
+			if err := prototext.Unmarshal([]byte(row.GetString("info")), tablet); err != nil {
 				log.Errore(err)
 				return nil
 			}

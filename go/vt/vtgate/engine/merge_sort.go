@@ -20,6 +20,8 @@ import (
 	"container/heap"
 	"io"
 
+	"vitess.io/vitess/go/mysql"
+
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -47,8 +49,9 @@ var _ Primitive = (*MergeSort)(nil)
 // be used like other Primitives in VTGate. However, it satisfies the Primitive API
 // so that vdiff can use it. In that situation, only StreamExecute is used.
 type MergeSort struct {
-	Primitives []StreamExecutor
-	OrderBy    []OrderbyParams
+	Primitives              []StreamExecutor
+	OrderBy                 []OrderbyParams
+	ScatterErrorsAsWarnings bool
 	noInputs
 	noTxNeeded
 }
@@ -76,22 +79,22 @@ func (ms *MergeSort) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bin
 func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	ctx, cancel := context.WithCancel(vcursor.Context())
 	defer cancel()
-
+	gotFields := wantfields
 	handles := make([]*streamHandle, len(ms.Primitives))
 	for i, input := range ms.Primitives {
-		handles[i] = runOneStream(ctx, vcursor, input, bindVars, wantfields)
-		// Need fields only from first handle, if wantfields was true.
-		wantfields = false
+		handles[i] = runOneStream(ctx, vcursor, input, bindVars, gotFields)
+		if !ms.ScatterErrorsAsWarnings {
+			// we only need the fields from the first input, unless we allow ScatterErrorsAsWarnings.
+			// in that case, we need to ask all the inputs for fields - we don't know which will return anything
+			gotFields = false
+		}
 	}
 
-	// Fetch field info from just one stream.
-	fields := <-handles[0].fields
-	// If fields is nil, it means there was an error.
-	if fields == nil {
-		return handles[0].err
-	}
-	if err := callback(&sqltypes.Result{Fields: fields}); err != nil {
-		return err
+	if wantfields {
+		err := ms.getStreamingFields(handles, callback)
+		if err != nil {
+			return err
+		}
 	}
 
 	comparers := extractSlices(ms.OrderBy)
@@ -100,6 +103,7 @@ func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 		comparers: comparers,
 	}
 
+	var errs []error
 	// Prime the heap. One element must be pulled from
 	// each stream.
 	for i, handle := range handles {
@@ -107,6 +111,10 @@ func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 		case row, ok := <-handle.row:
 			if !ok {
 				if handle.err != nil {
+					if ms.ScatterErrorsAsWarnings {
+						errs = append(errs, handle.err)
+						break
+					}
 					return handle.err
 				}
 				// It's possible that a stream returns no rows.
@@ -153,6 +161,50 @@ func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 		case <-ctx.Done():
 			return ctx.Err()
 		}
+	}
+
+	err := vterrors.Aggregate(errs)
+	if err != nil && ms.ScatterErrorsAsWarnings && len(errs) < len(handles) {
+		// we got errors, but not all shards failed, so we can hide the error and just warn instead
+		partialSuccessScatterQueries.Add(1)
+		sErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+		vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(sErr.Num), Message: err.Error()})
+		return nil
+	}
+	return err
+}
+
+func (ms *MergeSort) getStreamingFields(handles []*streamHandle, callback func(*sqltypes.Result) error) error {
+	var fields []*querypb.Field
+
+	if ms.ScatterErrorsAsWarnings {
+		for _, handle := range handles {
+			// Fetch field info from just one stream.
+			fields = <-handle.fields
+			// If fields is nil, it means there was an error.
+			if fields != nil {
+				break
+			}
+		}
+	} else {
+		// Fetch field info from just one stream.
+		fields = <-handles[0].fields
+	}
+	if fields == nil {
+		// something went wrong. need to figure out where the error can be
+		if !ms.ScatterErrorsAsWarnings {
+			return handles[0].err
+		}
+
+		var errs []error
+		for _, handle := range handles {
+			errs = append(errs, handle.err)
+		}
+		return vterrors.Aggregate(errs)
+	}
+
+	if err := callback(&sqltypes.Result{Fields: fields}); err != nil {
+		return err
 	}
 	return nil
 }

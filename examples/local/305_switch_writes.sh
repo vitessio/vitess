@@ -18,4 +18,4 @@
 
 source ./env.sh
 
-vtctlclient SwitchWrites customer.cust2cust
+vtctlclient Reshard -tablet_types=master SwitchTraffic customer.cust2cust

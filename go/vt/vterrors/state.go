@@ -25,12 +25,15 @@ const (
 
 	// invalid argument
 	BadFieldError
+	BadTableError
 	CantUseOptionHere
 	DataOutOfRange
 	EmptyQuery
 	ForbidSchemaChange
 	IncorrectGlobalLocalVar
+	NonUniqError
 	NonUniqTable
+	NonUpdateableTable
 	SyntaxError
 	WrongGroupField
 	WrongTypeForVar
@@ -41,6 +44,8 @@ const (
 	NoDB
 	InnodbReadOnly
 	WrongNumberOfColumnsInSelect
+	CantDoThisInTransaction
+	RequiresPrimaryKey
 
 	// not found
 	BadDb
@@ -49,6 +54,7 @@ const (
 	SPDoesNotExist
 	UnknownSystemVariable
 	UnknownTable
+	NoSuchSession
 
 	// already exists
 	DbCreateExists
@@ -65,6 +71,9 @@ const (
 
 	// permission denied
 	AccessDeniedError
+
+	// server not available
+	ServerNotAvailable
 
 	// No state should be added below NumOfStates
 	NumOfStates

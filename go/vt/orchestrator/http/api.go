@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/util"
 
-	"vitess.io/vitess/go/vt/orchestrator/agent"
 	"vitess.io/vitess/go/vt/orchestrator/collection"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/discovery"
@@ -61,9 +60,6 @@ var apiSynonyms = map[string]string{
 	"regroup-slaves-bls":         "regroup-replicas-bls",
 	"move-slaves-gtid":           "move-replicas-gtid",
 	"regroup-slaves-gtid":        "regroup-replicas-gtid",
-	"match-slaves":               "match-replicas",
-	"match-up-slaves":            "match-up-replicas",
-	"regroup-slaves-pgtid":       "regroup-replicas-pgtid",
 	"detach-slave":               "detach-replica",
 	"reattach-slave":             "reattach-replica",
 	"detach-slave-master-host":   "detach-replica-master-host",
@@ -941,163 +937,8 @@ func (this *HttpAPI) RelocateReplicas(params martini.Params, r render.Render, re
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Relocated %d replicas of %+v below %+v; %d errors: %+v", len(replicas), instanceKey, belowKey, len(errs), errs), Details: replicas})
 }
 
-// MoveEquivalent attempts to move an instance below another, baseed on known equivalence master coordinates
-func (this *HttpAPI) MoveEquivalent(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	instance, err := inst.MoveEquivalent(&instanceKey, &belowKey)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance %+v relocated via equivalence coordinates below %+v", instanceKey, belowKey), Details: instance})
-}
-
-// LastPseudoGTID attempts to find the last pseugo-gtid entry in an instance
-func (this *HttpAPI) LastPseudoGTID(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	instance, found, err := inst.ReadInstance(&instanceKey)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-	if instance == nil || !found {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Instance not found: %+v", instanceKey)})
-		return
-	}
-	coordinates, text, err := inst.FindLastPseudoGTIDEntry(instance, instance.RelaylogCoordinates, nil, false, nil)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("%+v", *coordinates), Details: text})
-}
-
-// MatchBelow attempts to move an instance below another via pseudo GTID matching of binlog entries
-func (this *HttpAPI) MatchBelow(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	instance, matchedCoordinates, err := inst.MatchBelow(&instanceKey, &belowKey, true)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance %+v matched below %+v at %+v", instanceKey, belowKey, *matchedCoordinates), Details: instance})
-}
-
-// MatchBelow attempts to move an instance below another via pseudo GTID matching of binlog entries
-func (this *HttpAPI) MatchUp(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	instance, matchedCoordinates, err := inst.MatchUp(&instanceKey, true)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance %+v matched up at %+v", instanceKey, *matchedCoordinates), Details: instance})
-}
-
-// MultiMatchReplicas attempts to match all replicas of a given instance below another, efficiently
-func (this *HttpAPI) MultiMatchReplicas(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	replicas, newMaster, err, errs := inst.MultiMatchReplicas(&instanceKey, &belowKey, req.URL.Query().Get("pattern"))
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Matched %d replicas of %+v below %+v; %d errors: %+v", len(replicas), instanceKey, newMaster.Key, len(errs), errs), Details: newMaster.Key})
-}
-
-// MatchUpReplicas attempts to match up all replicas of an instance
-func (this *HttpAPI) MatchUpReplicas(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	replicas, newMaster, err, errs := inst.MatchUpReplicas(&instanceKey, req.URL.Query().Get("pattern"))
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Matched up %d replicas of %+v below %+v; %d errors: %+v", len(replicas), instanceKey, newMaster.Key, len(errs), errs), Details: newMaster.Key})
-}
-
 // RegroupReplicas attempts to pick a replica of a given instance and make it take its siblings, using any
-// method possible (GTID, Pseudo-GTID, binlog servers)
+// method possible (GTID, binlog servers)
 func (this *HttpAPI) RegroupReplicas(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
@@ -1111,31 +952,6 @@ func (this *HttpAPI) RegroupReplicas(params martini.Params, r render.Render, req
 
 	lostReplicas, equalReplicas, aheadReplicas, cannotReplicateReplicas, promotedReplica, err := inst.RegroupReplicas(&instanceKey, false, nil, nil)
 	lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("promoted replica: %s, lost: %d, trivial: %d, pseudo-gtid: %d",
-		promotedReplica.Key.DisplayString(), len(lostReplicas), len(equalReplicas), len(aheadReplicas)), Details: promotedReplica.Key})
-}
-
-// RegroupReplicas attempts to pick a replica of a given instance and make it take its siblings, efficiently,
-// using pseudo-gtid if necessary
-func (this *HttpAPI) RegroupReplicasPseudoGTID(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	lostReplicas, equalReplicas, aheadReplicas, cannotReplicateReplicas, promotedReplica, err := inst.RegroupReplicasPseudoGTID(&instanceKey, false, nil, nil, nil)
-	lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
-
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -1190,49 +1006,6 @@ func (this *HttpAPI) RegroupReplicasBinlogServers(params martini.Params, r rende
 
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("promoted binlog server: %s",
 		promotedBinlogServer.Key.DisplayString()), Details: promotedBinlogServer.Key})
-}
-
-// MakeMaster attempts to make the given instance a master, and match its siblings to be its replicas
-func (this *HttpAPI) MakeMaster(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	instance, err := inst.MakeMaster(&instanceKey)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance %+v now made master", instanceKey), Details: instance})
-}
-
-// MakeLocalMaster attempts to make the given instance a local master: take over its master by
-// enslaving its siblings and replicating from its grandparent.
-func (this *HttpAPI) MakeLocalMaster(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	instance, err := inst.MakeLocalMaster(&instanceKey)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance %+v now made local master", instanceKey), Details: instance})
 }
 
 // SkipQuery skips a single query on a failed replication instance
@@ -1417,33 +1190,6 @@ func (this *HttpAPI) RestartReplicationStatements(params martini.Params, r rende
 	}
 
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("statements for: %+v", instanceKey), Details: statements})
-}
-
-// MasterEquivalent provides (possibly empty) list of master coordinates equivalent to the given ones
-func (this *HttpAPI) MasterEquivalent(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-	coordinates, err := this.getBinlogCoordinates(params["logFile"], params["logPos"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-	instanceCoordinates := &inst.InstanceBinlogCoordinates{Key: instanceKey, Coordinates: coordinates}
-
-	equivalentCoordinates, err := inst.GetEquivalentMasterCoordinates(instanceCoordinates)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Found %+v equivalent coordinates", len(equivalentCoordinates)), Details: equivalentCoordinates})
 }
 
 // CanReplicateFrom attempts to move an instance below another via pseudo GTID matching of binlog entries
@@ -2371,345 +2117,6 @@ func (this *HttpAPI) WriteBufferMetricsAggregated(params martini.Params, r rende
 	r.JSON(http.StatusOK, aggregated)
 }
 
-// Agents provides complete list of registered agents (See https://github.com/openark/orchestrator-agent)
-func (this *HttpAPI) Agents(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !config.Config.ServeAgentsHttp {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
-		return
-	}
-
-	agents, err := agent.ReadAgents()
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, agents)
-}
-
-// Agent returns complete information of a given agent
-func (this *HttpAPI) Agent(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !config.Config.ServeAgentsHttp {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
-		return
-	}
-
-	agent, err := agent.GetAgent(params["host"])
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, agent)
-}
-
-// AgentUnmount instructs an agent to unmount the designated mount point
-func (this *HttpAPI) AgentUnmount(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !config.Config.ServeAgentsHttp {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
-		return
-	}
-
-	output, err := agent.Unmount(params["host"])
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, output)
-}
-
-// AgentMountLV instructs an agent to mount a given volume on the designated mount point
-func (this *HttpAPI) AgentMountLV(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !config.Config.ServeAgentsHttp {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
-		return
-	}
-
-	output, err := agent.MountLV(params["host"], req.URL.Query().Get("lv"))
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, output)
-}
-
-// AgentCreateSnapshot instructs an agent to create a new snapshot. Agent's DIY implementation.
-func (this *HttpAPI) AgentCreateSnapshot(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !config.Config.ServeAgentsHttp {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
-		return
-	}
-
-	output, err := agent.CreateSnapshot(params["host"])
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, output)
-}
-
-// AgentRemoveLV instructs an agent to remove a logical volume
-func (this *HttpAPI) AgentRemoveLV(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !config.Config.ServeAgentsHttp {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
-		return
-	}
-
-	output, err := agent.RemoveLV(params["host"], req.URL.Query().Get("lv"))
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, output)
-}
-
-// AgentMySQLStop stops MySQL service on agent
-func (this *HttpAPI) AgentMySQLStop(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !config.Config.ServeAgentsHttp {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
-		return
-	}
-
-	output, err := agent.MySQLStop(params["host"])
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, output)
-}
-
-// AgentMySQLStart starts MySQL service on agent
-func (this *HttpAPI) AgentMySQLStart(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !config.Config.ServeAgentsHttp {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
-		return
-	}
-
-	output, err := agent.MySQLStart(params["host"])
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, output)
-}
-
-func (this *HttpAPI) AgentCustomCommand(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !config.Config.ServeAgentsHttp {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
-		return
-	}
-
-	output, err := agent.CustomCommand(params["host"], params["command"])
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, output)
-}
-
-// AgentSeed completely seeds a host with another host's snapshots. This is a complex operation
-// governed by orchestrator and executed by the two agents involved.
-func (this *HttpAPI) AgentSeed(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !config.Config.ServeAgentsHttp {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
-		return
-	}
-
-	output, err := agent.Seed(params["targetHost"], params["sourceHost"])
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, output)
-}
-
-// AgentActiveSeeds lists active seeds and their state
-func (this *HttpAPI) AgentActiveSeeds(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !config.Config.ServeAgentsHttp {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
-		return
-	}
-
-	output, err := agent.ReadActiveSeedsForHost(params["host"])
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, output)
-}
-
-// AgentRecentSeeds lists recent seeds of a given agent
-func (this *HttpAPI) AgentRecentSeeds(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !config.Config.ServeAgentsHttp {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
-		return
-	}
-
-	output, err := agent.ReadRecentCompletedSeedsForHost(params["host"])
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, output)
-}
-
-// AgentSeedDetails provides details of a given seed
-func (this *HttpAPI) AgentSeedDetails(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !config.Config.ServeAgentsHttp {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
-		return
-	}
-
-	seedId, _ := strconv.ParseInt(params["seedId"], 10, 0)
-	output, err := agent.AgentSeedDetails(seedId)
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, output)
-}
-
-// AgentSeedStates returns the breakdown of states (steps) of a given seed
-func (this *HttpAPI) AgentSeedStates(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !config.Config.ServeAgentsHttp {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
-		return
-	}
-
-	seedId, _ := strconv.ParseInt(params["seedId"], 10, 0)
-	output, err := agent.ReadSeedStates(seedId)
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, output)
-}
-
-// Seeds retruns all recent seeds
-func (this *HttpAPI) Seeds(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !config.Config.ServeAgentsHttp {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
-		return
-	}
-
-	output, err := agent.ReadRecentSeeds()
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, output)
-}
-
-// AbortSeed instructs agents to abort an active seed
-func (this *HttpAPI) AbortSeed(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !config.Config.ServeAgentsHttp {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
-		return
-	}
-
-	seedId, _ := strconv.ParseInt(params["seedId"], 10, 0)
-	err := agent.AbortSeed(seedId)
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, err == nil)
-}
-
 // Headers is a self-test call which returns HTTP headers
 func (this *HttpAPI) Headers(params martini.Params, r render.Render, req *http.Request) {
 	r.JSON(http.StatusOK, req.Header)
@@ -2788,188 +2195,6 @@ func (this *HttpAPI) Reelect(params martini.Params, r render.Render, req *http.R
 	}
 
 	Respond(r, &APIResponse{Code: OK, Message: "Set re-elections"})
-}
-
-// RaftAddPeer adds a new node to the raft cluster
-func (this *HttpAPI) RaftAddPeer(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-add-peer: not running with raft setup"})
-		return
-	}
-	addr, err := orcraft.AddPeer(params["addr"])
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot add raft peer: %+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, addr)
-}
-
-// RaftAddPeer removes a node fro the raft cluster
-func (this *HttpAPI) RaftRemovePeer(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-remove-peer: not running with raft setup"})
-		return
-	}
-	addr, err := orcraft.RemovePeer(params["addr"])
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot remove raft peer: %+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, addr)
-}
-
-// RaftYield yields to a specified host
-func (this *HttpAPI) RaftYield(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-yield: not running with raft setup"})
-		return
-	}
-	orcraft.PublishYield(params["node"])
-	Respond(r, &APIResponse{Code: OK, Message: "Asynchronously yielded"})
-}
-
-// RaftYieldHint yields to a host whose name contains given hint (e.g. DC)
-func (this *HttpAPI) RaftYieldHint(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-yield-hint: not running with raft setup"})
-		return
-	}
-	hint := params["hint"]
-	orcraft.PublishYieldHostnameHint(hint)
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Asynchronously yielded by hint %s", hint), Details: hint})
-}
-
-// RaftPeers returns the list of peers in a raft setup
-func (this *HttpAPI) RaftPeers(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-nodes: not running with raft setup"})
-		return
-	}
-
-	peers, err := orcraft.GetPeers()
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot get raft peers: %+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, peers)
-}
-
-// RaftState returns the state of this raft node
-func (this *HttpAPI) RaftState(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-state: not running with raft setup"})
-		return
-	}
-
-	state := orcraft.GetState().String()
-	r.JSON(http.StatusOK, state)
-}
-
-// RaftLeader returns the identify of the leader, if possible
-func (this *HttpAPI) RaftLeader(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-leader: not running with raft setup"})
-		return
-	}
-
-	leader := orcraft.GetLeader()
-	r.JSON(http.StatusOK, leader)
-}
-
-// RaftHealth indicates whether this node is part of a healthy raft group
-func (this *HttpAPI) RaftHealth(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-state: not running with raft setup"})
-		return
-	}
-	if !orcraft.IsHealthy() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "unhealthy"})
-		return
-	}
-	r.JSON(http.StatusOK, "healthy")
-}
-
-// RaftStatus exports a status summary for a raft node
-func (this *HttpAPI) RaftStatus(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-state: not running with raft setup"})
-		return
-	}
-	peers, err := orcraft.GetPeers()
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot get raft peers: %+v", err)})
-		return
-	}
-
-	status := struct {
-		RaftBind       string
-		RaftAdvertise  string
-		State          string
-		Healthy        bool
-		IsPartOfQuorum bool
-		Leader         string
-		LeaderURI      string
-		Peers          []string
-	}{
-		RaftBind:       orcraft.GetRaftBind(),
-		RaftAdvertise:  orcraft.GetRaftAdvertise(),
-		State:          orcraft.GetState().String(),
-		Healthy:        orcraft.IsHealthy(),
-		IsPartOfQuorum: orcraft.IsPartOfQuorum(),
-		Leader:         orcraft.GetLeader(),
-		LeaderURI:      orcraft.LeaderURI.Get(),
-		Peers:          peers,
-	}
-	r.JSON(http.StatusOK, status)
-}
-
-// RaftFollowerHealthReport is initiated by followers to report their identity and health to the raft leader.
-func (this *HttpAPI) RaftFollowerHealthReport(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-state: not running with raft setup"})
-		return
-	}
-	err := orcraft.OnHealthReport(params["authenticationToken"], params["raftBind"], params["raftAdvertise"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot create snapshot: %+v", err)})
-		return
-	}
-	r.JSON(http.StatusOK, "health reported")
-}
-
-// RaftSnapshot instructs raft to take a snapshot
-func (this *HttpAPI) RaftSnapshot(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-leader: not running with raft setup"})
-		return
-	}
-	err := orcraft.Snapshot()
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot create snapshot: %+v", err)})
-		return
-	}
-	r.JSON(http.StatusOK, "snapshot created")
 }
 
 // ReloadConfiguration reloads confiug settings (not all of which will apply after change)
@@ -3581,11 +2806,7 @@ func (this *HttpAPI) registerSingleAPIRequest(m *martini.ClassicMartini, path st
 	registeredPaths = append(registeredPaths, path)
 	fullPath := fmt.Sprintf("%s/api/%s", this.URLPrefix, path)
 
-	if allowProxy && config.Config.RaftEnabled {
-		m.Get(fullPath, raftReverseProxy, handler)
-	} else {
-		m.Get(fullPath, handler)
-	}
+	m.Get(fullPath, handler)
 }
 
 func (this *HttpAPI) registerAPIRequestInternal(m *martini.ClassicMartini, path string, handler martini.Handler, allowProxy bool) {
@@ -3616,13 +2837,11 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "move-up/:host/:port", this.MoveUp)
 	this.registerAPIRequest(m, "move-up-slaves/:host/:port", this.MoveUpReplicas)
 	this.registerAPIRequest(m, "move-below/:host/:port/:siblingHost/:siblingPort", this.MoveBelow)
-	this.registerAPIRequest(m, "move-equivalent/:host/:port/:belowHost/:belowPort", this.MoveEquivalent)
 	this.registerAPIRequest(m, "repoint/:host/:port/:belowHost/:belowPort", this.Repoint)
 	this.registerAPIRequest(m, "repoint-slaves/:host/:port", this.RepointReplicas)
 	this.registerAPIRequest(m, "make-co-master/:host/:port", this.MakeCoMaster)
 	this.registerAPIRequest(m, "enslave-siblings/:host/:port", this.TakeSiblings)
 	this.registerAPIRequest(m, "enslave-master/:host/:port", this.TakeMaster)
-	this.registerAPIRequest(m, "master-equivalent/:host/:port/:logFile/:logPos", this.MasterEquivalent)
 
 	// Binlog server relocation:
 	this.registerAPIRequest(m, "regroup-slaves-bls/:host/:port", this.RegroupReplicasBinlogServers)
@@ -3631,17 +2850,6 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "move-below-gtid/:host/:port/:belowHost/:belowPort", this.MoveBelowGTID)
 	this.registerAPIRequest(m, "move-slaves-gtid/:host/:port/:belowHost/:belowPort", this.MoveReplicasGTID)
 	this.registerAPIRequest(m, "regroup-slaves-gtid/:host/:port", this.RegroupReplicasGTID)
-
-	// Pseudo-GTID relocation:
-	this.registerAPIRequest(m, "match/:host/:port/:belowHost/:belowPort", this.MatchBelow)
-	this.registerAPIRequest(m, "match-below/:host/:port/:belowHost/:belowPort", this.MatchBelow)
-	this.registerAPIRequest(m, "match-up/:host/:port", this.MatchUp)
-	this.registerAPIRequest(m, "match-slaves/:host/:port/:belowHost/:belowPort", this.MultiMatchReplicas)
-	this.registerAPIRequest(m, "match-up-slaves/:host/:port", this.MatchUpReplicas)
-	this.registerAPIRequest(m, "regroup-slaves-pgtid/:host/:port", this.RegroupReplicasPseudoGTID)
-	// Legacy, need to revisit:
-	this.registerAPIRequest(m, "make-master/:host/:port", this.MakeMaster)
-	this.registerAPIRequest(m, "make-local-master/:host/:port", this.MakeLocalMaster)
 
 	// Replication, general:
 	this.registerAPIRequest(m, "enable-gtid/:host/:port", this.EnableGTID)
@@ -3671,9 +2879,6 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "set-read-only/:host/:port", this.SetReadOnly)
 	this.registerAPIRequest(m, "set-writeable/:host/:port", this.SetWriteable)
 	this.registerAPIRequest(m, "kill-query/:host/:port/:process", this.KillQuery)
-
-	// Binary logs:
-	this.registerAPIRequest(m, "last-pseudo-gtid/:host/:port", this.LastPseudoGTID)
 
 	// Pools:
 	this.registerAPIRequest(m, "submit-pool-instances/:pool", this.SubmitPoolInstances)
@@ -3814,17 +3019,6 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequestNoProxy(m, "leader-check", this.LeaderCheck)
 	this.registerAPIRequestNoProxy(m, "leader-check/:errorStatusCode", this.LeaderCheck)
 	this.registerAPIRequestNoProxy(m, "grab-election", this.GrabElection)
-	this.registerAPIRequest(m, "raft-add-peer/:addr", this.RaftAddPeer)       // delegated to the raft leader
-	this.registerAPIRequest(m, "raft-remove-peer/:addr", this.RaftRemovePeer) // delegated to the raft leader
-	this.registerAPIRequestNoProxy(m, "raft-yield/:node", this.RaftYield)
-	this.registerAPIRequestNoProxy(m, "raft-yield-hint/:hint", this.RaftYieldHint)
-	this.registerAPIRequestNoProxy(m, "raft-peers", this.RaftPeers)
-	this.registerAPIRequestNoProxy(m, "raft-state", this.RaftState)
-	this.registerAPIRequestNoProxy(m, "raft-leader", this.RaftLeader)
-	this.registerAPIRequestNoProxy(m, "raft-health", this.RaftHealth)
-	this.registerAPIRequestNoProxy(m, "raft-status", this.RaftStatus)
-	this.registerAPIRequestNoProxy(m, "raft-snapshot", this.RaftSnapshot)
-	this.registerAPIRequestNoProxy(m, "raft-follower-health-report/:authenticationToken/:raftBind/:raftAdvertise", this.RaftFollowerHealthReport)
 	this.registerAPIRequestNoProxy(m, "reload-configuration", this.ReloadConfiguration)
 	this.registerAPIRequestNoProxy(m, "hostname-resolve-cache", this.HostnameResolveCache)
 	this.registerAPIRequestNoProxy(m, "reset-hostname-resolve-cache", this.ResetHostnameResolveCache)
@@ -3848,24 +3042,6 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "backend-query-metrics-aggregated/:seconds", this.BackendQueryMetricsAggregated)
 	this.registerAPIRequest(m, "write-buffer-metrics-raw/:seconds", this.WriteBufferMetricsRaw)
 	this.registerAPIRequest(m, "write-buffer-metrics-aggregated/:seconds", this.WriteBufferMetricsAggregated)
-
-	// Agents
-	this.registerAPIRequest(m, "agents", this.Agents)
-	this.registerAPIRequest(m, "agent/:host", this.Agent)
-	this.registerAPIRequest(m, "agent-umount/:host", this.AgentUnmount)
-	this.registerAPIRequest(m, "agent-mount/:host", this.AgentMountLV)
-	this.registerAPIRequest(m, "agent-create-snapshot/:host", this.AgentCreateSnapshot)
-	this.registerAPIRequest(m, "agent-removelv/:host", this.AgentRemoveLV)
-	this.registerAPIRequest(m, "agent-mysql-stop/:host", this.AgentMySQLStop)
-	this.registerAPIRequest(m, "agent-mysql-start/:host", this.AgentMySQLStart)
-	this.registerAPIRequest(m, "agent-seed/:targetHost/:sourceHost", this.AgentSeed)
-	this.registerAPIRequest(m, "agent-active-seeds/:host", this.AgentActiveSeeds)
-	this.registerAPIRequest(m, "agent-recent-seeds/:host", this.AgentRecentSeeds)
-	this.registerAPIRequest(m, "agent-seed-details/:seedId", this.AgentSeedDetails)
-	this.registerAPIRequest(m, "agent-seed-states/:seedId", this.AgentSeedStates)
-	this.registerAPIRequest(m, "agent-abort-seed/:seedId", this.AbortSeed)
-	this.registerAPIRequest(m, "agent-custom-command/:host/:command", this.AgentCustomCommand)
-	this.registerAPIRequest(m, "seeds", this.Seeds)
 
 	// Configurable status check endpoint
 	if config.Config.StatusEndpoint == config.DefaultStatusAPIEndpoint {

@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"context"
 
 	"github.com/stretchr/testify/assert"
@@ -123,6 +125,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
 
 	ctx := context.Background()
+	statsTabletTypeCount.ResetAll()
 	cell := "cell1"
 	ts := memorytopo.NewServer(cell)
 	tm := newTestTM(t, ts, 1, "ks", "0")
@@ -398,7 +401,7 @@ func TestStartFixesReplicationData(t *testing.T) {
 
 	sri, err := ts.GetShardReplication(ctx, cell, "ks", "0")
 	require.NoError(t, err)
-	assert.Equal(t, tabletAlias, sri.Nodes[0].TabletAlias)
+	utils.MustMatch(t, tabletAlias, sri.Nodes[0].TabletAlias)
 
 	// Remove the ShardReplication record, try to create the
 	// tablets again, make sure it's fixed.
@@ -414,7 +417,7 @@ func TestStartFixesReplicationData(t *testing.T) {
 
 	sri, err = ts.GetShardReplication(ctx, cell, "ks", "0")
 	require.NoError(t, err)
-	assert.Equal(t, tabletAlias, sri.Nodes[0].TabletAlias)
+	utils.MustMatch(t, tabletAlias, sri.Nodes[0].TabletAlias)
 }
 
 // This is a test to make sure a regression does not happen in the future.

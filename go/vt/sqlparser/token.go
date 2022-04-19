@@ -136,6 +136,8 @@ func (tkn *Tokenizer) Scan() (int, string) {
 		if tkn.cur() == '`' {
 			tkn.skip(1)
 			tID, tBytes = tkn.scanLiteralIdentifier()
+		} else if tkn.cur() == eofChar {
+			return LEX_ERROR, ""
 		} else {
 			tID, tBytes = tkn.scanIdentifier(true)
 		}

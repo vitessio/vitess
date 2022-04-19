@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
@@ -90,9 +91,12 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 	span, ctx := trace.NewSpan(ctx, "VtctldClientProxy.Dial")
 	defer span.Finish()
 
+	vtadminproto.AnnotateClusterSpan(vtctld.cluster, span)
+
 	if vtctld.VtctldClient != nil {
 		if !vtctld.closed {
 			span.Annotate("is_noop", true)
+			span.Annotate("vtctld_host", vtctld.host)
 
 			return nil
 		}

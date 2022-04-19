@@ -218,8 +218,8 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		return mysql.NewSQLErrorFromError(err)
 	}
 	session, result, err := vh.vtg.Execute(ctx, session, query, make(map[string]*querypb.BindVariable))
-	err = mysql.NewSQLErrorFromError(err)
-	if err != nil {
+
+	if err := mysql.NewSQLErrorFromError(err); err != nil {
 		return err
 	}
 	fillInTxStatusFlags(c, session)

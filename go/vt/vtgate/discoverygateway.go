@@ -59,7 +59,7 @@ func init() {
 	RegisterGatewayCreator(GatewayImplementationDiscovery, createDiscoveryGateway)
 }
 
-// DiscoveryGateway is the default Gateway implementation.
+// DiscoveryGateway is not the default Gateway implementation anymore.
 // This implementation uses the legacy healthcheck module.
 type DiscoveryGateway struct {
 	queryservice.QueryService

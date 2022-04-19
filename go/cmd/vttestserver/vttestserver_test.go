@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/tlstest"
 
@@ -37,8 +39,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/vt/vttest"
-
-	"github.com/golang/protobuf/jsonpb"
 
 	"vitess.io/vitess/go/vt/proto/logutil"
 	"vitess.io/vitess/go/vt/proto/vschema"
@@ -124,6 +124,59 @@ func TestPersistentMode(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, expectedRows, res.Rows)
+}
+
+func TestForeignKeysAndDDLModes(t *testing.T) {
+	args := os.Args
+	conf := config
+	defer resetFlags(args, conf)
+
+	cluster, err := startCluster("-foreign_key_mode=allow", "-enable_online_ddl=true", "-enable_direct_ddl=true")
+	assert.NoError(t, err)
+	defer cluster.TearDown()
+
+	execOnCluster(cluster, "test_keyspace", func(conn *mysql.Conn) error {
+		_, err := conn.ExecuteFetch(`CREATE TABLE test_table_2 (
+			id BIGINT,
+			test_table_id BIGINT,
+			FOREIGN KEY (test_table_id) REFERENCES test_table(id)
+		)`, 1, false)
+		assert.NoError(t, err)
+		_, err = conn.ExecuteFetch("SET @@ddl_strategy='online'", 1, false)
+		assert.NoError(t, err)
+		_, err = conn.ExecuteFetch("ALTER TABLE test_table ADD COLUMN something_else VARCHAR(255) NOT NULL DEFAULT ''", 1, false)
+		assert.NoError(t, err)
+		_, err = conn.ExecuteFetch("SET @@ddl_strategy='direct'", 1, false)
+		assert.NoError(t, err)
+		_, err = conn.ExecuteFetch("ALTER TABLE test_table ADD COLUMN something_else_2 VARCHAR(255) NOT NULL DEFAULT ''", 1, false)
+		assert.NoError(t, err)
+		_, err = conn.ExecuteFetch("SELECT something_else_2 FROM test_table", 1, false)
+		assert.NoError(t, err)
+		return nil
+	})
+
+	cluster.TearDown()
+	cluster, err = startCluster("-foreign_key_mode=disallow", "-enable_online_ddl=false", "-enable_direct_ddl=false")
+	assert.NoError(t, err)
+	defer cluster.TearDown()
+
+	execOnCluster(cluster, "test_keyspace", func(conn *mysql.Conn) error {
+		_, err := conn.ExecuteFetch(`CREATE TABLE test_table_2 (
+			id BIGINT,
+			test_table_id BIGINT,
+			FOREIGN KEY (test_table_id) REFERENCES test_table(id)
+		)`, 1, false)
+		assert.Error(t, err)
+		_, err = conn.ExecuteFetch("SET @@ddl_strategy='online'", 1, false)
+		assert.NoError(t, err)
+		_, err = conn.ExecuteFetch("ALTER TABLE test_table ADD COLUMN something_else VARCHAR(255) NOT NULL DEFAULT ''", 1, false)
+		assert.Error(t, err)
+		_, err = conn.ExecuteFetch("SET @@ddl_strategy='direct'", 1, false)
+		assert.NoError(t, err)
+		_, err = conn.ExecuteFetch("ALTER TABLE test_table ADD COLUMN something_else VARCHAR(255) NOT NULL DEFAULT ''", 1, false)
+		assert.Error(t, err)
+		return nil
+	})
 }
 
 func TestCanVtGateExecute(t *testing.T) {
@@ -305,7 +358,7 @@ func assertColumnVindex(t *testing.T, cluster vttest.LocalCluster, expected colu
 
 	err := vtctlclient.RunCommandAndWait(ctx, server, args, func(e *logutil.Event) {
 		var keyspace vschema.Keyspace
-		if err := jsonpb.UnmarshalString(e.Value, &keyspace); err != nil {
+		if err := protojson.Unmarshal([]byte(e.Value), &keyspace); err != nil {
 			t.Error(err)
 		}
 

@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var _ StreamExecutor = (*shardRoute)(nil)
@@ -33,6 +34,7 @@ type shardRoute struct {
 }
 
 // StreamExecute performs a streaming exec.
-func (sr *shardRoute) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return vcursor.StreamExecuteMulti(sr.query, []*srvtopo.ResolvedShard{sr.rs}, []map[string]*querypb.BindVariable{sr.bv}, callback)
+func (sr *shardRoute) StreamExecute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ bool, callback func(*sqltypes.Result) error) error {
+	errors := vcursor.StreamExecuteMulti(sr.query, []*srvtopo.ResolvedShard{sr.rs}, []map[string]*querypb.BindVariable{sr.bv}, callback)
+	return vterrors.Aggregate(errors)
 }

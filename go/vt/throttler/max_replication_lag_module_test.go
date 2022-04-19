@@ -999,7 +999,7 @@ func TestApplyLatestConfig(t *testing.T) {
 	// Change the default MaxIncrease from 100% to 200% and test that it's
 	// correctly propagated.
 	config.MaxIncrease = 2
-	tf.m.updateConfiguration(&config.Configuration, true /* copyZeroValues */)
+	tf.m.updateConfiguration(config.Configuration, true /* copyZeroValues */)
 
 	// r2 @  70s, 0s lag
 	tf.ratesHistory.add(sinceZero(69*time.Second), 100)

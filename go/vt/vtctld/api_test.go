@@ -37,7 +37,7 @@ import (
 func compactJSON(in []byte) string {
 	buf := &bytes.Buffer{}
 	json.Compact(buf, in)
-	return buf.String()
+	return strings.ReplaceAll(buf.String(), "\n", "")
 }
 
 func TestAPI(t *testing.T) {
@@ -277,7 +277,7 @@ func TestAPI(t *testing.T) {
 				"master_alias": null,
 				"master_term_start_time":null,
 				"key_range": {
-					"start": null,
+					"start": "",
 					"end":"gA=="
 				},
 				"served_types": [],
@@ -397,11 +397,11 @@ func TestAPI(t *testing.T) {
 		// vtctl RunCommand
 		{"POST", "vtctl/", `["GetKeyspace","ks1"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [\n  ],\n  \"keyspace_type\": 0,\n  \"base_keyspace\": \"\",\n  \"snapshot_time\": null\n}\n\n"
+		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [],\n  \"keyspace_type\": 0,\n  \"base_keyspace\": \"\",\n  \"snapshot_time\": null\n}\n\n"
 		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetKeyspace","ks3"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"sharding_column_name\": \"\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [\n  ],\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  }\n}\n\n"
+		   "Output": "{\n  \"sharding_column_name\": \"\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [],\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  }\n}\n\n"
 		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetVSchema","ks3"]`, `{
 		   "Error": "",

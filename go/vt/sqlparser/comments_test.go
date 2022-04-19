@@ -318,14 +318,43 @@ func TestExtractCommentDirectives(t *testing.T) {
 	}}
 
 	for _, testCase := range testCases {
-		sql := "select " + testCase.input + " 1 from dual"
-		stmt, _ := Parse(sql)
-		comments := stmt.(*Select).Comments
-		vals := ExtractCommentDirectives(comments)
+		t.Run(testCase.input, func(t *testing.T) {
+			sqls := []string{
+				"select " + testCase.input + " 1 from dual",
+				"update " + testCase.input + " t set i=i+1",
+				"delete " + testCase.input + " from t where id>1",
+				"drop " + testCase.input + " table t",
+				"create " + testCase.input + " table if not exists t (id int primary key)",
+				"alter " + testCase.input + " table t add column c int not null",
+			}
+			for _, sql := range sqls {
+				t.Run(sql, func(t *testing.T) {
+					var comments Comments
+					stmt, _ := Parse(sql)
+					switch s := stmt.(type) {
+					case *Select:
+						comments = s.Comments
+					case *Update:
+						comments = s.Comments
+					case *Delete:
+						comments = s.Comments
+					case *DropTable:
+						comments = s.Comments
+					case *AlterTable:
+						comments = s.Comments
+					case *CreateTable:
+						comments = s.Comments
+					default:
+						t.Errorf("Unexpected statement type %+v", s)
+					}
+					vals := ExtractCommentDirectives(comments)
 
-		if !reflect.DeepEqual(vals, testCase.vals) {
-			t.Errorf("test input: '%v', got vals:\n%+v, want\n%+v", testCase.input, vals, testCase.vals)
-		}
+					if !reflect.DeepEqual(vals, testCase.vals) {
+						t.Errorf("test input: '%v', got vals:\n%+v, want\n%+v", testCase.input, vals, testCase.vals)
+					}
+				})
+			}
+		})
 	}
 
 	d := CommentDirectives{

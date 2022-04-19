@@ -37,7 +37,6 @@ import (
 	ometrics "vitess.io/vitess/go/vt/orchestrator/metrics"
 	"vitess.io/vitess/go/vt/orchestrator/os"
 	"vitess.io/vitess/go/vt/orchestrator/process"
-	orcraft "vitess.io/vitess/go/vt/orchestrator/raft"
 	"vitess.io/vitess/go/vt/orchestrator/util"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -161,8 +160,8 @@ type MasterRecoveryType string
 const (
 	NotMasterRecovery          MasterRecoveryType = "NotMasterRecovery"
 	MasterRecoveryGTID         MasterRecoveryType = "MasterRecoveryGTID"
-	MasterRecoveryPseudoGTID   MasterRecoveryType = "MasterRecoveryPseudoGTID"
 	MasterRecoveryBinlogServer MasterRecoveryType = "MasterRecoveryBinlogServer"
+	MasterRecoveryUnknown      MasterRecoveryType = "MasterRecoveryUnknown"
 )
 
 var emergencyReadTopologyInstanceMap *cache.Cache
@@ -232,12 +231,7 @@ func AuditTopologyRecovery(topologyRecovery *TopologyRecovery, message string) e
 	}
 
 	recoveryStep := NewTopologyRecoveryStep(topologyRecovery.UID, message)
-	if orcraft.IsRaftEnabled() {
-		_, err := orcraft.PublishCommand("write-recovery-step", recoveryStep)
-		return err
-	} else {
-		return writeTopologyRecoveryStep(recoveryStep)
-	}
+	return writeTopologyRecoveryStep(recoveryStep)
 }
 
 func resolveRecovery(topologyRecovery *TopologyRecovery, successorInstance *inst.Instance) error {
@@ -246,12 +240,7 @@ func resolveRecovery(topologyRecovery *TopologyRecovery, successorInstance *inst
 		topologyRecovery.SuccessorAlias = successorInstance.InstanceAlias
 		topologyRecovery.IsSuccessful = true
 	}
-	if orcraft.IsRaftEnabled() {
-		_, err := orcraft.PublishCommand("resolve-recovery", topologyRecovery)
-		return err
-	} else {
-		return writeResolveRecovery(topologyRecovery)
-	}
+	return writeResolveRecovery(topologyRecovery)
 }
 
 // prepareCommand replaces agreed-upon placeholders with analysis data
@@ -482,7 +471,7 @@ func recoverDeadMasterInBinlogServerTopology(topologyRecovery *TopologyRecovery)
 }
 
 func GetMasterRecoveryType(analysisEntry *inst.ReplicationAnalysis) (masterRecoveryType MasterRecoveryType) {
-	masterRecoveryType = MasterRecoveryPseudoGTID
+	masterRecoveryType = MasterRecoveryUnknown
 	if analysisEntry.OracleGTIDImmediateTopology || analysisEntry.MariaDBGTIDImmediateTopology {
 		masterRecoveryType = MasterRecoveryGTID
 	} else if analysisEntry.BinlogServerImmediateTopology {
@@ -534,15 +523,14 @@ func recoverDeadMaster(topologyRecovery *TopologyRecovery, candidateInstanceKey 
 		return false
 	}
 	switch topologyRecovery.RecoveryType {
+	case MasterRecoveryUnknown:
+		{
+			return false, nil, lostReplicas, topologyRecovery.AddError(log.Errorf("RecoveryType unknown/unsupported"))
+		}
 	case MasterRecoveryGTID:
 		{
 			AuditTopologyRecovery(topologyRecovery, "RecoverDeadMaster: regrouping replicas via GTID")
 			lostReplicas, _, cannotReplicateReplicas, promotedReplica, err = inst.RegroupReplicasGTID(failedInstanceKey, true, nil, &topologyRecovery.PostponedFunctionsContainer, promotedReplicaIsIdeal)
-		}
-	case MasterRecoveryPseudoGTID:
-		{
-			AuditTopologyRecovery(topologyRecovery, "RecoverDeadMaster: regrouping replicas via Pseudo-GTID")
-			lostReplicas, _, _, cannotReplicateReplicas, promotedReplica, err = inst.RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers(failedInstanceKey, true, nil, &topologyRecovery.PostponedFunctionsContainer, promotedReplicaIsIdeal)
 		}
 	case MasterRecoveryBinlogServer:
 		{
@@ -940,19 +928,9 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 
 		kvPairs := inst.GetClusterMasterKVPairs(analysisEntry.ClusterDetails.ClusterAlias, &promotedReplica.Key)
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Writing KV %+v", kvPairs))
-		if orcraft.IsRaftEnabled() {
-			for _, kvPair := range kvPairs {
-				_, err := orcraft.PublishCommand("put-key-value", kvPair)
-				log.Errore(err)
-			}
-			// since we'll be affecting 3rd party tools here, we _prefer_ to mitigate re-applying
-			// of the put-key-value event upon startup. We _recommend_ a snapshot in the near future.
-			go orcraft.PublishCommand("async-snapshot", "")
-		} else {
-			for _, kvPair := range kvPairs {
-				err := kv.PutKVPair(kvPair)
-				log.Errore(err)
-			}
+		for _, kvPair := range kvPairs {
+			err := kv.PutKVPair(kvPair)
+			log.Errore(err)
 		}
 		{
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Distributing KV %+v", kvPairs))
@@ -1283,7 +1261,7 @@ func RecoverDeadCoMaster(topologyRecovery *TopologyRecovery, skipProcesses bool)
 
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadCoMaster: will recover %+v", *failedInstanceKey))
 
-	var coMasterRecoveryType MasterRecoveryType = MasterRecoveryPseudoGTID
+	var coMasterRecoveryType MasterRecoveryType = MasterRecoveryUnknown
 	if analysisEntry.OracleGTIDImmediateTopology || analysisEntry.MariaDBGTIDImmediateTopology {
 		coMasterRecoveryType = MasterRecoveryGTID
 	}
@@ -1292,13 +1270,13 @@ func RecoverDeadCoMaster(topologyRecovery *TopologyRecovery, skipProcesses bool)
 
 	var cannotReplicateReplicas [](*inst.Instance)
 	switch coMasterRecoveryType {
+	case MasterRecoveryUnknown:
+		{
+			return nil, lostReplicas, topologyRecovery.AddError(log.Errorf("RecoverDeadCoMaster: RecoveryType unknown/unsupported"))
+		}
 	case MasterRecoveryGTID:
 		{
 			lostReplicas, _, cannotReplicateReplicas, promotedReplica, err = inst.RegroupReplicasGTID(failedInstanceKey, true, nil, &topologyRecovery.PostponedFunctionsContainer, nil)
-		}
-	case MasterRecoveryPseudoGTID:
-		{
-			lostReplicas, _, _, cannotReplicateReplicas, promotedReplica, err = inst.RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers(failedInstanceKey, true, nil, &topologyRecovery.PostponedFunctionsContainer, nil)
 		}
 	}
 	topologyRecovery.AddError(err)
@@ -1654,25 +1632,8 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 
 	// At this point we have validated there's a failure scenario for which we have a recovery path.
 
-	if orcraft.IsRaftEnabled() {
-		// with raft, all nodes can (and should) run analysis,
-		// but only the leader proceeds to execute detection hooks and then to failover.
-		if !orcraft.IsLeader() {
-			log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
-				"skipProcesses: %v: NOT detecting/recovering host (raft non-leader)",
-				analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, candidateInstanceKey, skipProcesses)
-			return false, nil, err
-		}
-	}
-
 	// Initiate detection:
-	registrationSuccess, _, err := checkAndExecuteFailureDetectionProcesses(analysisEntry, skipProcesses)
-	if registrationSuccess {
-		if orcraft.IsRaftEnabled() {
-			_, err := orcraft.PublishCommand("register-failure-detection", analysisEntry)
-			log.Errore(err)
-		}
-	}
+	_, _, err = checkAndExecuteFailureDetectionProcesses(analysisEntry, skipProcesses)
 	if err != nil {
 		log.Errorf("executeCheckAndRecoverFunction: error on failure detection: %+v", err)
 		return false, nil, err

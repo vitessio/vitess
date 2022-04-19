@@ -53,6 +53,7 @@ var (
 
 // VTGate is the public structure that is exported via gRPC
 type VTGate struct {
+	vtgateservicepb.UnimplementedVitessServer
 	server vtgateservice.VTGateService
 }
 
@@ -178,6 +179,39 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 	return vterrors.ToGRPC(vtgErr)
 }
 
+// Prepare is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) Prepare(ctx context.Context, request *vtgatepb.PrepareRequest) (response *vtgatepb.PrepareResponse, err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx = withCallerIDContext(ctx, request.CallerId)
+
+	session := request.Session
+	if session == nil {
+		session = &vtgatepb.Session{Autocommit: true}
+	}
+
+	session, fields, err := vtg.server.Prepare(ctx, session, request.Query.Sql, request.Query.BindVariables)
+	return &vtgatepb.PrepareResponse{
+		Fields:  fields,
+		Session: session,
+		Error:   vterrors.ToVTRPC(err),
+	}, nil
+}
+
+// CloseSession is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) CloseSession(ctx context.Context, request *vtgatepb.CloseSessionRequest) (response *vtgatepb.CloseSessionResponse, err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx = withCallerIDContext(ctx, request.CallerId)
+
+	session := request.Session
+	if session == nil {
+		session = &vtgatepb.Session{Autocommit: true}
+	}
+	err = vtg.server.CloseSession(ctx, session)
+	return &vtgatepb.CloseSessionResponse{
+		Error: vterrors.ToVTRPC(err),
+	}, nil
+}
+
 // ResolveTransaction is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) ResolveTransaction(ctx context.Context, request *vtgatepb.ResolveTransactionRequest) (response *vtgatepb.ResolveTransactionResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
@@ -194,8 +228,15 @@ func (vtg *VTGate) ResolveTransaction(ctx context.Context, request *vtgatepb.Res
 func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservicepb.Vitess_VStreamServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx := withCallerIDContext(stream.Context(), request.CallerId)
+
+	// For backward compatibility.
+	// The mysql query equivalent has logic to use topodatapb.TabletType_MASTER if tablet_type is not set.
+	tabletType := request.TabletType
+	if tabletType == topodatapb.TabletType_UNKNOWN {
+		tabletType = topodatapb.TabletType_MASTER
+	}
 	vtgErr := vtg.server.VStream(ctx,
-		request.TabletType,
+		tabletType,
 		request.Vgtid,
 		request.Filter,
 		request.Flags,
@@ -210,7 +251,7 @@ func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservic
 func init() {
 	vtgate.RegisterVTGates = append(vtgate.RegisterVTGates, func(vtGate vtgateservice.VTGateService) {
 		if servenv.GRPCCheckServiceMap("vtgateservice") {
-			vtgateservicepb.RegisterVitessServer(servenv.GRPCServer, &VTGate{vtGate})
+			vtgateservicepb.RegisterVitessServer(servenv.GRPCServer, &VTGate{server: vtGate})
 		}
 	})
 }
@@ -219,5 +260,5 @@ func init() {
 // server.  Useful for unit tests only, for real use, the init()
 // function does the registration.
 func RegisterForTest(s *grpc.Server, service vtgateservice.VTGateService) {
-	vtgateservicepb.RegisterVitessServer(s, &VTGate{service})
+	vtgateservicepb.RegisterVitessServer(s, &VTGate{server: service})
 }

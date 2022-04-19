@@ -34,7 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -77,7 +77,7 @@ type tabletHealthCheck struct {
 // String is defined because we want to print a []*tabletHealthCheck array nicely.
 func (thc *tabletHealthCheck) String() string {
 	return fmt.Sprintf("tabletHealthCheck{Tablet: %v,Target: %v,Serving: %v, MasterTermStartTime: %v, Stats: %v, LastError: %v",
-		thc.Tablet, thc.Target, thc.Serving, thc.MasterTermStartTime, *thc.Stats, thc.LastError)
+		thc.Tablet, thc.Target, thc.Serving, thc.MasterTermStartTime, thc.Stats, thc.LastError)
 }
 
 // SimpleCopy returns a TabletHealth with all the necessary fields copied from tabletHealthCheck.
@@ -200,7 +200,7 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 	thc.setServingState(serving, reason)
 
 	// notify downstream for master change
-	hc.updateHealth(thc.SimpleCopy(), prevTarget, trivialUpdate, true)
+	hc.updateHealth(thc.SimpleCopy(), prevTarget, trivialUpdate, thc.Serving)
 	return nil
 }
 
@@ -294,7 +294,7 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 				return
 			}
 			// trivialUpdate = false because this is an error
-			// isPrimaryUp = false because we did not get a healthy response
+			// up = false because we did not get a healthy response
 			hc.updateHealth(thc.SimpleCopy(), thc.Target, false, false)
 		}
 		// If there was a timeout send an error. We do this after stream has returned.
@@ -305,7 +305,7 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 			thc.setServingState(false, thc.LastError.Error())
 			hcErrorCounters.Add([]string{thc.Target.Keyspace, thc.Target.Shard, topoproto.TabletTypeLString(thc.Target.TabletType)}, 1)
 			// trivialUpdate = false because this is an error
-			// isPrimaryUp = false because we did not get a healthy response within the timeout
+			// up = false because we did not get a healthy response within the timeout
 			hc.updateHealth(thc.SimpleCopy(), thc.Target, false, false)
 		}
 

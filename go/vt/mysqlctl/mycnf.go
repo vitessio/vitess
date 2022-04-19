@@ -55,6 +55,10 @@ type Mycnf struct {
 	// (used by vt software for Clone)
 	InnodbLogGroupHomeDir string
 
+	// SecureFilePriv is the path for loading secure files
+	// (used by vt software for bulk loading into tablet instances)
+	SecureFilePriv string
+
 	// SocketFile is the path to the local mysql.sock file.
 	// (used by vt software to check server is running)
 	SocketFile string
@@ -203,6 +207,7 @@ func ReadMycnf(mycnf *Mycnf) (*Mycnf, error) {
 		"master-info-file":          &mycnf.MasterInfoFile,
 		"pid-file":                  &mycnf.PidFile,
 		"tmpdir":                    &mycnf.TmpDir,
+		"secure-file-priv":          &mycnf.SecureFilePriv,
 	}
 	for key, member := range mapping {
 		val, err := mycnf.lookupWithDefault(key, *member)

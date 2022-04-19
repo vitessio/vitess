@@ -12,6 +12,7 @@
     "query": "revert vitess_migration 'abc'"
   }
 }
+Gen4 plan same as above
 
 # retry migration
 "alter vitess_migration 'abc' retry"
@@ -25,11 +26,10 @@
       "Sharded": false
     },
     "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "alter vitess_migration 'abc' retry",
-    "SingleShardOnly": false
+    "Query": "alter vitess_migration 'abc' retry"
   }
 }
+Gen4 plan same as above
 
 # complete migration
 "alter vitess_migration 'abc' complete"
@@ -43,11 +43,10 @@
       "Sharded": false
     },
     "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "alter vitess_migration 'abc' complete",
-    "SingleShardOnly": false
+    "Query": "alter vitess_migration 'abc' complete"
   }
 }
+Gen4 plan same as above
 
 # cancel migration
 "alter vitess_migration 'abc' cancel"
@@ -61,11 +60,10 @@
       "Sharded": false
     },
     "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "alter vitess_migration 'abc' cancel",
-    "SingleShardOnly": false
+    "Query": "alter vitess_migration 'abc' cancel"
   }
 }
+Gen4 plan same as above
 
 # cancel all migrations
 "alter vitess_migration cancel all"
@@ -79,8 +77,7 @@
       "Sharded": false
     },
     "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "alter vitess_migration cancel all",
-    "SingleShardOnly": false
+    "Query": "alter vitess_migration cancel all"
   }
 }
+Gen4 plan same as above

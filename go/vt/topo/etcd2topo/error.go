@@ -21,7 +21,7 @@ import (
 
 	"context"
 
-	"github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes"
+	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 

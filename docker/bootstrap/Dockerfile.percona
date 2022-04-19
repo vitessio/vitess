@@ -14,7 +14,7 @@ FROM "${image}"
 # 'buster' repository as the 'stretch' package requires 'libcurl3' that is not present
 # in Debian Buster.
 #
-RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keys.gnupg.net --recv-keys 9334A25F8507EFA5 && break; done && \
+RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keyserver.ubuntu.com --recv-keys 9334A25F8507EFA5 && break; done && \
     add-apt-repository 'deb http://repo.percona.com/apt stretch main' && \
     add-apt-repository 'deb http://repo.percona.com/apt buster main' && \
     { \

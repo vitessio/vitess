@@ -20,7 +20,7 @@ import (
 	"context"
 	"path"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/event"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

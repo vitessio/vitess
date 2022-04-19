@@ -17,14 +17,22 @@ limitations under the License.
 package semantics
 
 import (
+	"vitess.io/vitess/go/vt/key"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type (
-	table = *sqlparser.AliasedTableExpr
+	// TableInfo contains the alias table expr and vindex table
+	TableInfo struct {
+		dbName, tableName string
+		ASTNode           *sqlparser.AliasedTableExpr
+		Table             *vindexes.Table
+	}
 
 	// TableSet is how a set of tables is expressed.
 	// Tables get unique bits assigned in the order that they are encountered during semantic analysis
@@ -33,13 +41,22 @@ type (
 
 	// SemTable contains semantic analysis information about the query.
 	SemTable struct {
-		Tables           []table
+		Tables []*TableInfo
+		// ProjectionErr stores the error that we got during the semantic analysis of the SelectExprs.
+		// This is only a real error if we are unable to plan the query as a single route
+		ProjectionErr    error
 		exprDependencies map[sqlparser.Expr]TableSet
+		selectScope      map[*sqlparser.Select]*scope
 	}
 
 	scope struct {
 		parent *scope
-		tables map[string]*sqlparser.AliasedTableExpr
+		tables []*TableInfo
+	}
+
+	// SchemaInformation is used tp provide table information from Vschema.
+	SchemaInformation interface {
+		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 	}
 )
 
@@ -49,13 +66,21 @@ func NewSemTable() *SemTable {
 }
 
 // TableSetFor returns the bitmask for this particular tableshoe
-func (st *SemTable) TableSetFor(t table) TableSet {
+func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for idx, t2 := range st.Tables {
-		if t == t2 {
+		if t == t2.ASTNode {
 			return 1 << idx
 		}
 	}
 	return 0
+}
+
+// TableInfoFor returns the table info for the table set. It should contains only single table.
+func (st *SemTable) TableInfoFor(id TableSet) (*TableInfo, error) {
+	if id.NumberOfTables() > 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
+	}
+	return st.Tables[id.TableOffset()], nil
 }
 
 // Dependencies return the table dependencies of the expression.
@@ -79,28 +104,35 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 	return deps
 }
 
+// GetSelectTables returns the table in the select.
+func (st *SemTable) GetSelectTables(node *sqlparser.Select) []*TableInfo {
+	scope := st.selectScope[node]
+	return scope.tables
+}
+
+// AddExprs adds new select exprs to the SemTable.
+func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.SelectExprs) {
+	tableSet := st.TableSetFor(tbl)
+	for _, col := range cols {
+		st.exprDependencies[col.(*sqlparser.AliasedExpr).Expr] = tableSet
+	}
+}
+
 func newScope(parent *scope) *scope {
-	return &scope{tables: map[string]*sqlparser.AliasedTableExpr{}, parent: parent}
+	return &scope{parent: parent}
 }
 
-func (s *scope) addTable(name string, table *sqlparser.AliasedTableExpr) error {
-	_, found := s.tables[name]
-	if found {
-		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", name)
+func (s *scope) addTable(table *TableInfo) error {
+	for _, scopeTable := range s.tables {
+		b := scopeTable.tableName == table.tableName
+		b2 := scopeTable.dbName == table.dbName
+		if b && b2 {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", table.tableName)
+		}
 	}
-	s.tables[name] = table
+
+	s.tables = append(s.tables, table)
 	return nil
-}
-
-// Analyse analyzes the parsed query.
-func Analyse(statement sqlparser.Statement) (*SemTable, error) {
-	analyzer := newAnalyzer()
-	// Initial scope
-	err := analyzer.analyze(statement)
-	if err != nil {
-		return nil, err
-	}
-	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables}, nil
 }
 
 // IsOverlapping returns true if at least one table exists in both sets
@@ -118,6 +150,16 @@ func (ts TableSet) NumberOfTables() int {
 		count++
 	}
 	return count
+}
+
+// TableOffset returns the offset in the Tables array from TableSet
+func (ts TableSet) TableOffset() int {
+	offset := 0
+	for ts > 1 {
+		ts = ts >> 1
+		offset++
+	}
+	return offset
 }
 
 // Constituents returns an slice with all the

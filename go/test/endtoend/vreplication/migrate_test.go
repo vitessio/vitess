@@ -52,7 +52,7 @@ func TestMigrate(t *testing.T) {
 	require.NotNil(t, vc)
 	defaultReplicas = 0
 	defaultRdonly = 0
-	defer vc.TearDown()
+	defer vc.TearDown(t)
 
 	defaultCell = vc.Cells[defaultCellName]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
@@ -70,7 +70,7 @@ func TestMigrate(t *testing.T) {
 	extCells := []string{extCell}
 	extVc := NewVitessCluster(t, "TestMigrateExternal", extCells, externalClusterConfig)
 	require.NotNil(t, extVc)
-	defer extVc.TearDown()
+	defer extVc.TearDown(t)
 
 	extCell2 := extVc.Cells[extCell]
 	extVc.AddKeyspace(t, []*Cell{extCell2}, "rating", "0", initialExternalVSchema, initialExternalSchema, 0, 0, 1000)

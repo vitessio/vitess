@@ -56,7 +56,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 			case *sqlparser.ColName:
 				c := e.Metadata.(*column)
 				if c.Origin() == node {
-					return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongGroupField, "group by expression cannot reference an aggregate function: %v", sqlparser.String(e))
+					return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongGroupField, "Can't group on '%s'", sqlparser.String(e))
 				}
 				for i, rc := range node.resultColumns {
 					if rc.column == c {
@@ -77,6 +77,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: only simple references allowed")
 			}
 			node.eaggr.Keys = append(node.eaggr.Keys, colNumber)
+			node.eaggr.FromGroupBy = append(node.eaggr.FromGroupBy, true)
 		}
 		// Append the distinct aggregate if any.
 		if node.extraDistinct != nil {
@@ -110,6 +111,7 @@ func planDistinct(input logicalPlan) (logicalPlan, error) {
 				return newDistinct(node), nil
 			}
 			node.eaggr.Keys = append(node.eaggr.Keys, i)
+			node.eaggr.FromGroupBy = append(node.eaggr.FromGroupBy, false)
 		}
 		newInput, err := planDistinct(node.input)
 		if err != nil {

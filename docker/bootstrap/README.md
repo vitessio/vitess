@@ -25,6 +25,24 @@ vitess$ docker/bootstrap/build.sh common
 vitess$ docker/bootstrap/build.sh mysql56
 ```
 
+Is it also possible to specify the resulting image name:
+
+```sh
+vitess$ docker/bootstrap/build.sh common --image my-common-image
+```
+
+If custom image names are specified, you might need to set the base image name when building flavors:
+
+```sh
+vitess$ docker/bootstrap/build.sh mysql56 --base_image my-common-image
+```
+
+Both arguments can be combined. For example:
+
+```sh
+vitess$ docker/bootstrap/build.sh mysql56 --base_image my-common-image --image my-mysql-image
+```
+
 ## For Vitess Project Maintainers
 
 To update all bootstrap images on Docker Hub, you can use the `docker_bootstrap`

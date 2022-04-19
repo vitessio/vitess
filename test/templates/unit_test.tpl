@@ -9,7 +9,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v1
       with:
-        go-version: 1.15
+        go-version: 1.16
 
     - name: Tune the OS
       run: |
@@ -60,6 +60,8 @@ jobs:
         {{end}}
 
         {{if (eq .Platform "mysql80")}}
+        # Get key to latest MySQL repo
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
 
         # mysql80
         wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.14-1_all.deb

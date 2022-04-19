@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -36,7 +38,7 @@ func TestVitessCluster(t *testing.T) {
 				Root:     topoRoot,
 			},
 		}
-		require.Equal(t, expectedVc, vci.ExternalVitessCluster)
+		utils.MustMatch(t, expectedVc, vci.ExternalVitessCluster)
 	})
 
 	t.Run("Mount second cluster", func(t *testing.T) {

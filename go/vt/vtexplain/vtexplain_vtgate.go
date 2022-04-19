@@ -69,7 +69,8 @@ func initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts *Options) error {
 	vtgateSession.TargetString = opts.Target
 
 	streamSize := 10
-	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, resolver, opts.Normalize, false /*do not warn for sharded only*/, streamSize, cache.DefaultConfig)
+	var schemaTracker vtgate.SchemaInfo // no schema tracker for these tests
+	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, resolver, opts.Normalize, false /*do not warn for sharded only*/, streamSize, cache.DefaultConfig, schemaTracker)
 
 	return nil
 }
@@ -214,13 +215,18 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error
 			continue
 		}
 
-		tabletActions[shard] = &TabletActions{
-			TabletQueries: tc.tabletQueries,
-			MysqlQueries:  tc.mysqlQueries,
-		}
+		func() {
+			tc.mu.Lock()
+			defer tc.mu.Unlock()
 
-		tc.tabletQueries = nil
-		tc.mysqlQueries = nil
+			tabletActions[shard] = &TabletActions{
+				TabletQueries: tc.tabletQueries,
+				MysqlQueries:  tc.mysqlQueries,
+			}
+
+			tc.tabletQueries = nil
+			tc.mysqlQueries = nil
+		}()
 	}
 
 	return plans, tabletActions, nil

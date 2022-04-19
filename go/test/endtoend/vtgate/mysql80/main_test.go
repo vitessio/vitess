@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -55,6 +55,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "-enable_system_settings=true")
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {

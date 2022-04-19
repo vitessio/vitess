@@ -23,13 +23,13 @@ func (cached *KeyRange) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(76)
+		size += int64(88)
 	}
+	// field unknownFields []byte
+	size += int64(cap(cached.unknownFields))
 	// field Start []byte
 	size += int64(cap(cached.Start))
 	// field End []byte
 	size += int64(cap(cached.End))
-	// field XXX_unrecognized []byte
-	size += int64(cap(cached.XXX_unrecognized))
 	return size
 }

@@ -23,9 +23,10 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/encoding/prototext"
+
 	"context"
 
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -92,7 +93,8 @@ func main() {
 		Name:       *task,
 		Parameters: params.parameters,
 	}
-	fmt.Printf("Sending request:\n%v", proto.MarshalTextString(enqueueRequest))
+	protoTextReq, _ := prototext.Marshal(enqueueRequest)
+	fmt.Printf("Sending request:\n%s", protoTextReq)
 	enqueueResponse, err := client.EnqueueClusterOperation(context.Background(), enqueueRequest, grpc.WaitForReady(true))
 	if err != nil {
 		fmt.Println("Failed to enqueue ClusterOperation. Error:", err)
@@ -104,7 +106,8 @@ func main() {
 		fmt.Println("ERROR:", errWait)
 		os.Exit(5)
 	}
-	fmt.Printf("SUCCESS: ClusterOperation finished.\n\nDetails:\n%v", proto.MarshalTextString(resp))
+	protoTextResp, _ := prototext.Marshal(resp)
+	fmt.Printf("SUCCESS: ClusterOperation finished.\n\nDetails:\n%s", protoTextResp)
 }
 
 // waitForClusterOp polls and blocks until the ClusterOperation invocation specified by "id" has finished. If an error occurred, it will be returned.
@@ -124,7 +127,8 @@ func waitForClusterOp(client automationservicepb.AutomationClient, id string) (*
 			return resp, fmt.Errorf("ClusterOperation is in an unknown state. Details: %v", resp)
 		case automationpb.ClusterOperationState_CLUSTER_OPERATION_DONE:
 			if resp.ClusterOp.Error != "" {
-				return resp, fmt.Errorf("ClusterOperation failed. Details:\n%v", proto.MarshalTextString(resp))
+				protoTextResp, _ := prototext.Marshal(resp)
+				return resp, fmt.Errorf("ClusterOperation failed. Details:\n%s", protoTextResp)
 			}
 			return resp, nil
 		}

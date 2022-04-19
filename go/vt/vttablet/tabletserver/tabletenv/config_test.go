@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -140,6 +142,7 @@ replicationTracker:
   heartbeatIntervalSeconds: 0.25
   mode: disable
 schemaReloadIntervalSeconds: 1800
+signalSchemaChangeReloadIntervalSeconds: 5
 streamBufferSize: 32768
 txPool:
   idleTimeoutSeconds: 1800
@@ -147,7 +150,7 @@ txPool:
   size: 20
   timeoutSeconds: 1
 `
-	assert.Equal(t, want, string(gotBytes))
+	utils.MustMatch(t, want, string(gotBytes))
 }
 
 func TestClone(t *testing.T) {
@@ -194,16 +197,17 @@ func TestFlags(t *testing.T) {
 			MaxGlobalQueueSize: 1000,
 			MaxConcurrency:     5,
 		},
-		StreamBufferSize:            32768,
-		QueryCacheSize:              int(cache.DefaultConfig.MaxEntries),
-		QueryCacheMemory:            cache.DefaultConfig.MaxMemoryUsage,
-		QueryCacheLFU:               cache.DefaultConfig.LFU,
-		SchemaReloadIntervalSeconds: 1800,
-		TrackSchemaVersions:         false,
-		MessagePostponeParallelism:  4,
-		CacheResultFields:           true,
-		TxThrottlerConfig:           "target_replication_lag_sec: 2\nmax_replication_lag_sec: 10\ninitial_rate: 100\nmax_increase: 1\nemergency_decrease: 0.5\nmin_duration_between_increases_sec: 40\nmax_duration_between_increases_sec: 62\nmin_duration_between_decreases_sec: 20\nspread_backlog_across_sec: 20\nage_bad_rate_after_sec: 180\nbad_rate_increase: 0.1\nmax_rate_approach_threshold: 0.9\n",
-		TxThrottlerHealthCheckCells: []string{},
+		StreamBufferSize:                        32768,
+		QueryCacheSize:                          int(cache.DefaultConfig.MaxEntries),
+		QueryCacheMemory:                        cache.DefaultConfig.MaxMemoryUsage,
+		QueryCacheLFU:                           cache.DefaultConfig.LFU,
+		SchemaReloadIntervalSeconds:             1800,
+		SignalSchemaChangeReloadIntervalSeconds: 5,
+		TrackSchemaVersions:                     false,
+		MessagePostponeParallelism:              4,
+		CacheResultFields:                       true,
+		TxThrottlerConfig:                       "target_replication_lag_sec: 2\nmax_replication_lag_sec: 10\ninitial_rate: 100\nmax_increase: 1\nemergency_decrease: 0.5\nmin_duration_between_increases_sec: 40\nmax_duration_between_increases_sec: 62\nmin_duration_between_decreases_sec: 20\nspread_backlog_across_sec: 20\nage_bad_rate_after_sec: 180\nbad_rate_increase: 0.1\nmax_rate_approach_threshold: 0.9\n",
+		TxThrottlerHealthCheckCells:             []string{},
 		TransactionLimitConfig: TransactionLimitConfig{
 			TransactionLimitPerUser:     0.4,
 			TransactionLimitByUsername:  true,

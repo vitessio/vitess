@@ -41,12 +41,12 @@ func (s *sqlCalcFoundRows) Wireup(logicalPlan, *jointab) error {
 }
 
 //Wireup2 implements the logicalPlan interface
-func (s *sqlCalcFoundRows) WireupV4(semTable *semantics.SemTable) error {
-	err := s.LimitQuery.WireupV4(semTable)
+func (s *sqlCalcFoundRows) WireupGen4(semTable *semantics.SemTable) error {
+	err := s.LimitQuery.WireupGen4(semTable)
 	if err != nil {
 		return err
 	}
-	return s.CountQuery.WireupV4(semTable)
+	return s.CountQuery.WireupGen4(semTable)
 }
 
 // Solves implements the logicalPlan interface
@@ -90,7 +90,7 @@ func (s *sqlCalcFoundRows) SupplyCol(col *sqlparser.ColName) (*resultColumn, int
 }
 
 //SupplyWeightString implements the logicalPlan interface
-func (s *sqlCalcFoundRows) SupplyWeightString(int) (weightcolNumber int, err error) {
+func (s *sqlCalcFoundRows) SupplyWeightString(int, bool) (weightcolNumber int, err error) {
 	return 0, UnsupportedSupplyWeightString{Type: "sqlCalcFoundRows"}
 }
 

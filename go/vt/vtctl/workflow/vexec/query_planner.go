@@ -62,7 +62,7 @@ type QueryPlanner interface {
 
 	// PlanQuery constructs and returns a QueryPlan for a given statement. The
 	// resulting QueryPlan is suitable for repeated, concurrent use.
-	PlanQuery(stmt sqlparser.Statement) (*QueryPlan, error)
+	PlanQuery(stmt sqlparser.Statement) (QueryPlan, error)
 	// QueryParams returns a struct of column parameters the QueryPlanner uses.
 	// It is used primarily to abstract the adding of default WHERE clauses to
 	// queries by a private function of this package, and may be removed from
@@ -116,7 +116,7 @@ func NewVReplicationQueryPlanner(tmc tmclient.TabletManagerClient, workflow stri
 //
 // For DELETE queries, USING, PARTITION, ORDER BY, and LIMIT clauses are not
 // supported.
-func (planner *VReplicationQueryPlanner) PlanQuery(stmt sqlparser.Statement) (plan *QueryPlan, err error) {
+func (planner *VReplicationQueryPlanner) PlanQuery(stmt sqlparser.Statement) (plan QueryPlan, err error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
 		plan, err = planner.planSelect(stmt)
@@ -152,7 +152,7 @@ func (planner *VReplicationQueryPlanner) QueryParams() QueryParams {
 	}
 }
 
-func (planner *VReplicationQueryPlanner) planDelete(del *sqlparser.Delete) (*QueryPlan, error) {
+func (planner *VReplicationQueryPlanner) planDelete(del *sqlparser.Delete) (*FixedQueryPlan, error) {
 	if del.Targets != nil {
 		return nil, fmt.Errorf(
 			"%w: DELETE must not have USING clause (have: %v): %v",
@@ -186,27 +186,27 @@ func (planner *VReplicationQueryPlanner) planDelete(del *sqlparser.Delete) (*Que
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("%v", del)
 
-	return &QueryPlan{
+	return &FixedQueryPlan{
 		ParsedQuery: buf.ParsedQuery(),
 		workflow:    planner.workflow,
 		tmc:         planner.tmc,
 	}, nil
 }
 
-func (planner *VReplicationQueryPlanner) planSelect(sel *sqlparser.Select) (*QueryPlan, error) {
+func (planner *VReplicationQueryPlanner) planSelect(sel *sqlparser.Select) (*FixedQueryPlan, error) {
 	sel.Where = addDefaultWheres(planner, sel.Where)
 
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("%v", sel)
 
-	return &QueryPlan{
+	return &FixedQueryPlan{
 		ParsedQuery: buf.ParsedQuery(),
 		workflow:    planner.workflow,
 		tmc:         planner.tmc,
 	}, nil
 }
 
-func (planner *VReplicationQueryPlanner) planUpdate(upd *sqlparser.Update) (*QueryPlan, error) {
+func (planner *VReplicationQueryPlanner) planUpdate(upd *sqlparser.Update) (*FixedQueryPlan, error) {
 	if upd.OrderBy != nil || upd.Limit != nil {
 		return nil, fmt.Errorf(
 			"%w: UPDATE must not have explicit ordering (have: %v) or limit clauses (have: %v): %v",
@@ -235,10 +235,142 @@ func (planner *VReplicationQueryPlanner) planUpdate(upd *sqlparser.Update) (*Que
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("%v", upd)
 
-	return &QueryPlan{
+	return &FixedQueryPlan{
 		ParsedQuery: buf.ParsedQuery(),
 		workflow:    planner.workflow,
 		tmc:         planner.tmc,
+	}, nil
+}
+
+// VReplicationLogQueryPlanner implements the QueryPlanner interface for queries
+// on the _vt.vreplication_log table.
+type VReplicationLogQueryPlanner struct {
+	tmc             tmclient.TabletManagerClient
+	tabletStreamIDs map[string][]int64
+}
+
+// NewVReplicationLogQueryPlanner returns a new VReplicationLogQueryPlanner. The
+// tabletStreamIDs map determines what stream_ids are expected to have vrep_log
+// rows, keyed by tablet alias string.
+func NewVReplicationLogQueryPlanner(tmc tmclient.TabletManagerClient, tabletStreamIDs map[string][]int64) *VReplicationLogQueryPlanner {
+	return &VReplicationLogQueryPlanner{
+		tmc:             tmc,
+		tabletStreamIDs: tabletStreamIDs,
+	}
+}
+
+// PlanQuery is part of the QueryPlanner interface.
+//
+// For vreplication_log query planners, only SELECT queries are supported.
+func (planner *VReplicationLogQueryPlanner) PlanQuery(stmt sqlparser.Statement) (plan QueryPlan, err error) {
+	switch stmt := stmt.(type) {
+	case *sqlparser.Select:
+		plan, err = planner.planSelect(stmt)
+	case *sqlparser.Insert:
+		err = ErrUnsupportedQuery
+	case *sqlparser.Update:
+		err = ErrUnsupportedQuery
+	case *sqlparser.Delete:
+		err = ErrUnsupportedQuery
+	default:
+		err = ErrUnsupportedQuery
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", err, sqlparser.String(stmt))
+	}
+
+	return plan, nil
+}
+
+// QueryParams is part of the QueryPlanner interface.
+func (planner *VReplicationLogQueryPlanner) QueryParams() QueryParams {
+	return QueryParams{}
+}
+
+func (planner *VReplicationLogQueryPlanner) planSelect(sel *sqlparser.Select) (QueryPlan, error) {
+	where := sel.Where
+	cols := extractWhereComparisonColumns(where)
+	hasVReplIDCol := false
+
+	for _, col := range cols {
+		if col == "vrepl_id" {
+			hasVReplIDCol = true
+		}
+	}
+
+	if hasVReplIDCol { // we're not injecting per-target parameters, return a Fixed plan
+		buf := sqlparser.NewTrackedBuffer(nil)
+		buf.Myprintf("%v", sel)
+
+		return &FixedQueryPlan{
+			ParsedQuery: buf.ParsedQuery(),
+			tmc:         planner.tmc,
+		}, nil
+	}
+
+	// Construct a where clause to filter by vrepl_id, parameterized by target
+	// streamIDs.
+	queriesByTarget := make(map[string]*sqlparser.ParsedQuery, len(planner.tabletStreamIDs))
+	for target, streamIDs := range planner.tabletStreamIDs {
+		targetWhere := &sqlparser.Where{
+			Type: sqlparser.WhereClause,
+		}
+
+		var expr sqlparser.Expr
+		switch len(streamIDs) {
+		case 0: // WHERE vreplication_log.vrepl_id IN () => WHERE 1 != 1
+			one := sqlparser.NewIntLiteral("1")
+			expr = &sqlparser.ComparisonExpr{
+				Operator: sqlparser.NotEqualOp,
+				Left:     one,
+				Right:    one,
+			}
+		case 1: // WHERE vreplication_log.vrepl_id = ?
+			expr = &sqlparser.ComparisonExpr{
+				Operator: sqlparser.EqualOp,
+				Left: &sqlparser.ColName{
+					Name: sqlparser.NewColIdent("vrepl_id"),
+				},
+				Right: sqlparser.NewIntLiteral(fmt.Sprintf("%d", streamIDs[0])),
+			}
+		default: // WHERE vreplication_log.vrepl_id IN (?)
+			vals := []sqlparser.Expr{}
+			for _, streamID := range streamIDs {
+				vals = append(vals, sqlparser.NewIntLiteral(fmt.Sprintf("%d", streamID)))
+			}
+
+			var tuple sqlparser.ValTuple = vals
+			expr = &sqlparser.ComparisonExpr{
+				Operator: sqlparser.InOp,
+				Left: &sqlparser.ColName{
+					Name: sqlparser.NewColIdent("vrepl_id"),
+				},
+				Right: tuple,
+			}
+		}
+
+		switch where {
+		case nil:
+			targetWhere.Expr = expr
+		default:
+			targetWhere.Expr = &sqlparser.AndExpr{
+				Left:  expr,
+				Right: where.Expr,
+			}
+		}
+
+		sel.Where = targetWhere
+
+		buf := sqlparser.NewTrackedBuffer(nil)
+		buf.Myprintf("%v", sel)
+
+		queriesByTarget[target] = buf.ParsedQuery()
+	}
+
+	return &PerTargetQueryPlan{
+		ParsedQueries: queriesByTarget,
+		tmc:           planner.tmc,
 	}, nil
 }
 

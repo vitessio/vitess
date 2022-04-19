@@ -160,7 +160,6 @@ type ReplicationAnalysis struct {
 	DowntimeEndTimestamp                      string
 	DowntimeRemainingSeconds                  int
 	IsBinlogServer                            bool
-	PseudoGTIDImmediateTopology               bool
 	OracleGTIDImmediateTopology               bool
 	MariaDBGTIDImmediateTopology              bool
 	BinlogServerImmediateTopology             bool

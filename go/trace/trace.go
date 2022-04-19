@@ -133,6 +133,7 @@ var currentTracer tracingService = noopTracingServer{}
 
 var (
 	tracingServer = flag.String("tracer", "noop", "tracing service to use")
+	enableLogging = flag.Bool("tracing-enable-logging", false, "whether to enable logging in the tracing service")
 )
 
 // StartTracing enables tracing for a named service

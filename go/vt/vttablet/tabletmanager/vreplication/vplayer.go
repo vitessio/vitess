@@ -106,7 +106,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 		return nil
 	}
 
-	plan, err := buildReplicatorPlan(vp.vr.source.Filter, vp.vr.pkInfoMap, vp.copyState, vp.vr.stats)
+	plan, err := buildReplicatorPlan(vp.vr.source.Filter, vp.vr.colInfoMap, vp.copyState, vp.vr.stats)
 	if err != nil {
 		vp.vr.stats.ErrorCounts.Add([]string{"Plan"}, 1)
 		return err
@@ -232,7 +232,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 
 func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	vp.numAccumulatedHeartbeats = 0
-	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts)
+	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), *vreplicationStoreCompressedGTID)
 	if _, err := vp.vr.dbClient.Execute(update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}
@@ -432,7 +432,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 	stats := NewVrLogStats(event.Type.String())
 	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
-		pos, err := mysql.DecodePosition(event.Gtid)
+		pos, err := binlogplayer.DecodePosition(event.Gtid)
 		if err != nil {
 			return err
 		}
@@ -484,8 +484,8 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if sql == "" {
 			sql = event.Dml
 		}
-		// If the event is for one of the AWS RDS "special" tables, we skip
-		if !strings.Contains(sql, " mysql.rds_") {
+		// If the event is for one of the AWS RDS "special" or pt-table-checksum tables, we skip
+		if !strings.Contains(sql, " mysql.rds_") && !strings.Contains(sql, " percona.checksums") {
 			// This is a player using statement based replication
 			if err := vp.vr.dbClient.Begin(); err != nil {
 				return err

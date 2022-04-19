@@ -25,6 +25,8 @@ import (
 	"path"
 	"strings"
 
+	"vitess.io/vitess/go/tools/common"
+
 	"github.com/dave/jennifer/jen"
 	"golang.org/x/tools/go/packages"
 )
@@ -201,7 +203,8 @@ func GenerateASTHelpers(packagePatterns []string, rootIface, exceptCloneType str
 		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesSizes | packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports | packages.NeedModule,
 	}, packagePatterns...)
 
-	if err != nil {
+	if err != nil || common.PkgFailed(loaded) {
+		log.Fatal("error loading packaged")
 		return nil, err
 	}
 

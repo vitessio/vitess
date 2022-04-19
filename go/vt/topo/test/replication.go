@@ -19,6 +19,8 @@ package test
 import (
 	"testing"
 
+	"google.golang.org/protobuf/proto"
+
 	"context"
 
 	"vitess.io/vitess/go/vt/topo"
@@ -49,7 +51,8 @@ func checkShardReplication(t *testing.T, ts *topo.Server) {
 		t.Fatalf("UpdateShardReplicationFields() failed: %v", err)
 	}
 	if err := ts.UpdateShardReplicationFields(ctx, LocalCellName, "test_keyspace", "-10", func(oldSr *topodatapb.ShardReplication) error {
-		*oldSr = *sr
+		proto.Reset(oldSr)
+		proto.Merge(oldSr, sr)
 		return nil
 	}); err != nil {
 		t.Fatalf("UpdateShardReplicationFields() failed: %v", err)

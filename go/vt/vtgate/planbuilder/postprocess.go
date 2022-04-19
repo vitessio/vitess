@@ -54,7 +54,16 @@ func (pb *primitiveBuilder) pushOrderBy(orderBy sqlparser.OrderBy) error {
 	if err := pb.st.ResolveSymbols(orderBy); err != nil {
 		return err
 	}
-	plan, err := planOrdering(pb, pb.plan, orderBy)
+
+	var v3OrderBylist v3OrderBy
+
+	if orderBy != nil {
+		v3OrderBylist = make(v3OrderBy, 0, len(orderBy))
+		for _, order := range orderBy {
+			v3OrderBylist = append(v3OrderBylist, &v3Order{Order: order})
+		}
+	}
+	plan, err := planOrdering(pb, pb.plan, v3OrderBylist)
 	if err != nil {
 		return err
 	}
@@ -95,7 +104,7 @@ var _ planVisitor = setUpperLimit
 // that it does not need to return more than the specified number of rows.
 // A primitive that cannot perform this can ignore the request.
 func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
-	arg := sqlparser.NewArgument(":__upper_limit")
+	arg := sqlparser.NewArgument("__upper_limit")
 	switch node := plan.(type) {
 	case *join:
 		return false, node, nil

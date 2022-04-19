@@ -565,7 +565,7 @@ func TestServer(t *testing.T) {
 
 	// If there's an error after streaming has started,
 	// we should get a 2013
-	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced error after send"))
+	th.SetErr(NewSQLError(ERUnknownComError, SSNetError, "forced error after send"))
 	output, err = runMysqlWithErr(t, params, "error after send")
 	require.Error(t, err)
 	assert.Contains(t, output, "ERROR 2013 (HY000)", "Unexpected output for 'panic'")
@@ -650,7 +650,7 @@ func TestServerStats(t *testing.T) {
 	connRefuse.Reset()
 
 	// Run an 'error' command.
-	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced query error"))
+	th.SetErr(NewSQLError(ERUnknownComError, SSNetError, "forced query error"))
 	output, ok := runMysql(t, params, "error")
 	require.False(t, ok, "mysql should have failed: %v", output)
 
@@ -843,7 +843,17 @@ func TestTLSServer(t *testing.T) {
 		"")
 	require.NoError(t, err)
 	l.TLSConfig.Store(serverConfig)
-	go l.Accept()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(l *Listener) {
+		wg.Done()
+		l.Accept()
+	}(l)
+	// This is ensure the listener is called
+	wg.Wait()
+	// Sleep so that the Accept function is called as well.'
+	time.Sleep(3 * time.Second)
 
 	connCountByTLSVer.ResetAll()
 	// Setup the right parameters.
@@ -933,7 +943,17 @@ func TestTLSRequired(t *testing.T) {
 	require.NoError(t, err)
 	l.TLSConfig.Store(serverConfig)
 	l.RequireSecureTransport = true
-	go l.Accept()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(l *Listener) {
+		wg.Done()
+		l.Accept()
+	}(l)
+	// This is ensure the listener is called
+	wg.Wait()
+	// Sleep so that the Accept function is called as well.'
+	time.Sleep(3 * time.Second)
 
 	// Setup conn params without SSL.
 	params := &ConnParams{
@@ -1254,7 +1274,7 @@ func TestServerFlush(t *testing.T) {
 	flds, err := c.Fields()
 	require.NoError(t, err)
 	if duration, want := time.Since(start), 20*time.Millisecond; duration < *mysqlServerFlushDelay || duration > want {
-		assert.Fail(t, "duration: %v, want between %v and %v", duration, *mysqlServerFlushDelay, want)
+		assert.Fail(t, "duration: %v, want between %v and %v", duration.String(), (*mysqlServerFlushDelay).String(), want.String())
 	}
 	want1 := []*querypb.Field{{
 		Name: "result",
@@ -1262,7 +1282,7 @@ func TestServerFlush(t *testing.T) {
 	}}
 	assert.Equal(t, want1, flds)
 
-	row, err := c.FetchNext()
+	row, err := c.FetchNext(nil)
 	require.NoError(t, err)
 	if duration, want := time.Since(start), 50*time.Millisecond; duration < want {
 		assert.Fail(t, "duration: %v, want > %v", duration, want)
@@ -1270,7 +1290,7 @@ func TestServerFlush(t *testing.T) {
 	want2 := []sqltypes.Value{sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("delayed"))}
 	assert.Equal(t, want2, row)
 
-	row, err = c.FetchNext()
+	row, err = c.FetchNext(nil)
 	require.NoError(t, err)
 	assert.Nil(t, row)
 }

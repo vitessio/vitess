@@ -162,7 +162,7 @@ type AutoIncrement struct {
 }
 
 // BuildVSchema builds a VSchema from a SrvVSchema.
-func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema, err error) {
+func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
 	vschema = &VSchema{
 		RoutingRules:   make(map[string]*RoutingRule),
 		uniqueTables:   make(map[string]*Table),
@@ -173,7 +173,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema, err error) {
 	resolveAutoIncrement(source, vschema)
 	addDual(vschema)
 	buildRoutingRule(source, vschema)
-	return vschema, nil
+	return vschema
 }
 
 // BuildKeyspaceSchema builds the vschema portion for one keyspace.
@@ -484,7 +484,7 @@ func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 	}
 	ks, ok := vschema.Keyspaces[keyspace]
 	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "keyspace %s not found in vschema", keyspace)
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s' in vschema", keyspace)
 	}
 	table := ks.Tables[tablename]
 	if table == nil {
@@ -562,7 +562,7 @@ func (vschema *VSchema) FindVindex(keyspace, name string) (Vindex, error) {
 	}
 	ks, ok := vschema.Keyspaces[keyspace]
 	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "keyspace %s not found in vschema", keyspace)
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s' in vschema", keyspace)
 	}
 	return ks.Vindexes[name], nil
 }
