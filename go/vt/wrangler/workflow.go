@@ -514,6 +514,7 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 	// Ensure that the tablets on both sides are in good shape as we make this same call in the process
 	// and an error will cause us to backout
 	refreshErrors := strings.Builder{}
+	var m sync.Mutex
 	var wg sync.WaitGroup
 	rtbsCtx, cancel := context.WithTimeout(vrw.ctx, shardTabletRefreshTimeout)
 	defer cancel()
@@ -521,8 +522,10 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 		defer wg.Done()
 		for _, si := range shards {
 			if partial, err := topotools.RefreshTabletsByShard(rtbsCtx, vrw.wr.ts, vrw.wr.tmc, si, nil, vrw.wr.Logger()); err != nil || partial {
+				m.Lock()
 				refreshErrors.WriteString(fmt.Sprintf("Failed to successfully refresh all tablets in the %s/%s %s shard:\n  %v\n\n",
 					si.Keyspace(), si.ShardName(), stype, err))
+				m.Unlock()
 			}
 		}
 	}
