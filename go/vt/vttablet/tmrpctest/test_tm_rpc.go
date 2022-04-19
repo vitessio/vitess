@@ -24,6 +24,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+
 	"vitess.io/vitess/go/mysql"
 
 	"context"
