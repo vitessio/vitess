@@ -30,7 +30,7 @@
     "react-dom": "^17.0.1",
     "react-query": "^3.5.9",
     "react-router-dom": "^5.2.0",
-    "react-scripts": "^5.0.0",
+    "react-scripts": "5.0.1",
     "react-tiny-popover": "^6.0.5",
     "react-toastify": "^8.1.0",
     "sass": "^1.43.4",

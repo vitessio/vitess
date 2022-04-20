@@ -303,14 +303,3 @@ loop:
 	err = tokenizer.LastError
 	return
 }
-
-// String returns a string representation of an SQLNode.
-func String(node SQLNode) string {
-	if node == nil {
-		return "<nil>"
-	}
-
-	buf := NewTrackedBuffer(nil)
-	node.formatFast(buf)
-	return buf.String()
-}

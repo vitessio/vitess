@@ -31,7 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildUnionPlan(string) selectPlanner {
+func buildUnionPlan(string) stmtPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
 		union := stmt.(*sqlparser.Union)
 		if union.With != nil {

@@ -132,6 +132,40 @@ func TestUpdateEqual(t *testing.T) {
 	assertQueries(t, sbclookup, wantQueries)
 }
 
+func TestUpdateFromSubQuery(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	fields := []*querypb.Field{
+		{Name: "count(*)", Type: sqltypes.Int64},
+	}
+	sbc2.SetResults([]*sqltypes.Result{{
+		Fields: fields,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(4),
+		}},
+	}})
+
+	// Update by primary vindex, but first execute subquery
+	_, err := executorExec(executor, "update user set a=(select count(*) from user where id = 3) where id = 1", nil)
+	require.NoError(t, err)
+	wantQueriesSbc1 := []*querypb.BoundQuery{{
+		Sql: "update `user` set a = :__sq1 where id = 1",
+		BindVariables: map[string]*querypb.BindVariable{
+			"__sq1": sqltypes.Int64BindVariable(4),
+		},
+	}}
+	wantQueriesSbc2 := []*querypb.BoundQuery{{
+		Sql:           "select count(*) from `user` where id = 3 lock in share mode",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	assertQueries(t, sbc1, wantQueriesSbc1)
+	assertQueries(t, sbc2, wantQueriesSbc2)
+	testQueryLog(t, logChan, "TestExecute", "UPDATE", "update user set a=(select count(*) from user where id = 3) where id = 1", 2)
+}
+
 func TestUpdateEqualWithWriteOnlyLookupUniqueVindex(t *testing.T) {
 	res := []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("id|wo_lu_col|lu_col|t2_lu_vdx", "int64|int64|int64|int64"),

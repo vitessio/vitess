@@ -133,7 +133,11 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *physical.ApplyJ
 	}, nil
 }
 
-func transformRoutePlan(ctx *plancontext.PlanningContext, op *physical.Route) (*routeGen4, error) {
+func transformRoutePlan(ctx *plancontext.PlanningContext, op *physical.Route) (logicalPlan, error) {
+	upd, isUpdate := op.Source.(*physical.Update)
+	if isUpdate {
+		return transformUpdatePlan(ctx, op, upd)
+	}
 	tableNames, err := getAllTableNames(op)
 	if err != nil {
 		return nil, err
@@ -166,7 +170,49 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *physical.Route) (*
 
 }
 
-func replaceSubQuery(ctx *plancontext.PlanningContext, sel sqlparser.SelectStatement) {
+func transformUpdatePlan(ctx *plancontext.PlanningContext, op *physical.Route, upd *physical.Update) (logicalPlan, error) {
+	var vindex vindexes.Vindex
+	var values []evalengine.Expr
+	if op.Selected != nil {
+		vindex = op.Selected.FoundVindex
+		values = op.Selected.Values
+	}
+	ast := upd.AST
+	replaceSubQuery(ctx, ast)
+	edml := &engine.DML{
+		Query:            generateQuery(ast),
+		Table:            upd.VTable,
+		OwnedVindexQuery: upd.OwnedVindexQuery,
+		RoutingParameters: &engine.RoutingParameters{
+			Opcode:            op.RouteOpCode,
+			Keyspace:          op.Keyspace,
+			Vindex:            vindex,
+			Values:            values,
+			TargetDestination: op.TargetDestination,
+		},
+	}
+
+	directives := upd.AST.GetParsedComments().Directives()
+	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
+		edml.MultiShardAutocommit = true
+	}
+	edml.QueryTimeout = queryTimeout(directives)
+
+	e := &engine.Update{
+		ChangedVindexValues: upd.ChangedVindexValues,
+	}
+	e.DML = edml
+
+	if op.RouteOpCode != engine.Unsharded && len(upd.ChangedVindexValues) > 0 {
+		primary := upd.VTable.ColumnVindexes[0]
+		e.DML.KsidVindex = primary.Vindex
+		e.DML.KsidLength = len(primary.Columns)
+	}
+
+	return &primitiveWrapper{prim: e}, nil
+}
+
+func replaceSubQuery(ctx *plancontext.PlanningContext, sel sqlparser.Statement) {
 	extractedSubqueries := ctx.SemTable.GetSubqueryNeedingRewrite()
 	if len(extractedSubqueries) == 0 {
 		return
