@@ -679,9 +679,10 @@ func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bv
 			case querypb.Type_JSON:
 				buf.Myprintf("convert(%v using utf8mb4)", cexpr.expr)
 			case querypb.Type_DATETIME:
-				sourceTZ := tpb.source.GetSourceTimeZone()
-				if sourceTZ != "" {
-					buf.Myprintf("convert_tz(%v, '%s', '%s')", cexpr.expr, sourceTZ, "UTC")
+				sourceTZ := tpb.source.SourceTimeZone
+				targetTZ := tpb.source.TargetTimeZone
+				if sourceTZ != "" && targetTZ != "" {
+					buf.Myprintf("convert_tz(%v, '%s', '%s')", cexpr.expr, sourceTZ, targetTZ)
 				} else {
 					buf.Myprintf("%v", cexpr.expr)
 				}

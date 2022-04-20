@@ -360,6 +360,8 @@ type ReplicationStatusResult struct {
 	ShardStatuses map[string]*ShardReplicationStatus
 	// SourceTimeZone represents the time zone provided to the workflow, only set if not UTC
 	SourceTimeZone string
+	// TargetTimeZone is set to the original SourceTimeZone, in reverse streams, if it was provided to the workflow
+	TargetTimeZone string
 }
 
 // ReplicationLocation represents a location that data is either replicating from, or replicating into.
@@ -415,6 +417,8 @@ type ReplicationStatus struct {
 	CopyState []copyState
 	// sourceTimeZone represents the time zone of each stream, only set if not UTC
 	sourceTimeZone string
+	// targetTimeZone is set to the sourceTimeZone of the forward stream, if it was provided in the workflow
+	targetTimeZone string
 }
 
 func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltypes.RowNamedValues, primary *topo.TabletInfo) (*ReplicationStatus, string, error) {
@@ -495,6 +499,7 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 		Message:              message,
 		Tags:                 tags,
 		sourceTimeZone:       bls.SourceTimeZone,
+		targetTimeZone:       bls.TargetTimeZone,
 	}
 	status.CopyState, err = wr.getCopyState(ctx, primary, id)
 	if err != nil {
@@ -534,6 +539,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 				return nil, err
 			}
 			rsr.SourceTimeZone = status.sourceTimeZone
+			rsr.TargetTimeZone = status.targetTimeZone
 			sourceKeyspace = sk
 			sourceShards.Insert(status.Bls.Shard)
 			rsrStatus = append(rsrStatus, status)

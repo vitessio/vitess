@@ -103,6 +103,7 @@ type vdiff struct {
 	targetKeyspace string
 	tables         []string
 	sourceTimeZone string
+	targetTimeZone string
 }
 
 // compareColInfo contains the metadata for a column of the table being diffed
@@ -206,6 +207,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		targetKeyspace: targetKeyspace,
 		tables:         includeTables,
 		sourceTimeZone: ts.sourceTimeZone,
+		targetTimeZone: ts.targetTimeZone,
 	}
 	for shard, source := range ts.Sources() {
 		df.sources[shard] = &shardStreamer{
@@ -520,7 +522,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	}
 
 	// If SourceTimeZone is defined in the BinlogSource, the VReplication workflow would have converted the datetime
-	// columns expecting the source to have been in the SourceTimeZone and target to be UTC. We need to do the reverse
+	// columns expecting the source to have been in the SourceTimeZone and target in TargetTimeZone. We need to do the reverse
 	// conversion in VDiff before comparing to the source
 	if df.sourceTimeZone != "" {
 		log.Infof("found source time zone %s", df.sourceTimeZone)
@@ -539,7 +541,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 							Name: sqlparser.NewColIdent("convert_tz"),
 							Exprs: sqlparser.SelectExprs{
 								expr,
-								&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral("UTC")},
+								&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(df.targetTimeZone)},
 								&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(df.sourceTimeZone)},
 							},
 						}

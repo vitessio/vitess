@@ -243,7 +243,11 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		TabletTypes:           tabletTypes,
 		StopAfterCopy:         stopAfterCopy,
 		ExternalCluster:       externalCluster,
-		SourceTimeZone:        sourceTimeZone,
+	}
+
+	if sourceTimeZone != "" {
+		ms.SourceTimeZone = sourceTimeZone
+		ms.TargetTimeZone = "UTC"
 	}
 
 	createDDLMode := createDDLAsCopy
@@ -1146,6 +1150,7 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 			StopAfterCopy:   mz.ms.StopAfterCopy,
 			ExternalCluster: mz.ms.ExternalCluster,
 			SourceTimeZone:  mz.ms.SourceTimeZone,
+			TargetTimeZone:  mz.ms.TargetTimeZone,
 		}
 		for _, ts := range mz.ms.TableSettings {
 			rule := &binlogdatapb.Rule{

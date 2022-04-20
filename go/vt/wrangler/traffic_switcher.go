@@ -103,6 +103,7 @@ type trafficSwitcher struct {
 	externalCluster  string
 	externalTopo     *topo.Server
 	sourceTimeZone   string
+	targetTimeZone   string
 }
 
 /*
@@ -134,6 +135,7 @@ func (ts *trafficSwitcher) TargetKeyspaceName() string                     { ret
 func (ts *trafficSwitcher) Targets() map[string]*workflow.MigrationTarget  { return ts.targets }
 func (ts *trafficSwitcher) WorkflowName() string                           { return ts.workflow }
 func (ts *trafficSwitcher) SourceTimeZone() string                         { return ts.sourceTimeZone }
+func (ts *trafficSwitcher) TargetTimeZone() string                         { return ts.targetTimeZone }
 
 func (ts *trafficSwitcher) ForAllSources(f func(source *workflow.MigrationSource) error) error {
 	var wg sync.WaitGroup
@@ -811,6 +813,7 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 			if ts.sourceKeyspace == "" {
 				ts.sourceKeyspace = bls.Keyspace
 				ts.sourceTimeZone = bls.SourceTimeZone
+				ts.targetTimeZone = bls.TargetTimeZone
 				ts.externalCluster = bls.ExternalCluster
 				if ts.externalCluster != "" {
 					externalTopo, err := wr.ts.OpenExternalVitessClusterServer(ctx, ts.externalCluster)
@@ -1160,12 +1163,15 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 		bls := target.Sources[uid]
 		source := ts.Sources()[bls.Shard]
 		reverseBls := &binlogdatapb.BinlogSource{
-			Keyspace:   ts.TargetKeyspaceName(),
-			Shard:      target.GetShard().ShardName(),
-			TabletType: bls.TabletType,
-			Filter:     &binlogdatapb.Filter{},
-			OnDdl:      bls.OnDdl,
+			Keyspace:       ts.TargetKeyspaceName(),
+			Shard:          target.GetShard().ShardName(),
+			TabletType:     bls.TabletType,
+			Filter:         &binlogdatapb.Filter{},
+			OnDdl:          bls.OnDdl,
+			SourceTimeZone: bls.TargetTimeZone,
+			TargetTimeZone: bls.SourceTimeZone,
 		}
+
 		for _, rule := range bls.Filter.Rules {
 			if rule.Filter == "exclude" {
 				reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, rule)
