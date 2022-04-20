@@ -6222,7 +6222,6 @@ reserved_keyword:
 | COUNT
 | CREATE
 | CROSS
-| CURRENT
 | CURRENT_DATE
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
@@ -6421,6 +6420,7 @@ non_reserved_keyword:
 | CONSTRAINT_NAME
 | CONSTRAINT_SCHEMA
 | CONTAINS
+| CURRENT
 | CURSOR_NAME
 | DATA
 | DATE
@@ -6645,7 +6645,6 @@ column_name_safe_reserved_keyword:
 | CONNECTION
 | COUNT
 | CUME_DIST
-| CURRENT
 | DENSE_RANK
 | END
 | ERRORS

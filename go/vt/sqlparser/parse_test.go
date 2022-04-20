@@ -2453,6 +2453,18 @@ var (
 			input:  "CREATE DATABASE `somedb` CHARACTER SET binary CHARSET binary COLLATE binary collate binary encryption 'n' encryption 'n'",
 			output: "create database somedb character set binary charset binary collate binary collate binary encryption n encryption n",
 		}, {
+			input:  "select * from current",
+			output: "select * from `current`",
+		}, {
+			input:  "select * from prev as current",
+			output: "select * from prev as `current`",
+		}, {
+			input:  "select current from table1",
+			output: "select `current` from table1",
+		}, {
+			input:  "select prev as current from table1",
+			output: "select prev as `current` from table1",
+		}, {
 			input:  "CREATE TABLE mytable (h int DEFAULT (date_format(now(),_utf8mb4'%Y')))",
 			output: "create table mytable (\n\th int default (date_format(now(), _utf8mb4 '%Y'))\n)",
 		}, {
