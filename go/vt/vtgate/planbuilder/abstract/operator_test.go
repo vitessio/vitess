@@ -167,8 +167,14 @@ func testString(op Operator) string {
 	case *Update:
 		tbl := "table: " + op.Table.testString()
 		var assignments []string
-		for name, expr := range op.Assignments {
-			assignments = append(assignments, fmt.Sprintf("\t%s = %s", name, sqlparser.String(expr)))
+		// sort to produce stable results, otherwise test is flaky
+		keys := make([]string, 0, len(op.Assignments))
+		for k := range op.Assignments {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			assignments = append(assignments, fmt.Sprintf("\t%s = %s", k, sqlparser.String(op.Assignments[k])))
 		}
 		return fmt.Sprintf("Update {\n\t%s\nassignments:\n%s\n}", tbl, strings.Join(assignments, "\n"))
 	}
