@@ -31,7 +31,9 @@ import (
 // covers the test case graceful-master-takeover from orchestrator
 func TestGracefulPrimaryTakeover(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, "test_config.json")
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, cluster.VtorcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	})
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -65,7 +67,9 @@ func TestGracefulPrimaryTakeover(t *testing.T) {
 // orchestrator used to fail in this case, but for VtOrc, specifying no target makes it choose one on its own
 func TestGracefulPrimaryTakeoverNoTarget(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, "test_config.json")
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, cluster.VtorcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	})
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -98,7 +102,9 @@ func TestGracefulPrimaryTakeoverNoTarget(t *testing.T) {
 // covers the test case graceful-master-takeover-auto from orchestrator
 func TestGracefulPrimaryTakeoverAuto(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 1, nil, "test_config.json")
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 1, nil, cluster.VtorcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	})
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -142,7 +148,9 @@ func TestGracefulPrimaryTakeoverAuto(t *testing.T) {
 // covers the test case graceful-master-takeover-fail-cross-region from orchestrator
 func TestGracefulPrimaryTakeoverFailCrossCell(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, nil, "test_config.json")
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, nil, cluster.VtorcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	})
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 

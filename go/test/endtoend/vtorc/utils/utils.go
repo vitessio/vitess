@@ -241,17 +241,10 @@ func demotePrimaryTablet(ts *topo.Server) (err error) {
 }
 
 // StartVtorc is used to start the orchestrator with the given extra arguments
-func StartVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, orcExtraArgs []string, configFileName string) {
+func StartVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, orcExtraArgs []string, config cluster.VtorcConfiguration) {
 	t.Helper()
-	workingDir := os.Getenv("PWD")
-	idx := strings.Index(workingDir, "vtorc")
-	if idx == -1 {
-		require.Fail(t, "SetupVttabletsAndVtorc should only be used from a package inside the vtorc directory")
-	}
-
-	pathToConfig := path.Join(workingDir[:idx], "vtorc", "utils", configFileName)
 	// Start vtorc
-	clusterInfo.ClusterInstance.VtorcProcess = clusterInfo.ClusterInstance.NewOrcProcess(pathToConfig)
+	clusterInfo.ClusterInstance.VtorcProcess = clusterInfo.ClusterInstance.NewOrcProcess(config)
 	clusterInfo.ClusterInstance.VtorcProcess.ExtraArgs = orcExtraArgs
 	err := clusterInfo.ClusterInstance.VtorcProcess.Setup()
 	require.NoError(t, err)
@@ -269,7 +262,7 @@ func StopVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo) {
 }
 
 // SetupVttabletsAndVtorc is used to setup the vttablets and start the orchestrator
-func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, configFileName string) {
+func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, config cluster.VtorcConfiguration) {
 	// stop vtorc if it is running
 	StopVtorc(t, clusterInfo)
 
@@ -312,7 +305,7 @@ func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numRepl
 	}
 
 	// start vtorc
-	StartVtorc(t, clusterInfo, orcExtraArgs, configFileName)
+	StartVtorc(t, clusterInfo, orcExtraArgs, config)
 }
 
 // cleanAndStartVttablet cleans the MySQL instance underneath for running a new test. It also starts the vttablet.

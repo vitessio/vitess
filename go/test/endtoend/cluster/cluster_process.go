@@ -952,13 +952,13 @@ func (cluster *LocalProcessCluster) NewVttabletInstance(tabletType string, UID i
 }
 
 // NewOrcProcess creates a new VtorcProcess object
-func (cluster *LocalProcessCluster) NewOrcProcess(configFile string) *VtorcProcess {
+func (cluster *LocalProcessCluster) NewOrcProcess(config VtorcConfiguration) *VtorcProcess {
 	base := VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
 	base.Binary = "vtorc"
 	return &VtorcProcess{
 		VtctlProcess: *base,
 		LogDir:       cluster.TmpDirectory,
-		Config:       configFile,
+		Config:       config,
 	}
 }
 

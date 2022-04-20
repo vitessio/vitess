@@ -37,7 +37,9 @@ import (
 // verify replication is setup
 func TestPrimaryElection(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, nil, "test_config.json")
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, nil, cluster.VtorcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	})
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -51,7 +53,9 @@ func TestPrimaryElection(t *testing.T) {
 // verify replication is setup
 func TestSingleKeyspace(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, []string{"--clusters_to_watch", "ks"}, "test_config.json")
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, []string{"--clusters_to_watch", "ks"}, cluster.VtorcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	})
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -65,7 +69,9 @@ func TestSingleKeyspace(t *testing.T) {
 // verify replication is setup
 func TestKeyspaceShard(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, []string{"--clusters_to_watch", "ks/0"}, "test_config.json")
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, []string{"--clusters_to_watch", "ks/0"}, cluster.VtorcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	})
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -95,7 +101,9 @@ func waitForReadOnlyValue(t *testing.T, curPrimary *cluster.Vttablet, expectValu
 // 3. make primary readonly, let orc repair
 func TestPrimaryReadOnly(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, "test_config.json")
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, cluster.VtorcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	})
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -115,7 +123,9 @@ func TestPrimaryReadOnly(t *testing.T) {
 // 4. make replica ReadWrite, let orc repair
 func TestReplicaReadWrite(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, "test_config.json")
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, cluster.VtorcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	})
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -143,7 +153,9 @@ func TestReplicaReadWrite(t *testing.T) {
 // 5. stop replication, let orc repair
 func TestStopReplication(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, "test_config.json")
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, cluster.VtorcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	})
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -175,7 +187,9 @@ func TestStopReplication(t *testing.T) {
 // 6. setup replication from non-primary, let orc repair
 func TestReplicationFromOtherReplica(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 3, 0, nil, "test_config.json")
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 3, 0, nil, cluster.VtorcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	})
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -221,7 +235,9 @@ func TestRepairAfterTER(t *testing.T) {
 	// test fails intermittently on CI, skip until it can be fixed.
 	t.SkipNow()
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, "test_config.json")
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, cluster.VtorcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	})
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -252,7 +268,9 @@ func TestRepairAfterTER(t *testing.T) {
 // 7. make instance A replicates from B and B from A, wait for repair
 func TestCircularReplication(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, "test_config.json")
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, cluster.VtorcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	})
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -294,7 +312,10 @@ func TestSemiSync(t *testing.T) {
 	// stop any vtorc instance running due to a previous test.
 	utils.StopVtorc(t, clusterInfo)
 	newCluster := utils.SetupNewClusterSemiSync(t)
-	utils.StartVtorc(t, newCluster, nil, "test_config_semi_sync.json")
+	utils.StartVtorc(t, newCluster, nil, cluster.VtorcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+		Durability:                            "semi_sync",
+	})
 	defer func() {
 		utils.StopVtorc(t, newCluster)
 		newCluster.ClusterInstance.Teardown()
@@ -357,7 +378,9 @@ func TestSemiSync(t *testing.T) {
 // TestVtorcWithPrs tests that VTOrc works fine even when PRS is called from vtctld
 func TestVtorcWithPrs(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 4, 0, nil, "test_config.json")
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 4, 0, nil, cluster.VtorcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	})
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
