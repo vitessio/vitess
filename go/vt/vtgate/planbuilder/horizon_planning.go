@@ -52,6 +52,23 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 		return plan, nil
 	}
 
+	// If the current plan is a simpleProjection, we want to rewrite derived expression.
+	// In transformDerivedPlan (operator_transformers.go), derived tables that are not
+	// a simple route are put behind a simpleProjection. In this simple projection,
+	// every Route will represent the original derived table. Thus, pushing new expressions
+	// to those Routes require us to rewrite them.
+	// On the other hand, when a derived table is a simple Route, we do not put it under
+	// a simpleProjection. We create a new Route that contains the derived table in the
+	// FROM clause. Meaning that, when we push expressions to the select list of this
+	// new Route, we do not want them to rewrite them.
+	if _, isSimpleProj := plan.(*simpleProjection); isSimpleProj {
+		oldRewriteDerivedExpr := ctx.RewriteDerivedExpr
+		defer func() {
+			ctx.RewriteDerivedExpr = oldRewriteDerivedExpr
+		}()
+		ctx.RewriteDerivedExpr = true
+	}
+
 	var err error
 	hp.qp, err = abstract.CreateQPFromSelect(hp.sel, ctx.SemTable)
 	if err != nil {
@@ -384,12 +401,14 @@ func addExpressionToRoute(ctx *plancontext.PlanningContext, rb *routeGen4, expr 
 		return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "unsupported: pushing projection '%s' on %T", sqlparser.String(expr), rb.Select)
 	}
 
-	// if we are trying to push a projection that belongs to a DerivedTable
-	// we rewrite that expression, so it matches the column name used inside
-	// that derived table.
-	err := rewriteProjectionOfDerivedTable(expr, ctx.SemTable)
-	if err != nil {
-		return 0, false, err
+	if ctx.RewriteDerivedExpr {
+		// if we are trying to push a projection that belongs to a DerivedTable
+		// we rewrite that expression, so it matches the column name used inside
+		// that derived table.
+		err := rewriteProjectionOfDerivedTable(expr, ctx.SemTable)
+		if err != nil {
+			return 0, false, err
+		}
 	}
 
 	offset := len(sel.SelectExprs)
@@ -989,15 +1008,7 @@ func wrapAndPushExpr(ctx *plancontext.PlanningContext, expr sqlparser.Expr, weig
 }
 
 func weightStringFor(expr sqlparser.Expr) sqlparser.Expr {
-	return &sqlparser.FuncExpr{
-		Name: sqlparser.NewColIdent("weight_string"),
-		Exprs: []sqlparser.SelectExpr{
-			&sqlparser.AliasedExpr{
-				Expr: expr,
-			},
-		},
-	}
-
+	return &sqlparser.WeightStringFuncExpr{Expr: expr}
 }
 
 func (hp *horizonPlanning) planOrderByForHashJoin(ctx *plancontext.PlanningContext, orderExprs []abstract.OrderBy, plan *hashJoin) (logicalPlan, error) {
