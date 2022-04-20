@@ -86,14 +86,16 @@ func NewPlannedReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, log
 // and shard. It will make the provided tablet the primary for the shard, when
 // both the current and desired primary are reachable and in a good state.
 func (pr *PlannedReparenter) ReparentShard(ctx context.Context, keyspace string, shard string, opts PlannedReparentOptions) (*events.Reparent, error) {
-	opts.lockAction = pr.getLockAction(opts)
-
-	ctx, unlock, err := pr.ts.LockShard(ctx, keyspace, shard, opts.lockAction)
-	if err != nil {
-		return nil, err
+	var err error
+	if err = topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		var unlock func(*error)
+		opts.lockAction = pr.getLockAction(opts)
+		ctx, unlock, err = pr.ts.LockShard(ctx, keyspace, shard, opts.lockAction)
+		if err != nil {
+			return nil, err
+		}
+		defer unlock(&err)
 	}
-
-	defer unlock(&err)
 
 	if opts.NewPrimaryAlias == nil && opts.AvoidPrimaryAlias == nil {
 		shardInfo, err := pr.ts.GetShard(ctx, keyspace, shard)
