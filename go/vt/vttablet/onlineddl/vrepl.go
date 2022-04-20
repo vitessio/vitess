@@ -472,7 +472,8 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset, sourceCol.Name)
 			}
 			toEncoding, ok := mysql.CharacterSetEncoding[targetCol.Charset]
-			if !ok {
+			// Let's see if target col is at all textual
+			if targetCol.Type == vrepl.StringColumnType && !ok {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset, targetCol.Name)
 			}
 			if fromEncoding == nil && toEncoding == nil {
