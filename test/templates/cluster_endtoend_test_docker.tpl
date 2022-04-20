@@ -11,7 +11,7 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Check for changes in relevant files
-      uses: frouioui/paths-filter@master
+      uses: frouioui/paths-filter@main
       id: changes
       with:
         token: ''
