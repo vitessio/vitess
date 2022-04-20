@@ -6496,7 +6496,8 @@ func TestRefreshStateByShard(t *testing.T) {
 				Cells:    []string{"zone1"}, // If we didn't filter, we would get IsPartialRefresh=true because of the failure in zone2.
 			},
 			expected: &vtctldatapb.RefreshStateByShardResponse{
-				IsPartialRefresh: false,
+				IsPartialRefresh:      false,
+				PartialRefreshDetails: "",
 			},
 			shouldErr: false,
 		},
@@ -6532,7 +6533,8 @@ func TestRefreshStateByShard(t *testing.T) {
 				Shard:    "-",
 			},
 			expected: &vtctldatapb.RefreshStateByShardResponse{
-				IsPartialRefresh: true,
+				IsPartialRefresh:      true,
+				PartialRefreshDetails: "failed to refresh tablet zone2-0000000100: assert.AnError general error for testing: RefreshState failed on zone2-100",
 			},
 			shouldErr: false,
 		},

@@ -38469,6 +38469,9 @@ export namespace vtctldata {
 
         /** RefreshStateByShardResponse is_partial_refresh */
         is_partial_refresh?: (boolean|null);
+
+        /** RefreshStateByShardResponse partial_refresh_details */
+        partial_refresh_details?: (string|null);
     }
 
     /** Represents a RefreshStateByShardResponse. */
@@ -38482,6 +38485,9 @@ export namespace vtctldata {
 
         /** RefreshStateByShardResponse is_partial_refresh. */
         public is_partial_refresh: boolean;
+
+        /** RefreshStateByShardResponse partial_refresh_details. */
+        public partial_refresh_details: string;
 
         /**
          * Creates a new RefreshStateByShardResponse instance using the specified properties.

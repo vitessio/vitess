@@ -798,6 +798,8 @@ message RefreshStateByShardRequest {
 
 message RefreshStateByShardResponse {
   bool is_partial_refresh = 1;
+  // This explains why we had a partial refresh (if we did)
+  string partial_refresh_details = 2;
 }
 
 message ReloadSchemaRequest {
