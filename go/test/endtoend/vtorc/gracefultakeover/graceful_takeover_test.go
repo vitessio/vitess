@@ -33,7 +33,7 @@ func TestGracefulPrimaryTakeover(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	})
+	}, 1)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -69,7 +69,7 @@ func TestGracefulPrimaryTakeoverNoTarget(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	})
+	}, 1)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -104,7 +104,7 @@ func TestGracefulPrimaryTakeoverAuto(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 1, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	})
+	}, 1)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -150,7 +150,7 @@ func TestGracefulPrimaryTakeoverFailCrossCell(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	})
+	}, 1)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 

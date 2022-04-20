@@ -38,12 +38,14 @@ type VtorcProcess struct {
 	ExtraArgs  []string
 	ConfigPath string
 	Config     VtorcConfiguration
+	WebPort    int
 	proc       *exec.Cmd
 	exit       chan error
 }
 
 type VtorcConfiguration struct {
 	Debug                                 bool
+	ListenAddress                         string
 	MySQLTopologyUser                     string
 	MySQLTopologyPassword                 string
 	MySQLReplicaUser                      string
@@ -63,7 +65,7 @@ func (config *VtorcConfiguration) ToJSONString() string {
 	return string(b)
 }
 
-func (config *VtorcConfiguration) AddDefaults() {
+func (config *VtorcConfiguration) AddDefaults(webPort int) {
 	config.Debug = true
 	config.MySQLTopologyUser = "orc_client_user"
 	config.MySQLTopologyPassword = "orc_client_user_password"
@@ -71,6 +73,7 @@ func (config *VtorcConfiguration) AddDefaults() {
 	config.MySQLReplicaPassword = ""
 	config.RecoveryPeriodBlockSeconds = 1
 	config.InstancePollSeconds = 1
+	config.ListenAddress = fmt.Sprintf(":%d", webPort)
 }
 
 // Setup starts orc process with required arguements
@@ -82,7 +85,7 @@ func (orc *VtorcProcess) Setup() (err error) {
 	orc.ConfigPath = configFile.Name()
 
 	// Add the default configurations and print them out
-	orc.Config.AddDefaults()
+	orc.Config.AddDefaults(orc.WebPort)
 	log.Errorf("configuration - %v", orc.Config.ToJSONString())
 	_, err = configFile.WriteString(orc.Config.ToJSONString())
 	if err != nil {

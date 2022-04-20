@@ -959,6 +959,7 @@ func (cluster *LocalProcessCluster) NewOrcProcess(config VtorcConfiguration) *Vt
 		VtctlProcess: *base,
 		LogDir:       cluster.TmpDirectory,
 		Config:       config,
+		WebPort:      cluster.GetAndReservePort(),
 	}
 }
 

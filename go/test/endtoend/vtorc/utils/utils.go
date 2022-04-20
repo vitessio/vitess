@@ -240,15 +240,17 @@ func demotePrimaryTablet(ts *topo.Server) (err error) {
 	return
 }
 
-// StartVtorc is used to start the orchestrator with the given extra arguments
-func StartVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, orcExtraArgs []string, config cluster.VtorcConfiguration) {
+// StartVtorcs is used to start the orchestrator with the given extra arguments
+func StartVtorcs(t *testing.T, clusterInfo *VtOrcClusterInfo, orcExtraArgs []string, config cluster.VtorcConfiguration, count int) {
 	t.Helper()
 	// Start vtorc
-	vtorcProcess := clusterInfo.ClusterInstance.NewOrcProcess(config)
-	vtorcProcess.ExtraArgs = orcExtraArgs
-	err := vtorcProcess.Setup()
-	require.NoError(t, err)
-	clusterInfo.ClusterInstance.VtorcProcesses = append(clusterInfo.ClusterInstance.VtorcProcesses, vtorcProcess)
+	for i := 0; i < count; i++ {
+		vtorcProcess := clusterInfo.ClusterInstance.NewOrcProcess(config)
+		vtorcProcess.ExtraArgs = orcExtraArgs
+		err := vtorcProcess.Setup()
+		require.NoError(t, err)
+		clusterInfo.ClusterInstance.VtorcProcesses = append(clusterInfo.ClusterInstance.VtorcProcesses, vtorcProcess)
+	}
 }
 
 // StopVtorcs is used to stop the orchestrator
@@ -264,7 +266,7 @@ func StopVtorcs(t *testing.T, clusterInfo *VtOrcClusterInfo) {
 }
 
 // SetupVttabletsAndVtorc is used to setup the vttablets and start the orchestrator
-func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, config cluster.VtorcConfiguration) {
+func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, config cluster.VtorcConfiguration, vtorcCount int) {
 	// stop vtorc if it is running
 	StopVtorcs(t, clusterInfo)
 
@@ -307,7 +309,7 @@ func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numRepl
 	}
 
 	// start vtorc
-	StartVtorc(t, clusterInfo, orcExtraArgs, config)
+	StartVtorcs(t, clusterInfo, orcExtraArgs, config, vtorcCount)
 }
 
 // cleanAndStartVttablet cleans the MySQL instance underneath for running a new test. It also starts the vttablet.
