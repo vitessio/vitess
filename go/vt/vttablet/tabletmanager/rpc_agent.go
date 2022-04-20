@@ -77,9 +77,6 @@ type RPCTM interface {
 	ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error)
 
 	// Replication related methods
-	// Deprecated, use PrimaryStatus instead
-	MasterStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
-
 	PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
 
 	ReplicationStatus(ctx context.Context) (*replicationdatapb.Status, error)
@@ -93,8 +90,6 @@ type RPCTM interface {
 	StartReplicationUntilAfter(ctx context.Context, position string, waitTime time.Duration) error
 
 	GetReplicas(ctx context.Context) ([]string, error)
-	// Deprecated, use PrimaryPosition instead
-	MasterPosition(ctx context.Context) (string, error)
 
 	PrimaryPosition(ctx context.Context) (string, error)
 
@@ -111,29 +106,17 @@ type RPCTM interface {
 
 	ResetReplication(ctx context.Context) error
 
-	// Deprecated, use InitPrimary instead
-	InitMaster(ctx context.Context, semiSync bool) (string, error)
-
 	InitPrimary(ctx context.Context, semiSync bool) (string, error)
 
 	PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, tabletAlias *topodatapb.TabletAlias, pos string) error
 
 	InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64, semiSync bool) error
 
-	// Deprecated, use DemotePrimary instead
-	DemoteMaster(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
-
-	// Deprecated, use UndoDemotePrimary instead
-	UndoDemoteMaster(ctx context.Context, semiSync bool) error
-
 	DemotePrimary(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
 
 	UndoDemotePrimary(ctx context.Context, semiSync bool) error
 
 	ReplicaWasPromoted(ctx context.Context) error
-
-	// Deprecated, use SetReplicationSource instead
-	SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error
 
 	SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error
 
