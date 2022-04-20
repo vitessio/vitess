@@ -46,6 +46,8 @@ else
 	CELL=zone1 ./scripts/etcd-down.sh
 fi
 
+./scripts/vtadmin-down.sh
+
 # pedantic check: grep for any remaining processes
 
 if [ ! -z "$VTDATAROOT" ]; then
