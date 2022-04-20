@@ -75,8 +75,8 @@ func (c *Cache[Key, Value]) Add(key string, val Value, d time.Duration) error {
 // is not cached, the zero value for the given type is returned, along with a
 // boolean to indicated presence/absence.
 func (c *Cache[Key, Value]) Get(key string) (Value, bool) {
-	v, ok := c.cache.Get(key)
-	if !ok {
+	v, exp, ok := c.cache.GetWithExpiration(key)
+	if !ok || (!exp.IsZero() && exp.Before(time.Now())) {
 		var zero Value
 		return zero, false
 	}
@@ -138,10 +138,12 @@ func (c *Cache[Key, Value]) backfill() {
 
 		key := req.k.Key()
 		if _, exp, ok := c.fillcache.GetWithExpiration(key); ok {
-			// We recently added a value for this key to the cache, either via
-			// another backfill request, or directly via a call to Add.
-			log.Infof("filled cache for %s less than %s ago (at %s)", key, time.Duration(0) /* TODO: config */, exp.UTC())
-			continue
+			if !exp.IsZero() && exp.Before(time.Now()) {
+				// We recently added a value for this key to the cache, either via
+				// another backfill request, or directly via a call to Add.
+				log.Infof("filled cache for %s less than %s ago (at %s)", key, time.Duration(0) /* TODO: config */, exp.UTC())
+				continue
+			}
 		}
 
 		val, err := c.fillFunc(c.ctx, req.k)
