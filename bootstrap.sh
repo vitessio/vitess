@@ -263,7 +263,6 @@ install_chromedriver() {
 
   case $(uname) in
     Linux)  local platform=linux;;
-    Darwin)  local platform=darwin;;
     *)   echo "Platform not supported for vtctl-web tests. Skipping chromedriver install."; return;;
   esac
 
@@ -314,7 +313,7 @@ install_all() {
 
   # chromedriver
   if [ "$BUILD_CHROME" == 1 ] ; then
-    install_dep "chromedriver" "v18.0.4" "$VTROOT/dist/chromedriver" install_chromedriver
+    install_dep "chromedriver" "v6.0.3" "$VTROOT/dist/chromedriver" install_chromedriver
   fi
 
   echo
