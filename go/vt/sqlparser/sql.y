@@ -136,6 +136,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   jsonObjectParams []*JSONObjectParam
   partDefs      []*PartitionDefinition
   partitionValueRange	*PartitionValueRange
+  partitionEngine *PartitionEngine
   partSpecs     []*PartitionSpec
   characteristics []Characteristic
   selectExpr    SelectExpr
@@ -365,7 +366,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <alterDatabase> alter_database_prefix
 %type <collateAndCharset> collate character_set
 %type <collateAndCharsets> create_options create_options_opt
-%type <boolean> default_optional first_opt linear_opt jt_exists_opt jt_path_opt
+%type <boolean> default_optional first_opt linear_opt jt_exists_opt jt_path_opt partition_storage_opt
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement call_statement
@@ -486,6 +487,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partDefs> partition_definitions partition_definitions_opt
 %type <partDef> partition_definition partition_name
 %type <partitionValueRange> partition_value_range_opt
+%type <partitionEngine> partition_engine_options_opt
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
@@ -2095,7 +2097,7 @@ equal_opt:
   }
 | '='
   {
-    $$ = string($1)
+    $$ = "="
   }
 
 index_info:
@@ -3197,9 +3199,10 @@ partition_definitions:
   }
 
 partition_definition:
-  partition_name partition_value_range_opt
+  partition_name partition_value_range_opt partition_engine_options_opt
   {
     $$.ValueRange = $2
+    $$.Engine = $3
   }
 
 partition_value_range_opt:
@@ -3226,6 +3229,24 @@ partition_value_range_opt:
     	Type: InType,
     	Range: $3,
     }
+  }
+
+partition_storage_opt:
+  {
+    $$ = false
+  }
+| STORAGE
+  {
+    $$ = true
+  }
+
+partition_engine_options_opt:
+  {
+    $$ = nil
+  }
+| partition_storage_opt ENGINE equal_opt STRING
+  {
+    $$ = &PartitionEngine{Storage:$1, Equal: $3, Name: $4}
   }
 
 partition_name:

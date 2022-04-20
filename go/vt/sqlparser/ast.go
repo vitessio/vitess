@@ -1615,6 +1615,7 @@ type PartitionSpecAction int8
 type PartitionDefinition struct {
 	Name       ColIdent
 	ValueRange *PartitionValueRange
+	Engine     *PartitionEngine
 }
 
 // PartitionValueRangeType is an enum for PartitionValueRange.Type
@@ -1624,6 +1625,12 @@ type PartitionValueRange struct {
 	Type     PartitionValueRangeType
 	Range    ValTuple
 	Maxvalue bool
+}
+
+type PartitionEngine struct {
+	Storage bool
+	Equal   string
+	Name    string
 }
 
 // PartitionByType is an enum storing how we are partitioning a table

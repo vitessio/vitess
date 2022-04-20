@@ -598,6 +598,10 @@ func (node *PartitionDefinition) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		node.ValueRange.formatFast(buf)
 	}
+	if node.Engine != nil {
+		buf.WriteByte(' ')
+		node.Engine.formatFast(buf)
+	}
 }
 
 // formatFast formats the node
@@ -610,6 +614,18 @@ func (node *PartitionValueRange) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		node.Range.formatFast(buf)
 	}
+}
+
+// formatFast formats the node
+func (node *PartitionEngine) formatFast(buf *TrackedBuffer) {
+	if node.Storage {
+		buf.WriteString("storage ")
+	}
+	buf.WriteString("engine ")
+	if node.Equal != "" {
+		buf.WriteString("= ")
+	}
+	buf.WriteString(node.Name)
 }
 
 // formatFast formats the node.

@@ -776,6 +776,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfPartitionDefinition(a, b)
+	case *PartitionEngine:
+		b, ok := inB.(*PartitionEngine)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPartitionEngine(a, b)
 	case *PartitionOption:
 		b, ok := inB.(*PartitionOption)
 		if !ok {
@@ -2648,7 +2654,21 @@ func EqualsRefOfPartitionDefinition(a, b *PartitionDefinition) bool {
 		return false
 	}
 	return EqualsColIdent(a.Name, b.Name) &&
-		EqualsRefOfPartitionValueRange(a.ValueRange, b.ValueRange)
+		EqualsRefOfPartitionValueRange(a.ValueRange, b.ValueRange) &&
+		EqualsRefOfPartitionEngine(a.Engine, b.Engine)
+}
+
+// EqualsRefOfPartitionEngine does deep equals between the two objects.
+func EqualsRefOfPartitionEngine(a, b *PartitionEngine) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Storage == b.Storage &&
+		a.Equal == b.Equal &&
+		a.Name == b.Name
 }
 
 // EqualsRefOfPartitionOption does deep equals between the two objects.

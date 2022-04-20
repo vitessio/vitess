@@ -432,6 +432,9 @@ func (node *PartitionDefinition) Format(buf *TrackedBuffer) {
 	if node.ValueRange != nil {
 		buf.astPrintf(node, " %v", node.ValueRange)
 	}
+	if node.Engine != nil {
+		buf.astPrintf(node, " %v", node.Engine)
+	}
 }
 
 // Format formats the node
@@ -442,6 +445,18 @@ func (node *PartitionValueRange) Format(buf *TrackedBuffer) {
 	} else {
 		buf.astPrintf(node, " %v", node.Range)
 	}
+}
+
+// Format formats the node
+func (node *PartitionEngine) Format(buf *TrackedBuffer) {
+	if node.Storage {
+		buf.WriteString("storage ")
+	}
+	buf.WriteString("engine ")
+	if node.Equal != "" {
+		buf.WriteString("= ")
+	}
+	buf.astPrintf(node, "%s", node.Name)
 }
 
 // Format formats the node.
