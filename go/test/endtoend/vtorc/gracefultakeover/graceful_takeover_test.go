@@ -54,7 +54,7 @@ func TestGracefulPrimaryTakeover(t *testing.T) {
 	// check that the replication is setup correctly before we failover
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica}, 10*time.Second)
 
-	status, _ := utils.MakeAPICallUntilRegistered(t, fmt.Sprintf("http://localhost:3000/api/graceful-primary-takeover/localhost/%d/localhost/%d", curPrimary.MySQLPort, replica.MySQLPort))
+	status, _ := utils.MakeAPICallUntilRegistered(t, fmt.Sprintf("http://localhost:%d/api/graceful-primary-takeover/localhost/%d/localhost/%d", clusterInfo.ClusterInstance.VtorcProcesses[0].WebPort, curPrimary.MySQLPort, replica.MySQLPort))
 	assert.Equal(t, 200, status)
 
 	// check that the replica gets promoted
@@ -90,7 +90,7 @@ func TestGracefulPrimaryTakeoverNoTarget(t *testing.T) {
 	// check that the replication is setup correctly before we failover
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica}, 10*time.Second)
 
-	status, _ := utils.MakeAPICallUntilRegistered(t, fmt.Sprintf("http://localhost:3000/api/graceful-primary-takeover/localhost/%d/", curPrimary.MySQLPort))
+	status, _ := utils.MakeAPICallUntilRegistered(t, fmt.Sprintf("http://localhost:%d/api/graceful-primary-takeover/localhost/%d/", clusterInfo.ClusterInstance.VtorcProcesses[0].WebPort, curPrimary.MySQLPort))
 	assert.Equal(t, 200, status)
 
 	// check that the replica gets promoted
@@ -129,14 +129,14 @@ func TestGracefulPrimaryTakeoverAuto(t *testing.T) {
 	// check that the replication is setup correctly before we failover
 	utils.CheckReplication(t, clusterInfo, primary, []*cluster.Vttablet{replica, rdonly}, 10*time.Second)
 
-	status, _ := utils.MakeAPICallUntilRegistered(t, fmt.Sprintf("http://localhost:3000/api/graceful-primary-takeover-auto/localhost/%d/localhost/%d", primary.MySQLPort, replica.MySQLPort))
+	status, _ := utils.MakeAPICallUntilRegistered(t, fmt.Sprintf("http://localhost:%d/api/graceful-primary-takeover-auto/localhost/%d/localhost/%d", clusterInfo.ClusterInstance.VtorcProcesses[0].WebPort, primary.MySQLPort, replica.MySQLPort))
 	assert.Equal(t, 200, status)
 
 	// check that the replica gets promoted
 	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{primary, rdonly}, 10*time.Second)
 
-	status, _ = utils.MakeAPICallUntilRegistered(t, fmt.Sprintf("http://localhost:3000/api/graceful-primary-takeover-auto/localhost/%d/", replica.MySQLPort))
+	status, _ = utils.MakeAPICallUntilRegistered(t, fmt.Sprintf("http://localhost:%d/api/graceful-primary-takeover-auto/localhost/%d/", clusterInfo.ClusterInstance.VtorcProcesses[0].WebPort, replica.MySQLPort))
 	assert.Equal(t, 200, status)
 
 	// check that the primary gets promoted back
@@ -171,7 +171,7 @@ func TestGracefulPrimaryTakeoverFailCrossCell(t *testing.T) {
 	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
 	utils.CheckReplication(t, clusterInfo, primary, []*cluster.Vttablet{crossCellReplica1, rdonly}, 25*time.Second)
 
-	status, response := utils.MakeAPICallUntilRegistered(t, fmt.Sprintf("http://localhost:3000/api/graceful-primary-takeover/localhost/%d/localhost/%d", primary.MySQLPort, crossCellReplica1.MySQLPort))
+	status, response := utils.MakeAPICallUntilRegistered(t, fmt.Sprintf("http://localhost:%d/api/graceful-primary-takeover/localhost/%d/localhost/%d", clusterInfo.ClusterInstance.VtorcProcesses[0].WebPort, primary.MySQLPort, crossCellReplica1.MySQLPort))
 	assert.Equal(t, 500, status)
 	assert.Contains(t, response, "GracefulPrimaryTakeover: constraint failure")
 
