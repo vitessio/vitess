@@ -266,8 +266,8 @@ install_chromedriver() {
     *)   echo "Platform not supported for vtctl-web tests. Skipping chromedriver install."; return;;
   esac
 
-  case $(get_arch) in
-    aarch64)
+  if [ "$(arch)" == "aarch64" ] ; then
+      os=$(cat /etc/*release | grep "^ID=" | cut -d '=' -f 2)
       case $os in
         ubuntu|debian)
           sudo apt-get update -y && sudo apt install -y --no-install-recommends unzip libglib2.0-0 libnss3 libx11-6
@@ -276,15 +276,15 @@ install_chromedriver() {
           sudo yum update -y && yum install -y libX11 unzip wget
         ;;
       esac
-      target=arm64
-    ;;
-    arm64) local target=arm64;;
-    *)  local target=x64;;
-  esac
-  file="chromedriver-$version-${platform}-${target}.zip"
-  $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
-  unzip -o -q $file -d "$dist"
-  rm $file
+      echo "For Arm64, using prebuilt binary from electron (https://github.com/electron/electron/) of version 76.0.3809.126"
+      $VTROOT/tools/wget-retry https://github.com/electron/electron/releases/download/v6.0.3/chromedriver-v6.0.3-linux-arm64.zip
+      unzip -o -q chromedriver-v6.0.3-linux-arm64.zip -d "$dist"
+      rm chromedriver-v6.0.3-linux-arm64.zip
+  else
+      $VTROOT/tools/wget-retry "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip"
+      unzip -o -q chromedriver_linux64.zip -d "$dist"
+      rm chromedriver_linux64.zip
+  fi
 }
 
 install_all() {
@@ -313,7 +313,7 @@ install_all() {
 
   # chromedriver
   if [ "$BUILD_CHROME" == 1 ] ; then
-    install_dep "chromedriver" "v6.0.3" "$VTROOT/dist/chromedriver" install_chromedriver
+    install_dep "chromedriver" "90.0.4430.24" "$VTROOT/dist/chromedriver" install_chromedriver
   fi
 
   echo
