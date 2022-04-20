@@ -1365,7 +1365,7 @@ func TestGetSchema(t *testing.T) {
 					Name: fmt.Sprintf("cluster%d", i),
 				},
 				VtctldClient: tt.vtctld,
-				Tablets:      nil,
+				Tablets:      []*vtadminpb.Tablet{tt.tablet},
 				DBConfig:     testutil.Dbcfg{},
 			})
 
@@ -1373,7 +1373,6 @@ func TestGetSchema(t *testing.T) {
 			require.NoError(t, err, "could not dial test vtctld")
 
 			schema, err := c.GetSchema(ctx, "testkeyspace", cluster.GetSchemaOptions{
-				Tablets:     []*vtadminpb.Tablet{tt.tablet},
 				BaseRequest: tt.req,
 			})
 			if tt.shouldErr {
@@ -1429,7 +1428,6 @@ func TestGetSchema(t *testing.T) {
 
 		_, _ = c.GetSchema(ctx, "testkeyspace", cluster.GetSchemaOptions{
 			BaseRequest: req,
-			Tablets:     []*vtadminpb.Tablet{tablet},
 		})
 
 		assert.NotEqual(t, req.TabletAlias, tablet.Tablet.Alias, "expected GetSchema to not modify original request object")
@@ -2234,9 +2232,10 @@ func TestGetSchema(t *testing.T) {
 							Tablet: &topodatapb.Tablet{
 								Alias: &topodatapb.TabletAlias{
 									Cell: "zone1",
-									Uid:  200,
+									Uid:  300,
 								},
-								Keyspace: "testkeyspace",
+								// Note this is for another keyspace, so we fail to find a tablet for testkeyspace/-80.
+								Keyspace: "otherkeyspace",
 								Shard:    "80-",
 							},
 							State: vtadminpb.Tablet_SERVING,
@@ -2330,31 +2329,6 @@ func TestGetSchema(t *testing.T) {
 				opts: cluster.GetSchemaOptions{
 					TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
 						AggregateSizes: true,
-					},
-					Tablets: []*vtadminpb.Tablet{
-						{
-							Tablet: &topodatapb.Tablet{
-								Alias: &topodatapb.TabletAlias{
-									Cell: "zone1",
-									Uid:  100,
-								},
-								Keyspace: "testkeyspace",
-								Shard:    "-80",
-							},
-							State: vtadminpb.Tablet_SERVING,
-						},
-						{
-							Tablet: &topodatapb.Tablet{
-								Alias: &topodatapb.TabletAlias{
-									Cell: "zone1",
-									Uid:  300,
-								},
-								// Note this is for another keyspace, so we fail to find a tablet for testkeyspace/-80.
-								Keyspace: "otherkeyspace",
-								Shard:    "80-",
-							},
-							State: vtadminpb.Tablet_SERVING,
-						},
 					},
 				},
 				expected:  nil,
