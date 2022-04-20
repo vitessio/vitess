@@ -13,9 +13,10 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Check for changes in relevant files
-        uses: dorny/paths-filter@v2
+        uses: frouioui/paths-filter@main
         id: changes
         with:
+          token: ''
           filters: |
             unit_tests:
               - 'go/**'
