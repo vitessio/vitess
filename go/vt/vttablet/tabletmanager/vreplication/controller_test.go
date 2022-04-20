@@ -76,7 +76,6 @@ func TestControllerKeyRange(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
-	dbClient.ExpectRequest(changeMasterToPrimary, testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=1", testSettingsResponse, nil)
@@ -113,7 +112,6 @@ func TestControllerTables(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
-	dbClient.ExpectRequest(changeMasterToPrimary, testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=1", testSettingsResponse, nil)
@@ -207,7 +205,6 @@ func TestControllerOverrides(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
-	dbClient.ExpectRequest(changeMasterToPrimary, testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=1", testSettingsResponse, nil)
@@ -273,12 +270,10 @@ func TestControllerRetry(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
-	dbClient.ExpectRequest(changeMasterToPrimary, testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=1", nil, errors.New("(expected error)"))
 	dbClient.ExpectRequest("update _vt.vreplication set state='Error', message='error (expected error) in selecting vreplication settings select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=1' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest(changeMasterToPrimary, testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=1", testSettingsResponse, nil)
@@ -310,7 +305,6 @@ func TestControllerStopPosition(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
-	dbClient.ExpectRequest(changeMasterToPrimary, testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	withStop := &sqltypes.Result{
