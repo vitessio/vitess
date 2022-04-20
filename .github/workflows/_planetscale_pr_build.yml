@@ -1,6 +1,11 @@
 name: Build on PR
 
 on:
+  pull_request_review:
+    types:
+      - submitted
+      - edited
+
   pull_request:
     types:
       - opened
@@ -40,12 +45,42 @@ jobs:
           username: _json_key
           password: ${{ secrets.PLANETSCALE_GITHUB_PROD_SA_KEY }}
 
+      - uses: actions/github-script@v6
+        id: check-pr-state
+        with:
+          result-encoding: string
+          script: |
+            const full_repo = '${{ github.repository }}';
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              owner: '${{ github.repository_owner }}',
+              repo: full_repo.split('/')[1],
+              pull_number: '${{ github.event.pull_request.number }}'
+            });
+
+            const review_states = new Map();
+            for (const review of reviews) {
+              console.log(`Reviewer: ${review.user.login} State: ${review.state}`);
+              review_states.set(review.user.login, review.state);
+            }
+
+            let state = 'pending';
+            for (const review_state of review_states.values()) {
+              if (review_state == 'APPROVED') {
+                state = 'approved';
+              } else if (review_state = 'REQUEST_CHANGES') {
+                state = 'request_changes';
+                break;
+              }
+            }
+
+            return state;
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v3
         with:
           images: |
-            ${{ format('us-docker.pkg.dev/planetscale-registry/{0}/vitess/lite', matrix.ref == 'main' && 'prod' || 'dev') }}
+            ${{ format('us-docker.pkg.dev/planetscale-registry/{0}/vitess/lite', steps.check-pr-state.outputs.result == 'approved' && 'prod' || 'dev') }}
           flavor: |
             latest=false
             prefix=mysql80-
