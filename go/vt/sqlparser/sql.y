@@ -220,7 +220,13 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %left <bytes> '^'
 %right <bytes> '~' UNARY
 %left <bytes> COLLATE
-%right <bytes> BINARY UNDERSCORE_BINARY UNDERSCORE_UTF8MB4
+%right <bytes> BINARY UNDERSCORE_ARMSCII8 UNDERSCORE_ASCII UNDERSCORE_BIG5 UNDERSCORE_BINARY UNDERSCORE_CP1250
+%right <bytes> UNDERSCORE_CP1251 UNDERSCORE_CP1256 UNDERSCORE_CP1257 UNDERSCORE_CP850 UNDERSCORE_CP852 UNDERSCORE_CP866
+%right <bytes> UNDERSCORE_CP932 UNDERSCORE_DEC8 UNDERSCORE_EUCJPMS UNDERSCORE_EUCKR UNDERSCORE_GB18030 UNDERSCORE_GB2312
+%right <bytes> UNDERSCORE_GBK UNDERSCORE_GEOSTD8 UNDERSCORE_GREEK UNDERSCORE_HEBREW UNDERSCORE_HP8 UNDERSCORE_KEYBCS2
+%right <bytes> UNDERSCORE_KOI8R UNDERSCORE_KOI8U UNDERSCORE_LATIN1 UNDERSCORE_LATIN2 UNDERSCORE_LATIN5 UNDERSCORE_LATIN7
+%right <bytes> UNDERSCORE_MACCE UNDERSCORE_MACROMAN UNDERSCORE_SJIS UNDERSCORE_SWE7 UNDERSCORE_TIS620 UNDERSCORE_UCS2
+%right <bytes> UNDERSCORE_UJIS UNDERSCORE_UTF16 UNDERSCORE_UTF16LE UNDERSCORE_UTF32 UNDERSCORE_UTF8 UNDERSCORE_UTF8MB3 UNDERSCORE_UTF8MB4
 %right <bytes> INTERVAL
 %nonassoc <bytes> '.'
 
@@ -424,7 +430,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <colIdents> reserved_sql_id_list
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias
-%type <str> charset
+%type <str> charset underscore_charsets
 %type <str> show_session_or_global
 %type <convertType> convert_type
 %type <columnType> column_type  column_type_options
@@ -3712,6 +3718,10 @@ like_or_where_opt:
   {
     $$ = &ShowFilter{Like:string($2)}
   }
+| LIKE underscore_charsets STRING
+  {
+    $$ = &ShowFilter{Like:string($3)}
+  }
 | WHERE expression
   {
     $$ = &ShowFilter{Filter:$2}
@@ -4809,13 +4819,9 @@ value_expression:
   {
     $$ = &UnaryExpr{Operator: BinaryStr, Expr: $2}
   }
-| UNDERSCORE_BINARY value_expression %prec UNARY
+| underscore_charsets value_expression %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: UBinaryStr, Expr: $2}
-  }
-| UNDERSCORE_UTF8MB4 value_expression %prec UNARY
-  {
-    $$ = &UnaryExpr{Operator: Utf8mb4Str, Expr: $2}
+    $$ = &UnaryExpr{Operator: $1, Expr: $2}
   }
 | '+'  value_expression %prec UNARY
   {
@@ -5246,6 +5252,176 @@ charset:
 {
     $$ = string($1)
 }
+
+underscore_charsets:
+  UNDERSCORE_ARMSCII8
+  {
+    $$ = Armscii8Str
+  }
+| UNDERSCORE_ASCII
+  {
+    $$ = AsciiStr
+  }
+| UNDERSCORE_BIG5
+  {
+    $$ = Big5Str
+  }
+| UNDERSCORE_BINARY
+  {
+    $$ = UBinaryStr
+  }
+| UNDERSCORE_CP1250
+  {
+    $$ = Cp1250Str
+  }
+| UNDERSCORE_CP1251
+  {
+    $$ = Cp1251Str
+  }
+| UNDERSCORE_CP1256
+  {
+    $$ = Cp1256Str
+  }
+| UNDERSCORE_CP1257
+  {
+    $$ = Cp1257Str
+  }
+| UNDERSCORE_CP850
+  {
+    $$ = Cp850Str
+  }
+| UNDERSCORE_CP852
+  {
+    $$ = Cp852Str
+  }
+| UNDERSCORE_CP866
+  {
+    $$ = Cp866Str
+  }
+| UNDERSCORE_CP932
+  {
+    $$ = Cp932Str
+  }
+| UNDERSCORE_DEC8
+  {
+    $$ = Dec8Str
+  }
+| UNDERSCORE_EUCJPMS
+  {
+    $$ = EucjpmsStr
+  }
+| UNDERSCORE_EUCKR
+  {
+    $$ = EuckrStr
+  }
+| UNDERSCORE_GB18030
+  {
+    $$ = Gb18030Str
+  }
+| UNDERSCORE_GB2312
+  {
+    $$ = Gb2312Str
+  }
+| UNDERSCORE_GBK
+  {
+    $$ = GbkStr
+  }
+| UNDERSCORE_GEOSTD8
+  {
+    $$ = Geostd8Str
+  }
+| UNDERSCORE_GREEK
+  {
+    $$ = GreekStr
+  }
+| UNDERSCORE_HEBREW
+  {
+    $$ = HebrewStr
+  }
+| UNDERSCORE_HP8
+  {
+    $$ = Hp8Str
+  }
+| UNDERSCORE_KEYBCS2
+  {
+    $$ = Keybcs2Str
+  }
+| UNDERSCORE_KOI8R
+  {
+    $$ = Koi8rStr
+  }
+| UNDERSCORE_KOI8U
+  {
+    $$ = Koi8uStr
+  }
+| UNDERSCORE_LATIN1
+  {
+    $$ = Latin1Str
+  }
+| UNDERSCORE_LATIN2
+  {
+    $$ = Latin2Str
+  }
+| UNDERSCORE_LATIN5
+  {
+    $$ = Latin5Str
+  }
+| UNDERSCORE_LATIN7
+  {
+    $$ = Latin7Str
+  }
+| UNDERSCORE_MACCE
+  {
+    $$ = MacceStr
+  }
+| UNDERSCORE_MACROMAN
+  {
+    $$ = MacromanStr
+  }
+| UNDERSCORE_SJIS
+  {
+    $$ = SjisStr
+  }
+| UNDERSCORE_SWE7
+  {
+    $$ = Swe7Str
+  }
+| UNDERSCORE_TIS620
+  {
+    $$ = Tis620Str
+  }
+| UNDERSCORE_UCS2
+  {
+    $$ = Ucs2Str
+  }
+| UNDERSCORE_UJIS
+  {
+    $$ = UjisStr
+  }
+| UNDERSCORE_UTF16
+  {
+    $$ = Utf16Str
+  }
+| UNDERSCORE_UTF16LE
+  {
+    $$ = Utf16leStr
+  }
+| UNDERSCORE_UTF32
+  {
+    $$ = Utf32Str
+  }
+| UNDERSCORE_UTF8
+  {
+    $$ = Utf8mb3Str
+  }
+| UNDERSCORE_UTF8MB3
+  {
+    $$ = Utf8mb3Str
+  }
+| UNDERSCORE_UTF8MB4
+  {
+    $$ = Utf8mb4Str
+  }
 
 convert_type:
   BINARY length_opt

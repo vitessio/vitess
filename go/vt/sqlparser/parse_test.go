@@ -2452,6 +2452,27 @@ var (
 		}, {
 			input:  "CREATE DATABASE `somedb` CHARACTER SET binary CHARSET binary COLLATE binary collate binary encryption 'n' encryption 'n'",
 			output: "create database somedb character set binary charset binary collate binary collate binary encryption n encryption n",
+		}, {
+			input:  "CREATE TABLE mytable (h int DEFAULT (date_format(now(),_utf8mb4'%Y')))",
+			output: "create table mytable (\n\th int default (date_format(now(), _utf8mb4 '%Y'))\n)",
+		}, {
+			input:  "CREATE TABLE mytable (pk int NOT NULL, col2 varchar(20) NOT NULL DEFAULT sometext, PRIMARY KEY (pk), CONSTRAINT status CHECK (col2 like _utf8mb4'%sometext%'))",
+			output: "create table mytable (\n\tpk int not null,\n\tcol2 varchar(20) not null default sometext,\n\tPRIMARY KEY (pk),\n\tconstraint status check (col2 like _utf8mb4 '%sometext%')\n)",
+		}, {
+			input:  "SELECT _utf8mb4'abc'",
+			output: "select _utf8mb4 'abc' from dual",
+		}, {
+			input:  "SELECT _latin1 X'4D7953514C'",
+			output: "select _latin1 X'4D7953514C' from dual",
+		}, {
+			input:  "SELECT _utf8mb4'abc' COLLATE utf8mb4_danish_ci",
+			output: "select _utf8mb4 'abc' collate utf8mb4_danish_ci from dual",
+		}, {
+			input:  "CREATE TABLE engine_cost (cost_name varchar(64) NOT NULL PRIMARY KEY, default_value float GENERATED ALWAYS AS ((case cost_name when _utf8mb3'io_block_read_cost' then 1.0 when _utf8mb3'memory_block_read_cost' then 0.25 else NULL end)) VIRTUAL)",
+			output: "create table engine_cost (\n\tcost_name varchar(64) not null primary key,\n\tdefault_value float generated always as ((case cost_name when _utf8mb3 'io_block_read_cost' then 1.0 when _utf8mb3 'memory_block_read_cost' then 0.25 else null end)) virtual\n)",
+		}, {
+			input:  "CREATE VIEW myview AS SELECT concat(a.first_name, _utf8mb4 ' ', a.last_name) AS name, if(a.active, _utf8mb4 'active', _utf8mb4 '') AS notes FROM a",
+			output: "create view myview as select concat(a.first_name, _utf8mb4 ' ', a.last_name) as name, if(a.active, _utf8mb4 'active', _utf8mb4 '') as notes from a",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
