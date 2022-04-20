@@ -18,6 +18,46 @@ import (
 // providing a human-friendly representation.
 type Keyer interface{ Key() string }
 
+const (
+	// DefaultExpiration is used to instruct calls to Add to use the default
+	// cache expiration.
+	// See https://pkg.go.dev/github.com/patrickmn/go-cache@v2.1.0+incompatible#pkg-constants.
+	DefaultExpiration = cache.DefaultExpiration
+	// NoExpiration is used to create caches that do not expire items by
+	// default.
+	// See https://pkg.go.dev/github.com/patrickmn/go-cache@v2.1.0+incompatible#pkg-constants.
+	NoExpiration = cache.NoExpiration
+)
+
+// Config is the configuration for a cache.
+//
+// TODO: provide a hook point for vtadmin cluster flags/config.
+type Config struct {
+	// DefaultExpiration is how long to keep Values in the cache by default (the
+	// duration passed to Add takes precedence). Use the sentinel NoExpiration
+	// to make Values never expire by default.
+	DefaultExpiration time.Duration
+	// CleanupInterval is how often to remove expired Values from the cache.
+	CleanupInterval time.Duration
+
+	// BackfillRequestTTL is how long a backfill request is considered valid.
+	// If the backfill goroutine encounters a request older than this, it is
+	// discarded.
+	BackfillRequestTTL time.Duration
+	// BackfillRequestDuplicateInterval is how much time must pass before the
+	// backfill goroutine will re-backfill the same key. It is used to prevent
+	// multiple callers queuing up too many requests for the same key, when one
+	// backfill would satisfy all of them.
+	BackfillRequestDuplicateInterval time.Duration
+	// BackfillQueueSize is how many outstanding backfill requests to permit.
+	// If the queue is full, calls to EnqueueBackfill will return false and
+	// those requests will be discarded.
+	BackfillQueueSize int
+	// BackfillEnqueueWaitTime is how long to wait when attempting to enqueue a
+	// backfill request before giving up.
+	BackfillEnqueueWaitTime time.Duration
+}
+
 // Cache is a generic cache supporting background fills. To add things to the
 // cache, call Add. To enqueue a background fill, call EnqueueBackfill with a
 // Keyer implementation, which will be passed to the fill func provided to New.
@@ -42,16 +82,19 @@ type Cache[Key Keyer, Value any] struct {
 	backfills chan *backfillRequest[Key]
 
 	fillFunc func(ctx context.Context, k Key) (Value, error)
+
+	cfg Config
 }
 
 // New creates a new cache with the given backfill func. When a request is
 // enqueued (via EnqueueBackfill), fillFunc will be called with that request.
-func New[Key Keyer, Value any](fillFunc func(ctx context.Context, req Key) (Value, error)) *Cache[Key, Value] {
+func New[Key Keyer, Value any](fillFunc func(ctx context.Context, req Key) (Value, error), cfg Config) *Cache[Key, Value] {
 	c := &Cache[Key, Value]{
-		cache:     cache.New(0, 0),                     // TODO: read timeouts from config
-		fillcache: cache.New(0, 0),                     // TODO: also read from config (different values)
-		backfills: make(chan *backfillRequest[Key], 0), // TODO: config buffer size
+		cache:     cache.New(cfg.DefaultExpiration, cfg.CleanupInterval),
+		fillcache: cache.New(cfg.BackfillRequestDuplicateInterval, time.Minute),
+		backfills: make(chan *backfillRequest[Key], cfg.BackfillQueueSize),
 		fillFunc:  fillFunc,
+		cfg:       cfg,
 	}
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
@@ -91,7 +134,7 @@ func (c *Cache[Key, Value]) EnqueueBackfill(k Key) bool {
 		requestedAt: time.Now().UTC(),
 	}
 
-	ctx, cancel := context.WithTimeout(c.ctx, 0 /* TODO: use config */)
+	ctx, cancel := context.WithTimeout(c.ctx, c.cfg.BackfillEnqueueWaitTime)
 	defer cancel()
 
 	select {
@@ -130,9 +173,9 @@ func (c *Cache[Key, Value]) backfill() {
 			}
 		}
 
-		if req.requestedAt.Before(time.Now() /* TODO: time.Now() - backfill_request_expiration */) {
+		if req.requestedAt.Add(c.cfg.BackfillRequestTTL).Before(time.Now()) {
 			// We took too long to get to this request, per config options.
-			// TODO: log
+			log.Warningf("backfill for %s requested at %s; discarding due to exceeding TTL (%s)", req.k.Key(), req.requestedAt, c.cfg.BackfillRequestTTL)
 			continue
 		}
 
