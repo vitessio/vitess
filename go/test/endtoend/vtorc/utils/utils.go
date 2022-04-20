@@ -244,27 +244,29 @@ func demotePrimaryTablet(ts *topo.Server) (err error) {
 func StartVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, orcExtraArgs []string, config cluster.VtorcConfiguration) {
 	t.Helper()
 	// Start vtorc
-	clusterInfo.ClusterInstance.VtorcProcess = clusterInfo.ClusterInstance.NewOrcProcess(config)
-	clusterInfo.ClusterInstance.VtorcProcess.ExtraArgs = orcExtraArgs
-	err := clusterInfo.ClusterInstance.VtorcProcess.Setup()
+	vtorcProcess := clusterInfo.ClusterInstance.NewOrcProcess(config)
+	vtorcProcess.ExtraArgs = orcExtraArgs
+	err := vtorcProcess.Setup()
 	require.NoError(t, err)
+	clusterInfo.ClusterInstance.VtorcProcesses = append(clusterInfo.ClusterInstance.VtorcProcesses, vtorcProcess)
 }
 
-// StopVtorc is used to stop the orchestrator
-func StopVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo) {
+// StopVtorcs is used to stop the orchestrator
+func StopVtorcs(t *testing.T, clusterInfo *VtOrcClusterInfo) {
 	t.Helper()
 	// Stop vtorc
-	if clusterInfo.ClusterInstance.VtorcProcess != nil {
-		err := clusterInfo.ClusterInstance.VtorcProcess.TearDown()
-		require.NoError(t, err)
+	for _, vtorcProcess := range clusterInfo.ClusterInstance.VtorcProcesses {
+		if err := vtorcProcess.TearDown(); err != nil {
+			log.Errorf("Error in vtorc teardown: %v", err)
+		}
 	}
-	clusterInfo.ClusterInstance.VtorcProcess = nil
+	clusterInfo.ClusterInstance.VtorcProcesses = nil
 }
 
 // SetupVttabletsAndVtorc is used to setup the vttablets and start the orchestrator
 func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, config cluster.VtorcConfiguration) {
 	// stop vtorc if it is running
-	StopVtorc(t, clusterInfo)
+	StopVtorcs(t, clusterInfo)
 
 	// remove all the vttablets so that each test can add the amount that they require
 	err := shutdownVttablets(clusterInfo)

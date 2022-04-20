@@ -89,7 +89,7 @@ type LocalProcessCluster struct {
 	VtgateProcess   VtgateProcess
 	VtworkerProcess VtworkerProcess
 	VtbackupProcess VtbackupProcess
-	VtorcProcess    *VtorcProcess
+	VtorcProcesses  []*VtorcProcess
 
 	nextPortForProcess int
 
@@ -726,8 +726,8 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Errorf("Error in vtgate teardown: %v", err)
 	}
 
-	if cluster.VtorcProcess != nil {
-		if err := cluster.VtorcProcess.TearDown(); err != nil {
+	for _, vtorcProcess := range cluster.VtorcProcesses {
+		if err := vtorcProcess.TearDown(); err != nil {
 			log.Errorf("Error in vtorc teardown: %v", err)
 		}
 	}

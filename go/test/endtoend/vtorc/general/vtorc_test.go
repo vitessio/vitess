@@ -310,14 +310,14 @@ func TestCircularReplication(t *testing.T) {
 // TestSemiSync tests that semi-sync is setup correctly by vtorc if it is incorrectly set
 func TestSemiSync(t *testing.T) {
 	// stop any vtorc instance running due to a previous test.
-	utils.StopVtorc(t, clusterInfo)
+	utils.StopVtorcs(t, clusterInfo)
 	newCluster := utils.SetupNewClusterSemiSync(t)
 	utils.StartVtorc(t, newCluster, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 		Durability:                            "semi_sync",
 	})
 	defer func() {
-		utils.StopVtorc(t, newCluster)
+		utils.StopVtorcs(t, newCluster)
 		newCluster.ClusterInstance.Teardown()
 	}()
 	keyspace := &newCluster.ClusterInstance.Keyspaces[0]
