@@ -1,1 +1,6 @@
 # Add your test case here for debugging and run go test -run=One.
+"SELECT latest_error as `Latest Error`, count(*) AS `Count` FROM (select JSON_UNQUOTE(JSON_EXTRACT(attributes, '$.latestError')) as latest_error, TIMESTAMP(JSON_EXTRACT(attributes, '$.latestTriedAt')) as latest_tried_at from user where time_next is not null) as msgs_errors WHERE latest_error IS NOT NULL GROUP BY latest_error ORDER BY `Count`;"
+{
+}
+{
+}
