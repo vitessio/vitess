@@ -93,8 +93,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 		"STOP SLAVE IO_THREAD",
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
-		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN primary_alias master_alias VARBINARY(32) NOT NULL",
-		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
+		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN master_alias primary_alias VARBINARY(32) NOT NULL",
+		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
 	}
 	newPrimary.FakeMysqlDaemon.PromoteResult = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
@@ -230,8 +230,8 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 		"START SLAVE",
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
-		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN primary_alias master_alias VARBINARY(32) NOT NULL",
-		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
+		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN master_alias primary_alias VARBINARY(32) NOT NULL",
+		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
 	}
 	newPrimary.StartActionLoop(t, wr)
 	defer newPrimary.StopActionLoop(t)

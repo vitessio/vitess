@@ -420,9 +420,10 @@ func (dbcfgs *DBConfigs) getParams(userKey string, dbc *DBConfigs) (*UserConfig,
 }
 
 // SetDbParams sets the dba and app params
-func (dbcfgs *DBConfigs) SetDbParams(dbaParams, appParams mysql.ConnParams) {
+func (dbcfgs *DBConfigs) SetDbParams(dbaParams, appParams, filteredParams mysql.ConnParams) {
 	dbcfgs.dbaParams = dbaParams
 	dbcfgs.appParams = appParams
+	dbcfgs.filteredParams = filteredParams
 }
 
 // NewTestDBConfigs returns a DBConfigs meant for testing.

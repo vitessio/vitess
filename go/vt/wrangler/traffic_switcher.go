@@ -68,6 +68,16 @@ const (
 	lockTablesCycles = 2
 	// time to wait between LOCK TABLES cycles on the sources during SwitchWrites
 	lockTablesCycleDelay = time.Duration(100 * time.Millisecond)
+
+	// How long to wait when refreshing the state of each tablet in a shard. Note that these
+	// are refreshed in parallel, non-topo errors are ignored (in the error handling) and we
+	// may only do a partial refresh. Because in some cases it's unsafe to switch the traffic
+	// if some tablets do not refresh, we may need to look for partial results and produce
+	// an error (with the provided details of WHY) if we see them.
+	// Side note: the default lock/lease TTL in etcd is 60s so the default tablet refresh
+	// timeout of 60s can cause us to lose our keyspace lock before completing the
+	// operation too.
+	shardTabletRefreshTimeout = time.Duration(30 * time.Second)
 )
 
 // trafficSwitcher contains the metadata for switching read and write traffic
@@ -1015,7 +1025,13 @@ func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access a
 		}); err != nil {
 			return err
 		}
-		_, err := topotools.RefreshTabletsByShard(ctx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
+		rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
+		defer cancel()
+		isPartial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
+		if isPartial {
+			err = fmt.Errorf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
+				source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
+		}
 		return err
 	})
 }
@@ -1283,7 +1299,9 @@ func (ts *trafficSwitcher) allowTableTargetWrites(ctx context.Context) error {
 		}); err != nil {
 			return err
 		}
-		_, err := topotools.RefreshTabletsByShard(ctx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
+		rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
+		defer cancel()
+		_, _, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
 		return err
 	})
 }
@@ -1389,7 +1407,9 @@ func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 		}); err != nil {
 			return err
 		}
-		_, err := topotools.RefreshTabletsByShard(ctx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
+		rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
+		defer cancel()
+		_, _, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
 		return err
 	})
 }

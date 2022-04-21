@@ -144,6 +144,16 @@ func TestFindSchema(t *testing.T) {
 					DBConfig: vtadmintestutil.Dbcfg{
 						ShouldErr: true,
 					},
+					VtctldClient: &fakevtctldclient.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Keyspaces: []*vtctldatapb.Keyspace{
+								{Name: "testkeyspace"},
+							},
+						},
+					},
 				},
 			},
 			req: &vtadminpb.FindSchemaRequest{

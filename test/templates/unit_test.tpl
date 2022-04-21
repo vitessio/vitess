@@ -13,9 +13,10 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Check for changes in relevant files
-      uses: dorny/paths-filter@v2
+      uses: frouioui/paths-filter@main
       id: changes
       with:
+        token: ''
         filters: |
           unit_tests:
             - 'go/**'
@@ -32,7 +33,7 @@ jobs:
       if: steps.changes.outputs.unit_tests == 'true'
       uses: actions/setup-go@v2
       with:
-        go-version: 1.18
+        go-version: 1.18.1
 
     - name: Tune the OS
       if: steps.changes.outputs.unit_tests == 'true'

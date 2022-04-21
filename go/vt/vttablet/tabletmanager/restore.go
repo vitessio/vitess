@@ -327,7 +327,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		Host: connParams.Host,
 		Port: connParams.Port,
 	}
-	dbCfgs.SetDbParams(*connParams, *connParams)
+	dbCfgs.SetDbParams(*connParams, *connParams, *connParams)
 	vsClient := vreplication.NewReplicaConnector(connParams)
 
 	filter := &binlogdatapb.Filter{

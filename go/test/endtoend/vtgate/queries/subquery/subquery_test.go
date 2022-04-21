@@ -96,6 +96,7 @@ func TestSubqueryInINClause(t *testing.T) {
 }
 
 func TestSubqueryInUpdate(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 14, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 

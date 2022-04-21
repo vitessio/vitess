@@ -66,17 +66,24 @@ type flavor interface {
 	// restartReplicationCommands returns the commands to stop, reset and start the replication.
 	restartReplicationCommands() []string
 
-	// startReplicationUntilAfter will restart replication, but only allow it
+	// startReplicationUntilAfter will start replication, but only allow it
 	// to run until `pos` is reached. After reaching pos, replication will be stopped again
 	startReplicationUntilAfter(pos Position) string
+
+	// startSQLThreadUntilAfter will start replication's sql thread(s), but only allow it
+	// to run until `pos` is reached. After reaching pos, it will be stopped again
+	startSQLThreadUntilAfter(pos Position) string
 
 	// stopReplicationCommand returns the command to stop the replication.
 	stopReplicationCommand() string
 
-	// stopIOThreadCommand returns the command to stop the replica's io thread only.
+	// stopIOThreadCommand returns the command to stop the replica's IO thread only.
 	stopIOThreadCommand() string
 
-	// startSQLThreadCommand returns the command to start the replica's sql thread only.
+	// stopSQLThreadCommand returns the command to stop the replica's SQL thread(s) only.
+	stopSQLThreadCommand() string
+
+	// startSQLThreadCommand returns the command to start the replica's SQL thread only.
 	startSQLThreadCommand() string
 
 	// sendBinlogDumpCommand sends the packet required to start
@@ -236,19 +243,26 @@ func (c *Conn) PrimaryFilePosition() (Position, error) {
 	}, nil
 }
 
-// StartReplicationCommand returns the command to start the replication.
+// StartReplicationCommand returns the command to start replication.
 func (c *Conn) StartReplicationCommand() string {
 	return c.flavor.startReplicationCommand()
 }
 
-// RestartReplicationCommands returns the commands to stop, reset and start the replication.
+// RestartReplicationCommands returns the commands to stop, reset and start replication.
 func (c *Conn) RestartReplicationCommands() []string {
 	return c.flavor.restartReplicationCommands()
 }
 
-// StartReplicationUntilAfterCommand returns the command to start the replication.
+// StartReplicationUntilAfterCommand returns the command to start replication.
 func (c *Conn) StartReplicationUntilAfterCommand(pos Position) string {
 	return c.flavor.startReplicationUntilAfter(pos)
+}
+
+// StartSQLThreadUntilAfterCommand returns the command to start the replica's SQL
+// thread(s) and have it run until it has reached the given position, at which point
+// it will stop.
+func (c *Conn) StartSQLThreadUntilAfterCommand(pos Position) string {
+	return c.flavor.startSQLThreadUntilAfter(pos)
 }
 
 // StopReplicationCommand returns the command to stop the replication.
@@ -259,6 +273,11 @@ func (c *Conn) StopReplicationCommand() string {
 // StopIOThreadCommand returns the command to stop the replica's io thread.
 func (c *Conn) StopIOThreadCommand() string {
 	return c.flavor.stopIOThreadCommand()
+}
+
+// StopSQLThreadCommand returns the command to stop the replica's SQL thread(s).
+func (c *Conn) StopSQLThreadCommand() string {
+	return c.flavor.stopSQLThreadCommand()
 }
 
 // StartSQLThreadCommand returns the command to start the replica's SQL thread.
