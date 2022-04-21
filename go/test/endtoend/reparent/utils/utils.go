@@ -90,9 +90,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 
 	if enableSemiSync {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
-		if clusterInstance.VtctlMajorVersion >= 13 {
-			clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
-		}
+		clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 	}
 
 	// Start topo server
@@ -132,17 +130,13 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		// In this case, the close method and initSchema method of the onlineDDL executor race.
 		// If the initSchema acquires the lock, then it takes about 30 seconds for it to run during which time the
 		// DemotePrimary rpc is stalled!
-		"--queryserver_enable_online_ddl=false")
-
-	if clusterInstance.VtTabletMajorVersion >= 13 && clusterInstance.VtctlMajorVersion >= 13 {
+		"--queryserver_enable_online_ddl=false",
 		// disabling active reparents on the tablet since we don't want the replication manager
 		// to fix replication if it is stopped. Some tests deliberately do that. Also, we don't want
 		// the replication manager to silently fix the replication in case ERS or PRS mess up. All the
 		// tests in this test suite should work irrespective of this flag. Each run of ERS, PRS should be
 		// setting up the replication correctly.
-		// However, due to the bugs in old vitess components we can only do this for version >= 13.
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--disable_active_reparents")
-	}
+		"--disable_active_reparents")
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
@@ -208,9 +202,7 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 
 	if enableSemiSync {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
-		if clusterInstance.VtctlMajorVersion >= 13 {
-			clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
-		}
+		clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 	}
 
 	// Start topo server
@@ -250,17 +242,13 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 		// In this case, the close method and initSchema method of the onlineDDL executor race.
 		// If the initSchema acquires the lock, then it takes about 30 seconds for it to run during which time the
 		// DemotePrimary rpc is stalled!
-		"--queryserver_enable_online_ddl=false")
-
-	if clusterInstance.VtTabletMajorVersion >= 13 && clusterInstance.VtctlMajorVersion >= 13 {
+		"--queryserver_enable_online_ddl=false",
 		// disabling active reparents on the tablet since we don't want the replication manager
 		// to fix replication if it is stopped. Some tests deliberately do that. Also, we don't want
 		// the replication manager to silently fix the replication in case ERS or PRS mess up. All the
 		// tests in this test suite should work irrespective of this flag. Each run of ERS, PRS should be
 		// setting up the replication correctly.
-		// However, due to the bugs in old vitess components we can only do this for version >= 13.
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--disable_active_reparents")
-	}
+		"--disable_active_reparents")
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
@@ -423,10 +411,7 @@ func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.
 
 // ErsWithVtctl runs ERS via vtctl binary
 func ErsWithVtctl(clusterInstance *cluster.LocalProcessCluster) (string, error) {
-	args := []string{"EmergencyReparentShard", "--", "--keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
-	if clusterInstance.VtctlMajorVersion >= 13 {
-		args = append([]string{"--durability_policy=semi_sync"}, args...)
-	}
+	args := []string{"--durability_policy=semi_sync", "EmergencyReparentShard", "--", "--keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
 	return clusterInstance.VtctlProcess.ExecuteCommandWithOutput(args...)
 }
 
