@@ -79,7 +79,16 @@ type Cluster struct {
 	topoReadPool     *pools.RPCPool
 	workflowReadPool *pools.RPCPool
 
-	schemaCache *cache.Cache[*getSchemaCacheRequest, *vtadminpb.Schema]
+	// schemaCache caches schema(s) for different GetSchema(s) requests.
+	//
+	// - if we call GetSchema, then getSchemaCacheRequest.Keyspace will be
+	// non-empty and the cached schemas slice will contain exactly one element,
+	// namely for that keyspace's schema.
+	// - if we call GetSchemas, then getSchemaCacheRequest == "", and the cached
+	// schemas slice will contain one element per keyspace* in the cluster
+	// 	*: at the time it was cached; if keyspaces were created/destroyed in
+	//  the interim, we won't pick that up until something refreshes the cache.
+	schemaCache *cache.Cache[*getSchemaCacheRequest, []*vtadminpb.Schema]
 
 	cfg Config
 }
@@ -133,9 +142,22 @@ func New(cfg Config) (*Cluster, error) {
 	cluster.topoReadPool = cfg.TopoReadPoolConfig.NewReadPool()
 	cluster.workflowReadPool = cfg.WorkflowReadPoolConfig.NewReadPool()
 
-	cluster.schemaCache = cache.New(func(ctx context.Context, req *getSchemaCacheRequest) (*vtadminpb.Schema, error) {
+	cluster.schemaCache = cache.New(func(ctx context.Context, req *getSchemaCacheRequest) ([]*vtadminpb.Schema, error) {
 		// TODO: make a private method to separate the fetching bits from the cache bits
-		return cluster.GetSchema(ctx, req.Keyspace, GetSchemaOptions{
+		if req.Keyspace == "" {
+			return cluster.GetSchemas(ctx, GetSchemaOptions{
+				BaseRequest: &vtctldatapb.GetSchemaRequest{
+					IncludeViews: true,
+				},
+				TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
+					AggregateSizes:          true,
+					IncludeNonServingShards: req.IncludeNonServingShards,
+				},
+				isBackfill: true,
+			})
+		}
+
+		schema, err := cluster.GetSchema(ctx, req.Keyspace, GetSchemaOptions{
 			BaseRequest: &vtctldatapb.GetSchemaRequest{
 				IncludeViews: true,
 			},
@@ -145,6 +167,11 @@ func New(cfg Config) (*Cluster, error) {
 			},
 			isBackfill: true,
 		})
+		if err != nil {
+			return nil, err
+		}
+
+		return []*vtadminpb.Schema{schema}, nil
 	}, cache.Config{ // TODO: need to have config flags for this
 		DefaultExpiration:                10 * time.Minute,
 		CleanupInterval:                  60 * time.Minute,
@@ -1038,7 +1065,7 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 		IncludeNonServingShards: opts.TableSizeOptions.IncludeNonServingShards,
 	}
 	if !opts.isBackfill { // TODO: make a method for this.
-		if cachedSchema, ok := c.schemaCache.Get(&cacheRequest); ok {
+		if cachedSchemas, ok := c.schemaCache.Get(&cacheRequest); ok {
 			log.Infof("found cached schema for %+v", &cacheRequest)
 			filter, err := tmutils.NewTableFilter(opts.BaseRequest.Tables, opts.BaseRequest.ExcludeTables, opts.BaseRequest.IncludeViews)
 			if err != nil {
@@ -1051,7 +1078,7 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 
 			// We have a cache hit, now transform the cached response back to
 			// match potential "subset"-ish parameters.
-			schema := proto.Clone(cachedSchema).(*vtadminpb.Schema)
+			schema := proto.Clone(cachedSchemas[0]).(*vtadminpb.Schema)
 
 			if !opts.TableSizeOptions.AggregateSizes {
 				schema.TableSizes = nil
@@ -1148,7 +1175,7 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 				log.Warningf("failed to enqueue backfill for schema cache %+v", &cacheRequest)
 			}
 		} else {
-			if err := c.schemaCache.Add(&cacheRequest, schema, cache.DefaultExpiration); err != nil {
+			if err := c.schemaCache.Add(&cacheRequest, []*vtadminpb.Schema{schema}, cache.DefaultExpiration); err != nil {
 				log.Warningf("failed to add schema to cache for %+v: %s", &cacheRequest, err)
 			}
 		}
