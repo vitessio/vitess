@@ -138,6 +138,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   partitionValueRange	*PartitionValueRange
   partitionEngine *PartitionEngine
   partitionDataDirectory *PartitionDataDirectory
+  partitionIndexDirectory *PartitionIndexDirectory
   partSpecs     []*PartitionSpec
   characteristics []Characteristic
   selectExpr    SelectExpr
@@ -490,6 +491,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partitionValueRange> partition_value_range_opt
 %type <partitionEngine> partition_engine_options_opt
 %type <partitionDataDirectory> partition_datadir_opt
+%type <partitionIndexDirectory> partition_index_directory_opt
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
@@ -3201,11 +3203,12 @@ partition_definitions:
   }
 
 partition_definition:
-  partition_name partition_value_range_opt partition_engine_options_opt partition_datadir_opt
+  partition_name partition_value_range_opt partition_engine_options_opt partition_datadir_opt partition_index_directory_opt
   {
     $$.ValueRange = $2
     $$.Engine = $3
     $$.DataDirectory = $4
+    $$.IndexDirectory = $5
   }
 
 partition_value_range_opt:
@@ -3259,6 +3262,15 @@ partition_datadir_opt:
 | DATA DIRECTORY equal_opt STRING
   {
     $$ = &PartitionDataDirectory{ Equal: $3, DataDir: $4}
+  }
+
+partition_index_directory_opt:
+  {
+    $$ = nil
+  }
+| INDEX DIRECTORY equal_opt STRING
+  {
+    $$ = &PartitionIndexDirectory{ Equal: $3, IndexDir: $4}
   }
 
 partition_name:

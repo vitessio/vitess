@@ -606,6 +606,10 @@ func (node *PartitionDefinition) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		node.DataDirectory.formatFast(buf)
 	}
+	if node.IndexDirectory != nil {
+		buf.WriteByte(' ')
+		node.IndexDirectory.formatFast(buf)
+	}
 }
 
 // formatFast formats the node
@@ -640,6 +644,17 @@ func (node *PartitionDataDirectory) formatFast(buf *TrackedBuffer) {
 	}
 	buf.WriteByte('\'')
 	buf.WriteString(node.DataDir)
+	buf.WriteByte('\'')
+}
+
+// formatFast formats the node
+func (node *PartitionIndexDirectory) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("index directory ")
+	if node.Equal != "" {
+		buf.WriteString("= ")
+	}
+	buf.WriteByte('\'')
+	buf.WriteString(node.IndexDir)
 	buf.WriteByte('\'')
 }
 

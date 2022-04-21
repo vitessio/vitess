@@ -438,6 +438,9 @@ func (node *PartitionDefinition) Format(buf *TrackedBuffer) {
 	if node.DataDirectory != nil {
 		buf.astPrintf(node, " %v", node.DataDirectory)
 	}
+	if node.IndexDirectory != nil {
+		buf.astPrintf(node, " %v", node.IndexDirectory)
+	}
 }
 
 // Format formats the node
@@ -469,6 +472,15 @@ func (node *PartitionDataDirectory) Format(buf *TrackedBuffer) {
 		buf.WriteString("= ")
 	}
 	buf.astPrintf(node, "'%s'", node.DataDir)
+}
+
+// Format formats the node
+func (node *PartitionIndexDirectory) Format(buf *TrackedBuffer) {
+	buf.WriteString("index directory ")
+	if node.Equal != "" {
+		buf.WriteString("= ")
+	}
+	buf.astPrintf(node, "'%s'", node.IndexDir)
 }
 
 // Format formats the node.

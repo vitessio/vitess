@@ -2194,7 +2194,7 @@ func (cached *PartitionDefinition) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(80)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
 	size += cached.Name.CachedSize(false)
@@ -2204,6 +2204,8 @@ func (cached *PartitionDefinition) CachedSize(alloc bool) int64 {
 	size += cached.Engine.CachedSize(true)
 	// field DataDirectory *vitess.io/vitess/go/vt/sqlparser.PartitionDataDirectory
 	size += cached.DataDirectory.CachedSize(true)
+	// field IndexDirectory *vitess.io/vitess/go/vt/sqlparser.PartitionIndexDirectory
+	size += cached.IndexDirectory.CachedSize(true)
 	return size
 }
 func (cached *PartitionEngine) CachedSize(alloc bool) int64 {
@@ -2218,6 +2220,20 @@ func (cached *PartitionEngine) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Equal)))
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
+	return size
+}
+func (cached *PartitionIndexDirectory) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Equal string
+	size += hack.RuntimeAllocSize(int64(len(cached.Equal)))
+	// field IndexDir string
+	size += hack.RuntimeAllocSize(int64(len(cached.IndexDir)))
 	return size
 }
 func (cached *PartitionOption) CachedSize(alloc bool) int64 {
