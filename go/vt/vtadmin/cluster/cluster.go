@@ -47,11 +47,13 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // Cluster is the self-contained unit of services required for vtadmin to talk
@@ -1058,68 +1060,32 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 	span.Annotate("keyspace", keyspace)
 	annotateGetSchemaRequest(opts.BaseRequest, span)
 	vtadminproto.AnnotateSpanWithGetSchemaTableSizeOptions(opts.TableSizeOptions, span)
+	span.Annotate("is_backfill", opts.isBackfill)
 
 	cacheRequest := getSchemaCacheRequest{
 		ClusterID:               c.ID,
 		Keyspace:                keyspace,
 		IncludeNonServingShards: opts.TableSizeOptions.IncludeNonServingShards,
 	}
-	if !opts.isBackfill { // TODO: make a method for this.
+
+	if !opts.isBackfill {
 		if cachedSchemas, ok := c.schemaCache.Get(&cacheRequest); ok {
-			log.Infof("found cached schema for %+v", &cacheRequest)
-			filter, err := tmutils.NewTableFilter(opts.BaseRequest.Tables, opts.BaseRequest.ExcludeTables, opts.BaseRequest.IncludeViews)
+			span.Annotate("cache_hit", true)
+			schemas, err := c.hydrateSchemasFromCache(cachedSchemas, &cacheRequest, opts)
 			if err != nil {
-				// Note that there's no point in falling back to a full fetch in
-				// this case; this exact code gets executed on the tabletserver
-				// side, too, so we would just fail on the same issue _after_
-				// paying the cost to wait for a roundtrip to the remote tablet.
 				return nil, err
 			}
 
-			// We have a cache hit, now transform the cached response back to
-			// match potential "subset"-ish parameters.
-			schema := proto.Clone(cachedSchemas[0]).(*vtadminpb.Schema)
-
-			if !opts.TableSizeOptions.AggregateSizes {
-				schema.TableSizes = nil
+			if len(schemas) != 1 {
+				err := vterrors.Errorf(vtrpc.Code_INTERNAL, "impossible: cache should have exactly 1 schema for request %+v (have %d)", &cacheRequest, len(schemas))
+				log.Errorf(err.Error())
+				return nil, err
 			}
 
-			tables := make([]*tabletmanagerdatapb.TableDefinition, 0, len(schema.TableDefinitions))
-			tableSizes := make(map[string]*vtadminpb.Schema_TableSize, len(schema.TableSizes))
-
-			for _, td := range schema.TableDefinitions {
-				if !filter.Includes(td.Name, td.Type) {
-					continue
-				}
-
-				if opts.TableSizeOptions.AggregateSizes {
-					tableSizes[td.Name] = schema.TableSizes[td.Name]
-				}
-
-				if opts.BaseRequest.TableNamesOnly {
-					tables = append(tables, &tabletmanagerdatapb.TableDefinition{
-						Name: td.Name,
-					})
-					continue
-				}
-
-				if opts.BaseRequest.TableSizesOnly {
-					tables = append(tables, &tabletmanagerdatapb.TableDefinition{
-						Name:       td.Name,
-						DataLength: td.DataLength,
-						RowCount:   td.RowCount,
-					})
-					continue
-				}
-
-				tables = append(tables, td)
-			}
-
-			schema.TableDefinitions = tables
-			schema.TableSizes = tableSizes
-
-			return schema, nil
+			return schemas[0], nil
 		}
+
+		span.Annotate("cache_hit", false)
 	}
 
 	var (
@@ -1208,6 +1174,21 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 	AnnotateSpan(c, span)
 	annotateGetSchemaRequest(opts.BaseRequest, span)
 	vtadminproto.AnnotateSpanWithGetSchemaTableSizeOptions(opts.TableSizeOptions, span)
+	span.Annotate("is_backfill", opts.isBackfill)
+
+	cacheRequest := getSchemaCacheRequest{
+		ClusterID:               c.ID,
+		Keyspace:                "",
+		IncludeNonServingShards: opts.TableSizeOptions.IncludeNonServingShards,
+	}
+	if !opts.isBackfill {
+		if cachedSchemas, ok := c.schemaCache.Get(&cacheRequest); ok {
+			span.Annotate("cache_hit", true)
+			return c.hydrateSchemasFromCache(cachedSchemas, &cacheRequest, opts)
+		}
+
+		span.Annotate("cache_hit", false)
+	}
 
 	var (
 		m   sync.Mutex
@@ -1485,6 +1466,74 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 
 	randomServingTablet := keyspaceTablets[rand.Intn(len(keyspaceTablets))]
 	return []*vtadminpb.Tablet{randomServingTablet}, nil
+}
+
+func (c *Cluster) hydrateSchemasFromCache(cachedSchemas []*vtadminpb.Schema, req *getSchemaCacheRequest, opts GetSchemaOptions) ([]*vtadminpb.Schema, error) {
+	filter, err := tmutils.NewTableFilter(opts.BaseRequest.Tables, opts.BaseRequest.ExcludeTables, opts.BaseRequest.IncludeViews)
+	if err != nil {
+		// Note that there's no point in falling back to a full fetch in this
+		// case; this exact code gets executed on the tabletserver side, too,
+		// so we would just fail on the same issue _after_ paying the cost to
+		// wait for a roundtrip to the remote tablet.
+		return nil, err
+	}
+
+	schemas := make([]*vtadminpb.Schema, 0, len(cachedSchemas))
+	for _, schema := range cachedSchemas {
+		if req.Keyspace != "" && schema.Keyspace != req.Keyspace {
+			continue
+		}
+
+		schemas = append(schemas, c.hydrateSchemaFromCache(schema, opts, filter))
+	}
+
+	return schemas, nil
+}
+
+func (c *Cluster) hydrateSchemaFromCache(cachedSchema *vtadminpb.Schema, opts GetSchemaOptions, filter *tmutils.TableFilter) *vtadminpb.Schema {
+	// We have a cache hit, now transform the cached response back to
+	// match potential "subset"-ish parameters.
+	schema := proto.Clone(cachedSchema).(*vtadminpb.Schema)
+
+	if !opts.TableSizeOptions.AggregateSizes {
+		schema.TableSizes = nil
+	}
+
+	tables := make([]*tabletmanagerdatapb.TableDefinition, 0, len(schema.TableDefinitions))
+	tableSizes := make(map[string]*vtadminpb.Schema_TableSize, len(schema.TableSizes))
+
+	for _, td := range schema.TableDefinitions {
+		if !filter.Includes(td.Name, td.Type) {
+			continue
+		}
+
+		if opts.TableSizeOptions.AggregateSizes {
+			tableSizes[td.Name] = schema.TableSizes[td.Name]
+		}
+
+		if opts.BaseRequest.TableNamesOnly {
+			tables = append(tables, &tabletmanagerdatapb.TableDefinition{
+				Name: td.Name,
+			})
+			continue
+		}
+
+		if opts.BaseRequest.TableSizesOnly {
+			tables = append(tables, &tabletmanagerdatapb.TableDefinition{
+				Name:       td.Name,
+				DataLength: td.DataLength,
+				RowCount:   td.RowCount,
+			})
+			continue
+		}
+
+		tables = append(tables, td)
+	}
+
+	schema.TableDefinitions = tables
+	schema.TableSizes = tableSizes
+
+	return schema
 }
 
 // GetShardReplicationPositions returns a ClusterShardReplicationPosition object
