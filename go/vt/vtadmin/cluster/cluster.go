@@ -1004,6 +1004,38 @@ type GetSchemaOptions struct {
 	isBackfill bool
 }
 
+// shouldBackfillCache returns true if the []*vtadminpb.Schema slice returned by
+// as a result of the given options needs an additional backfill. if false, the
+// schema slice can be added to the cache directly without an additional
+// backfill.
+func (opts GetSchemaOptions) shouldBackfillCache() bool {
+	if len(opts.BaseRequest.Tables) > 0 {
+		return true
+	}
+
+	if len(opts.BaseRequest.Tables) > 0 {
+		return true
+	}
+
+	if !opts.BaseRequest.IncludeViews {
+		return true
+	}
+
+	if opts.BaseRequest.TableNamesOnly {
+		return true
+	}
+
+	if opts.BaseRequest.TableSizesOnly {
+		return true
+	}
+
+	if !opts.TableSizeOptions.AggregateSizes {
+		return true
+	}
+
+	return false
+}
+
 type getSchemaCacheRequest struct {
 	ClusterID               string
 	Keyspace                string
@@ -1135,7 +1167,7 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 	}
 
 	go func() { // and, fill the cache
-		if !opts.TableSizeOptions.AggregateSizes {
+		if opts.shouldBackfillCache() {
 			if !c.schemaCache.EnqueueBackfill(&cacheRequest) {
 				log.Warningf("failed to enqueue backfill for schema cache %+v", &cacheRequest)
 			}
@@ -1302,7 +1334,7 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 	}
 
 	go func() { // and, fill the cache
-		if !opts.TableSizeOptions.AggregateSizes {
+		if opts.shouldBackfillCache() {
 			if !c.schemaCache.EnqueueBackfill(&cacheRequest) {
 				log.Warningf("failed to enqueue backfill for schema cache %+v", &cacheRequest)
 			}
