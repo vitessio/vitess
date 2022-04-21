@@ -291,7 +291,7 @@ install_all() {
   echo "##local system details..."
   echo "##platform: $(uname) target:$(get_arch) OS: $os"
   # protoc
-  protoc_ver=3.20.0
+  protoc_ver=3.19.4
   install_dep "protoc" "$protoc_ver" "$VTROOT/dist/vt-protoc-$protoc_ver" install_protoc
 
   # zk
