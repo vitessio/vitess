@@ -1039,6 +1039,7 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 	}
 	if !opts.isBackfill { // TODO: make a method for this.
 		if cachedSchema, ok := c.schemaCache.Get(&cacheRequest); ok {
+			log.Infof("found cached schema for %+v", &cacheRequest)
 			filter, err := tmutils.NewTableFilter(opts.BaseRequest.Tables, opts.BaseRequest.ExcludeTables, opts.BaseRequest.IncludeViews)
 			if err != nil {
 				// Note that there's no point in falling back to a full fetch in
