@@ -3247,9 +3247,9 @@ partition_engine_options_opt:
   {
     $$ = nil
   }
-| partition_storage_opt ENGINE equal_opt STRING
+| partition_storage_opt ENGINE equal_opt table_alias
   {
-    $$ = &PartitionEngine{Storage:$1, Equal: $3, Name: $4}
+    $$ = &PartitionEngine{Storage:$1, Equal: $3, Name: $4.String()}
   }
 
 partition_datadir_opt:
