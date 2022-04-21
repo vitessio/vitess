@@ -58,16 +58,6 @@ Gen4 plan same as above
 "unsupported: natural right join"
 Gen4 plan same as above
 
-# left join with expressions
-"select user_extra.col+1 from user left join user_extra on user.col = user_extra.col"
-"unsupported: cross-shard left join and column expressions"
-Gen4 plan same as above
-
-# left join with expressions, with three-way join (different code path)
-"select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col join user_extra e"
-"unsupported: cross-shard left join and column expressions"
-Gen4 plan same as above
-
 # * expresson not allowed for cross-shard joins
 "select * from user join user_extra"
 "unsupported: '*' expression in cross-shard query"
