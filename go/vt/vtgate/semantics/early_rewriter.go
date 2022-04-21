@@ -102,21 +102,25 @@ func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.E
 	num, err := strconv.Atoi(node.Val)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", node.Val)
-
 	}
-	if num < 1 || num > len(currScope.selectStmt.SelectExprs) {
+	stmt, isSel := currScope.stmt.(*sqlparser.Select)
+	if !isSel {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error invalid statement type, expect Select, got: %T", currScope.stmt)
+	}
+
+	if num < 1 || num > len(stmt.SelectExprs) {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, r.clause)
 	}
 
 	for i := 0; i < num; i++ {
-		expr := currScope.selectStmt.SelectExprs[i]
+		expr := stmt.SelectExprs[i]
 		_, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(expr))
 		}
 	}
 
-	aliasedExpr, ok := currScope.selectStmt.SelectExprs[num-1].(*sqlparser.AliasedExpr)
+	aliasedExpr, ok := stmt.SelectExprs[num-1].(*sqlparser.AliasedExpr)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
 	}

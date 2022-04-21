@@ -1,0 +1,1 @@
+modify column t int not null default '0'

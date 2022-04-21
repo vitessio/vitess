@@ -29,33 +29,35 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// buildUpdatePlan builds the instructions for an UPDATE statement.
-func buildUpdatePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
-	upd := stmt.(*sqlparser.Update)
-	if upd.With != nil {
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in update statement")
-	}
-	dml, ksidVindex, err := buildDMLPlan(vschema, "update", stmt, reservedVars, upd.TableExprs, upd.Where, upd.OrderBy, upd.Limit, upd.Comments, upd.Exprs)
-	if err != nil {
-		return nil, err
-	}
-	eupd := &engine.Update{DML: dml}
+// buildUpdatePlan returns a stmtPlanner that builds the instructions for an UPDATE statement.
+func buildUpdatePlan(query string) stmtPlanner {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+		upd := stmt.(*sqlparser.Update)
+		if upd.With != nil {
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in update statement")
+		}
+		dml, ksidVindex, err := buildDMLPlan(vschema, "update", stmt, reservedVars, upd.TableExprs, upd.Where, upd.OrderBy, upd.Limit, upd.Comments, upd.Exprs)
+		if err != nil {
+			return nil, err
+		}
+		eupd := &engine.Update{DML: dml}
 
-	if dml.Opcode == engine.Unsharded {
+		if dml.Opcode == engine.Unsharded {
+			return eupd, nil
+		}
+
+		cvv, ovq, err := buildChangedVindexesValues(upd, eupd.Table, ksidVindex.Columns)
+		if err != nil {
+			return nil, err
+		}
+		eupd.ChangedVindexValues = cvv
+		eupd.OwnedVindexQuery = ovq
+		if len(eupd.ChangedVindexValues) != 0 {
+			eupd.KsidVindex = ksidVindex.Vindex
+			eupd.KsidLength = len(ksidVindex.Columns)
+		}
 		return eupd, nil
 	}
-
-	cvv, ovq, err := buildChangedVindexesValues(upd, eupd.Table, ksidVindex.Columns)
-	if err != nil {
-		return nil, err
-	}
-	eupd.ChangedVindexValues = cvv
-	eupd.OwnedVindexQuery = ovq
-	if len(eupd.ChangedVindexValues) != 0 {
-		eupd.KsidVindex = ksidVindex.Vindex
-		eupd.KsidLength = len(ksidVindex.Columns)
-	}
-	return eupd, nil
 }
 
 // buildChangedVindexesValues adds to the plan all the lookup vindexes that are changing.

@@ -57,19 +57,44 @@ jobs:
       - get_latest_release
 
     steps:
+    - name: Check out commit's code
+      uses: actions/checkout@v2
+
+    - name: Check for changes in relevant files
+      uses: frouioui/paths-filter@main
+      id: changes
+      with:
+        token: ''
+        filters: |
+          end_to_end:
+            - 'go/**'
+            - 'go/**/*.go'
+            - 'test.go'
+            - 'Makefile'
+            - 'build.env'
+            - 'go.[sumod]'
+            - 'proto/*.proto'
+            - 'tools/**'
+            - 'config/**'
+            - 'bootstrap.sh'
+
     - name: Set up Go
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v2
       with:
-        go-version: 1.18
+        go-version: 1.18.1
 
     - name: Set up python
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@v2
 
     - name: Tune the OS
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
 
     - name: Get base dependencies
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
         # Uninstall any previously installed MySQL first
@@ -106,15 +131,18 @@ jobs:
 
     # Checkout to the last release of Vitess
     - name: Check out other version's code (${{ needs.get_latest_release.outputs.latest_release }})
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@v2
       with:
         ref: ${{ needs.get_latest_release.outputs.latest_release }}
 
     - name: Get dependencies for the last release
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
 
     - name: Building last release's binaries
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         source build.env
@@ -125,13 +153,16 @@ jobs:
 
     # Checkout to this build's commit
     - name: Check out commit's code
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@v2
 
     - name: Get dependencies for this commit
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
 
     - name: Building the binaries for this commit
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         source build.env
@@ -141,6 +172,7 @@ jobs:
 
     # Running a test with vtgate and vttablet using version n
     - name: Run query serving tests (vtgate=N, vttablet=N)
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
@@ -150,6 +182,7 @@ jobs:
 
     # Swap the binaries in the bin. Use vtgate version n-1 and keep vttablet at version n
     - name: Use last release's VTGate
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
@@ -159,6 +192,7 @@ jobs:
 
     # Running a test with vtgate at version n-1 and vttablet at version n
     - name: Run query serving tests (vtgate=N-1, vttablet=N)
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
@@ -168,6 +202,7 @@ jobs:
 
     # Swap the binaries again. This time, vtgate will be at version n, and vttablet will be at version n-1
     - name: Use current version VTGate, and other version VTTablet
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
@@ -179,6 +214,7 @@ jobs:
 
     # Running a test with vtgate at version n and vttablet at version n-1
     - name: Run query serving tests (vtgate=N, vttablet=N-1)
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot

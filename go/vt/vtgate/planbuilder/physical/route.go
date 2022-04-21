@@ -17,6 +17,7 @@ limitations under the License.
 package physical
 
 import (
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -48,6 +49,9 @@ type (
 		// SeenPredicates contains all the predicates that have had a chance to influence routing.
 		// If we need to replan routing, we'll use this list
 		SeenPredicates []sqlparser.Expr
+
+		// TargetDestination specifies an explicit target destination tablet type
+		TargetDestination key.Destination
 	}
 
 	// VindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
@@ -130,6 +134,10 @@ func (r *Route) Clone() abstract.PhysicalOperator {
 
 func (r *Route) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	r.SeenPredicates = append(r.SeenPredicates, expr)
+	return r.tryImprovingVindex(ctx, expr)
+}
+
+func (r *Route) tryImprovingVindex(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	if r.canImprove() {
 		newVindexFound, err := r.searchForNewVindexes(ctx, expr)
 		if err != nil {
@@ -606,7 +614,7 @@ func (r *Route) resetRoutingSelections(ctx *plancontext.PlanningContext) error {
 	}
 
 	for _, predicate := range r.SeenPredicates {
-		err := r.UpdateRoutingLogic(ctx, predicate)
+		err := r.tryImprovingVindex(ctx, predicate)
 		if err != nil {
 			return err
 		}

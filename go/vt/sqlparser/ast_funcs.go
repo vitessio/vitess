@@ -58,8 +58,9 @@ type Visit func(node SQLNode) (kontinue bool, err error)
 func Append(buf *strings.Builder, node SQLNode) {
 	tbuf := &TrackedBuffer{
 		Builder: buf,
+		fast:    true,
 	}
-	node.Format(tbuf)
+	node.formatFast(tbuf)
 }
 
 // IndexColumn describes a column in an index definition with optional length
@@ -85,10 +86,11 @@ type IndexOption struct {
 
 // TableOption is used for create table options like AUTO_INCREMENT, INSERT_METHOD, etc
 type TableOption struct {
-	Name   string
-	Value  *Literal
-	String string
-	Tables TableNames
+	Name          string
+	Value         *Literal
+	String        string
+	Tables        TableNames
+	CaseSensitive bool
 }
 
 // ColumnKeyOption indicates whether or not the given column is defined as an
@@ -778,7 +780,7 @@ func containEscapableChars(s string, at AtCount) bool {
 
 func formatID(buf *TrackedBuffer, original string, at AtCount) {
 	_, isKeyword := keywordLookupTable.LookupString(original)
-	if isKeyword || containEscapableChars(original, at) {
+	if buf.escape || isKeyword || containEscapableChars(original, at) {
 		writeEscapedString(buf, original)
 	} else {
 		buf.WriteString(original)
@@ -1335,6 +1337,54 @@ func (ty TrimType) ToString() string {
 		return TrailingTrimStr
 	default:
 		return "Unknown TrimType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty JSONAttributeType) ToString() string {
+	switch ty {
+	case DepthAttributeType:
+		return DepthAttributeStr
+	case ValidAttributeType:
+		return ValidAttributeStr
+	case TypeAttributeType:
+		return TypeAttributeStr
+	case LengthAttributeType:
+		return LengthAttributeStr
+	default:
+		return "Unknown JSONAttributeType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty JSONValueModifierType) ToString() string {
+	switch ty {
+	case JSONArrayAppendType:
+		return JSONArrayAppendStr
+	case JSONArrayInsertType:
+		return JSONArrayInsertStr
+	case JSONInsertType:
+		return JSONInsertStr
+	case JSONReplaceType:
+		return JSONReplaceStr
+	case JSONSetType:
+		return JSONSetStr
+	default:
+		return "Unknown JSONValueModifierType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty JSONValueMergeType) ToString() string {
+	switch ty {
+	case JSONMergeType:
+		return JSONMergeStr
+	case JSONMergePatchType:
+		return JSONMergePatchStr
+	case JSONMergePreserveType:
+		return JSONMergePreserveStr
+	default:
+		return "Unknown JSONValueMergeType"
 	}
 }
 

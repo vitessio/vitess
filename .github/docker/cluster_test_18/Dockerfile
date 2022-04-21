@@ -1,6 +1,6 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-ARG bootstrap_version=5
+ARG bootstrap_version=6
 ARG image="vitess/bootstrap:${bootstrap_version}-mysql57"
 
 FROM "${image}"

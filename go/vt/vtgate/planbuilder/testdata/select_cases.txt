@@ -3204,8 +3204,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select json_contains('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', '1'), json_contains_path('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), JSON_UNQUOTE(json_extract('[\\\"a\\\",\\\"b\\\"]', '$[1]')), json_keys('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\\\"abc\\\"]', 'one', 'abc'), json_value('{\\\"fname\\\": \\\"Joe\\\", \\\"lname\\\": \\\"Palmer\\\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual where 1 != 1",
-    "Query": "select json_contains('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', '1'), json_contains_path('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), JSON_UNQUOTE(json_extract('[\\\"a\\\",\\\"b\\\"]', '$[1]')), json_keys('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\\\"abc\\\"]', 'one', 'abc'), json_value('{\\\"fname\\\": \\\"Joe\\\", \\\"lname\\\": \\\"Palmer\\\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual",
+    "FieldQuery": "select json_contains('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', '1'), json_contains_path('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), json_unquote(json_extract('[\\\"a\\\",\\\"b\\\"]', '$[1]')), json_keys('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\\\"abc\\\"]', 'one', 'abc'), json_value('{\\\"fname\\\": \\\"Joe\\\", \\\"lname\\\": \\\"Palmer\\\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual where 1 != 1",
+    "Query": "select json_contains('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', '1'), json_contains_path('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), json_unquote(json_extract('[\\\"a\\\",\\\"b\\\"]', '$[1]')), json_keys('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\\\"abc\\\"]', 'one', 'abc'), json_value('{\\\"fname\\\": \\\"Joe\\\", \\\"lname\\\": \\\"Palmer\\\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual",
     "Table": "dual"
   }
 }
@@ -3226,6 +3226,101 @@ Gen4 plan same as above
     "FieldQuery": "select a -\u003e '$[4]', a -\u003e\u003e '$[3]' from `user` where 1 != 1",
     "Query": "select a -\u003e '$[4]', a -\u003e\u003e '$[3]' from `user`",
     "Table": "`user`"
+  }
+}
+Gen4 plan same as above
+
+# groupe by with non aggregated columns and table alias
+"select u.id, u.age from user u group by u.id"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id, u.age from user u group by u.id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u.id, u.age from `user` as u where 1 != 1 group by u.id",
+    "Query": "select u.id, u.age from `user` as u group by u.id",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
+
+# Functions that return JSON value attributes
+"select JSON_DEPTH('{}'), JSON_LENGTH('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), JSON_TYPE(JSON_EXTRACT('{\"a\": [10, true]}', '$.a')), JSON_VALID('{\"a\": 1}')"
+{
+  "QueryType": "SELECT",
+  "Original": "select JSON_DEPTH('{}'), JSON_LENGTH('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), JSON_TYPE(JSON_EXTRACT('{\"a\": [10, true]}', '$.a')), JSON_VALID('{\"a\": 1}')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_depth('{}'), json_length('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}', '$.b'), json_type(json_extract('{\\\"a\\\": [10, true]}', '$.a')), json_valid('{\\\"a\\\": 1}') from dual where 1 != 1",
+    "Query": "select json_depth('{}'), json_length('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}', '$.b'), json_type(json_extract('{\\\"a\\\": [10, true]}', '$.a')), json_valid('{\\\"a\\\": 1}') from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+
+# Json array functions
+"select JSON_ARRAY_APPEND('{\"a\": 1}', '$', 'z'), JSON_ARRAY_INSERT('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), JSON_INSERT('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', CAST('[true, false]' AS JSON))"
+{
+  "QueryType": "SELECT",
+  "Original": "select JSON_ARRAY_APPEND('{\"a\": 1}', '$', 'z'), JSON_ARRAY_INSERT('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), JSON_INSERT('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', CAST('[true, false]' AS JSON))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', convert('[true, false]', JSON)) from dual where 1 != 1",
+    "Query": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', convert('[true, false]', JSON)) from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+
+# Json merge functions
+"select JSON_MERGE('[1, 2]', '[true, false]'), JSON_MERGE_PATCH('{\"name\": \"x\"}', '{\"id\": 47}'), JSON_MERGE_PRESERVE('[1, 2]', '{\"id\": 47}')"
+{
+  "QueryType": "SELECT",
+  "Original": "select JSON_MERGE('[1, 2]', '[true, false]'), JSON_MERGE_PATCH('{\"name\": \"x\"}', '{\"id\": 47}'), JSON_MERGE_PRESERVE('[1, 2]', '{\"id\": 47}')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_merge('[1, 2]', '[true, false]'), json_merge_patch('{\\\"name\\\": \\\"x\\\"}', '{\\\"id\\\": 47}'), json_merge_preserve('[1, 2]', '{\\\"id\\\": 47}') from dual where 1 != 1",
+    "Query": "select json_merge('[1, 2]', '[true, false]'), json_merge_patch('{\\\"name\\\": \\\"x\\\"}', '{\\\"id\\\": 47}'), json_merge_preserve('[1, 2]', '{\\\"id\\\": 47}') from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+
+# JSON modifier functions
+"select JSON_REMOVE('[1, [2, 3], 4]', '$[1]'), JSON_REPLACE('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), JSON_SET('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), JSON_UNQUOTE('\"abc\"')"
+{
+  "QueryType": "SELECT",
+  "Original": "select JSON_REMOVE('[1, [2, 3], 4]', '$[1]'), JSON_REPLACE('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), JSON_SET('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), JSON_UNQUOTE('\"abc\"')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_remove('[1, [2, 3], 4]', '$[1]'), json_replace('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_set('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_unquote('\\\"abc\\\"') from dual where 1 != 1",
+    "Query": "select json_remove('[1, [2, 3], 4]', '$[1]'), json_replace('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_set('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_unquote('\\\"abc\\\"') from dual",
+    "Table": "dual"
   }
 }
 Gen4 plan same as above

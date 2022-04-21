@@ -58,16 +58,6 @@ Gen4 plan same as above
 "unsupported: natural right join"
 Gen4 plan same as above
 
-# left join with expressions
-"select user_extra.col+1 from user left join user_extra on user.col = user_extra.col"
-"unsupported: cross-shard left join and column expressions"
-Gen4 plan same as above
-
-# left join with expressions, with three-way join (different code path)
-"select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col join user_extra e"
-"unsupported: cross-shard left join and column expressions"
-Gen4 plan same as above
-
 # * expresson not allowed for cross-shard joins
 "select * from user join user_extra"
 "unsupported: '*' expression in cross-shard query"
@@ -143,21 +133,6 @@ Gen4 plan same as above
 "unsupported: in scatter query: complex order by expression: 1 collate utf8_general_ci"
 Gen4 error: unsupported: in scatter query: complex order by expression: a collate utf8_general_ci
 
-# subqueries in update
-"update user set col = (select id from unsharded)"
-"unsupported: subqueries in sharded DML"
-Gen4 plan same as above
-
-# sharded subqueries in unsharded update
-"update unsharded set col = (select id from user)"
-"unsupported: sharded subqueries in DML"
-Gen4 plan same as above
-
-# sharded join unsharded subqueries in unsharded update
-"update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)"
-"unsupported: sharded subqueries in DML"
-Gen4 plan same as above
-
 # subqueries in delete
 "delete from user where col = (select id from unsharded)"
 "unsupported: subqueries in sharded DML"
@@ -223,20 +198,20 @@ Gen4 plan same as above
 "unsupported: Need to provide order by clause when using limit. Invalid update on vindex: email_user_map"
 Gen4 plan same as above
 
-# cross-shard update tables
+# update with derived table
 "update (select id from user) as u set id = 4"
 "unsupported: subqueries in sharded DML"
-Gen4 plan same as above
+Gen4 error: The target table u of the UPDATE is not updatable
 
 # join in update tables
 "update user join user_extra on user.id = user_extra.id set user.name = 'foo'"
 "unsupported: multi-shard or vindex write statement"
-Gen4 plan same as above
+Gen4 error: unsupported: multiple tables in update
 
 # multiple tables in update
 "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id"
 "unsupported: multi-shard or vindex write statement"
-Gen4 plan same as above
+Gen4 error: unsupported: multiple tables in update
 
 # unsharded insert, unqualified names and auto-inc combined
 "insert into unsharded_auto select col from unsharded"
