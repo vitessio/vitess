@@ -1613,9 +1613,10 @@ type PartitionSpecAction int8
 
 // PartitionDefinition describes a very minimal partition definition
 type PartitionDefinition struct {
-	Name       ColIdent
-	ValueRange *PartitionValueRange
-	Engine     *PartitionEngine
+	Name          ColIdent
+	ValueRange    *PartitionValueRange
+	Engine        *PartitionEngine
+	DataDirectory *PartitionDataDirectory
 }
 
 // PartitionValueRangeType is an enum for PartitionValueRange.Type
@@ -1631,6 +1632,11 @@ type PartitionEngine struct {
 	Storage bool
 	Equal   string
 	Name    string
+}
+
+type PartitionDataDirectory struct {
+	Equal   string
+	DataDir string
 }
 
 // PartitionByType is an enum storing how we are partitioning a table

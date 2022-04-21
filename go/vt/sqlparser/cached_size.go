@@ -2174,6 +2174,20 @@ func (cached *ParsedQuery) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *PartitionDataDirectory) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Equal string
+	size += hack.RuntimeAllocSize(int64(len(cached.Equal)))
+	// field DataDir string
+	size += hack.RuntimeAllocSize(int64(len(cached.DataDir)))
+	return size
+}
 func (cached *PartitionDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2188,6 +2202,8 @@ func (cached *PartitionDefinition) CachedSize(alloc bool) int64 {
 	size += cached.ValueRange.CachedSize(true)
 	// field Engine *vitess.io/vitess/go/vt/sqlparser.PartitionEngine
 	size += cached.Engine.CachedSize(true)
+	// field DataDirectory *vitess.io/vitess/go/vt/sqlparser.PartitionDataDirectory
+	size += cached.DataDirectory.CachedSize(true)
 	return size
 }
 func (cached *PartitionEngine) CachedSize(alloc bool) int64 {

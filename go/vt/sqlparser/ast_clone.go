@@ -271,6 +271,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfParenTableExpr(in)
 	case *ParsedComments:
 		return CloneRefOfParsedComments(in)
+	case *PartitionDataDirectory:
+		return CloneRefOfPartitionDataDirectory(in)
 	case *PartitionDefinition:
 		return CloneRefOfPartitionDefinition(in)
 	case *PartitionEngine:
@@ -1672,6 +1674,15 @@ func CloneRefOfParsedComments(n *ParsedComments) *ParsedComments {
 	return &out
 }
 
+// CloneRefOfPartitionDataDirectory creates a deep clone of the input.
+func CloneRefOfPartitionDataDirectory(n *PartitionDataDirectory) *PartitionDataDirectory {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
 // CloneRefOfPartitionDefinition creates a deep clone of the input.
 func CloneRefOfPartitionDefinition(n *PartitionDefinition) *PartitionDefinition {
 	if n == nil {
@@ -1681,6 +1692,7 @@ func CloneRefOfPartitionDefinition(n *PartitionDefinition) *PartitionDefinition 
 	out.Name = CloneColIdent(n.Name)
 	out.ValueRange = CloneRefOfPartitionValueRange(n.ValueRange)
 	out.Engine = CloneRefOfPartitionEngine(n.Engine)
+	out.DataDirectory = CloneRefOfPartitionDataDirectory(n.DataDirectory)
 	return &out
 }
 
