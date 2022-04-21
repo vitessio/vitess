@@ -26,11 +26,11 @@ function goversion_min() {
   wantmajor=${BASH_REMATCH[1]}
   wantminor=${BASH_REMATCH[2]}
   wantpatch=${BASH_REMATCH[3]}
-  [ "$gotmajor" -lt "$wantmajor" ] && return 1
-  [ "$gotmajor" -gt "$wantmajor" ] && return 0
-  [ "$gotminor" -lt "$wantminor" ] && return 1
-  [ "$gotminor" -gt "$wantminor" ] && return 0
-  [ "$gotpatch" -lt "$wantpatch" ] && return 1
+  [[ $gotmajor -lt $wantmajor ]] && return 1
+  [[ $gotmajor -gt $wantmajor ]] && return 0
+  [[ $gotminor -lt $wantminor ]] && return 1
+  [[ $gotminor -gt $wantminor ]] && return 0
+  [[ $gotpatch -lt $wantpatch ]] && return 1
   return 0
 }
 
