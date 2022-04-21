@@ -289,7 +289,8 @@ func TestWorkflowListStreams(t *testing.T) {
 			"PrimaryIsServing": true
 		}
 	},
-	"SourceTimeZone": ""
+	"SourceTimeZone": "",
+	"TargetTimeZone": ""
 }
 
 `

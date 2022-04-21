@@ -428,7 +428,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 	for _, tcase := range testcases {
 		t.Run(tcase.input.Filter, func(t *testing.T) {
 			filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{tcase.input}}
-			df := &vdiff{sourceTimeZone: tcase.sourceTimeZone}
+			df := &vdiff{sourceTimeZone: tcase.sourceTimeZone, targetTimeZone: "UTC"}
 			err := df.buildVDiffPlan(context.Background(), filter, schm, nil)
 			require.NoError(t, err, tcase.input)
 			require.Equal(t, 1, len(df.differs), tcase.input)
