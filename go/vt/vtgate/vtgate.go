@@ -303,6 +303,11 @@ func Init(
 		log.Fatalf("error initializing query logger: %v", err)
 	}
 
+	_, err = initInsights(QueryLogger)
+	if err != nil {
+		log.Fatalf("error initializing query insights: %v", err)
+	}
+
 	initAPI(gw.hc)
 
 	return rpcVTGate
