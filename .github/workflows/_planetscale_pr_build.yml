@@ -67,7 +67,7 @@ jobs:
             for (const review_state of review_states.values()) {
               if (review_state == 'APPROVED') {
                 state = 'approved';
-              } else if (review_state = 'REQUEST_CHANGES') {
+              } else if (review_state == 'REQUEST_CHANGES') {
                 state = 'request_changes';
                 break;
               }
