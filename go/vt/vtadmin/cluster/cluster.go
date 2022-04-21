@@ -1005,14 +1005,13 @@ type GetSchemaOptions struct {
 }
 
 type getSchemaCacheRequest struct {
-	ClusterID               string `json:"cluster_id"`
-	Keyspace                string `json:"keyspace"`
-	IncludeNonServingShards bool   `json:"include_non_serving_shards"`
+	ClusterID               string
+	Keyspace                string
+	IncludeNonServingShards bool
 }
 
 func (req *getSchemaCacheRequest) Key() string {
-	b, _ := json.Marshal(req)
-	return string(b)
+	return fmt.Sprintf("%s/%s/%v", req.ClusterID, req.Keyspace, req.IncludeNonServingShards)
 }
 
 // GetSchema returns the schema for a given keyspace. GetSchema has a few
@@ -1469,6 +1468,7 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 }
 
 func (c *Cluster) hydrateSchemasFromCache(cachedSchemas []*vtadminpb.Schema, req *getSchemaCacheRequest, opts GetSchemaOptions) ([]*vtadminpb.Schema, error) {
+	log.Infof("hydrating schema from cache for %+v", req)
 	filter, err := tmutils.NewTableFilter(opts.BaseRequest.Tables, opts.BaseRequest.ExcludeTables, opts.BaseRequest.IncludeViews)
 	if err != nil {
 		// Note that there's no point in falling back to a full fetch in this
