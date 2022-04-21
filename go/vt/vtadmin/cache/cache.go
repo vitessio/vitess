@@ -107,7 +107,11 @@ func New[Key Keyer, Value any](fillFunc func(ctx context.Context, req Key) (Valu
 
 // Add adds a (key, value) to the cache directly, following the semantics of
 // (github.com/patrickmn/go-cache).Cache.Add.
-func (c *Cache[Key, Value]) Add(key string, val Value, d time.Duration) error {
+func (c *Cache[Key, Value]) Add(key Key, val Value, d time.Duration) error {
+	return c.add(key.Key(), val, d)
+}
+
+func (c *Cache[Key, Value]) add(key string, val Value, d time.Duration) error {
 	// Record the time we last cached this key, to check against
 	c.fillcache.Set(key, struct{}{}, cache.DefaultExpiration)
 	// Then cache the actual value.
@@ -117,8 +121,8 @@ func (c *Cache[Key, Value]) Add(key string, val Value, d time.Duration) error {
 // Get returns the Value stored for the key, if present in the cache. If the key
 // is not cached, the zero value for the given type is returned, along with a
 // boolean to indicated presence/absence.
-func (c *Cache[Key, Value]) Get(key string) (Value, bool) {
-	v, exp, ok := c.cache.GetWithExpiration(key)
+func (c *Cache[Key, Value]) Get(key Key) (Value, bool) {
+	v, exp, ok := c.cache.GetWithExpiration(key.Key())
 	if !ok || (!exp.IsZero() && exp.Before(time.Now())) {
 		var zero Value
 		return zero, false
@@ -197,7 +201,7 @@ func (c *Cache[Key, Value]) backfill() {
 		}
 
 		// Finally, store the value.
-		if err := c.Add(key, val, cache.DefaultExpiration); err != nil {
+		if err := c.add(key, val, cache.DefaultExpiration); err != nil {
 			log.Warningf("failed to add (%s, %+v) to cache: %s", key, val, err)
 		}
 	}
