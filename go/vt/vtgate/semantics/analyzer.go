@@ -60,7 +60,7 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 }
 
 // Analyze analyzes the parsed query.
-func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInformation) (*SemTable, error) {
+func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
 	analyzer := newAnalyzer(currentDb, si)
 
 	// Analysis for initial scope
@@ -75,7 +75,13 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 	return semTable, nil
 }
 
-func (a analyzer) newSemTable(statement sqlparser.SelectStatement, coll collations.ID) *SemTable {
+func (a analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID) *SemTable {
+	var comments *sqlparser.ParsedComments
+	commentedStmt, isCommented := statement.(sqlparser.Commented)
+	if isCommented {
+		comments = commentedStmt.GetParsedComments()
+	}
+
 	return &SemTable{
 		Recursive:         a.binder.recursive,
 		Direct:            a.binder.direct,
@@ -85,7 +91,7 @@ func (a analyzer) newSemTable(statement sqlparser.SelectStatement, coll collatio
 		NotSingleRouteErr: a.projErr,
 		NotUnshardedErr:   a.unshardedErr,
 		Warning:           a.warning,
-		Comments:          statement.GetParsedComments(),
+		Comments:          comments,
 		SubqueryMap:       a.binder.subqueryMap,
 		SubqueryRef:       a.binder.subqueryRef,
 		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
@@ -246,6 +252,18 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 
 func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
+	case *sqlparser.Update:
+		if len(node.TableExprs) != 1 {
+			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multiple tables in update")}
+		}
+		alias, isAlias := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
+		if !isAlias {
+			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multiple tables in update")}
+		}
+		_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
+		if isDerived {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUpdateableTable, "The target table %s of the UPDATE is not updatable", alias.As.String())
+		}
 	case *sqlparser.Select:
 		parent := cursor.Parent()
 		if _, isUnion := parent.(*sqlparser.Union); isUnion && node.SQLCalcFoundRows {

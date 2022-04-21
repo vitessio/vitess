@@ -72,6 +72,12 @@ type iExecute interface {
 	ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
 	ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
 
+	showVitessReplicationStatus(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
+	showShards(ctx context.Context, filter *sqlparser.ShowFilter, destTabletType topodatapb.TabletType) (*sqltypes.Result, error)
+	showTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
+	showVitessMetadata(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
+	setVitessMetadata(ctx context.Context, name, value string) error
+
 	// TODO: remove when resolver is gone
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
 	VSchema() *vindexes.VSchema
@@ -923,4 +929,31 @@ func (vc *vcursorImpl) MessageStream(rss []*srvtopo.ResolvedShard, tableName str
 
 func (vc *vcursorImpl) VStream(rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
 	return vc.executor.ExecuteVStream(vc.ctx, rss, filter, gtid, callback)
+}
+
+func (vc *vcursorImpl) ShowExec(command sqlparser.ShowCommandType, filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
+	switch command {
+	case sqlparser.VitessReplicationStatus:
+		return vc.executor.showVitessReplicationStatus(vc.ctx, filter)
+	case sqlparser.VitessShards:
+		return vc.executor.showShards(vc.ctx, filter, vc.tabletType)
+	case sqlparser.VitessTablets:
+		return vc.executor.showTablets(filter)
+	case sqlparser.VitessVariables:
+		return vc.executor.showVitessMetadata(vc.ctx, filter)
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "bug: unexpected show command: %v", command)
+	}
+}
+
+func (vc *vcursorImpl) GetVSchema() *vindexes.VSchema {
+	return vc.vschema
+}
+
+func (vc *vcursorImpl) GetSrvVschema() *vschemapb.SrvVSchema {
+	return vc.vm.GetCurrentSrvVschema()
+}
+
+func (vc *vcursorImpl) SetExec(name string, value string) error {
+	return vc.executor.setVitessMetadata(vc.ctx, name, value)
 }

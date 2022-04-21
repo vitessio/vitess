@@ -18,6 +18,7 @@ package throttler
 import (
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"testing"
@@ -65,9 +66,10 @@ var (
     }
 	}`
 
-	httpClient       = base.SetupHTTPClient(time.Second)
-	checkAPIPath     = "throttler/check"
-	checkSelfAPIPath = "throttler/check-self"
+	httpClient           = base.SetupHTTPClient(time.Second)
+	throttledAppsAPIPath = "throttler/throttled-apps"
+	checkAPIPath         = "throttler/check"
+	checkSelfAPIPath     = "throttler/check-self"
 )
 
 const (
@@ -130,6 +132,19 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
+func throttledApps(tablet *cluster.Vttablet) (resp *http.Response, respBody string, err error) {
+	resp, err = httpClient.Get(fmt.Sprintf("http://localhost:%d/%s", tablet.HTTPPort, throttledAppsAPIPath))
+	if err != nil {
+		return resp, respBody, err
+	}
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp, respBody, err
+	}
+	respBody = string(b)
+	return resp, respBody, err
+}
+
 func throttleCheck(tablet *cluster.Vttablet) (*http.Response, error) {
 	return httpClient.Head(fmt.Sprintf("http://localhost:%d/%s", tablet.HTTPPort, checkAPIPath))
 }
@@ -160,6 +175,12 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 		resp, err := throttleCheck(primaryTablet)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	}
+	{
+		resp, body, err := throttledApps(primaryTablet)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Contains(t, body, "abusing-app")
 	}
 	{
 		resp, err := throttleCheckSelf(primaryTablet)

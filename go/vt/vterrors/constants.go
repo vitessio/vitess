@@ -30,9 +30,6 @@ var RxOp = regexp.MustCompile("operation not allowed in state (NOT_SERVING|SHUTT
 // TxEngineClosed for transaction engine closed error
 const TxEngineClosed = "tx engine can't accept new connections in state %v"
 
-// RxTxEngineClosed regex for operation not allowed error
-var RxTxEngineClosed = regexp.MustCompile("tx engine can't accept new connections in state (NotServing|Transitioning)")
-
 // WrongTablet for invalid tablet type error
 const WrongTablet = "wrong tablet type"
 

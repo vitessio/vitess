@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"sort"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -74,9 +73,6 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 	return BuildFromStmt(query, result.AST, reservedVars, vschema, result.BindVarNeeds, true, true)
 }
 
-// ErrPlanNotSupported is an error for plan building not supported
-var ErrPlanNotSupported = errors.New("plan building not supported")
-
 // BuildFromStmt builds a plan based on the AST provided.
 func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, bindVarNeeds *sqlparser.BindVarNeeds, enableOnlineDDL, enableDirectDDL bool) (*engine.Plan, error) {
 	instruction, err := createInstructionFor(query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
@@ -92,7 +88,7 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlpars
 	return plan, nil
 }
 
-func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) selectPlanner, stmt sqlparser.SelectStatement, query string) (selectPlanner, error) {
+func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) stmtPlanner, stmt sqlparser.Statement, query string) (stmtPlanner, error) {
 	planner, ok := getPlannerFromQuery(stmt)
 	if !ok {
 		// if the query doesn't specify the planner, we check what the configuration is
@@ -121,7 +117,7 @@ func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) se
 // The default planner can be overridden using /*vt+ PLANNER=gen4 */
 // We will also fall back on the gen4 planner if we encounter outer join,
 // since there are known problems with the v3 planner and outer joins
-func getPlannerFromQuery(stmt sqlparser.SelectStatement) (version plancontext.PlannerVersion, found bool) {
+func getPlannerFromQuery(stmt sqlparser.Statement) (version plancontext.PlannerVersion, found bool) {
 	version, found = getPlannerFromQueryHint(stmt)
 	if found {
 		return
@@ -142,13 +138,13 @@ func getPlannerFromQuery(stmt sqlparser.SelectStatement) (version plancontext.Pl
 	return
 }
 
-func getPlannerFromQueryHint(stmt sqlparser.SelectStatement) (plancontext.PlannerVersion, bool) {
-	var d sqlparser.CommentDirectives
-
-	firstSelect := sqlparser.GetFirstSelect(stmt)
-	if firstSelect != nil {
-		d = firstSelect.Comments.Directives()
+func getPlannerFromQueryHint(stmt sqlparser.Statement) (plancontext.PlannerVersion, bool) {
+	cm, isCom := stmt.(sqlparser.Commented)
+	if !isCom {
+		return plancontext.PlannerVersion(0), false
 	}
+
+	d := cm.GetParsedComments().Directives()
 	val, ok := d[sqlparser.DirectiveQueryPlanner]
 	if !ok {
 		return plancontext.PlannerVersion(0), false
@@ -163,7 +159,7 @@ func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVa
 	return f(stmt, reservedVars, vschema)
 }
 
-type selectPlanner func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error)
+type stmtPlanner func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error)
 
 func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (engine.Primitive, error) {
 	switch stmt := stmt.(type) {
@@ -176,7 +172,11 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 	case *sqlparser.Insert:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildInsertPlan)
 	case *sqlparser.Update:
-		return buildRoutePlan(stmt, reservedVars, vschema, buildUpdatePlan)
+		configuredPlanner, err := getConfiguredPlanner(vschema, buildUpdatePlan, stmt, query)
+		if err != nil {
+			return nil, err
+		}
+		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Delete:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildDeletePlan)
 	case *sqlparser.Union:
@@ -208,12 +208,12 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 	case sqlparser.DBDDLStatement:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildDBDDLPlan)
 	case *sqlparser.SetTransaction:
-		return nil, ErrPlanNotSupported
+		return buildRoutePlan(stmt, reservedVars, vschema, buildSetTxPlan)
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release:
 		// Empty by design. Not executed by a plan
 		return nil, nil
 	case *sqlparser.Show:
-		return buildRoutePlan(stmt, reservedVars, vschema, buildShowPlan)
+		return buildShowPlan(query, stmt, reservedVars, vschema)
 	case *sqlparser.LockTables:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildLockPlan)
 	case *sqlparser.UnlockTables:
@@ -267,6 +267,13 @@ func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema
 		return engine.NewDBDDL(ksName, true, queryTimeout(dbDDL.Comments.Directives())), nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] database ddl not recognized: %s", sqlparser.String(dbDDLstmt))
+}
+
+func buildSetTxPlan(_ sqlparser.Statement, _ *sqlparser.ReservedVars, _ plancontext.VSchema) (engine.Primitive, error) {
+	// TODO: This is a NOP, modeled off of tx_isolation and tx_read_only.
+	// It's incredibly dangerous that it's a NOP, this will be fixed when it will be implemented.
+	// This is currently the refactor of existing setup.
+	return engine.NewRowsPrimitive(nil, nil), nil
 }
 
 func buildLoadPlan(query string, vschema plancontext.VSchema) (engine.Primitive, error) {

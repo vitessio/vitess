@@ -35,7 +35,7 @@ type binder struct {
 	tc          *tableCollector
 	org         originable
 	typer       *typer
-	subqueryMap map[*sqlparser.Select][]*sqlparser.ExtractedSubquery
+	subqueryMap map[sqlparser.Statement][]*sqlparser.ExtractedSubquery
 	subqueryRef map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery
 }
 
@@ -47,7 +47,7 @@ func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer)
 		org:         org,
 		tc:          tc,
 		typer:       typer,
-		subqueryMap: map[*sqlparser.Select][]*sqlparser.ExtractedSubquery{},
+		subqueryMap: map[sqlparser.Statement][]*sqlparser.ExtractedSubquery{},
 		subqueryRef: map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery{},
 	}
 }
@@ -61,7 +61,7 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 			return err
 		}
 
-		b.subqueryMap[currScope.selectStmt] = append(b.subqueryMap[currScope.selectStmt], sq)
+		b.subqueryMap[currScope.stmt] = append(b.subqueryMap[currScope.stmt], sq)
 		b.subqueryRef[node] = sq
 
 		b.setSubQueryDependencies(node, currScope)
@@ -122,7 +122,7 @@ func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery, currScope *sc
 }
 
 func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *scope, subq *sqlparser.Subquery) (*sqlparser.ExtractedSubquery, error) {
-	if currScope.selectStmt == nil {
+	if currScope.stmt == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to bind subquery to select statement")
 	}
 

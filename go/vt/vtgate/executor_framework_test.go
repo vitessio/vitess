@@ -441,7 +441,6 @@ func init() {
 }
 
 func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
-	// Use legacy gateway until we can rewrite these tests to use new tabletgateway
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox("TestExecutor")

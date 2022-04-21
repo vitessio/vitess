@@ -35,6 +35,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/withddl"
+
 	"google.golang.org/protobuf/proto"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -3036,7 +3038,7 @@ func (e *Executor) vreplicationExec(ctx context.Context, tmClient tmclient.Table
 	e.initVreplicationDDLOnce.Do(func() {
 		// Ensure vreplication schema is up-to-date by invoking a query with non-existing columns.
 		// This will make vreplication run through its WithDDL schema changes.
-		_, _ = tmClient.VReplicationExec(ctx, tablet, sqlImpossibleSelectVreplication)
+		_, _ = tmClient.VReplicationExec(ctx, tablet, withddl.QueryToTriggerWithDDL)
 	})
 	return tmClient.VReplicationExec(ctx, tablet, query)
 }
@@ -3592,6 +3594,14 @@ func (e *Executor) SubmitMigration(
 	if !e.isOpen {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
 	}
+	if ddlStmt, ok := stmt.(sqlparser.DDLStatement); ok {
+		// This validation should have taken place on submission. However, the query may have mutated
+		// during transfer, and this validation is here to catch any malformed mutation.
+		if !ddlStmt.IsFullyParsed() {
+			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error parsing statement")
+		}
+	}
+
 	onlineDDL, err := schema.OnlineDDLFromCommentedStatement(stmt)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Error submitting migration %s: %v", sqlparser.String(stmt), err)

@@ -36,11 +36,12 @@ import (
 )
 
 var (
-	opts                 grpcserver.Options
-	httpOpts             vtadminhttp.Options
-	clusterConfigs       cluster.ClustersFlag
-	clusterFileConfig    cluster.FileConfig
-	defaultClusterConfig cluster.Config
+	opts                  grpcserver.Options
+	httpOpts              vtadminhttp.Options
+	clusterConfigs        cluster.ClustersFlag
+	clusterFileConfig     cluster.FileConfig
+	defaultClusterConfig  cluster.Config
+	enableDynamicClusters bool
 
 	rbacConfigPath string
 	enableRBAC     bool
@@ -97,7 +98,7 @@ func run(cmd *cobra.Command, args []string) {
 	configs := clusterFileConfig.Combine(defaultClusterConfig, clusterConfigs)
 	clusters := make([]*cluster.Cluster, len(configs))
 
-	if len(configs) == 0 && !httpOpts.EnableDynamicClusters {
+	if len(configs) == 0 && !enableDynamicClusters {
 		bootSpan.Finish()
 		fatal("must specify at least one cluster")
 	}
@@ -129,9 +130,10 @@ func run(cmd *cobra.Command, args []string) {
 	}
 
 	s := vtadmin.NewAPI(clusters, vtadmin.Options{
-		GRPCOpts: opts,
-		HTTPOpts: httpOpts,
-		RBAC:     rbacConfig,
+		GRPCOpts:              opts,
+		HTTPOpts:              httpOpts,
+		RBAC:                  rbacConfig,
+		EnableDynamicClusters: enableDynamicClusters,
 	})
 	bootSpan.Finish()
 
@@ -141,13 +143,18 @@ func run(cmd *cobra.Command, args []string) {
 }
 
 func main() {
+	// Common flags
 	rootCmd.Flags().StringVar(&opts.Addr, "addr", ":15000", "address to serve on")
 	rootCmd.Flags().DurationVar(&opts.CMuxReadTimeout, "lmux-read-timeout", time.Second, "how long to spend connection muxing")
 	rootCmd.Flags().DurationVar(&opts.LameDuckDuration, "lame-duck-duration", time.Second*5, "length of lame duck period at shutdown")
+
+	// Cluster config flags
 	rootCmd.Flags().Var(&clusterConfigs, "cluster", "per-cluster configuration. any values here take precedence over those in -cluster-defaults or -cluster-config")
 	rootCmd.Flags().Var(&clusterFileConfig, "cluster-config", "path to a yaml cluster configuration. see clusters.example.yaml") // (TODO:@amason) provide example config.
 	rootCmd.Flags().Var(&defaultClusterConfig, "cluster-defaults", "default options for all clusters")
+	rootCmd.Flags().BoolVar(&enableDynamicClusters, "enable-dynamic-clusters", false, "whether to enable dynamic clusters that are set by request header cookies or gRPC metadata")
 
+	// Tracing flags
 	rootCmd.Flags().AddGoFlag(flag.Lookup("tracer"))                 // defined in go/vt/trace
 	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-enable-logging")) // defined in go/vt/trace
 	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-sampling-type"))  // defined in go/vt/trace
@@ -155,6 +162,11 @@ func main() {
 	rootCmd.Flags().BoolVar(&opts.EnableTracing, "grpc-tracing", false, "whether to enable tracing on the gRPC server")
 	rootCmd.Flags().BoolVar(&httpOpts.EnableTracing, "http-tracing", false, "whether to enable tracing on the HTTP server")
 
+	// gRPC server flags
+	rootCmd.Flags().BoolVar(&opts.AllowReflection, "grpc-allow-reflection", false, "whether to register the gRPC server for reflection; this is required to use tools like `grpc_cli`")
+	rootCmd.Flags().BoolVar(&opts.EnableChannelz, "grpc-enable-channelz", false, "whether to enable the channelz service on the gRPC server")
+
+	// HTTP server flags
 	rootCmd.Flags().BoolVar(&httpOpts.DisableCompression, "http-no-compress", false, "whether to disable compression of HTTP API responses")
 	rootCmd.Flags().BoolVar(&httpOpts.DisableDebug, "http-no-debug", false, "whether to disable /debug/pprof/* and /debug/env HTTP endpoints")
 	rootCmd.Flags().Var(&debug.OmitEnv, "http-debug-omit-env", "name of an environment variable to omit from /debug/env, if http debug endpoints are enabled. specify multiple times to omit multiple env vars")
@@ -167,9 +179,8 @@ func main() {
 			"address for a tablet. Currently used to make passthrough "+
 			"requests to /debug/vars endpoints.",
 	)
-	rootCmd.Flags().BoolVar(&httpOpts.EnableDynamicClusters, "http-enable-dynamic-clusters", false, "whether to enable dynamic clusters that are set by request header cookies")
 
-	// rbac flags
+	// RBAC flags
 	rootCmd.Flags().StringVar(&rbacConfigPath, "rbac-config", "", "path to an RBAC config file. must be set if passing --rbac")
 	rootCmd.Flags().BoolVar(&enableRBAC, "rbac", false, "whether to enable RBAC. must be set if not passing --rbac")
 	rootCmd.Flags().BoolVar(&disableRBAC, "no-rbac", false, "whether to disable RBAC. must be set if not passing --no-rbac")

@@ -454,7 +454,7 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStat
 func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
 	isPushable := !isJoin(plan)
 	grouping := hp.qp.GetGrouping()
-	vindexOverlapWithGrouping := hasUniqueVindex(ctx.VSchema, ctx.SemTable, grouping)
+	vindexOverlapWithGrouping := hasUniqueVindex(ctx.SemTable, grouping)
 	if isPushable && vindexOverlapWithGrouping {
 		// If we have a plan that we can push the group by and aggregation through, we don't need to do aggregation
 		// at the vtgate level at all
@@ -724,7 +724,7 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		if exprHasVindex(ctx.VSchema, ctx.SemTable, innerWS, false) {
+		if exprHasVindex(ctx.SemTable, innerWS, false) {
 			aggrs = append(aggrs, expr)
 			continue
 		}
@@ -800,9 +800,9 @@ func isCountStar(f *sqlparser.FuncExpr) bool {
 	return isStar
 }
 
-func hasUniqueVindex(vschema plancontext.VSchema, semTable *semantics.SemTable, groupByExprs []abstract.GroupBy) bool {
+func hasUniqueVindex(semTable *semantics.SemTable, groupByExprs []abstract.GroupBy) bool {
 	for _, groupByExpr := range groupByExprs {
-		if exprHasUniqueVindex(vschema, semTable, groupByExpr.WeightStrExpr) {
+		if exprHasUniqueVindex(semTable, groupByExpr.WeightStrExpr) {
 			return true
 		}
 	}
@@ -1138,7 +1138,7 @@ func (hp *horizonPlanning) planDistinct(ctx *plancontext.PlanningContext, plan l
 		// we always make the underlying query distinct,
 		// and then we might also add a distinct operator on top if it is needed
 		p.Select.MakeDistinct()
-		if p.isSingleShard() || selectHasUniqueVindex(ctx.VSchema, ctx.SemTable, hp.qp.SelectExprs) {
+		if p.isSingleShard() || selectHasUniqueVindex(ctx.SemTable, hp.qp.SelectExprs) {
 			return plan, nil
 		}
 
@@ -1263,14 +1263,14 @@ func isAmbiguousOrderBy(index int, col sqlparser.ColIdent, exprs []abstract.Sele
 	return false
 }
 
-func selectHasUniqueVindex(vschema plancontext.VSchema, semTable *semantics.SemTable, sel []abstract.SelectExpr) bool {
+func selectHasUniqueVindex(semTable *semantics.SemTable, sel []abstract.SelectExpr) bool {
 	for _, expr := range sel {
 		exp, err := expr.GetExpr()
 		if err != nil {
 			// TODO: handle star expression error
 			return false
 		}
-		if exprHasUniqueVindex(vschema, semTable, exp) {
+		if exprHasUniqueVindex(semTable, exp) {
 			return true
 		}
 	}
@@ -1301,7 +1301,7 @@ func (hp *horizonPlanning) needDistinctHandling(
 		// Unreachable
 		return true, innerAliased, nil
 	}
-	if exprHasUniqueVindex(ctx.VSchema, ctx.SemTable, innerAliased.Expr) {
+	if exprHasUniqueVindex(ctx.SemTable, innerAliased.Expr) {
 		// if we can see a unique vindex on this table/column,
 		// we know the results will be unique, and we don't need to DISTINCTify them
 		return false, nil, nil
@@ -1341,11 +1341,11 @@ func isJoin(plan logicalPlan) bool {
 	}
 }
 
-func exprHasUniqueVindex(vschema plancontext.VSchema, semTable *semantics.SemTable, expr sqlparser.Expr) bool {
-	return exprHasVindex(vschema, semTable, expr, true)
+func exprHasUniqueVindex(semTable *semantics.SemTable, expr sqlparser.Expr) bool {
+	return exprHasVindex(semTable, expr, true)
 }
 
-func exprHasVindex(vschema plancontext.VSchema, semTable *semantics.SemTable, expr sqlparser.Expr, hasToBeUnique bool) bool {
+func exprHasVindex(semTable *semantics.SemTable, expr sqlparser.Expr, hasToBeUnique bool) bool {
 	col, isCol := expr.(*sqlparser.ColName)
 	if !isCol {
 		return false
@@ -1355,14 +1355,7 @@ func exprHasVindex(vschema plancontext.VSchema, semTable *semantics.SemTable, ex
 	if err != nil {
 		return false
 	}
-	tableName, err := tableInfo.Name()
-	if err != nil {
-		return false
-	}
-	vschemaTable, _, _, _, _, err := vschema.FindTableOrVindex(tableName)
-	if err != nil {
-		return false
-	}
+	vschemaTable := tableInfo.GetVindexTable()
 	for _, vindex := range vschemaTable.ColumnVindexes {
 		if len(vindex.Columns) > 1 || hasToBeUnique && !vindex.IsUnique() {
 			return false

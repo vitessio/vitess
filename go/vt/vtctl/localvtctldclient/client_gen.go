@@ -256,6 +256,11 @@ func (client *localVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldata
 	return client.s.GetKeyspaces(ctx, in)
 }
 
+// GetPermissions is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetPermissions(ctx context.Context, in *vtctldatapb.GetPermissionsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetPermissionsResponse, error) {
+	return client.s.GetPermissions(ctx, in)
+}
+
 // GetRoutingRules is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetRoutingRules(ctx context.Context, in *vtctldatapb.GetRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetRoutingRulesResponse, error) {
 	return client.s.GetRoutingRules(ctx, in)

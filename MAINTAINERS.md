@@ -14,6 +14,7 @@ The following is the full list, alphabetically ordered.
 * Jon Tirsen ([tirsen](https://github.com/tirsen)) jontirsen@squareup.com
 * Mali Akmanalp ([makmanalp](https://github.com/makmanalp) makmanalp@hubspot.com
 * Manan Gupta ([GuptaManan100](https://github.com/GuptaManan100)) manan@planetscale.com
+* Matt Lord ([mattlord](https://github.com/mattlord)) mlord@planetscale.com
 * Michael Demmer ([demmer](https://github.com/demmer)) mdemmer@slack-corp.com
 * Michael Pawliszyn ([mpawliszyn](https://github.com/mpawliszyn)) mikepaw@squareup.com
 * Rafael Chacon ([rafael](https://github.com/rafael)) rchacon@figma.com
@@ -32,7 +33,7 @@ sougou, deepthi, demmer, rafael, dweitzman, tirsen, enisoc
 dkhenry, shlomi-noach, ajm188, vmg, GuptaManan100
 
 ### Resharding
-sougou, rafael, tirsen, dweitzman, systay, rohit-nayak-ps, deepthi
+sougou, rafael, tirsen, dweitzman, systay, rohit-nayak-ps, deepthi, mattlord
 
 ### Parser
 sougou, dweitzman, systay, harshit-gangal, vmg, GuptaManan100

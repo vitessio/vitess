@@ -555,6 +555,14 @@ message GetKeyspaceResponse {
   Keyspace keyspace = 1;
 }
 
+message GetPermissionsRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message GetPermissionsResponse {
+  tabletmanagerdata.Permissions permissions = 1;
+}
+
 message GetRoutingRulesRequest {
 }
 
@@ -790,6 +798,8 @@ message RefreshStateByShardRequest {
 
 message RefreshStateByShardResponse {
   bool is_partial_refresh = 1;
+  // This explains why we had a partial refresh (if we did)
+  string partial_refresh_details = 2;
 }
 
 message ReloadSchemaRequest {

@@ -89,11 +89,13 @@ func (g *Generator) WriteToFile(out string) {
 	fmt.Fprintf(&file, ")\n\n")
 	g.Buffer.WriteTo(&file)
 
+	var stderr bytes.Buffer
 	gofmt := exec.Command("gofmt", "-s")
 	gofmt.Stdin = &file
 	gofmt.Stdout = &fmtfile
+	gofmt.Stderr = &stderr
 	if err := gofmt.Run(); err != nil {
-		g.Fail(fmt.Sprintf("failed to format generated code: %v", err))
+		g.Fail(fmt.Sprintf("failed to format generated code: %v\n%s", err, stderr.Bytes()))
 	}
 
 	if err := os.WriteFile(out, fmtfile.Bytes(), 0644); err != nil {
