@@ -1,4 +1,4 @@
-ARG bootstrap_version=6
+ARG bootstrap_version=7
 ARG image="vitess/bootstrap:${bootstrap_version}-mysql56"
 
 FROM "${image}"
