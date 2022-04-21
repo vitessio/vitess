@@ -1166,17 +1166,7 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 		return nil, err
 	}
 
-	go func() { // and, fill the cache
-		if opts.shouldBackfillCache() {
-			if !c.schemaCache.EnqueueBackfill(&cacheRequest) {
-				log.Warningf("failed to enqueue backfill for schema cache %+v", &cacheRequest)
-			}
-		} else {
-			if err := c.schemaCache.Add(&cacheRequest, []*vtadminpb.Schema{schema}, cache.DefaultExpiration); err != nil {
-				log.Warningf("failed to add schema to cache for %+v: %s", &cacheRequest, err)
-			}
-		}
-	}()
+	go c.updateOrBackfillSchemaCache([]*vtadminpb.Schema{schema}, cacheRequest, opts)
 
 	return schema, nil
 }
@@ -1333,19 +1323,21 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 		return nil, rec.Error()
 	}
 
-	go func() { // and, fill the cache
-		if opts.shouldBackfillCache() {
-			if !c.schemaCache.EnqueueBackfill(&cacheRequest) {
-				log.Warningf("failed to enqueue backfill for schema cache %+v", &cacheRequest)
-			}
-		} else {
-			if err := c.schemaCache.Add(&cacheRequest, schemas, cache.DefaultExpiration); err != nil {
-				log.Warningf("failed to add schema to cache for %+v: %s", &cacheRequest, err)
-			}
-		}
-	}()
+	go c.updateOrBackfillSchemaCache(schemas, cacheRequest, opts)
 
 	return schemas, nil
+}
+
+func (c *Cluster) updateOrBackfillSchemaCache(schemas []*vtadminpb.Schema, cacheRequest getSchemaCacheRequest, opts GetSchemaOptions) {
+	if opts.shouldBackfillCache() {
+		if !c.schemaCache.EnqueueBackfill(&cacheRequest) {
+			log.Warningf("failed to enqueue backfill for schema cache %+v", cacheRequest)
+		}
+	} else {
+		if err := c.schemaCache.Add(&cacheRequest, schemas, cache.DefaultExpiration); err != nil {
+			log.Warningf("failed to add schema to cache for %+v: %s", cacheRequest, err)
+		}
+	}
 }
 
 // Note that for this function we use the tablets parameter, ignoring the
