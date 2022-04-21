@@ -4614,3 +4614,56 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# Do not rewrite derived expressions when the derived table is merged with the outer
+"select col1, count(*) from (select colC+colD as col1 from user) as tbl group by col1"
+{
+  "QueryType": "SELECT",
+  "Original": "select col1, count(*) from (select colC+colD as col1 from user) as tbl group by col1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(1)",
+    "GroupBy": "0",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, count(*), weight_string(col1) from (select colC + colD as col1 from `user` where 1 != 1) as tbl where 1 != 1 group by col1, weight_string(col1)",
+        "OrderBy": "(0|2) ASC",
+        "Query": "select col1, count(*), weight_string(col1) from (select colC + colD as col1 from `user`) as tbl group by col1, weight_string(col1) order by col1 asc",
+        "ResultColumns": 2,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col1, count(*) from (select colC+colD as col1 from user) as tbl group by col1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "sum(1) AS count(*)",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, count(*), weight_string(col1) from (select colC + colD as col1 from `user` where 1 != 1) as tbl where 1 != 1 group by col1, weight_string(col1)",
+        "OrderBy": "(0|2) ASC",
+        "Query": "select col1, count(*), weight_string(col1) from (select colC + colD as col1 from `user`) as tbl group by col1, weight_string(col1) order by col1 asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
