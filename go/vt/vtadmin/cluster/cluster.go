@@ -1301,6 +1301,18 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 		return nil, rec.Error()
 	}
 
+	go func() { // and, fill the cache
+		if !opts.TableSizeOptions.AggregateSizes {
+			if !c.schemaCache.EnqueueBackfill(&cacheRequest) {
+				log.Warningf("failed to enqueue backfill for schema cache %+v", &cacheRequest)
+			}
+		} else {
+			if err := c.schemaCache.Add(&cacheRequest, schemas, cache.DefaultExpiration); err != nil {
+				log.Warningf("failed to add schema to cache for %+v: %s", &cacheRequest, err)
+			}
+		}
+	}()
+
 	return schemas, nil
 }
 
