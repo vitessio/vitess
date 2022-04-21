@@ -270,6 +270,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfParenTableExpr(parent, node, replacer)
 	case *ParsedComments:
 		return a.rewriteRefOfParsedComments(parent, node, replacer)
+	case *PartitionComment:
+		return a.rewriteRefOfPartitionComment(parent, node, replacer)
 	case *PartitionDataDirectory:
 		return a.rewriteRefOfPartitionDataDirectory(parent, node, replacer)
 	case *PartitionDefinition:
@@ -4140,6 +4142,30 @@ func (a *application) rewriteRefOfParsedComments(parent SQLNode, node *ParsedCom
 	}
 	return true
 }
+func (a *application) rewriteRefOfPartitionComment(parent SQLNode, node *PartitionComment, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfPartitionDataDirectory(parent SQLNode, node *PartitionDataDirectory, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4183,6 +4209,11 @@ func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *Part
 	}
 	if !a.rewriteRefOfPartitionValueRange(node, node.ValueRange, func(newNode, parent SQLNode) {
 		parent.(*PartitionDefinition).ValueRange = newNode.(*PartitionValueRange)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfPartitionComment(node, node.Comment, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinition).Comment = newNode.(*PartitionComment)
 	}) {
 		return false
 	}

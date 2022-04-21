@@ -270,6 +270,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfParenTableExpr(in, f)
 	case *ParsedComments:
 		return VisitRefOfParsedComments(in, f)
+	case *PartitionComment:
+		return VisitRefOfPartitionComment(in, f)
 	case *PartitionDataDirectory:
 		return VisitRefOfPartitionDataDirectory(in, f)
 	case *PartitionDefinition:
@@ -2103,6 +2105,15 @@ func VisitRefOfParsedComments(in *ParsedComments, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfPartitionComment(in *PartitionComment, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
 func VisitRefOfPartitionDataDirectory(in *PartitionDataDirectory, f Visit) error {
 	if in == nil {
 		return nil
@@ -2123,6 +2134,9 @@ func VisitRefOfPartitionDefinition(in *PartitionDefinition, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfPartitionValueRange(in.ValueRange, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfPartitionComment(in.Comment, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfPartitionEngine(in.Engine, f); err != nil {

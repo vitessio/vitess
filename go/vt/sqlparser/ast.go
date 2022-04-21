@@ -1615,6 +1615,7 @@ type PartitionSpecAction int8
 type PartitionDefinition struct {
 	Name           ColIdent
 	ValueRange     *PartitionValueRange
+	Comment        *PartitionComment
 	Engine         *PartitionEngine
 	DataDirectory  *PartitionDataDirectory
 	IndexDirectory *PartitionIndexDirectory
@@ -1633,6 +1634,11 @@ type PartitionEngine struct {
 	Storage bool
 	Equal   string
 	Name    string
+}
+
+type PartitionComment struct {
+	Equal   string
+	Comment string
 }
 
 type PartitionDataDirectory struct {

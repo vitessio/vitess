@@ -137,6 +137,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   partDefs      []*PartitionDefinition
   partitionValueRange	*PartitionValueRange
   partitionEngine *PartitionEngine
+  partitionComment *PartitionComment
   partitionDataDirectory *PartitionDataDirectory
   partitionIndexDirectory *PartitionIndexDirectory
   partSpecs     []*PartitionSpec
@@ -490,6 +491,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partDef> partition_definition partition_name
 %type <partitionValueRange> partition_value_range_opt
 %type <partitionEngine> partition_engine_options_opt
+%type <partitionComment> partition_comment_opt
 %type <partitionDataDirectory> partition_datadir_opt
 %type <partitionIndexDirectory> partition_index_directory_opt
 %type <partSpec> partition_operation
@@ -3203,12 +3205,13 @@ partition_definitions:
   }
 
 partition_definition:
-  partition_name partition_value_range_opt partition_engine_options_opt partition_datadir_opt partition_index_directory_opt
+  partition_name partition_value_range_opt partition_engine_options_opt partition_comment_opt partition_datadir_opt partition_index_directory_opt
   {
     $$.ValueRange = $2
     $$.Engine = $3
-    $$.DataDirectory = $4
-    $$.IndexDirectory = $5
+    $$.Comment = $4
+    $$.DataDirectory = $5
+    $$.IndexDirectory = $6
   }
 
 partition_value_range_opt:
@@ -3253,6 +3256,15 @@ partition_engine_options_opt:
 | partition_storage_opt ENGINE equal_opt table_alias
   {
     $$ = &PartitionEngine{Storage:$1, Equal: $3, Name: $4.String()}
+  }
+
+partition_comment_opt:
+  {
+    $$ = nil
+  }
+| COMMENT_KEYWORD equal_opt STRING
+  {
+    $$ = &PartitionComment{ Equal: $2, Comment: $3}
   }
 
 partition_datadir_opt:

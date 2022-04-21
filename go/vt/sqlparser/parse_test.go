@@ -4431,6 +4431,16 @@ PARTITIONS 6`,
 		{
 			input: `CREATE TABLE t2 (val INT)
 	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE 'FOOBAR' COMMENT = 'test',
+	PARTITION MyPart VALUES IN (2,4,6) comment 'test2'
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR comment = test, partition MyPart values in (2, 4, 6) comment test2)`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
 	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE 'FOOBAR' DATA DIRECTORY = 'test',
 	PARTITION MyPart VALUES IN (2,4,6) DATA DIRECTORY 'test2'
 )`,
