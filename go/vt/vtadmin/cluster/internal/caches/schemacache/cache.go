@@ -69,6 +69,10 @@ type LoadOptions struct {
 // meaning that AddOrBackfill for these options should enqueue a backfill to
 // fetch the full payload.
 func (opts LoadOptions) isFullPayload() bool {
+	if opts.BaseRequest == nil {
+		return false
+	}
+
 	if len(opts.BaseRequest.Tables) > 0 {
 		return false
 	}
