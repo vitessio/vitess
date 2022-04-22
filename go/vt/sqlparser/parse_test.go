@@ -4401,7 +4401,7 @@ PARTITIONS 6`,
 		{
 			input: `CREATE TABLE t2 (val INT)
 	PARTITION BY LIST(val)(
-	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE = 'FOOBAR',
+	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE = FOOBAR,
 	PARTITION MyPart VALUES IN (2,4,6)
 )`,
 			output: `create table t2 (
@@ -4411,7 +4411,7 @@ PARTITIONS 6`,
 		{
 			input: `CREATE TABLE t2 (val INT)
 	PARTITION BY LIST(val)(
-	PARTITION mypart VALUES IN (1,3,5) ENGINE = 'FOOBAR',
+	PARTITION mypart VALUES IN (1,3,5) ENGINE = FOOBAR,
 	PARTITION MyPart VALUES IN (2,4,6)
 )`,
 			output: `create table t2 (
@@ -4421,7 +4421,7 @@ PARTITIONS 6`,
 		{
 			input: `CREATE TABLE t2 (val INT)
 	PARTITION BY LIST(val)(
-	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE 'FOOBAR',
+	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE FOOBAR,
 	PARTITION MyPart VALUES IN (2,4,6)
 )`,
 			output: `create table t2 (
@@ -4431,17 +4431,17 @@ PARTITIONS 6`,
 		{
 			input: `CREATE TABLE t2 (val INT)
 	PARTITION BY LIST(val)(
-	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE 'FOOBAR' COMMENT = 'test',
+	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE FOOBAR COMMENT = 'test',
 	PARTITION MyPart VALUES IN (2,4,6) comment 'test2'
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR comment = test, partition MyPart values in (2, 4, 6) comment test2)`,
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR comment = 'test', partition MyPart values in (2, 4, 6) comment 'test2')`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
 	PARTITION BY LIST(val)(
-	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE 'FOOBAR' DATA DIRECTORY = 'test',
+	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE FOOBAR DATA DIRECTORY = 'test',
 	PARTITION MyPart VALUES IN (2,4,6) DATA DIRECTORY 'test2'
 )`,
 			output: `create table t2 (
@@ -4463,6 +4463,16 @@ PARTITIONS 6`,
 			output: `create table t1 (
 	id int primary key
 ) partition by list (id) (partition p1 values in (11, 21), partition p2 values in (12, 22))`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) COMMENT = 'before' STORAGE ENGINE FOOBAR DATA DIRECTORY = 'test',
+	PARTITION MyPart VALUES IN (2,4,6) DATA DIRECTORY 'test2'
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR comment = 'before' data directory = 'test', partition MyPart values in (2, 4, 6) data directory 'test2')`,
 		},
 	}
 	for _, test := range createTableQueries {

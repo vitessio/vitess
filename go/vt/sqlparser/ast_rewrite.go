@@ -276,6 +276,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfPartitionDataDirectory(parent, node, replacer)
 	case *PartitionDefinition:
 		return a.rewriteRefOfPartitionDefinition(parent, node, replacer)
+	case *PartitionDefinitionOptions:
+		return a.rewriteRefOfPartitionDefinitionOptions(parent, node, replacer)
 	case *PartitionEngine:
 		return a.rewriteRefOfPartitionEngine(parent, node, replacer)
 	case *PartitionIndexDirectory:
@@ -4207,28 +4209,55 @@ func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *Part
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfPartitionDefinitionOptions(node, node.Options, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinition).Options = newNode.(*PartitionDefinitionOptions)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfPartitionDefinitionOptions(parent SQLNode, node *PartitionDefinitionOptions, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
 	if !a.rewriteRefOfPartitionValueRange(node, node.ValueRange, func(newNode, parent SQLNode) {
-		parent.(*PartitionDefinition).ValueRange = newNode.(*PartitionValueRange)
+		parent.(*PartitionDefinitionOptions).ValueRange = newNode.(*PartitionValueRange)
 	}) {
 		return false
 	}
 	if !a.rewriteRefOfPartitionComment(node, node.Comment, func(newNode, parent SQLNode) {
-		parent.(*PartitionDefinition).Comment = newNode.(*PartitionComment)
+		parent.(*PartitionDefinitionOptions).Comment = newNode.(*PartitionComment)
 	}) {
 		return false
 	}
 	if !a.rewriteRefOfPartitionEngine(node, node.Engine, func(newNode, parent SQLNode) {
-		parent.(*PartitionDefinition).Engine = newNode.(*PartitionEngine)
+		parent.(*PartitionDefinitionOptions).Engine = newNode.(*PartitionEngine)
 	}) {
 		return false
 	}
 	if !a.rewriteRefOfPartitionDataDirectory(node, node.DataDirectory, func(newNode, parent SQLNode) {
-		parent.(*PartitionDefinition).DataDirectory = newNode.(*PartitionDataDirectory)
+		parent.(*PartitionDefinitionOptions).DataDirectory = newNode.(*PartitionDataDirectory)
 	}) {
 		return false
 	}
 	if !a.rewriteRefOfPartitionIndexDirectory(node, node.IndexDirectory, func(newNode, parent SQLNode) {
-		parent.(*PartitionDefinition).IndexDirectory = newNode.(*PartitionIndexDirectory)
+		parent.(*PartitionDefinitionOptions).IndexDirectory = newNode.(*PartitionIndexDirectory)
 	}) {
 		return false
 	}

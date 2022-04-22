@@ -594,6 +594,11 @@ func (node *PartitionSpec) formatFast(buf *TrackedBuffer) {
 func (node *PartitionDefinition) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("partition ")
 	node.Name.formatFast(buf)
+	node.Options.formatFast(buf)
+}
+
+// formatFast formats the node
+func (node *PartitionDefinitionOptions) formatFast(buf *TrackedBuffer) {
 	if node.ValueRange != nil {
 		buf.WriteByte(' ')
 		node.ValueRange.formatFast(buf)
@@ -646,7 +651,9 @@ func (node *PartitionComment) formatFast(buf *TrackedBuffer) {
 	if node.Equal != "" {
 		buf.WriteString("= ")
 	}
+	buf.WriteByte('\'')
 	buf.WriteString(node.Comment)
+	buf.WriteByte('\'')
 }
 
 // formatFast formats the node

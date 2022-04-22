@@ -2208,10 +2208,22 @@ func (cached *PartitionDefinition) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(48)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
 	size += cached.Name.CachedSize(false)
+	// field Options *vitess.io/vitess/go/vt/sqlparser.PartitionDefinitionOptions
+	size += cached.Options.CachedSize(true)
+	return size
+}
+func (cached *PartitionDefinitionOptions) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
 	// field ValueRange *vitess.io/vitess/go/vt/sqlparser.PartitionValueRange
 	size += cached.ValueRange.CachedSize(true)
 	// field Comment *vitess.io/vitess/go/vt/sqlparser.PartitionComment

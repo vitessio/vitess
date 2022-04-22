@@ -1613,7 +1613,11 @@ type PartitionSpecAction int8
 
 // PartitionDefinition describes a very minimal partition definition
 type PartitionDefinition struct {
-	Name           ColIdent
+	Name    ColIdent
+	Options *PartitionDefinitionOptions
+}
+
+type PartitionDefinitionOptions struct {
 	ValueRange     *PartitionValueRange
 	Comment        *PartitionComment
 	Engine         *PartitionEngine

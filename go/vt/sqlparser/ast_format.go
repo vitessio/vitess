@@ -429,6 +429,11 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *PartitionDefinition) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "partition %v", node.Name)
+	buf.astPrintf(node, "%v", node.Options)
+}
+
+// Format formats the node
+func (node *PartitionDefinitionOptions) Format(buf *TrackedBuffer) {
 	if node.ValueRange != nil {
 		buf.astPrintf(node, " %v", node.ValueRange)
 	}
@@ -474,7 +479,7 @@ func (node *PartitionComment) Format(buf *TrackedBuffer) {
 	if node.Equal != "" {
 		buf.WriteString("= ")
 	}
-	buf.astPrintf(node, "%s", node.Comment)
+	buf.astPrintf(node, "'%s'", node.Comment)
 }
 
 // Format formats the node

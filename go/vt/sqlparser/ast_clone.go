@@ -277,6 +277,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPartitionDataDirectory(in)
 	case *PartitionDefinition:
 		return CloneRefOfPartitionDefinition(in)
+	case *PartitionDefinitionOptions:
+		return CloneRefOfPartitionDefinitionOptions(in)
 	case *PartitionEngine:
 		return CloneRefOfPartitionEngine(in)
 	case *PartitionIndexDirectory:
@@ -1703,6 +1705,16 @@ func CloneRefOfPartitionDefinition(n *PartitionDefinition) *PartitionDefinition 
 	}
 	out := *n
 	out.Name = CloneColIdent(n.Name)
+	out.Options = CloneRefOfPartitionDefinitionOptions(n.Options)
+	return &out
+}
+
+// CloneRefOfPartitionDefinitionOptions creates a deep clone of the input.
+func CloneRefOfPartitionDefinitionOptions(n *PartitionDefinitionOptions) *PartitionDefinitionOptions {
+	if n == nil {
+		return nil
+	}
+	out := *n
 	out.ValueRange = CloneRefOfPartitionValueRange(n.ValueRange)
 	out.Comment = CloneRefOfPartitionComment(n.Comment)
 	out.Engine = CloneRefOfPartitionEngine(n.Engine)

@@ -118,6 +118,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   alterTable       *AlterTable
   tableOption      *TableOption
   columnTypeOptions *ColumnTypeOptions
+  partitionDefinitionOptions *PartitionDefinitionOptions
   constraintDefinition *ConstraintDefinition
   revertMigration *RevertMigration
   alterMigration  *AlterMigration
@@ -381,6 +382,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
 %type <partitionOption> partitions_options_opt partitions_options_beginning
+%type <partitionDefinitionOptions> partition_definition_attribute_list_opt
 %type <subPartition> subpartition_opt
 %type <intervalType> interval_time_stamp interval
 %type <str> cache_opt separator_opt flush_option for_channel_opt maxvalue
@@ -489,11 +491,11 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions partition_definitions_opt
 %type <partDef> partition_definition partition_name
-%type <partitionValueRange> partition_value_range_opt
-%type <partitionEngine> partition_engine_options_opt
-%type <partitionComment> partition_comment_opt
-%type <partitionDataDirectory> partition_datadir_opt
-%type <partitionIndexDirectory> partition_index_directory_opt
+%type <partitionValueRange> partition_value_range
+%type <partitionEngine> partition_engine
+%type <partitionComment> partition_comment
+%type <partitionDataDirectory> partition_data_directory
+%type <partitionIndexDirectory> partition_index_directory
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
@@ -3205,20 +3207,43 @@ partition_definitions:
   }
 
 partition_definition:
-  partition_name partition_value_range_opt partition_engine_options_opt partition_comment_opt partition_datadir_opt partition_index_directory_opt
+  partition_name partition_definition_attribute_list_opt
   {
-    $$.ValueRange = $2
-    $$.Engine = $3
-    $$.Comment = $4
-    $$.DataDirectory = $5
-    $$.IndexDirectory = $6
+    $$.Options = $2
   }
 
-partition_value_range_opt:
+partition_definition_attribute_list_opt:
   {
-    $$ = nil
+    $$ = &PartitionDefinitionOptions{ValueRange: nil, Comment: nil, Engine: nil, DataDirectory: nil, IndexDirectory: nil}
   }
-| VALUES LESS THAN row_tuple
+| partition_definition_attribute_list_opt partition_value_range
+  {
+    $1.ValueRange = $2
+    $$ = $1
+  }
+| partition_definition_attribute_list_opt partition_comment
+  {
+    $1.Comment = $2
+    $$ = $1
+  }
+| partition_definition_attribute_list_opt partition_engine
+  {
+    $1.Engine = $2
+    $$ = $1
+  }
+| partition_definition_attribute_list_opt partition_data_directory
+  {
+    $1.DataDirectory = $2
+    $$ = $1
+  }
+| partition_definition_attribute_list_opt partition_index_directory
+  {
+    $1.IndexDirectory = $2
+    $$ = $1
+  }
+
+partition_value_range:
+  VALUES LESS THAN row_tuple
   {
     $$ = &PartitionValueRange{
     	Type: LessThanType,
@@ -3249,38 +3274,26 @@ partition_storage_opt:
     $$ = true
   }
 
-partition_engine_options_opt:
-  {
-    $$ = nil
-  }
-| partition_storage_opt ENGINE equal_opt table_alias
+partition_engine:
+  partition_storage_opt ENGINE equal_opt table_alias
   {
     $$ = &PartitionEngine{Storage:$1, Equal: $3, Name: $4.String()}
   }
 
-partition_comment_opt:
-  {
-    $$ = nil
-  }
-| COMMENT_KEYWORD equal_opt STRING
+partition_comment:
+  COMMENT_KEYWORD equal_opt STRING
   {
     $$ = &PartitionComment{ Equal: $2, Comment: $3}
   }
 
-partition_datadir_opt:
-  {
-    $$ = nil
-  }
-| DATA DIRECTORY equal_opt STRING
+partition_data_directory:
+  DATA DIRECTORY equal_opt STRING
   {
     $$ = &PartitionDataDirectory{ Equal: $3, DataDir: $4}
   }
 
-partition_index_directory_opt:
-  {
-    $$ = nil
-  }
-| INDEX DIRECTORY equal_opt STRING
+partition_index_directory:
+  INDEX DIRECTORY equal_opt STRING
   {
     $$ = &PartitionIndexDirectory{ Equal: $3, IndexDir: $4}
   }
