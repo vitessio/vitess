@@ -627,6 +627,10 @@ func (node *PartitionDefinitionOptions) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		node.MinRows.formatFast(buf)
 	}
+	if node.TableSpace != nil {
+		buf.WriteByte(' ')
+		node.TableSpace.formatFast(buf)
+	}
 }
 
 // formatFast formats the node
@@ -702,6 +706,15 @@ func (node *PartitionMinRows) formatFast(buf *TrackedBuffer) {
 		buf.WriteString("= ")
 	}
 	buf.WriteString(fmt.Sprintf("%d", node.Rows))
+}
+
+// formatFast formats the node
+func (node *PartitionTableSpace) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("tablespace ")
+	if node.Equal != "" {
+		buf.WriteString("= ")
+	}
+	buf.WriteString(node.Name)
 }
 
 // formatFast formats the node.

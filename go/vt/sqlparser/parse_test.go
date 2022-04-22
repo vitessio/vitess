@@ -4494,6 +4494,16 @@ PARTITIONS 6`,
 	val INT
 ) partition by list (val) (partition mypart values in (1, 3, 5) min_rows = 4, partition MyPart values in (2, 4, 6) min_rows 10)`,
 		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) TABLESPACE = innodb_system,
+	PARTITION MyPart VALUES IN (2,4,6) TABLESPACE innodb_system
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) tablespace = innodb_system, partition MyPart values in (2, 4, 6) tablespace innodb_system)`,
+		},
 	}
 	for _, test := range createTableQueries {
 		sql := strings.TrimSpace(test.input)

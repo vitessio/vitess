@@ -2238,6 +2238,8 @@ func (cached *PartitionDefinitionOptions) CachedSize(alloc bool) int64 {
 	size += cached.MaxRows.CachedSize(true)
 	// field MinRows *vitess.io/vitess/go/vt/sqlparser.PartitionMinRows
 	size += cached.MinRows.CachedSize(true)
+	// field TableSpace *vitess.io/vitess/go/vt/sqlparser.PartitionTableSpace
+	size += cached.TableSpace.CachedSize(true)
 	return size
 }
 func (cached *PartitionEngine) CachedSize(alloc bool) int64 {
@@ -2348,6 +2350,20 @@ func (cached *PartitionSpec) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
+	return size
+}
+func (cached *PartitionTableSpace) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Equal string
+	size += hack.RuntimeAllocSize(int64(len(cached.Equal)))
+	// field Name string
+	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
 	return size
 }
 func (cached *PartitionValueRange) CachedSize(alloc bool) int64 {

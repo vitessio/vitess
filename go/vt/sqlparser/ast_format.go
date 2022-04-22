@@ -455,6 +455,9 @@ func (node *PartitionDefinitionOptions) Format(buf *TrackedBuffer) {
 	if node.MinRows != nil {
 		buf.astPrintf(node, " %v", node.MinRows)
 	}
+	if node.TableSpace != nil {
+		buf.astPrintf(node, " %v", node.TableSpace)
+	}
 }
 
 // Format formats the node
@@ -522,6 +525,15 @@ func (node *PartitionMinRows) Format(buf *TrackedBuffer) {
 		buf.WriteString("= ")
 	}
 	buf.astPrintf(node, "%d", node.Rows)
+}
+
+// Format formats the node
+func (node *PartitionTableSpace) Format(buf *TrackedBuffer) {
+	buf.WriteString("tablespace ")
+	if node.Equal != "" {
+		buf.WriteString("= ")
+	}
+	buf.astPrintf(node, "%s", node.Name)
 }
 
 // Format formats the node.

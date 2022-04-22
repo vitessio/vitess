@@ -290,6 +290,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfPartitionOption(parent, node, replacer)
 	case *PartitionSpec:
 		return a.rewriteRefOfPartitionSpec(parent, node, replacer)
+	case *PartitionTableSpace:
+		return a.rewriteRefOfPartitionTableSpace(parent, node, replacer)
 	case *PartitionValueRange:
 		return a.rewriteRefOfPartitionValueRange(parent, node, replacer)
 	case Partitions:
@@ -4275,6 +4277,11 @@ func (a *application) rewriteRefOfPartitionDefinitionOptions(parent SQLNode, nod
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfPartitionTableSpace(node, node.TableSpace, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinitionOptions).TableSpace = newNode.(*PartitionTableSpace)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4467,6 +4474,30 @@ func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionS
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfPartitionTableSpace(parent SQLNode, node *PartitionTableSpace, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
 		if !a.post(&a.cur) {
 			return false
 		}
