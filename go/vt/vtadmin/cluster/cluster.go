@@ -38,22 +38,19 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/internal/caches/schemacache"
 	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
-	"vitess.io/vitess/go/vt/vterrors"
 
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // Cluster is the self-contained unit of services required for vtadmin to talk
@@ -90,7 +87,7 @@ type Cluster struct {
 	// schemas slice will contain one element per keyspace* in the cluster
 	// 	*: at the time it was cached; if keyspaces were created/destroyed in
 	//  the interim, we won't pick that up until something refreshes the cache.
-	schemaCache *cache.Cache[*getSchemaCacheRequest, []*vtadminpb.Schema]
+	schemaCache *cache.Cache[schemacache.Key, []*vtadminpb.Schema]
 
 	cfg Config
 }
@@ -144,28 +141,28 @@ func New(cfg Config) (*Cluster, error) {
 	cluster.topoReadPool = cfg.TopoReadPoolConfig.NewReadPool()
 	cluster.workflowReadPool = cfg.WorkflowReadPoolConfig.NewReadPool()
 
-	cluster.schemaCache = cache.New(func(ctx context.Context, req *getSchemaCacheRequest) ([]*vtadminpb.Schema, error) {
+	cluster.schemaCache = cache.New(func(ctx context.Context, key schemacache.Key) ([]*vtadminpb.Schema, error) {
 		// TODO: make a private method to separate the fetching bits from the cache bits
-		if req.Keyspace == "" {
+		if key.Keyspace == "" {
 			return cluster.GetSchemas(ctx, GetSchemaOptions{
 				BaseRequest: &vtctldatapb.GetSchemaRequest{
 					IncludeViews: true,
 				},
 				TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
 					AggregateSizes:          true,
-					IncludeNonServingShards: req.IncludeNonServingShards,
+					IncludeNonServingShards: key.IncludeNonServingShards,
 				},
 				isBackfill: true,
 			})
 		}
 
-		schema, err := cluster.GetSchema(ctx, req.Keyspace, GetSchemaOptions{
+		schema, err := cluster.GetSchema(ctx, key.Keyspace, GetSchemaOptions{
 			BaseRequest: &vtctldatapb.GetSchemaRequest{
 				IncludeViews: true,
 			},
 			TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
 				AggregateSizes:          true,
-				IncludeNonServingShards: req.IncludeNonServingShards,
+				IncludeNonServingShards: key.IncludeNonServingShards,
 			},
 			isBackfill: true,
 		})
@@ -1004,48 +1001,6 @@ type GetSchemaOptions struct {
 	isBackfill bool
 }
 
-// shouldBackfillCache returns true if the []*vtadminpb.Schema slice returned by
-// as a result of the given options needs an additional backfill. if false, the
-// schema slice can be added to the cache directly without an additional
-// backfill.
-func (opts GetSchemaOptions) shouldBackfillCache() bool {
-	if len(opts.BaseRequest.Tables) > 0 {
-		return true
-	}
-
-	if len(opts.BaseRequest.Tables) > 0 {
-		return true
-	}
-
-	if !opts.BaseRequest.IncludeViews {
-		return true
-	}
-
-	if opts.BaseRequest.TableNamesOnly {
-		return true
-	}
-
-	if opts.BaseRequest.TableSizesOnly {
-		return true
-	}
-
-	if !opts.TableSizeOptions.AggregateSizes {
-		return true
-	}
-
-	return false
-}
-
-type getSchemaCacheRequest struct {
-	ClusterID               string
-	Keyspace                string
-	IncludeNonServingShards bool
-}
-
-func (req *getSchemaCacheRequest) Key() string {
-	return fmt.Sprintf("%s/%s/%v", req.ClusterID, req.Keyspace, req.IncludeNonServingShards)
-}
-
 // GetSchema returns the schema for a given keyspace. GetSchema has a few
 // different behaviors depending on the GetSchemaOptions provided, as follows:
 //
@@ -1093,30 +1048,21 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 	vtadminproto.AnnotateSpanWithGetSchemaTableSizeOptions(opts.TableSizeOptions, span)
 	span.Annotate("is_backfill", opts.isBackfill)
 
-	cacheRequest := getSchemaCacheRequest{
+	key := schemacache.Key{
 		ClusterID:               c.ID,
 		Keyspace:                keyspace,
 		IncludeNonServingShards: opts.TableSizeOptions.IncludeNonServingShards,
 	}
-
 	if !opts.isBackfill {
-		if cachedSchemas, ok := c.schemaCache.Get(&cacheRequest); ok {
-			span.Annotate("cache_hit", true)
-			schemas, err := c.hydrateSchemasFromCache(cachedSchemas, &cacheRequest, opts)
-			if err != nil {
-				return nil, err
-			}
+		schema, ok, err := schemacache.LoadOne(c.schemaCache, key, schemacache.LoadOptions{
+			BaseRequest:    opts.BaseRequest,
+			AggregateSizes: opts.TableSizeOptions.AggregateSizes,
+		})
 
-			if len(schemas) != 1 {
-				err := vterrors.Errorf(vtrpc.Code_INTERNAL, "impossible: cache should have exactly 1 schema for request %+v (have %d)", &cacheRequest, len(schemas))
-				log.Errorf(err.Error())
-				return nil, err
-			}
-
-			return schemas[0], nil
+		span.Annotate("cache_hit", ok)
+		if ok {
+			return schema, err
 		}
-
-		span.Annotate("cache_hit", false)
 	}
 
 	var (
@@ -1166,7 +1112,10 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 		return nil, err
 	}
 
-	go c.updateOrBackfillSchemaCache([]*vtadminpb.Schema{schema}, cacheRequest, opts)
+	go schemacache.AddOrBackfill(c.schemaCache, []*vtadminpb.Schema{schema}, key, cache.DefaultExpiration, schemacache.LoadOptions{
+		BaseRequest:    opts.BaseRequest,
+		AggregateSizes: opts.TableSizeOptions.AggregateSizes,
+	})
 
 	return schema, nil
 }
@@ -1197,18 +1146,21 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 	vtadminproto.AnnotateSpanWithGetSchemaTableSizeOptions(opts.TableSizeOptions, span)
 	span.Annotate("is_backfill", opts.isBackfill)
 
-	cacheRequest := getSchemaCacheRequest{
+	key := schemacache.Key{
 		ClusterID:               c.ID,
 		Keyspace:                "",
 		IncludeNonServingShards: opts.TableSizeOptions.IncludeNonServingShards,
 	}
 	if !opts.isBackfill {
-		if cachedSchemas, ok := c.schemaCache.Get(&cacheRequest); ok {
-			span.Annotate("cache_hit", true)
-			return c.hydrateSchemasFromCache(cachedSchemas, &cacheRequest, opts)
-		}
+		schemas, ok, err := schemacache.LoadAll(c.schemaCache, key, schemacache.LoadOptions{
+			BaseRequest:    opts.BaseRequest,
+			AggregateSizes: opts.TableSizeOptions.AggregateSizes,
+		})
 
-		span.Annotate("cache_hit", false)
+		span.Annotate("cache_hit", ok)
+		if ok {
+			return schemas, err
+		}
 	}
 
 	var (
@@ -1323,21 +1275,12 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 		return nil, rec.Error()
 	}
 
-	go c.updateOrBackfillSchemaCache(schemas, cacheRequest, opts)
+	go schemacache.AddOrBackfill(c.schemaCache, schemas, key, cache.DefaultExpiration, schemacache.LoadOptions{
+		BaseRequest:    opts.BaseRequest,
+		AggregateSizes: opts.TableSizeOptions.AggregateSizes,
+	})
 
 	return schemas, nil
-}
-
-func (c *Cluster) updateOrBackfillSchemaCache(schemas []*vtadminpb.Schema, cacheRequest getSchemaCacheRequest, opts GetSchemaOptions) {
-	if opts.shouldBackfillCache() {
-		if !c.schemaCache.EnqueueBackfill(&cacheRequest) {
-			log.Warningf("failed to enqueue backfill for schema cache %+v", cacheRequest)
-		}
-	} else {
-		if err := c.schemaCache.Add(&cacheRequest, schemas, cache.DefaultExpiration); err != nil {
-			log.Warningf("failed to add schema to cache for %+v: %s", cacheRequest, err)
-		}
-	}
 }
 
 // Note that for this function we use the tablets parameter, ignoring the
@@ -1501,75 +1444,6 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 
 	randomServingTablet := keyspaceTablets[rand.Intn(len(keyspaceTablets))]
 	return []*vtadminpb.Tablet{randomServingTablet}, nil
-}
-
-func (c *Cluster) hydrateSchemasFromCache(cachedSchemas []*vtadminpb.Schema, req *getSchemaCacheRequest, opts GetSchemaOptions) ([]*vtadminpb.Schema, error) {
-	log.Infof("hydrating schema from cache for %+v", req)
-	filter, err := tmutils.NewTableFilter(opts.BaseRequest.Tables, opts.BaseRequest.ExcludeTables, opts.BaseRequest.IncludeViews)
-	if err != nil {
-		// Note that there's no point in falling back to a full fetch in this
-		// case; this exact code gets executed on the tabletserver side, too,
-		// so we would just fail on the same issue _after_ paying the cost to
-		// wait for a roundtrip to the remote tablet.
-		return nil, err
-	}
-
-	schemas := make([]*vtadminpb.Schema, 0, len(cachedSchemas))
-	for _, schema := range cachedSchemas {
-		if req.Keyspace != "" && schema.Keyspace != req.Keyspace {
-			continue
-		}
-
-		schemas = append(schemas, c.hydrateSchemaFromCache(schema, opts, filter))
-	}
-
-	return schemas, nil
-}
-
-func (c *Cluster) hydrateSchemaFromCache(cachedSchema *vtadminpb.Schema, opts GetSchemaOptions, filter *tmutils.TableFilter) *vtadminpb.Schema {
-	// We have a cache hit, now transform the cached response back to
-	// match potential "subset"-ish parameters.
-	schema := proto.Clone(cachedSchema).(*vtadminpb.Schema)
-
-	if !opts.TableSizeOptions.AggregateSizes {
-		schema.TableSizes = nil
-	}
-
-	tables := make([]*tabletmanagerdatapb.TableDefinition, 0, len(schema.TableDefinitions))
-	tableSizes := make(map[string]*vtadminpb.Schema_TableSize, len(schema.TableSizes))
-
-	for _, td := range schema.TableDefinitions {
-		if !filter.Includes(td.Name, td.Type) {
-			continue
-		}
-
-		if opts.TableSizeOptions.AggregateSizes {
-			tableSizes[td.Name] = schema.TableSizes[td.Name]
-		}
-
-		if opts.BaseRequest.TableNamesOnly {
-			tables = append(tables, &tabletmanagerdatapb.TableDefinition{
-				Name: td.Name,
-			})
-			continue
-		}
-
-		if opts.BaseRequest.TableSizesOnly {
-			tables = append(tables, &tabletmanagerdatapb.TableDefinition{
-				Name:       td.Name,
-				DataLength: td.DataLength,
-				RowCount:   td.RowCount,
-			})
-			continue
-		}
-
-		tables = append(tables, td)
-	}
-
-	schema.TableDefinitions = tables
-	schema.TableSizes = tableSizes
-
-	return schema
 }
 
 // GetShardReplicationPositions returns a ClusterShardReplicationPosition object
