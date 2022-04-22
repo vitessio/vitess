@@ -142,6 +142,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   partitionDataDirectory *PartitionDataDirectory
   partitionIndexDirectory *PartitionIndexDirectory
   partitionMaxRows *PartitionMaxRows
+  partitionMinRows *PartitionMinRows
   partSpecs     []*PartitionSpec
   characteristics []Characteristic
   selectExpr    SelectExpr
@@ -498,6 +499,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partitionDataDirectory> partition_data_directory
 %type <partitionIndexDirectory> partition_index_directory
 %type <partitionMaxRows> partition_max_rows
+%type <partitionMinRows> partition_min_rows
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
@@ -3216,7 +3218,7 @@ partition_definition:
 
 partition_definition_attribute_list_opt:
   {
-    $$ = &PartitionDefinitionOptions{ValueRange: nil, Comment: nil, Engine: nil, DataDirectory: nil, IndexDirectory: nil, MaxRows: nil}
+    $$ = &PartitionDefinitionOptions{ValueRange: nil, Comment: nil, Engine: nil, DataDirectory: nil, IndexDirectory: nil, MaxRows: nil, MinRows: nil}
   }
 | partition_definition_attribute_list_opt partition_value_range
   {
@@ -3246,6 +3248,11 @@ partition_definition_attribute_list_opt:
 | partition_definition_attribute_list_opt partition_max_rows
   {
     $1.MaxRows = $2
+    $$ = $1
+  }
+| partition_definition_attribute_list_opt partition_min_rows
+  {
+    $1.MinRows = $2
     $$ = $1
   }
 
@@ -3311,6 +3318,11 @@ partition_max_rows:
     $$ = &PartitionMaxRows{ Equal: $2, Rows: convertStringToInt($3)}
   }
 
+partition_min_rows:
+  MIN_ROWS equal_opt INTEGRAL
+  {
+    $$ = &PartitionMinRows{ Equal: $2, Rows: convertStringToInt($3)}
+  }
 
 partition_name:
   PARTITION sql_id

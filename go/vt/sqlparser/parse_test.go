@@ -4484,6 +4484,16 @@ PARTITIONS 6`,
 	val INT
 ) partition by list (val) (partition mypart values in (1, 3, 5) max_rows = 4, partition MyPart values in (2, 4, 6) max_rows 10)`,
 		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) MIN_ROWS = 4,
+	PARTITION MyPart VALUES IN (2,4,6) MIN_ROWS 10
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) min_rows = 4, partition MyPart values in (2, 4, 6) min_rows 10)`,
+		},
 	}
 	for _, test := range createTableQueries {
 		sql := strings.TrimSpace(test.input)

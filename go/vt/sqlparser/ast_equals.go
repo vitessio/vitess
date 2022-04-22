@@ -812,6 +812,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfPartitionMaxRows(a, b)
+	case *PartitionMinRows:
+		b, ok := inB.(*PartitionMinRows)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPartitionMinRows(a, b)
 	case *PartitionOption:
 		b, ok := inB.(*PartitionOption)
 		if !ok {
@@ -2724,7 +2730,8 @@ func EqualsRefOfPartitionDefinitionOptions(a, b *PartitionDefinitionOptions) boo
 		EqualsRefOfPartitionEngine(a.Engine, b.Engine) &&
 		EqualsRefOfPartitionDataDirectory(a.DataDirectory, b.DataDirectory) &&
 		EqualsRefOfPartitionIndexDirectory(a.IndexDirectory, b.IndexDirectory) &&
-		EqualsRefOfPartitionMaxRows(a.MaxRows, b.MaxRows)
+		EqualsRefOfPartitionMaxRows(a.MaxRows, b.MaxRows) &&
+		EqualsRefOfPartitionMinRows(a.MinRows, b.MinRows)
 }
 
 // EqualsRefOfPartitionEngine does deep equals between the two objects.
@@ -2754,6 +2761,18 @@ func EqualsRefOfPartitionIndexDirectory(a, b *PartitionIndexDirectory) bool {
 
 // EqualsRefOfPartitionMaxRows does deep equals between the two objects.
 func EqualsRefOfPartitionMaxRows(a, b *PartitionMaxRows) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Equal == b.Equal &&
+		a.Rows == b.Rows
+}
+
+// EqualsRefOfPartitionMinRows does deep equals between the two objects.
+func EqualsRefOfPartitionMinRows(a, b *PartitionMinRows) bool {
 	if a == b {
 		return true
 	}

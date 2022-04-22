@@ -452,6 +452,9 @@ func (node *PartitionDefinitionOptions) Format(buf *TrackedBuffer) {
 	if node.MaxRows != nil {
 		buf.astPrintf(node, " %v", node.MaxRows)
 	}
+	if node.MinRows != nil {
+		buf.astPrintf(node, " %v", node.MinRows)
+	}
 }
 
 // Format formats the node
@@ -506,6 +509,15 @@ func (node *PartitionIndexDirectory) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *PartitionMaxRows) Format(buf *TrackedBuffer) {
 	buf.WriteString("max_rows ")
+	if node.Equal != "" {
+		buf.WriteString("= ")
+	}
+	buf.astPrintf(node, "%d", node.Rows)
+}
+
+// Format formats the node
+func (node *PartitionMinRows) Format(buf *TrackedBuffer) {
+	buf.WriteString("min_rows ")
 	if node.Equal != "" {
 		buf.WriteString("= ")
 	}

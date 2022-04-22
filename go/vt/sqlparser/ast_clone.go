@@ -285,6 +285,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPartitionIndexDirectory(in)
 	case *PartitionMaxRows:
 		return CloneRefOfPartitionMaxRows(in)
+	case *PartitionMinRows:
+		return CloneRefOfPartitionMinRows(in)
 	case *PartitionOption:
 		return CloneRefOfPartitionOption(in)
 	case *PartitionSpec:
@@ -1723,6 +1725,7 @@ func CloneRefOfPartitionDefinitionOptions(n *PartitionDefinitionOptions) *Partit
 	out.DataDirectory = CloneRefOfPartitionDataDirectory(n.DataDirectory)
 	out.IndexDirectory = CloneRefOfPartitionIndexDirectory(n.IndexDirectory)
 	out.MaxRows = CloneRefOfPartitionMaxRows(n.MaxRows)
+	out.MinRows = CloneRefOfPartitionMinRows(n.MinRows)
 	return &out
 }
 
@@ -1746,6 +1749,15 @@ func CloneRefOfPartitionIndexDirectory(n *PartitionIndexDirectory) *PartitionInd
 
 // CloneRefOfPartitionMaxRows creates a deep clone of the input.
 func CloneRefOfPartitionMaxRows(n *PartitionMaxRows) *PartitionMaxRows {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfPartitionMinRows creates a deep clone of the input.
+func CloneRefOfPartitionMinRows(n *PartitionMinRows) *PartitionMinRows {
 	if n == nil {
 		return nil
 	}
