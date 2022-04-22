@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
 )
 
@@ -61,6 +62,8 @@ type Config struct {
 	TopoRWPoolConfig       *RPCPoolConfig
 	TopoReadPoolConfig     *RPCPoolConfig
 	WorkflowReadPoolConfig *RPCPoolConfig
+
+	SchemaCacheConfig *cache.Config
 }
 
 // Cluster returns a new cluster instance from the given config.
@@ -170,6 +173,11 @@ func (cfg *Config) MarshalJSON() ([]byte, error) {
 		Size:        DefaultReadPoolSize,
 		WaitTimeout: DefaultReadPoolWaitTimeout,
 	}
+	defaultCacheConfig := &cache.Config{
+		BackfillRequestTTL:      cache.DefaultBackfillRequestTTL,
+		BackfillQueueSize:       10,
+		BackfillEnqueueWaitTime: cache.DefaultBackfillEnqueueWaitTime,
+	}
 
 	tmp := struct {
 		ID                   string            `json:"id"`
@@ -185,6 +193,8 @@ func (cfg *Config) MarshalJSON() ([]byte, error) {
 		TopoRWPoolConfig       *RPCPoolConfig `json:"topo_rw_pool_config"`
 		TopoReadPoolConfig     *RPCPoolConfig `json:"topo_read_pool_config"`
 		WorkflowReadPoolConfig *RPCPoolConfig `json:"workflow_read_pool_config"`
+
+		SchemaCacheConfig *cache.Config `json:"schema_cache_config"`
 	}{
 		ID:                     cfg.ID,
 		Name:                   cfg.Name,
@@ -197,6 +207,7 @@ func (cfg *Config) MarshalJSON() ([]byte, error) {
 		TopoRWPoolConfig:       defaultRWPoolConfig.merge(cfg.TopoRWPoolConfig),
 		TopoReadPoolConfig:     defaultReadPoolConfig.merge(cfg.TopoReadPoolConfig),
 		WorkflowReadPoolConfig: defaultReadPoolConfig.merge(cfg.WorkflowReadPoolConfig),
+		SchemaCacheConfig:      mergeCacheConfigs(defaultCacheConfig, cfg.SchemaCacheConfig),
 	}
 
 	return json.Marshal(&tmp)
@@ -218,6 +229,7 @@ func (cfg Config) Merge(override Config) Config {
 		TopoReadPoolConfig:     cfg.TopoReadPoolConfig.merge(override.TopoReadPoolConfig),
 		TopoRWPoolConfig:       cfg.TopoRWPoolConfig.merge(override.TopoRWPoolConfig),
 		WorkflowReadPoolConfig: cfg.WorkflowReadPoolConfig.merge(override.WorkflowReadPoolConfig),
+		SchemaCacheConfig:      mergeCacheConfigs(cfg.SchemaCacheConfig, override.SchemaCacheConfig),
 	}
 
 	if override.ID != "" {
@@ -254,6 +266,81 @@ func mergeStringMap(base map[string]string, override map[string]string) {
 	for k, v := range override {
 		base[k] = v
 	}
+}
+
+func mergeCacheConfigs(base, override *cache.Config) *cache.Config {
+	if base == nil && override == nil {
+		return nil
+	}
+
+	merged := &cache.Config{
+		DefaultExpiration:                -1,
+		CleanupInterval:                  -1,
+		BackfillRequestTTL:               -1,
+		BackfillRequestDuplicateInterval: -1,
+		BackfillQueueSize:                -1,
+		BackfillEnqueueWaitTime:          -1,
+	}
+
+	for _, c := range []*cache.Config{base, override} {
+		if c != nil {
+			if c.DefaultExpiration >= 0 {
+				merged.DefaultExpiration = c.DefaultExpiration
+			}
+
+			if c.CleanupInterval >= 0 {
+				merged.CleanupInterval = c.CleanupInterval
+			}
+
+			if c.BackfillRequestTTL >= 0 {
+				merged.BackfillRequestTTL = c.BackfillRequestTTL
+			}
+
+			if c.BackfillRequestDuplicateInterval >= 0 {
+				merged.BackfillRequestDuplicateInterval = c.BackfillRequestDuplicateInterval
+			}
+
+			if c.BackfillQueueSize >= 0 {
+				merged.BackfillQueueSize = c.BackfillQueueSize
+			}
+
+			if c.BackfillEnqueueWaitTime >= 0 {
+				merged.BackfillEnqueueWaitTime = c.BackfillEnqueueWaitTime
+			}
+		}
+	}
+
+	return merged
+}
+
+func parseCacheConfigFlag(cfg *cache.Config, name, val string) (err error) {
+	switch name {
+	case "default-expiration":
+		cfg.DefaultExpiration, err = time.ParseDuration(val)
+	case "cleanup-interval":
+		cfg.CleanupInterval, err = time.ParseDuration(val)
+	case "backfill-request-ttl":
+		cfg.BackfillRequestTTL, err = time.ParseDuration(val)
+	case "backfill-request-duplicate-interval":
+		cfg.BackfillRequestDuplicateInterval, err = time.ParseDuration(val)
+	case "backfill-queue-size":
+		size, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return err
+		}
+
+		if size < 0 {
+			return fmt.Errorf("%w: backfill queue size must be non-negative; got %d", strconv.ErrRange, size)
+		}
+
+		cfg.BackfillQueueSize = int(size)
+	case "backfill-enqueue-wait-time":
+		cfg.BackfillEnqueueWaitTime, err = time.ParseDuration(val)
+	default:
+		return errors.ErrNoFlag
+	}
+
+	return err
 }
 
 // RPCPoolConfig holds configuration options for creating RPCPools.

@@ -45,35 +45,42 @@ const (
 	// default.
 	// See https://pkg.go.dev/github.com/patrickmn/go-cache@v2.1.0+incompatible#pkg-constants.
 	NoExpiration = cache.NoExpiration
+
+	// DefaultBackfillEnqueueWaitTime is the default value used for waiting to
+	// enqueue backfill requests, if a config is passed with a non-positive
+	// BackfillEnqueueWaitTime.
+	DefaultBackfillEnqueueWaitTime = time.Millisecond * 50
+	// DefaultBackfillRequestTTL is the default value used for how stale of
+	// backfill requests to still process, if a config is passed with a
+	// non-positive BackfillRequestTTL.
+	DefaultBackfillRequestTTL = time.Millisecond * 100
 )
 
 // Config is the configuration for a cache.
-//
-// TODO: provide a hook point for vtadmin cluster flags/config.
 type Config struct {
 	// DefaultExpiration is how long to keep Values in the cache by default (the
 	// duration passed to Add takes precedence). Use the sentinel NoExpiration
 	// to make Values never expire by default.
-	DefaultExpiration time.Duration
+	DefaultExpiration time.Duration `json:"default_expiration"`
 	// CleanupInterval is how often to remove expired Values from the cache.
-	CleanupInterval time.Duration
+	CleanupInterval time.Duration `json:"cleanup_interval"`
 
 	// BackfillRequestTTL is how long a backfill request is considered valid.
 	// If the backfill goroutine encounters a request older than this, it is
 	// discarded.
-	BackfillRequestTTL time.Duration
+	BackfillRequestTTL time.Duration `json:"backfill_request_ttl"`
 	// BackfillRequestDuplicateInterval is how much time must pass before the
 	// backfill goroutine will re-backfill the same key. It is used to prevent
 	// multiple callers queuing up too many requests for the same key, when one
 	// backfill would satisfy all of them.
-	BackfillRequestDuplicateInterval time.Duration
+	BackfillRequestDuplicateInterval time.Duration `json:"backfill_request_duplicate_interval"`
 	// BackfillQueueSize is how many outstanding backfill requests to permit.
 	// If the queue is full, calls to EnqueueBackfill will return false and
 	// those requests will be discarded.
-	BackfillQueueSize int
+	BackfillQueueSize int `json:"backfill_queue_size"`
 	// BackfillEnqueueWaitTime is how long to wait when attempting to enqueue a
 	// backfill request before giving up.
-	BackfillEnqueueWaitTime time.Duration
+	BackfillEnqueueWaitTime time.Duration `json:"backfill_enqueue_wait_time"`
 }
 
 // Cache is a generic cache supporting background fills. To add things to the
@@ -107,6 +114,16 @@ type Cache[Key Keyer, Value any] struct {
 // New creates a new cache with the given backfill func. When a request is
 // enqueued (via EnqueueBackfill), fillFunc will be called with that request.
 func New[Key Keyer, Value any](fillFunc func(ctx context.Context, req Key) (Value, error), cfg Config) *Cache[Key, Value] {
+	if cfg.BackfillEnqueueWaitTime <= 0 {
+		log.Warningf("BackfillEnqueueWaitTime (%v) must be positive, defaulting to %v", cfg.BackfillEnqueueWaitTime, DefaultBackfillEnqueueWaitTime)
+		cfg.BackfillEnqueueWaitTime = DefaultBackfillEnqueueWaitTime
+	}
+
+	if cfg.BackfillRequestTTL <= 0 {
+		log.Warningf("BackfillRequestTTL (%v) must be positive, defaulting to %v", cfg.BackfillRequestTTL, DefaultBackfillRequestTTL)
+		cfg.BackfillRequestTTL = DefaultBackfillRequestTTL
+	}
+
 	c := &Cache[Key, Value]{
 		cache:     cache.New(cfg.DefaultExpiration, cfg.CleanupInterval),
 		fillcache: cache.New(cfg.BackfillRequestDuplicateInterval, time.Minute),
