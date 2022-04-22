@@ -18,6 +18,7 @@ package engine
 
 import (
 	"encoding/json"
+	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -97,17 +98,22 @@ func (gc *Gen4CompareV3) TryStreamExecute(
 	wantfields bool,
 	callback func(*sqltypes.Result) error,
 ) error {
+	var mu sync.Mutex
 	var v3Err, gen4Err error
 	v3Result, gen4Result := &sqltypes.Result{}, &sqltypes.Result{}
 
 	if gc.Gen4 != nil {
 		gen4Err = gc.Gen4.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
+			mu.Lock()
+			defer mu.Unlock()
 			gen4Result.AppendResult(result)
 			return nil
 		})
 	}
 	if gc.V3 != nil {
 		v3Err = gc.V3.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
+			mu.Lock()
+			defer mu.Unlock()
 			v3Result.AppendResult(result)
 			return nil
 		})
