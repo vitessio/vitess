@@ -619,6 +619,10 @@ func (node *PartitionDefinitionOptions) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		node.IndexDirectory.formatFast(buf)
 	}
+	if node.MaxRows != nil {
+		buf.WriteByte(' ')
+		node.MaxRows.formatFast(buf)
+	}
 }
 
 // formatFast formats the node
@@ -676,6 +680,15 @@ func (node *PartitionIndexDirectory) formatFast(buf *TrackedBuffer) {
 	buf.WriteByte('\'')
 	buf.WriteString(node.IndexDir)
 	buf.WriteByte('\'')
+}
+
+// formatFast formats the node
+func (node *PartitionMaxRows) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("max_rows ")
+	if node.Equal != "" {
+		buf.WriteString("= ")
+	}
+	buf.WriteString(fmt.Sprintf("%d", node.Rows))
 }
 
 // formatFast formats the node.

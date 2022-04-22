@@ -1623,6 +1623,7 @@ type PartitionDefinitionOptions struct {
 	Engine         *PartitionEngine
 	DataDirectory  *PartitionDataDirectory
 	IndexDirectory *PartitionIndexDirectory
+	MaxRows        *PartitionMaxRows
 }
 
 // PartitionValueRangeType is an enum for PartitionValueRange.Type
@@ -1653,6 +1654,11 @@ type PartitionDataDirectory struct {
 type PartitionIndexDirectory struct {
 	Equal    string
 	IndexDir string
+}
+
+type PartitionMaxRows struct {
+	Equal string
+	Rows  int
 }
 
 // PartitionByType is an enum storing how we are partitioning a table

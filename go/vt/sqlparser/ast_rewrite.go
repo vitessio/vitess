@@ -282,6 +282,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfPartitionEngine(parent, node, replacer)
 	case *PartitionIndexDirectory:
 		return a.rewriteRefOfPartitionIndexDirectory(parent, node, replacer)
+	case *PartitionMaxRows:
+		return a.rewriteRefOfPartitionMaxRows(parent, node, replacer)
 	case *PartitionOption:
 		return a.rewriteRefOfPartitionOption(parent, node, replacer)
 	case *PartitionSpec:
@@ -4261,6 +4263,11 @@ func (a *application) rewriteRefOfPartitionDefinitionOptions(parent SQLNode, nod
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfPartitionMaxRows(node, node.MaxRows, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinitionOptions).MaxRows = newNode.(*PartitionMaxRows)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4296,6 +4303,30 @@ func (a *application) rewriteRefOfPartitionEngine(parent SQLNode, node *Partitio
 	return true
 }
 func (a *application) rewriteRefOfPartitionIndexDirectory(parent SQLNode, node *PartitionIndexDirectory, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfPartitionMaxRows(parent SQLNode, node *PartitionMaxRows, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}

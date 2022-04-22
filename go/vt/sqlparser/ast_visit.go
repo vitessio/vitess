@@ -282,6 +282,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfPartitionEngine(in, f)
 	case *PartitionIndexDirectory:
 		return VisitRefOfPartitionIndexDirectory(in, f)
+	case *PartitionMaxRows:
+		return VisitRefOfPartitionMaxRows(in, f)
 	case *PartitionOption:
 		return VisitRefOfPartitionOption(in, f)
 	case *PartitionSpec:
@@ -2162,6 +2164,9 @@ func VisitRefOfPartitionDefinitionOptions(in *PartitionDefinitionOptions, f Visi
 	if err := VisitRefOfPartitionIndexDirectory(in.IndexDirectory, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfPartitionMaxRows(in.MaxRows, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfPartitionEngine(in *PartitionEngine, f Visit) error {
@@ -2174,6 +2179,15 @@ func VisitRefOfPartitionEngine(in *PartitionEngine, f Visit) error {
 	return nil
 }
 func VisitRefOfPartitionIndexDirectory(in *PartitionIndexDirectory, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfPartitionMaxRows(in *PartitionMaxRows, f Visit) error {
 	if in == nil {
 		return nil
 	}

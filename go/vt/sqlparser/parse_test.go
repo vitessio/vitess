@@ -4474,6 +4474,16 @@ PARTITIONS 6`,
 	val INT
 ) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR comment = 'before' data directory = 'test', partition MyPart values in (2, 4, 6) data directory 'test2')`,
 		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) MAX_ROWS = 4,
+	PARTITION MyPart VALUES IN (2,4,6) MAX_ROWS 10
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) max_rows = 4, partition MyPart values in (2, 4, 6) max_rows 10)`,
+		},
 	}
 	for _, test := range createTableQueries {
 		sql := strings.TrimSpace(test.input)

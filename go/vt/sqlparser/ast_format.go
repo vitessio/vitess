@@ -449,6 +449,9 @@ func (node *PartitionDefinitionOptions) Format(buf *TrackedBuffer) {
 	if node.IndexDirectory != nil {
 		buf.astPrintf(node, " %v", node.IndexDirectory)
 	}
+	if node.MaxRows != nil {
+		buf.astPrintf(node, " %v", node.MaxRows)
+	}
 }
 
 // Format formats the node
@@ -498,6 +501,15 @@ func (node *PartitionIndexDirectory) Format(buf *TrackedBuffer) {
 		buf.WriteString("= ")
 	}
 	buf.astPrintf(node, "'%s'", node.IndexDir)
+}
+
+// Format formats the node
+func (node *PartitionMaxRows) Format(buf *TrackedBuffer) {
+	buf.WriteString("max_rows ")
+	if node.Equal != "" {
+		buf.WriteString("= ")
+	}
+	buf.astPrintf(node, "%d", node.Rows)
 }
 
 // Format formats the node.
