@@ -34,23 +34,30 @@ func (hp *horizonPlanning) pushAggregation(
 	grouping []abstract.GroupBy,
 	aggregations []abstract.Aggr,
 	ignoreOutputOrder bool,
-) (groupingOffsets []offsets, outputAggrsOffset [][]offsets, err error) {
+) (output logicalPlan, groupingOffsets []offsets, outputAggrsOffset [][]offsets, err error) {
 	switch plan := plan.(type) {
 	case *routeGen4:
+		output = plan
 		groupingOffsets, outputAggrsOffset, err = pushAggrOnRoute(ctx, plan, aggregations, grouping, ignoreOutputOrder)
-		if err != nil {
-			return nil, nil, err
-		}
 		return
 
 	case *joinGen4:
-		return hp.pushAggrOnJoin(ctx, grouping, aggregations, plan)
+		output = plan
+		groupingOffsets, outputAggrsOffset, err = hp.pushAggrOnJoin(ctx, plan, grouping, aggregations)
+		return
 
 	case *semiJoin:
-		return hp.pushAggrOnSemiJoin(ctx, grouping, aggregations, plan, ignoreOutputOrder)
+		output = plan
+		groupingOffsets, outputAggrsOffset, err = hp.pushAggrOnSemiJoin(ctx, plan, grouping, aggregations, ignoreOutputOrder)
+		return
+
+	case *simpleProjection:
+		// we just remove the simpleProjection. We are doing an OA on top anyway, so no need to clean up the output columns
+		return hp.pushAggregation(ctx, plan.input, grouping, aggregations, ignoreOutputOrder)
 
 	default:
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "using aggregation on top of a %T plan is not yet supported", plan)
+		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "using aggregation on top of a %T plan is not yet supported", plan)
+		return
 	}
 }
 
@@ -195,9 +202,9 @@ vtgate level, we can offload most of the work to MySQL, and at the vtgate just s
 */
 func (hp *horizonPlanning) pushAggrOnJoin(
 	ctx *plancontext.PlanningContext,
+	join *joinGen4,
 	grouping []abstract.GroupBy,
 	aggregations []abstract.Aggr,
-	join *joinGen4,
 ) ([]offsets, [][]offsets, error) {
 	// First we separate aggregations according to which side the dependencies are coming from
 	lhsAggrs, rhsAggrs, err := splitAggregationsToLeftAndRight(ctx, aggregations, join)
@@ -220,15 +227,16 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 	}
 
 	// Next we push the aggregations to both sides
-	lhsOffsets, lhsAggrOffsets, err := hp.filteredPushAggregation(ctx, join.Left, lhsGrouping, lhsAggrs, true)
+	newLHS, lhsOffsets, lhsAggrOffsets, err := hp.filteredPushAggregation(ctx, join.Left, lhsGrouping, lhsAggrs, true)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	rhsOffsets, rhsAggrOffsets, err := hp.filteredPushAggregation(ctx, join.Right, rhsGrouping, rhsAggrs, true)
+	newRHS, rhsOffsets, rhsAggrOffsets, err := hp.filteredPushAggregation(ctx, join.Right, rhsGrouping, rhsAggrs, true)
 	if err != nil {
 		return nil, nil, err
 	}
+	join.Left, join.Right = newLHS, newRHS
 
 	// Next, we have to pass through the grouping values through the join and the projection we add on top
 	// We added new groupings to the LHS because of the join condition, so we don't want to pass through everything,
@@ -283,9 +291,9 @@ That way we get the aggregation grouped by the column we need to use to decide i
 */
 func (hp *horizonPlanning) pushAggrOnSemiJoin(
 	ctx *plancontext.PlanningContext,
+	join *semiJoin,
 	grouping []abstract.GroupBy,
 	aggregations []abstract.Aggr,
-	join *semiJoin,
 	ignoreOutputOrder bool,
 ) ([]offsets, [][]offsets, error) {
 	// We need to group by the columns used in the join condition.
@@ -296,10 +304,11 @@ func (hp *horizonPlanning) pushAggrOnSemiJoin(
 	}
 
 	totalGrouping := append(grouping, lhsCols...)
-	groupingOffsets, aggrParams, err := hp.pushAggregation(ctx, join.lhs, totalGrouping, aggregations, ignoreOutputOrder)
+	newLeft, groupingOffsets, aggrParams, err := hp.pushAggregation(ctx, join.lhs, totalGrouping, aggregations, ignoreOutputOrder)
 	if err != nil {
 		return nil, nil, err
 	}
+	join.lhs = newLeft
 
 	outputGroupings := make([]offsets, 0, len(grouping))
 	for idx := range grouping {
@@ -321,7 +330,7 @@ func (hp *horizonPlanning) filteredPushAggregation(
 	grouping []abstract.GroupBy,
 	aggregations []*abstract.Aggr,
 	ignoreOutputOrder bool,
-) (groupingOffsets []offsets, outputAggrs [][]offsets, err error) {
+) (out logicalPlan, groupingOffsets []offsets, outputAggrs [][]offsets, err error) {
 	used := make([]bool, len(aggregations))
 	var aggrs []abstract.Aggr
 
@@ -331,9 +340,9 @@ func (hp *horizonPlanning) filteredPushAggregation(
 			aggrs = append(aggrs, *aggr)
 		}
 	}
-	groupingOffsets, pushedAggrs, err := hp.pushAggregation(ctx, plan, grouping, aggrs, ignoreOutputOrder)
+	newplan, groupingOffsets, pushedAggrs, err := hp.pushAggregation(ctx, plan, grouping, aggrs, ignoreOutputOrder)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	idx := 0
 	for _, b := range used {
@@ -344,7 +353,7 @@ func (hp *horizonPlanning) filteredPushAggregation(
 		outputAggrs = append(outputAggrs, pushedAggrs[idx])
 		idx++
 	}
-	return groupingOffsets, outputAggrs, nil
+	return newplan, groupingOffsets, outputAggrs, nil
 }
 
 func isMinOrMax(in engine.AggregateOpcode) bool {
