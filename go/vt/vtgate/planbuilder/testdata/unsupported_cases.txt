@@ -510,7 +510,7 @@ Gen4 error: unsupported: in scatter query: complex order by expression: a + 1
 # aggregation on union
 "select sum(col) from (select col from user union all select col from unsharded) t"
 "unsupported: cross-shard query with aggregates"
-Gen4 error: using aggregation on top of a *planbuilder.simpleProjection plan is not yet supported
+Gen4 error: using aggregation on top of a *planbuilder.concatenateGen4 plan is not yet supported
 
 # systable union query in derived table with constraint on outside (without star projection)
 "select id from (select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `id` = 'primary'"
