@@ -4838,6 +4838,17 @@ type ServeHTTPResult struct {
 func TestServeHTTP(t *testing.T) {
 	t.Parallel()
 
+	testCluster, _ := cluster.Config{
+		ID:            "dynamiccluster1",
+		Name:          "dynamiccluster1",
+		DiscoveryImpl: "dynamic",
+		DiscoveryFlagsByImpl: cluster.FlagsByImpl{
+			"dynamic": {
+				"discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}",
+			},
+		},
+	}.Cluster()
+
 	tests := []struct {
 		name                  string
 		cookie                string
@@ -4893,6 +4904,20 @@ func TestServeHTTP(t *testing.T) {
 					Name:      "cluster2",
 					Discovery: fakediscovery.New(),
 				},
+			},
+			expected: []*vtadminpb.Cluster{
+				{
+					Id:   "dynamiccluster1",
+					Name: "dynamiccluster1",
+				},
+			},
+		},
+		{
+			name:                  "multiple clusters with dynamic clusters",
+			enableDynamicClusters: true,
+			cookie:                `{"id": "dynamiccluster1", "name": "dynamiccluster1", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}"}`,
+			clusters: []*cluster.Cluster{
+				testCluster,
 			},
 			expected: []*vtadminpb.Cluster{
 				{
