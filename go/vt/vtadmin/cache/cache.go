@@ -220,7 +220,7 @@ func (c *Cache[Key, Value]) backfill() {
 
 		key := req.k.Key()
 		if _, exp, ok := c.fillcache.GetWithExpiration(key); ok {
-			if !exp.IsZero() && exp.Before(time.Now()) {
+			if !exp.IsZero() && exp.After(time.Now()) {
 				// We recently added a value for this key to the cache, either via
 				// another backfill request, or directly via a call to Add.
 				log.Infof("filled cache for %s less than %s ago (at %s)", key, time.Duration(0) /* TODO: config */, exp.UTC())
