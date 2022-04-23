@@ -282,7 +282,7 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 		// which point the SQL thread(s) will be stopped again, since the replicas can only make forward
 		// progress if the SQL thread is started and we have already verified that the replica is not already
 		// as advanced as we want it to be
-		if !replicationStatus.SQLHealthy() {
+		if !replicationStatus.SQLThreadRunning {
 			// Let's ensure the replication state is put back to what it was when we started.
 			// Doing this in a deferred function ensures that we do so even if we timeout while waiting.
 			defer func() {
