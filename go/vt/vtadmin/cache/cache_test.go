@@ -46,7 +46,6 @@ func TestBackfillDuplicates(t *testing.T) {
 			cfg: cache.Config{
 				BackfillRequestTTL:               time.Hour,
 				BackfillRequestDuplicateInterval: time.Second,
-				BackfillQueueSize:                10,
 			},
 			enqueueInterval:   0, // no sleep between enqueues
 			enqueueCount:      2,
@@ -58,7 +57,6 @@ func TestBackfillDuplicates(t *testing.T) {
 			cfg: cache.Config{
 				BackfillRequestTTL:               time.Hour,
 				BackfillRequestDuplicateInterval: time.Millisecond,
-				BackfillQueueSize:                10,
 			},
 			enqueueInterval:   time.Millisecond * 5, // sleep longer than the duplicate interval
 			enqueueCount:      2,
@@ -87,7 +85,6 @@ func TestBackfillDuplicates(t *testing.T) {
 				time.Sleep(tt.enqueueInterval)
 			}
 
-			time.Sleep(time.Millisecond * 50)
 			c.Close()
 
 			assert.Equal(t, tt.expectedCallCount, callcount, tt.assertionMsg)
