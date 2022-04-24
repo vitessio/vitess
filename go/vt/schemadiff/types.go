@@ -70,7 +70,7 @@ const (
 )
 
 const (
-	RangeRotationAlways = iota
+	RangeRotationFullSpec = iota
 	RangeRotationStatements
 	RangeRotationIgnore
 )

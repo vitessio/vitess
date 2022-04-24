@@ -462,7 +462,7 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 				return nil
 			case RangeRotationStatements:
 				return ErrRangeRotattionStatementsStrategyUnsupported
-			case RangeRotationAlways:
+			case RangeRotationFullSpec:
 				// proceed to return a full rebuild
 			}
 		}
