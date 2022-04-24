@@ -27,14 +27,14 @@ import (
 
 func TestCreateTableDiff(t *testing.T) {
 	tt := []struct {
-		name                          string
-		from                          string
-		to                            string
-		diff                          string
-		isError                       bool
-		errorMsg                      string
-		autoinc                       int
-		ignoreRangePartitionsRotation bool
+		name     string
+		from     string
+		to       string
+		diff     string
+		isError  bool
+		errorMsg string
+		autoinc  int
+		rotation int
 	}{
 		{
 			name: "identical",
@@ -338,52 +338,52 @@ func TestCreateTableDiff(t *testing.T) {
 			diff: "alter table t1 partition by range (id) (partition p2 values less than (20), partition p3 values less than (30), partition p4 values less than (40))",
 		},
 		{
-			name:                          "change partitioning range: ignore rotate",
-			from:                          "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
-			to:                            "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition p3 values less than (30), partition p4 values less than (40))",
-			ignoreRangePartitionsRotation: true,
+			name:     "change partitioning range: ignore rotate",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition p3 values less than (30), partition p4 values less than (40))",
+			rotation: RangeRotationIgnore,
 		},
 		{
-			name:                          "change partitioning range: ignore rotate, not a rotation",
-			from:                          "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
-			to:                            "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (25), partition p3 values less than (30), partition p4 values less than (40))",
-			ignoreRangePartitionsRotation: true,
-			diff:                          "alter table t1 partition by range (id) (partition p2 values less than (25), partition p3 values less than (30), partition p4 values less than (40))",
+			name:     "change partitioning range: ignore rotate, not a rotation",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (25), partition p3 values less than (30), partition p4 values less than (40))",
+			rotation: RangeRotationIgnore,
+			diff:     "alter table t1 partition by range (id) (partition p2 values less than (25), partition p3 values less than (30), partition p4 values less than (40))",
 		},
 		{
-			name:                          "change partitioning range: ignore rotate, not a rotation 2",
-			from:                          "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
-			to:                            "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition p3 values less than (35), partition p4 values less than (40))",
-			ignoreRangePartitionsRotation: true,
-			diff:                          "alter table t1 partition by range (id) (partition p2 values less than (20), partition p3 values less than (35), partition p4 values less than (40))",
+			name:     "change partitioning range: ignore rotate, not a rotation 2",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition p3 values less than (35), partition p4 values less than (40))",
+			rotation: RangeRotationIgnore,
+			diff:     "alter table t1 partition by range (id) (partition p2 values less than (20), partition p3 values less than (35), partition p4 values less than (40))",
 		},
 		{
-			name:                          "change partitioning range: ignore rotate, not a rotation 3",
-			from:                          "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
-			to:                            "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition pX values less than (30), partition p4 values less than (40))",
-			ignoreRangePartitionsRotation: true,
-			diff:                          "alter table t1 partition by range (id) (partition p2 values less than (20), partition pX values less than (30), partition p4 values less than (40))",
+			name:     "change partitioning range: ignore rotate, not a rotation 3",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition pX values less than (30), partition p4 values less than (40))",
+			rotation: RangeRotationIgnore,
+			diff:     "alter table t1 partition by range (id) (partition p2 values less than (20), partition pX values less than (30), partition p4 values less than (40))",
 		},
 		{
-			name:                          "change partitioning range: ignore rotate, not a rotation 4",
-			from:                          "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
-			to:                            "create table t1 (id int primary key) partition by range (id) (partition pX values less than (20), partition p3 values less than (30), partition p4 values less than (40))",
-			ignoreRangePartitionsRotation: true,
-			diff:                          "alter table t1 partition by range (id) (partition pX values less than (20), partition p3 values less than (30), partition p4 values less than (40))",
+			name:     "change partitioning range: ignore rotate, not a rotation 4",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition pX values less than (20), partition p3 values less than (30), partition p4 values less than (40))",
+			rotation: RangeRotationIgnore,
+			diff:     "alter table t1 partition by range (id) (partition pX values less than (20), partition p3 values less than (30), partition p4 values less than (40))",
 		},
 		{
-			name:                          "change partitioning range: ignore rotate, nothing shared",
-			from:                          "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
-			to:                            "create table t1 (id int primary key) partition by range (id) (partition p4 values less than (40), partition p5 values less than (50), partition p6 values less than (60))",
-			ignoreRangePartitionsRotation: true,
-			diff:                          "alter table t1 partition by range (id) (partition p4 values less than (40), partition p5 values less than (50), partition p6 values less than (60))",
+			name:     "change partitioning range: ignore rotate, nothing shared",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p4 values less than (40), partition p5 values less than (50), partition p6 values less than (60))",
+			rotation: RangeRotationIgnore,
+			diff:     "alter table t1 partition by range (id) (partition p4 values less than (40), partition p5 values less than (50), partition p6 values less than (60))",
 		},
 		{
-			name:                          "change partitioning range: ignore rotate, no names shared, definitions shared",
-			from:                          "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
-			to:                            "create table t1 (id int primary key) partition by range (id) (partition pA values less than (20), partition pB values less than (30), partition pC values less than (40))",
-			ignoreRangePartitionsRotation: true,
-			diff:                          "alter table t1 partition by range (id) (partition pA values less than (20), partition pB values less than (30), partition pC values less than (40))",
+			name:     "change partitioning range: ignore rotate, no names shared, definitions shared",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition pA values less than (20), partition pB values less than (30), partition pC values less than (40))",
+			rotation: RangeRotationIgnore,
+			diff:     "alter table t1 partition by range (id) (partition pA values less than (20), partition pB values less than (30), partition pC values less than (40))",
 		},
 
 		//
@@ -558,7 +558,7 @@ func TestCreateTableDiff(t *testing.T) {
 			other := NewCreateTableEntity(toCreateTable)
 			hints := standardHints
 			hints.AutoIncrementStrategy = ts.autoinc
-			hints.IgnoreRangePartitionsRotation = ts.ignoreRangePartitionsRotation
+			hints.RangeRotationStrategy = ts.rotation
 			alter, err := c.Diff(other, &hints)
 			switch {
 			case ts.isError:

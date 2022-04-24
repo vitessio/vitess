@@ -378,22 +378,22 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 func (c *CreateTableEntity) isRangePartitionsRotation(
 	t1Partitions *sqlparser.PartitionOption,
 	t2Partitions *sqlparser.PartitionOption,
-) bool {
+) (bool, []sqlparser.AlterOption) {
 	// Validate that both tables have range partitioning
 	if t1Partitions.Type != t2Partitions.Type {
-		return false
+		return false, nil
 	}
 	if t1Partitions.Type != sqlparser.RangeType {
-		return false
+		return false, nil
 	}
 	definitions1 := t1Partitions.Definitions
 	definitions2 := t2Partitions.Definitions
 	// there has to be a non-empty shared list, therefore both definitions must be non-empty:
 	if len(definitions1) == 0 {
-		return false
+		return false, nil
 	}
 	if len(definitions2) == 0 {
-		return false
+		return false, nil
 	}
 	// It's OK for prefix of t1 partitions to be nonexistent in t2 (as they may have been rotated away in t2)
 	for len(definitions1) > 0 && sqlparser.String(definitions1[0]) != sqlparser.String(definitions2[0]) {
@@ -402,10 +402,10 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	if len(definitions1) == 0 {
 		// We've exhaused definition1 trying to find a shared partition with definitions2. Nothing found.
 		// so there is no shared sequence between the two tables.
-		return false
+		return false, nil
 	}
 	if len(definitions1) > len(definitions2) {
-		return false
+		return false, nil
 	}
 	// To save computation, and ecause we've already shown that sqlparser.String(definitions1[0]) == sqlparser.String(definitions2[0]),
 	// we can skip one element
@@ -415,12 +415,12 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	// It's ok if we end up with leftover elements in definition2
 	for len(definitions1) > 0 {
 		if sqlparser.String(definitions1[0]) != sqlparser.String(definitions2[0]) {
-			return false
+			return false, nil
 		}
 		definitions1 = definitions1[1:]
 		definitions2 = definitions2[1:]
 	}
-	return true
+	return true, nil
 }
 
 func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
@@ -456,8 +456,15 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 		// Having said that, we _do_ analyze the scenario of a RANGE partitioning rotation of partitions:
 		// where zero or more partitions may have been dropped from the earlier range, and zero or more
 		// partitions have been added with a later range:
-		if c.isRangePartitionsRotation(t1Partitions, t2Partitions) && hints.IgnoreRangePartitionsRotation {
-			return nil
+		if isRotation, _ := c.isRangePartitionsRotation(t1Partitions, t2Partitions); isRotation {
+			switch hints.RangeRotationStrategy {
+			case RangeRotationIgnore:
+				return nil
+			case RangeRotationStatements:
+				return ErrRangeRotattionStatementsStrategyUnsupported
+			case RangeRotationAlways:
+				// proceed to return a full rebuild
+			}
 		}
 		alterTable.PartitionOption = t2Partitions
 	}
