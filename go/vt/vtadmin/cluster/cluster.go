@@ -1053,7 +1053,7 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 		Keyspace:                keyspace,
 		IncludeNonServingShards: opts.TableSizeOptions.IncludeNonServingShards,
 	}
-	if !opts.isBackfill {
+	if !(opts.isBackfill || cache.ShouldRefreshFromIncomingContext(ctx)) {
 		schema, ok, err := schemacache.LoadOne(c.schemaCache, key, schemacache.LoadOptions{
 			BaseRequest:    opts.BaseRequest,
 			AggregateSizes: opts.TableSizeOptions.AggregateSizes,
@@ -1151,7 +1151,7 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 		Keyspace:                "",
 		IncludeNonServingShards: opts.TableSizeOptions.IncludeNonServingShards,
 	}
-	if !opts.isBackfill {
+	if !(opts.isBackfill || cache.ShouldRefreshFromIncomingContext(ctx)) {
 		schemas, ok, err := schemacache.LoadAll(c.schemaCache, key, schemacache.LoadOptions{
 			BaseRequest:    opts.BaseRequest,
 			AggregateSizes: opts.TableSizeOptions.AggregateSizes,

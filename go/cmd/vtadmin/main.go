@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtadmin"
+	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
@@ -46,6 +47,8 @@ var (
 	rbacConfigPath string
 	enableRBAC     bool
 	disableRBAC    bool
+
+	cacheRefreshKey string
 
 	traceCloser io.Closer = &noopCloser{}
 
@@ -129,6 +132,11 @@ func run(cmd *cobra.Command, args []string) {
 		clusters[i] = cluster
 	}
 
+	if cacheRefreshKey == "" {
+		log.Warningf("no cache-refresh-key set; forcing cache refreshes will not be possible")
+	}
+	cache.SetCacheRefreshKey(cacheRefreshKey)
+
 	s := vtadmin.NewAPI(clusters, vtadmin.Options{
 		GRPCOpts:              opts,
 		HTTPOpts:              httpOpts,
@@ -184,6 +192,12 @@ func main() {
 	rootCmd.Flags().StringVar(&rbacConfigPath, "rbac-config", "", "path to an RBAC config file. must be set if passing --rbac")
 	rootCmd.Flags().BoolVar(&enableRBAC, "rbac", false, "whether to enable RBAC. must be set if not passing --rbac")
 	rootCmd.Flags().BoolVar(&disableRBAC, "no-rbac", false, "whether to disable RBAC. must be set if not passing --no-rbac")
+
+	// Global cache flags (N.B. there are also cluster-specific cache flags)
+	cacheRefreshHelp := "instructs a request to ignore any cached data (if applicable) and refresh the cache;" +
+		"usable as an HTTP header named 'X-<key>' and as a gRPC metadata key '<key>'\n" +
+		"Note: any whitespace characters are replaced with hyphens."
+	rootCmd.Flags().StringVar(&cacheRefreshKey, "cache-refresh-key", "vt-cache-refresh", cacheRefreshHelp)
 
 	// glog flags, no better way to do this
 	rootCmd.Flags().AddGoFlag(flag.Lookup("v"))
