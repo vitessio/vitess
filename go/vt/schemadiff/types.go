@@ -71,6 +71,7 @@ const (
 
 // DiffHints is an assortment of rules for diffing entities
 type DiffHints struct {
-	StrictIndexOrdering   bool
-	AutoIncrementStrategy int
+	StrictIndexOrdering           bool
+	AutoIncrementStrategy         int
+	IgnoreRangePartitionsRotation bool
 }
