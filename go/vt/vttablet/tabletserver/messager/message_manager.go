@@ -252,7 +252,9 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, pos
 		}},
 	}
 	mm.readByPriorityAndTimeNext = sqlparser.BuildParsedQuery(
-		"select priority, time_next, epoch, time_acked, %s from %v where time_next < %a order by priority, time_next desc limit %a",
+		// There should be a poller_idx defined on (time_acked, priority, time_next desc)
+		// for this to be as effecient as possible
+		"select priority, time_next, epoch, time_acked, %s from %v where time_acked is null and time_next < %a order by priority, time_next desc limit %a",
 		columnList, mm.name, ":time_next", ":max")
 	mm.ackQuery = sqlparser.BuildParsedQuery(
 		"update %v set time_acked = %a, time_next = null where id in %a and time_acked is null",
@@ -749,13 +751,13 @@ func (mm *messageManager) processRowEvent(fields []*querypb.Field, rowEvent *bin
 }
 
 func (mm *messageManager) runPoller() {
+	mm.getExclusiveLock()
+	defer mm.releaseExclusiveLock()
+
 	// Fast-path. Skip all the work.
-	if mm.receiverCount() == 0 {
+	if len(mm.receivers) == 0 {
 		return
 	}
-
-	mm.streamMu.Lock()
-	defer mm.streamMu.Unlock()
 
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), mm.pollerTicks.Interval())
 	defer func() {
@@ -773,9 +775,6 @@ func (mm *messageManager) runPoller() {
 		return
 	}
 
-	// Obtain mu lock to verify and preserve that len(receivers) != 0.
-	mm.mu.Lock()
-	defer mm.mu.Unlock()
 	mm.messagesPending = false
 	if len(qr.Rows) >= size {
 		// There are probably more messages to be sent.
@@ -948,4 +947,18 @@ func (mm *messageManager) readPending(ctx context.Context, bindVars map[string]*
 		return nil, err
 	}
 	return qr, err
+}
+
+// This grants the caller exclusive access to the message service.
+// When this is needed for a function, you must get the mutexes in
+// main mutex, stream mutex order to avoid deadlocks with other places
+// that conditionally get the mutexes in this same order.
+func (mm *messageManager) getExclusiveLock() {
+	mm.mu.Lock()
+	mm.streamMu.Lock()
+}
+
+func (mm *messageManager) releaseExclusiveLock() {
+	mm.streamMu.Unlock()
+	mm.mu.Unlock()
 }
