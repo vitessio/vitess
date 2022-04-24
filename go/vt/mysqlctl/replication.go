@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"context"
@@ -97,6 +98,19 @@ func (mysqld *Mysqld) StartReplicationUntilAfter(ctx context.Context, targetPos 
 	return mysqld.executeSuperQueryListConn(ctx, conn, queries)
 }
 
+// StartSQLThreadUntilAfter starts replication's SQL thread(s) until replication has come to `targetPos`, then it stops it
+func (mysqld *Mysqld) StartSQLThreadUntilAfter(ctx context.Context, targetPos mysql.Position) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	queries := []string{conn.StartSQLThreadUntilAfterCommand(targetPos)}
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, queries)
+}
+
 // StopReplication stops replication.
 func (mysqld *Mysqld) StopReplication(hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("preflight_stop_slave")
@@ -123,6 +137,17 @@ func (mysqld *Mysqld) StopIOThread(ctx context.Context) error {
 	defer conn.Recycle()
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopIOThreadCommand()})
+}
+
+// StopSQLThread stops a replica's SQL thread(s) only.
+func (mysqld *Mysqld) StopSQLThread(ctx context.Context) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopSQLThreadCommand()})
 }
 
 // RestartReplication stops, resets and starts replication.
@@ -244,12 +269,30 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 			return nil
 		}
 
-		// Start the SQL Thread before waiting for position to be reached, since the replicas
-		// can only make forward progress if the SQL thread is started and we have already verified
-		// that the replica is not already as advanced as we want it to be
-		err = mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StartSQLThreadCommand()})
-		if err != nil {
+		replicationStatus, err := conn.ShowReplicationStatus()
+		if err != nil && !errors.Is(err, mysql.ErrNotReplica) {
 			return err
+		}
+
+		// If the SQL thread(s) is not already running -- e.g. in the case of EmergencyReparentShard where the
+		// instance is transitioning to PRIMARY (elect) and we can no longer talk to the old PRIMARY, we need
+		// it to catch up as much as possible by executing all of the locally queued binary log events (in
+		// the existing relay logs) before it starts serving traffic for the shard to minimize potential data
+		// loss -- then we try to start the SQL Thread(s) before waiting for the position to be reached at
+		// which point the SQL thread(s) will be stopped again, since the replicas can only make forward
+		// progress if the SQL thread is started and we have already verified that the replica is not already
+		// as advanced as we want it to be
+		if !replicationStatus.SQLThreadRunning {
+			// Let's ensure the replication state is put back to what it was when we started.
+			// Doing this in a deferred function ensures that we do so even if we timeout while waiting.
+			defer func() {
+				mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopSQLThreadCommand()})
+			}()
+			if err = mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StartSQLThreadCommand()}); err != nil {
+				return vterrors.Wrap(err,
+					fmt.Sprintf("the replication SQL thread(s) was stopped and we could not temporarily start it in order to wait for the target position of %v",
+						targetPos))
+			}
 		}
 
 		// Find the query to run, run it.
