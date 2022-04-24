@@ -52,8 +52,7 @@ var createMessage = `create table vitess_message(
 	time_acked bigint,
 	message varchar(128),
 	primary key(id),
-	index next_idx(priority, time_next desc),
-	index ack_idx(time_acked))
+	index poller_idx (time_acked, priority, time_next desc),
 comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 
 func TestMessage(t *testing.T) {
@@ -172,8 +171,7 @@ var createThreeColMessage = `create table vitess_message3(
 	msg1 varchar(128),
 	msg2 bigint,
 	primary key(id),
-	index next_idx(priority, time_next desc),
-	index ack_idx(time_acked))
+	index poller_idx (time_acked, priority, time_next desc),
 comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 
 func TestThreeColMessage(t *testing.T) {
@@ -519,18 +517,18 @@ func assertClientCount(t *testing.T, expected int, vttablet *cluster.Vttablet) {
 }
 
 func parseDebugVars(t *testing.T, output interface{}, vttablet *cluster.Vttablet) {
-	debugVarUrl := fmt.Sprintf("http://%s:%d/debug/vars", vttablet.VttabletProcess.TabletHostname, vttablet.HTTPPort)
-	resp, err := http.Get(debugVarUrl)
+	debugVarURL := fmt.Sprintf("http://%s:%d/debug/vars", vttablet.VttabletProcess.TabletHostname, vttablet.HTTPPort)
+	resp, err := http.Get(debugVarURL)
 	if err != nil {
-		t.Fatalf("failed to fetch %q: %v", debugVarUrl, err)
+		t.Fatalf("failed to fetch %q: %v", debugVarURL, err)
 	}
 
 	respByte, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
-		t.Fatalf("status code %d while fetching %q:\n%s", resp.StatusCode, debugVarUrl, respByte)
+		t.Fatalf("status code %d while fetching %q:\n%s", resp.StatusCode, debugVarURL, respByte)
 	}
 
 	if err := json.Unmarshal(respByte, output); err != nil {
-		t.Fatalf("failed to unmarshal JSON from %q: %v", debugVarUrl, err)
+		t.Fatalf("failed to unmarshal JSON from %q: %v", debugVarURL, err)
 	}
 }
