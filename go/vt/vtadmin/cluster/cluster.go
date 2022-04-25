@@ -31,7 +31,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/strings/slices"
 
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/textutil"
@@ -1714,8 +1713,11 @@ func equalAddresses(list1 []string, list2 []string) bool {
 		return false
 	}
 
-	for _, addr := range list1 {
-		if !slices.Contains(list2, addr) {
+	sort.Strings(list1)
+	sort.Strings(list2)
+	for i, e1 := range list1 {
+		e2 := list2[i]
+		if e1 != e2 {
 			return false
 		}
 	}
