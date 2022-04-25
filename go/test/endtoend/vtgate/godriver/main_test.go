@@ -17,7 +17,6 @@ limitations under the License.
 package godriver
 
 import (
-	"database/sql"
 	"flag"
 	"os"
 	"strconv"
@@ -142,8 +141,7 @@ func TestStreamMessaging(t *testing.T) {
 	defer db.Close()
 
 	// Exec not allowed in streaming
-	timenow := time.Now().Add(time.Second * 60).UnixNano()
-	_, err = db.Exec("insert into my_message(id, message, time_scheduled) values(1, 'hello world', :curr_time)", sql.Named("curr_time", timenow))
+	_, err = db.Exec("insert into my_message(id, message) values(1, 'hello world')")
 	require.NoError(t, err)
 
 	// for streaming messages

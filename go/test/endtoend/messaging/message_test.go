@@ -45,7 +45,7 @@ import (
 )
 
 var createMessage = `
-create table my_message(
+create table vitess_message(
 	# required columns
 	id bigint NOT NULL COMMENT 'often an event id, can also be auto-increment or a sequence',
 	priority tinyint NOT NULL DEFAULT '50' COMMENT 'lower number priorities process first',
@@ -174,7 +174,7 @@ func TestMessage(t *testing.T) {
 }
 
 var createThreeColMessage = `
-create table my_message(
+create table vitess_message3(
 	# required columns
 	id bigint NOT NULL COMMENT 'often an event id, can also be auto-increment or a sequence',
 	priority tinyint NOT NULL DEFAULT '50' COMMENT 'lower number priorities process first',

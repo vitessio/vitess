@@ -336,7 +336,6 @@
         "Name": "PRIMARY",
         "Unique": true,
         "Columns": [
-          "time_scheduled",
           "id"
         ],
         "Cardinality": [
@@ -347,10 +346,9 @@
       }
     ],
     "PKColumns": [
-      0,
-      1
+      0
     ],
-    "Type": 2
+    "Type": 0
   },
   {
     "Name": "dual",
