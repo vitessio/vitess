@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/test/utils"
@@ -484,4 +486,44 @@ func createMap(keys []string, values []any) map[string]*querypb.BindVariable {
 		result[key] = variable
 	}
 	return result
+}
+
+func TestSetVar(t *testing.T) {
+	executor, _, _, sbc := createExecutorEnv()
+	executor.normalize = true
+
+	oldVersion := sqlparser.MySQLVersion
+	sqlparser.MySQLVersion = "80000"
+	defer func() {
+		sqlparser.MySQLVersion = oldVersion
+	}()
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
+
+	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+		"|only_full_group_by")})
+
+	_, err := executor.Execute(context.Background(), "TestSetVar", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+
+	tcases := []struct {
+		sql string
+		rc  bool
+	}{
+		{sql: "select 1 from user"},
+		{sql: "update user set col = 2"},
+		{sql: "delete from user"},
+		{sql: "insert into user (id) values (1)"},
+		{sql: "replace into user(id, col) values (1, 'new')"},
+		{sql: "show create table user"},
+		{sql: "create table foo(bar bigint)", rc: true},
+	}
+
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			_, err = executor.Execute(context.Background(), "TestSetVar", session, tc.sql, map[string]*querypb.BindVariable{})
+			require.NoError(t, err)
+			assert.Equal(t, tc.rc, session.InReservedConn())
+		})
+	}
 }
