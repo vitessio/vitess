@@ -44,16 +44,27 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
-var createMessage = `create table vitess_message(
-	id bigint,
-	priority bigint default 0,
-	time_next bigint default 0,
-	epoch bigint,
-	time_acked bigint,
-	message varchar(128),
+var createMessage = `
+create table my_message(
+	# required columns
+	id bigint NOT NULL COMMENT 'often an event id, can also be auto-increment or a sequence',
+	priority tinyint NOT NULL DEFAULT '50' COMMENT 'lower number priorities process first',
+	epoch bigint NOT NULL DEFAULT '0' COMMENT 'Vitess increments this each time it sends a message, and is used for incremental backoff doubling',
+	time_next bigint DEFAULT 0 COMMENT 'the earliest time the message will be sent in epoch nanoseconds. Must be null if time_acked is set',
+	time_acked bigint DEFAULT NULL COMMENT 'the time the message was acked in epoch nanoseconds. Must be null if time_next is set',
+
+	# add as many custom fields here as required
+	# optional - these are suggestions
+	tenant_id bigint,
+	message json,
+
+	# required indexes
 	primary key(id),
-	index poller_idx (time_acked, priority, time_next desc),
-comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
+	index poller_idx(time_acked, priority, time_next desc)
+
+	# add any secondary indexes or foreign keys - no restrictions
+) comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'
+`
 
 func TestMessage(t *testing.T) {
 	ctx := context.Background()
@@ -162,17 +173,31 @@ func TestMessage(t *testing.T) {
 	assert.Equal(t, 0, len(qr.Rows))
 }
 
-var createThreeColMessage = `create table vitess_message3(
-	id bigint,
-	priority bigint default 0,
-	time_next bigint default 0,
-	epoch bigint,
-	time_acked bigint,
+var createThreeColMessage = `
+create table my_message(
+	# required columns
+	id bigint NOT NULL COMMENT 'often an event id, can also be auto-increment or a sequence',
+	priority tinyint NOT NULL DEFAULT '50' COMMENT 'lower number priorities process first',
+	epoch bigint NOT NULL DEFAULT '0' COMMENT 'Vitess increments this each time it sends a message, and is used for incremental backoff doubling',
+	time_next bigint DEFAULT 0 COMMENT 'the earliest time the message will be sent in epoch nanoseconds. Must be null if time_acked is set',
+	time_acked bigint DEFAULT NULL COMMENT 'the time the message was acked in epoch nanoseconds. Must be null if time_next is set',
+
+	# add as many custom fields here as required
+	# optional - these are suggestions
+	tenant_id bigint,
+	message json,
+
+	# custom to this test
 	msg1 varchar(128),
 	msg2 bigint,
+
+	# required indexes
 	primary key(id),
-	index poller_idx (time_acked, priority, time_next desc),
-comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
+	index poller_idx(time_acked, priority, time_next desc)
+
+	# add any secondary indexes or foreign keys - no restrictions
+) comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'
+`
 
 func TestThreeColMessage(t *testing.T) {
 	ctx := context.Background()
