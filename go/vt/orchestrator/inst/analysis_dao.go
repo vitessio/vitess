@@ -363,7 +363,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 	`
 
 	clusters := make(map[string]*clusterAnalysis)
-	err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	err := db.Db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
 		a := ReplicationAnalysis{
 			Analysis:               NoProblem,
 			ProcessingNodeHostname: process.ThisHostname,
