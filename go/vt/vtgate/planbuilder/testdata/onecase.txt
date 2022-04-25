@@ -1,1 +1,6 @@
 # Add your test case here for debugging and run go test -run=One.
+"select city, age from user group by age"
+{
+}
+{
+}

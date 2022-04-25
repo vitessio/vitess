@@ -494,9 +494,9 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		return newPlan, nil
 	}
 
-	if hp.qp.ProjectionError != nil {
-		return nil, hp.qp.ProjectionError
-	}
+	// if hp.qp.ProjectionError != nil {
+	// 	return nil, hp.qp.ProjectionError
+	// }
 
 	return hp.planAggrUsingOA(ctx, plan, grouping)
 }
@@ -551,7 +551,7 @@ func (hp *horizonPlanning) planAggrUsingOA(
 		oa.preProcess = true
 	}
 
-	newPlan, groupingOffsets, aggrParamOffsets, err := hp.pushAggregation(ctx, plan, grouping, aggrs, false)
+	newPlan, groupingOffsets, aggrParamOffsets, err := hp.pushAggregation(ctx, plan, grouping, aggrs, hp.qp.NonAggrCols, false)
 	if err != nil {
 		return nil, err
 	}

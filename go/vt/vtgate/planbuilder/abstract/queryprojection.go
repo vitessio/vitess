@@ -44,6 +44,7 @@ type (
 		Distinct           bool
 		groupByExprs       []GroupBy
 		OrderExprs         []OrderBy
+		NonAggrCols        []NonAggr
 		CanPushDownSorting bool
 		HasStar            bool
 		ProjectionError    error
@@ -65,6 +66,21 @@ type (
 
 		// The original aliased expression that this group by is referring
 		aliasedExpr *sqlparser.AliasedExpr
+	}
+
+	Aggr struct {
+		Original *sqlparser.AliasedExpr
+		Func     *sqlparser.FuncExpr
+		OpCode   engine.AggregateOpcode
+		Alias    string
+		// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
+		Index    *int
+		Distinct bool
+	}
+
+	NonAggr struct {
+		Original *sqlparser.AliasedExpr
+		Index    *int
 	}
 )
 
@@ -158,14 +174,18 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 	}
 
 	if qp.HasAggr || len(qp.groupByExprs) > 0 {
-		expr := qp.getNonAggrExprNotMatchingGroupByExprs()
+		expr, err := qp.getNonAggrExprNotMatchingGroupByExprs()
+		if err != nil {
+			return nil, err
+		}
 		// if we have aggregation functions, non aggregating columns and GROUP BY,
 		// the non-aggregating expressions must all be listed in the GROUP BY list
-		if expr != nil {
-			if len(qp.groupByExprs) == 0 {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.MixOfGroupFuncAndFields, "In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column '%s'; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
-			}
-			qp.ProjectionError = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongFieldWithGroup, "Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '%s' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
+		if len(expr) > 0 {
+			qp.NonAggrCols = expr
+			// if len(qp.groupByExprs) == 0 {
+			// 	return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.MixOfGroupFuncAndFields, "In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column(s) '%s'; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
+			// }
+			// qp.ProjectionError = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongFieldWithGroup, "Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '%s' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
 		}
 	}
 
@@ -267,16 +287,23 @@ func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 	}, exp.Expr)
 }
 
-func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.SelectExpr {
-	for _, expr := range qp.SelectExprs {
+func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() ([]NonAggr, error) {
+	var nonAggrExprs []NonAggr
+	for i, expr := range qp.SelectExprs {
 		if expr.Aggr {
 			continue
 		}
 		isGroupByOk := false
+		aliasedExpr, err := expr.GetAliasedExpr()
+		if err != nil {
+			return nil, err
+		}
+		idx := i
 		for _, groupByExpr := range qp.groupByExprs {
 			exp, err := expr.GetExpr()
 			if err != nil {
-				return expr.Col
+				nonAggrExprs = append(nonAggrExprs, NonAggr{Original: aliasedExpr, Index: &idx})
+				continue
 			}
 			if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, exp) {
 				isGroupByOk = true
@@ -284,7 +311,7 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Sel
 			}
 		}
 		if !isGroupByOk {
-			return expr.Col
+			nonAggrExprs = append(nonAggrExprs, NonAggr{Original: aliasedExpr, Index: &idx})
 		}
 	}
 	for _, order := range qp.OrderExprs {
@@ -300,12 +327,12 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Sel
 			}
 		}
 		if !isGroupByOk {
-			return &sqlparser.AliasedExpr{
+			nonAggrExprs = append(nonAggrExprs, NonAggr{Original: &sqlparser.AliasedExpr{
 				Expr: order.Inner.Expr,
-			}
+			}})
 		}
 	}
-	return nil
+	return nonAggrExprs, nil
 }
 
 // GetSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, and returns an expression that is simpler to evaluate
@@ -403,16 +430,6 @@ func (qp *QueryProjection) NeedsDistinct() bool {
 		return false
 	}
 	return true
-}
-
-type Aggr struct {
-	Original *sqlparser.AliasedExpr
-	Func     *sqlparser.FuncExpr
-	OpCode   engine.AggregateOpcode
-	Alias    string
-	// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
-	Index    *int
-	Distinct bool
 }
 
 func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {

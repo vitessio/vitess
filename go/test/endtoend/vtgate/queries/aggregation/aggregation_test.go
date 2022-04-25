@@ -296,3 +296,13 @@ func TestGreaterEqualFilterOnScatter(t *testing.T) {
 		})
 	}
 }
+
+func TestGroupByOnlyFullGroupByOff(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t9(id1, id2, id3) values(1,'a', '1'), (2,'Abc','2'), (3,'b', '3'), (4,'c', '4'), (5,'test', '5')")
+	mcmp.Exec("insert into t9(id1, id2, id3) values(6,'a', '11'), (7,'Abc','22'), (8,'b', '33'), (9,'c', '44'), (10,'test', '55')")
+	mcmp.Exec("set @@sql_mode = ''")
+	mcmp.AssertMatches("select id2, id3 from t9 group by id2", `[[INT64(5) VARCHAR("test")] [INT64(4) VARCHAR("c")] [INT64(3) VARCHAR("b")] [INT64(2) VARCHAR("Abc")] [INT64(1) VARCHAR("a")]]`)
+}

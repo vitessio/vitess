@@ -75,6 +75,8 @@ type orderedAggregate struct {
 	// the aggregation key.
 	groupByKeys []*engine.GroupByParams
 
+	nonAggregatedCols []*sqlparser.ColName
+
 	truncateColumnCount int
 }
 

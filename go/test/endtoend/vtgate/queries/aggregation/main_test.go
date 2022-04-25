@@ -48,6 +48,13 @@ create table t3_id7_idx(
     primary key(id)
 ) Engine=InnoDB;
 
+create table t9(
+	id1 bigint,
+	id2 varchar(10),
+	id3 varchar(10),
+	primary key(id1)
+) ENGINE=InnoDB DEFAULT charset=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 create table aggr_test(
 	id bigint,
 	val1 varchar(16),
@@ -127,6 +134,14 @@ create table t7_xxhash_idx(
         }
       ]
     },
+	"t9": {
+      "column_vindexes": [
+        {
+          "column": "id1",
+          "name": "hash"
+        }
+      ]
+	},
 	"aggr_test": {
       "column_vindexes": [
         {
