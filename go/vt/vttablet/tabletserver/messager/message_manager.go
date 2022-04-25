@@ -469,9 +469,7 @@ func (mm *messageManager) rescanReceivers(start int) {
 // if successful. If the message is already present,
 // it still returns true.
 func (mm *messageManager) Add(mr *MessageRow) bool {
-	mm.mu.Lock()
-	defer mm.mu.Unlock()
-	if len(mm.receivers) == 0 {
+	if mm.receiverCount() == 0 {
 		return false
 	}
 	// If cache is empty, we have to broadcast that we're not empty
@@ -879,7 +877,7 @@ func (mm *messageManager) GeneratePurgeQuery(timeCutoff int64) (string, map[stri
 	}
 }
 
-// BuildMessageRow builds a MessageRow for a db row.
+// BuildMessageRow builds a MessageRow from a db row.
 func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
 	mr := &MessageRow{Row: row[4:]}
 	if !row[0].IsNull() {
