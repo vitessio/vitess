@@ -120,7 +120,7 @@ require (
 	sigs.k8s.io/yaml v1.2.0
 )
 
-require k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
+require k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9 // indirect
 
 require (
 	cloud.google.com/go v0.81.0 // indirect
