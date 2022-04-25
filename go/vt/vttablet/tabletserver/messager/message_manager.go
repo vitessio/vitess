@@ -754,13 +754,13 @@ func (mm *messageManager) processRowEvent(fields []*querypb.Field, rowEvent *bin
 }
 
 func (mm *messageManager) runPoller() {
-	mm.getExclusiveLock()
-	defer mm.releaseExclusiveLock()
-
 	// Fast-path. Skip all the work.
 	if mm.receiverCount.Get() == 0 {
 		return
 	}
+
+	mm.getExclusiveLock()
+	defer mm.releaseExclusiveLock()
 
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), mm.pollerTicks.Interval())
 	defer func() {
@@ -773,6 +773,7 @@ func (mm *messageManager) runPoller() {
 		"time_next": sqltypes.Int64BindVariable(time.Now().UnixNano()),
 		"max":       sqltypes.Int64BindVariable(int64(size)),
 	}
+
 	qr, err := mm.readPending(ctx, bindVars)
 	if err != nil {
 		return
@@ -947,9 +948,8 @@ func (mm *messageManager) readPending(ctx context.Context, bindVars map[string]*
 }
 
 // This grants the caller exclusive access to the message service.
-// When this is needed for a function, you must get the mutexes in
-// main mutex, stream mutex order to avoid deadlocks with other places
-// that conditionally get the mutexes in this same order.
+// When this is needed for a function, you can use this to
+// enforce consistent locking order.
 func (mm *messageManager) getExclusiveLock() {
 	mm.mu.Lock()
 	mm.streamMu.Lock()
