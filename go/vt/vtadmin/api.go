@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"net/url"
-	"reflect"
 	stdsort "sort"
 	"strings"
 	"sync"
@@ -272,7 +271,16 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 	}
 
 	if c != nil {
-		if existingCluster, exists := api.clusterMap[id]; !exists || !reflect.DeepEqual(existingCluster, c) {
+		existingCluster, exists := api.clusterMap[id]
+		shouldAddCluster := !exists
+		if exists {
+			isEqual, err := existingCluster.Equal(c)
+			if err != nil {
+				log.Errorf("Error checking for existing cluster %s equality with new cluster %s: %v", existingCluster.ID, id, err)
+			}
+			shouldAddCluster = shouldAddCluster || !isEqual
+		}
+		if shouldAddCluster {
 			api.clusterMap[id] = c
 			api.clusters = append(api.clusters, c)
 			sort.ClustersBy(func(c1, c2 *cluster.Cluster) bool {

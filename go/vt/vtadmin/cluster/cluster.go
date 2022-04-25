@@ -31,6 +31,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/strings/slices"
 
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/textutil"
@@ -1681,4 +1682,43 @@ func (c *Cluster) Debug() map[string]any {
 	}
 
 	return m
+}
+
+// Equal compares the vtctld and vtgate addresses of the clusters for equality
+func (c *Cluster) Equal(otherCluster *Cluster) (bool, error) {
+	ctx := context.Background()
+	vtgateAddresses, err := c.Discovery.DiscoverVTGateAddrs(ctx, []string{})
+	if err != nil {
+		return false, err
+	}
+	otherVtgateAddresses, err := otherCluster.Discovery.DiscoverVTGateAddrs(ctx, []string{})
+	if err != nil {
+		return false, err
+	}
+
+	vtctldAddresses, err := c.Discovery.DiscoverVtctldAddrs(ctx, []string{})
+	if err != nil {
+		return false, err
+	}
+
+	otherVtctldAddresses, err := otherCluster.Discovery.DiscoverVtctldAddrs(ctx, []string{})
+	if err != nil {
+		return false, err
+	}
+
+	return equalAddresses(vtgateAddresses, otherVtgateAddresses) && equalAddresses(vtctldAddresses, otherVtctldAddresses), nil
+}
+
+func equalAddresses(list1 []string, list2 []string) bool {
+	if len(list1) != len(list2) {
+		return false
+	}
+
+	for _, addr := range list1 {
+		if !slices.Contains(list2, addr) {
+			return false
+		}
+	}
+
+	return true
 }
