@@ -18,6 +18,7 @@ package godriver
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"strconv"
 	"testing"
@@ -80,6 +81,8 @@ create table my_message(
   }
 }
 `
+
+	testMessage = "{\"message\":\"hello world\"}"
 )
 
 func TestMain(m *testing.M) {
@@ -141,7 +144,7 @@ func TestStreamMessaging(t *testing.T) {
 	defer db.Close()
 
 	// Exec not allowed in streaming
-	_, err = db.Exec("insert into my_message(id, message) values(1, 'hello world')")
+	_, err = db.Exec(fmt.Sprintf("insert into my_message(id, message) values(1, '%s')", testMessage))
 	require.NoError(t, err)
 
 	// for streaming messages
