@@ -49,6 +49,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	"vitess.io/vitess/go/vt/vtadmin/sort"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
+	"vitess.io/vitess/go/vt/vtadmin/web"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtexplain"
 
@@ -181,6 +182,9 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 		debugRouter.HandleFunc("/cluster/{cluster_id}", debug.Cluster(dapi))
 		debugRouter.HandleFunc("/clusters", debug.Clusters(dapi))
 	}
+
+	// Catch-all route for vtadmin-web
+	serv.Router().PathPrefix("/").Handler(web.Handler())
 
 	// Middlewares are executed in order of addition. Our ordering (all
 	// middlewares being optional) is:
