@@ -774,6 +774,9 @@ func TestFindSchema(t *testing.T) {
 		}
 
 		if schema != nil {
+			// Clone so our mutation below doesn't trip the race detector.
+			schema = proto.Clone(schema).(*vtadminpb.Schema)
+
 			for _, td := range schema.TableDefinitions {
 				// Zero these out because they're non-deterministic and also not
 				// relevant to the final result.
@@ -1379,7 +1382,6 @@ func TestGetSchema(t *testing.T) {
 						Name: "testtable",
 					},
 				},
-				TableSizes: map[string]*vtadminpb.Schema_TableSize{},
 			},
 			shouldErr: false,
 		},
@@ -1535,6 +1537,11 @@ func TestGetSchema(t *testing.T) {
 					assert.Error(t, err)
 
 					return
+				}
+
+				if resp != nil {
+					// Clone so our mutation below doesn't trip the race detector.
+					resp = proto.Clone(resp).(*vtadminpb.Schema)
 				}
 
 				assert.NoError(t, err)
@@ -2212,7 +2219,14 @@ func TestGetSchemas(t *testing.T) {
 				resp, err := api.GetSchemas(ctx, tt.req)
 				require.NoError(t, err)
 
-				vtadmintestutil.AssertSchemaSlicesEqual(t, tt.expected.Schemas, resp.Schemas)
+				// Clone schemas so our mutations below don't trip the race detector.
+				schemas := make([]*vtadminpb.Schema, len(resp.Schemas))
+				for i, schema := range resp.Schemas {
+					schema := proto.Clone(schema).(*vtadminpb.Schema)
+					schemas[i] = schema
+				}
+
+				vtadmintestutil.AssertSchemaSlicesEqual(t, tt.expected.Schemas, schemas)
 			}, vtctlds...)
 		})
 	}
@@ -2495,14 +2509,22 @@ func TestGetSchemas(t *testing.T) {
 		}
 
 		if resp != nil {
-			for _, schema := range resp.Schemas {
+			// Clone schemas so our mutations below don't trip the race detector.
+			schemas := make([]*vtadminpb.Schema, len(resp.Schemas))
+			for i, schema := range resp.Schemas {
+				schema := proto.Clone(schema).(*vtadminpb.Schema)
+
 				for _, td := range schema.TableDefinitions {
 					// Zero these out because they're non-deterministic and also not
 					// relevant to the final result.
 					td.RowCount = 0
 					td.DataLength = 0
 				}
+
+				schemas[i] = schema
 			}
+
+			resp.Schemas = schemas
 		}
 
 		assert.NoError(t, err)
