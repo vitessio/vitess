@@ -183,16 +183,24 @@ type messageManager struct {
 	isOpen bool
 	// cond waits on curReceiver == -1 || cache.IsEmpty():
 	// No current receivers available or cache is empty.
-	cond      sync.Cond
-	cache     *cache
-	receivers []*receiverWithStatus
-	// Way to track the receiver count in a consistent way w/o locks
-	receiverCount   sync2.AtomicInt64
-	curReceiver     int64
-	messagesPending sync2.AtomicBool
+	cond            sync.Cond
+	cache           *cache
+	receivers       []*receiverWithStatus
+	curReceiver     int
+	messagesPending bool
 
-	// streamMu keeps the cache and database consistent with each other.
-	// Specifically:
+	// lastPostionMu protects the lastPollPosition variable which is the main
+	// point of coordination between the poller and the binlog streamer to
+	// ensure that we are not re-processing older events.
+	lastPollPositionMu sync.Mutex
+	lastPollPosition   *mysql.Position
+
+	// streamProcessingMu keeps the cache and database consistent with
+	// each other by ensuring that only one of the streams is processing
+	// changes at a time. The Poller uses a results streamer to pull directly
+	// from the message table and the message manager uses a binlog streamer
+	// to process change events. This mutex ensures that only one of them are
+	// updating the cache at any one time.
 	// It prevents items from being removed from cache while the poller
 	// reads from the db and adds items to it. Otherwise, the poller
 	// might add an older snapshot of a row that was just postponed.
@@ -201,12 +209,11 @@ type messageManager struct {
 	// lastPollPosition must be ignored by the vstream. It consequently
 	// also blocks vstream from updating the cache while the poller is
 	// active.
-	streamMu sync.Mutex
+	streamProcessingMu sync.Mutex
 	// streamCancel is set when a vstream is running, and is reset
-	// to nil after a cancel. This allows for startVStream and stopVstream
+	// to nil after a cancel. This allows for startVStream and stopVStream
 	// to be idempotent.
-	streamCancel     func()
-	lastPollPosition *mysql.Position
+	streamCancel func()
 
 	// wg is for ensuring all running goroutines have returned
 	// before we can close the manager. You need to Add before
@@ -241,7 +248,7 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, pos
 		pollerTicks:     timer.NewTimer(table.MessageInfo.PollInterval),
 		purgeTicks:      timer.NewTimer(table.MessageInfo.PollInterval),
 		postponeSema:    postponeSema,
-		messagesPending: sync2.NewAtomicBool(true),
+		messagesPending: true,
 	}
 	mm.cond.L = &mm.mu
 
@@ -366,7 +373,6 @@ func (mm *messageManager) Close() {
 	for _, rcvr := range mm.receivers {
 		rcvr.receiver.cancel()
 	}
-	mm.receiverCount.Set(0)
 	mm.receivers = nil
 	MessageStats.Set([]string{mm.name.String(), "ClientCount"}, 0)
 	log.Infof("messageManager - clearing cache")
@@ -406,12 +412,11 @@ func (mm *messageManager) Subscribe(ctx context.Context, send func(*sqltypes.Res
 	withStatus := &receiverWithStatus{
 		receiver: receiver,
 	}
-	if mm.receiverCount.Get() == 0 {
+	if len(mm.receivers) == 0 {
 		mm.startVStream()
 	}
 	mm.receivers = append(mm.receivers, withStatus)
-	mm.receiverCount.Add(1)
-	MessageStats.Set([]string{mm.name.String(), "ClientCount"}, mm.receiverCount.Get())
+	MessageStats.Set([]string{mm.name.String(), "ClientCount"}, int64(len(mm.receivers)))
 	if mm.curReceiver == -1 {
 		mm.rescanReceivers(-1)
 	}
@@ -432,17 +437,16 @@ func (mm *messageManager) unsubscribe(receiver *messageReceiver) {
 			continue
 		}
 		// Delete the item at current position.
-		n := mm.receiverCount.Get()
+		n := len(mm.receivers)
 		copy(mm.receivers[i:n-1], mm.receivers[i+1:n])
 		mm.receivers = mm.receivers[0 : n-1]
-		mm.receiverCount.Add(-1)
-		MessageStats.Set([]string{mm.name.String(), "ClientCount"}, mm.receiverCount.Get())
+		MessageStats.Set([]string{mm.name.String(), "ClientCount"}, int64(len(mm.receivers)))
 		break
 	}
 	// curReceiver is obsolete. Recompute.
 	mm.rescanReceivers(-1)
 	// If there are no receivers. Shut down the cache.
-	if mm.receiverCount.Get() == 0 {
+	if len(mm.receivers) == 0 {
 		mm.stopVStream()
 		mm.cache.Clear()
 	}
@@ -454,10 +458,10 @@ func (mm *messageManager) unsubscribe(receiver *messageReceiver) {
 // was previously -1, it broadcasts. If none was found,
 // curReceiver is set to -1. If there's no starting point,
 // it must be specified as -1.
-func (mm *messageManager) rescanReceivers(start int64) {
+func (mm *messageManager) rescanReceivers(start int) {
 	cur := start
 	for range mm.receivers {
-		cur = (cur + 1) % mm.receiverCount.Get()
+		cur = (cur + 1) % len(mm.receivers)
 		if !mm.receivers[cur].busy {
 			if mm.curReceiver == -1 {
 				mm.cond.Broadcast()
@@ -474,7 +478,7 @@ func (mm *messageManager) rescanReceivers(start int64) {
 // if successful. If the message is already present,
 // it still returns true.
 func (mm *messageManager) Add(mr *MessageRow) bool {
-	if mm.receiverCount.Get() == 0 {
+	if mm.getReceiverCount() == 0 {
 		return false
 	}
 	// If cache is empty, we have to broadcast that we're not empty
@@ -484,7 +488,7 @@ func (mm *messageManager) Add(mr *MessageRow) bool {
 	}
 	if !mm.cache.Add(mr) {
 		// Cache is full. Enter "messagesPending" mode.
-		mm.messagesPending.Set(true)
+		mm.messagesPending = true
 		return false
 	}
 	return true
@@ -515,7 +519,7 @@ func (mm *messageManager) runSend() {
 
 			// If cache became empty, there are messages pending, and there are subscribed
 			// receivers, we have to trigger the poller to fetch more.
-			if mm.cache.IsEmpty() && mm.messagesPending.Get() && mm.receiverCount.Get() != 0 {
+			if mm.cache.IsEmpty() && mm.messagesPending && len(mm.receivers) != 0 {
 				// Do this as a separate goroutine. Otherwise, this could cause
 				// the following deadlock:
 				// 1. runSend obtains a lock
@@ -575,12 +579,12 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 	}
 
 	defer func() {
-		// Hold streamMu to prevent the ids from being discarded
+		// Hold streamProcessingMu to prevent the ids from being discarded
 		// if poller is active. Otherwise, it could have read a
 		// snapshot of a row before the postponement and requeue
 		// the message.
-		mm.streamMu.Lock()
-		defer mm.streamMu.Unlock()
+		mm.streamProcessingMu.Lock()
+		defer mm.streamProcessingMu.Unlock()
 		mm.cache.Discard(ids)
 	}()
 
@@ -621,8 +625,6 @@ func (mm *messageManager) postpone(tsv TabletService, ackWaitTime time.Duration,
 }
 
 func (mm *messageManager) startVStream() {
-	mm.streamMu.Lock()
-	defer mm.streamMu.Unlock()
 	if mm.streamCancel != nil {
 		return
 	}
@@ -632,10 +634,6 @@ func (mm *messageManager) startVStream() {
 }
 
 func (mm *messageManager) stopVStream() {
-	log.Infof("messageManager - stopVStream called. Acquiring streamMu lock")
-	mm.streamMu.Lock()
-	log.Infof("messageManager - acquired streamMu lock")
-	defer mm.streamMu.Unlock()
 	log.Infof("messageManager - calling stream cancel")
 	if mm.streamCancel != nil {
 		mm.streamCancel()
@@ -670,8 +668,8 @@ func (mm *messageManager) runOneVStream(ctx context.Context) error {
 	var fields []*querypb.Field
 
 	err := mm.vs.Stream(ctx, "current", nil, mm.vsFilter, func(events []*binlogdatapb.VEvent) error {
-		mm.streamMu.Lock()
-		defer mm.streamMu.Unlock()
+		mm.streamProcessingMu.Lock()
+		defer mm.streamProcessingMu.Unlock()
 
 		select {
 		case <-ctx.Done():
@@ -680,6 +678,8 @@ func (mm *messageManager) runOneVStream(ctx context.Context) error {
 		}
 
 		mustSkip := func() (bool, error) {
+			mm.lastPollPositionMu.Lock()
+			defer mm.lastPollPositionMu.Unlock()
 			if mm.lastPollPosition == nil {
 				return false, nil
 			}
@@ -754,13 +754,13 @@ func (mm *messageManager) processRowEvent(fields []*querypb.Field, rowEvent *bin
 }
 
 func (mm *messageManager) runPoller() {
+	mm.mu.Lock()
+	defer mm.mu.Unlock()
+
 	// Fast-path. Skip all the work.
-	if mm.receiverCount.Get() == 0 {
+	if len(mm.receivers) == 0 {
 		return
 	}
-
-	mm.getExclusiveLock()
-	defer mm.releaseExclusiveLock()
 
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), mm.pollerTicks.Interval())
 	defer func() {
@@ -774,17 +774,20 @@ func (mm *messageManager) runPoller() {
 		"max":       sqltypes.Int64BindVariable(int64(size)),
 	}
 
+	mm.streamProcessingMu.Lock()
+	defer mm.streamProcessingMu.Unlock()
+
 	qr, err := mm.readPending(ctx, bindVars)
 	if err != nil {
 		return
 	}
 
-	mm.messagesPending.Set(false)
+	mm.messagesPending = false
 	if len(qr.Rows) >= size {
 		// There are probably more messages to be sent.
-		mm.messagesPending.Set(true)
+		mm.messagesPending = true
 	}
-	if mm.receiverCount.Get() == 0 {
+	if len(mm.receivers) == 0 {
 		// Almost never reachable because we just checked this.
 		return
 	}
@@ -801,7 +804,7 @@ func (mm *messageManager) runPoller() {
 			continue
 		}
 		if !mm.cache.Add(mr) {
-			mm.messagesPending.Set(true)
+			mm.messagesPending = true
 			return
 		}
 	}
@@ -926,6 +929,8 @@ func (mm *messageManager) readPending(ctx context.Context, bindVars map[string]*
 	}
 	qr := &sqltypes.Result{}
 	err = mm.vs.StreamResults(ctx, query, func(response *binlogdatapb.VStreamResultsResponse) error {
+		mm.lastPollPositionMu.Lock()
+		defer mm.lastPollPositionMu.Unlock()
 		if response.Fields != nil {
 			qr.Fields = response.Fields
 		}
@@ -947,15 +952,14 @@ func (mm *messageManager) readPending(ctx context.Context, bindVars map[string]*
 	return qr, err
 }
 
-// This grants the caller exclusive access to the message service.
-// When this is needed for a function, you can use this to
-// enforce consistent locking order.
-func (mm *messageManager) getExclusiveLock() {
+func (mm *messageManager) getReceiverCount() int {
 	mm.mu.Lock()
-	mm.streamMu.Lock()
+	defer mm.mu.Unlock()
+	return len(mm.receivers)
 }
 
-func (mm *messageManager) releaseExclusiveLock() {
-	mm.streamMu.Unlock()
-	mm.mu.Unlock()
+func (mm *messageManager) getLastPollPosition() *mysql.Position {
+	mm.lastPollPositionMu.Lock()
+	defer mm.lastPollPositionMu.Unlock()
+	return mm.lastPollPosition
 }
