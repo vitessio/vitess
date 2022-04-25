@@ -319,13 +319,16 @@
         "Name": "priority"
       },
       {
-        "Name": "time_next"
-      },
-      {
         "Name": "epoch"
       },
       {
+        "Name": "time_next"
+      },
+      {
         "Name": "time_acked"
+      },
+      {
+        "Name": "tenant_id"
       },
       {
         "Name": "message"
@@ -348,7 +351,7 @@
     "PKColumns": [
       0
     ],
-    "Type": 0
+    "Type": 2
   },
   {
     "Name": "dual",
