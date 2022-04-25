@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
@@ -1329,6 +1330,7 @@ func TestGetSchema(t *testing.T) {
 		req       *vtadminpb.GetSchemaRequest
 		expected  *vtadminpb.Schema
 		shouldErr bool
+		skipCache bool
 	}{
 		{
 			name:      "success",
@@ -1497,6 +1499,7 @@ func TestGetSchema(t *testing.T) {
 					},
 				},
 			},
+			skipCache: true,
 			req: &vtadminpb.GetSchemaRequest{
 				ClusterId: "c1",
 				Keyspace:  "testkeyspace",
@@ -1531,6 +1534,11 @@ func TestGetSchema(t *testing.T) {
 					Tablets:      tt.tablets,
 				})
 				api := NewAPI([]*cluster.Cluster{c}, Options{})
+
+				ctx := ctx
+				if tt.skipCache {
+					ctx = cache.NewIncomingRefreshContext(ctx)
+				}
 
 				resp, err := api.GetSchema(ctx, tt.req)
 				if tt.shouldErr {
