@@ -563,13 +563,6 @@ func (session *SafeSession) GetSessionEnableSystemSettings() bool {
 	return session.EnableSystemSettings
 }
 
-// GetEnableSetVar returns the EnableSetVar value.
-func (session *SafeSession) GetEnableSetVar() bool {
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	return session.EnableSetVar
-}
-
 // SetReadAfterWriteGTID set the ReadAfterWriteGtid setting.
 func (session *SafeSession) SetReadAfterWriteGTID(vtgtid string) {
 	session.mu.Lock()
