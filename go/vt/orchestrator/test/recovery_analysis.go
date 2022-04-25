@@ -32,7 +32,6 @@ type InfoForRecoveryAnalysis struct {
 	PrimaryTabletInfo                         *topodatapb.Tablet
 	PrimaryTimestamp                          *time.Time
 	IsPrimary                                 int
-	CountCoPrimaryReplicas                    uint
 	IsCoPrimary                               int
 	Hostname                                  string
 	Port                                      int
@@ -91,7 +90,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["binary_log_file"] = sqlutils.CellData{String: info.LogFile, Valid: true}
 	rowMap["binary_log_pos"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.LogPos), Valid: true}
 	rowMap["cluster_alias"] = sqlutils.CellData{String: info.ClusterAlias, Valid: true}
-	rowMap["cluster_domain"] = sqlutils.CellData{String: info.ClusterAlias, Valid: true}
+	rowMap["cluster_domain"] = sqlutils.CellData{String: info.ClusterDomain, Valid: true}
 	rowMap["cluster_name"] = sqlutils.CellData{String: info.ClusterName, Valid: true}
 	rowMap["count_binlog_server_replicas"] = sqlutils.CellData{Valid: false}
 	rowMap["count_co_primary_replicas"] = sqlutils.CellData{Valid: false}
@@ -103,7 +102,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["count_mariadb_gtid_replicas"] = sqlutils.CellData{Valid: false}
 	rowMap["count_mixed_based_logging_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountMixedBasedLoggingReplicas), Valid: true}
 	rowMap["count_oracle_gtid_replicas"] = sqlutils.CellData{Valid: false}
-	rowMap["count_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountValidReplicas), Valid: true}
+	rowMap["count_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountReplicas), Valid: true}
 	rowMap["count_replicas_failing_to_connect_to_primary"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountReplicasFailingToConnectToPrimary), Valid: true}
 	rowMap["count_row_based_logging_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountRowBasedLoggingReplicas), Valid: true}
 	rowMap["count_semi_sync_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountSemiSyncReplicasEnabled), Valid: true}
