@@ -241,3 +241,21 @@ func (c *Cache[Key, Value]) backfill() {
 		}
 	}
 }
+
+// Debug implements debug.Debuggable for Cache.
+func (c *Cache[Key, Value]) Debug() map[string]any {
+	m := map[string]any{
+		"size":                  c.cache.ItemCount(), // NOTE: this may include expired items that have not been evicted yet.
+		"config":                c.cfg,
+		"backfill_queue_length": len(c.backfills),
+		"closed":                false,
+	}
+
+	select {
+	case <-c.ctx.Done():
+		m["closed"] = true
+	default:
+	}
+
+	return m
+}

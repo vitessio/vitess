@@ -1775,6 +1775,9 @@ func (c *Cluster) Debug() map[string]any {
 			"topo_rw_pool":       json.RawMessage(c.topoRWPool.StatsJSON()),
 			"workflow_read_pool": json.RawMessage(c.workflowReadPool.StatsJSON()),
 		},
+		"caches": map[string]any{
+			"schemas": c.schemaCache.Debug(),
+		},
 	}
 
 	if vtsql, ok := c.DB.(debug.Debuggable); ok {
