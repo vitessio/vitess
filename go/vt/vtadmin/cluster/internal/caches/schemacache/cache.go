@@ -160,6 +160,10 @@ func LoadOne(c *schemaCache, key Key, opts LoadOptions) (schema *vtadminpb.Schem
 		return nil, found, err
 	}
 
+	if !found {
+		return nil, found, nil
+	}
+
 	if len(schemas) != 1 {
 		err = vterrors.Errorf(vtrpc.Code_INTERNAL, "impossible: cache should have exactly 1 schema for request %+v (have %d)", key, len(schemas))
 		log.Errorf(err.Error())
