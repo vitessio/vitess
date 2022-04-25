@@ -44,6 +44,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
+var testMessage = "{\"message\":\"hello world\"}"
+var testShardedMessagef = "{\"message\": \"hello world\", \"id\": %d}"
+
 var createMessage = `
 create table vitess_message(
 	# required columns
@@ -95,8 +98,11 @@ func TestMessage(t *testing.T) {
 		Name: "id",
 		Type: sqltypes.Int64,
 	}, {
+		Name: "tenant_id",
+		Type: sqltypes.Int64,
+	}, {
 		Name: "message",
-		Type: sqltypes.VarChar,
+		Type: sqltypes.TypeJSON,
 	}}
 	gotFields, err := streamConn.Fields()
 	for i, field := range gotFields {
@@ -109,7 +115,7 @@ func TestMessage(t *testing.T) {
 	require.NoError(t, err)
 	cmp.MustMatch(t, wantFields, gotFields)
 
-	utils.Exec(t, conn, "insert into vitess_message(id, message) values(1, 'hello world')")
+	utils.Exec(t, conn, fmt.Sprintf("insert into vitess_message(id, tenant_id, message) values(1, 1, '%s')", testMessage))
 
 	// account for jitter in timings, maxJitter uses the current hardcoded value for jitter in message_manager.go
 	jitter := int64(0)
@@ -122,7 +128,8 @@ func TestMessage(t *testing.T) {
 
 	want := []sqltypes.Value{
 		sqltypes.NewInt64(1),
-		sqltypes.NewVarChar("hello world"),
+		sqltypes.NewInt64(1),
+		sqltypes.TestValue(sqltypes.TypeJSON, testMessage),
 	}
 	cmp.MustMatch(t, want, got)
 
@@ -226,6 +233,12 @@ func TestThreeColMessage(t *testing.T) {
 		Name: "id",
 		Type: sqltypes.Int64,
 	}, {
+		Name: "tenant_id",
+		Type: sqltypes.Int64,
+	}, {
+		Name: "message",
+		Type: sqltypes.TypeJSON,
+	}, {
 		Name: "msg1",
 		Type: sqltypes.VarChar,
 	}, {
@@ -243,12 +256,14 @@ func TestThreeColMessage(t *testing.T) {
 	require.NoError(t, err)
 	cmp.MustMatch(t, wantFields, gotFields)
 
-	utils.Exec(t, conn, "insert into vitess_message3(id, msg1, msg2) values(1, 'hello world', 3)")
+	utils.Exec(t, conn, fmt.Sprintf("insert into vitess_message3(id, tenant_id, message, msg1, msg2) values(1, 3, '%s', 'hello world', 3)", testMessage))
 
 	got, err := streamConn.FetchNext(nil)
 	require.NoError(t, err)
 	want := []sqltypes.Value{
 		sqltypes.NewInt64(1),
+		sqltypes.NewInt64(3),
+		sqltypes.TestValue(sqltypes.TypeJSON, testMessage),
 		sqltypes.NewVarChar("hello world"),
 		sqltypes.NewInt64(3),
 	}
@@ -315,7 +330,8 @@ func TestReparenting(t *testing.T) {
 	assertClientCount(t, 1, shard0Replica)
 	assertClientCount(t, 1, shard1Primary)
 	session := stream.Session("@primary", nil)
-	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (3,'hello world 3')")
+	msg3 := fmt.Sprintf(testShardedMessagef, 3)
+	cluster.ExecuteQueriesUsingVtgate(t, session, fmt.Sprintf("insert into sharded_message (id, tenant_id, message) values (3,3,'%s')", msg3))
 
 	// validate that we have received inserted message
 	stream.Next()
@@ -376,8 +392,10 @@ func TestConnection(t *testing.T) {
 	// in message stream
 	session := stream.Session("@primary", nil)
 	// insert data in primary
-	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (2,'hello world 2')")
-	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (5,'hello world 5')")
+	msg2 := fmt.Sprintf(testShardedMessagef, 2)
+	msg5 := fmt.Sprintf(testShardedMessagef, 5)
+	cluster.ExecuteQueriesUsingVtgate(t, session, fmt.Sprintf("insert into sharded_message (id, tenant_id, message) values (2,2,'%s')", msg2))
+	cluster.ExecuteQueriesUsingVtgate(t, session, fmt.Sprintf("insert into sharded_message (id, tenant_id, message) values (5,5,'%s')", msg5))
 	// validate in msg stream
 	_, err = stream.Next()
 	require.Nil(t, err)
@@ -403,15 +421,18 @@ func testMessaging(t *testing.T, name, ks string) {
 	defer stream.Close()
 
 	session := stream.Session("@primary", nil)
-	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into "+name+" (id, message) values (4,'hello world 4')")
-	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into "+name+" (id, message) values (1,'hello world 1')")
+	msg4 := fmt.Sprintf(testShardedMessagef, 4)
+	msg1 := fmt.Sprintf(testShardedMessagef, 1)
+	cluster.ExecuteQueriesUsingVtgate(t, session, fmt.Sprintf("insert into "+name+" (id, tenant_id, message) values (4,4,'%s')", msg4))
+	cluster.ExecuteQueriesUsingVtgate(t, session, fmt.Sprintf("insert into "+name+" (id, tenant_id, message) values (1,1,'%s')", msg1))
 
 	// validate fields
 	res, err := stream.MessageStream(ks, "", nil, name)
 	require.Nil(t, err)
-	require.Equal(t, 2, len(res.Fields))
+	require.Equal(t, 3, len(res.Fields))
 	validateField(t, res.Fields[0], "id", query.Type_INT64)
-	validateField(t, res.Fields[1], "message", query.Type_VARCHAR)
+	validateField(t, res.Fields[1], "tenant_id", query.Type_INT64)
+	validateField(t, res.Fields[2], "message", query.Type_JSON)
 
 	// validate recieved msgs
 	resMap := make(map[string]string)
@@ -429,8 +450,8 @@ func testMessaging(t *testing.T, name, ks string) {
 		}
 	}
 
-	assert.Equal(t, "hello world 1", resMap["1"])
-	assert.Equal(t, "hello world 4", resMap["4"])
+	assert.Equal(t, "1", resMap["1"])
+	assert.Equal(t, "4", resMap["4"])
 
 	resMap = make(map[string]string)
 	stream.ClearMem()
@@ -445,7 +466,7 @@ func testMessaging(t *testing.T, name, ks string) {
 		}
 	}
 
-	assert.Equal(t, "hello world 1", resMap["1"])
+	assert.Equal(t, "1", resMap["1"])
 
 	// validate message ack with 1 and 4, only 1 should be ack
 	qr, err = session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (1, 4) and time_acked is null", nil)
