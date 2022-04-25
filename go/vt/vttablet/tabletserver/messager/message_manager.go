@@ -183,11 +183,13 @@ type messageManager struct {
 	isOpen bool
 	// cond waits on curReceiver == -1 || cache.IsEmpty():
 	// No current receivers available or cache is empty.
-	cond            sync.Cond
-	cache           *cache
-	receivers       []*receiverWithStatus
-	curReceiver     int
-	messagesPending bool
+	cond      sync.Cond
+	cache     *cache
+	receivers []*receiverWithStatus
+	// Way to track the receiver count in a consistent way w/o locks
+	receiverCount   sync2.AtomicInt64
+	curReceiver     int64
+	messagesPending sync2.AtomicBool
 
 	// streamMu keeps the cache and database consistent with each other.
 	// Specifically:
@@ -239,7 +241,7 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, pos
 		pollerTicks:     timer.NewTimer(table.MessageInfo.PollInterval),
 		purgeTicks:      timer.NewTimer(table.MessageInfo.PollInterval),
 		postponeSema:    postponeSema,
-		messagesPending: true,
+		messagesPending: sync2.NewAtomicBool(true),
 	}
 	mm.cond.L = &mm.mu
 
@@ -364,6 +366,7 @@ func (mm *messageManager) Close() {
 	for _, rcvr := range mm.receivers {
 		rcvr.receiver.cancel()
 	}
+	mm.receiverCount.Set(0)
 	mm.receivers = nil
 	MessageStats.Set([]string{mm.name.String(), "ClientCount"}, 0)
 	log.Infof("messageManager - clearing cache")
@@ -403,11 +406,12 @@ func (mm *messageManager) Subscribe(ctx context.Context, send func(*sqltypes.Res
 	withStatus := &receiverWithStatus{
 		receiver: receiver,
 	}
-	if len(mm.receivers) == 0 {
+	if mm.receiverCount.Get() == 0 {
 		mm.startVStream()
 	}
 	mm.receivers = append(mm.receivers, withStatus)
-	MessageStats.Set([]string{mm.name.String(), "ClientCount"}, int64(len(mm.receivers)))
+	mm.receiverCount.Add(1)
+	MessageStats.Set([]string{mm.name.String(), "ClientCount"}, mm.receiverCount.Get())
 	if mm.curReceiver == -1 {
 		mm.rescanReceivers(-1)
 	}
@@ -428,16 +432,17 @@ func (mm *messageManager) unsubscribe(receiver *messageReceiver) {
 			continue
 		}
 		// Delete the item at current position.
-		n := len(mm.receivers)
+		n := mm.receiverCount.Get()
 		copy(mm.receivers[i:n-1], mm.receivers[i+1:n])
 		mm.receivers = mm.receivers[0 : n-1]
-		MessageStats.Set([]string{mm.name.String(), "ClientCount"}, int64(len(mm.receivers)))
+		mm.receiverCount.Add(-1)
+		MessageStats.Set([]string{mm.name.String(), "ClientCount"}, mm.receiverCount.Get())
 		break
 	}
 	// curReceiver is obsolete. Recompute.
 	mm.rescanReceivers(-1)
 	// If there are no receivers. Shut down the cache.
-	if len(mm.receivers) == 0 {
+	if mm.receiverCount.Get() == 0 {
 		mm.stopVStream()
 		mm.cache.Clear()
 	}
@@ -449,10 +454,10 @@ func (mm *messageManager) unsubscribe(receiver *messageReceiver) {
 // was previously -1, it broadcasts. If none was found,
 // curReceiver is set to -1. If there's no starting point,
 // it must be specified as -1.
-func (mm *messageManager) rescanReceivers(start int) {
+func (mm *messageManager) rescanReceivers(start int64) {
 	cur := start
 	for range mm.receivers {
-		cur = (cur + 1) % len(mm.receivers)
+		cur = (cur + 1) % mm.receiverCount.Get()
 		if !mm.receivers[cur].busy {
 			if mm.curReceiver == -1 {
 				mm.cond.Broadcast()
@@ -469,7 +474,7 @@ func (mm *messageManager) rescanReceivers(start int) {
 // if successful. If the message is already present,
 // it still returns true.
 func (mm *messageManager) Add(mr *MessageRow) bool {
-	if mm.receiverCount() == 0 {
+	if mm.receiverCount.Get() == 0 {
 		return false
 	}
 	// If cache is empty, we have to broadcast that we're not empty
@@ -479,7 +484,7 @@ func (mm *messageManager) Add(mr *MessageRow) bool {
 	}
 	if !mm.cache.Add(mr) {
 		// Cache is full. Enter "messagesPending" mode.
-		mm.messagesPending = true
+		mm.messagesPending.Set(true)
 		return false
 	}
 	return true
@@ -510,7 +515,7 @@ func (mm *messageManager) runSend() {
 
 			// If cache became empty, there are messages pending, and there are subscribed
 			// receivers, we have to trigger the poller to fetch more.
-			if mm.cache.IsEmpty() && mm.messagesPending && len(mm.receivers) != 0 {
+			if mm.cache.IsEmpty() && mm.messagesPending.Get() && mm.receiverCount.Get() != 0 {
 				// Do this as a separate goroutine. Otherwise, this could cause
 				// the following deadlock:
 				// 1. runSend obtains a lock
@@ -753,7 +758,7 @@ func (mm *messageManager) runPoller() {
 	defer mm.releaseExclusiveLock()
 
 	// Fast-path. Skip all the work.
-	if len(mm.receivers) == 0 {
+	if mm.receiverCount.Get() == 0 {
 		return
 	}
 
@@ -773,12 +778,12 @@ func (mm *messageManager) runPoller() {
 		return
 	}
 
-	mm.messagesPending = false
+	mm.messagesPending.Set(false)
 	if len(qr.Rows) >= size {
 		// There are probably more messages to be sent.
-		mm.messagesPending = true
+		mm.messagesPending.Set(true)
 	}
-	if len(mm.receivers) == 0 {
+	if mm.receiverCount.Get() == 0 {
 		// Almost never reachable because we just checked this.
 		return
 	}
@@ -795,7 +800,7 @@ func (mm *messageManager) runPoller() {
 			continue
 		}
 		if !mm.cache.Add(mr) {
-			mm.messagesPending = true
+			mm.messagesPending.Set(true)
 			return
 		}
 	}
@@ -909,12 +914,6 @@ func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
 		mr.TimeAcked = v
 	}
 	return mr, nil
-}
-
-func (mm *messageManager) receiverCount() int {
-	mm.mu.Lock()
-	defer mm.mu.Unlock()
-	return len(mm.receivers)
 }
 
 func (mm *messageManager) readPending(ctx context.Context, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {

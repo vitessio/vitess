@@ -148,12 +148,12 @@ func TestReceiverCancel(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		runtime.Gosched()
 		time.Sleep(10 * time.Millisecond)
-		if mm.receiverCount() != 0 {
+		if mm.receiverCount.Get() != 0 {
 			continue
 		}
 		return
 	}
-	t.Errorf("receivers were not cleared: %d", len(mm.receivers))
+	t.Errorf("receivers were not cleared: %d", mm.receiverCount.Get())
 }
 
 func TestMessageManagerState(t *testing.T) {
@@ -281,7 +281,7 @@ func TestMessageManagerSend(t *testing.T) {
 		runtime.Gosched()
 		time.Sleep(10 * time.Millisecond)
 		mm.mu.Lock()
-		if len(mm.receivers) != 1 {
+		if mm.receiverCount.Get() != 1 {
 			mm.mu.Unlock()
 			continue
 		}
