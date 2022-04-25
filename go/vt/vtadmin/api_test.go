@@ -29,6 +29,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/topo"
@@ -1690,6 +1691,9 @@ func TestGetSchema(t *testing.T) {
 		}
 
 		if schema != nil {
+			// Clone so our mutation below doesn't trip the race detector.
+			schema = proto.Clone(schema).(*vtadminpb.Schema)
+
 			for _, td := range schema.TableDefinitions {
 				// Zero these out because they're non-deterministic and also not
 				// relevant to the final result.
