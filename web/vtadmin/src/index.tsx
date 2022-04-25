@@ -33,11 +33,17 @@ const queryClient = new QueryClient({
     },
 });
 
-ReactDOM.render(
+const Root = () => (
     <React.StrictMode>
         <QueryClientProvider client={queryClient}>
             <App />
         </QueryClientProvider>
-    </React.StrictMode>,
-    document.getElementById('root')
+    </React.StrictMode>
 );
+
+const rootElement = document.getElementById('root');
+if (rootElement?.hasChildNodes()) {
+    ReactDOM.hydrate(<Root />, rootElement);
+} else {
+    ReactDOM.render(<Root />, rootElement);
+}

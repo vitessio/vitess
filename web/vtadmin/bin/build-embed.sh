@@ -22,14 +22,26 @@ set -e
 
 # TODO check node version
 # TODO check npm install
+# TODO check that this script can run from anywhere
 
 script_root=$(dirname "${BASH_SOURCE[0]}")
 web_root="$script_root/.."
 
-# The output directory of the build must be in the same package directory
-# (or subdirectory) as the file with the "//go:embed" directive.
-build_path="$script_root/../../../go/vt/vtadmin/web/build"
+# Initially build into the local web/vtadmin/build/ directory,
+# which simplifies the react-snap postbuild step by not requiring
+# a separate "reactSnap.source" config in the package.json".
+build_path="$web_root/build"
 
-BUILD_PATH=$build_path \
+# Clear out any existing build, since react-snap requires a clean directory.
+rm -rf "$build_path"
+
+# The destination directory of the build must be in the same package directory
+# (or subdirectory) as the file with the "//go:embed" directive.
+dest_path="$script_root/../../../go/vt/vtadmin/web/build"
+
+BUILD_PATH="$build_path" \
     REACT_APP_VTADMIN_API_ADDRESS="" \
-    node "$web_root/node_modules/.bin/react-scripts" build
+    npm --prefix "$web_root" run build
+
+rm -rf "$dest_path"
+mv "$build_path" "$dest_path"
