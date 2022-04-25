@@ -128,7 +128,7 @@ func (t *noopVCursor) GetSessionEnableSystemSettings() bool {
 	panic("implement me")
 }
 
-func (t *noopVCursor) GetEnableSetVar() bool {
+func (t *noopVCursor) CanUseSetVar() bool {
 	panic("implement me")
 }
 
@@ -689,9 +689,12 @@ func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {
 	return r, nil
 }
 
-func (f *loggingVCursor) GetEnableSetVar() bool {
-	f.log = append(f.log, fmt.Sprintf("SET_VAR enabled: %v", !f.disableSetVar))
-	return !f.disableSetVar
+func (f *loggingVCursor) CanUseSetVar() bool {
+	useSetVar := sqlparser.IsMySQL80AndAbove() && !f.disableSetVar
+	if useSetVar {
+		f.log = append(f.log, "SET_VAR can be used")
+	}
+	return useSetVar
 }
 
 func expectResult(t *testing.T, msg string, result, want *sqltypes.Result) {

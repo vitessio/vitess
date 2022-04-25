@@ -160,8 +160,9 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 	executor.normalize = true
 
 	sqlparser.MySQLVersion = "57000"
+	*setVarEnabled = true
 
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSetVar: true, EnableSystemSettings: true, TargetString: "TestExecutor"})
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -195,8 +196,11 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 	executor.normalize = true
 
 	sqlparser.MySQLVersion = "80000"
-
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSetVar: false, EnableSystemSettings: true, TargetString: "TestExecutor"})
+	*setVarEnabled = false
+	defer func() {
+		*setVarEnabled = true
+	}()
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -231,7 +235,7 @@ func TestSetSystemVariablesTx(t *testing.T) {
 
 	sqlparser.MySQLVersion = "80001"
 
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSetVar: true, EnableSystemSettings: true, TargetString: "TestExecutor"})
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
 	_, err := executor.Execute(context.Background(), "TestBegin", session, "begin", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
@@ -279,7 +283,7 @@ func TestSetSystemVariables(t *testing.T) {
 
 	sqlparser.MySQLVersion = "80001"
 
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSetVar: true, EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
 
 	// Set @@sql_mode and execute a select statement. We should have SET_VAR in the select statement
 

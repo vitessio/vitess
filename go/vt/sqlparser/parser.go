@@ -303,3 +303,7 @@ loop:
 	err = tokenizer.LastError
 	return
 }
+
+func IsMySQL80AndAbove() bool {
+	return MySQLVersion >= "80000"
+}
