@@ -767,11 +767,6 @@ func (vc *vcursorImpl) GetSessionEnableSystemSettings() bool {
 	return vc.safeSession.GetSessionEnableSystemSettings()
 }
 
-// GetEnableSetVar implements the SessionActions interface
-func (vc *vcursorImpl) GetEnableSetVar() bool {
-	return vc.safeSession.GetEnableSetVar()
-}
-
 // SetReadAfterWriteGTID implements the SessionActions interface
 func (vc *vcursorImpl) SetReadAfterWriteGTID(vtgtid string) {
 	vc.safeSession.SetReadAfterWriteGTID(vtgtid)
@@ -956,4 +951,8 @@ func (vc *vcursorImpl) GetSrvVschema() *vschemapb.SrvVSchema {
 
 func (vc *vcursorImpl) SetExec(name string, value string) error {
 	return vc.executor.setVitessMetadata(vc.ctx, name, value)
+}
+
+func (vc *vcursorImpl) CanUseSetVar() bool {
+	return sqlparser.IsMySQL80AndAbove() && *setVarEnabled
 }
