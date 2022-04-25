@@ -370,6 +370,59 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 	return nil
 }
 
+// rangePartitionsAddedRemoved returns true when:
+// - both table partitions are RANGE type
+// - there is exactly one consequitive non-empty shared sequence of partitions (same names, same range values, in same order)
+// - table1 may have non-empty list of partitions _preceding_ this sequence, and table2 may not
+// - table2 may have non-empty list of partitions _following_ this sequence, and table1 may not
+func (c *CreateTableEntity) isRangePartitionsRotation(
+	t1Partitions *sqlparser.PartitionOption,
+	t2Partitions *sqlparser.PartitionOption,
+) (bool, []sqlparser.AlterOption) {
+	// Validate that both tables have range partitioning
+	if t1Partitions.Type != t2Partitions.Type {
+		return false, nil
+	}
+	if t1Partitions.Type != sqlparser.RangeType {
+		return false, nil
+	}
+	definitions1 := t1Partitions.Definitions
+	definitions2 := t2Partitions.Definitions
+	// there has to be a non-empty shared list, therefore both definitions must be non-empty:
+	if len(definitions1) == 0 {
+		return false, nil
+	}
+	if len(definitions2) == 0 {
+		return false, nil
+	}
+	// It's OK for prefix of t1 partitions to be nonexistent in t2 (as they may have been rotated away in t2)
+	for len(definitions1) > 0 && sqlparser.String(definitions1[0]) != sqlparser.String(definitions2[0]) {
+		definitions1 = definitions1[1:]
+	}
+	if len(definitions1) == 0 {
+		// We've exhaused definition1 trying to find a shared partition with definitions2. Nothing found.
+		// so there is no shared sequence between the two tables.
+		return false, nil
+	}
+	if len(definitions1) > len(definitions2) {
+		return false, nil
+	}
+	// To save computation, and ecause we've already shown that sqlparser.String(definitions1[0]) == sqlparser.String(definitions2[0]),
+	// we can skip one element
+	definitions1 = definitions1[1:]
+	definitions2 = definitions2[1:]
+	// Now let's ensure that whatever is remaining in definitions1 is an exact match for a prefix of definitions2
+	// It's ok if we end up with leftover elements in definition2
+	for len(definitions1) > 0 {
+		if sqlparser.String(definitions1[0]) != sqlparser.String(definitions2[0]) {
+			return false, nil
+		}
+		definitions1 = definitions1[1:]
+		definitions2 = definitions2[1:]
+	}
+	return true, nil
+}
+
 func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 	t1Partitions *sqlparser.PartitionOption,
 	t2Partitions *sqlparser.PartitionOption,
@@ -393,12 +446,26 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 		return nil
 	default:
 		// partitioning was changed
-		// we produce a complete re-partitioing schema. What we don't do is try and figure out the minimal
+		// For most cases, we produce a complete re-partitioing schema: we don't try and figure out the minimal
 		// needed change. For example, maybe the minimal change is to REORGANIZE a specific partition and split
 		// into two, thus unaffecting the rest of the partitions. But we don't evaluate that, we just set a
 		// complete new ALTER TABLE ... PARTITION BY statement.
 		// The idea is that it doesn't matter: we're not looking to do optimal in-place ALTERs, we run
 		// Online DDL alters, where we create a new table anyway. Thus, the optimization is meaningless.
+
+		// Having said that, we _do_ analyze the scenario of a RANGE partitioning rotation of partitions:
+		// where zero or more partitions may have been dropped from the earlier range, and zero or more
+		// partitions have been added with a later range:
+		if isRotation, _ := c.isRangePartitionsRotation(t1Partitions, t2Partitions); isRotation {
+			switch hints.RangeRotationStrategy {
+			case RangeRotationIgnore:
+				return nil
+			case RangeRotationStatements:
+				return ErrRangeRotattionStatementsStrategyUnsupported
+			case RangeRotationFullSpec:
+				// proceed to return a full rebuild
+			}
+		}
 		alterTable.PartitionOption = t2Partitions
 	}
 	return nil
