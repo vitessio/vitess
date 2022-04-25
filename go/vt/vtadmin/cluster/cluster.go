@@ -141,6 +141,9 @@ func New(cfg Config) (*Cluster, error) {
 	cluster.topoReadPool = cfg.TopoReadPoolConfig.NewReadPool()
 	cluster.workflowReadPool = cfg.WorkflowReadPoolConfig.NewReadPool()
 
+	if cluster.cfg.SchemaCacheConfig == nil {
+		cluster.cfg.SchemaCacheConfig = &cache.Config{}
+	}
 	cluster.schemaCache = cache.New(func(ctx context.Context, key schemacache.Key) ([]*vtadminpb.Schema, error) {
 		// TODO: make a private method to separate the fetching bits from the cache bits
 		if key.Keyspace == "" {
@@ -171,14 +174,7 @@ func New(cfg Config) (*Cluster, error) {
 		}
 
 		return []*vtadminpb.Schema{schema}, nil
-	}, cache.Config{ // TODO: need to have config flags for this
-		DefaultExpiration:                10 * time.Minute,
-		CleanupInterval:                  60 * time.Minute,
-		BackfillRequestTTL:               1 * time.Minute,
-		BackfillRequestDuplicateInterval: 5 * time.Minute,
-		BackfillQueueSize:                10,
-		BackfillEnqueueWaitTime:          30 * time.Second,
-	})
+	}, *cluster.cfg.SchemaCacheConfig)
 
 	return cluster, nil
 }
