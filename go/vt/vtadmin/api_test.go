@@ -2224,17 +2224,14 @@ func TestGetSchemas(t *testing.T) {
 
 				api := NewAPI(clusters, Options{})
 
+				// TODO (ajm188): get these tests working with the cache
+				// there's a race caused by data sharing with the single fake
+				// TabletManagerClient across multiple clusters.
+				ctx := cache.NewIncomingRefreshContext(ctx)
 				resp, err := api.GetSchemas(ctx, tt.req)
 				require.NoError(t, err)
 
-				// Clone schemas so our mutations below don't trip the race detector.
-				schemas := make([]*vtadminpb.Schema, len(resp.Schemas))
-				for i, schema := range resp.Schemas {
-					schema := proto.Clone(schema).(*vtadminpb.Schema)
-					schemas[i] = schema
-				}
-
-				vtadmintestutil.AssertSchemaSlicesEqual(t, tt.expected.Schemas, schemas)
+				vtadmintestutil.AssertSchemaSlicesEqual(t, tt.expected.Schemas, resp.Schemas)
 			}, vtctlds...)
 		})
 	}
