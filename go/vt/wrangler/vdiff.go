@@ -467,7 +467,7 @@ func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs sqlparser.SelectExprs
 	if df.sourceTimeZone == "" {
 		return targetSelectExprs
 	}
-	log.Infof("found source time zone %s", df.sourceTimeZone)
+	log.Infof("source time zone specified: %s", df.sourceTimeZone)
 	var newSelectExprs sqlparser.SelectExprs
 	var modified bool
 	for _, expr := range targetSelectExprs {

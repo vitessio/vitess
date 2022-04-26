@@ -65,7 +65,7 @@ func TestMoveTablesTZ(t *testing.T) {
 	loadTimeZoneInfo := func(tab *cluster.VttabletProcess, sql, timezone string) {
 		_, err := tab.QueryTabletWithDB(timeZoneSQL, "mysql")
 		require.NoError(t, err)
-		timer := time.NewTimer(5 * time.Second)
+		timer := time.NewTimer(1 * time.Minute)
 		for {
 			select {
 			case <-timer.C:
@@ -124,7 +124,7 @@ func TestMoveTablesTZ(t *testing.T) {
 
 	require.Equal(t, len(qrSourceUSPacific.Rows), len(qrTargetUTC.Rows))
 
-	pst, err := time.LoadLocation("US/Pacific")
+	pacificLocation, err := time.LoadLocation("US/Pacific")
 	require.NoError(t, err)
 
 	// for reference the columns in the test are as follows:
@@ -147,7 +147,7 @@ func TestMoveTablesTZ(t *testing.T) {
 		require.NoError(t, err)
 		sourceUSPacific := dt2b.Unix()
 
-		dtt := dt2b.In(pst)
+		dtt := dt2b.In(pacificLocation)
 		zone, _ := dtt.Zone()
 		var hoursBehind int64
 		if zone == "PDT" { // daylight savings is on

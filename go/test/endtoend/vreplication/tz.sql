@@ -1,4 +1,7 @@
 # install only US/Pacific and UTC timezones, for e2e tests
+# this file is a subset of the output of "mysql_tzinfo_to_sql /usr/share/zoneinfo"
+# each time zone set starts with an "insert into time_zone". So we cut/paste all inserts from the start of our
+# candidate time zone upto the next one.
 TRUNCATE TABLE time_zone;
 TRUNCATE TABLE time_zone_name;
 TRUNCATE TABLE time_zone_transition;
