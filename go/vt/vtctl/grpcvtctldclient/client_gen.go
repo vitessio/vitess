@@ -362,6 +362,15 @@ func (client *gRPCVtctldClient) GetTablets(ctx context.Context, in *vtctldatapb.
 	return client.c.GetTablets(ctx, in, opts...)
 }
 
+// GetTopology is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetTopology(ctx context.Context, in *vtctldatapb.GetTopologyRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTopologyResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetTopology(ctx, in, opts...)
+}
+
 // GetVSchema is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetVSchema(ctx context.Context, in *vtctldatapb.GetVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetVSchemaResponse, error) {
 	if client.c == nil {

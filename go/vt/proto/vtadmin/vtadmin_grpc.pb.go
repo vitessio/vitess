@@ -79,6 +79,8 @@ type VTAdminClient interface {
 	GetWorkflow(ctx context.Context, in *GetWorkflowRequest, opts ...grpc.CallOption) (*Workflow, error)
 	// GetWorkflows returns the Workflows for all specified clusters.
 	GetWorkflows(ctx context.Context, in *GetWorkflowsRequest, opts ...grpc.CallOption) (*GetWorkflowsResponse, error)
+	// GetTopology returns the topology for the specified cluster
+	GetTopology(ctx context.Context, in *vtctldata.GetTopologyRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
 	PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error)
 	// RefreshState reloads the tablet record on the specified tablet.
@@ -320,6 +322,15 @@ func (c *vTAdminClient) GetWorkflows(ctx context.Context, in *GetWorkflowsReques
 	return out, nil
 }
 
+func (c *vTAdminClient) GetTopology(ctx context.Context, in *vtctldata.GetTopologyRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyResponse, error) {
+	out := new(vtctldata.GetTopologyResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetTopology", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error) {
 	out := new(PingTabletResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/PingTablet", in, out, opts...)
@@ -488,6 +499,8 @@ type VTAdminServer interface {
 	GetWorkflow(context.Context, *GetWorkflowRequest) (*Workflow, error)
 	// GetWorkflows returns the Workflows for all specified clusters.
 	GetWorkflows(context.Context, *GetWorkflowsRequest) (*GetWorkflowsResponse, error)
+	// GetTopology returns the topology for the specified cluster
+	GetTopology(context.Context, *vtctldata.GetTopologyRequest) (*vtctldata.GetTopologyResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
 	PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error)
 	// RefreshState reloads the tablet record on the specified tablet.
@@ -587,6 +600,9 @@ func (UnimplementedVTAdminServer) GetWorkflow(context.Context, *GetWorkflowReque
 }
 func (UnimplementedVTAdminServer) GetWorkflows(context.Context, *GetWorkflowsRequest) (*GetWorkflowsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWorkflows not implemented")
+}
+func (UnimplementedVTAdminServer) GetTopology(context.Context, *vtctldata.GetTopologyRequest) (*vtctldata.GetTopologyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTopology not implemented")
 }
 func (UnimplementedVTAdminServer) PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PingTablet not implemented")
@@ -1051,6 +1067,24 @@ func _VTAdmin_GetWorkflows_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_GetTopology_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetTopologyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetTopology(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetTopology",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetTopology(ctx, req.(*vtctldata.GetTopologyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_PingTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PingTabletRequest)
 	if err := dec(in); err != nil {
@@ -1365,6 +1399,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetWorkflows",
 			Handler:    _VTAdmin_GetWorkflows_Handler,
+		},
+		{
+			MethodName: "GetTopology",
+			Handler:    _VTAdmin_GetTopology_Handler,
 		},
 		{
 			MethodName: "PingTablet",

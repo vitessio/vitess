@@ -681,6 +681,20 @@ message GetTabletsResponse {
   repeated topodata.Tablet tablets = 1;
 }
 
+message GetTopologyRequest {
+  string cluster_id = 1;
+}
+
+message GetTopologyResponse {
+  repeated TopologyCell cells = 1;
+}
+
+message TopologyCell {
+  string name = 1;
+  string data = 2;
+  repeated TopologyCell children = 3;
+}
+
 message GetVSchemaRequest {
   string keyspace = 1;
 }

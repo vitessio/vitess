@@ -238,6 +238,8 @@ type VtctldClient interface {
 	GetTablet(ctx context.Context, in *vtctldata.GetTabletRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletResponse, error)
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
 	GetTablets(ctx context.Context, in *vtctldata.GetTabletsRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletsResponse, error)
+	// GetTopology returns topology for the given cluster
+	GetTopology(ctx context.Context, in *vtctldata.GetTopologyRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
 	GetVersion(ctx context.Context, in *vtctldata.GetVersionRequest, opts ...grpc.CallOption) (*vtctldata.GetVersionResponse, error)
 	// GetVSchema returns the vschema for a keyspace.
@@ -780,6 +782,15 @@ func (c *vtctldClient) GetTablets(ctx context.Context, in *vtctldata.GetTabletsR
 	return out, nil
 }
 
+func (c *vtctldClient) GetTopology(ctx context.Context, in *vtctldata.GetTopologyRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyResponse, error) {
+	out := new(vtctldata.GetTopologyResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetTopology", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) GetVersion(ctx context.Context, in *vtctldata.GetVersionRequest, opts ...grpc.CallOption) (*vtctldata.GetVersionResponse, error) {
 	out := new(vtctldata.GetVersionResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetVersion", in, out, opts...)
@@ -1287,6 +1298,8 @@ type VtctldServer interface {
 	GetTablet(context.Context, *vtctldata.GetTabletRequest) (*vtctldata.GetTabletResponse, error)
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
 	GetTablets(context.Context, *vtctldata.GetTabletsRequest) (*vtctldata.GetTabletsResponse, error)
+	// GetTopology returns topology for the given cluster
+	GetTopology(context.Context, *vtctldata.GetTopologyRequest) (*vtctldata.GetTopologyResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
 	GetVersion(context.Context, *vtctldata.GetVersionRequest) (*vtctldata.GetVersionResponse, error)
 	// GetVSchema returns the vschema for a keyspace.
@@ -1557,6 +1570,9 @@ func (UnimplementedVtctldServer) GetTablet(context.Context, *vtctldata.GetTablet
 }
 func (UnimplementedVtctldServer) GetTablets(context.Context, *vtctldata.GetTabletsRequest) (*vtctldata.GetTabletsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTablets not implemented")
+}
+func (UnimplementedVtctldServer) GetTopology(context.Context, *vtctldata.GetTopologyRequest) (*vtctldata.GetTopologyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTopology not implemented")
 }
 func (UnimplementedVtctldServer) GetVersion(context.Context, *vtctldata.GetVersionRequest) (*vtctldata.GetVersionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVersion not implemented")
@@ -2365,6 +2381,24 @@ func _Vtctld_GetTablets_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).GetTablets(ctx, req.(*vtctldata.GetTabletsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetTopology_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetTopologyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetTopology(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetTopology",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetTopology(ctx, req.(*vtctldata.GetTopologyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3274,6 +3308,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTablets",
 			Handler:    _Vtctld_GetTablets_Handler,
+		},
+		{
+			MethodName: "GetTopology",
+			Handler:    _Vtctld_GetTopology_Handler,
 		},
 		{
 			MethodName: "GetVersion",

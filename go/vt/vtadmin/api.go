@@ -54,6 +54,7 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -313,6 +314,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/clusters", httpAPI.Adapt(vtadminhttp.GetClusters)).Name("API.GetClusters")
 	router.HandleFunc("/gates", httpAPI.Adapt(vtadminhttp.GetGates)).Name("API.GetGates")
 	router.HandleFunc("/keyspace/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateKeyspace)).Name("API.CreateKeyspace").Methods("POST")
+	router.HandleFunc("/keyspace/{cluster_id}/topology", httpAPI.Adapt(vtadminhttp.GetTopology)).Name("API.GetTopology")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.DeleteKeyspace)).Name("API.DeleteKeyspace").Methods("DELETE")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.GetKeyspace)).Name("API.GetKeyspace")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}/validate", httpAPI.Adapt(vtadminhttp.ValidateKeyspace)).Name("API.ValidateKeyspace").Methods("PUT", "OPTIONS")
@@ -973,6 +975,30 @@ func (api *API) DeleteTablet(ctx context.Context, req *vtadminpb.DeleteTabletReq
 	}
 
 	return &vtadminpb.DeleteTabletResponse{Status: "ok"}, nil
+}
+
+func (api *API) GetTopology(ctx context.Context, req *vtctldata.GetTopologyRequest) (*vtctldata.GetTopologyResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetTopology")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	result, err := c.Vtctld.GetCellInfo(ctx, &vtctldatapb.GetCellInfoRequest{Cell: "/"})
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("Cell Info: %+v", result)
+	return nil, nil
 }
 
 func (api *API) ReparentTablet(ctx context.Context, req *vtadminpb.ReparentTabletRequest) (*vtadminpb.ReparentTabletResponse, error) {

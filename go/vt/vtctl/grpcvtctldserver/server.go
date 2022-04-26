@@ -71,6 +71,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -1603,6 +1604,48 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	return &vtctldatapb.GetTabletsResponse{
 		Tablets: adjustedTablets,
 	}, nil
+}
+
+// GetTopology returns a cluster's topology
+func (s *VtctldServer) GetTopology(ctx context.Context, req *vtctldatapb.GetTopologyRequest) (*vtctldatapb.GetTopologyResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetTopology")
+	defer span.Finish()
+
+	resp := vtctldatapb.GetTopologyResponse{
+		Cells: []*vtctldatapb.TopologyCell{},
+	}
+
+	cells, err := s.ts.GetKnownCells(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, cell := range cells {
+		children, err := s.getTopologyCell(cell)
+		if err != nil {
+			return nil, err
+		}
+
+		conn, err := s.ts.ConnForCell(ctx, cell)
+		if err != nil {
+			return nil, err
+		}
+
+		// Get the file contents, if any.
+		data, _, err := conn.Get(ctx, cell)
+		if err != nil || len(data) <= 0 {
+			return nil, err
+		}
+
+		resp.Cells = append(resp.Cells, &vtctldata.TopologyCell{
+			Children: children,
+			Data:     string(data),
+			Name:     cell,
+		})
+
+	}
+
+	return &resp, nil
 }
 
 // GetVersion returns the version of a tablet from its debug vars
@@ -3809,6 +3852,12 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 	}
 	wg.Wait()
 	return &resp, nil
+}
+
+func (s *VtctldServer) getTopologyCell(cell string) ([]*vtctldata.TopologyCell, error) {
+	cells := []*vtctldata.TopologyCell{}
+
+	return cells, nil
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.

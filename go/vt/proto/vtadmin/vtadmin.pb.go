@@ -4566,8 +4566,8 @@ var file_vtadmin_proto_rawDesc = []byte{
 	0x71, 0x6c, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x71, 0x6c, 0x22, 0x2f, 0x0a,
 	0x11, 0x56, 0x54, 0x45, 0x78, 0x70, 0x6c, 0x61, 0x69, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
 	0x73, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x32, 0xe2,
-	0x15, 0x0a, 0x07, 0x56, 0x54, 0x41, 0x64, 0x6d, 0x69, 0x6e, 0x12, 0x53, 0x0a, 0x0e, 0x43, 0x72,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x32, 0xb2,
+	0x16, 0x0a, 0x07, 0x56, 0x54, 0x41, 0x64, 0x6d, 0x69, 0x6e, 0x12, 0x53, 0x0a, 0x0e, 0x43, 0x72,
 	0x65, 0x61, 0x74, 0x65, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x1e, 0x2e, 0x76,
 	0x74, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x4b, 0x65, 0x79,
 	0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1f, 0x2e, 0x76,
@@ -4676,6 +4676,11 @@ var file_vtadmin_proto_rawDesc = []byte{
 	0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1d,
 	0x2e, 0x76, 0x74, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x47, 0x65, 0x74, 0x57, 0x6f, 0x72, 0x6b,
 	0x66, 0x6c, 0x6f, 0x77, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12,
+	0x4e, 0x0a, 0x0b, 0x47, 0x65, 0x74, 0x54, 0x6f, 0x70, 0x6f, 0x6c, 0x6f, 0x67, 0x79, 0x12, 0x1d,
+	0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x47, 0x65, 0x74, 0x54, 0x6f,
+	0x70, 0x6f, 0x6c, 0x6f, 0x67, 0x79, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1e, 0x2e,
+	0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x47, 0x65, 0x74, 0x54, 0x6f, 0x70,
+	0x6f, 0x6c, 0x6f, 0x67, 0x79, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12,
 	0x47, 0x0a, 0x0a, 0x50, 0x69, 0x6e, 0x67, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x12, 0x1a, 0x2e,
 	0x76, 0x74, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x50, 0x69, 0x6e, 0x67, 0x54, 0x61, 0x62, 0x6c,
 	0x65, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1b, 0x2e, 0x76, 0x74, 0x61, 0x64,
@@ -4853,12 +4858,14 @@ var file_vtadmin_proto_goTypes = []interface{}{
 	(*vtctldata.DeleteShardsRequest)(nil),               // 88: vtctldata.DeleteShardsRequest
 	(*vtctldata.GetBackupsRequest)(nil),                 // 89: vtctldata.GetBackupsRequest
 	(*vtctldata.Shard)(nil),                             // 90: vtctldata.Shard
-	(*vtctldata.CreateShardResponse)(nil),               // 91: vtctldata.CreateShardResponse
-	(*vtctldata.DeleteKeyspaceResponse)(nil),            // 92: vtctldata.DeleteKeyspaceResponse
-	(*vtctldata.DeleteShardsResponse)(nil),              // 93: vtctldata.DeleteShardsResponse
-	(*vtctldata.ValidateKeyspaceResponse)(nil),          // 94: vtctldata.ValidateKeyspaceResponse
-	(*vtctldata.ValidateSchemaKeyspaceResponse)(nil),    // 95: vtctldata.ValidateSchemaKeyspaceResponse
-	(*vtctldata.ValidateVersionKeyspaceResponse)(nil),   // 96: vtctldata.ValidateVersionKeyspaceResponse
+	(*vtctldata.GetTopologyRequest)(nil),                // 91: vtctldata.GetTopologyRequest
+	(*vtctldata.CreateShardResponse)(nil),               // 92: vtctldata.CreateShardResponse
+	(*vtctldata.DeleteKeyspaceResponse)(nil),            // 93: vtctldata.DeleteKeyspaceResponse
+	(*vtctldata.DeleteShardsResponse)(nil),              // 94: vtctldata.DeleteShardsResponse
+	(*vtctldata.GetTopologyResponse)(nil),               // 95: vtctldata.GetTopologyResponse
+	(*vtctldata.ValidateKeyspaceResponse)(nil),          // 96: vtctldata.ValidateKeyspaceResponse
+	(*vtctldata.ValidateSchemaKeyspaceResponse)(nil),    // 97: vtctldata.ValidateSchemaKeyspaceResponse
+	(*vtctldata.ValidateVersionKeyspaceResponse)(nil),   // 98: vtctldata.ValidateVersionKeyspaceResponse
 }
 var file_vtadmin_proto_depIdxs = []int32{
 	1,  // 0: vtadmin.ClusterBackup.cluster:type_name -> vtadmin.Cluster
@@ -4931,55 +4938,57 @@ var file_vtadmin_proto_depIdxs = []int32{
 	45, // 67: vtadmin.VTAdmin.GetVtctlds:input_type -> vtadmin.GetVtctldsRequest
 	47, // 68: vtadmin.VTAdmin.GetWorkflow:input_type -> vtadmin.GetWorkflowRequest
 	48, // 69: vtadmin.VTAdmin.GetWorkflows:input_type -> vtadmin.GetWorkflowsRequest
-	50, // 70: vtadmin.VTAdmin.PingTablet:input_type -> vtadmin.PingTabletRequest
-	52, // 71: vtadmin.VTAdmin.RefreshState:input_type -> vtadmin.RefreshStateRequest
-	54, // 72: vtadmin.VTAdmin.ReparentTablet:input_type -> vtadmin.ReparentTabletRequest
-	56, // 73: vtadmin.VTAdmin.RunHealthCheck:input_type -> vtadmin.RunHealthCheckRequest
-	58, // 74: vtadmin.VTAdmin.SetReadOnly:input_type -> vtadmin.SetReadOnlyRequest
-	60, // 75: vtadmin.VTAdmin.SetReadWrite:input_type -> vtadmin.SetReadWriteRequest
-	62, // 76: vtadmin.VTAdmin.StartReplication:input_type -> vtadmin.StartReplicationRequest
-	64, // 77: vtadmin.VTAdmin.StopReplication:input_type -> vtadmin.StopReplicationRequest
-	66, // 78: vtadmin.VTAdmin.ValidateKeyspace:input_type -> vtadmin.ValidateKeyspaceRequest
-	67, // 79: vtadmin.VTAdmin.ValidateSchemaKeyspace:input_type -> vtadmin.ValidateSchemaKeyspaceRequest
-	68, // 80: vtadmin.VTAdmin.ValidateVersionKeyspace:input_type -> vtadmin.ValidateVersionKeyspaceRequest
-	69, // 81: vtadmin.VTAdmin.VTExplain:input_type -> vtadmin.VTExplainRequest
-	14, // 82: vtadmin.VTAdmin.CreateKeyspace:output_type -> vtadmin.CreateKeyspaceResponse
-	91, // 83: vtadmin.VTAdmin.CreateShard:output_type -> vtctldata.CreateShardResponse
-	92, // 84: vtadmin.VTAdmin.DeleteKeyspace:output_type -> vtctldata.DeleteKeyspaceResponse
-	93, // 85: vtadmin.VTAdmin.DeleteShards:output_type -> vtctldata.DeleteShardsResponse
-	19, // 86: vtadmin.VTAdmin.DeleteTablet:output_type -> vtadmin.DeleteTabletResponse
-	6,  // 87: vtadmin.VTAdmin.FindSchema:output_type -> vtadmin.Schema
-	22, // 88: vtadmin.VTAdmin.GetBackups:output_type -> vtadmin.GetBackupsResponse
-	24, // 89: vtadmin.VTAdmin.GetClusters:output_type -> vtadmin.GetClustersResponse
-	26, // 90: vtadmin.VTAdmin.GetGates:output_type -> vtadmin.GetGatesResponse
-	5,  // 91: vtadmin.VTAdmin.GetKeyspace:output_type -> vtadmin.Keyspace
-	29, // 92: vtadmin.VTAdmin.GetKeyspaces:output_type -> vtadmin.GetKeyspacesResponse
-	6,  // 93: vtadmin.VTAdmin.GetSchema:output_type -> vtadmin.Schema
-	32, // 94: vtadmin.VTAdmin.GetSchemas:output_type -> vtadmin.GetSchemasResponse
-	34, // 95: vtadmin.VTAdmin.GetShardReplicationPositions:output_type -> vtadmin.GetShardReplicationPositionsResponse
-	7,  // 96: vtadmin.VTAdmin.GetSrvVSchema:output_type -> vtadmin.SrvVSchema
-	37, // 97: vtadmin.VTAdmin.GetSrvVSchemas:output_type -> vtadmin.GetSrvVSchemasResponse
-	8,  // 98: vtadmin.VTAdmin.GetTablet:output_type -> vtadmin.Tablet
-	41, // 99: vtadmin.VTAdmin.GetTablets:output_type -> vtadmin.GetTabletsResponse
-	9,  // 100: vtadmin.VTAdmin.GetVSchema:output_type -> vtadmin.VSchema
-	44, // 101: vtadmin.VTAdmin.GetVSchemas:output_type -> vtadmin.GetVSchemasResponse
-	46, // 102: vtadmin.VTAdmin.GetVtctlds:output_type -> vtadmin.GetVtctldsResponse
-	12, // 103: vtadmin.VTAdmin.GetWorkflow:output_type -> vtadmin.Workflow
-	49, // 104: vtadmin.VTAdmin.GetWorkflows:output_type -> vtadmin.GetWorkflowsResponse
-	51, // 105: vtadmin.VTAdmin.PingTablet:output_type -> vtadmin.PingTabletResponse
-	53, // 106: vtadmin.VTAdmin.RefreshState:output_type -> vtadmin.RefreshStateResponse
-	55, // 107: vtadmin.VTAdmin.ReparentTablet:output_type -> vtadmin.ReparentTabletResponse
-	57, // 108: vtadmin.VTAdmin.RunHealthCheck:output_type -> vtadmin.RunHealthCheckResponse
-	59, // 109: vtadmin.VTAdmin.SetReadOnly:output_type -> vtadmin.SetReadOnlyResponse
-	61, // 110: vtadmin.VTAdmin.SetReadWrite:output_type -> vtadmin.SetReadWriteResponse
-	63, // 111: vtadmin.VTAdmin.StartReplication:output_type -> vtadmin.StartReplicationResponse
-	65, // 112: vtadmin.VTAdmin.StopReplication:output_type -> vtadmin.StopReplicationResponse
-	94, // 113: vtadmin.VTAdmin.ValidateKeyspace:output_type -> vtctldata.ValidateKeyspaceResponse
-	95, // 114: vtadmin.VTAdmin.ValidateSchemaKeyspace:output_type -> vtctldata.ValidateSchemaKeyspaceResponse
-	96, // 115: vtadmin.VTAdmin.ValidateVersionKeyspace:output_type -> vtctldata.ValidateVersionKeyspaceResponse
-	70, // 116: vtadmin.VTAdmin.VTExplain:output_type -> vtadmin.VTExplainResponse
-	82, // [82:117] is the sub-list for method output_type
-	47, // [47:82] is the sub-list for method input_type
+	91, // 70: vtadmin.VTAdmin.GetTopology:input_type -> vtctldata.GetTopologyRequest
+	50, // 71: vtadmin.VTAdmin.PingTablet:input_type -> vtadmin.PingTabletRequest
+	52, // 72: vtadmin.VTAdmin.RefreshState:input_type -> vtadmin.RefreshStateRequest
+	54, // 73: vtadmin.VTAdmin.ReparentTablet:input_type -> vtadmin.ReparentTabletRequest
+	56, // 74: vtadmin.VTAdmin.RunHealthCheck:input_type -> vtadmin.RunHealthCheckRequest
+	58, // 75: vtadmin.VTAdmin.SetReadOnly:input_type -> vtadmin.SetReadOnlyRequest
+	60, // 76: vtadmin.VTAdmin.SetReadWrite:input_type -> vtadmin.SetReadWriteRequest
+	62, // 77: vtadmin.VTAdmin.StartReplication:input_type -> vtadmin.StartReplicationRequest
+	64, // 78: vtadmin.VTAdmin.StopReplication:input_type -> vtadmin.StopReplicationRequest
+	66, // 79: vtadmin.VTAdmin.ValidateKeyspace:input_type -> vtadmin.ValidateKeyspaceRequest
+	67, // 80: vtadmin.VTAdmin.ValidateSchemaKeyspace:input_type -> vtadmin.ValidateSchemaKeyspaceRequest
+	68, // 81: vtadmin.VTAdmin.ValidateVersionKeyspace:input_type -> vtadmin.ValidateVersionKeyspaceRequest
+	69, // 82: vtadmin.VTAdmin.VTExplain:input_type -> vtadmin.VTExplainRequest
+	14, // 83: vtadmin.VTAdmin.CreateKeyspace:output_type -> vtadmin.CreateKeyspaceResponse
+	92, // 84: vtadmin.VTAdmin.CreateShard:output_type -> vtctldata.CreateShardResponse
+	93, // 85: vtadmin.VTAdmin.DeleteKeyspace:output_type -> vtctldata.DeleteKeyspaceResponse
+	94, // 86: vtadmin.VTAdmin.DeleteShards:output_type -> vtctldata.DeleteShardsResponse
+	19, // 87: vtadmin.VTAdmin.DeleteTablet:output_type -> vtadmin.DeleteTabletResponse
+	6,  // 88: vtadmin.VTAdmin.FindSchema:output_type -> vtadmin.Schema
+	22, // 89: vtadmin.VTAdmin.GetBackups:output_type -> vtadmin.GetBackupsResponse
+	24, // 90: vtadmin.VTAdmin.GetClusters:output_type -> vtadmin.GetClustersResponse
+	26, // 91: vtadmin.VTAdmin.GetGates:output_type -> vtadmin.GetGatesResponse
+	5,  // 92: vtadmin.VTAdmin.GetKeyspace:output_type -> vtadmin.Keyspace
+	29, // 93: vtadmin.VTAdmin.GetKeyspaces:output_type -> vtadmin.GetKeyspacesResponse
+	6,  // 94: vtadmin.VTAdmin.GetSchema:output_type -> vtadmin.Schema
+	32, // 95: vtadmin.VTAdmin.GetSchemas:output_type -> vtadmin.GetSchemasResponse
+	34, // 96: vtadmin.VTAdmin.GetShardReplicationPositions:output_type -> vtadmin.GetShardReplicationPositionsResponse
+	7,  // 97: vtadmin.VTAdmin.GetSrvVSchema:output_type -> vtadmin.SrvVSchema
+	37, // 98: vtadmin.VTAdmin.GetSrvVSchemas:output_type -> vtadmin.GetSrvVSchemasResponse
+	8,  // 99: vtadmin.VTAdmin.GetTablet:output_type -> vtadmin.Tablet
+	41, // 100: vtadmin.VTAdmin.GetTablets:output_type -> vtadmin.GetTabletsResponse
+	9,  // 101: vtadmin.VTAdmin.GetVSchema:output_type -> vtadmin.VSchema
+	44, // 102: vtadmin.VTAdmin.GetVSchemas:output_type -> vtadmin.GetVSchemasResponse
+	46, // 103: vtadmin.VTAdmin.GetVtctlds:output_type -> vtadmin.GetVtctldsResponse
+	12, // 104: vtadmin.VTAdmin.GetWorkflow:output_type -> vtadmin.Workflow
+	49, // 105: vtadmin.VTAdmin.GetWorkflows:output_type -> vtadmin.GetWorkflowsResponse
+	95, // 106: vtadmin.VTAdmin.GetTopology:output_type -> vtctldata.GetTopologyResponse
+	51, // 107: vtadmin.VTAdmin.PingTablet:output_type -> vtadmin.PingTabletResponse
+	53, // 108: vtadmin.VTAdmin.RefreshState:output_type -> vtadmin.RefreshStateResponse
+	55, // 109: vtadmin.VTAdmin.ReparentTablet:output_type -> vtadmin.ReparentTabletResponse
+	57, // 110: vtadmin.VTAdmin.RunHealthCheck:output_type -> vtadmin.RunHealthCheckResponse
+	59, // 111: vtadmin.VTAdmin.SetReadOnly:output_type -> vtadmin.SetReadOnlyResponse
+	61, // 112: vtadmin.VTAdmin.SetReadWrite:output_type -> vtadmin.SetReadWriteResponse
+	63, // 113: vtadmin.VTAdmin.StartReplication:output_type -> vtadmin.StartReplicationResponse
+	65, // 114: vtadmin.VTAdmin.StopReplication:output_type -> vtadmin.StopReplicationResponse
+	96, // 115: vtadmin.VTAdmin.ValidateKeyspace:output_type -> vtctldata.ValidateKeyspaceResponse
+	97, // 116: vtadmin.VTAdmin.ValidateSchemaKeyspace:output_type -> vtctldata.ValidateSchemaKeyspaceResponse
+	98, // 117: vtadmin.VTAdmin.ValidateVersionKeyspace:output_type -> vtctldata.ValidateVersionKeyspaceResponse
+	70, // 118: vtadmin.VTAdmin.VTExplain:output_type -> vtadmin.VTExplainResponse
+	83, // [83:119] is the sub-list for method output_type
+	47, // [47:83] is the sub-list for method input_type
 	47, // [47:47] is the sub-list for extension type_name
 	47, // [47:47] is the sub-list for extension extendee
 	0,  // [0:47] is the sub-list for field type_name
