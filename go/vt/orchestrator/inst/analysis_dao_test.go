@@ -31,14 +31,14 @@ import (
 func TestGetReplicationAnalysis(t *testing.T) {
 	tests := []struct {
 		name       string
-		info       *test.InfoForRecoveryAnalysis
+		info       []*test.InfoForRecoveryAnalysis
 		durability string
 		codeWanted AnalysisCode
 		wantErr    string
 	}{
 		{
 			name: "ClusterHasNoPrimary",
-			info: &test.InfoForRecoveryAnalysis{
+			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
 					Hostname:      "localhost",
@@ -49,11 +49,11 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlPort:     6709,
 				},
 				LastCheckValid: 1,
-			},
+			}},
 			codeWanted: ClusterHasNoPrimary,
 		}, {
 			name: "DeadPrimary",
-			info: &test.InfoForRecoveryAnalysis{
+			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
 					Hostname:      "localhost",
@@ -68,11 +68,11 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				CountValidReplicas:            4,
 				CountValidReplicatingReplicas: 0,
 				IsPrimary:                     1,
-			},
+			}},
 			codeWanted: DeadPrimary,
 		}, {
 			name: "DeadPrimaryAndSomeReplicas",
-			info: &test.InfoForRecoveryAnalysis{
+			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
 					Hostname:      "localhost",
@@ -87,11 +87,11 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				CountValidReplicas:            2,
 				CountValidReplicatingReplicas: 0,
 				IsPrimary:                     1,
-			},
+			}},
 			codeWanted: DeadPrimaryAndSomeReplicas,
 		}, {
 			name: "PrimaryHasPrimary",
-			info: &test.InfoForRecoveryAnalysis{
+			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
 					Hostname:      "localhost",
@@ -105,11 +105,11 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				CountReplicas:      4,
 				CountValidReplicas: 4,
 				IsPrimary:          0,
-			},
+			}},
 			codeWanted: PrimaryHasPrimary,
 		}, {
 			name: "PrimaryIsReadOnly",
-			info: &test.InfoForRecoveryAnalysis{
+			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
 					Hostname:      "localhost",
@@ -124,11 +124,11 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				CountValidReplicas: 4,
 				IsPrimary:          1,
 				ReadOnly:           1,
-			},
+			}},
 			codeWanted: PrimaryIsReadOnly,
 		}, {
 			name: "PrimarySemiSyncMustNotBeSet",
-			info: &test.InfoForRecoveryAnalysis{
+			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
 					Hostname:      "localhost",
@@ -143,11 +143,11 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				CountValidReplicas:     4,
 				IsPrimary:              1,
 				SemiSyncPrimaryEnabled: 1,
-			},
+			}},
 			codeWanted: PrimarySemiSyncMustNotBeSet,
 		}, {
 			name: "PrimarySemiSyncMustBeSet",
-			info: &test.InfoForRecoveryAnalysis{
+			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
 					Hostname:      "localhost",
@@ -162,9 +162,242 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				CountValidReplicas:     4,
 				IsPrimary:              1,
 				SemiSyncPrimaryEnabled: 0,
-			},
+			}},
 			durability: "semi_sync",
 			codeWanted: PrimarySemiSyncMustBeSet,
+		}, {
+			name: "NotConnectedToPrimary",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				LastCheckValid:                1,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 3,
+				CountValidOracleGTIDReplicas:  4,
+				CountLoggingReplicas:          2,
+				IsPrimary:                     1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				LastCheckValid: 1,
+				ReadOnly:       1,
+				IsPrimary:      1,
+			}},
+			codeWanted: NotConnectedToPrimary,
+		}, {
+			name: "ReplicaIsWritable",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				LastCheckValid:                1,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 3,
+				CountValidOracleGTIDReplicas:  4,
+				CountLoggingReplicas:          2,
+				IsPrimary:                     1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				SourceHost:     "localhost",
+				SourcePort:     6708,
+				LastCheckValid: 1,
+				ReadOnly:       0,
+			}},
+			codeWanted: ReplicaIsWritable,
+		}, {
+			name: "ConnectedToWrongPrimary",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				LastCheckValid:                1,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 3,
+				CountValidOracleGTIDReplicas:  4,
+				CountLoggingReplicas:          2,
+				IsPrimary:                     1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				SourceHost:     "localhost",
+				SourcePort:     6706,
+				LastCheckValid: 1,
+				ReadOnly:       1,
+			}},
+			codeWanted: ConnectedToWrongPrimary,
+		}, {
+			name: "ReplicationStopped",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				LastCheckValid:                1,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 3,
+				CountValidOracleGTIDReplicas:  4,
+				CountLoggingReplicas:          2,
+				IsPrimary:                     1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				SourceHost:         "localhost",
+				SourcePort:         6708,
+				LastCheckValid:     1,
+				ReadOnly:           1,
+				ReplicationStopped: 1,
+			}},
+			codeWanted: ReplicationStopped,
+		},
+		{
+			name:       "ReplicaSemiSyncMustBeSet",
+			durability: "semi_sync",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				LastCheckValid:                1,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 3,
+				CountValidOracleGTIDReplicas:  4,
+				CountLoggingReplicas:          2,
+				IsPrimary:                     1,
+				SemiSyncPrimaryEnabled:        1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				PrimaryTabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				SourceHost:             "localhost",
+				SourcePort:             6708,
+				LastCheckValid:         1,
+				ReadOnly:               1,
+				SemiSyncReplicaEnabled: 0,
+			}},
+			codeWanted: ReplicaSemiSyncMustBeSet,
+		}, {
+			name: "ReplicaSemiSyncMustNotBeSet",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				LastCheckValid:                1,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 3,
+				CountValidOracleGTIDReplicas:  4,
+				CountLoggingReplicas:          2,
+				IsPrimary:                     1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				PrimaryTabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				SourceHost:             "localhost",
+				SourcePort:             6708,
+				LastCheckValid:         1,
+				ReadOnly:               1,
+				SemiSyncReplicaEnabled: 1,
+			}},
+			codeWanted: ReplicaSemiSyncMustNotBeSet,
 		},
 	}
 	for _, tt := range tests {
@@ -175,10 +408,12 @@ func TestGetReplicationAnalysis(t *testing.T) {
 			err := reparentutil.SetDurabilityPolicy(tt.durability)
 			require.NoError(t, err)
 
-			tt.info.SetValuesFromTabletInfo()
-			db.Db = test.NewTestDB([][]sqlutils.RowMap{{
-				tt.info.ConvertToRowMap(),
-			}})
+			var rowMaps []sqlutils.RowMap
+			for _, analysis := range tt.info {
+				analysis.SetValuesFromTabletInfo()
+				rowMaps = append(rowMaps, analysis.ConvertToRowMap())
+			}
+			db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
 
 			got, err := GetReplicationAnalysis("", &ReplicationAnalysisHints{})
 			if tt.wantErr != "" {
