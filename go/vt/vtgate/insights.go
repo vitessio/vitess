@@ -309,17 +309,32 @@ func (ii *Insights) handleMessage(record interface{}) {
 		return
 	}
 
-	ii.addToAggregates(ls)
+	var sql string
+	var comments []string
+	// If there was an error, there's no point in parsing ls.SQL, because we're not going to use it.
+	if ls.Error == nil {
+		// comments with /**/ markers are present in the normalized ls.SQL, and we need to split them off.
+		// comments with -- markers get stripped when newExecute calls getPlan around plan_execute.go:63.
+		sql, comments = splitComments(ls.SQL)
+	}
+
+	ii.addToAggregates(ls, sql)
 
 	if !ii.shouldSendToInsights(ls) {
 		return
 	}
 
-	buf, err := ii.makeQueryMessage(ls)
+	buf, err := ii.makeQueryMessage(ls, sql, parseCommentTags(comments))
 	if err != nil {
 		log.Warningf("Could not serialize %s message: %v", queryTopic, err)
 	} else {
-		ii.reserveAndSend(buf, queryTopic, ii.makeKafkaKey(ls.SQL))
+		var kafkaKey string
+		if ls.Error != nil {
+			kafkaKey = ii.makeKafkaKey(ls.Error.Error())
+		} else {
+			kafkaKey = ii.makeKafkaKey(sql)
+		}
+		ii.reserveAndSend(buf, queryTopic, kafkaKey)
 	}
 }
 
@@ -363,7 +378,7 @@ func maxDuration(a time.Duration, b time.Duration) time.Duration {
 	return b
 }
 
-func (ii *Insights) addToAggregates(ls *LogStats) bool {
+func (ii *Insights) addToAggregates(ls *LogStats, sql string) bool {
 	// no locks needed if all callers are on the same thread
 
 	var pa *QueryPatternAggregation
@@ -371,11 +386,11 @@ func (ii *Insights) addToAggregates(ls *LogStats) bool {
 		Keyspace: ls.Keyspace,
 	}
 
-	// When there is an error, ls.SQL isn't normalized.  To protect private information and
+	// When there is an error, `sql` isn't normalized.  To protect private information and
 	// avoid high cardinality in ii.Aggregations, combine all error statements into a single
 	// bucket.
 	if ls.Error == nil {
-		key.SQL = ls.SQL
+		key.SQL = sql
 	} else {
 		key.SQL = "<error>"
 	}
@@ -386,7 +401,7 @@ func (ii *Insights) addToAggregates(ls *LogStats) bool {
 			log.Infof("Too many patterns: reached limit of %d", len(ii.Aggregations), ii.MaxPatterns)
 			return false
 		}
-		// ls.StmtType and ls.Table depend only on the contents of ls.SQL, so we don't separately make them
+		// ls.StmtType and ls.Table depend only on the contents of sql, so we don't separately make them
 		// part of the key, and we don't track them as separate values in the QueryPatternAggregation values.
 		// In other words, we assume they don't change, so we only need to track a single value for each.
 		pa = newPatternAggregation(ls.StmtType, []string{ls.Table})
@@ -445,7 +460,7 @@ func hostnameOrEmpty() string {
 	return hostname
 }
 
-func (ii *Insights) makeQueryMessage(ls *LogStats) ([]byte, error) {
+func (ii *Insights) makeQueryMessage(ls *LogStats, sql string, tags []*pbvtgate.Query_Tag) ([]byte, error) {
 	addr, user := ls.RemoteAddrUsername()
 	var port *wrapperspb.UInt32Value
 	if strings.Contains(addr, ":") {
@@ -482,12 +497,12 @@ func (ii *Insights) makeQueryMessage(ls *LogStats) ([]byte, error) {
 		ExecuteDuration:        durationOrNil(ls.ExecuteTime),
 		CommitDuration:         durationOrNil(ls.CommitTime),
 		Error:                  stringOrNil(ls.ErrorStr()),
-		CommentTags:            nil, // WRITEME
+		CommentTags:            tags,
 	}
 
-	// If there was an error, then ls.SQL won't be normalized, and we shouldn't send it.
+	// If there was an error, then sql won't be normalized, and we shouldn't send it.
 	if ls.Error == nil {
-		obj.NormalizedSql = stringOrNil(ls.SQL)
+		obj.NormalizedSql = stringOrNil(sql)
 	}
 
 	var out []byte

@@ -179,6 +179,18 @@ func TestInsightsKafkaBufferSize(t *testing.T) {
 		nil)
 }
 
+func TestInsightsComments(t *testing.T) {
+	insightsTestHelper(t, true,
+		setupOptions{},
+		[]insightsQuery{
+			{sql: "select * from foo /*abc='xxx%2fyyy%3azzz'*/", responseTime: 5 * time.Second},
+		},
+		[]insightsKafkaExpectation{
+			expect(queryTopic, "xxx/yyy:zzz"),
+			expect(queryStatsBundleTopic, "select * from foo").butNot("xxx"),
+		})
+}
+
 func TestInsightsErrors(t *testing.T) {
 	insightsTestHelper(t, true, setupOptions{},
 		[]insightsQuery{
