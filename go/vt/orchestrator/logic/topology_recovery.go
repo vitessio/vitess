@@ -1001,37 +1001,6 @@ func RecoverDeadIntermediatePrimary(topologyRecovery *TopologyRecovery, skipProc
 	return successorInstance, err
 }
 
-// checkAndRecoverDeadIntermediatePrimary checks a given analysis, decides whether to take action, and possibly takes action
-// Returns true when action was taken.
-func checkAndRecoverDeadIntermediatePrimary(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (bool, *TopologyRecovery, error) {
-	if !(forceInstanceRecovery || analysisEntry.ClusterDetails.HasAutomatedIntermediatePrimaryRecovery) {
-		return false, nil, nil
-	}
-	topologyRecovery, err := AttemptRecoveryRegistration(&analysisEntry, !forceInstanceRecovery, !forceInstanceRecovery)
-	if topologyRecovery == nil {
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadIntermediatePrimary: found an active or recent recovery on %+v. Will not issue another RecoverDeadIntermediatePrimary.", analysisEntry.AnalyzedInstanceKey))
-		return false, nil, err
-	}
-
-	// That's it! We must do recovery!
-	recoverDeadIntermediatePrimaryCounter.Inc(1)
-	promotedReplica, err := RecoverDeadIntermediatePrimary(topologyRecovery, skipProcesses)
-	if promotedReplica != nil {
-		// success
-		recoverDeadIntermediatePrimarySuccessCounter.Inc(1)
-
-		if !skipProcesses {
-			// Execute post intermediate-primary-failover processes
-			topologyRecovery.SuccessorKey = &promotedReplica.Key
-			topologyRecovery.SuccessorAlias = promotedReplica.InstanceAlias
-			executeProcesses(config.Config.PostIntermediatePrimaryFailoverProcesses, "PostIntermediatePrimaryFailoverProcesses", topologyRecovery, false)
-		}
-	} else {
-		recoverDeadIntermediatePrimaryFailureCounter.Inc(1)
-	}
-	return true, topologyRecovery, err
-}
-
 // RecoverDeadCoPrimary recovers a dead co-primary, complete logic inside
 func RecoverDeadCoPrimary(topologyRecovery *TopologyRecovery, skipProcesses bool) (promotedReplica *inst.Instance, lostReplicas [](*inst.Instance), err error) {
 	topologyRecovery.Type = CoPrimaryRecovery
@@ -1149,52 +1118,6 @@ func RecoverDeadCoPrimary(topologyRecovery *TopologyRecovery, skipProcesses bool
 	}()
 
 	return promotedReplica, lostReplicas, err
-}
-
-// checkAndRecoverDeadCoPrimary checks a given analysis, decides whether to take action, and possibly takes action
-// Returns true when action was taken.
-func checkAndRecoverDeadCoPrimary(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (bool, *TopologyRecovery, error) {
-	failedInstanceKey := &analysisEntry.AnalyzedInstanceKey
-	if !(forceInstanceRecovery || analysisEntry.ClusterDetails.HasAutomatedPrimaryRecovery) {
-		return false, nil, nil
-	}
-	topologyRecovery, err := AttemptRecoveryRegistration(&analysisEntry, !forceInstanceRecovery, !forceInstanceRecovery)
-	if topologyRecovery == nil {
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another RecoverDeadCoPrimary.", analysisEntry.AnalyzedInstanceKey))
-		return false, nil, err
-	}
-
-	// That's it! We must do recovery!
-	recoverDeadCoPrimaryCounter.Inc(1)
-	promotedReplica, lostReplicas, err := RecoverDeadCoPrimary(topologyRecovery, skipProcesses)
-	resolveRecovery(topologyRecovery, promotedReplica)
-	if promotedReplica == nil {
-		inst.AuditOperation("recover-dead-co-primary", failedInstanceKey, "Failure: no replica promoted.")
-	} else {
-		inst.AuditOperation("recover-dead-co-primary", failedInstanceKey, fmt.Sprintf("promoted: %+v", promotedReplica.Key))
-	}
-	topologyRecovery.LostReplicas.AddInstances(lostReplicas)
-	if promotedReplica != nil {
-		if config.Config.FailPrimaryPromotionIfSQLThreadNotUpToDate && !promotedReplica.SQLThreadUpToDate() {
-			return false, nil, log.Errorf("Promoted replica %+v: sql thread is not up to date (relay logs still unapplied). Aborting promotion", promotedReplica.Key)
-		}
-		// success
-		recoverDeadCoPrimarySuccessCounter.Inc(1)
-
-		if config.Config.ApplyMySQLPromotionAfterPrimaryFailover {
-			AuditTopologyRecovery(topologyRecovery, "- RecoverDeadPrimary: will apply MySQL changes to promoted primary")
-			inst.SetReadOnly(&promotedReplica.Key, false)
-		}
-		if !skipProcesses {
-			// Execute post intermediate-primary-failover processes
-			topologyRecovery.SuccessorKey = &promotedReplica.Key
-			topologyRecovery.SuccessorAlias = promotedReplica.InstanceAlias
-			executeProcesses(config.Config.PostPrimaryFailoverProcesses, "PostPrimaryFailoverProcesses", topologyRecovery, false)
-		}
-	} else {
-		recoverDeadCoPrimaryFailureCounter.Inc(1)
-	}
-	return true, topologyRecovery, err
 }
 
 // checkAndRecoverGenericProblem is a general-purpose recovery function
@@ -1331,22 +1254,6 @@ func getCheckAndRecoverFunction(analysisCode inst.AnalysisCode, analyzedInstance
 	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
 		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet:
 		return fixReplica, false
-	// intermediate primary
-	case inst.DeadIntermediatePrimary:
-		return checkAndRecoverDeadIntermediatePrimary, true
-	case inst.DeadIntermediatePrimaryAndSomeReplicas:
-		return checkAndRecoverDeadIntermediatePrimary, true
-	case inst.DeadIntermediatePrimaryWithSingleReplicaFailingToConnect:
-		return checkAndRecoverDeadIntermediatePrimary, true
-	case inst.AllIntermediatePrimaryReplicasFailingToConnectOrDead:
-		return checkAndRecoverDeadIntermediatePrimary, true
-	case inst.DeadIntermediatePrimaryAndReplicas:
-		return checkAndRecoverGenericProblem, false
-	// co-primary
-	case inst.DeadCoPrimary:
-		return checkAndRecoverDeadCoPrimary, true
-	case inst.DeadCoPrimaryAndSomeReplicas:
-		return checkAndRecoverDeadCoPrimary, true
 	// primary, non actionable
 	case inst.DeadPrimaryAndReplicas:
 		return checkAndRecoverGenericProblem, false
@@ -1357,8 +1264,6 @@ func getCheckAndRecoverFunction(analysisCode inst.AnalysisCode, analyzedInstance
 	case inst.AllPrimaryReplicasNotReplicating:
 		return checkAndRecoverGenericProblem, false
 	case inst.AllPrimaryReplicasNotReplicatingOrDead:
-		return checkAndRecoverGenericProblem, false
-	case inst.UnreachableIntermediatePrimaryWithLaggingReplicas:
 		return checkAndRecoverGenericProblem, false
 	}
 	// Right now this is mostly causing noise with no clear action.
@@ -1381,14 +1286,10 @@ func runEmergentOperations(analysisEntry *inst.ReplicationAnalysis) {
 	case inst.LockedSemiSyncPrimaryHypothesis:
 		go emergentlyReadTopologyInstance(&analysisEntry.AnalyzedInstanceKey, analysisEntry.Analysis)
 		go emergentlyRecordStaleBinlogCoordinates(&analysisEntry.AnalyzedInstanceKey, &analysisEntry.AnalyzedInstanceBinlogCoordinates)
-	case inst.UnreachableIntermediatePrimaryWithLaggingReplicas:
-		go emergentlyRestartReplicationOnTopologyInstanceReplicas(&analysisEntry.AnalyzedInstanceKey, analysisEntry.Analysis)
 	case inst.AllPrimaryReplicasNotReplicating:
 		go emergentlyReadTopologyInstance(&analysisEntry.AnalyzedInstanceKey, analysisEntry.Analysis)
 	case inst.AllPrimaryReplicasNotReplicatingOrDead:
 		go emergentlyReadTopologyInstance(&analysisEntry.AnalyzedInstanceKey, analysisEntry.Analysis)
-	case inst.FirstTierReplicaFailingToConnectToPrimary:
-		go emergentlyReadTopologyInstance(&analysisEntry.AnalyzedInstancePrimaryKey, analysisEntry.Analysis)
 	}
 }
 

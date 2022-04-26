@@ -71,6 +71,40 @@ func TestGetReplicationAnalysis(t *testing.T) {
 			}},
 			codeWanted: DeadPrimary,
 		}, {
+			name: "DeadPrimaryWithoutReplicas",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				LastCheckValid: 0,
+				CountReplicas:  0,
+				IsPrimary:      1,
+			}},
+			codeWanted: DeadPrimaryWithoutReplicas,
+		}, {
+			name: "DeadPrimaryAndReplicas",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				LastCheckValid: 0,
+				CountReplicas:  3,
+				IsPrimary:      1,
+			}},
+			codeWanted: DeadPrimaryAndReplicas,
+		}, {
 			name: "DeadPrimaryAndSomeReplicas",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
