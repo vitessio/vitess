@@ -186,9 +186,10 @@ func (c *Cache[Key, Value]) EnqueueBackfill(k Key) bool {
 
 // Close closes the backfill goroutine, effectively rendering this cache
 // unusable for further background fills.
-func (c *Cache[Key, Value]) Close() {
+func (c *Cache[Key, Value]) Close() error {
 	c.cancel()
 	c.wg.Wait()
+	return nil
 }
 
 type backfillRequest[Key Keyer] struct {

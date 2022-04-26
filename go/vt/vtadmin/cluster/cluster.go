@@ -179,6 +179,13 @@ func New(cfg Config) (*Cluster, error) {
 	return cluster, nil
 }
 
+// Close closes a cluster. Its primary function is to gracefully shutdown any
+// background cache goroutines to avoid data races in tests. It does not have
+// any production use case, but needs to be exported.
+func (c *Cluster) Close() error {
+	return c.schemaCache.Close()
+}
+
 // ToProto returns a value-copy protobuf equivalent of the cluster.
 func (c Cluster) ToProto() *vtadminpb.Cluster {
 	return &vtadminpb.Cluster{
