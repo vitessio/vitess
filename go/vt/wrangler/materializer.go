@@ -1324,14 +1324,14 @@ func (mz *materializer) checkTZConversion(ctx context.Context, tz string) error 
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
 		}
-		query := fmt.Sprintf("select convert_tz(now(), %s, 'UTC')", encodeString(tz))
+		testDateTime := "2006-01-02 15:04:05"
+		query := fmt.Sprintf("select convert_tz(%s, %s, 'UTC')", encodeString(testDateTime), encodeString(tz))
 		qrproto, err := mz.wr.tmc.ExecuteFetchAsApp(ctx, targetPrimary.Tablet, false, []byte(query), 1)
 		if err != nil {
 			return vterrors.Wrapf(err, "ExecuteFetchAsApp(%v, %s)", targetPrimary.Tablet, query)
 		}
 		qr := sqltypes.Proto3ToResult(qrproto)
-		dateFormat := "2006-01-02 15:04:05"
-		if gotDate, err := time.Parse(dateFormat, qr.Rows[0][0].ToString()); err != nil {
+		if gotDate, err := time.Parse(testDateTime, qr.Rows[0][0].ToString()); err != nil {
 			return fmt.Errorf("unable to perform time_zone conversions from %s to UTC — result of the attempt was: %s. Either the specified source time zone is invalid or the time zone tables have not been loaded on the %s tablet",
 				tz, gotDate, targetPrimary.Alias)
 		}
