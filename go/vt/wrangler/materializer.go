@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"text/template"
+	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -270,7 +271,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	}
 
 	if sourceTimeZone != "" {
-		if err := mz.checkIfTimeZoneIsLoaded(ctx, sourceTimeZone, targetKeyspace); err != nil {
+		if err := mz.checkTZConversion(ctx, sourceTimeZone); err != nil {
 			return err
 		}
 	}
@@ -1313,11 +1314,11 @@ func (mz *materializer) forAllTargets(f func(*topo.ShardInfo) error) error {
 	return allErrors.AggrError(vterrors.Aggregate)
 }
 
-// checkIfTimeZoneIsLoaded is a light-weight consistency check to validate that, if a source time zone is specified to MoveTables,
+// checkTZConversion is a light-weight consistency check to validate that, if a source time zone is specified to MoveTables,
 // that the current primary has the time zone loaded in order to run the convert_tz() function used by VReplication to do the
 // datetime conversions. We only check the current primaries on each shard and note here that it is possible a new primary
 // gets elected: in this case user will either see errors during vreplication or vdiff will report mismatches.
-func (mz *materializer) checkIfTimeZoneIsLoaded(ctx context.Context, tz string, keyspace string) error {
+func (mz *materializer) checkTZConversion(ctx context.Context, tz string) error {
 	err := mz.forAllTargets(func(target *topo.ShardInfo) error {
 		targetPrimary, err := mz.wr.ts.GetTablet(ctx, target.PrimaryAlias)
 		if err != nil {
@@ -1329,9 +1330,10 @@ func (mz *materializer) checkIfTimeZoneIsLoaded(ctx context.Context, tz string, 
 			return vterrors.Wrapf(err, "ExecuteFetchAsApp(%v, %s)", targetPrimary.Tablet, query)
 		}
 		qr := sqltypes.Proto3ToResult(qrproto)
-		gotDate := qr.Rows[0][0].ToString()
-		if gotDate == "" {
-			return fmt.Errorf("%s timezone not found on %s", tz, targetPrimary.Alias)
+		dateFormat := "2006-01-02 15:04:05"
+		if gotDate, err := time.Parse(dateFormat, qr.Rows[0][0].ToString()); err != nil {
+			return fmt.Errorf("unable to perform time_zone conversions from %s to UTC — result of the attempt was: %s. Either the specified source time zone is invalid or the time zone tables have not been loaded on the %s tablet",
+				tz, gotDate, targetPrimary.Alias)
 		}
 		return nil
 	})
