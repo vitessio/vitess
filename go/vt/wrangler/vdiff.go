@@ -513,7 +513,7 @@ func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, 
 	case *sqlparser.ColName:
 		colname = t.Name.Lowered()
 	case *sqlparser.FuncExpr: // only in case datetime was converted using convert_tz()
-		colname = aliasedExpr.As.String()
+		colname = aliasedExpr.As.Lowered()
 	default:
 		return "", fmt.Errorf("found target SelectExpr which was neither ColName or FuncExpr: %+v", aliasedExpr)
 	}
