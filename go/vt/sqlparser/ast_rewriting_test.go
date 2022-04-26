@@ -41,7 +41,7 @@ type myTestCase struct {
 	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID  bool
 	ddlStrategy, sessionUUID, sessionEnableSystemSettings              bool
 	udv                                                                int
-	autocommit, clientFoundRows, skipQueryPlanCache, socket            bool
+	autocommit, clientFoundRows, skipQueryPlanCache, socket, replLag   bool
 	sqlSelectLimit, transactionMode, workload, version, versionComment bool
 }
 
@@ -295,6 +295,10 @@ func TestRewrites(in *testing.T) {
 		rawTimeout:                  true,
 		sessTrackGTID:               true,
 		socket:                      true,
+	}, {
+		in:       "select max_repl_lag()",
+		expected: "select :__vtmaxrepllag as `max_repl_lag()` from dual",
+		replLag:  true,
 	}}
 
 	for _, tc := range tests {
@@ -316,6 +320,7 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.db, result.NeedsFuncResult(DBVarName), "should need database name")
 			assert.Equal(tc.foundRows, result.NeedsFuncResult(FoundRowsName), "should need found rows")
 			assert.Equal(tc.rowCount, result.NeedsFuncResult(RowCountName), "should need row count")
+			assert.Equal(tc.replLag, result.NeedsFuncResult(MaxReplLag), "should need max repl lag")
 			assert.Equal(tc.udv, len(result.NeedUserDefinedVariables), "count of user defined variables")
 			assert.Equal(tc.autocommit, result.NeedsSysVar(sysvars.Autocommit.Name), "should need :__vtautocommit")
 			assert.Equal(tc.clientFoundRows, result.NeedsSysVar(sysvars.ClientFoundRows.Name), "should need :__vtclientFoundRows")

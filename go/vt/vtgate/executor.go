@@ -383,7 +383,7 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 		case sqlparser.RowCountName:
 			bindVars[sqlparser.RowCountName] = sqltypes.Int64BindVariable(session.RowCount)
 		case sqlparser.MaxReplLag:
-			bindVars[sqlparser.RowCountName] = sqltypes.Int64BindVariable(e.getMaxReplicationLag())
+			bindVars[sqlparser.MaxReplLag] = sqltypes.Int64BindVariable(e.getMaxReplicationLag())
 		}
 	}
 

@@ -714,6 +714,26 @@ func TestSelectLastInsertId(t *testing.T) {
 	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
+func TestReplLag(t *testing.T) {
+	replLag := 10
+	for _, health := range hcVTGateTest.Healths() {
+		if health.Stats != nil {
+			health.Stats.ReplicationLagSeconds = uint32(replLag)
+		}
+	}
+	executor, _, _, _ := createExecutorEnv()
+	primarySession.LastInsertId = 52
+	executor.normalize = true
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "select max_repl_lag()"
+	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	got := fmt.Sprintf("%v", result.Rows)
+	assert.Equal(t, "[[INT64(0)]]", got)
+}
+
 func TestSelectSystemVariables(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 	primarySession.ReadAfterWrite = &vtgatepb.ReadAfterWrite{
