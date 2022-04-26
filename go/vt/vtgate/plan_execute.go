@@ -274,6 +274,7 @@ func (e *Executor) logExecutionEnd(logStats *LogStats, execStart time.Time, plan
 	} else {
 		logStats.RowsAffected = qr.RowsAffected
 		logStats.RowsReturned = uint64(len(qr.Rows))
+		logStats.RowsRead = qr.RowsRead
 	}
 	return errCount
 }

@@ -1269,6 +1269,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 		return nil, err
 	}
 	logStats.RowsAffected = qr.RowsAffected
+	logStats.RowsRead = qr.RowsRead
 
 	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, qr.RowsAffected, uint64(len(qr.Rows)), errCount)
 

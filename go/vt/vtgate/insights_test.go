@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -49,7 +51,7 @@ func setup(t *testing.T, brokers, publicID, username, password string, options s
 		dfl(options.patternLimit, 10000),
 		dfl(options.rowsReadThreshold, 1000),
 		dfl(options.responseTimeThreshold, 1000),
-		15*time.Second)
+		15*time.Second, true)
 	if insights != nil {
 		t.Cleanup(func() { insights.Drain() })
 	}
@@ -96,6 +98,7 @@ func TestInsightsSlowQuery(t *testing.T) {
 	insights.Sender = func(buf []byte, topic, key string) error {
 		messages++
 		assert.Contains(t, string(buf), "select sleep(5)")
+		assert.Contains(t, key, "mumblefoo/")
 		assert.Equal(t, queryTopic, topic)
 		return nil
 	}
@@ -108,15 +111,16 @@ func TestInsightsSummaries(t *testing.T) {
 	insightsTestHelper(t, true, setupOptions{},
 		[]insightsQuery{
 			{sql: "select sleep(5)", responseTime: 5 * time.Second},
-			{sql: "select * from foo", responseTime: 10 * time.Millisecond},
-			{sql: "select * from foo", responseTime: 10 * time.Millisecond},
-			{sql: "select * from foo", responseTime: 10 * time.Millisecond},
-			{sql: "select * from foo", responseTime: 10 * time.Millisecond},
+			{sql: "select * from foo", responseTime: 10 * time.Millisecond, rowsRead: 2},
+			{sql: "select * from foo", responseTime: 10 * time.Millisecond, rowsRead: 3},
+			{sql: "select * from foo", responseTime: 10 * time.Millisecond, rowsRead: 5},
+			{sql: "select * from foo", responseTime: 10 * time.Millisecond, rowsRead: 7},
 		},
 		[]insightsKafkaExpectation{
-			{pattern: "select sleep(5)", topic: queryTopic, count: 1},
-			{pattern: "select sleep(5)", topic: queryStatsBundleTopic, count: 1},
-			{pattern: "select * from foo", topic: queryStatsBundleTopic, count: 1},
+			expect(queryTopic, "select sleep(5)", "total_duration:{seconds:5}"),
+			expect(queryStatsBundleTopic, "select sleep(5)", "query_count:1", "sum_total_duration:{seconds:5}", "max_total_duration:{seconds:5}"),
+			expect(queryStatsBundleTopic, "select * from foo", "query_count:4", "sum_total_duration:{nanos:40000000}",
+				"max_total_duration:{nanos:10000000}", "sum_rows_read:17", "max_rows_read:7"),
 		})
 }
 
@@ -131,14 +135,14 @@ func TestInsightsTooManyPatterns(t *testing.T) {
 			{sql: "select * from foo5", responseTime: 5 * time.Second},
 		},
 		[]insightsKafkaExpectation{
-			{pattern: "select * from foo1", topic: queryTopic, count: 1},
-			{pattern: "select * from foo2", topic: queryTopic, count: 1},
-			{pattern: "select * from foo3", topic: queryTopic, count: 1},
-			{pattern: "select * from foo4", topic: queryTopic, count: 1},
-			{pattern: "select * from foo5", topic: queryTopic, count: 1},
-			{pattern: "select * from foo1", topic: queryStatsBundleTopic, count: 1},
-			{pattern: "select * from foo2", topic: queryStatsBundleTopic, count: 1},
-			{pattern: "select * from foo3", topic: queryStatsBundleTopic, count: 1},
+			expect(queryTopic, "select * from foo1", "total_duration:{seconds:5}"),
+			expect(queryTopic, "select * from foo2", "total_duration:{seconds:5}"),
+			expect(queryTopic, "select * from foo3", "total_duration:{seconds:5}"),
+			expect(queryTopic, "select * from foo4", "total_duration:{seconds:5}"),
+			expect(queryTopic, "select * from foo5", "total_duration:{seconds:5}"),
+			expect(queryStatsBundleTopic, "select * from foo1", "query_count:1", "sum_total_duration:{seconds:5}", "max_total_duration:{seconds:5}"),
+			expect(queryStatsBundleTopic, "select * from foo2", "query_count:1", "sum_total_duration:{seconds:5}", "max_total_duration:{seconds:5}"),
+			expect(queryStatsBundleTopic, "select * from foo3", "query_count:1", "sum_total_duration:{seconds:5}", "max_total_duration:{seconds:5}"),
 		})
 }
 
@@ -150,7 +154,7 @@ func TestInsightsResponseTimeThreshold(t *testing.T) {
 			{sql: "select * from foo2", responseTime: 600 * time.Millisecond},
 		},
 		[]insightsKafkaExpectation{
-			{pattern: "select * from foo2", topic: queryTopic, count: 1},
+			expect(queryTopic, "select * from foo2", "total_duration:{nanos:600000000}"),
 		})
 }
 
@@ -162,7 +166,7 @@ func TestInsightsRowsReadThreshold(t *testing.T) {
 			{sql: "select * from foo2", responseTime: 5 * time.Millisecond, rowsRead: 15},
 		},
 		[]insightsKafkaExpectation{
-			{pattern: "select * from foo1", topic: queryTopic, count: 1},
+			expect(queryTopic, "select * from foo1", "total_duration:{nanos:5000000}", "rows_read:88"),
 		})
 }
 
@@ -175,18 +179,43 @@ func TestInsightsKafkaBufferSize(t *testing.T) {
 		nil)
 }
 
+func TestInsightsErrors(t *testing.T) {
+	insightsTestHelper(t, true, setupOptions{},
+		[]insightsQuery{
+			{sql: "select this does not parse", error: "syntax error at position 21"},
+		},
+		[]insightsKafkaExpectation{
+			expect(queryTopic, `error:{value:\"syntax error at position 21\"}`).butNot("this does not parse"),
+			expect(queryStatsBundleTopic, `normalized_sql:{value:\"<error>\"}`, "query_count:1", "error_count:1").butNot("this does not parse"),
+		})
+}
+
 type insightsQuery struct {
-	sql          string
+	sql, error   string
 	responseTime time.Duration
 	rowsRead     int
 }
 
 type insightsKafkaExpectation struct {
-	pattern, topic string
-	count, found   int
+	patterns     []string
+	antipatterns []string
+	topic        string
+	found        int
 }
 
-func insightsTestHelper(t *testing.T, sleep bool, options setupOptions, queries []insightsQuery, expect []insightsKafkaExpectation) {
+func expect(topic string, patterns ...string) insightsKafkaExpectation {
+	return insightsKafkaExpectation{
+		patterns: patterns,
+		topic:    topic,
+	}
+}
+
+func (ike insightsKafkaExpectation) butNot(anti ...string) insightsKafkaExpectation {
+	ike.antipatterns = append(ike.antipatterns, anti...)
+	return ike
+}
+
+func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, queries []insightsQuery, expect []insightsKafkaExpectation) {
 	t.Helper()
 	insights, err := setup(t, "localhost:1234", "mumblefoo", "", "", options)
 	require.NoError(t, err)
@@ -196,30 +225,44 @@ func insightsTestHelper(t *testing.T, sleep bool, options setupOptions, queries 
 		assert.Contains(t, string(buf), queryURLBase+"/"+topic, "expected key not present in message body")
 		var found bool
 		for i, ex := range expect {
-			if strings.Contains(string(buf), ex.pattern) && topic == ex.topic {
-				expect[i].found++
-				found = true
-				break
+			matchesAll := true
+			if topic == ex.topic {
+				for _, p := range ex.patterns {
+					if !strings.Contains(string(buf), p) {
+						matchesAll = false
+						break
+					}
+				}
+				if matchesAll {
+					expect[i].found++
+					found = true
+					break
+				}
 			}
 		}
 		assert.True(t, found, "no pattern expects topic=%q buf=%q", topic, string(buf))
 		return nil
 	}
+	now := time.Now()
 	for _, q := range queries {
-		logger.Send(&LogStats{
+		ls := &LogStats{
 			SQL:       q.sql,
-			StartTime: time.Now().Add(-q.responseTime),
-			EndTime:   time.Now(),
+			StartTime: now.Add(-q.responseTime),
+			EndTime:   now,
 			RowsRead:  uint64(q.rowsRead),
 			Ctx:       context.Background(),
-		})
+		}
+		if q.error != "" {
+			ls.Error = errors.New(q.error)
+		}
+		logger.Send(ls)
 	}
-	if sleep {
+	if mockTimer {
 		insights.MockTimer()
 	}
 	require.True(t, insights.Drain(), "did not drain")
 	for _, ex := range expect {
-		assert.Equal(t, ex.count, ex.found, "count for topic=%q pattern=%q was wrong", ex.topic, ex.pattern)
+		assert.Equal(t, 1, ex.found, "count for %+v was wrong", ex)
 	}
 }
 

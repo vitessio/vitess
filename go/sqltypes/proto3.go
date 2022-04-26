@@ -114,12 +114,14 @@ func Proto3ToResult(qr *querypb.QueryResult) *Result {
 	if qr == nil {
 		return nil
 	}
+	infoJSON := parseOKInfoJSON(qr.Info)
 	return &Result{
 		Fields:       qr.Fields,
 		RowsAffected: qr.RowsAffected,
 		InsertID:     qr.InsertId,
 		Rows:         proto3ToRows(qr.Fields, qr.Rows),
 		Info:         qr.Info,
+		RowsRead:     infoJSON.RowsRead,
 	}
 }
 
@@ -130,11 +132,13 @@ func CustomProto3ToResult(fields []*querypb.Field, qr *querypb.QueryResult) *Res
 	if qr == nil {
 		return nil
 	}
+	infoJSON := parseOKInfoJSON(qr.Info)
 	return &Result{
 		Fields:       qr.Fields,
 		RowsAffected: qr.RowsAffected,
 		InsertID:     qr.InsertId,
 		Rows:         proto3ToRows(fields, qr.Rows),
+		RowsRead:     infoJSON.RowsRead,
 	}
 }
 

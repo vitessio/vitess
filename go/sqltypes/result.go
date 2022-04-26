@@ -30,6 +30,7 @@ import (
 type Result struct {
 	Fields              []*querypb.Field `json:"fields"`
 	RowsAffected        uint64           `json:"rows_affected"`
+	RowsRead            uint64           `json:"rows_read"`
 	InsertID            uint64           `json:"insert_id"`
 	Rows                []Row            `json:"rows"`
 	SessionStateChanges string           `json:"session_state_changes"`
@@ -92,6 +93,7 @@ func (result *Result) Copy() *Result {
 	out := &Result{
 		InsertID:     result.InsertID,
 		RowsAffected: result.RowsAffected,
+		RowsRead:     result.RowsRead,
 	}
 	if result.Fields != nil {
 		out.Fields = make([]*querypb.Field, len(result.Fields))
@@ -127,6 +129,7 @@ func (result *Result) Truncate(l int) *Result {
 	out := &Result{
 		InsertID:     result.InsertID,
 		RowsAffected: result.RowsAffected,
+		RowsRead:     result.RowsRead,
 	}
 	if result.Fields != nil {
 		out.Fields = result.Fields[:l]
@@ -300,6 +303,7 @@ func (result *Result) AppendResult(src *Result) {
 		result.Fields = src.Fields
 	}
 	result.RowsAffected += src.RowsAffected
+	result.RowsRead += src.RowsRead
 	if src.InsertID != 0 {
 		result.InsertID = src.InsertID
 	}

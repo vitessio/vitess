@@ -95,6 +95,7 @@ type Insights struct {
 	MaxPatterns            uint
 	RowsReadThreshold      uint
 	ResponseTimeThreshold  uint
+	KafkaText              bool // use human-readable pb, for tests and debugging
 
 	// state
 	KafkaWriter     *kafka.Writer
@@ -138,6 +139,9 @@ var (
 
 	// databaseBranchPublicID is api-bb's name for the database branch this cluster hosts
 	databaseBranchPublicID = flag.String("database_branch_public_id", "", "The public ID of the database branch this cluster hosts, used for Insights")
+
+	// insightsKafkaText is true if we should send protobufs message in clear text, for unit tests and debugging
+	insightsKafkaText = flag.Bool("insights_kafka_text", false, "Send Insights messages as plain text")
 )
 
 func initInsights(logger *streamlog.StreamLogger) (*Insights, error) {
@@ -151,10 +155,11 @@ func initInsights(logger *streamlog.StreamLogger) (*Insights, error) {
 		*insightsRowsReadThreshold,
 		*insightsRTThreshold,
 		time.Duration(*insightsFlushInterval)*time.Second,
+		*insightsKafkaText,
 	)
 }
 
-func initInsightsInner(logger *streamlog.StreamLogger, brokers, publicID, username, password string, bufsize, patternLimit, rowsReadThreshold, responseTimeThreshold uint, interval time.Duration) (*Insights, error) {
+func initInsightsInner(logger *streamlog.StreamLogger, brokers, publicID, username, password string, bufsize, patternLimit, rowsReadThreshold, responseTimeThreshold uint, interval time.Duration, kafkaText bool) (*Insights, error) {
 	if brokers == "" {
 		return nil, nil
 	}
@@ -173,6 +178,7 @@ func initInsightsInner(logger *streamlog.StreamLogger, brokers, publicID, userna
 		MaxPatterns:            patternLimit,
 		RowsReadThreshold:      rowsReadThreshold,
 		ResponseTimeThreshold:  responseTimeThreshold,
+		KafkaText:              kafkaText,
 	}
 	insights.Sender = insights.sendToKafka
 	err := insights.logToKafka(logger)
@@ -211,8 +217,8 @@ func (ii *Insights) startInterval() {
 	ii.PeriodStart = time.Now()
 }
 
-func (ii *Insights) shouldSendToInsights(responseTime time.Duration, rowsRead uint64) bool {
-	return responseTime.Milliseconds() > int64(ii.ResponseTimeThreshold) || rowsRead >= uint64(ii.RowsReadThreshold)
+func (ii *Insights) shouldSendToInsights(ls *LogStats) bool {
+	return ls.TotalTime().Milliseconds() > int64(ii.ResponseTimeThreshold) || ls.RowsRead >= uint64(ii.RowsReadThreshold) || ls.Error != nil
 }
 
 func (ii *Insights) logToKafka(logger *streamlog.StreamLogger) error {
@@ -305,7 +311,7 @@ func (ii *Insights) handleMessage(record interface{}) {
 
 	ii.addToAggregates(ls)
 
-	if !ii.shouldSendToInsights(ls.TotalTime(), ls.RowsRead) {
+	if !ii.shouldSendToInsights(ls) {
 		return
 	}
 
@@ -363,8 +369,17 @@ func (ii *Insights) addToAggregates(ls *LogStats) bool {
 	var pa *QueryPatternAggregation
 	key := QueryPatternKey{
 		Keyspace: ls.Keyspace,
-		SQL:      ls.SQL,
 	}
+
+	// When there is an error, ls.SQL isn't normalized.  To protect private information and
+	// avoid high cardinality in ii.Aggregations, combine all error statements into a single
+	// bucket.
+	if ls.Error == nil {
+		key.SQL = ls.SQL
+	} else {
+		key.SQL = "<error>"
+	}
+
 	pa, ok := ii.Aggregations[key]
 	if !ok {
 		if uint(len(ii.Aggregations)) >= ii.MaxPatterns {
@@ -454,7 +469,6 @@ func (ii *Insights) makeQueryMessage(ls *LogStats) ([]byte, error) {
 		RemoteAddress:          stringOrNil(addr),
 		RemotePort:             port,
 		VtgateName:             hostnameOrEmpty(),
-		NormalizedSql:          stringOrNil(ls.SQL),
 		StatementType:          stringOrNil(ls.StmtType),
 		Tables:                 tables, // FIXME: ls.Table captures only one table, and only for simple queries
 		Keyspace:               stringOrNil(ls.Keyspace),
@@ -471,11 +485,22 @@ func (ii *Insights) makeQueryMessage(ls *LogStats) ([]byte, error) {
 		CommentTags:            nil, // WRITEME
 	}
 
-	out, err := proto.Marshal(&obj)
-	if err != nil {
-		return nil, err
+	// If there was an error, then ls.SQL won't be normalized, and we shouldn't send it.
+	if ls.Error == nil {
+		obj.NormalizedSql = stringOrNil(ls.SQL)
 	}
-	return makeEnvelope(out, queryTopic)
+
+	var out []byte
+	if ii.KafkaText {
+		out = []byte(obj.String())
+	} else {
+		var err error
+		out, err = proto.Marshal(&obj)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return ii.makeEnvelope(out, queryTopic)
 }
 
 func (ii *Insights) makeQueryPatternMessage(sql, keyspace string, pa *QueryPatternAggregation) ([]byte, error) {
@@ -507,14 +532,20 @@ func (ii *Insights) makeQueryPatternMessage(sql, keyspace string, pa *QueryPatte
 		MaxCommitDuration:      durationOrNil(pa.MaxCommitDuration),
 	}
 
-	out, err := proto.Marshal(&obj)
-	if err != nil {
-		return nil, err
+	var out []byte
+	if ii.KafkaText {
+		out = []byte(obj.String())
+	} else {
+		var err error
+		out, err = proto.Marshal(&obj)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return makeEnvelope(out, queryStatsBundleTopic)
+	return ii.makeEnvelope(out, queryStatsBundleTopic)
 }
 
-func makeEnvelope(contents []byte, topic string) ([]byte, error) {
+func (ii *Insights) makeEnvelope(contents []byte, topic string) ([]byte, error) {
 	envelope := pbenvelope.Envelope{
 		TypeUrl:   queryURLBase + "/" + topic,
 		Event:     contents,
@@ -522,6 +553,9 @@ func makeEnvelope(contents []byte, topic string) ([]byte, error) {
 		Timestamp: timestamppb.Now(),
 	}
 
+	if ii.KafkaText {
+		return []byte(envelope.String()), nil
+	}
 	return proto.Marshal(&envelope)
 }
 
