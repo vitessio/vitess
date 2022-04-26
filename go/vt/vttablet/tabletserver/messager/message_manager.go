@@ -189,7 +189,7 @@ type messageManager struct {
 	curReceiver     int
 	messagesPending bool
 
-	// lastPostionMu protects the lastPollPosition variable which is the main
+	// lastPollPostionMu protects the lastPollPosition variable which is the main
 	// point of coordination between the poller and the binlog streamer to
 	// ensure that we are not re-processing older events.
 	lastPollPositionMu sync.Mutex
@@ -754,6 +754,8 @@ func (mm *messageManager) processRowEvent(fields []*querypb.Field, rowEvent *bin
 }
 
 func (mm *messageManager) runPoller() {
+	mm.streamProcessingMu.Lock()
+	defer mm.streamProcessingMu.Unlock()
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 
@@ -773,9 +775,6 @@ func (mm *messageManager) runPoller() {
 		"time_next": sqltypes.Int64BindVariable(time.Now().UnixNano()),
 		"max":       sqltypes.Int64BindVariable(int64(size)),
 	}
-
-	mm.streamProcessingMu.Lock()
-	defer mm.streamProcessingMu.Unlock()
 
 	qr, err := mm.readPending(ctx, bindVars)
 	if err != nil {
