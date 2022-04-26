@@ -294,6 +294,9 @@ const (
 
 	// UserDefinedVariableName is what we prepend bind var names for user defined variables
 	UserDefinedVariableName = "__vtudv"
+
+	// MaxReplLag is a reserved bind var name for max_repl_lag()
+	MaxReplLag = "__vtmaxrepllag"
 )
 
 func (er *astRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, error) {
@@ -488,6 +491,7 @@ var funcRewrites = map[string]string{
 	"schema":         DBVarName,
 	"found_rows":     FoundRowsName,
 	"row_count":      RowCountName,
+	"max_repl_lag":   MaxReplLag,
 }
 
 func (er *astRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {

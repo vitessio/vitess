@@ -382,6 +382,8 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[sqlparser.FoundRowsName] = sqltypes.Int64BindVariable(int64(session.FoundRows))
 		case sqlparser.RowCountName:
 			bindVars[sqlparser.RowCountName] = sqltypes.Int64BindVariable(session.RowCount)
+		case sqlparser.MaxReplLag:
+			bindVars[sqlparser.RowCountName] = sqltypes.Int64BindVariable(e.getMaxReplicationLag())
 		}
 	}
 
@@ -882,6 +884,23 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 		Fields: buildVarCharFields("Keyspace", "Shard", "TabletType", "Alias", "Hostname", "ReplicationSource", "ReplicationHealth", "ReplicationLag", "ThrottlerStatus"),
 		Rows:   rows,
 	}, nil
+}
+
+func (e *Executor) getMaxReplicationLag() int64 {
+	status := e.scatterConn.GetHealthCheckCacheStatus()
+	replLag := uint32(0)
+	for _, s := range status {
+		for _, ts := range s.TabletsStats {
+			// We only want to show REPLICA and RDONLY tablets
+			if ts.Tablet.Type != topodatapb.TabletType_REPLICA && ts.Tablet.Type != topodatapb.TabletType_RDONLY {
+				continue
+			}
+			if ts.Stats != nil && ts.Stats.ReplicationLagSeconds > replLag {
+				replLag = ts.Stats.ReplicationLagSeconds
+			}
+		}
+	}
+	return int64(replLag)
 }
 
 // MessageStream is part of the vtgate service API. This is a V2 level API that's sent
