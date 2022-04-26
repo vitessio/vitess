@@ -722,6 +722,10 @@ func TestReplLag(t *testing.T) {
 	ks2 := "TestReplLag2"
 	_ = createSandbox(ks1)
 	_ = createSandbox(ks2)
+	defer func() {
+		delete(ksToSandbox, ks1)
+		delete(ksToSandbox, ks2)
+	}()
 	serv := new(sandboxTopo)
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-"}
