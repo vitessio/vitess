@@ -479,7 +479,9 @@ func (mm *messageManager) rescanReceivers(start int) {
 // if successful. If the message is already present,
 // it still returns true.
 func (mm *messageManager) Add(mr *MessageRow) bool {
-	if mm.getReceiverCount() == 0 {
+	mm.mu.Lock()
+	defer mm.mu.Unlock()
+	if len(mm.receivers) == 0 {
 		return false
 	}
 	// If cache is empty, we have to broadcast that we're not empty
