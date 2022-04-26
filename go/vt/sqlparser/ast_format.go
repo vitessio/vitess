@@ -440,23 +440,23 @@ func (node *PartitionDefinitionOptions) Format(buf *TrackedBuffer) {
 	if node.Engine != nil {
 		buf.astPrintf(node, " %v", node.Engine)
 	}
-	if node.Comment != nil {
-		buf.astPrintf(node, " %v", node.Comment)
+	if node.Comment != "" {
+		buf.astPrintf(node, " comment '%s'", node.Comment)
 	}
-	if node.DataDirectory != nil {
-		buf.astPrintf(node, " %v", node.DataDirectory)
+	if node.DataDirectory != "" {
+		buf.astPrintf(node, " data directory '%s'", node.DataDirectory)
 	}
-	if node.IndexDirectory != nil {
-		buf.astPrintf(node, " %v", node.IndexDirectory)
+	if node.IndexDirectory != "" {
+		buf.astPrintf(node, " index directory '%s'", node.IndexDirectory)
 	}
-	if node.MaxRows != nil {
-		buf.astPrintf(node, " %v", node.MaxRows)
+	if node.MaxRows != -1 {
+		buf.astPrintf(node, " max_rows %d", node.MaxRows)
 	}
-	if node.MinRows != nil {
-		buf.astPrintf(node, " %v", node.MinRows)
+	if node.MinRows != -1 {
+		buf.astPrintf(node, " min_rows %d", node.MinRows)
 	}
-	if node.TableSpace != nil {
-		buf.astPrintf(node, " %v", node.TableSpace)
+	if node.TableSpace != "" {
+		buf.astPrintf(node, " tablespace %s", node.TableSpace)
 	}
 }
 
@@ -476,63 +476,7 @@ func (node *PartitionEngine) Format(buf *TrackedBuffer) {
 		buf.WriteString("storage ")
 	}
 	buf.WriteString("engine ")
-	if node.Equal != "" {
-		buf.WriteString("= ")
-	}
-	buf.astPrintf(node, "%s", node.Name)
-}
 
-// Format formats the node
-func (node *PartitionComment) Format(buf *TrackedBuffer) {
-	buf.WriteString("comment ")
-	if node.Equal != "" {
-		buf.WriteString("= ")
-	}
-	buf.astPrintf(node, "'%s'", node.Comment)
-}
-
-// Format formats the node
-func (node *PartitionDataDirectory) Format(buf *TrackedBuffer) {
-	buf.WriteString("data directory ")
-	if node.Equal != "" {
-		buf.WriteString("= ")
-	}
-	buf.astPrintf(node, "'%s'", node.DataDir)
-}
-
-// Format formats the node
-func (node *PartitionIndexDirectory) Format(buf *TrackedBuffer) {
-	buf.WriteString("index directory ")
-	if node.Equal != "" {
-		buf.WriteString("= ")
-	}
-	buf.astPrintf(node, "'%s'", node.IndexDir)
-}
-
-// Format formats the node
-func (node *PartitionMaxRows) Format(buf *TrackedBuffer) {
-	buf.WriteString("max_rows ")
-	if node.Equal != "" {
-		buf.WriteString("= ")
-	}
-	buf.astPrintf(node, "%d", node.Rows)
-}
-
-// Format formats the node
-func (node *PartitionMinRows) Format(buf *TrackedBuffer) {
-	buf.WriteString("min_rows ")
-	if node.Equal != "" {
-		buf.WriteString("= ")
-	}
-	buf.astPrintf(node, "%d", node.Rows)
-}
-
-// Format formats the node
-func (node *PartitionTableSpace) Format(buf *TrackedBuffer) {
-	buf.WriteString("tablespace ")
-	if node.Equal != "" {
-		buf.WriteString("= ")
-	}
 	buf.astPrintf(node, "%s", node.Name)
 }
 

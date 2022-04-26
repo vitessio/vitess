@@ -271,28 +271,16 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfParenTableExpr(in)
 	case *ParsedComments:
 		return CloneRefOfParsedComments(in)
-	case *PartitionComment:
-		return CloneRefOfPartitionComment(in)
-	case *PartitionDataDirectory:
-		return CloneRefOfPartitionDataDirectory(in)
 	case *PartitionDefinition:
 		return CloneRefOfPartitionDefinition(in)
 	case *PartitionDefinitionOptions:
 		return CloneRefOfPartitionDefinitionOptions(in)
 	case *PartitionEngine:
 		return CloneRefOfPartitionEngine(in)
-	case *PartitionIndexDirectory:
-		return CloneRefOfPartitionIndexDirectory(in)
-	case *PartitionMaxRows:
-		return CloneRefOfPartitionMaxRows(in)
-	case *PartitionMinRows:
-		return CloneRefOfPartitionMinRows(in)
 	case *PartitionOption:
 		return CloneRefOfPartitionOption(in)
 	case *PartitionSpec:
 		return CloneRefOfPartitionSpec(in)
-	case *PartitionTableSpace:
-		return CloneRefOfPartitionTableSpace(in)
 	case *PartitionValueRange:
 		return CloneRefOfPartitionValueRange(in)
 	case Partitions:
@@ -1686,24 +1674,6 @@ func CloneRefOfParsedComments(n *ParsedComments) *ParsedComments {
 	return &out
 }
 
-// CloneRefOfPartitionComment creates a deep clone of the input.
-func CloneRefOfPartitionComment(n *PartitionComment) *PartitionComment {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
-}
-
-// CloneRefOfPartitionDataDirectory creates a deep clone of the input.
-func CloneRefOfPartitionDataDirectory(n *PartitionDataDirectory) *PartitionDataDirectory {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
-}
-
 // CloneRefOfPartitionDefinition creates a deep clone of the input.
 func CloneRefOfPartitionDefinition(n *PartitionDefinition) *PartitionDefinition {
 	if n == nil {
@@ -1722,45 +1692,12 @@ func CloneRefOfPartitionDefinitionOptions(n *PartitionDefinitionOptions) *Partit
 	}
 	out := *n
 	out.ValueRange = CloneRefOfPartitionValueRange(n.ValueRange)
-	out.Comment = CloneRefOfPartitionComment(n.Comment)
 	out.Engine = CloneRefOfPartitionEngine(n.Engine)
-	out.DataDirectory = CloneRefOfPartitionDataDirectory(n.DataDirectory)
-	out.IndexDirectory = CloneRefOfPartitionIndexDirectory(n.IndexDirectory)
-	out.MaxRows = CloneRefOfPartitionMaxRows(n.MaxRows)
-	out.MinRows = CloneRefOfPartitionMinRows(n.MinRows)
-	out.TableSpace = CloneRefOfPartitionTableSpace(n.TableSpace)
 	return &out
 }
 
 // CloneRefOfPartitionEngine creates a deep clone of the input.
 func CloneRefOfPartitionEngine(n *PartitionEngine) *PartitionEngine {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
-}
-
-// CloneRefOfPartitionIndexDirectory creates a deep clone of the input.
-func CloneRefOfPartitionIndexDirectory(n *PartitionIndexDirectory) *PartitionIndexDirectory {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
-}
-
-// CloneRefOfPartitionMaxRows creates a deep clone of the input.
-func CloneRefOfPartitionMaxRows(n *PartitionMaxRows) *PartitionMaxRows {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
-}
-
-// CloneRefOfPartitionMinRows creates a deep clone of the input.
-func CloneRefOfPartitionMinRows(n *PartitionMinRows) *PartitionMinRows {
 	if n == nil {
 		return nil
 	}
@@ -1791,15 +1728,6 @@ func CloneRefOfPartitionSpec(n *PartitionSpec) *PartitionSpec {
 	out.Number = CloneRefOfLiteral(n.Number)
 	out.TableName = CloneTableName(n.TableName)
 	out.Definitions = CloneSliceOfRefOfPartitionDefinition(n.Definitions)
-	return &out
-}
-
-// CloneRefOfPartitionTableSpace creates a deep clone of the input.
-func CloneRefOfPartitionTableSpace(n *PartitionTableSpace) *PartitionTableSpace {
-	if n == nil {
-		return nil
-	}
-	out := *n
 	return &out
 }
 

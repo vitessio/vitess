@@ -270,28 +270,16 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfParenTableExpr(in, f)
 	case *ParsedComments:
 		return VisitRefOfParsedComments(in, f)
-	case *PartitionComment:
-		return VisitRefOfPartitionComment(in, f)
-	case *PartitionDataDirectory:
-		return VisitRefOfPartitionDataDirectory(in, f)
 	case *PartitionDefinition:
 		return VisitRefOfPartitionDefinition(in, f)
 	case *PartitionDefinitionOptions:
 		return VisitRefOfPartitionDefinitionOptions(in, f)
 	case *PartitionEngine:
 		return VisitRefOfPartitionEngine(in, f)
-	case *PartitionIndexDirectory:
-		return VisitRefOfPartitionIndexDirectory(in, f)
-	case *PartitionMaxRows:
-		return VisitRefOfPartitionMaxRows(in, f)
-	case *PartitionMinRows:
-		return VisitRefOfPartitionMinRows(in, f)
 	case *PartitionOption:
 		return VisitRefOfPartitionOption(in, f)
 	case *PartitionSpec:
 		return VisitRefOfPartitionSpec(in, f)
-	case *PartitionTableSpace:
-		return VisitRefOfPartitionTableSpace(in, f)
 	case *PartitionValueRange:
 		return VisitRefOfPartitionValueRange(in, f)
 	case Partitions:
@@ -2113,24 +2101,6 @@ func VisitRefOfParsedComments(in *ParsedComments, f Visit) error {
 	}
 	return nil
 }
-func VisitRefOfPartitionComment(in *PartitionComment, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	return nil
-}
-func VisitRefOfPartitionDataDirectory(in *PartitionDataDirectory, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	return nil
-}
 func VisitRefOfPartitionDefinition(in *PartitionDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -2156,57 +2126,12 @@ func VisitRefOfPartitionDefinitionOptions(in *PartitionDefinitionOptions, f Visi
 	if err := VisitRefOfPartitionValueRange(in.ValueRange, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfPartitionComment(in.Comment, f); err != nil {
-		return err
-	}
 	if err := VisitRefOfPartitionEngine(in.Engine, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfPartitionDataDirectory(in.DataDirectory, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfPartitionIndexDirectory(in.IndexDirectory, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfPartitionMaxRows(in.MaxRows, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfPartitionMinRows(in.MinRows, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfPartitionTableSpace(in.TableSpace, f); err != nil {
 		return err
 	}
 	return nil
 }
 func VisitRefOfPartitionEngine(in *PartitionEngine, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	return nil
-}
-func VisitRefOfPartitionIndexDirectory(in *PartitionIndexDirectory, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	return nil
-}
-func VisitRefOfPartitionMaxRows(in *PartitionMaxRows, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	return nil
-}
-func VisitRefOfPartitionMinRows(in *PartitionMinRows, f Visit) error {
 	if in == nil {
 		return nil
 	}
@@ -2258,15 +2183,6 @@ func VisitRefOfPartitionSpec(in *PartitionSpec, f Visit) error {
 		if err := VisitRefOfPartitionDefinition(el, f); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-func VisitRefOfPartitionTableSpace(in *PartitionTableSpace, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
 	}
 	return nil
 }

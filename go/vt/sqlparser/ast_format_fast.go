@@ -607,29 +607,32 @@ func (node *PartitionDefinitionOptions) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		node.Engine.formatFast(buf)
 	}
-	if node.Comment != nil {
-		buf.WriteByte(' ')
-		node.Comment.formatFast(buf)
+	if node.Comment != "" {
+		buf.WriteString(" comment '")
+		buf.WriteString(node.Comment)
+		buf.WriteByte('\'')
 	}
-	if node.DataDirectory != nil {
-		buf.WriteByte(' ')
-		node.DataDirectory.formatFast(buf)
+	if node.DataDirectory != "" {
+		buf.WriteString(" data directory '")
+		buf.WriteString(node.DataDirectory)
+		buf.WriteByte('\'')
 	}
-	if node.IndexDirectory != nil {
-		buf.WriteByte(' ')
-		node.IndexDirectory.formatFast(buf)
+	if node.IndexDirectory != "" {
+		buf.WriteString(" index directory '")
+		buf.WriteString(node.IndexDirectory)
+		buf.WriteByte('\'')
 	}
-	if node.MaxRows != nil {
-		buf.WriteByte(' ')
-		node.MaxRows.formatFast(buf)
+	if node.MaxRows != -1 {
+		buf.WriteString(" max_rows ")
+		buf.WriteString(fmt.Sprintf("%d", node.MaxRows))
 	}
-	if node.MinRows != nil {
-		buf.WriteByte(' ')
-		node.MinRows.formatFast(buf)
+	if node.MinRows != -1 {
+		buf.WriteString(" min_rows ")
+		buf.WriteString(fmt.Sprintf("%d", node.MinRows))
 	}
-	if node.TableSpace != nil {
-		buf.WriteByte(' ')
-		node.TableSpace.formatFast(buf)
+	if node.TableSpace != "" {
+		buf.WriteString(" tablespace ")
+		buf.WriteString(node.TableSpace)
 	}
 }
 
@@ -651,69 +654,7 @@ func (node *PartitionEngine) formatFast(buf *TrackedBuffer) {
 		buf.WriteString("storage ")
 	}
 	buf.WriteString("engine ")
-	if node.Equal != "" {
-		buf.WriteString("= ")
-	}
-	buf.WriteString(node.Name)
-}
 
-// formatFast formats the node
-func (node *PartitionComment) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("comment ")
-	if node.Equal != "" {
-		buf.WriteString("= ")
-	}
-	buf.WriteByte('\'')
-	buf.WriteString(node.Comment)
-	buf.WriteByte('\'')
-}
-
-// formatFast formats the node
-func (node *PartitionDataDirectory) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("data directory ")
-	if node.Equal != "" {
-		buf.WriteString("= ")
-	}
-	buf.WriteByte('\'')
-	buf.WriteString(node.DataDir)
-	buf.WriteByte('\'')
-}
-
-// formatFast formats the node
-func (node *PartitionIndexDirectory) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("index directory ")
-	if node.Equal != "" {
-		buf.WriteString("= ")
-	}
-	buf.WriteByte('\'')
-	buf.WriteString(node.IndexDir)
-	buf.WriteByte('\'')
-}
-
-// formatFast formats the node
-func (node *PartitionMaxRows) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("max_rows ")
-	if node.Equal != "" {
-		buf.WriteString("= ")
-	}
-	buf.WriteString(fmt.Sprintf("%d", node.Rows))
-}
-
-// formatFast formats the node
-func (node *PartitionMinRows) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("min_rows ")
-	if node.Equal != "" {
-		buf.WriteString("= ")
-	}
-	buf.WriteString(fmt.Sprintf("%d", node.Rows))
-}
-
-// formatFast formats the node
-func (node *PartitionTableSpace) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("tablespace ")
-	if node.Equal != "" {
-		buf.WriteString("= ")
-	}
 	buf.WriteString(node.Name)
 }
 

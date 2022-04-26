@@ -138,12 +138,6 @@ func bindVariable(yylex yyLexer, bvar string) {
   partDefs      []*PartitionDefinition
   partitionValueRange	*PartitionValueRange
   partitionEngine *PartitionEngine
-  partitionComment *PartitionComment
-  partitionDataDirectory *PartitionDataDirectory
-  partitionIndexDirectory *PartitionIndexDirectory
-  partitionMaxRows *PartitionMaxRows
-  partitionMinRows *PartitionMinRows
-  partitionTableSpace *PartitionTableSpace
   partSpecs     []*PartitionSpec
   characteristics []Characteristic
   selectExpr    SelectExpr
@@ -352,7 +346,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> PARTITIONS LINEAR RANGE LIST SUBPARTITION SUBPARTITIONS HASH
 
 %type <partitionByType> range_or_list
-%type <integer> partitions_opt algorithm_opt subpartitions_opt
+%type <integer> partitions_opt algorithm_opt subpartitions_opt partition_max_rows partition_min_rows
 %type <statement> command
 %type <selStmt> query_expression_parens query_expression query_expression_body select_statement query_primary select_stmt_with_into
 %type <statement> explain_statement explainable_statement
@@ -480,7 +474,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <constraintDefinition> constraint_definition check_constraint_definition
 %type <str> index_or_key index_symbols from_or_in index_or_key_opt
 %type <str> name_opt constraint_name_opt
-%type <str> equal_opt
+%type <str> equal_opt partition_comment partition_data_directory partition_index_directory partition_tablespace_name
 %type <tableSpec> table_spec table_column_list
 %type <optLike> create_like
 %type <str> table_opt_value
@@ -496,12 +490,6 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partDef> partition_definition partition_name
 %type <partitionValueRange> partition_value_range
 %type <partitionEngine> partition_engine
-%type <partitionComment> partition_comment
-%type <partitionDataDirectory> partition_data_directory
-%type <partitionIndexDirectory> partition_index_directory
-%type <partitionMaxRows> partition_max_rows
-%type <partitionMinRows> partition_min_rows
-%type <partitionTableSpace> partition_tablespace_name
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
@@ -2111,7 +2099,7 @@ equal_opt:
   }
 | '='
   {
-    $$ = "="
+    $$ = string($1)
   }
 
 index_info:
@@ -3220,7 +3208,7 @@ partition_definition:
 
 partition_definition_attribute_list_opt:
   {
-    $$ = &PartitionDefinitionOptions{ValueRange: nil, Comment: nil, Engine: nil, DataDirectory: nil, IndexDirectory: nil, MaxRows: nil, MinRows: nil, TableSpace: nil}
+    $$ = &PartitionDefinitionOptions{ValueRange: nil, Comment: "", Engine: nil, DataDirectory: "", IndexDirectory: "", MaxRows: -1, MinRows: -1, TableSpace: ""}
   }
 | partition_definition_attribute_list_opt partition_value_range
   {
@@ -3298,43 +3286,43 @@ partition_storage_opt:
 partition_engine:
   partition_storage_opt ENGINE equal_opt table_alias
   {
-    $$ = &PartitionEngine{Storage:$1, Equal: $3, Name: $4.String()}
+    $$ = &PartitionEngine{Storage:$1, Name: $4.String()}
   }
 
 partition_comment:
   COMMENT_KEYWORD equal_opt STRING
   {
-    $$ = &PartitionComment{ Equal: $2, Comment: $3}
+    $$ = $3
   }
 
 partition_data_directory:
   DATA DIRECTORY equal_opt STRING
   {
-    $$ = &PartitionDataDirectory{ Equal: $3, DataDir: $4}
+    $$ = $4
   }
 
 partition_index_directory:
   INDEX DIRECTORY equal_opt STRING
   {
-    $$ = &PartitionIndexDirectory{ Equal: $3, IndexDir: $4}
+    $$ = $4
   }
 
 partition_max_rows:
   MAX_ROWS equal_opt INTEGRAL
   {
-    $$ = &PartitionMaxRows{ Equal: $2, Rows: convertStringToInt($3)}
+    $$ = convertStringToInt($3)
   }
 
 partition_min_rows:
   MIN_ROWS equal_opt INTEGRAL
   {
-    $$ = &PartitionMinRows{ Equal: $2, Rows: convertStringToInt($3)}
+    $$ = convertStringToInt($3)
   }
 
 partition_tablespace_name:
   TABLESPACE equal_opt table_alias
   {
-    $$ = &PartitionTableSpace{ Equal: $2, Name: $3.String() }
+    $$ = $3.String()
   }
 
 partition_name:

@@ -4406,7 +4406,7 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) storage engine = FOOBAR, partition MyPart values in (2, 4, 6))`,
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR, partition MyPart values in (2, 4, 6))`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
@@ -4416,7 +4416,7 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) engine = FOOBAR, partition MyPart values in (2, 4, 6))`,
+) partition by list (val) (partition mypart values in (1, 3, 5) engine FOOBAR, partition MyPart values in (2, 4, 6))`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
@@ -4436,7 +4436,7 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR comment = 'test', partition MyPart values in (2, 4, 6) comment 'test2')`,
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR comment 'test', partition MyPart values in (2, 4, 6) comment 'test2')`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
@@ -4446,7 +4446,7 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR data directory = 'test', partition MyPart values in (2, 4, 6) data directory 'test2')`,
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR data directory 'test', partition MyPart values in (2, 4, 6) data directory 'test2')`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
@@ -4456,7 +4456,7 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) index directory = 'test', partition MyPart values in (2, 4, 6) index directory 'test2')`,
+) partition by list (val) (partition mypart values in (1, 3, 5) index directory 'test', partition MyPart values in (2, 4, 6) index directory 'test2')`,
 		},
 		{
 			input: `create table t1 (id int primary key) partition by list (id) (partition p1 values in(11,21), partition p2 values in (12,22))`,
@@ -4472,7 +4472,7 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR comment = 'before' data directory = 'test', partition MyPart values in (2, 4, 6) data directory 'test2')`,
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR comment 'before' data directory 'test', partition MyPart values in (2, 4, 6) data directory 'test2')`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
@@ -4482,7 +4482,7 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) max_rows = 4, partition MyPart values in (2, 4, 6) max_rows 10)`,
+) partition by list (val) (partition mypart values in (1, 3, 5) max_rows 4, partition MyPart values in (2, 4, 6) max_rows 10)`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
@@ -4492,7 +4492,7 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) min_rows = 4, partition MyPart values in (2, 4, 6) min_rows 10)`,
+) partition by list (val) (partition mypart values in (1, 3, 5) min_rows 4, partition MyPart values in (2, 4, 6) min_rows 10)`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
@@ -4502,7 +4502,7 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) tablespace = innodb_system, partition MyPart values in (2, 4, 6) tablespace innodb_system)`,
+) partition by list (val) (partition mypart values in (1, 3, 5) tablespace innodb_system, partition MyPart values in (2, 4, 6) tablespace innodb_system)`,
 		},
 	}
 	for _, test := range createTableQueries {

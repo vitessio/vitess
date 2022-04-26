@@ -270,28 +270,16 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfParenTableExpr(parent, node, replacer)
 	case *ParsedComments:
 		return a.rewriteRefOfParsedComments(parent, node, replacer)
-	case *PartitionComment:
-		return a.rewriteRefOfPartitionComment(parent, node, replacer)
-	case *PartitionDataDirectory:
-		return a.rewriteRefOfPartitionDataDirectory(parent, node, replacer)
 	case *PartitionDefinition:
 		return a.rewriteRefOfPartitionDefinition(parent, node, replacer)
 	case *PartitionDefinitionOptions:
 		return a.rewriteRefOfPartitionDefinitionOptions(parent, node, replacer)
 	case *PartitionEngine:
 		return a.rewriteRefOfPartitionEngine(parent, node, replacer)
-	case *PartitionIndexDirectory:
-		return a.rewriteRefOfPartitionIndexDirectory(parent, node, replacer)
-	case *PartitionMaxRows:
-		return a.rewriteRefOfPartitionMaxRows(parent, node, replacer)
-	case *PartitionMinRows:
-		return a.rewriteRefOfPartitionMinRows(parent, node, replacer)
 	case *PartitionOption:
 		return a.rewriteRefOfPartitionOption(parent, node, replacer)
 	case *PartitionSpec:
 		return a.rewriteRefOfPartitionSpec(parent, node, replacer)
-	case *PartitionTableSpace:
-		return a.rewriteRefOfPartitionTableSpace(parent, node, replacer)
 	case *PartitionValueRange:
 		return a.rewriteRefOfPartitionValueRange(parent, node, replacer)
 	case Partitions:
@@ -4150,54 +4138,6 @@ func (a *application) rewriteRefOfParsedComments(parent SQLNode, node *ParsedCom
 	}
 	return true
 }
-func (a *application) rewriteRefOfPartitionComment(parent SQLNode, node *PartitionComment, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfPartitionDataDirectory(parent SQLNode, node *PartitionDataDirectory, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
 func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *PartitionDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4247,38 +4187,8 @@ func (a *application) rewriteRefOfPartitionDefinitionOptions(parent SQLNode, nod
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfPartitionComment(node, node.Comment, func(newNode, parent SQLNode) {
-		parent.(*PartitionDefinitionOptions).Comment = newNode.(*PartitionComment)
-	}) {
-		return false
-	}
 	if !a.rewriteRefOfPartitionEngine(node, node.Engine, func(newNode, parent SQLNode) {
 		parent.(*PartitionDefinitionOptions).Engine = newNode.(*PartitionEngine)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfPartitionDataDirectory(node, node.DataDirectory, func(newNode, parent SQLNode) {
-		parent.(*PartitionDefinitionOptions).DataDirectory = newNode.(*PartitionDataDirectory)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfPartitionIndexDirectory(node, node.IndexDirectory, func(newNode, parent SQLNode) {
-		parent.(*PartitionDefinitionOptions).IndexDirectory = newNode.(*PartitionIndexDirectory)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfPartitionMaxRows(node, node.MaxRows, func(newNode, parent SQLNode) {
-		parent.(*PartitionDefinitionOptions).MaxRows = newNode.(*PartitionMaxRows)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfPartitionMinRows(node, node.MinRows, func(newNode, parent SQLNode) {
-		parent.(*PartitionDefinitionOptions).MinRows = newNode.(*PartitionMinRows)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfPartitionTableSpace(node, node.TableSpace, func(newNode, parent SQLNode) {
-		parent.(*PartitionDefinitionOptions).TableSpace = newNode.(*PartitionTableSpace)
 	}) {
 		return false
 	}
@@ -4293,78 +4203,6 @@ func (a *application) rewriteRefOfPartitionDefinitionOptions(parent SQLNode, nod
 	return true
 }
 func (a *application) rewriteRefOfPartitionEngine(parent SQLNode, node *PartitionEngine, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfPartitionIndexDirectory(parent SQLNode, node *PartitionIndexDirectory, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfPartitionMaxRows(parent SQLNode, node *PartitionMaxRows, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfPartitionMinRows(parent SQLNode, node *PartitionMinRows, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}
@@ -4474,30 +4312,6 @@ func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionS
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfPartitionTableSpace(parent SQLNode, node *PartitionTableSpace, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
 		if !a.post(&a.cur) {
 			return false
 		}

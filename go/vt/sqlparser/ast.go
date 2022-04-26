@@ -1619,13 +1619,13 @@ type PartitionDefinition struct {
 
 type PartitionDefinitionOptions struct {
 	ValueRange     *PartitionValueRange
-	Comment        *PartitionComment
+	Comment        string
 	Engine         *PartitionEngine
-	DataDirectory  *PartitionDataDirectory
-	IndexDirectory *PartitionIndexDirectory
-	MaxRows        *PartitionMaxRows
-	MinRows        *PartitionMinRows
-	TableSpace     *PartitionTableSpace
+	DataDirectory  string
+	IndexDirectory string
+	MaxRows        int
+	MinRows        int
+	TableSpace     string
 }
 
 // PartitionValueRangeType is an enum for PartitionValueRange.Type
@@ -1639,38 +1639,7 @@ type PartitionValueRange struct {
 
 type PartitionEngine struct {
 	Storage bool
-	Equal   string
 	Name    string
-}
-
-type PartitionComment struct {
-	Equal   string
-	Comment string
-}
-
-type PartitionDataDirectory struct {
-	Equal   string
-	DataDir string
-}
-
-type PartitionIndexDirectory struct {
-	Equal    string
-	IndexDir string
-}
-
-type PartitionMaxRows struct {
-	Equal string
-	Rows  int
-}
-
-type PartitionMinRows struct {
-	Equal string
-	Rows  int
-}
-
-type PartitionTableSpace struct {
-	Equal string
-	Name  string
 }
 
 // PartitionByType is an enum storing how we are partitioning a table

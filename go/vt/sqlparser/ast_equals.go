@@ -770,18 +770,6 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfParsedComments(a, b)
-	case *PartitionComment:
-		b, ok := inB.(*PartitionComment)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfPartitionComment(a, b)
-	case *PartitionDataDirectory:
-		b, ok := inB.(*PartitionDataDirectory)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfPartitionDataDirectory(a, b)
 	case *PartitionDefinition:
 		b, ok := inB.(*PartitionDefinition)
 		if !ok {
@@ -800,24 +788,6 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfPartitionEngine(a, b)
-	case *PartitionIndexDirectory:
-		b, ok := inB.(*PartitionIndexDirectory)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfPartitionIndexDirectory(a, b)
-	case *PartitionMaxRows:
-		b, ok := inB.(*PartitionMaxRows)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfPartitionMaxRows(a, b)
-	case *PartitionMinRows:
-		b, ok := inB.(*PartitionMinRows)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfPartitionMinRows(a, b)
 	case *PartitionOption:
 		b, ok := inB.(*PartitionOption)
 		if !ok {
@@ -830,12 +800,6 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfPartitionSpec(a, b)
-	case *PartitionTableSpace:
-		b, ok := inB.(*PartitionTableSpace)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfPartitionTableSpace(a, b)
 	case *PartitionValueRange:
 		b, ok := inB.(*PartitionValueRange)
 		if !ok {
@@ -2687,30 +2651,6 @@ func EqualsRefOfParsedComments(a, b *ParsedComments) bool {
 	return EqualsComments(a.comments, b.comments)
 }
 
-// EqualsRefOfPartitionComment does deep equals between the two objects.
-func EqualsRefOfPartitionComment(a, b *PartitionComment) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Equal == b.Equal &&
-		a.Comment == b.Comment
-}
-
-// EqualsRefOfPartitionDataDirectory does deep equals between the two objects.
-func EqualsRefOfPartitionDataDirectory(a, b *PartitionDataDirectory) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Equal == b.Equal &&
-		a.DataDir == b.DataDir
-}
-
 // EqualsRefOfPartitionDefinition does deep equals between the two objects.
 func EqualsRefOfPartitionDefinition(a, b *PartitionDefinition) bool {
 	if a == b {
@@ -2731,14 +2671,14 @@ func EqualsRefOfPartitionDefinitionOptions(a, b *PartitionDefinitionOptions) boo
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsRefOfPartitionValueRange(a.ValueRange, b.ValueRange) &&
-		EqualsRefOfPartitionComment(a.Comment, b.Comment) &&
-		EqualsRefOfPartitionEngine(a.Engine, b.Engine) &&
-		EqualsRefOfPartitionDataDirectory(a.DataDirectory, b.DataDirectory) &&
-		EqualsRefOfPartitionIndexDirectory(a.IndexDirectory, b.IndexDirectory) &&
-		EqualsRefOfPartitionMaxRows(a.MaxRows, b.MaxRows) &&
-		EqualsRefOfPartitionMinRows(a.MinRows, b.MinRows) &&
-		EqualsRefOfPartitionTableSpace(a.TableSpace, b.TableSpace)
+	return a.Comment == b.Comment &&
+		a.DataDirectory == b.DataDirectory &&
+		a.IndexDirectory == b.IndexDirectory &&
+		a.MaxRows == b.MaxRows &&
+		a.MinRows == b.MinRows &&
+		a.TableSpace == b.TableSpace &&
+		EqualsRefOfPartitionValueRange(a.ValueRange, b.ValueRange) &&
+		EqualsRefOfPartitionEngine(a.Engine, b.Engine)
 }
 
 // EqualsRefOfPartitionEngine does deep equals between the two objects.
@@ -2750,44 +2690,7 @@ func EqualsRefOfPartitionEngine(a, b *PartitionEngine) bool {
 		return false
 	}
 	return a.Storage == b.Storage &&
-		a.Equal == b.Equal &&
 		a.Name == b.Name
-}
-
-// EqualsRefOfPartitionIndexDirectory does deep equals between the two objects.
-func EqualsRefOfPartitionIndexDirectory(a, b *PartitionIndexDirectory) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Equal == b.Equal &&
-		a.IndexDir == b.IndexDir
-}
-
-// EqualsRefOfPartitionMaxRows does deep equals between the two objects.
-func EqualsRefOfPartitionMaxRows(a, b *PartitionMaxRows) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Equal == b.Equal &&
-		a.Rows == b.Rows
-}
-
-// EqualsRefOfPartitionMinRows does deep equals between the two objects.
-func EqualsRefOfPartitionMinRows(a, b *PartitionMinRows) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Equal == b.Equal &&
-		a.Rows == b.Rows
 }
 
 // EqualsRefOfPartitionOption does deep equals between the two objects.
@@ -2823,18 +2726,6 @@ func EqualsRefOfPartitionSpec(a, b *PartitionSpec) bool {
 		EqualsRefOfLiteral(a.Number, b.Number) &&
 		EqualsTableName(a.TableName, b.TableName) &&
 		EqualsSliceOfRefOfPartitionDefinition(a.Definitions, b.Definitions)
-}
-
-// EqualsRefOfPartitionTableSpace does deep equals between the two objects.
-func EqualsRefOfPartitionTableSpace(a, b *PartitionTableSpace) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Equal == b.Equal &&
-		a.Name == b.Name
 }
 
 // EqualsRefOfPartitionValueRange does deep equals between the two objects.
