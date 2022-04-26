@@ -189,26 +189,27 @@ type messageManager struct {
 	curReceiver     int
 	messagesPending bool
 
-	// lastPollPostionMu protects the lastPollPosition variable which is the main
-	// point of coordination between the poller and the binlog streamer to
-	// ensure that we are not re-processing older events.
+	// lastPollPositionMu protects the lastPollPosition variable which is the
+	// main point of coordination between the poller and the binlog streamer to
+	// ensure that we are not re-processing older events and moving along
+	// linearly in the shared virtual stream within the message manager.
 	lastPollPositionMu sync.Mutex
 	lastPollPosition   *mysql.Position
 
-	// streamProcessingMu keeps the cache and database consistent with
-	// each other by ensuring that only one of the streams is processing
-	// changes at a time. The Poller uses a results streamer to pull directly
-	// from the message table and the message manager uses a binlog streamer
-	// to process change events. This mutex ensures that only one of them are
-	// updating the cache at any one time.
+	// streamProcessingMu keeps the cache and database consistent with each
+	// other by ensuring that only one of the streams is processing messages
+	// and updating the cache at a time. The poller uses a results streamer to
+	// pull directly from the message table and the message manager uses a
+	// binlog streamer to process change events. This mutex ensures that only
+	// one of them are updating the cache at any one time.
 	// It prevents items from being removed from cache while the poller
 	// reads from the db and adds items to it. Otherwise, the poller
 	// might add an older snapshot of a row that was just postponed.
-	// It blocks vstream from receiving messages while the poller
-	// reads a snapshot and updates lastPollPosition. Any events older than
-	// lastPollPosition must be ignored by the vstream. It consequently
-	// also blocks vstream from updating the cache while the poller is
-	// active.
+	// It blocks the vstream (binlog streamer) from receiving messages while
+	// the poller reads a snapshot and updates lastPollPosition. Any events
+	// older than lastPollPosition must be ignored by the vstream. It
+	// consequently also blocks vstream from updating the cache while the
+	// poller is active.
 	streamProcessingMu sync.Mutex
 	// streamCancel is set when a vstream is running, and is reset
 	// to nil after a cancel. This allows for startVStream and stopVStream
