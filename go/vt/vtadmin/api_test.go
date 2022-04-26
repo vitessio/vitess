@@ -101,6 +101,22 @@ func TestFindSchema(t *testing.T) {
 								},
 							},
 						},
+						FindAllShardsInKeyspaceResults: map[string]struct {
+							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+									Shards: map[string]*vtctldatapb.Shard{
+										"-": {
+											Shard: &topodatapb.Shard{
+												IsPrimaryServing: true,
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 					Tablets: []*vtadminpb.Tablet{
 						{
@@ -110,6 +126,7 @@ func TestFindSchema(t *testing.T) {
 									Uid:  100,
 								},
 								Keyspace: "testkeyspace",
+								Shard:    "-",
 							},
 							State: vtadminpb.Tablet_SERVING,
 						},
