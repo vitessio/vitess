@@ -293,6 +293,7 @@ func TestBasicPackets(t *testing.T) {
 		lastInsertID: 34,
 		statusFlags:  56,
 		warnings:     78,
+		info:         "let's bloat this size of this packet!",
 	}
 	err = sConn.writeOKPacketWithEOFHeader(&ok)
 	require.NoError(err)
@@ -300,7 +301,8 @@ func TestBasicPackets(t *testing.T) {
 	data, err = cConn.ReadPacket()
 	require.NoError(err)
 	require.NotEmpty(data)
-	assert.True(isEOFPacket(data), "expected EOF")
+	assert.False(isEOFPacket(data, false), "expected not EOF (too big for !CLIENT_DEPRECATE_EOF protocol)")
+	assert.True(isEOFPacket(data, true), "expected EOF")
 
 	packetOk, err = cConn.parseOKPacket(data)
 	require.NoError(err)
@@ -339,7 +341,7 @@ func TestBasicPackets(t *testing.T) {
 	data, err = cConn.ReadPacket()
 	require.NoError(err)
 	require.NotEmpty(data)
-	assert.True(isEOFPacket(data), "expected EOF")
+	assert.True(isEOFPacket(data, false), "expected EOF")
 }
 
 func TestOkPackets(t *testing.T) {
@@ -447,7 +449,7 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 		bytes[0] = 0xfe
 
 		_, _, isInt := readLenEncInt(bytes, 0)
-		isEOF := isEOFPacket(bytes)
+		isEOF := isEOFPacket(bytes, false)
 		if (isInt && isEOF) || (!isInt && !isEOF) {
 			t.Fatalf("0xfe bytestring is EOF xor Int. Bytes %v", bytes)
 		}

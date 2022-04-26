@@ -1363,23 +1363,35 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 // Packet parsing methods, for generic packets.
 //
 
-// isEOFPacket determines whether or not a data packet is a "true" EOF. DO NOT blindly compare the
-// first byte of a packet to EOFPacket as you might do for other packet types, as 0xfe is overloaded
-// as a first byte.
+// isEOFPacket determines whether or not a data packet is a true EOF or an EOF-flavored OK packet.
+// DO NOT blindly compare the first byte of a packet to EOFPacket as you might do for other packet
+// types, as 0xfe is overloaded as a first byte.
 //
-// Per https://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html, a packet starting with 0xfe
-// but having length >= 9 (on top of 4 byte header) is not a true EOF but a LengthEncodedInteger
-// (typically preceding a LengthEncodedString). Thus, all EOF checks must validate the payload size
-// before exiting.
+// This function behaves differently when talking to 5.8+ servers (with CLIENT_DEPRECATE_EOF set) vs
+// older servers.
 //
-// More specifically, an EOF packet can have 3 different lengths (1, 5, 7) depending on the client
-// flags that are set. 7 comes from server versions of 5.7.5 or greater where ClientDeprecateEOF is
-// set (i.e. uses an OK packet starting with 0xfe instead of 0x00 to signal EOF). Regardless, 8 is
-// an upper bound otherwise it would be ambiguous w.r.t. LengthEncodedIntegers.
+// On newer servers, the pure EOF packet is deprecated, and the end of a result set is now marked
+// with an OK packet that begins with 0xfe.  OK packets can be arbitrarily large, because they contain
+// optional strings for Info and SessionState.
+// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_ok_packet.html
+// We still need to tell the difference between an EOF-flavored OK packet and a 64-bit length-encoded
+// integer, both of which begin with 0xfe.  The check used in the official MySQL client is to compare
+// the packet's length to MAX_PACKET_SIZE (16 MiB), because the a 64-bit length-encoded integer only
+// makes sense in a context where it's the length field for a very long string, in a very big packet.
+// https://github.com/mysql/mysql-server/blob/6846e6b2f72931991cc9fd589dc9946ea2ab58c9/sql-common/client.cc#L1232-L1239
+// All other 0xfe's mean EOF-flavored OK packet now.
+//
+// On older servers, there are no EOF-flavored OK packets, only pure EOF packets, which are 8 bytes
+// or fewer after the header.
+// https://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html
+// So any packet >= 9 bytes can't be an EOF, regardless of the leading 0xfe.
 //
 // More docs here:
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_response_packets.html
-func isEOFPacket(data []byte) bool {
+func isEOFPacket(data []byte, deprecateEOF bool) bool {
+	if deprecateEOF {
+		return data[0] == EOFPacket && len(data) < MaxPacketSize
+	}
 	return data[0] == EOFPacket && len(data) < 9
 }
 
