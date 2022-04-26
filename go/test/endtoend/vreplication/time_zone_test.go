@@ -99,7 +99,13 @@ func TestMoveTablesTZ(t *testing.T) {
 
 	tables := "datze"
 
+	ksErrorWorkflow := fmt.Sprintf("%s.%s", targetKs, "tzerr")
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput("MoveTables", "--", "--source", sourceKs, "--tables",
+		tables, "--source_time_zone", "US/Pacifik", "Create", ksErrorWorkflow)
+	require.Error(t, err, output)
+	require.Contains(t, output, "timezone not found")
+
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("MoveTables", "--", "--source", sourceKs, "--tables",
 		tables, "--source_time_zone", "US/Pacific", "Create", ksWorkflow)
 	require.NoError(t, err, output)
 

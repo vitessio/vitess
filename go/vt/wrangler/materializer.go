@@ -268,6 +268,13 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	if err != nil {
 		return err
 	}
+
+	if sourceTimeZone != "" {
+		if err := mz.checkIfTimeZoneIsLoaded(ctx, sourceTimeZone, targetKeyspace); err != nil {
+			return err
+		}
+	}
+
 	tabletShards, err := wr.collectTargetStreams(ctx, mz)
 	if err != nil {
 		return err
@@ -1304,4 +1311,29 @@ func (mz *materializer) forAllTargets(f func(*topo.ShardInfo) error) error {
 	}
 	wg.Wait()
 	return allErrors.AggrError(vterrors.Aggregate)
+}
+
+// checkIfTimeZoneIsLoaded is a light-weight consistency check to validate that, if a source time zone is specified to MoveTables,
+// that the current primary has the time zone loaded in order to run the convert_tz() function used by VReplication to do the
+// datetime conversions. We only check the current primaries on each shard and note here that it is possible a new primary
+// gets elected: in this case user will either see errors during vreplication or vdiff will report mismatches.
+func (mz *materializer) checkIfTimeZoneIsLoaded(ctx context.Context, tz string, keyspace string) error {
+	err := mz.forAllTargets(func(target *topo.ShardInfo) error {
+		targetPrimary, err := mz.wr.ts.GetTablet(ctx, target.PrimaryAlias)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
+		}
+		query := fmt.Sprintf("select convert_tz(now(), %s, 'UTC')", encodeString(tz))
+		qrproto, err := mz.wr.tmc.ExecuteFetchAsApp(ctx, targetPrimary.Tablet, false, []byte(query), 1)
+		if err != nil {
+			return vterrors.Wrapf(err, "ExecuteFetchAsApp(%v, %s)", targetPrimary.Tablet, query)
+		}
+		qr := sqltypes.Proto3ToResult(qrproto)
+		gotDate := qr.Rows[0][0].ToString()
+		if gotDate == "" {
+			return fmt.Errorf("%s timezone not found on %s", tz, targetPrimary.Alias)
+		}
+		return nil
+	})
+	return err
 }
