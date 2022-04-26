@@ -78,6 +78,10 @@ const InfoDialog: React.FC<InfoDialogProps> = ({
                 setAnimationDone(false);
                 onClose();
             }}
+            onConfirm={() => {
+                setAnimationDone(false);
+                onClose();
+            }}
             hideCancel={true}
             confirmText="Done"
         >
