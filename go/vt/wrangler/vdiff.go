@@ -478,7 +478,7 @@ func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs sqlparser.SelectExprs
 				var convertTZFuncExpr *sqlparser.FuncExpr
 				colName := colAs.Name.Lowered()
 				fieldType := fields[colName]
-				if strings.EqualFold(fieldType.String(), "DATETIME") {
+				if fieldType == querypb.Type_DATETIME {
 					convertTZFuncExpr = &sqlparser.FuncExpr{
 						Name: sqlparser.NewColIdent("convert_tz"),
 						Exprs: sqlparser.SelectExprs{
