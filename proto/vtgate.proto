@@ -146,9 +146,6 @@ message Session {
 
   // enable_system_settings defines if we can use reserved connections.
   bool enable_system_settings = 23;
-
-  // enable_set_var is not required in session
-  reserved 24;
 }
 
 // ReadAfterWrite contains information regarding gtid set and timeout
