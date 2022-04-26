@@ -383,7 +383,7 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 		case sqlparser.RowCountName:
 			bindVars[sqlparser.RowCountName] = sqltypes.Int64BindVariable(session.RowCount)
 		case sqlparser.MaxReplLag:
-			bindVars[sqlparser.MaxReplLag] = sqltypes.Int64BindVariable(e.getMaxReplicationLag())
+			bindVars[sqlparser.MaxReplLag] = sqltypes.ValueBindVariable(e.getMaxReplicationLag(session))
 		}
 	}
 
@@ -886,21 +886,43 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 	}, nil
 }
 
-func (e *Executor) getMaxReplicationLag() int64 {
+func (e *Executor) getMaxReplicationLag(session *SafeSession) sqltypes.Value {
 	status := e.scatterConn.GetHealthCheckCacheStatus()
-	replLag := uint32(0)
+	replLag := -1
+	targetString := session.GetTargetString()
+	ks, tabletType, _, err := e.ParseDestinationTarget(targetString)
+	if err != nil {
+		return sqltypes.NULL
+	}
+	last := strings.LastIndexAny(targetString, "@")
+	if last == -1 {
+		tabletType = topodatapb.TabletType_UNKNOWN
+	}
+
 	for _, s := range status {
 		for _, ts := range s.TabletsStats {
-			// We only want to show REPLICA and RDONLY tablets
-			if ts.Tablet.Type != topodatapb.TabletType_REPLICA && ts.Tablet.Type != topodatapb.TabletType_RDONLY {
+			// no stats available, ignore.
+			if ts.Stats == nil {
 				continue
 			}
-			if ts.Stats != nil && ts.Stats.ReplicationLagSeconds > replLag {
-				replLag = ts.Stats.ReplicationLagSeconds
+			// if keyspace is specified, only check replication status for that keyspace tablets
+			if ks != "" && ts.Tablet.Keyspace != ks {
+				continue
+			}
+			// if tablet type is specified, only check replication status for those tablets
+			if tabletType != topodatapb.TabletType_UNKNOWN && ts.Tablet.Type != tabletType {
+				continue
+			}
+			lagSeconds := int(ts.Stats.ReplicationLagSeconds)
+			if lagSeconds > replLag {
+				replLag = lagSeconds
 			}
 		}
 	}
-	return int64(replLag)
+	if replLag == -1 {
+		return sqltypes.NULL
+	}
+	return sqltypes.NewInt64(int64(replLag))
 }
 
 // MessageStream is part of the vtgate service API. This is a V2 level API that's sent

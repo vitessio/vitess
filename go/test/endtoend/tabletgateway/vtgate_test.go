@@ -67,10 +67,14 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 	expectNumRows := 2
 	numRows := len(qr.Rows)
 	assert.Equal(t, expectNumRows, numRows, "wrong number of results from show vitess_replication_status")
+
 	qr = utils.Exec(t, conn, "select max_repl_lag()")
 	expectNumRows = 1
 	numRows = len(qr.Rows)
 	assert.Equal(t, expectNumRows, numRows, "expected single row from `select max_repl_lag()`")
+
+	_ = utils.Exec(t, conn, "use @spare")
+	utils.AssertMatches(t, conn, `select max_repl_lag()`, `[[NULL]]`)
 }
 
 func verifyVtgateVariables(t *testing.T, url string) {

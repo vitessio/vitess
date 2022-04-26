@@ -718,30 +718,51 @@ func TestReplLag(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "maxrepl"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestReplLag")
+	ks1 := "TestReplLag1"
+	ks2 := "TestReplLag2"
+	s := createSandbox(ks1)
+	s.VSchema = executorVSchema
+	s = createSandbox(ks2)
 	s.VSchema = executorVSchema
 	serv := new(sandboxTopo)
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-"}
 	var conns []*sandboxconn.SandboxConn
+	port := int32(1)
 	for _, shard := range shards {
-		sbc := hc.AddTestTablet(cell, shard, 1, "TestReplLag", shard, topodatapb.TabletType_REPLICA, true, 1, nil)
+		sbc := hc.AddTestTablet(cell, shard, port, ks1, shard, topodatapb.TabletType_REPLICA, true, 1, nil)
+		conns = append(conns, sbc)
+		port++
+		sbc = hc.AddTestTablet(cell, shard, port, ks2, shard, topodatapb.TabletType_REPLICA, true, 1, nil)
 		conns = append(conns, sbc)
 	}
 	executor := createExecutor(serv, cell, resolver)
 	executor.normalize = true
-	replLag := 10
 	for _, healthCache := range executor.scatterConn.GetHealthCheckCacheStatus() {
 		for _, ts := range healthCache.TabletsStats {
-			if ts.Stats != nil {
-				ts.Stats.ReplicationLagSeconds = uint32(replLag)
+			if ts.Target.Keyspace == ks1 {
+				ts.Stats.ReplicationLagSeconds = uint32(10)
+			}
+			if ts.Target.Keyspace == ks2 {
+				ts.Stats.ReplicationLagSeconds = uint32(20)
 			}
 		}
 	}
 
-	result, err := executorExec(executor, "select max_repl_lag()", map[string]*querypb.BindVariable{})
+	session := NewAutocommitSession(&vtgatepb.Session{})
+	qr, err := executor.Execute(context.Background(), "TestExecute", session, "select max_repl_lag()", nil)
 	require.NoError(t, err)
-	assert.Equal(t, "[[INT64(10)]]", fmt.Sprintf("%v", result.Rows))
+	assert.Equal(t, "[[INT64(20)]]", fmt.Sprintf("%v", qr.Rows))
+
+	session.SetTargetString(ks1)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "select max_repl_lag()", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "[[INT64(10)]]", fmt.Sprintf("%v", qr.Rows))
+
+	session.TargetString = ks1 + "@rdonly"
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "select max_repl_lag()", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "[[NULL]]", fmt.Sprintf("%v", qr.Rows))
 }
 
 func TestSelectSystemVariables(t *testing.T) {
