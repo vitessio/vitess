@@ -720,10 +720,8 @@ func TestReplLag(t *testing.T) {
 	hc := discovery.NewFakeHealthCheck(nil)
 	ks1 := "TestReplLag1"
 	ks2 := "TestReplLag2"
-	s := createSandbox(ks1)
-	s.VSchema = executorVSchema
-	s = createSandbox(ks2)
-	s.VSchema = executorVSchema
+	_ = createSandbox(ks1)
+	_ = createSandbox(ks2)
 	serv := new(sandboxTopo)
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-"}
