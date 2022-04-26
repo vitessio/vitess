@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
@@ -549,6 +548,7 @@ func TestFindSchema(t *testing.T) {
 			}
 
 			api := NewAPI(clusters, Options{})
+			defer api.Close()
 
 			resp, err := api.FindSchema(ctx, tt.req)
 			if tt.shouldErr {
@@ -758,6 +758,8 @@ func TestFindSchema(t *testing.T) {
 		)
 
 		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{})
+		defer api.Close()
+
 		schema, err := api.FindSchema(ctx, &vtadminpb.FindSchemaRequest{
 			Table: "testtable",
 			TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
@@ -1347,7 +1349,6 @@ func TestGetSchema(t *testing.T) {
 		req       *vtadminpb.GetSchemaRequest
 		expected  *vtadminpb.Schema
 		shouldErr bool
-		skipCache bool
 	}{
 		{
 			name:      "success",
@@ -1516,7 +1517,6 @@ func TestGetSchema(t *testing.T) {
 					},
 				},
 			},
-			skipCache: true,
 			req: &vtadminpb.GetSchemaRequest{
 				ClusterId: "c1",
 				Keyspace:  "testkeyspace",
@@ -1551,11 +1551,7 @@ func TestGetSchema(t *testing.T) {
 					Tablets:      tt.tablets,
 				})
 				api := NewAPI([]*cluster.Cluster{c}, Options{})
-
-				ctx := ctx
-				if tt.skipCache {
-					ctx = cache.NewIncomingRefreshContext(ctx)
-				}
+				defer api.Close()
 
 				resp, err := api.GetSchema(ctx, tt.req)
 				if tt.shouldErr {
@@ -1687,6 +1683,8 @@ func TestGetSchema(t *testing.T) {
 		)
 
 		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{})
+		defer api.Close()
+
 		schema, err := api.GetSchema(ctx, &vtadminpb.GetSchemaRequest{
 			ClusterId: c1.ID,
 			Keyspace:  "testkeyspace",
@@ -2240,11 +2238,8 @@ func TestGetSchemas(t *testing.T) {
 				}
 
 				api := NewAPI(clusters, Options{})
+				defer api.Close()
 
-				// TODO (ajm188): get these tests working with the cache
-				// there's a race caused by data sharing with the single fake
-				// TabletManagerClient across multiple clusters.
-				ctx := cache.NewIncomingRefreshContext(ctx)
 				resp, err := api.GetSchemas(ctx, tt.req)
 				require.NoError(t, err)
 
@@ -2464,6 +2459,8 @@ func TestGetSchemas(t *testing.T) {
 		)
 
 		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{})
+		defer api.Close()
+
 		resp, err := api.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{
 			TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
 				AggregateSizes: true,
