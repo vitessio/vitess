@@ -24,6 +24,8 @@ The following is the full list, alphabetically ordered.
 * Sugu Sougoumarane ([sougou](https://github.com/sougou)) sougou@planetscale.com
 * Vicent Marti ([vmg](https://github.com/vmg)) vmg@planetscale.com
 
+Test
+
 ## Areas of expertise
 
 ### General Vitess
