@@ -140,6 +140,10 @@ func TestCanonicalOutput(t *testing.T) {
 			"create table a (e enum('red','green','blue','orange','yellow'))",
 			"CREATE TABLE `a` (\n\t`e` enum('red', 'green', 'blue', 'orange', 'yellow')\n)",
 		},
+		{
+			"create table a (e set('red','green','blue','orange','yellow'))",
+			"CREATE TABLE `a` (\n\t`e` set('red', 'green', 'blue', 'orange', 'yellow')\n)",
+		},
 	}
 
 	for _, tc := range testcases {
