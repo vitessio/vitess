@@ -184,6 +184,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execRevertMigration()
 	case p.PlanShowMigrationLogs:
 		return qre.execShowMigrationLogs()
+	case p.PlanShowThrottledApps:
+		return qre.execShowThrottledApps()
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
 }
@@ -908,6 +910,38 @@ func (qre *QueryExecutor) execShowMigrationLogs() (*sqltypes.Result, error) {
 		return qre.tsv.onlineDDLExecutor.ShowMigrationLogs(qre.ctx, showMigrationLogsStmt)
 	}
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting SHOW VITESS_MIGRATION plan")
+}
+
+func (qre *QueryExecutor) execShowThrottledApps() (*sqltypes.Result, error) {
+	if _, ok := qre.plan.FullStmt.(*sqlparser.ShowThrottledApps); ok {
+		result := &sqltypes.Result{
+			Fields: []*querypb.Field{
+				{
+					Name: "app",
+					Type: sqltypes.VarChar,
+				},
+				{
+					Name: "expire_at",
+					Type: sqltypes.Timestamp,
+				},
+				{
+					Name: "ratio",
+					Type: sqltypes.Decimal,
+				},
+			},
+			Rows: [][]sqltypes.Value{},
+		}
+		for _, t := range qre.tsv.lagThrottler.ThrottledApps() {
+			result.Rows = append(result.Rows,
+				[]sqltypes.Value{
+					sqltypes.NewVarChar(t.AppName),
+					sqltypes.NewTimestamp(t.ExpireAt.Format(sqltypes.TimestampFormat)),
+					sqltypes.NewDecimal(fmt.Sprintf("%v", t.Ratio)),
+				})
+		}
+		return result, nil
+	}
+	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting SHOW VITESS_THROTTLED_APPS plan")
 }
 
 func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.DBConn) error {

@@ -331,6 +331,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfShowMigrationLogs(in)
 	case *ShowOther:
 		return CloneRefOfShowOther(in)
+	case *ShowThrottledApps:
+		return CloneRefOfShowThrottledApps(in)
 	case *StarExpr:
 		return CloneRefOfStarExpr(in)
 	case *Stream:
@@ -1986,6 +1988,16 @@ func CloneRefOfShowOther(n *ShowOther) *ShowOther {
 	return &out
 }
 
+// CloneRefOfShowThrottledApps creates a deep clone of the input.
+func CloneRefOfShowThrottledApps(n *ShowThrottledApps) *ShowThrottledApps {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Comments = CloneComments(n.Comments)
+	return &out
+}
+
 // CloneRefOfStarExpr creates a deep clone of the input.
 func CloneRefOfStarExpr(n *StarExpr) *StarExpr {
 	if n == nil {
@@ -3014,6 +3026,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfShow(in)
 	case *ShowMigrationLogs:
 		return CloneRefOfShowMigrationLogs(in)
+	case *ShowThrottledApps:
+		return CloneRefOfShowThrottledApps(in)
 	case *Stream:
 		return CloneRefOfStream(in)
 	case *TruncateTable:

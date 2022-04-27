@@ -450,6 +450,11 @@ type (
 		Comments *ParsedComments
 	}
 
+	// ShowThrottledApps represents a SHOW VITESS_THROTTLED_APPS statement
+	ShowThrottledApps struct {
+		Comments Comments
+	}
+
 	// RevertMigration represents a REVERT VITESS_MIGRATION statement
 	RevertMigration struct {
 		UUID     string
@@ -695,6 +700,7 @@ func (*AlterVschema) iStatement()      {}
 func (*AlterMigration) iStatement()    {}
 func (*RevertMigration) iStatement()   {}
 func (*ShowMigrationLogs) iStatement() {}
+func (*ShowThrottledApps) iStatement() {}
 func (*DropTable) iStatement()         {}
 func (*DropView) iStatement()          {}
 func (*TruncateTable) iStatement()     {}

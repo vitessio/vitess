@@ -423,6 +423,11 @@ func (node *ShowMigrationLogs) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *ShowThrottledApps) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("show vitess_throttled_apps")
+}
+
+// formatFast formats the node.
 func (node *OptLike) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("like ")
 	node.LikeTable.formatFast(buf)
