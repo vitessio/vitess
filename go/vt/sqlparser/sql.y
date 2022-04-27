@@ -273,7 +273,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Migration tokens
-%token <str> VITESS_MIGRATION CANCEL RETRY COMPLETE CLEANUP
+%token <str> VITESS_MIGRATION CANCEL RETRY COMPLETE CLEANUP THROTTLE UNTHROTTLE
 
 // Transaction Tokens
 %token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -2855,6 +2855,18 @@ alter_statement:
   {
     $$ = &AlterMigration{
       Type: CancelAllMigrationType,
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION THROTTLE ALL
+  {
+    $$ = &AlterMigration{
+      Type: ThrottleAllMigrationType,
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION UNTHROTTLE ALL
+  {
+    $$ = &AlterMigration{
+      Type: UnthrottleAllMigrationType,
     }
   }
 

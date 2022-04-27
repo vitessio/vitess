@@ -699,6 +699,8 @@ const (
 	CancelMigrationType
 	CancelAllMigrationType
 	CleanupMigrationType
+	ThrottleAllMigrationType
+	UnthrottleAllMigrationType
 )
 
 // ColumnStorage constants
