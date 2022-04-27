@@ -888,6 +888,10 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 		return qre.tsv.onlineDDLExecutor.CancelMigration(qre.ctx, alterMigration.UUID, "CANCEL issued by user")
 	case sqlparser.CancelAllMigrationType:
 		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, "CANCEL ALL issued by user")
+	case sqlparser.ThrottleAllMigrationType:
+		return qre.tsv.onlineDDLExecutor.ThrottleAllMigrations(qre.ctx, 1.0)
+	case sqlparser.UnthrottleAllMigrationType:
+		return qre.tsv.onlineDDLExecutor.UnthrottleAllMigrations(qre.ctx)
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ALTER VITESS_MIGRATION not implemented")
 }

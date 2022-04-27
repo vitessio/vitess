@@ -62,6 +62,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/vexec"
 )
@@ -72,7 +73,8 @@ var (
 	// ErrExecutorMigrationAlreadyRunning is generated when an attempt is made to run an operation that conflicts with a running migration
 	ErrExecutorMigrationAlreadyRunning = errors.New("cannot run migration since a migration is already running")
 	// ErrMigrationNotFound is returned by readMigration when given UUI cannot be found
-	ErrMigrationNotFound = errors.New("migration not found")
+	ErrMigrationNotFound   = errors.New("migration not found")
+	ErrThrottlerNotEnabled = errors.New("throttler not enabled")
 )
 
 var vexecUpdateTemplates = []string{
@@ -129,6 +131,7 @@ var (
 	migrationFailureFileName = "migration-failure.log"
 	onlineDDLUser            = "vt-online-ddl-internal"
 	onlineDDLGrant           = fmt.Sprintf("'%s'@'%s'", onlineDDLUser, "%")
+	throttlerOnlineDDLApp    = "online-ddl"
 )
 
 type mysqlVariables struct {
@@ -145,6 +148,7 @@ type Executor struct {
 	pool                  *connpool.Pool
 	tabletTypeFunc        func() topodatapb.TabletType
 	ts                    *topo.Server
+	lagThrottler          *throttle.Throttler
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, bufferQueries bool)
 	tabletAlias           *topodatapb.TabletAlias
 
@@ -204,6 +208,7 @@ func newGCTableRetainTime() time.Time {
 
 // NewExecutor creates a new gh-ost executor.
 func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *topo.Server,
+	lagThrottler *throttle.Throttler,
 	tabletTypeFunc func() topodatapb.TabletType,
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, bufferQueries bool),
 ) *Executor {
@@ -217,6 +222,7 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 		}),
 		tabletTypeFunc:        tabletTypeFunc,
 		ts:                    ts,
+		lagThrottler:          lagThrottler,
 		toggleBufferTableFunc: toggleBufferTableFunc,
 		ticks:                 timer.NewTimer(*migrationCheckInterval),
 	}
@@ -1221,7 +1227,7 @@ exit $exit_code
 			fmt.Sprintf("--serve-socket-file=%s", serveSocketFile),
 			fmt.Sprintf("--hooks-path=%s", tempDir),
 			fmt.Sprintf(`--hooks-hint-token=%s`, onlineDDL.UUID),
-			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check?app=online-ddl:gh-ost:%s&p=low`, *servenv.Port, onlineDDL.UUID),
+			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check?app=%s:gh-ost:%s&p=low`, *servenv.Port, throttlerOnlineDDLApp, onlineDDL.UUID),
 			fmt.Sprintf(`--database=%s`, e.dbName),
 			fmt.Sprintf(`--table=%s`, onlineDDL.Table),
 			fmt.Sprintf(`--alter=%s`, alterOptions),
@@ -1373,7 +1379,7 @@ export MYSQL_PWD
 		my ($self, %args) = @_;
 
 		return sub {
-			if (head("http://localhost:{{VTTABLET_PORT}}/throttler/check?app=online-ddl:pt-osc:{{MIGRATION_UUID}}&p=low")) {
+			if (head("http://localhost:{{VTTABLET_PORT}}/throttler/check?app={{THROTTLER_ONLINE_DDL_APP}}:pt-osc:{{MIGRATION_UUID}}&p=low")) {
 				# Got HTTP 200 OK, means throttler is happy
 				return 0;
 			}	else {
@@ -1387,6 +1393,8 @@ export MYSQL_PWD
 	`
 	pluginCode = strings.ReplaceAll(pluginCode, "{{VTTABLET_PORT}}", fmt.Sprintf("%d", *servenv.Port))
 	pluginCode = strings.ReplaceAll(pluginCode, "{{MIGRATION_UUID}}", onlineDDL.UUID)
+	pluginCode = strings.ReplaceAll(pluginCode, "{{THROTTLER_ONLINE_DDL_APP}}", throttlerOnlineDDLApp)
+
 	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusRunning}}", string(schema.OnlineDDLStatusRunning))
 	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusComplete}}", string(schema.OnlineDDLStatusComplete))
 	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusFailed}}", string(schema.OnlineDDLStatusFailed))
@@ -1685,6 +1693,76 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) 
 			return result, err
 		}
 		result.AppendResult(res)
+	}
+	return result, nil
+}
+
+// ThrottleAllMigrations
+func (e *Executor) ThrottleAllMigrations(ctx context.Context, ratio float64) (result *sqltypes.Result, err error) {
+	if !e.env.Config().EnableLagThrottler {
+		return nil, ErrThrottlerNotEnabled
+	}
+	if !e.lagThrottler.IsOpen() {
+		return nil, ErrThrottlerNotEnabled
+	}
+	t := e.lagThrottler.ThrottleApp(throttlerOnlineDDLApp, time.Now().Add(time.Hour), ratio)
+	result = &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "app",
+				Type: sqltypes.VarChar,
+			},
+			{
+				Name: "expire_at",
+				Type: sqltypes.Timestamp,
+			},
+			{
+				Name: "ratio",
+				Type: sqltypes.Decimal,
+			},
+		},
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.NewVarChar(t.AppName),
+				sqltypes.NewTimestamp(t.ExpireAt.Format(sqltypes.TimestampFormat)),
+				sqltypes.NewDecimal(fmt.Sprintf("%v", t.Ratio)),
+			},
+		},
+	}
+	return result, nil
+}
+
+// UnthrottleAllMigrations
+func (e *Executor) UnthrottleAllMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+	if !e.env.Config().EnableLagThrottler {
+		return nil, ErrThrottlerNotEnabled
+	}
+	if !e.lagThrottler.IsOpen() {
+		return nil, ErrThrottlerNotEnabled
+	}
+	t := e.lagThrottler.UnthrottleApp(throttlerOnlineDDLApp)
+	result = &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "app",
+				Type: sqltypes.VarChar,
+			},
+			{
+				Name: "expire_at",
+				Type: sqltypes.Timestamp,
+			},
+			{
+				Name: "ratio",
+				Type: sqltypes.Decimal,
+			},
+		},
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.NewVarChar(t.AppName),
+				sqltypes.NewTimestamp(t.ExpireAt.Format(sqltypes.TimestampFormat)),
+				sqltypes.NewDecimal(fmt.Sprintf("%v", t.Ratio)),
+			},
+		},
 	}
 	return result, nil
 }
