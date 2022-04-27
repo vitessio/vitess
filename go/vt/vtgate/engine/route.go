@@ -193,10 +193,18 @@ func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*queryp
 
 	// No route.
 	if len(rss) == 0 {
-		if wantfields {
-			return route.GetFields(vcursor, bindVars)
+		// Here we were earlier returning no rows back.
+		// But this was incorrect for queries like select count(*) from user where name='x'
+		// If the lookup_vindex for name, returns no shards, we still want a result from here
+		// with a single row with 0 as the output.
+		// However, at this level it is hard to distinguish between the cases that need a result
+		// and the ones that don't. So, we are sending the query to any shard! This is safe because
+		// the query contains a predicate that make it not match any rows on that shard. (If they did,
+		// we should have gotten that shard back already from findRoute)
+		rss, bvs, err = route.anyShard(vcursor, bindVars)
+		if err != nil {
+			return nil, err
 		}
-		return &sqltypes.Result{}, nil
 	}
 
 	queries := getQueries(route.Query, bvs)
