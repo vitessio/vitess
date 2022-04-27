@@ -295,7 +295,7 @@ func applyCommentDirectives(ins *sqlparser.Insert, eins *engine.Insert) {
 
 func getColVindexes(allColVindexes []*vindexes.ColumnVindex) (colVindexes []*vindexes.ColumnVindex) {
 	for _, colVindex := range allColVindexes {
-		if colVindex.IgnoreInDML() {
+		if colVindex.IsPartialVindex() {
 			continue
 		}
 		colVindexes = append(colVindexes, colVindex)
