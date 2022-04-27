@@ -19,10 +19,16 @@ package grpcvtctldserver
 import (
 	"context"
 	"fmt"
+	"path"
 	"time"
+
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -355,4 +361,56 @@ func removeShardCell(ctx context.Context, ts *topo.Server, cell string, keyspace
 	}
 
 	return err
+}
+
+// decodeContent decodes file data found at a given path in the topo
+func decodeContent(filename string, data []byte, json bool) (string, error) {
+	name := path.Base(filename)
+	dir := path.Dir(filename)
+	var p proto.Message
+	switch name {
+	case topo.CellInfoFile:
+		p = new(topodatapb.CellInfo)
+	case topo.KeyspaceFile:
+		p = new(topodatapb.Keyspace)
+	case topo.ShardFile:
+		p = new(topodatapb.Shard)
+	case topo.VSchemaFile:
+		p = new(vschemapb.Keyspace)
+	case topo.ShardReplicationFile:
+		p = new(topodatapb.ShardReplication)
+	case topo.TabletFile:
+		p = new(topodatapb.Tablet)
+	case topo.SrvVSchemaFile:
+		p = new(vschemapb.SrvVSchema)
+	case topo.SrvKeyspaceFile:
+		p = new(topodatapb.SrvKeyspace)
+	case topo.RoutingRulesFile:
+		p = new(vschemapb.RoutingRules)
+	default:
+		switch dir {
+		case "/" + topo.GetExternalVitessClusterDir():
+			p = new(topodatapb.ExternalVitessCluster)
+		default:
+		}
+		if p == nil {
+			if json {
+				return "", fmt.Errorf("unknown topo protobuf type for %v", name)
+			}
+			return string(data), nil
+		}
+	}
+
+	if err := proto.Unmarshal(data, p); err != nil {
+		return string(data), err
+	}
+
+	var marshalled []byte
+	var err error
+	if json {
+		marshalled, err = protojson.Marshal(p)
+	} else {
+		marshalled, err = prototext.Marshal(p)
+	}
+	return string(marshalled), err
 }

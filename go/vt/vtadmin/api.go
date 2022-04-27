@@ -992,13 +992,12 @@ func (api *API) GetTopology(ctx context.Context, req *vtctldata.GetTopologyReque
 		return nil, err
 	}
 
-	result, err := c.Vtctld.GetCellInfo(ctx, &vtctldatapb.GetCellInfoRequest{Cell: "/"})
+	result, err := c.Vtctld.GetTopology(ctx, &vtctldatapb.GetTopologyRequest{ClusterId: req.ClusterId})
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("Cell Info: %+v", result)
-	return nil, nil
+	return result, nil
 }
 
 func (api *API) ReparentTablet(ctx context.Context, req *vtadminpb.ReparentTabletRequest) (*vtadminpb.ReparentTabletResponse, error) {

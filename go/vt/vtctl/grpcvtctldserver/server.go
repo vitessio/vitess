@@ -1621,28 +1621,12 @@ func (s *VtctldServer) GetTopology(ctx context.Context, req *vtctldatapb.GetTopo
 	}
 
 	for _, cell := range cells {
-		children, err := s.getTopologyCell(cell)
+		topoCell, err := s.getTopologyCell(ctx, "/"+cell)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Error fetching root cell %s: %v", cell, err)
 		}
 
-		conn, err := s.ts.ConnForCell(ctx, cell)
-		if err != nil {
-			return nil, err
-		}
-
-		// Get the file contents, if any.
-		data, _, err := conn.Get(ctx, cell)
-		if err != nil || len(data) <= 0 {
-			return nil, err
-		}
-
-		resp.Cells = append(resp.Cells, &vtctldata.TopologyCell{
-			Children: children,
-			Data:     string(data),
-			Name:     cell,
-		})
-
+		resp.Cells = append(resp.Cells, topoCell)
 	}
 
 	return &resp, nil
@@ -3854,10 +3838,50 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 	return &resp, nil
 }
 
-func (s *VtctldServer) getTopologyCell(cell string) ([]*vtctldata.TopologyCell, error) {
-	cells := []*vtctldata.TopologyCell{}
+// getTopologyCell gets a cell and its children recursively, given a cell's path
+func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string) (*vtctldata.TopologyCell, error) {
+	// Extract cell and relative path
+	parts := strings.Split(cellPath, "/")
+	if parts[0] != "" || len(parts) < 2 {
+		return nil, fmt.Errorf("Invalid path: %s", cellPath)
+	}
+	cell := parts[1]
+	relativePath := cellPath[len(cell)+1:]
+	topoCell := vtctldata.TopologyCell{Name: parts[len(parts)-1]}
 
-	return cells, nil
+	conn, err := s.ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return nil, fmt.Errorf("Error connecting to cell %s: %v", cell, err)
+	}
+
+	data, _, noData := conn.Get(ctx, relativePath)
+	if noData == nil {
+		if len(data) > 0 {
+			result, err := decodeContent(relativePath, data, false)
+			if err != nil {
+				return nil, fmt.Errorf("Error decoding file content for cell %s: %v", cellPath, err)
+			}
+			topoCell.Data = result
+		}
+		// Since there is data at this cell, it cannot be a directory cell
+		return &topoCell, nil
+	}
+
+	children, noChildren := conn.ListDir(ctx, relativePath, false /*full*/)
+	if noChildren != nil {
+		return nil, fmt.Errorf("Cell %s with path %s has no file contents and no children: %v", cell, cellPath, err)
+	}
+
+	for _, child := range topo.DirEntriesToStringArray(children) {
+		childCell, err := s.getTopologyCell(ctx, cellPath+"/"+child)
+		if err != nil {
+			return nil, fmt.Errorf("Error getting child cell %s for parent %s: %v", child, cell, err)
+		}
+
+		topoCell.Children = append(topoCell.Children, childCell)
+	}
+
+	return &topoCell, nil
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
