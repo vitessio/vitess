@@ -119,6 +119,14 @@ type RoutingParameters struct {
 	Values []evalengine.Expr
 }
 
+func (code Opcode) IsSingleShard() bool {
+	switch code {
+	case Unsharded, DBA, Next, EqualUnique, Reference:
+		return true
+	}
+	return false
+}
+
 func (rp *RoutingParameters) findRoute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	switch rp.Opcode {
 	case None:

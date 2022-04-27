@@ -158,11 +158,7 @@ func (rb *routeGen4) Inputs() []logicalPlan {
 }
 
 func (rb *routeGen4) isSingleShard() bool {
-	switch rb.eroute.Opcode {
-	case engine.Unsharded, engine.DBA, engine.Next, engine.EqualUnique, engine.Reference:
-		return true
-	}
-	return false
+	return rb.eroute.Opcode.IsSingleShard()
 }
 
 func (rb *routeGen4) unionCanMerge(other *routeGen4, distinct bool) bool {
