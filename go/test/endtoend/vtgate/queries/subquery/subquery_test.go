@@ -122,4 +122,21 @@ func TestSubqueryInReference(t *testing.T) {
 	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ exists(select * from t1 where id2 = 30)`, `[[INT64(1)]]`)
 	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ exists(select * from t1 where id2 = 9)`, `[[INT64(0)]]`)
 	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ count(*) from t1 where id2 = 9`, `[[INT64(0)]]`)
+
+	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ 1 in (select 1 from t1 where id1 = 3)`, `[[INT64(1)]]`)
+	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ 1 in (select 1 from t1 where id1 = 9)`, `[[INT64(0)]]`)
+	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ 1 in (select id1 from t1)`, `[[INT64(1)]]`)
+	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ 1 in (select 1 from t1 where id2 = 30)`, `[[INT64(1)]]`)
+	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ 1 in (select 1 from t1 where id2 = 9)`, `[[INT64(0)]]`)
+
+	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ 1 not in (select 1 from t1 where id1 = 3)`, `[[INT64(0)]]`)
+	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ 1 not in (select 1 from t1 where id1 = 9)`, `[[INT64(1)]]`)
+	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ 1 not in (select id1 from t1)`, `[[INT64(0)]]`)
+	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ 1 not in (select 1 from t1 where id2 = 30)`, `[[INT64(0)]]`)
+	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ 1 not in (select 1 from t1 where id2 = 9)`, `[[INT64(1)]]`)
+
+	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ (select id2 from t1 where id1 = 3)`, `[[INT64(30)]]`)
+	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ (select id2 from t1 where id1 = 9)`, `[[NULL]]`)
+	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ (select id1 from t1 where id2 = 30)`, `[[INT64(3)]]`)
+	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ (select id1 from t1 where id2 = 9)`, `[[NULL]]`)
 }
