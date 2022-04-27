@@ -26,6 +26,8 @@ The following is the full list, alphabetically ordered.
 
 ## Areas of expertise
 
+This is a test
+
 ### General Vitess
 sougou, deepthi, demmer, rafael, dweitzman, tirsen, enisoc
 
