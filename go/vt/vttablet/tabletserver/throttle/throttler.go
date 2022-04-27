@@ -176,7 +176,7 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 
 		throttler.httpClient = base.SetupHTTPClient(2 * mysqlCollectInterval)
 		throttler.initThrottleTabletTypes()
-		throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
+		throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
 		throttler.check = NewThrottlerCheck(throttler)
 		throttler.initConfig()
 		throttler.check.SelfChecks(context.Background())
