@@ -8,10 +8,10 @@ permissions:
   pull-requests: write
 
 jobs:
-  comment_pull_request:
+    review_checklist:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
-    name: Comment Pull Request with review checklist
+    name: Comment Pull Request with the Review cChecklist
     steps:
       - name: Checkout
         uses: actions/checkout@v3
