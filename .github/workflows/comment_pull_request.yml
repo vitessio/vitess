@@ -1,7 +1,11 @@
 name: comment_pull_request
 on:
-  pull_request:
+  pull_request_target:
     types: [ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   comment_pull_request:
