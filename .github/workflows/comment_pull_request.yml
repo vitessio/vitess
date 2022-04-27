@@ -25,22 +25,22 @@ jobs:
             
             Hello reviewers! :wave: Please follow the checklist that follows when reviewing this Pull Request.
             
-            ##### General
+            #### General
             - [ ] Ensure that the Pull Request has the correct `release notes` label.
             - [ ] If a new flag is being introduced, review whether it is really needed. The flag names should be clear and intuitive (as far as possible), and the flag's help should be descriptive.
   
-            ##### Bug fixes
+            #### Bug fixes
             - [ ] There should be an unit or end-to-end tests.
             - [ ] The Pull Request description should either include a link to an issue that describes the bug OR an actual description of the bug and how to reproduce, along with a description of the fix.
             
-            ##### Non-trivial changes
+            #### Non-trivial changes
             - [ ] There should be some comments as to why things are implemented the way they are.
             
-            ##### New/Existing features
+            #### New/Existing features
             - [ ] They should be documented, either by modifying the existing documentation or creating new documentation.
             - [ ] New features should have a link to a feature request issue or an RFC that documents the use cases, corner cases and test cases.
             
-            ##### Backward compatibility            
+            #### Backward compatibility            
             - [ ] Protobuf changes should be wire-compatible.
             - [ ] Changes to `_vt` tables and RPC need to be backward compatibles.
             - [ ] `vtctl` command output order should be stable and `awk`-able.
