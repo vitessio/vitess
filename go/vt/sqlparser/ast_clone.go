@@ -498,6 +498,7 @@ func CloneRefOfAlterMigration(n *AlterMigration) *AlterMigration {
 		return nil
 	}
 	out := *n
+	out.Ratio = CloneRefOfLiteral(n.Ratio)
 	return &out
 }
 

@@ -667,12 +667,15 @@ func (a *application) rewriteRefOfAlterMigration(parent SQLNode, node *AlterMigr
 			return true
 		}
 	}
+	if !a.rewriteRefOfLiteral(node, node.Ratio, func(newNode, parent SQLNode) {
+		parent.(*AlterMigration).Ratio = newNode.(*Literal)
+	}) {
+		return false
+	}
 	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}

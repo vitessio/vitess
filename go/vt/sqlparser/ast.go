@@ -464,7 +464,7 @@ type (
 		Type   AlterMigrationType
 		UUID   string
 		Expire string
-		Ratio  float64
+		Ratio  *Literal
 	}
 
 	// AlterTable represents a ALTER TABLE statement.

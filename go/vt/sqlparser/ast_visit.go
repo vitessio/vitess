@@ -526,6 +526,9 @@ func VisitRefOfAlterMigration(in *AlterMigration, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitRefOfLiteral(in.Ratio, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfAlterTable(in *AlterTable, f Visit) error {

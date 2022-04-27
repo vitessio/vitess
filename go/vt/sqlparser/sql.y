@@ -505,6 +505,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <referenceDefinition> reference_definition reference_definition_opt
 %type <str> underscore_charsets
 %type <str> expire_opt
+%type <literal> ratio_opt
 %start any_command
 
 %%
@@ -2538,6 +2539,19 @@ expire_opt:
     $$ = string($2)
   }
 
+ratio_opt:
+  {
+    $$ = nil
+  }
+| RATIO INTEGRAL
+  {
+    $$ = NewIntLiteral($2)
+  }
+| RATIO DECIMAL
+  {
+    $$ = NewDecimalLiteral($2)
+  }
+
 alter_commands_list:
   {
     $$ = nil
@@ -2867,11 +2881,12 @@ alter_statement:
       Type: CancelAllMigrationType,
     }
   }
-| ALTER comment_opt VITESS_MIGRATION THROTTLE ALL expire_opt
+| ALTER comment_opt VITESS_MIGRATION THROTTLE ALL expire_opt ratio_opt
   {
     $$ = &AlterMigration{
       Type: ThrottleAllMigrationType,
       Expire: $6,
+      Ratio: $7,
     }
   }
 | ALTER comment_opt VITESS_MIGRATION UNTHROTTLE ALL

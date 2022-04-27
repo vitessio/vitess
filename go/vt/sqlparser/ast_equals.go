@@ -1271,8 +1271,8 @@ func EqualsRefOfAlterMigration(a, b *AlterMigration) bool {
 	}
 	return a.UUID == b.UUID &&
 		a.Expire == b.Expire &&
-		a.Ratio == b.Ratio &&
-		a.Type == b.Type
+		a.Type == b.Type &&
+		EqualsRefOfLiteral(a.Ratio, b.Ratio)
 }
 
 // EqualsRefOfAlterTable does deep equals between the two objects.
