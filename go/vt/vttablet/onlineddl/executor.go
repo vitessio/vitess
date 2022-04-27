@@ -2889,6 +2889,14 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
+	var currentUserThrottleRatio float64
+	for _, app := range e.lagThrottler.ThrottledApps() {
+		if app.AppName == throttlerOnlineDDLApp {
+			currentUserThrottleRatio = app.Ratio
+			break
+		}
+	}
+
 	r, err := e.execQuery(ctx, sqlSelectRunningMigrations)
 	if err != nil {
 		return countRunnning, cancellable, err
@@ -2929,6 +2937,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 
 		uuidsFoundRunning[uuid] = true
 
+		_ = e.updateMigrationUserThrotleRatio(ctx, uuid, currentUserThrottleRatio)
 		switch onlineDDL.StrategySetting().Strategy {
 		case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 			{
@@ -3569,6 +3578,18 @@ func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid stri
 func (e *Executor) updateMigrationStowawayTable(ctx context.Context, uuid string, tableName string) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationStowawayTable,
 		sqltypes.StringBindVariable(tableName),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationUserThrotleRatio(ctx context.Context, uuid string, ratio float64) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationUserThrottleRatio,
+		sqltypes.Float64BindVariable(ratio),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
