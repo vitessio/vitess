@@ -1702,20 +1702,14 @@ func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString strin
 	duration := 24 * time.Hour
 	if expireString != "" {
 		duration, err = time.ParseDuration(expireString)
-		if err != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid EXPIRE value: %s. Try '30m', '1h', '7d' etc.", expireString)
-		}
-		if duration < 0 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "EXPIRE value must be non-negative. Try '30m', '1h', '7d' etc.")
+		if err != nil || duration < 0 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid EXPIRE value: %s. Try '120s', '30m', '1h', etc. Allowed units are (s)ec, (m)in, (h)hour", expireString)
 		}
 	}
 	ratio := 1.0
 	if ratioLiteral != nil {
 		ratio, err = strconv.ParseFloat(ratioLiteral.Val, 64)
-		if err != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid RATIO value: %s. Try any decimal number between '0.0' (no throttle) and `1.0` (fully throttled)", ratioLiteral.Val)
-		}
-		if ratio < 0 || ratio > 1 {
+		if err != nil || ratio < 0 || ratio > 1 {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid RATIO value: %s. Try any decimal number between '0.0' (no throttle) and `1.0` (fully throttled)", ratioLiteral.Val)
 		}
 	}
