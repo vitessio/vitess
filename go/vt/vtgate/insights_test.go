@@ -202,6 +202,49 @@ func TestInsightsErrors(t *testing.T) {
 		})
 }
 
+func TestInsightsCollapseSets(t *testing.T) {
+	insightsTestHelper(t, true, setupOptions{},
+		[]insightsQuery{
+			{sql: "select beam.`User`.id, beam.`User`.`name` from beam.`User` where beam.`User`.id in (:v1, :v2, :v3, :v4, :v5, :v6, :v7, :v8, :v9, :v10, :v11, :v12, :v13, :v14, :v15, :v16, :v17, :v18, :v19, :v20, :v21, :v22, :v23, :v24, :v25, :v26, :v27, :v28, :v29, :v30, :v31, :v32, :v33, :v34, :v35, :v36, :v37, :v38, :v39, :v40, :v41, :v42, :v43, :v44, :v45, :v46, :v47, :v48, :v49, :v50, :v51, :v52, :v53, :v54, :v55, :v56, :v57, :v58, :v59, :v60, :v61, :v62, :v63, :v64, :v65, :v66, :v67, :v68, :v69, :v70, :v71, :v72, :v73)", responseTime: 5 * time.Second},
+			{sql: "select * from users where foo in (:v1, :v2) and bar in (:v3, :v4) and baz in (:v5) and blarg in ()", responseTime: 5 * time.Second},
+		},
+		[]insightsKafkaExpectation{
+			expect(queryTopic, "select beam.`User`.id, beam.`User`.`name` from beam.`User` where beam.`User`.id in (<elements>)").butNot(":v73"),
+			expect(queryStatsBundleTopic, "select beam.`User`.id, beam.`User`.`name` from beam.`User` where beam.`User`.id in (<elements>)").butNot(":v73"),
+			expect(queryTopic, "select * from users where foo in (<elements>) and bar in (<elements>) and baz in (<elements>) and blarg in ()").butNot(":v2", ":v4", ":v5"),
+			expect(queryStatsBundleTopic, "select * from users where foo in (<elements>) and bar in (<elements>) and baz in (<elements>) and blarg in ()").butNot(":v2", ":v4", ":v5"),
+		})
+}
+
+func TestSetCompaction(t *testing.T) {
+	testCases := []struct {
+		input, output string
+	}{
+		// nothing to change
+		{"foo", "foo"},
+
+		// unterminated
+		{"where xyz in (:v1, :v2) and abc in (:v3,", "where xyz in (<elements>) and abc in (:v3,"},
+
+		// case insensitive
+		{"WHERE xyz IN (:v1, :v2) AND abc in (:v3, :v4)", "WHERE xyz in (<elements>) AND abc in (<elements>)"},
+
+		// single element in list
+		{"where xyz in (:v1)", "where xyz in (<elements>)"},
+
+		// no elements in list
+		{"where xyz in ()", "where xyz in ()"},
+
+		// very large :v sequence numbers
+		{"where xyz in (:v8675309, :v8765000)", "where xyz in (<elements>)"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.input, func(t *testing.T) {
+			assert.Equal(t, tc.output, compactSets(tc.input))
+		})
+	}
+}
+
 type insightsQuery struct {
 	sql, error   string
 	responseTime time.Duration

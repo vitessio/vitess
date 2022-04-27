@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -316,6 +317,7 @@ func (ii *Insights) handleMessage(record interface{}) {
 		// comments with /**/ markers are present in the normalized ls.SQL, and we need to split them off.
 		// comments with -- markers get stripped when newExecute calls getPlan around plan_execute.go:63.
 		sql, comments = splitComments(ls.SQL)
+		sql = compactSets(sql)
 	}
 
 	ii.addToAggregates(ls, sql)
@@ -572,6 +574,15 @@ func (ii *Insights) makeEnvelope(contents []byte, topic string) ([]byte, error) 
 		return []byte(envelope.String()), nil
 	}
 	return proto.Marshal(&envelope)
+}
+
+var reSetCompactor = regexp.MustCompile(`(?i)\bin \(:v\d+(?:,\s*:v\d+)*\)`)
+
+func compactSets(sql string) string {
+	if reSetCompactor.MatchString(sql) {
+		return reSetCompactor.ReplaceAllLiteralString(sql, "in (<elements>)")
+	}
+	return sql
 }
 
 func stringOrNil(s string) *wrapperspb.StringValue {
