@@ -240,6 +240,12 @@ func (throttler *Throttler) initConfig() {
 	}
 }
 
+func (throttler *Throttler) IsOpen() bool {
+	throttler.initMutex.Lock()
+	defer throttler.initMutex.Unlock()
+	return atomic.LoadInt64(&throttler.isOpen) > 0
+}
+
 // Open opens database pool and initializes the schema
 func (throttler *Throttler) Open() error {
 	throttler.initMutex.Lock()
