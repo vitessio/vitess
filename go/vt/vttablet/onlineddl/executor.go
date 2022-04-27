@@ -1698,14 +1698,24 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) 
 }
 
 // ThrottleAllMigrations
-func (e *Executor) ThrottleAllMigrations(ctx context.Context, ratio float64) (result *sqltypes.Result, err error) {
+func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString string, ratio float64) (result *sqltypes.Result, err error) {
+	duration := 24 * time.Hour
+	if expireString != "" {
+		duration, err = time.ParseDuration(expireString)
+		if err != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid EXPIRE value: %s. Try '30m', '1h', '7d' etc.", expireString)
+		}
+		if duration < 0 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "EXPIRE value must be non-negative. Try '30m', '1h', '7d' etc.")
+		}
+	}
 	if !e.env.Config().EnableLagThrottler {
 		return nil, ErrThrottlerNotEnabled
 	}
 	if !e.lagThrottler.IsOpen() {
 		return nil, ErrThrottlerNotEnabled
 	}
-	t := e.lagThrottler.ThrottleApp(throttlerOnlineDDLApp, time.Now().Add(time.Hour), ratio)
+	t := e.lagThrottler.ThrottleApp(throttlerOnlineDDLApp, time.Now().Add(duration), ratio)
 	result = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{

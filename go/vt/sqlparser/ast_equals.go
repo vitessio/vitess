@@ -1270,6 +1270,8 @@ func EqualsRefOfAlterMigration(a, b *AlterMigration) bool {
 		return false
 	}
 	return a.UUID == b.UUID &&
+		a.Expire == b.Expire &&
+		a.Ratio == b.Ratio &&
 		a.Type == b.Type
 }
 

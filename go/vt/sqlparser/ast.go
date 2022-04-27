@@ -461,8 +461,10 @@ type (
 
 	// AlterMigration represents a ALTER VITESS_MIGRATION statement
 	AlterMigration struct {
-		Type AlterMigrationType
-		UUID string
+		Type   AlterMigrationType
+		UUID   string
+		Expire string
+		Ratio  float64
 	}
 
 	// AlterTable represents a ALTER TABLE statement.
