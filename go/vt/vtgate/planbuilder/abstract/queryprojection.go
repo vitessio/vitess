@@ -44,7 +44,6 @@ type (
 		Distinct           bool
 		groupByExprs       []GroupBy
 		OrderExprs         []OrderBy
-		NonAggrCols        []NonAggr
 		CanPushDownSorting bool
 		HasStar            bool
 		ProjectionError    error
@@ -76,11 +75,6 @@ type (
 		// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
 		Index    *int
 		Distinct bool
-	}
-
-	NonAggr struct {
-		Original *sqlparser.AliasedExpr
-		Index    *int
 	}
 )
 
@@ -174,14 +168,11 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 	}
 
 	if qp.HasAggr || len(qp.groupByExprs) > 0 {
-		expr, err := qp.getNonAggrExprNotMatchingGroupByExprs()
-		if err != nil {
-			return nil, err
-		}
+		expr := qp.getNonAggrExprNotMatchingGroupByExprs()
 		// if we have aggregation functions, non aggregating columns and GROUP BY,
 		// the non-aggregating expressions must all be listed in the GROUP BY list
-		if len(expr) > 0 {
-			qp.NonAggrCols = expr
+		if expr != nil {
+			// TODO(@frouioui): check sql_mode here
 			// if len(qp.groupByExprs) == 0 {
 			// 	return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.MixOfGroupFuncAndFields, "In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column(s) '%s'; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
 			// }
@@ -287,52 +278,49 @@ func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 	}, exp.Expr)
 }
 
-func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() ([]NonAggr, error) {
-	var nonAggrExprs []NonAggr
-	for i, expr := range qp.SelectExprs {
+func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.SelectExpr {
+	for _, expr := range qp.SelectExprs {
 		if expr.Aggr {
 			continue
 		}
-		isGroupByOk := false
-		aliasedExpr, err := expr.GetAliasedExpr()
-		if err != nil {
-			return nil, err
-		}
-		idx := i
-		for _, groupByExpr := range qp.groupByExprs {
-			exp, err := expr.GetExpr()
-			if err != nil {
-				nonAggrExprs = append(nonAggrExprs, NonAggr{Original: aliasedExpr, Index: &idx})
-				continue
-			}
-			if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, exp) {
-				isGroupByOk = true
-				break
-			}
-		}
-		if !isGroupByOk {
-			nonAggrExprs = append(nonAggrExprs, NonAggr{Original: aliasedExpr, Index: &idx})
+		if !qp.isExprInGroupByExprs(expr) {
+			return expr.Col
 		}
 	}
 	for _, order := range qp.OrderExprs {
-		// ORDER BY NULL or Aggregation functions need not be present in group by
-		if sqlparser.IsNull(order.Inner.Expr) || sqlparser.IsAggregation(order.WeightStrExpr) {
-			continue
-		}
-		isGroupByOk := false
-		for _, groupByExpr := range qp.groupByExprs {
-			if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, order.WeightStrExpr) {
-				isGroupByOk = true
-				break
+		if !qp.isOrderByExprInGroupBy(order) {
+			return &sqlparser.AliasedExpr{
+				Expr: order.Inner.Expr,
 			}
 		}
-		if !isGroupByOk {
-			nonAggrExprs = append(nonAggrExprs, NonAggr{Original: &sqlparser.AliasedExpr{
-				Expr: order.Inner.Expr,
-			}})
+	}
+	return nil
+}
+
+func (qp *QueryProjection) isOrderByExprInGroupBy(order OrderBy) bool {
+	// ORDER BY NULL or Aggregation functions need not be present in group by
+	if sqlparser.IsNull(order.Inner.Expr) || sqlparser.IsAggregation(order.WeightStrExpr) {
+		return true
+	}
+	for _, groupByExpr := range qp.groupByExprs {
+		if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, order.WeightStrExpr) {
+			return true
 		}
 	}
-	return nonAggrExprs, nil
+	return false
+}
+
+func (qp *QueryProjection) isExprInGroupByExprs(expr SelectExpr) bool {
+	for _, groupByExpr := range qp.groupByExprs {
+		exp, err := expr.GetExpr()
+		if err != nil {
+			return false
+		}
+		if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, exp) {
+			return true
+		}
+	}
+	return false
 }
 
 // GetSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, and returns an expression that is simpler to evaluate
@@ -434,13 +422,32 @@ func (qp *QueryProjection) NeedsDistinct() bool {
 
 func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 	for idx, expr := range qp.SelectExprs {
-		if !sqlparser.ContainsAggregation(expr.Col) {
-			continue
-		}
 		aliasedExpr, err := expr.GetAliasedExpr()
 		if err != nil {
 			return nil, err
 		}
+
+		var alias string
+		if aliasedExpr.As.IsEmpty() {
+			alias = sqlparser.String(aliasedExpr.Expr)
+		} else {
+			alias = aliasedExpr.As.String()
+		}
+
+		idxCopy := idx
+
+		if !sqlparser.ContainsAggregation(expr.Col) {
+			if !qp.isExprInGroupByExprs(expr) {
+				out = append(out, Aggr{
+					Original: aliasedExpr,
+					OpCode:   engine.AggregateRandom,
+					Alias:    alias,
+					Index:    &idxCopy,
+				})
+			}
+			continue
+		}
+
 		fExpr, isFunc := aliasedExpr.Expr.(*sqlparser.FuncExpr)
 		if !isFunc {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
@@ -461,14 +468,6 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 			}
 		}
 
-		var alias string
-		if aliasedExpr.As.IsEmpty() {
-			alias = sqlparser.String(aliasedExpr.Expr)
-		} else {
-			alias = aliasedExpr.As.String()
-		}
-
-		idxCopy := idx
 		out = append(out, Aggr{
 			Original: aliasedExpr,
 			Func:     fExpr,
@@ -477,6 +476,16 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 			Index:    &idxCopy,
 			Distinct: fExpr.Distinct,
 		})
+	}
+	for i, orderExpr := range qp.OrderExprs {
+		newIdx := i + len(qp.SelectExprs)
+		if !qp.isOrderByExprInGroupBy(orderExpr) {
+			out = append(out, Aggr{
+				Original: &sqlparser.AliasedExpr{Expr: orderExpr.Inner.Expr},
+				OpCode:   engine.AggregateRandom,
+				Index:    &newIdx,
+			})
+		}
 	}
 	return
 }

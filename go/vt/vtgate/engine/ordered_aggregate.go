@@ -141,6 +141,7 @@ const (
 	AggregateCountDistinct
 	AggregateSumDistinct
 	AggregateGtid
+	AggregateRandom
 )
 
 var (
@@ -476,6 +477,7 @@ func merge(
 			data, _ := proto.Marshal(vgtid)
 			val, _ := sqltypes.NewValue(sqltypes.VarBinary, data)
 			result[aggr.Col] = val
+		case AggregateRandom:
 		default:
 			return nil, nil, fmt.Errorf("BUG: Unexpected opcode: %v", aggr.Opcode)
 		}

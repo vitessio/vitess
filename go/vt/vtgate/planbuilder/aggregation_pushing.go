@@ -28,11 +28,11 @@ import (
 )
 
 // pushAggregation pushes grouping and aggregation as far down in the tree as possible
-func (hp *horizonPlanning) pushAggregation(ctx *plancontext.PlanningContext, plan logicalPlan, grouping []abstract.GroupBy, aggregations []abstract.Aggr, nonAggrs []abstract.NonAggr, ignoreOutputOrder bool) (output logicalPlan, groupingOffsets []offsets, outputAggrsOffset [][]offsets, err error) {
+func (hp *horizonPlanning) pushAggregation(ctx *plancontext.PlanningContext, plan logicalPlan, grouping []abstract.GroupBy, aggregations []abstract.Aggr, ignoreOutputOrder bool) (output logicalPlan, groupingOffsets []offsets, outputAggrsOffset [][]offsets, err error) {
 	switch plan := plan.(type) {
 	case *routeGen4:
 		output = plan
-		groupingOffsets, outputAggrsOffset, _, err = pushAggrOnRoute(ctx, plan, aggregations, grouping, nonAggrs, ignoreOutputOrder)
+		groupingOffsets, outputAggrsOffset, _, err = pushAggrOnRoute(ctx, plan, aggregations, grouping, ignoreOutputOrder)
 		return
 
 	case *joinGen4:
@@ -47,7 +47,7 @@ func (hp *horizonPlanning) pushAggregation(ctx *plancontext.PlanningContext, pla
 
 	case *simpleProjection:
 		// we just remove the simpleProjection. We are doing an OA on top anyway, so no need to clean up the output columns
-		return hp.pushAggregation(ctx, plan.input, grouping, aggregations, nil, ignoreOutputOrder)
+		return hp.pushAggregation(ctx, plan.input, grouping, aggregations, ignoreOutputOrder)
 
 	default:
 		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "using aggregation on top of a %T plan is not yet supported", plan)
@@ -60,7 +60,6 @@ func pushAggrOnRoute(
 	plan *routeGen4,
 	aggregations []abstract.Aggr,
 	grouping []abstract.GroupBy,
-	nonAggrs []abstract.NonAggr,
 	ignoreOutputOrder bool,
 ) (
 	groupingOffsets []offsets,
@@ -84,7 +83,7 @@ func pushAggrOnRoute(
 		// that can be used to rearrange the produced outputs to the original order
 		var it *sortedIterator
 		var err error
-		grouping, reorg, it = sortOffsets(grouping, aggregations, nonAggrs)
+		grouping, reorg, it = sortOffsets(grouping, aggregations)
 		vtgateAggregation, groupingCols, err = pushAggrsAndGroupingInOrder(ctx, plan, it, sel, vtgateAggregation, groupingCols)
 		if err != nil {
 			return nil, nil, nil, err
@@ -303,7 +302,7 @@ func (hp *horizonPlanning) pushAggrOnSemiJoin(
 	}
 
 	totalGrouping := append(grouping, lhsCols...)
-	newLeft, groupingOffsets, aggrParams, err := hp.pushAggregation(ctx, join.lhs, totalGrouping, aggregations, nil, ignoreOutputOrder)
+	newLeft, groupingOffsets, aggrParams, err := hp.pushAggregation(ctx, join.lhs, totalGrouping, aggregations, ignoreOutputOrder)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -339,7 +338,7 @@ func (hp *horizonPlanning) filteredPushAggregation(
 			aggrs = append(aggrs, *aggr)
 		}
 	}
-	newplan, groupingOffsets, pushedAggrs, err := hp.pushAggregation(ctx, plan, grouping, aggrs, nil, ignoreOutputOrder)
+	newplan, groupingOffsets, pushedAggrs, err := hp.pushAggregation(ctx, plan, grouping, aggrs, ignoreOutputOrder)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -432,7 +431,6 @@ type (
 		aggregations []abstract.Aggr
 		valueGB      *abstract.GroupBy
 		valueA       *abstract.Aggr
-		valueNA      *abstract.NonAggr
 		groupbyIdx   int
 		aggrIdx      int
 	}
@@ -475,7 +473,7 @@ func passThrough(groupByOffsets []offsets, aggrOffsets [][]offsets) ([]offsets, 
 	return groupByOffsets, aggrOffsets
 }
 
-func sortOffsets(grouping []abstract.GroupBy, aggregations []abstract.Aggr, aggrs []abstract.NonAggr) ([]abstract.GroupBy, reorgFunc, *sortedIterator) {
+func sortOffsets(grouping []abstract.GroupBy, aggregations []abstract.Aggr) ([]abstract.GroupBy, reorgFunc, *sortedIterator) {
 	originalGrouping := make([]abstract.GroupBy, len(grouping))
 	originalAggr := make([]abstract.Aggr, len(aggregations))
 	copy(originalAggr, aggregations)

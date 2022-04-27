@@ -17,8 +17,10 @@ limitations under the License.
 package aggregation
 
 import (
+	"context"
 	"fmt"
 	"testing"
+	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
 
@@ -298,11 +300,17 @@ func TestGreaterEqualFilterOnScatter(t *testing.T) {
 }
 
 func TestGroupByOnlyFullGroupByOff(t *testing.T) {
-	mcmp, closer := start(t)
-	defer closer()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
 
-	mcmp.Exec("insert into t9(id1, id2, id3) values(1,'a', '1'), (2,'Abc','2'), (3,'b', '3'), (4,'c', '4'), (5,'test', '5')")
-	mcmp.Exec("insert into t9(id1, id2, id3) values(6,'a', '11'), (7,'Abc','22'), (8,'b', '33'), (9,'c', '44'), (10,'test', '55')")
-	mcmp.Exec("set @@sql_mode = ''")
-	mcmp.AssertMatches("select id2, id3 from t9 group by id2", `[[INT64(5) VARCHAR("test")] [INT64(4) VARCHAR("c")] [INT64(3) VARCHAR("b")] [INT64(2) VARCHAR("Abc")] [INT64(1) VARCHAR("a")]]`)
+	utils.Exec(t, conn, "insert into t9(id1, id2, id3) values(1,'a', '1'), (2,'Abc','2'), (3,'b', '3'), (4,'c', '4'), (5,'test', '5')")
+	utils.Exec(t, conn, "insert into t9(id1, id2, id3) values(6,'a', '11'), (7,'Abc','22'), (8,'b', '33'), (9,'c', '44'), (10,'test', '55')")
+	utils.Exec(t, conn, "set @@sql_mode = ' '")
+	utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ connection_id(), @@sql_mode from t9 limit 1")
+	utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ id2, id3 from t9 group by id2", `[[INT64(5) VARCHAR("test")] [INT64(4) VARCHAR("c")] [INT64(3) VARCHAR("b")] [INT64(2) VARCHAR("Abc")] [INT64(1) VARCHAR("a")]]`)
 }
