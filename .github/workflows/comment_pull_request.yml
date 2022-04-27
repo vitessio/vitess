@@ -1,7 +1,7 @@
 name: comment_pull_request
 on:
   pull_request_target:
-    types: [ready_for_review]
+    types: [opened, ready_for_review]
 
 permissions:
   contents: write
@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   comment_pull_request:
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     name: Comment Pull Request with review checklist
     steps:
@@ -18,6 +19,12 @@ jobs:
       - name: Comment PR
         uses: thollander/actions-comment-pull-request@v1
         with:
+          comment_include: 'Review Checklist'
           message: |
-            Hello world ! :wave:
+            ### Review Checklist
+            
+            Hello reviewers! :wave: Please follow the checklist that follows when reviewing this Pull Request.
+            
+            - [ ] Protobuf changes should be wire-compatible.
+
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
