@@ -102,6 +102,8 @@ type vreplicator struct {
 
 	originalFKCheckSetting int64
 	originalSQLMode        string
+
+	WorkflowType int64
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -356,6 +358,7 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 	if err != nil {
 		return settings, numTablesToCopy, err
 	}
+	vr.WorkflowType = settings.WorkflowType
 	return settings, numTablesToCopy, nil
 }
 
@@ -469,6 +472,15 @@ func (vr *vreplicator) setSQLMode(ctx context.Context) (func(), error) {
 	}
 
 	return resetFunc, nil
+}
+
+// throttlerAppNames returns app names to be used by thrttoerClient for this particular workflow
+func (vr *vreplicator) throttlerAppNames() []string {
+	names := []string{throttlerAppName}
+	if vr.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) {
+		names = append(names, throttlerOnlineDDLAppName)
+	}
+	return names
 }
 
 func (vr *vreplicator) clearFKCheck() error {

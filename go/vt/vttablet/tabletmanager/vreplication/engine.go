@@ -67,7 +67,8 @@ var withDDL *withddl.WithDDL
 var withDDLInitialQueries []string
 
 const (
-	throttlerAppName = "vreplication"
+	throttlerAppName          = "vreplication"
+	throttlerOnlineDDLAppName = "online-ddl"
 )
 
 func init() {
