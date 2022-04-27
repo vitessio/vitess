@@ -162,7 +162,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -171,7 +171,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -180,7 +180,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
@@ -284,7 +284,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -293,7 +293,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -302,7 +302,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -413,7 +413,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -422,7 +422,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
@@ -565,13 +565,13 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Error      error
 				}{
 					"zone1-0000000100": {
-						StopStatus: &replicationdatapb.StopReplicationStatus{},
+						StopStatus: &replicationdatapb.StopReplicationStatus{Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true}},
 					},
 					"zone1-0000000101": {
-						StopStatus: &replicationdatapb.StopReplicationStatus{},
+						StopStatus: &replicationdatapb.StopReplicationStatus{Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true}},
 					},
 					"zone1-0000000102": {
-						StopStatus: &replicationdatapb.StopReplicationStatus{},
+						StopStatus: &replicationdatapb.StopReplicationStatus{Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true}},
 					},
 				},
 			},
@@ -625,6 +625,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -633,6 +634,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -641,7 +643,8 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							After: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
+							After:  &replicationdatapb.Status{},
 						},
 					},
 				},
@@ -715,6 +718,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -723,6 +727,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -731,6 +736,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -807,6 +813,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -815,6 +822,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -823,6 +831,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -926,7 +935,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -935,7 +944,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-20",
@@ -944,7 +953,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-20",
@@ -1039,7 +1048,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1048,7 +1057,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1057,7 +1066,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1162,7 +1171,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1171,7 +1180,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1180,7 +1189,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
@@ -1277,7 +1286,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1286,7 +1295,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1295,7 +1304,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
@@ -2242,7 +2251,7 @@ func TestEmergencyReparenterCounters(t *testing.T) {
 		}{
 			"zone1-0000000100": {
 				StopStatus: &replicationdatapb.StopReplicationStatus{
-					Before: &replicationdatapb.Status{},
+					Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -2251,7 +2260,7 @@ func TestEmergencyReparenterCounters(t *testing.T) {
 			},
 			"zone1-0000000101": {
 				StopStatus: &replicationdatapb.StopReplicationStatus{
-					Before: &replicationdatapb.Status{},
+					Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -2260,7 +2269,7 @@ func TestEmergencyReparenterCounters(t *testing.T) {
 			},
 			"zone1-0000000102": {
 				StopStatus: &replicationdatapb.StopReplicationStatus{
-					Before: &replicationdatapb.Status{},
+					Before: &replicationdatapb.Status{IoThreadRunning: true, SqlThreadRunning: true},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",

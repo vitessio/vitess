@@ -151,6 +151,17 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 	return stopStatus.Before.IoThreadRunning || stopStatus.Before.SqlThreadRunning, nil
 }
 
+// SQLThreadWasRunning returns true if a StopReplicationStatus indicates that the
+// replica had a running sql thread. It returns an
+// error if the Before state of replication is nil.
+func SQLThreadWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (bool, error) {
+	if stopStatus == nil || stopStatus.Before == nil {
+		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
+	}
+
+	return stopStatus.Before.SqlThreadRunning, nil
+}
+
 // StopReplicationAndBuildStatusMaps stops replication on all replicas, then
 // collects and returns a mapping of TabletAlias (as string) to their current
 // replication positions.
@@ -210,9 +221,23 @@ func StopReplicationAndBuildStatusMaps(
 				err = vterrors.Wrapf(err, "error when getting replication status for alias %v: %v", alias, err)
 			}
 		} else {
-			m.Lock()
-			statusMap[alias] = stopReplicationStatus
-			m.Unlock()
+			var sqlThreadRunning bool
+			// Check if the sql thread was running for the tablet
+			sqlThreadRunning, err = SQLThreadWasRunning(stopReplicationStatus)
+			if err == nil {
+				// If the sql thread was running, then we will add the tablet to the status map and the list of
+				// reachable tablets.
+				if sqlThreadRunning {
+					m.Lock()
+					statusMap[alias] = stopReplicationStatus
+					m.Unlock()
+				} else {
+					// If the sql thread was stopped, we do not consider the tablet as reachable
+					// The user must either explicitly ignore this tablet or start its replication
+					logger.Warningf("sql thread stopped on tablet - %v", alias)
+					err = vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "sql thread stopped on tablet - "+alias)
+				}
+			}
 		}
 	}
 
