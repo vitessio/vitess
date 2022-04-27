@@ -209,7 +209,7 @@ type messageManager struct {
 	// older than lastPollPosition must be ignored by the vstream. It
 	// consequently also blocks vstream from updating the cache while the
 	// poller is active.
-	// TODO(mattalord): since this is primarily a flow control mechanism, we
+	// TODO(mattlord): since this is primarily a flow control mechanism, we
 	// should do it in a more idiomatic go way using channels or cond vars.
 	cacheManagementMu sync.Mutex
 	// The lastPollPosition variable is the main point of coordination
