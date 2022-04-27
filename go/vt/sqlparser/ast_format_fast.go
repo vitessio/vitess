@@ -764,9 +764,14 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 	}
 
 	if ct.EnumValues != nil {
-		buf.WriteByte('(')
-		buf.WriteString(strings.Join(ct.EnumValues, ", "))
-		buf.WriteByte(')')
+		buf.WriteString("(")
+		for i, enum := range ct.EnumValues {
+			if i > 0 {
+				buf.WriteString(", ")
+			}
+			buf.WriteString(enum)
+		}
+		buf.WriteString(")")
 	}
 
 	if ct.Unsigned {
