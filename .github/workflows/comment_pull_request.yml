@@ -1,7 +1,7 @@
 name: comment_pull_request
 on:
   pull_request_target:
-    types: [opened, ready_for_review]
+    types: [opened, reopened, ready_for_review]
 
 permissions:
   contents: write
@@ -19,7 +19,7 @@ jobs:
       - name: Comment PR
         uses: thollander/actions-comment-pull-request@v1
         with:
-          comment_include: 'Review Checklist'
+          comment_includes: 'Review Checklist'
           message: |
             ### Review Checklist
             
