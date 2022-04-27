@@ -212,16 +212,25 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	return api
 }
 
-// Close closes all the clusters in an API. Its primary function is to
-// gracefully shutdown cache background goroutines to avoid data races in tests,
-// but needs to be exported to be called by those tests. It does not have any
-// production use case.
+// Close closes all the clusters in an API concurrently. Its primary function is
+// to gracefully shutdown cache background goroutines to avoid data races in
+// tests, but needs to be exported to be called by those tests. It does not have
+// any production use case.
 func (api *API) Close() error {
-	var rec concurrency.AllErrorRecorder
+	var (
+		wg  sync.WaitGroup
+		rec concurrency.AllErrorRecorder
+	)
+
 	for _, c := range api.clusters {
-		rec.RecordError(c.Close())
+		wg.Add(1)
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+			rec.RecordError(c.Close())
+		}(c)
 	}
 
+	wg.Wait()
 	return rec.Error()
 }
 
