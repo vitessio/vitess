@@ -56,6 +56,7 @@ type ReplicatorPlan struct {
 	TablePlans    map[string]*TablePlan
 	ColInfoMap    map[string][]*ColumnInfo
 	stats         *binlogplayer.Stats
+	Source        *binlogdatapb.BinlogSource
 }
 
 // buildExecution plan uses the field info as input and the partially built
@@ -99,6 +100,7 @@ func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Res
 		lastpk:   lastpk,
 		colInfos: rp.ColInfoMap[tableName],
 		stats:    rp.stats,
+		source:   rp.Source,
 	}
 	for _, field := range fields {
 		colName := sqlparser.NewColIdent(field.Name)
