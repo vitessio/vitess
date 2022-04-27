@@ -547,7 +547,7 @@ func TestDeleteEqualSubshard(t *testing.T) {
 	del := &Delete{
 		DML: &DML{
 			RoutingParameters: &RoutingParameters{
-				Opcode: Equal,
+				Opcode: SubShard,
 				Keyspace: &vindexes.Keyspace{
 					Name:    "ks",
 					Sharded: true,
