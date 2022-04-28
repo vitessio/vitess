@@ -1098,8 +1098,8 @@ func TestReplicaWasRunning(t *testing.T) {
 			name: "io thread running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
-					IoState:  int32(mysql.ReplicationStateRunning),
-					SqlState: int32(mysql.ReplicationStateStopped),
+					IoThreadRunning:  true,
+					SqlThreadRunning: false,
 				},
 			},
 			expected:  true,
@@ -1109,8 +1109,8 @@ func TestReplicaWasRunning(t *testing.T) {
 			name: "sql thread running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
-					IoState:  int32(mysql.ReplicationStateStopped),
-					SqlState: int32(mysql.ReplicationStateRunning),
+					IoThreadRunning:  false,
+					SqlThreadRunning: true,
 				},
 			},
 			expected:  true,
@@ -1120,8 +1120,8 @@ func TestReplicaWasRunning(t *testing.T) {
 			name: "io and sql threads running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
-					IoState:  int32(mysql.ReplicationStateRunning),
-					SqlState: int32(mysql.ReplicationStateRunning),
+					IoThreadRunning:  true,
+					SqlThreadRunning: true,
 				},
 			},
 			expected:  true,
@@ -1131,8 +1131,8 @@ func TestReplicaWasRunning(t *testing.T) {
 			name: "no replication threads running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
-					IoState:  int32(mysql.ReplicationStateStopped),
-					SqlState: int32(mysql.ReplicationStateStopped),
+					IoThreadRunning:  false,
+					SqlThreadRunning: false,
 				},
 			},
 			expected:  false,

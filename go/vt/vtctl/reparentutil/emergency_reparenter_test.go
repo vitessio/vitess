@@ -2038,14 +2038,14 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": { // forceStart = false
 					Before: &replicationdatapb.Status{
-						IoState:  int32(mysql.ReplicationStateStopped),
-						SqlState: int32(mysql.ReplicationStateStopped),
+						IoThreadRunning:  false,
+						SqlThreadRunning: false,
 					},
 				},
 				"zone1-0000000102": { // forceStart = true
 					Before: &replicationdatapb.Status{
-						IoState:  int32(mysql.ReplicationStateRunning),
-						SqlState: int32(mysql.ReplicationStateRunning),
+						IoThreadRunning:  true,
+						SqlThreadRunning: true,
 					},
 				},
 			},
@@ -2416,14 +2416,14 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": { // forceStart = false
 					Before: &replicationdatapb.Status{
-						IoState:  int32(mysql.ReplicationStateStopped),
-						SqlState: int32(mysql.ReplicationStateStopped),
+						IoThreadRunning:  false,
+						SqlThreadRunning: false,
 					},
 				},
 				"zone1-0000000102": { // forceStart = true
 					Before: &replicationdatapb.Status{
-						IoState:  int32(mysql.ReplicationStateRunning),
-						SqlState: int32(mysql.ReplicationStateRunning),
+						IoThreadRunning:  true,
+						SqlThreadRunning: true,
 					},
 				},
 			},
@@ -3229,14 +3229,14 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": { // forceStart = false
 					Before: &replicationdatapb.Status{
-						IoState:  int32(mysql.ReplicationStateStopped),
-						SqlState: int32(mysql.ReplicationStateStopped),
+						IoThreadRunning:  false,
+						SqlThreadRunning: false,
 					},
 				},
 				"zone1-0000000102": { // forceStart = true
 					Before: &replicationdatapb.Status{
-						IoState:  int32(mysql.ReplicationStateRunning),
-						SqlState: int32(mysql.ReplicationStateRunning),
+						IoThreadRunning:  true,
+						SqlThreadRunning: true,
 					},
 				},
 			},
@@ -3622,14 +3622,14 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": { // forceStart = false
 					Before: &replicationdatapb.Status{
-						IoState:  int32(mysql.ReplicationStateStopped),
-						SqlState: int32(mysql.ReplicationStateStopped),
+						IoThreadRunning:  false,
+						SqlThreadRunning: false,
 					},
 				},
 				"zone1-0000000102": { // forceStart = true
 					Before: &replicationdatapb.Status{
-						IoState:  int32(mysql.ReplicationStateRunning),
-						SqlState: int32(mysql.ReplicationStateRunning),
+						IoThreadRunning:  true,
+						SqlThreadRunning: true,
 					},
 				},
 			},
@@ -3896,14 +3896,14 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": { // forceStart = false
 					Before: &replicationdatapb.Status{
-						IoState:  int32(mysql.ReplicationStateStopped),
-						SqlState: int32(mysql.ReplicationStateStopped),
+						IoThreadRunning:  false,
+						SqlThreadRunning: false,
 					},
 				},
 				"zone1-0000000102": { // forceStart = true
 					Before: &replicationdatapb.Status{
-						IoState:  int32(mysql.ReplicationStateRunning),
-						SqlState: int32(mysql.ReplicationStateRunning),
+						IoThreadRunning:  true,
+						SqlThreadRunning: true,
 					},
 				},
 			},
@@ -4242,8 +4242,8 @@ func TestParentContextCancelled(t *testing.T) {
 	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
 		"zone1-0000000101": {
 			Before: &replicationdatapb.Status{
-				IoState:  int32(mysql.ReplicationStateRunning),
-				SqlState: int32(mysql.ReplicationStateRunning),
+				IoThreadRunning:  true,
+				SqlThreadRunning: true,
 			},
 		},
 	}
