@@ -238,7 +238,7 @@ type VtctldClient interface {
 	GetTablet(ctx context.Context, in *vtctldata.GetTabletRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletResponse, error)
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
 	GetTablets(ctx context.Context, in *vtctldata.GetTabletsRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletsResponse, error)
-	// GetTopology returns topology for the given cluster
+	// GetTopology returns topology from vtctld's topology server.
 	GetTopology(ctx context.Context, in *vtctldata.GetTopologyRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
 	GetVersion(ctx context.Context, in *vtctldata.GetVersionRequest, opts ...grpc.CallOption) (*vtctldata.GetVersionResponse, error)
@@ -1298,7 +1298,7 @@ type VtctldServer interface {
 	GetTablet(context.Context, *vtctldata.GetTabletRequest) (*vtctldata.GetTabletResponse, error)
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
 	GetTablets(context.Context, *vtctldata.GetTabletsRequest) (*vtctldata.GetTabletsResponse, error)
-	// GetTopology returns topology for the given cluster
+	// GetTopology returns topology from vtctld's topology server.
 	GetTopology(context.Context, *vtctldata.GetTopologyRequest) (*vtctldata.GetTopologyResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
 	GetVersion(context.Context, *vtctldata.GetVersionRequest) (*vtctldata.GetVersionResponse, error)

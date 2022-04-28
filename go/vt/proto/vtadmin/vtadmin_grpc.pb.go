@@ -79,7 +79,7 @@ type VTAdminClient interface {
 	GetWorkflow(ctx context.Context, in *GetWorkflowRequest, opts ...grpc.CallOption) (*Workflow, error)
 	// GetWorkflows returns the Workflows for all specified clusters.
 	GetWorkflows(ctx context.Context, in *GetWorkflowsRequest, opts ...grpc.CallOption) (*GetWorkflowsResponse, error)
-	// GetTopology returns the topology for the specified cluster
+	// GetTopology returns the topology from the topology server of the vtctld of the specified cluster.
 	GetTopology(ctx context.Context, in *GetTopologyRequest, opts ...grpc.CallOption) (*GetTopologyResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
 	PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error)
@@ -499,7 +499,7 @@ type VTAdminServer interface {
 	GetWorkflow(context.Context, *GetWorkflowRequest) (*Workflow, error)
 	// GetWorkflows returns the Workflows for all specified clusters.
 	GetWorkflows(context.Context, *GetWorkflowsRequest) (*GetWorkflowsResponse, error)
-	// GetTopology returns the topology for the specified cluster
+	// GetTopology returns the topology from the topology server of the vtctld of the specified cluster.
 	GetTopology(context.Context, *GetTopologyRequest) (*GetTopologyResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
 	PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error)
