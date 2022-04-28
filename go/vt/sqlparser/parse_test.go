@@ -4399,10 +4399,110 @@ PARTITIONS 6`,
 ) partition by list (val) (partition mypart values in (1, 3, 5), partition MyPart values in (2, 4, 6))`,
 		},
 		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE = FOOBAR,
+	PARTITION MyPart VALUES IN (2,4,6)
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR, partition MyPart values in (2, 4, 6))`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) ENGINE = FOOBAR,
+	PARTITION MyPart VALUES IN (2,4,6)
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) engine FOOBAR, partition MyPart values in (2, 4, 6))`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE FOOBAR,
+	PARTITION MyPart VALUES IN (2,4,6)
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR, partition MyPart values in (2, 4, 6))`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE FOOBAR COMMENT = 'test',
+	PARTITION MyPart VALUES IN (2,4,6) comment 'test2'
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR comment 'test', partition MyPart values in (2, 4, 6) comment 'test2')`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE FOOBAR DATA DIRECTORY = 'test',
+	PARTITION MyPart VALUES IN (2,4,6) DATA DIRECTORY 'test2'
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR data directory 'test', partition MyPart values in (2, 4, 6) data directory 'test2')`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) INDEX DIRECTORY = 'test',
+	PARTITION MyPart VALUES IN (2,4,6) INDEX DIRECTORY 'test2'
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) index directory 'test', partition MyPart values in (2, 4, 6) index directory 'test2')`,
+		},
+		{
 			input: `create table t1 (id int primary key) partition by list (id) (partition p1 values in(11,21), partition p2 values in (12,22))`,
 			output: `create table t1 (
 	id int primary key
 ) partition by list (id) (partition p1 values in (11, 21), partition p2 values in (12, 22))`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) COMMENT = 'before' STORAGE ENGINE FOOBAR DATA DIRECTORY = 'test',
+	PARTITION MyPart VALUES IN (2,4,6) DATA DIRECTORY 'test2'
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR comment 'before' data directory 'test', partition MyPart values in (2, 4, 6) data directory 'test2')`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) MAX_ROWS = 4,
+	PARTITION MyPart VALUES IN (2,4,6) MAX_ROWS 10
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) max_rows 4, partition MyPart values in (2, 4, 6) max_rows 10)`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) MIN_ROWS = 4,
+	PARTITION MyPart VALUES IN (2,4,6) MIN_ROWS 10
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) min_rows 4, partition MyPart values in (2, 4, 6) min_rows 10)`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) TABLESPACE = innodb_system,
+	PARTITION MyPart VALUES IN (2,4,6) TABLESPACE innodb_system
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) tablespace innodb_system, partition MyPart values in (2, 4, 6) tablespace innodb_system)`,
 		},
 	}
 	for _, test := range createTableQueries {
@@ -4713,6 +4813,42 @@ func TestParseLobstersQueries(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to parse %q: %v", query, err)
 		}
+	}
+}
+
+func TestParseVersionedComments(t *testing.T) {
+	testcases := []struct {
+		input        string
+		mysqlVersion string
+		output       string
+	}{
+		{
+			input:        `CREATE TABLE table1 (id int) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*!50900 PARTITION BY RANGE (id) (PARTITION x VALUES LESS THAN (5) ENGINE = InnoDB, PARTITION t VALUES LESS THAN (20) ENGINE = InnoDB) */`,
+			mysqlVersion: "50401",
+			output: `create table table1 (
+	id int
+) ENGINE InnoDB,
+  CHARSET utf8mb4`,
+		}, {
+			input:        `CREATE TABLE table1 (id int) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*!50900 PARTITION BY RANGE (id) (PARTITION x VALUES LESS THAN (5) ENGINE = InnoDB, PARTITION t VALUES LESS THAN (20) ENGINE = InnoDB) */`,
+			mysqlVersion: "80001",
+			output: `create table table1 (
+	id int
+) ENGINE InnoDB,
+  CHARSET utf8mb4 partition by range (id) (partition x values less than (5) engine InnoDB, partition t values less than (20) engine InnoDB)`,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.input+":"+testcase.mysqlVersion, func(t *testing.T) {
+			oldMySQLVersion := MySQLVersion
+			defer func() { MySQLVersion = oldMySQLVersion }()
+			MySQLVersion = testcase.mysqlVersion
+			tree, err := Parse(testcase.input)
+			require.NoError(t, err, testcase.input)
+			out := String(tree)
+			require.Equal(t, testcase.output, out)
+		})
 	}
 }
 

@@ -272,6 +272,10 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfParsedComments(parent, node, replacer)
 	case *PartitionDefinition:
 		return a.rewriteRefOfPartitionDefinition(parent, node, replacer)
+	case *PartitionDefinitionOptions:
+		return a.rewriteRefOfPartitionDefinitionOptions(parent, node, replacer)
+	case *PartitionEngine:
+		return a.rewriteRefOfPartitionEngine(parent, node, replacer)
 	case *PartitionOption:
 		return a.rewriteRefOfPartitionOption(parent, node, replacer)
 	case *PartitionSpec:
@@ -4151,8 +4155,8 @@ func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *Part
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfPartitionValueRange(node, node.ValueRange, func(newNode, parent SQLNode) {
-		parent.(*PartitionDefinition).ValueRange = newNode.(*PartitionValueRange)
+	if !a.rewriteRefOfPartitionDefinitionOptions(node, node.Options, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinition).Options = newNode.(*PartitionDefinitionOptions)
 	}) {
 		return false
 	}
@@ -4160,6 +4164,77 @@ func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *Part
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfPartitionDefinitionOptions(parent SQLNode, node *PartitionDefinitionOptions, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteRefOfPartitionValueRange(node, node.ValueRange, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinitionOptions).ValueRange = newNode.(*PartitionValueRange)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfLiteral(node, node.Comment, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinitionOptions).Comment = newNode.(*Literal)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfPartitionEngine(node, node.Engine, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinitionOptions).Engine = newNode.(*PartitionEngine)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfLiteral(node, node.DataDirectory, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinitionOptions).DataDirectory = newNode.(*Literal)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfLiteral(node, node.IndexDirectory, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinitionOptions).IndexDirectory = newNode.(*Literal)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfPartitionEngine(parent SQLNode, node *PartitionEngine, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
 		if !a.post(&a.cur) {
 			return false
 		}

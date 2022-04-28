@@ -429,8 +429,34 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *PartitionDefinition) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "partition %v", node.Name)
+	buf.astPrintf(node, "%v", node.Options)
+}
+
+// Format formats the node
+func (node *PartitionDefinitionOptions) Format(buf *TrackedBuffer) {
 	if node.ValueRange != nil {
 		buf.astPrintf(node, " %v", node.ValueRange)
+	}
+	if node.Engine != nil {
+		buf.astPrintf(node, " %v", node.Engine)
+	}
+	if node.Comment != nil {
+		buf.astPrintf(node, " comment %v", node.Comment)
+	}
+	if node.DataDirectory != nil {
+		buf.astPrintf(node, " data directory %v", node.DataDirectory)
+	}
+	if node.IndexDirectory != nil {
+		buf.astPrintf(node, " index directory %v", node.IndexDirectory)
+	}
+	if node.MaxRows != nil {
+		buf.astPrintf(node, " max_rows %d", *node.MaxRows)
+	}
+	if node.MinRows != nil {
+		buf.astPrintf(node, " min_rows %d", *node.MinRows)
+	}
+	if node.TableSpace != "" {
+		buf.astPrintf(node, " tablespace %s", node.TableSpace)
 	}
 }
 
@@ -442,6 +468,16 @@ func (node *PartitionValueRange) Format(buf *TrackedBuffer) {
 	} else {
 		buf.astPrintf(node, " %v", node.Range)
 	}
+}
+
+// Format formats the node
+func (node *PartitionEngine) Format(buf *TrackedBuffer) {
+	if node.Storage {
+		buf.WriteString("storage ")
+	}
+	buf.WriteString("engine ")
+
+	buf.astPrintf(node, "%s", node.Name)
 }
 
 // Format formats the node.
