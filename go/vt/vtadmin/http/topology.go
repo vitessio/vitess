@@ -24,7 +24,7 @@ import (
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
-// GetTablets implements the http wrapper for /tablets[?cluster=[&cluster=]].
+// GetTablets implements the http wrapper for /clusters/:cluster_id/topology
 func GetTopology(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := mux.Vars(r.Request)
 

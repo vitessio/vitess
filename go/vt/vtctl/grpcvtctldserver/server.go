@@ -1605,7 +1605,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	}, nil
 }
 
-// GetTopology returns a cluster's topology
+// GetTopology is part of the vtctlservicepb.VtctldServer interface. It the topology map of the vtctld's topology server.
 func (s *VtctldServer) GetTopology(ctx context.Context, req *vtctldatapb.GetTopologyRequest) (*vtctldatapb.GetTopologyResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetTopology")
 	defer span.Finish()

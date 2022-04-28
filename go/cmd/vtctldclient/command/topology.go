@@ -27,12 +27,13 @@ import (
 )
 
 var (
-	// GetTopology fetches the topology for a given cluster.
+	// GetTopology makes a GetTopology gRPC call to vtctld.
 	GetTopology = &cobra.Command{
 		Use:   "GetTopology",
 		Short: "Gets topology map from vtctld's topology server.",
 		Long:  `Gets the topology map from vtctld's topology server.`,
 		RunE:  commandGetTopology,
+		Args:  cobra.NoArgs,
 	}
 )
 
@@ -51,8 +52,7 @@ func commandGetTopology(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("%s", data)
-
+	fmt.Printf("%s\n", data)
 	return nil
 }
 

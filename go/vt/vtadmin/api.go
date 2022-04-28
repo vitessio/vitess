@@ -311,9 +311,9 @@ func (api *API) Handler() http.Handler {
 
 	router.HandleFunc("/backups", httpAPI.Adapt(vtadminhttp.GetBackups)).Name("API.GetBackups")
 	router.HandleFunc("/clusters", httpAPI.Adapt(vtadminhttp.GetClusters)).Name("API.GetClusters")
+	router.HandleFunc("/clusters/{cluster_id}/topology", httpAPI.Adapt(vtadminhttp.GetTopology)).Name("API.GetTopology")
 	router.HandleFunc("/gates", httpAPI.Adapt(vtadminhttp.GetGates)).Name("API.GetGates")
 	router.HandleFunc("/keyspace/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateKeyspace)).Name("API.CreateKeyspace").Methods("POST")
-	router.HandleFunc("/keyspace/{cluster_id}/topology", httpAPI.Adapt(vtadminhttp.GetTopology)).Name("API.GetTopology")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.DeleteKeyspace)).Name("API.DeleteKeyspace").Methods("DELETE")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.GetKeyspace)).Name("API.GetKeyspace")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}/validate", httpAPI.Adapt(vtadminhttp.ValidateKeyspace)).Name("API.ValidateKeyspace").Methods("PUT", "OPTIONS")
@@ -976,29 +976,6 @@ func (api *API) DeleteTablet(ctx context.Context, req *vtadminpb.DeleteTabletReq
 	return &vtadminpb.DeleteTabletResponse{Status: "ok"}, nil
 }
 
-func (api *API) GetTopology(ctx context.Context, req *vtadminpb.GetTopologyRequest) (*vtadminpb.GetTopologyResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.GetTopology")
-	defer span.Finish()
-
-	c, err := api.getClusterForRequest(req.ClusterId)
-	if err != nil {
-		return nil, err
-	}
-
-	cluster.AnnotateSpan(c, span)
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
-	result, err := c.Vtctld.GetTopology(ctx, &vtctldatapb.GetTopologyRequest{})
-	if err != nil {
-		return nil, err
-	}
-
-	return &vtadminpb.GetTopologyResponse{Cells: result.Cells}, nil
-}
-
 func (api *API) ReparentTablet(ctx context.Context, req *vtadminpb.ReparentTabletRequest) (*vtadminpb.ReparentTabletResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.ReparentTablet")
 	defer span.Finish()
@@ -1269,6 +1246,34 @@ func (api *API) GetTablets(ctx context.Context, req *vtadminpb.GetTabletsRequest
 	return &vtadminpb.GetTabletsResponse{
 		Tablets: tablets,
 	}, nil
+}
+
+// GetTablets is part of the vtadminpb.VTAdminServer interface. It fetches the topology map from the topology server in the specified cluster's vtctld.
+func (api *API) GetTopology(ctx context.Context, req *vtadminpb.GetTopologyRequest) (*vtadminpb.GetTopologyResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetTopology")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ClusterResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	result, err := c.Vtctld.GetTopology(ctx, &vtctldatapb.GetTopologyRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.GetTopologyResponse{Cells: result.Cells}, nil
 }
 
 // GetVSchema is part of the vtadminpb.VTAdminServer interface.
