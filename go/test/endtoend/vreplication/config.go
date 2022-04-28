@@ -29,6 +29,7 @@ create table ` + "`Lead`(`Lead-id`" + ` binary(16), name varbinary(16), date1 da
 create table ` + "`Lead-1`(`Lead`" + ` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (` + "`Lead`" + `));
 create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, val varbinary(128), primary key(id));
 create table db_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, dstuff varchar(128), dtstuff text, dbstuff blob, cstuff char(32), primary key (c_uuid,created_at)) CHARSET=utf8mb4;
+create table datze (id int, dt1 datetime not null default current_timestamp, dt2 datetime not null, ts1 timestamp default current_timestamp, primary key (id));
 `
 
 	// These should always be ignored in vreplication
@@ -60,7 +61,8 @@ create table db_order_test (c_uuid varchar(64) not null default '', created_at d
 	},
 	"Lead": {},
 	"Lead-1": {},
-	"db_order_test": {}
+	"db_order_test": {},
+	"datze": {}
   }
 }
 `
@@ -125,6 +127,14 @@ create table db_order_test (c_uuid varchar(64) not null default '', created_at d
         {
           "columns": ["c_uuid", "created_at"],
           "name": "xxhash"
+        }
+      ]
+    },
+    "datze": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
         }
       ]
     }

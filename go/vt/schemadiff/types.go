@@ -61,6 +61,8 @@ type EntityDiff interface {
 	Statement() sqlparser.Statement
 	// StatementString "stringifies" the this diff's Statement(). It returns an empty string if the diff is empty
 	StatementString() string
+	// CanonicalStatementString "stringifies" the this diff's Statement() to a canonical string. It returns an empty string if the diff is empty
+	CanonicalStatementString() string
 }
 
 const (

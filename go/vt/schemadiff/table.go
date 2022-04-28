@@ -49,6 +49,14 @@ func (d *AlterTableEntityDiff) StatementString() (s string) {
 	return s
 }
 
+// CanonicalStatementString implements EntityDiff
+func (d *AlterTableEntityDiff) CanonicalStatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.CanonicalString(stmt)
+	}
+	return s
+}
+
 //
 type CreateTableEntityDiff struct {
 	createTable *sqlparser.CreateTable
@@ -75,6 +83,14 @@ func (d *CreateTableEntityDiff) StatementString() (s string) {
 	return s
 }
 
+// CanonicalStatementString implements EntityDiff
+func (d *CreateTableEntityDiff) CanonicalStatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.CanonicalString(stmt)
+	}
+	return s
+}
+
 //
 type DropTableEntityDiff struct {
 	dropTable *sqlparser.DropTable
@@ -97,6 +113,14 @@ func (d *DropTableEntityDiff) Statement() sqlparser.Statement {
 func (d *DropTableEntityDiff) StatementString() (s string) {
 	if stmt := d.Statement(); stmt != nil {
 		s = sqlparser.String(stmt)
+	}
+	return s
+}
+
+// CanonicalStatementString implements EntityDiff
+func (d *DropTableEntityDiff) CanonicalStatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.CanonicalString(stmt)
 	}
 	return s
 }
