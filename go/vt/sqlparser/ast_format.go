@@ -440,20 +440,20 @@ func (node *PartitionDefinitionOptions) Format(buf *TrackedBuffer) {
 	if node.Engine != nil {
 		buf.astPrintf(node, " %v", node.Engine)
 	}
-	if node.Comment != "" {
-		buf.astPrintf(node, " comment '%s'", node.Comment)
+	if node.Comment != nil {
+		buf.astPrintf(node, " comment %v", node.Comment)
 	}
-	if node.DataDirectory != "" {
-		buf.astPrintf(node, " data directory '%s'", node.DataDirectory)
+	if node.DataDirectory != nil {
+		buf.astPrintf(node, " data directory %v", node.DataDirectory)
 	}
-	if node.IndexDirectory != "" {
-		buf.astPrintf(node, " index directory '%s'", node.IndexDirectory)
+	if node.IndexDirectory != nil {
+		buf.astPrintf(node, " index directory %v", node.IndexDirectory)
 	}
-	if node.MaxRows != -1 {
-		buf.astPrintf(node, " max_rows %d", node.MaxRows)
+	if node.MaxRows != nil {
+		buf.astPrintf(node, " max_rows %d", *node.MaxRows)
 	}
-	if node.MinRows != -1 {
-		buf.astPrintf(node, " min_rows %d", node.MinRows)
+	if node.MinRows != nil {
+		buf.astPrintf(node, " min_rows %d", *node.MinRows)
 	}
 	if node.TableSpace != "" {
 		buf.astPrintf(node, " tablespace %s", node.TableSpace)

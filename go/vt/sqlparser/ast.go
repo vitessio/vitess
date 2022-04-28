@@ -1619,12 +1619,12 @@ type PartitionDefinition struct {
 
 type PartitionDefinitionOptions struct {
 	ValueRange     *PartitionValueRange
-	Comment        string
+	Comment        *Literal
 	Engine         *PartitionEngine
-	DataDirectory  string
-	IndexDirectory string
-	MaxRows        int
-	MinRows        int
+	DataDirectory  *Literal
+	IndexDirectory *Literal
+	MaxRows        *int
+	MinRows        *int
 	TableSpace     string
 }
 

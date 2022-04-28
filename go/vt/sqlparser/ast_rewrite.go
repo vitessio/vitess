@@ -4187,8 +4187,23 @@ func (a *application) rewriteRefOfPartitionDefinitionOptions(parent SQLNode, nod
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfLiteral(node, node.Comment, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinitionOptions).Comment = newNode.(*Literal)
+	}) {
+		return false
+	}
 	if !a.rewriteRefOfPartitionEngine(node, node.Engine, func(newNode, parent SQLNode) {
 		parent.(*PartitionDefinitionOptions).Engine = newNode.(*PartitionEngine)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfLiteral(node, node.DataDirectory, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinitionOptions).DataDirectory = newNode.(*Literal)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfLiteral(node, node.IndexDirectory, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinitionOptions).IndexDirectory = newNode.(*Literal)
 	}) {
 		return false
 	}

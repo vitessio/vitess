@@ -2671,14 +2671,14 @@ func EqualsRefOfPartitionDefinitionOptions(a, b *PartitionDefinitionOptions) boo
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Comment == b.Comment &&
-		a.DataDirectory == b.DataDirectory &&
-		a.IndexDirectory == b.IndexDirectory &&
-		a.MaxRows == b.MaxRows &&
-		a.MinRows == b.MinRows &&
-		a.TableSpace == b.TableSpace &&
+	return a.TableSpace == b.TableSpace &&
 		EqualsRefOfPartitionValueRange(a.ValueRange, b.ValueRange) &&
-		EqualsRefOfPartitionEngine(a.Engine, b.Engine)
+		EqualsRefOfLiteral(a.Comment, b.Comment) &&
+		EqualsRefOfPartitionEngine(a.Engine, b.Engine) &&
+		EqualsRefOfLiteral(a.DataDirectory, b.DataDirectory) &&
+		EqualsRefOfLiteral(a.IndexDirectory, b.IndexDirectory) &&
+		EqualsRefOfInt(a.MaxRows, b.MaxRows) &&
+		EqualsRefOfInt(a.MinRows, b.MinRows)
 }
 
 // EqualsRefOfPartitionEngine does deep equals between the two objects.
@@ -5484,6 +5484,17 @@ func EqualsComments(a, b Comments) bool {
 		}
 	}
 	return true
+}
+
+// EqualsRefOfInt does deep equals between the two objects.
+func EqualsRefOfInt(a, b *int) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
 }
 
 // EqualsSliceOfRefOfPartitionDefinition does deep equals between the two objects.

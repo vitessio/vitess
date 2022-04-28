@@ -2194,18 +2194,22 @@ func (cached *PartitionDefinitionOptions) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(80)
 	}
 	// field ValueRange *vitess.io/vitess/go/vt/sqlparser.PartitionValueRange
 	size += cached.ValueRange.CachedSize(true)
-	// field Comment string
-	size += hack.RuntimeAllocSize(int64(len(cached.Comment)))
+	// field Comment *vitess.io/vitess/go/vt/sqlparser.Literal
+	size += cached.Comment.CachedSize(true)
 	// field Engine *vitess.io/vitess/go/vt/sqlparser.PartitionEngine
 	size += cached.Engine.CachedSize(true)
-	// field DataDirectory string
-	size += hack.RuntimeAllocSize(int64(len(cached.DataDirectory)))
-	// field IndexDirectory string
-	size += hack.RuntimeAllocSize(int64(len(cached.IndexDirectory)))
+	// field DataDirectory *vitess.io/vitess/go/vt/sqlparser.Literal
+	size += cached.DataDirectory.CachedSize(true)
+	// field IndexDirectory *vitess.io/vitess/go/vt/sqlparser.Literal
+	size += cached.IndexDirectory.CachedSize(true)
+	// field MaxRows *int
+	size += hack.RuntimeAllocSize(int64(8))
+	// field MinRows *int
+	size += hack.RuntimeAllocSize(int64(8))
 	// field TableSpace string
 	size += hack.RuntimeAllocSize(int64(len(cached.TableSpace)))
 	return size

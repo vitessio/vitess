@@ -607,28 +607,25 @@ func (node *PartitionDefinitionOptions) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		node.Engine.formatFast(buf)
 	}
-	if node.Comment != "" {
-		buf.WriteString(" comment '")
-		buf.WriteString(node.Comment)
-		buf.WriteByte('\'')
+	if node.Comment != nil {
+		buf.WriteString(" comment ")
+		node.Comment.formatFast(buf)
 	}
-	if node.DataDirectory != "" {
-		buf.WriteString(" data directory '")
-		buf.WriteString(node.DataDirectory)
-		buf.WriteByte('\'')
+	if node.DataDirectory != nil {
+		buf.WriteString(" data directory ")
+		node.DataDirectory.formatFast(buf)
 	}
-	if node.IndexDirectory != "" {
-		buf.WriteString(" index directory '")
-		buf.WriteString(node.IndexDirectory)
-		buf.WriteByte('\'')
+	if node.IndexDirectory != nil {
+		buf.WriteString(" index directory ")
+		node.IndexDirectory.formatFast(buf)
 	}
-	if node.MaxRows != -1 {
+	if node.MaxRows != nil {
 		buf.WriteString(" max_rows ")
-		buf.WriteString(fmt.Sprintf("%d", node.MaxRows))
+		buf.WriteString(fmt.Sprintf("%d", *node.MaxRows))
 	}
-	if node.MinRows != -1 {
+	if node.MinRows != nil {
 		buf.WriteString(" min_rows ")
-		buf.WriteString(fmt.Sprintf("%d", node.MinRows))
+		buf.WriteString(fmt.Sprintf("%d", *node.MinRows))
 	}
 	if node.TableSpace != "" {
 		buf.WriteString(" tablespace ")

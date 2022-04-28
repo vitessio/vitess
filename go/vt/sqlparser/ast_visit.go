@@ -2126,7 +2126,16 @@ func VisitRefOfPartitionDefinitionOptions(in *PartitionDefinitionOptions, f Visi
 	if err := VisitRefOfPartitionValueRange(in.ValueRange, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfLiteral(in.Comment, f); err != nil {
+		return err
+	}
 	if err := VisitRefOfPartitionEngine(in.Engine, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.DataDirectory, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.IndexDirectory, f); err != nil {
 		return err
 	}
 	return nil

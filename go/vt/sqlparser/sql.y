@@ -3208,7 +3208,7 @@ partition_definition:
 
 partition_definition_attribute_list_opt:
   {
-    $$ = &PartitionDefinitionOptions{ValueRange: nil, Comment: "", Engine: nil, DataDirectory: "", IndexDirectory: "", MaxRows: -1, MinRows: -1, TableSpace: ""}
+    $$ = &PartitionDefinitionOptions{}
   }
 | partition_definition_attribute_list_opt partition_value_range
   {
@@ -3217,7 +3217,7 @@ partition_definition_attribute_list_opt:
   }
 | partition_definition_attribute_list_opt partition_comment
   {
-    $1.Comment = $2
+    $1.Comment = NewStrLiteral($2)
     $$ = $1
   }
 | partition_definition_attribute_list_opt partition_engine
@@ -3227,22 +3227,24 @@ partition_definition_attribute_list_opt:
   }
 | partition_definition_attribute_list_opt partition_data_directory
   {
-    $1.DataDirectory = $2
+    $1.DataDirectory = NewStrLiteral($2)
     $$ = $1
   }
 | partition_definition_attribute_list_opt partition_index_directory
   {
-    $1.IndexDirectory = $2
+    $1.IndexDirectory = NewStrLiteral($2)
     $$ = $1
   }
 | partition_definition_attribute_list_opt partition_max_rows
   {
-    $1.MaxRows = $2
+    val := $2
+    $1.MaxRows = &val
     $$ = $1
   }
 | partition_definition_attribute_list_opt partition_min_rows
   {
-    $1.MinRows = $2
+    val := $2
+    $1.MinRows = &val
     $$ = $1
   }
 | partition_definition_attribute_list_opt partition_tablespace_name
