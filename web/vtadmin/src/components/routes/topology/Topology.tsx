@@ -62,6 +62,7 @@ export const Topology = () => {
 
             <ContentContainer>
                 <div className="max-w-screen-sm">
+                    <div className="text-xl font-bold">Clusters</div>
                     <DataTable columns={['Name', 'Id', 'Topology']} data={rows} renderRows={renderRows} />
                 </div>
             </ContentContainer>
