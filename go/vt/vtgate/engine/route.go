@@ -75,6 +75,12 @@ type Route struct {
 	// RoutingParameters parameters required for query routing.
 	*RoutingParameters
 
+	// NoRoutesSpecialHandling will make the route send a query to arbitrary shard if the routing logic can't find
+	// the correct shard. This is important for queries where no matches does not mean empty result - examples would be:
+	// select count(*) from tbl where lookupColumn = 'not there'
+	// select exists(<subq>)
+	NoRoutesSpecialHandling bool
+
 	// Route does not take inputs
 	noInputs
 
@@ -193,6 +199,12 @@ func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*queryp
 
 	// No route.
 	if len(rss) == 0 {
+		if !route.NoRoutesSpecialHandling {
+			if wantfields {
+				return route.GetFields(vcursor, bindVars)
+			}
+			return &sqltypes.Result{}, nil
+		}
 		// Here we were earlier returning no rows back.
 		// But this was incorrect for queries like select count(*) from user where name='x'
 		// If the lookup_vindex for name, returns no shards, we still want a result from here
@@ -254,6 +266,16 @@ func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 
 	// No route.
 	if len(rss) == 0 {
+		if !route.NoRoutesSpecialHandling {
+			if wantfields {
+				r, err := route.GetFields(vcursor, bindVars)
+				if err != nil {
+					return err
+				}
+				return callback(r)
+			}
+			return nil
+		}
 		// Here we were earlier returning no rows back.
 		// But this was incorrect for queries like select count(*) from user where name='x'
 		// If the lookup_vindex for name, returns no shards, we still want a result from here

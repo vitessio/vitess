@@ -93,7 +93,13 @@ func gen4SelectStmtPlanner(
 			return primitive, nil
 		}
 	}
-	return plan.Primitive(), nil
+
+	primitive := plan.Primitive()
+	if rb, ok := primitive.(*engine.Route); ok {
+		rb.NoRoutesSpecialHandling = true
+	}
+
+	return primitive, nil
 }
 
 func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (engine.Primitive, error) {
