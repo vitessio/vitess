@@ -319,13 +319,16 @@
         "Name": "priority"
       },
       {
-        "Name": "time_next"
-      },
-      {
         "Name": "epoch"
       },
       {
+        "Name": "time_next"
+      },
+      {
         "Name": "time_acked"
+      },
+      {
+        "Name": "tenant_id"
       },
       {
         "Name": "message"
@@ -336,7 +339,6 @@
         "Name": "PRIMARY",
         "Unique": true,
         "Columns": [
-          "time_scheduled",
           "id"
         ],
         "Cardinality": [
@@ -347,8 +349,7 @@
       }
     ],
     "PKColumns": [
-      0,
-      1
+      0
     ],
     "Type": 2
   },

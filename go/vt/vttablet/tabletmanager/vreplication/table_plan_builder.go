@@ -21,6 +21,9 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
+
+	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
@@ -146,6 +149,8 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*C
 		}
 		colInfos, ok := colInfoMap[tableName]
 		if !ok {
+			log.Info("this is error1")
+			time.Sleep(10 * time.Second)
 			return nil, fmt.Errorf("table %s not found in schema", tableName)
 		}
 		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats)

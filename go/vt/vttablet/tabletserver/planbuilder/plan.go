@@ -19,6 +19,9 @@ package planbuilder
 import (
 	"encoding/json"
 	"strings"
+	"time"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -294,7 +297,10 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 		PlanID: PlanMessageStream,
 		Table:  tables[name],
 	}
+	time.Sleep(10 * time.Second)
 	if plan.Table == nil {
+		log.Info("this is error2")
+		time.Sleep(10 * time.Second)
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table %s not found in schema", name)
 	}
 	if plan.Table.Type != schema.Message {

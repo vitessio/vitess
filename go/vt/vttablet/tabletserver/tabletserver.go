@@ -1388,6 +1388,8 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	}
 
 	if logMethod != nil {
+		log.Info("this is error")
+		time.Sleep(10 * time.Second)
 		logMethod(message)
 	}
 
@@ -1399,9 +1401,10 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 }
 
 // truncateSQLAndBindVars calls TruncateForLog which:
-//  splits off trailing comments, truncates the query, re-adds the trailing comments,
-//  if sanitize is false appends quoted bindvar:value pairs in sorted order, and
-//  lastly it truncates the resulting string
+//
+//	splits off trailing comments, truncates the query, re-adds the trailing comments,
+//	if sanitize is false appends quoted bindvar:value pairs in sorted order, and
+//	lastly it truncates the resulting string
 func truncateSQLAndBindVars(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool) string {
 	truncatedQuery := sqlparser.TruncateForLog(sql)
 	buf := &bytes.Buffer{}
