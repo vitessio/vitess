@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"io"
-	"regexp"
 	"sync"
 	"time"
 
@@ -750,8 +749,6 @@ func (stc *ScatterConn) ExecuteLock(
 	return qr, err
 }
 
-var txClosed = regexp.MustCompile("transaction ([a-z0-9:]+) (?:ended|not found)")
-
 func wasConnectionClosed(err error) bool {
 	sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
 	message := sqlErr.Error()
@@ -760,7 +757,7 @@ func wasConnectionClosed(err error) bool {
 	case mysql.CRServerGone, mysql.CRServerLost:
 		return true
 	case mysql.ERQueryInterrupted:
-		return txClosed.MatchString(message)
+		return vterrors.TxClosed.MatchString(message)
 	default:
 		return false
 	}
