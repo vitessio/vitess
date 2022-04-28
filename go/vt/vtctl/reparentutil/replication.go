@@ -245,10 +245,24 @@ func stopReplicationAndBuildStatusMaps(
 				err = vterrors.Wrapf(err, "error when getting replication status for alias %v: %v", alias, err)
 			}
 		} else {
-			m.Lock()
-			res.statusMap[alias] = stopReplicationStatus
-			res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
-			m.Unlock()
+			var replicationRunning bool
+			// Check if the replication for the tablet was running
+			replicationRunning, err = ReplicaWasRunning(stopReplicationStatus)
+			if err == nil {
+				// If the replication was running, then we will add the tablet to the status map and the list of
+				// reachable tablets.
+				if replicationRunning {
+					m.Lock()
+					res.statusMap[alias] = stopReplicationStatus
+					res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
+					m.Unlock()
+				} else {
+					// If the replication was previously stopped, we do not consider the tablet as reachable
+					// The user must either explicitly ignore this tablet or start its replication
+					logger.Warningf("replication stopped on tablet - %v", alias)
+					err = vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "replication stopped on tablet - "+alias)
+				}
+			}
 		}
 	}
 
