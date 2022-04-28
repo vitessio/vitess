@@ -26893,9 +26893,6 @@ export namespace replicationdata {
         /** Status source_uuid */
         source_uuid?: (string|null);
 
-        /** Status io_thread_connecting */
-        io_thread_connecting?: (boolean|null);
-
         /** Status io_state */
         io_state?: (number|null);
 
@@ -26907,6 +26904,9 @@ export namespace replicationdata {
 
         /** Status last_sql_error */
         last_sql_error?: (string|null);
+
+        /** Status io_thread_connecting */
+        io_thread_connecting?: (boolean|null);
     }
 
     /** Represents a Status. */
@@ -26954,9 +26954,6 @@ export namespace replicationdata {
         /** Status source_uuid. */
         public source_uuid: string;
 
-        /** Status io_thread_connecting. */
-        public io_thread_connecting: boolean;
-
         /** Status io_state. */
         public io_state: number;
 
@@ -26968,6 +26965,9 @@ export namespace replicationdata {
 
         /** Status last_sql_error. */
         public last_sql_error: string;
+
+        /** Status io_thread_connecting. */
+        public io_thread_connecting: boolean;
 
         /**
          * Creates a new Status instance using the specified properties.

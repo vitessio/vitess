@@ -48,34 +48,6 @@ func (m *Status) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.LastSqlError) > 0 {
-		i -= len(m.LastSqlError)
-		copy(dAtA[i:], m.LastSqlError)
-		i = encodeVarint(dAtA, i, uint64(len(m.LastSqlError)))
-		i--
-		dAtA[i] = 0x1
-		i--
-		dAtA[i] = 0x8a
-	}
-	if m.SqlState != 0 {
-		i = encodeVarint(dAtA, i, uint64(m.SqlState))
-		i--
-		dAtA[i] = 0x1
-		i--
-		dAtA[i] = 0x80
-	}
-	if len(m.LastIoError) > 0 {
-		i -= len(m.LastIoError)
-		copy(dAtA[i:], m.LastIoError)
-		i = encodeVarint(dAtA, i, uint64(len(m.LastIoError)))
-		i--
-		dAtA[i] = 0x7a
-	}
-	if m.IoState != 0 {
-		i = encodeVarint(dAtA, i, uint64(m.IoState))
-		i--
-		dAtA[i] = 0x70
-	}
 	if m.IoThreadConnecting {
 		i--
 		if m.IoThreadConnecting {
@@ -83,6 +55,34 @@ func (m *Status) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		} else {
 			dAtA[i] = 0
 		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x88
+	}
+	if len(m.LastSqlError) > 0 {
+		i -= len(m.LastSqlError)
+		copy(dAtA[i:], m.LastSqlError)
+		i = encodeVarint(dAtA, i, uint64(len(m.LastSqlError)))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x82
+	}
+	if m.SqlState != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.SqlState))
+		i--
+		dAtA[i] = 0x78
+	}
+	if len(m.LastIoError) > 0 {
+		i -= len(m.LastIoError)
+		copy(dAtA[i:], m.LastIoError)
+		i = encodeVarint(dAtA, i, uint64(len(m.LastIoError)))
+		i--
+		dAtA[i] = 0x72
+	}
+	if m.IoState != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.IoState))
 		i--
 		dAtA[i] = 0x68
 	}
@@ -330,9 +330,6 @@ func (m *Status) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	if m.IoThreadConnecting {
-		n += 2
-	}
 	if m.IoState != 0 {
 		n += 1 + sov(uint64(m.IoState))
 	}
@@ -341,11 +338,14 @@ func (m *Status) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.SqlState != 0 {
-		n += 2 + sov(uint64(m.SqlState))
+		n += 1 + sov(uint64(m.SqlState))
 	}
 	l = len(m.LastSqlError)
 	if l > 0 {
 		n += 2 + l + sov(uint64(l))
+	}
+	if m.IoThreadConnecting {
+		n += 3
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -738,26 +738,6 @@ func (m *Status) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 13:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field IoThreadConnecting", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.IoThreadConnecting = bool(v != 0)
-		case 14:
-			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field IoState", wireType)
 			}
 			m.IoState = 0
@@ -775,7 +755,7 @@ func (m *Status) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-		case 15:
+		case 14:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field LastIoError", wireType)
 			}
@@ -807,7 +787,7 @@ func (m *Status) UnmarshalVT(dAtA []byte) error {
 			}
 			m.LastIoError = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 16:
+		case 15:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field SqlState", wireType)
 			}
@@ -826,7 +806,7 @@ func (m *Status) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-		case 17:
+		case 16:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field LastSqlError", wireType)
 			}
@@ -858,6 +838,26 @@ func (m *Status) UnmarshalVT(dAtA []byte) error {
 			}
 			m.LastSqlError = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 17:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IoThreadConnecting", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IoThreadConnecting = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
