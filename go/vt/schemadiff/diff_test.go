@@ -27,13 +27,15 @@ import (
 
 func TestDiffTables(t *testing.T) {
 	tt := []struct {
-		name    string
-		from    string
-		to      string
-		diff    string
-		cdiff   string
-		action  string
-		isError bool
+		name     string
+		from     string
+		to       string
+		diff     string
+		cdiff    string
+		fromName string
+		toName   string
+		action   string
+		isError  bool
 	}{
 		{
 			name: "identical",
@@ -41,12 +43,14 @@ func TestDiffTables(t *testing.T) {
 			to:   "create table t(id int primary key)",
 		},
 		{
-			name:   "change of columns",
-			from:   "create table t(id int primary key)",
-			to:     "create table t(id int primary key, i int)",
-			diff:   "alter table t add column i int",
-			cdiff:  "ALTER TABLE `t` ADD COLUMN `i` int",
-			action: "alter",
+			name:     "change of columns",
+			from:     "create table t(id int primary key)",
+			to:       "create table t(id int primary key, i int)",
+			diff:     "alter table t add column i int",
+			cdiff:    "ALTER TABLE `t` ADD COLUMN `i` int",
+			action:   "alter",
+			fromName: "t",
+			toName:   "t",
 		},
 		{
 			name:   "create",
@@ -54,13 +58,15 @@ func TestDiffTables(t *testing.T) {
 			diff:   "create table t (\n\tid int primary key\n)",
 			cdiff:  "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY\n)",
 			action: "create",
+			toName: "t",
 		},
 		{
-			name:   "drop",
-			from:   "create table t(id int primary key)",
-			diff:   "drop table t",
-			cdiff:  "DROP TABLE `t`",
-			action: "drop",
+			name:     "drop",
+			from:     "create table t(id int primary key)",
+			diff:     "drop table t",
+			cdiff:    "DROP TABLE `t`",
+			action:   "drop",
+			fromName: "t",
 		},
 		{
 			name: "none",
@@ -116,6 +122,14 @@ func TestDiffTables(t *testing.T) {
 					// validate we can parse back the statement
 					_, err = sqlparser.Parse(diff)
 					assert.NoError(t, err)
+
+					eFrom, eTo := d.Entities()
+					if ts.fromName != "" {
+						assert.Equal(t, ts.fromName, eFrom.Name())
+					}
+					if ts.toName != "" {
+						assert.Equal(t, ts.toName, eTo.Name())
+					}
 				}
 				{
 					canonicalDiff := d.CanonicalStatementString()
@@ -141,13 +155,15 @@ func TestDiffTables(t *testing.T) {
 
 func TestDiffViews(t *testing.T) {
 	tt := []struct {
-		name    string
-		from    string
-		to      string
-		diff    string
-		cdiff   string
-		action  string
-		isError bool
+		name     string
+		from     string
+		to       string
+		diff     string
+		cdiff    string
+		fromName string
+		toName   string
+		action   string
+		isError  bool
 	}{
 		{
 			name: "identical",
@@ -155,12 +171,14 @@ func TestDiffViews(t *testing.T) {
 			to:   "create view v1 as select a, b, c from t",
 		},
 		{
-			name:   "change of column list, qualifiers",
-			from:   "create view v1 (col1, `col2`, `col3`) as select `a`, `b`, c from t",
-			to:     "create view v1 (`col1`, col2, colother) as select a, b, `c` from t",
-			diff:   "alter view v1(col1, col2, colother) as select a, b, c from t",
-			cdiff:  "ALTER VIEW `v1`(`col1`, `col2`, `colother`) AS SELECT `a`, `b`, `c` FROM `t`",
-			action: "alter",
+			name:     "change of column list, qualifiers",
+			from:     "create view v1 (col1, `col2`, `col3`) as select `a`, `b`, c from t",
+			to:       "create view v1 (`col1`, col2, colother) as select a, b, `c` from t",
+			diff:     "alter view v1(col1, col2, colother) as select a, b, c from t",
+			cdiff:    "ALTER VIEW `v1`(`col1`, `col2`, `colother`) AS SELECT `a`, `b`, `c` FROM `t`",
+			action:   "alter",
+			fromName: "v1",
+			toName:   "v1",
 		},
 		{
 			name:   "create",
@@ -168,13 +186,15 @@ func TestDiffViews(t *testing.T) {
 			diff:   "create view v1 as select a, b, c from t",
 			cdiff:  "CREATE VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
 			action: "create",
+			toName: "v1",
 		},
 		{
-			name:   "drop",
-			from:   "create view v1 as select a, b, c from t",
-			diff:   "drop view v1",
-			cdiff:  "DROP VIEW `v1`",
-			action: "drop",
+			name:     "drop",
+			from:     "create view v1 as select a, b, c from t",
+			diff:     "drop view v1",
+			cdiff:    "DROP VIEW `v1`",
+			action:   "drop",
+			fromName: "v1",
 		},
 		{
 			name: "none",
@@ -231,6 +251,13 @@ func TestDiffViews(t *testing.T) {
 					_, err = sqlparser.Parse(diff)
 					assert.NoError(t, err)
 
+					eFrom, eTo := d.Entities()
+					if ts.fromName != "" {
+						assert.Equal(t, ts.fromName, eFrom.Name())
+					}
+					if ts.toName != "" {
+						assert.Equal(t, ts.toName, eTo.Name())
+					}
 				}
 				{
 					canonicalDiff := d.CanonicalStatementString()
