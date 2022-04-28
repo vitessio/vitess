@@ -293,8 +293,11 @@ func TestSelectNone(t *testing.T) {
 	vc.Rewind()
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
-	require.Empty(t, vc.log)
-	expectResult(t, "sel.StreamExecute", result, nil)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+		`StreamExecuteMulti dummy_select ks.-20: {} `,
+	})
+	expectResult(t, "sel.StreamExecute", result, &sqltypes.Result{})
 }
 
 func TestSelectEqualUniqueScatter(t *testing.T) {
@@ -430,8 +433,10 @@ func TestSelectEqualNoRoute(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
 		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationNone()`,
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
-	expectResult(t, "sel.StreamExecute", result, nil)
+	expectResult(t, "sel.StreamExecute", result, &sqltypes.Result{})
 }
 
 func TestINUnique(t *testing.T) {
@@ -803,7 +808,7 @@ func TestRouteGetFields(t *testing.T) {
 		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
 		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationNone()`,
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-		`ExecuteMultiShard ks.-20: dummy_select_field {} false false`,
+		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
 	expectResult(t, "sel.StreamExecute", result, &sqltypes.Result{})
 }
