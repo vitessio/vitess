@@ -311,7 +311,6 @@ func (api *API) Handler() http.Handler {
 
 	router.HandleFunc("/backups", httpAPI.Adapt(vtadminhttp.GetBackups)).Name("API.GetBackups")
 	router.HandleFunc("/clusters", httpAPI.Adapt(vtadminhttp.GetClusters)).Name("API.GetClusters")
-	router.HandleFunc("/clusters/{cluster_id}/topology", httpAPI.Adapt(vtadminhttp.GetTopology)).Name("API.GetTopology")
 	router.HandleFunc("/gates", httpAPI.Adapt(vtadminhttp.GetGates)).Name("API.GetGates")
 	router.HandleFunc("/keyspace/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateKeyspace)).Name("API.CreateKeyspace").Methods("POST")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.DeleteKeyspace)).Name("API.DeleteKeyspace").Methods("DELETE")
@@ -339,6 +338,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/tablet/{tablet}/set_read_write", httpAPI.Adapt(vtadminhttp.SetReadWrite)).Name("API.SetReadWrite").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/start_replication", httpAPI.Adapt(vtadminhttp.StartReplication)).Name("API.StartReplication").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/stop_replication", httpAPI.Adapt(vtadminhttp.StopReplication)).Name("API.StopReplication").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/topology", httpAPI.Adapt(vtadminhttp.GetTopology)).Name("API.GetTopology")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
 	router.HandleFunc("/vtctlds", httpAPI.Adapt(vtadminhttp.GetVtctlds)).Name("API.GetVtctlds")

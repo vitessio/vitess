@@ -475,7 +475,7 @@ export interface FetchTopologyParams {
 }
 
 export const fetchTopology = async ({ clusterID }: FetchTopologyParams) => {
-    const { result } = await vtfetch(`/api/clusters/${clusterID}/topology`);
+    const { result } = await vtfetch(`/api/topology?cluster=${clusterID}`);
 
     const err = vtctldata.GetTopologyResponse.verify(result);
     if (err) throw Error(err);
