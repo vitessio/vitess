@@ -179,7 +179,7 @@ func (code AggregateOpcode) String() string {
 			return k
 		}
 	}
-	panic("unreachable")
+	return "random"
 }
 
 // MarshalJSON serializes the AggregateOpcode as a JSON string.
