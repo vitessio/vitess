@@ -83,7 +83,7 @@ export const ClusterTopology = () => {
                 <WorkspaceTitle className="font-mono">{clusterID}</WorkspaceTitle>
             </WorkspaceHeader>
 
-            <ContentContainer className='w-[900px] h-[1200px]'>
+            <ContentContainer className='lg:w-[1400px] lg:h-[1200px] md:w-[900px] md:h-[800px]'>
                 <ReactFlow
                     nodes={nodes}
                     edges={edges}
