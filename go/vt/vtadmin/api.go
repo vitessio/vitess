@@ -183,8 +183,10 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 		debugRouter.HandleFunc("/clusters", debug.Clusters(dapi))
 	}
 
-	// Catch-all route for vtadmin-web
-	serv.Router().PathPrefix("/").Handler(web.Handler())
+	if !opts.HTTPOpts.DisableWeb {
+		// Catch-all route for vtadmin-web
+		serv.Router().PathPrefix("/").Handler(web.Handler())
+	}
 
 	// Middlewares are executed in order of addition. Our ordering (all
 	// middlewares being optional) is:
