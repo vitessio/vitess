@@ -411,6 +411,9 @@ export const useWorkflow = (
 /**
  * useTopology is a query hook that fetches topology for a given cluster
  */
- export const useTopology = (params: Parameters<typeof fetchTopology>[0], options?: UseQueryOptions<vtctldata.GetTopologyResponse, Error>) => {
+export const useTopology = (
+    params: Parameters<typeof fetchTopology>[0],
+    options?: UseQueryOptions<vtctldata.GetTopologyResponse, Error>
+) => {
     return useQuery(['topology', params], () => fetchTopology(params));
 };

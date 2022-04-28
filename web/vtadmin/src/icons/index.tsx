@@ -59,5 +59,5 @@ export { ReactComponent as Search } from './search.svg';
 export { ReactComponent as Sort } from './sort.svg';
 export { ReactComponent as SpinnerLoading } from './spinnerLoading.svg';
 export { ReactComponent as Start } from './start.svg';
-export { ReactComponent as Topology } from './topology.svg'
+export { ReactComponent as Topology } from './topology.svg';
 export { ReactComponent as Wrench } from './wrench.svg';

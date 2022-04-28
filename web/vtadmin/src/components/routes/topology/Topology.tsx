@@ -28,7 +28,7 @@ import { Link } from 'react-router-dom';
 
 const TopologyLink: React.FC<{ clusterID: string }> = ({ clusterID, children }) => {
     const to = {
-        pathname: `/topology/${clusterID}`
+        pathname: `/topology/${clusterID}`,
     };
 
     return (
@@ -36,7 +36,7 @@ const TopologyLink: React.FC<{ clusterID: string }> = ({ clusterID, children }) 
             {children}
         </Link>
     );
-}
+};
 export const Topology = () => {
     useDocumentTitle('Topology');
     const { data } = useClusters();
@@ -50,7 +50,9 @@ export const Topology = () => {
             <tr key={idx}>
                 <DataCell>{cluster.name}</DataCell>
                 <DataCell>{cluster.id}</DataCell>
-                <DataCell><TopologyLink clusterID={cluster.id}>View Topology</TopologyLink></DataCell>
+                <DataCell>
+                    <TopologyLink clusterID={cluster.id}>View Topology</TopologyLink>
+                </DataCell>
             </tr>
         ));
 
@@ -69,4 +71,3 @@ export const Topology = () => {
         </div>
     );
 };
-

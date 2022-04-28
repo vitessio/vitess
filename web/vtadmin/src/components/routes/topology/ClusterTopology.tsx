@@ -31,28 +31,27 @@ import ReactFlow, {
     Background,
     useNodesState,
     useEdgesState,
-    Connection
+    Connection,
 } from 'react-flow-renderer';
-
 
 export const ClusterTopology = () => {
     interface RouteParams {
-        clusterID: string
+        clusterID: string;
     }
     useDocumentTitle('Cluster');
     const { clusterID } = useParams<RouteParams>();
-    const { data } = useTopology({ clusterID })
+    const { data } = useTopology({ clusterID });
 
-    const { nodes: initialNodes, edges: initialEdges } = data ? generateGraph(data) : { nodes: [], edges: [] }
+    const { nodes: initialNodes, edges: initialEdges } = data ? generateGraph(data) : { nodes: [], edges: [] };
 
     const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
     const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
     useEffect(() => {
-        setNodes(initialNodes)
-        setEdges(initialEdges)
+        setNodes(initialNodes);
+        setEdges(initialEdges);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [data])
+    }, [data]);
     if (!data) {
         return (
             <div>
@@ -64,11 +63,9 @@ export const ClusterTopology = () => {
                     <WorkspaceTitle className="font-mono">{clusterID}</WorkspaceTitle>
                 </WorkspaceHeader>
 
-                <ContentContainer>
-                    404
-                </ContentContainer>
+                <ContentContainer>404</ContentContainer>
             </div>
-        )
+        );
     }
 
     const onConnect = (params: Connection) => setEdges((eds) => addEdge(params, eds));
@@ -83,7 +80,7 @@ export const ClusterTopology = () => {
                 <WorkspaceTitle className="font-mono">{clusterID}</WorkspaceTitle>
             </WorkspaceHeader>
 
-            <ContentContainer className='lg:w-[1400px] lg:h-[1200px] md:w-[900px] md:h-[800px]'>
+            <ContentContainer className="lg:w-[1400px] lg:h-[1200px] md:w-[900px] md:h-[800px]">
                 <ReactFlow
                     nodes={nodes}
                     edges={edges}
