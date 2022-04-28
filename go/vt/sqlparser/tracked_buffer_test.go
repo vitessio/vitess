@@ -136,6 +136,14 @@ func TestCanonicalOutput(t *testing.T) {
 			"alter table t1 row_format=compressed, character set=utf8",
 			"ALTER TABLE `t1` ROW_FORMAT COMPRESSED, CHARSET utf8",
 		},
+		{
+			"create table a (e enum('red','green','blue','orange','yellow'))",
+			"CREATE TABLE `a` (\n\t`e` enum('red', 'green', 'blue', 'orange', 'yellow')\n)",
+		},
+		{
+			"create table a (e set('red','green','blue','orange','yellow'))",
+			"CREATE TABLE `a` (\n\t`e` set('red', 'green', 'blue', 'orange', 'yellow')\n)",
+		},
 	}
 
 	for _, tc := range testcases {

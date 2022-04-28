@@ -31,6 +31,7 @@ func TestCreateViewDiff(t *testing.T) {
 		from    string
 		to      string
 		diff    string
+		cdiff   string
 		isError bool
 	}{
 		{
@@ -59,16 +60,18 @@ func TestCreateViewDiff(t *testing.T) {
 			to:   "create view v1 (`col1`, col2, col3) as select a, b, `c` from t",
 		},
 		{
-			name: "change of column list, qualifiers",
-			from: "create view v1 (col1, `col2`, `col3`) as select `a`, `b`, c from t",
-			to:   "create view v1 (`col1`, col2, colother) as select a, b, `c` from t",
-			diff: "alter view v1(col1, col2, colother) as select a, b, c from t",
+			name:  "change of column list, qualifiers",
+			from:  "create view v1 (col1, `col2`, `col3`) as select `a`, `b`, c from t",
+			to:    "create view v1 (`col1`, col2, colother) as select a, b, `c` from t",
+			diff:  "alter view v1(col1, col2, colother) as select a, b, c from t",
+			cdiff: "ALTER VIEW `v1`(`col1`, `col2`, `colother`) AS SELECT `a`, `b`, `c` FROM `t`",
 		},
 		{
-			name: "change of column list, must have qualifiers",
-			from: "create view v1 (col1, `col2`, `col3`) as select `a`, `b`, c from t",
-			to:   "create view v1 (`col1.with.dot`, `col2`, colother) as select a, b, `c` from t",
-			diff: "alter view v1(`col1.with.dot`, col2, colother) as select a, b, c from t",
+			name:  "change of column list, must have qualifiers",
+			from:  "create view v1 (col1, `col2`, `col3`) as select `a`, `b`, c from t",
+			to:    "create view v1 (`col1.with.dot`, `col2`, colother) as select a, b, `c` from t",
+			diff:  "alter view v1(`col1.with.dot`, col2, colother) as select a, b, c from t",
+			cdiff: "ALTER VIEW `v1`(`col1.with.dot`, `col2`, `colother`) AS SELECT `a`, `b`, `c` FROM `t`",
 		},
 		{
 			name: "identical, spacing, case change",
@@ -78,16 +81,18 @@ func TestCreateViewDiff(t *testing.T) {
 				from t`,
 		},
 		{
-			name: "change of query",
-			from: "create view v1 as select a from t",
-			to:   "create view v1 as select a, b from t",
-			diff: "alter view v1 as select a, b from t",
+			name:  "change of query",
+			from:  "create view v1 as select a from t",
+			to:    "create view v1 as select a, b from t",
+			diff:  "alter view v1 as select a, b from t",
+			cdiff: "ALTER VIEW `v1` AS SELECT `a`, `b` FROM `t`",
 		},
 		{
-			name: "change of view name",
-			from: "create view v1 as select a from t",
-			to:   "create view v2 as select a, b from t",
-			diff: "alter view v1 as select a, b from t",
+			name:  "change of view name",
+			from:  "create view v1 as select a from t",
+			to:    "create view v2 as select a, b from t",
+			diff:  "alter view v1 as select a, b from t",
+			cdiff: "ALTER VIEW `v1` AS SELECT `a`, `b` FROM `t`",
 		},
 		{
 			name: "change of columns, spacing",
@@ -95,37 +100,43 @@ func TestCreateViewDiff(t *testing.T) {
 			to: `create view v2 as
 				select a, b
 				from t`,
-			diff: "alter view v1 as select a, b from t",
+			diff:  "alter view v1 as select a, b from t",
+			cdiff: "ALTER VIEW `v1` AS SELECT `a`, `b` FROM `t`",
 		},
 		{
-			name: "algorithm, case change",
-			from: "create view v1 as select a from t",
-			to:   "create algorithm=temptable view v2 as select a FROM t",
-			diff: "alter algorithm = temptable view v1 as select a from t",
+			name:  "algorithm, case change",
+			from:  "create view v1 as select a from t",
+			to:    "create algorithm=temptable view v2 as select a FROM t",
+			diff:  "alter algorithm = temptable view v1 as select a from t",
+			cdiff: "ALTER ALGORITHM = TEMPTABLE VIEW `v1` AS SELECT `a` FROM `t`",
 		},
 		{
-			name: "algorith, case change 2",
-			from: "create view v1 as select a FROM t",
-			to:   "create algorithm=temptable view v2 as select a from t",
-			diff: "alter algorithm = temptable view v1 as select a from t",
+			name:  "algorith, case change 2",
+			from:  "create view v1 as select a FROM t",
+			to:    "create algorithm=temptable view v2 as select a from t",
+			diff:  "alter algorithm = temptable view v1 as select a from t",
+			cdiff: "ALTER ALGORITHM = TEMPTABLE VIEW `v1` AS SELECT `a` FROM `t`",
 		},
 		{
-			name: "algorith, case change 3",
-			from: "create ALGORITHM=MERGE view v1 as select a FROM t",
-			to:   "create ALGORITHM=TEMPTABLE view v2 as select a from t",
-			diff: "alter algorithm = TEMPTABLE view v1 as select a from t",
+			name:  "algorith, case change 3",
+			from:  "create ALGORITHM=MERGE view v1 as select a FROM t",
+			to:    "create ALGORITHM=TEMPTABLE view v2 as select a from t",
+			diff:  "alter algorithm = TEMPTABLE view v1 as select a from t",
+			cdiff: "ALTER ALGORITHM = TEMPTABLE VIEW `v1` AS SELECT `a` FROM `t`",
 		},
 		{
-			name: "algorith value is case sensitive",
-			from: "create ALGORITHM=TEMPTABLE view v1 as select a from t",
-			to:   "create ALGORITHM=temptable view v2 as select a from t",
-			diff: "alter algorithm = temptable view v1 as select a from t",
+			name:  "algorith value is case sensitive",
+			from:  "create ALGORITHM=TEMPTABLE view v1 as select a from t",
+			to:    "create ALGORITHM=temptable view v2 as select a from t",
+			diff:  "alter algorithm = temptable view v1 as select a from t",
+			cdiff: "ALTER ALGORITHM = TEMPTABLE VIEW `v1` AS SELECT `a` FROM `t`",
 		},
 		{
-			name: "algorith value is case sensitive 2",
-			from: "create ALGORITHM=temptable view v1 as select a from t",
-			to:   "create ALGORITHM=TEMPTABLE view v2 as select a from t",
-			diff: "alter algorithm = TEMPTABLE view v1 as select a from t",
+			name:  "algorith value is case sensitive 2",
+			from:  "create ALGORITHM=temptable view v1 as select a from t",
+			to:    "create ALGORITHM=TEMPTABLE view v2 as select a from t",
+			diff:  "alter algorithm = TEMPTABLE view v1 as select a from t",
+			cdiff: "ALTER ALGORITHM = TEMPTABLE VIEW `v1` AS SELECT `a` FROM `t`",
 		},
 	}
 	hints := &DiffHints{}
@@ -154,8 +165,19 @@ func TestCreateViewDiff(t *testing.T) {
 				assert.NoError(t, err)
 				require.NotNil(t, alter)
 				require.False(t, alter.IsEmpty())
-				diff := alter.StatementString()
-				assert.Equal(t, ts.diff, diff)
+				{
+					diff := alter.StatementString()
+					assert.Equal(t, ts.diff, diff)
+					// validate we can parse back the statement
+					_, err := sqlparser.Parse(diff)
+					assert.NoError(t, err)
+				}
+				{
+					cdiff := alter.CanonicalStatementString()
+					assert.Equal(t, ts.cdiff, cdiff)
+					_, err := sqlparser.Parse(cdiff)
+					assert.NoError(t, err)
+				}
 			}
 		})
 	}

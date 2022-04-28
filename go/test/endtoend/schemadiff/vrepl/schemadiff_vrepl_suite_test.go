@@ -344,7 +344,7 @@ func validateDiff(t *testing.T, fromCreateTable string, toCreateTable string, hi
 	// The diff can be empty or there can be an actual ALTER TABLE statement
 	diffedAlterQuery := ""
 	if diff != nil && !diff.IsEmpty() {
-		diffedAlterQuery = sqlparser.String(diff.Statement())
+		diffedAlterQuery = diff.CanonicalStatementString()
 	}
 
 	// Validate the diff! The way we do it is:
