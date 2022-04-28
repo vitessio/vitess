@@ -32,7 +32,6 @@ var (
 		Use:   "GetTopology",
 		Short: "Gets topology map from vtctld's topology server.",
 		Long:  `Gets the topology map from vtctld's topology server.`,
-		Args:  cobra.ExactArgs(1),
 		RunE:  commandGetTopology,
 	}
 )
