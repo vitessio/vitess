@@ -134,10 +134,13 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 		SQLState:              ReplicationState(s.SqlState),
 		LastSQLError:          s.LastSqlError,
 	}
+
 	// We need to be able to process gRPC response messages from v13 and older tablets.
-	// In those cases there will be no value (uknown) for the IoState but the message
-	// will have the IoThreadRunning boolean and we need to revert to our assumptions
-	// about a binary state as that's all the older tablet can provide.
+	// In those cases there will be no value (uknown) for the IoState or SqlState but
+	// the message will have the IoThreadRunning and SqlThreadRunning booleans and we
+	// need to revert to our assumptions about a binary state as that's all the older
+	// tablet can provide (really only applicable to the IO status as that is NOT binary
+	// but rather has three states: Running, Stopped, Connecting).
 	if s.IoState == int32(ReplicationStateUnknown) {
 		if s.IoThreadRunning {
 			replstatus.IOState = ReplicationStateRunning
@@ -145,6 +148,14 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 			replstatus.IOState = ReplicationStateStopped
 		}
 	}
+	if s.SqlState == int32(ReplicationStateUnknown) {
+		if s.SqlThreadRunning {
+			replstatus.SQLState = ReplicationStateRunning
+		} else {
+			replstatus.SQLState = ReplicationStateStopped
+		}
+	}
+
 	return replstatus
 }
 
