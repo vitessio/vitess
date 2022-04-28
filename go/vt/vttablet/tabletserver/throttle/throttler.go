@@ -9,6 +9,7 @@ package throttle
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -65,9 +66,10 @@ var (
 	throttleMetricQuery       = flag.String("throttle_metrics_query", "", "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
 	throttleMetricThreshold   = flag.Float64("throttle_metrics_threshold", math.MaxFloat64, "Override default throttle threshold, respective to -throttle_metrics_query")
 	throttlerCheckAsCheckSelf = flag.Bool("throttle_check_as_check_self", false, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
-)
-var (
+
 	replicationLagQuery = `select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from _vt.heartbeat`
+
+	ErrThrottlerNotEnabled = errors.New("throttler not enabled")
 )
 
 // ThrottleCheckType allows a client to indicate what type of check it wants to issue. See available types below.
@@ -90,9 +92,10 @@ type Throttler struct {
 	keyspace string
 	shard    string
 
-	check    *ThrottlerCheck
-	isLeader int64
-	isOpen   int64
+	check     *ThrottlerCheck
+	isEnabled bool
+	isLeader  int64
+	isOpen    int64
 
 	env            tabletenv.Env
 	pool           *connpool.Pool
@@ -156,6 +159,7 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 	}
 
 	if env.Config().EnableLagThrottler {
+		throttler.isEnabled = true
 		throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
 
 		throttler.mysqlInventoryChan = make(chan *mysql.Inventory, 1)
@@ -182,6 +186,11 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 		throttler.check.SelfChecks(context.Background())
 	}
 	return throttler
+}
+
+// IsEnabled
+func (throttler *Throttler) IsEnabled() bool {
+	return throttler.isEnabled
 }
 
 // initThrottleTabletTypes reads the user supplied throttle_tablet_types and sets these

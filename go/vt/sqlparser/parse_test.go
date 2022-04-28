@@ -1971,6 +1971,26 @@ var (
 	}, {
 		input: "alter vitess_migration cancel all",
 	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' throttle",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' throttle expire '1h'",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' throttle ratio 0.7",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' throttle expire '1h' ratio 0.7",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' unthrottle",
+	}, {
+		input: "alter vitess_migration throttle all",
+	}, {
+		input: "alter vitess_migration unthrottle all",
+	}, {
+		input: "alter vitess_migration throttle all expire '1h'",
+	}, {
+		input: "alter vitess_migration throttle all ratio 0.7",
+	}, {
+		input: "alter vitess_migration throttle all expire '1h' ratio 0.7",
+	}, {
 		input: "show warnings",
 	}, {
 		input:  "select warnings from t",
@@ -2897,9 +2917,7 @@ func TestValid(t *testing.T) {
 			tree, err := Parse(tcase.input)
 			require.NoError(t, err, tcase.input)
 			out := String(tree)
-			if tcase.output != out {
-				t.Errorf("Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)
-			}
+			assert.Equal(t, tcase.output, out)
 
 			// Some statements currently only have 5.7 specifications.
 			// For mysql 8.0 syntax, the query is not entirely parsed.

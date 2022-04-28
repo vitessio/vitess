@@ -41,6 +41,7 @@ import (
 	p "vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -890,8 +891,12 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 		return qre.tsv.onlineDDLExecutor.CancelMigration(qre.ctx, alterMigration.UUID, "CANCEL issued by user")
 	case sqlparser.CancelAllMigrationType:
 		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, "CANCEL ALL issued by user")
+	case sqlparser.ThrottleMigrationType:
+		return qre.tsv.onlineDDLExecutor.ThrottleMigration(qre.ctx, alterMigration.UUID, alterMigration.Expire, alterMigration.Ratio)
 	case sqlparser.ThrottleAllMigrationType:
 		return qre.tsv.onlineDDLExecutor.ThrottleAllMigrations(qre.ctx, alterMigration.Expire, alterMigration.Ratio)
+	case sqlparser.UnthrottleMigrationType:
+		return qre.tsv.onlineDDLExecutor.UnthrottleMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.UnthrottleAllMigrationType:
 		return qre.tsv.onlineDDLExecutor.UnthrottleAllMigrations(qre.ctx)
 	}
@@ -913,6 +918,12 @@ func (qre *QueryExecutor) execShowMigrationLogs() (*sqltypes.Result, error) {
 }
 
 func (qre *QueryExecutor) execShowThrottledApps() (*sqltypes.Result, error) {
+	if !qre.tsv.lagThrottler.IsEnabled() {
+		return nil, throttle.ErrThrottlerNotEnabled
+	}
+	if !qre.tsv.lagThrottler.IsOpen() {
+		return nil, throttle.ErrThrottlerNotEnabled
+	}
 	if _, ok := qre.plan.FullStmt.(*sqlparser.ShowThrottledApps); ok {
 		result := &sqltypes.Result{
 			Fields: []*querypb.Field{

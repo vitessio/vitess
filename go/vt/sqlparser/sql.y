@@ -2881,12 +2881,28 @@ alter_statement:
       Type: CancelAllMigrationType,
     }
   }
+| ALTER comment_opt VITESS_MIGRATION STRING THROTTLE expire_opt ratio_opt
+  {
+    $$ = &AlterMigration{
+      Type: ThrottleMigrationType,
+      UUID: string($4),
+      Expire: $6,
+      Ratio: $7,
+    }
+  }
 | ALTER comment_opt VITESS_MIGRATION THROTTLE ALL expire_opt ratio_opt
   {
     $$ = &AlterMigration{
       Type: ThrottleAllMigrationType,
       Expire: $6,
       Ratio: $7,
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION STRING UNTHROTTLE
+  {
+    $$ = &AlterMigration{
+      Type: UnthrottleMigrationType,
+      UUID: string($4),
     }
   }
 | ALTER comment_opt VITESS_MIGRATION UNTHROTTLE ALL

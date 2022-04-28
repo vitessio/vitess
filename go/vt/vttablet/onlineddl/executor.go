@@ -73,8 +73,7 @@ var (
 	// ErrExecutorMigrationAlreadyRunning is generated when an attempt is made to run an operation that conflicts with a running migration
 	ErrExecutorMigrationAlreadyRunning = errors.New("cannot run migration since a migration is already running")
 	// ErrMigrationNotFound is returned by readMigration when given UUI cannot be found
-	ErrMigrationNotFound   = errors.New("migration not found")
-	ErrThrottlerNotEnabled = errors.New("throttler not enabled")
+	ErrMigrationNotFound = errors.New("migration not found")
 )
 
 var vexecUpdateTemplates = []string{
@@ -1697,88 +1696,78 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) 
 	return result, nil
 }
 
-// ThrottleAllMigrations
-func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal) (result *sqltypes.Result, err error) {
-	duration := 24 * time.Hour
+func (e *Executor) validateThrottleParams(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal) (duration time.Duration, ratio float64, err error) {
+	duration = 24 * time.Hour
 	if expireString != "" {
 		duration, err = time.ParseDuration(expireString)
 		if err != nil || duration < 0 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid EXPIRE value: %s. Try '120s', '30m', '1h', etc. Allowed units are (s)ec, (m)in, (h)hour", expireString)
+			return duration, ratio, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid EXPIRE value: %s. Try '120s', '30m', '1h', etc. Allowed units are (s)ec, (m)in, (h)hour", expireString)
 		}
 	}
-	ratio := 1.0
+	ratio = 1.0
 	if ratioLiteral != nil {
 		ratio, err = strconv.ParseFloat(ratioLiteral.Val, 64)
 		if err != nil || ratio < 0 || ratio > 1 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid RATIO value: %s. Try any decimal number between '0.0' (no throttle) and `1.0` (fully throttled)", ratioLiteral.Val)
+			return duration, ratio, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid RATIO value: %s. Try any decimal number between '0.0' (no throttle) and `1.0` (fully throttled)", ratioLiteral.Val)
 		}
 	}
-	if !e.env.Config().EnableLagThrottler {
-		return nil, ErrThrottlerNotEnabled
+	return duration, ratio, nil
+}
+
+// ThrottleMigration
+func (e *Executor) ThrottleMigration(ctx context.Context, uuid string, expireString string, ratioLiteral *sqlparser.Literal) (result *sqltypes.Result, err error) {
+	duration, ratio, err := e.validateThrottleParams(ctx, expireString, ratioLiteral)
+	if err != nil {
+		return nil, err
+	}
+	if !e.lagThrottler.IsEnabled() {
+		return nil, throttle.ErrThrottlerNotEnabled
 	}
 	if !e.lagThrottler.IsOpen() {
-		return nil, ErrThrottlerNotEnabled
+		return nil, throttle.ErrThrottlerNotEnabled
 	}
-	t := e.lagThrottler.ThrottleApp(throttlerOnlineDDLApp, time.Now().Add(duration), ratio)
-	result = &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{
-				Name: "app",
-				Type: sqltypes.VarChar,
-			},
-			{
-				Name: "expire_at",
-				Type: sqltypes.Timestamp,
-			},
-			{
-				Name: "ratio",
-				Type: sqltypes.Decimal,
-			},
-		},
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.NewVarChar(t.AppName),
-				sqltypes.NewTimestamp(t.ExpireAt.Format(sqltypes.TimestampFormat)),
-				sqltypes.NewDecimal(fmt.Sprintf("%v", t.Ratio)),
-			},
-		},
+	_ = e.lagThrottler.ThrottleApp(uuid, time.Now().Add(duration), ratio)
+	return emptyResult, nil
+}
+
+// ThrottleAllMigrations
+func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal) (result *sqltypes.Result, err error) {
+	duration, ratio, err := e.validateThrottleParams(ctx, expireString, ratioLiteral)
+	if err != nil {
+		return nil, err
 	}
-	return result, nil
+	if !e.lagThrottler.IsEnabled() {
+		return nil, throttle.ErrThrottlerNotEnabled
+	}
+	if !e.lagThrottler.IsOpen() {
+		return nil, throttle.ErrThrottlerNotEnabled
+	}
+	_ = e.lagThrottler.ThrottleApp(throttlerOnlineDDLApp, time.Now().Add(duration), ratio)
+	return emptyResult, nil
+}
+
+// UnthrottleMigration
+func (e *Executor) UnthrottleMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
+	if !e.lagThrottler.IsEnabled() {
+		return nil, throttle.ErrThrottlerNotEnabled
+	}
+	if !e.lagThrottler.IsOpen() {
+		return nil, throttle.ErrThrottlerNotEnabled
+	}
+	_ = e.lagThrottler.UnthrottleApp(uuid)
+	return emptyResult, nil
 }
 
 // UnthrottleAllMigrations
 func (e *Executor) UnthrottleAllMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
-	if !e.env.Config().EnableLagThrottler {
-		return nil, ErrThrottlerNotEnabled
+	if !e.lagThrottler.IsEnabled() {
+		return nil, throttle.ErrThrottlerNotEnabled
 	}
 	if !e.lagThrottler.IsOpen() {
-		return nil, ErrThrottlerNotEnabled
+		return nil, throttle.ErrThrottlerNotEnabled
 	}
-	t := e.lagThrottler.UnthrottleApp(throttlerOnlineDDLApp)
-	result = &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{
-				Name: "app",
-				Type: sqltypes.VarChar,
-			},
-			{
-				Name: "expire_at",
-				Type: sqltypes.Timestamp,
-			},
-			{
-				Name: "ratio",
-				Type: sqltypes.Decimal,
-			},
-		},
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.NewVarChar(t.AppName),
-				sqltypes.NewTimestamp(t.ExpireAt.Format(sqltypes.TimestampFormat)),
-				sqltypes.NewDecimal(fmt.Sprintf("%v", t.Ratio)),
-			},
-		},
-	}
-	return result, nil
+	_ = e.lagThrottler.UnthrottleApp(throttlerOnlineDDLApp)
+	return emptyResult, nil
 }
 
 // scheduleNextMigration attemps to schedule a single migration to run next.

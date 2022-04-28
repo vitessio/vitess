@@ -401,9 +401,26 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 		alterType = "cancel"
 	case CancelAllMigrationType:
 		alterType = "cancel all"
+	case ThrottleMigrationType:
+		alterType = "throttle"
+	case ThrottleAllMigrationType:
+		alterType = "throttle all"
+	case UnthrottleMigrationType:
+		alterType = "unthrottle"
+	case UnthrottleAllMigrationType:
+		alterType = "unthrottle all"
 	}
 	buf.WriteByte(' ')
 	buf.WriteString(alterType)
+	if node.Expire != "" {
+		buf.WriteString(" expire '")
+		buf.WriteString(node.Expire)
+		buf.WriteByte('\'')
+	}
+	if node.Ratio != nil {
+		buf.WriteString(" ratio ")
+		node.Ratio.formatFast(buf)
+	}
 }
 
 // formatFast formats the node.

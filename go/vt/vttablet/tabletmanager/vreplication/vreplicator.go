@@ -104,6 +104,7 @@ type vreplicator struct {
 	originalSQLMode        string
 
 	WorkflowType int64
+	WorkflowName string
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -359,6 +360,7 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 		return settings, numTablesToCopy, err
 	}
 	vr.WorkflowType = settings.WorkflowType
+	vr.WorkflowName = settings.WorkflowName
 	return settings, numTablesToCopy, nil
 }
 
@@ -483,7 +485,7 @@ func (vr *vreplicator) setSQLMode(ctx context.Context) (func(), error) {
 //   This is useful when we want to throttle all migrations. We throttle "online-ddl" and that applies to both vreplication
 //   migrations as well as gh-ost migrations.
 func (vr *vreplicator) throttlerAppName() string {
-	names := []string{throttlerVReplicationAppName}
+	names := []string{vr.WorkflowName, throttlerVReplicationAppName}
 	if vr.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) {
 		names = append(names, throttlerOnlineDDLAppName)
 	}
