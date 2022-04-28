@@ -1682,3 +1682,45 @@ func (c *Cluster) Debug() map[string]any {
 
 	return m
 }
+
+// Equal compares the vtctld and vtgate addresses of the clusters for equality
+func (c *Cluster) Equal(otherCluster *Cluster) (bool, error) {
+	ctx := context.Background()
+	vtgateAddresses, err := c.Discovery.DiscoverVTGateAddrs(ctx, []string{})
+	if err != nil {
+		return false, err
+	}
+	otherVtgateAddresses, err := otherCluster.Discovery.DiscoverVTGateAddrs(ctx, []string{})
+	if err != nil {
+		return false, err
+	}
+
+	vtctldAddresses, err := c.Discovery.DiscoverVtctldAddrs(ctx, []string{})
+	if err != nil {
+		return false, err
+	}
+
+	otherVtctldAddresses, err := otherCluster.Discovery.DiscoverVtctldAddrs(ctx, []string{})
+	if err != nil {
+		return false, err
+	}
+
+	return equalAddresses(vtgateAddresses, otherVtgateAddresses) && equalAddresses(vtctldAddresses, otherVtctldAddresses), nil
+}
+
+func equalAddresses(list1 []string, list2 []string) bool {
+	if len(list1) != len(list2) {
+		return false
+	}
+
+	sort.Strings(list1)
+	sort.Strings(list2)
+	for i, e1 := range list1 {
+		e2 := list2[i]
+		if e1 != e2 {
+			return false
+		}
+	}
+
+	return true
+}

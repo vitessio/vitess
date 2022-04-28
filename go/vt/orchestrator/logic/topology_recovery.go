@@ -19,7 +19,6 @@ package logic
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/rand"
 	goos "os"
@@ -619,10 +618,44 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	if !(forceInstanceRecovery || analysisEntry.ClusterDetails.HasAutomatedPrimaryRecovery) {
 		return false, nil, nil
 	}
-	tablet, err := TabletRefresh(analysisEntry.AnalyzedInstanceKey)
+
+	// We lock the shard here and then refresh the tablets information
+	ctx, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		return false, nil, err
 	}
+	defer unlock(&err)
+
+	// TODO (@GuptaManan100): Refresh only the shard tablet information instead of all the tablets
+	RefreshTablets(true /* forceRefresh */)
+
+	// Run a replication analysis again. We need this because vtorc works on ephemeral data to find the failure scenarios.
+	// That data might be old, because of a cluster operation that was run through vtctld or some other vtorc. So before we do any
+	// changes, we should be checking that this failure is indeed needed to be fixed. We do this after locking the shard to be sure
+	// that the data that we use now is up-to-date.
+	analysisEntries, err := inst.GetReplicationAnalysis(analysisEntry.ClusterDetails.ClusterName, &inst.ReplicationAnalysisHints{})
+	if err != nil {
+		return false, nil, err
+	}
+
+	// The recovery is only required if the same instance key requires a DeadPrimary or DeadPrimaryAndSomeReplicas recovery.
+	recoveryRequired := false
+	for _, entry := range analysisEntries {
+		if entry.AnalyzedInstanceKey.Equals(&analysisEntry.AnalyzedInstanceKey) {
+			if entry.Analysis == inst.DeadPrimary || entry.Analysis == inst.DeadPrimaryAndSomeReplicas {
+				recoveryRequired = true
+			}
+		}
+	}
+
+	// No recovery is required. Some other agent already fixed the issue.
+	if !recoveryRequired {
+		log.Infof("Analysis: %v - No longer valid, some other agent must have fixed the problem.", analysisEntry.Analysis)
+		return false, nil, nil
+	}
+
+	// Read the tablet information from the database to find the shard and keyspace of the tablet
+	tablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceKey)
 
 	var candidateTabletAlias *topodatapb.TabletAlias
 	if candidateInstanceKey != nil {
@@ -639,32 +672,6 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	}
 	log.Infof("Analysis: %v, deadprimary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
 
-	// this check is needed because sometimes DeadPrimary code path is forcefully spawned off from other recoveries like PrimaryHasPrimary.
-	// So we need to check that we only run an ERS if the instance that we analyzed was actually a primary! Otherwise, we would end up running an ERS
-	// even when the cluster is fine or the problem can be fixed via some other recovery
-	if tablet.Type != topodatapb.TabletType_PRIMARY {
-		RefreshTablets(true /* forceRefresh */)
-		AuditTopologyRecovery(topologyRecovery, "another agent seems to have fixed the problem")
-		return false, topologyRecovery, nil
-	}
-
-	// check if we have received SIGTERM, if we have, we should not continue with the recovery
-	val := atomic.LoadInt32(&hasReceivedSIGTERM)
-	if val > 0 {
-		return false, topologyRecovery, errors.New("Can't lock shard: SIGTERM received")
-	}
-
-	// check if we have received an ERS in progress, if we do, we should not continue with the recovery
-	if checkAndSetIfERSInProgress() {
-		AuditTopologyRecovery(topologyRecovery, "an ERS is already in progress, not issuing another")
-		return false, topologyRecovery, nil
-	}
-	defer setERSCompleted()
-
-	// add to the shard lock counter since ERS will lock the shard
-	atomic.AddInt32(&shardsLockCounter, 1)
-	defer atomic.AddInt32(&shardsLockCounter, -1)
-
 	ev, err := reparentutil.NewEmergencyReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
 		level := event.GetLevel()
 		value := event.GetValue()
@@ -676,7 +683,7 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 			log.Errorf("ERS - %s", value)
 		}
 		AuditTopologyRecovery(topologyRecovery, value)
-	})).ReparentShard(context.Background(),
+	})).ReparentShard(ctx,
 		tablet.Keyspace,
 		tablet.Shard,
 		reparentutil.EmergencyReparentOptions{
@@ -687,9 +694,7 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 		},
 	)
 
-	// here we need to forcefully refresh all the tablets otherwise old information is used and failover scenarios are spawned off which are not required
-	// For example, if we do not refresh the tablets forcefully and the new primary is found in the cache then its source key is not updated and this spawns off
-	// PrimaryHasPrimary analysis which runs another ERS
+	// We should refresh the tablet information again to update our information.
 	RefreshTablets(true /* forceRefresh */)
 	var promotedReplica *inst.Instance
 	if ev.NewPrimary != nil {
@@ -700,24 +705,6 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	}
 	postErsCompletion(topologyRecovery, analysisEntry, skipProcesses, promotedReplica)
 	return true, topologyRecovery, err
-}
-
-// checkAndSetIfERSInProgress checks if an ERS is already in progress. If it is not in progress, then we set it to be in progress.
-func checkAndSetIfERSInProgress() bool {
-	ersInProgressMutex.Lock()
-	defer ersInProgressMutex.Unlock()
-	if ersInProgress {
-		return true
-	}
-	ersInProgress = true
-	return false
-}
-
-// setERSCompleted sets the variable tracking if an ers is in progress to false.
-func setERSCompleted() {
-	ersInProgressMutex.Lock()
-	defer ersInProgressMutex.Unlock()
-	ersInProgress = false
 }
 
 func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.ReplicationAnalysis, skipProcesses bool, promotedReplica *inst.Instance) {
@@ -1770,6 +1757,41 @@ func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.Re
 
 // electNewPrimary elects a new primary while none were present before.
 func electNewPrimary(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	// We lock the shard here and then refresh the tablets information
+	ctx, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedInstanceKey)
+	if err != nil {
+		return false, nil, err
+	}
+	defer unlock(&err)
+
+	// TODO (@GuptaManan100): Refresh only the shard tablet information instead of all the tablets
+	RefreshTablets(true /* forceRefresh */)
+
+	// Run a replication analysis again. We need this because vtorc works on ephemeral data to find the failure scenarios.
+	// That data might be old, because of a cluster operation that was run through vtctld or some other vtorc. So before we do any
+	// changes, we should be checking that this failure is indeed needed to be fixed. We do this after locking the shard to be sure
+	// that the data that we use now is up-to-date.
+	analysisEntries, err := inst.GetReplicationAnalysis(analysisEntry.ClusterDetails.ClusterName, &inst.ReplicationAnalysisHints{})
+	if err != nil {
+		return false, nil, err
+	}
+
+	// The recovery is only required if the same instance key requires a ClusterHasNoPrimary recovery.
+	recoveryRequired := false
+	for _, entry := range analysisEntries {
+		if entry.AnalyzedInstanceKey.Equals(&analysisEntry.AnalyzedInstanceKey) {
+			if entry.Analysis == inst.ClusterHasNoPrimary {
+				recoveryRequired = true
+			}
+		}
+	}
+
+	// No recovery is required. Some other agent already fixed the issue.
+	if !recoveryRequired {
+		log.Infof("Analysis: %v - No longer valid, some other agent must have fixed the problem.", analysisEntry.Analysis)
+		return false, nil, nil
+	}
+
 	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false /*failIfFailedInstanceInActiveRecovery*/, true /*failIfClusterInActiveRecovery*/)
 	if topologyRecovery == nil || err != nil {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another electNewPrimary.", analysisEntry.AnalyzedInstanceKey))
@@ -1794,7 +1816,7 @@ func electNewPrimary(analysisEntry inst.ReplicationAnalysis, candidateInstanceKe
 			log.Errorf("PRS - %s", value)
 		}
 		AuditTopologyRecovery(topologyRecovery, value)
-	})).ReparentShard(context.Background(),
+	})).ReparentShard(ctx,
 		analyzedTablet.Keyspace,
 		analyzedTablet.Shard,
 		reparentutil.PlannedReparentOptions{
@@ -1819,6 +1841,46 @@ func electNewPrimary(analysisEntry inst.ReplicationAnalysis, candidateInstanceKe
 
 // fixClusterAndPrimary performs a traditional vitess PlannedReparentShard.
 func fixClusterAndPrimary(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	// We lock the shard here and then refresh the tablets information
+	_, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedInstanceKey)
+	if err != nil {
+		return false, nil, err
+	}
+	unlockFunctionCalled := false
+	defer func() {
+		if !unlockFunctionCalled {
+			unlock(&err)
+		}
+	}()
+
+	// TODO (@GuptaManan100): Refresh only the shard tablet information instead of all the tablets
+	RefreshTablets(true /* forceRefresh */)
+
+	// Run a replication analysis again. We need this because vtorc works on ephemeral data to find the failure scenarios.
+	// That data might be old, because of a cluster operation that was run through vtctld or some other vtorc. So before we do any
+	// changes, we should be checking that this failure is indeed needed to be fixed. We do this after locking the shard to be sure
+	// that the data that we use now is up-to-date.
+	analysisEntries, err := inst.GetReplicationAnalysis(analysisEntry.ClusterDetails.ClusterName, &inst.ReplicationAnalysisHints{})
+	if err != nil {
+		return false, nil, err
+	}
+
+	// The recovery is only required if the same instance key requires a DeadPrimary or DeadPrimaryAndSomeReplicas recovery.
+	recoveryRequired := false
+	for _, entry := range analysisEntries {
+		if entry.AnalyzedInstanceKey.Equals(&analysisEntry.AnalyzedInstanceKey) {
+			if entry.Analysis == inst.PrimaryHasPrimary {
+				recoveryRequired = true
+			}
+		}
+	}
+
+	// No recovery is required. Some other agent already fixed the issue.
+	if !recoveryRequired {
+		log.Infof("Analysis: %v - No longer valid, some other agent must have fixed the problem.", analysisEntry.Analysis)
+		return false, nil, nil
+	}
+
 	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false, true)
 	if topologyRecovery == nil {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixClusterAndPrimary.", analysisEntry.AnalyzedInstanceKey))
@@ -1833,6 +1895,8 @@ func fixClusterAndPrimary(analysisEntry inst.ReplicationAnalysis, candidateInsta
 		return false, topologyRecovery, err
 	}
 
+	unlockFunctionCalled = true
+	unlock(&err)
 	altAnalysis, err := forceAnalysisEntry(analysisEntry.ClusterDetails.ClusterName, inst.DeadPrimary, "", &analysisEntry.AnalyzedInstancePrimaryKey)
 	if err != nil {
 		return false, topologyRecovery, err

@@ -884,7 +884,7 @@ func TestUpdateEqualSubshard(t *testing.T) {
 	upd := &Update{
 		DML: &DML{
 			RoutingParameters: &RoutingParameters{
-				Opcode: Equal,
+				Opcode: SubShard,
 				Keyspace: &vindexes.Keyspace{
 					Name:    "ks",
 					Sharded: true,

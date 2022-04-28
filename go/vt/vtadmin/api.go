@@ -271,16 +271,23 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 	}
 
 	if c != nil {
-		if _, exists := api.clusterMap[id]; !exists {
+		existingCluster, exists := api.clusterMap[id]
+		shouldAddCluster := !exists
+		if exists {
+			isEqual, err := existingCluster.Equal(c)
+			if err != nil {
+				log.Errorf("Error checking for existing cluster %s equality with new cluster %s: %v", existingCluster.ID, id, err)
+			}
+			shouldAddCluster = shouldAddCluster || !isEqual
+		}
+		if shouldAddCluster {
 			api.clusterMap[id] = c
 			api.clusters = append(api.clusters, c)
 			sort.ClustersBy(func(c1, c2 *cluster.Cluster) bool {
 				return c1.ID < c2.ID
 			}).Sort(api.clusters)
 
-			if err := api.clusterCache.Add(id, c, cache.DefaultExpiration); err != nil {
-				log.Infof("failed to add dynamic cluster %s to cluster cache: %+v", id, err)
-			}
+			api.clusterCache.Set(id, c, cache.DefaultExpiration)
 		} else {
 			log.Infof("API already has cluster with id %s, using that instead", id)
 		}

@@ -85,6 +85,12 @@ message MaterializeSettings {
   string external_cluster = 8;
   // MaterializationIntent is used to identify the reason behind the materialization workflow: eg. MoveTables, CreateLookupVindex
   MaterializationIntent materialization_intent = 9;
+  // SourceTimeZone is the time zone in which datetimes on the source were stored, provided as an option in MoveTable
+  string source_time_zone =10;
+  // TargetTimeZone is not currently specifiable by the user, defaults to UTC for the forward workflows
+  // and to the SourceTimeZone in reverse workflows
+  string target_time_zone = 11;
+
 }
 
 /* Data types for VtctldServer */
@@ -798,6 +804,8 @@ message RefreshStateByShardRequest {
 
 message RefreshStateByShardResponse {
   bool is_partial_refresh = 1;
+  // This explains why we had a partial refresh (if we did)
+  string partial_refresh_details = 2;
 }
 
 message ReloadSchemaRequest {

@@ -10,14 +10,16 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Check for changes in relevant files
-      uses: dorny/paths-filter@v2
+      uses: frouioui/paths-filter@main
       id: changes
       with:
+        token: ''
         filters: |
           end_to_end:
             - 'docker/**'
             - 'test.go'
             - 'Makefile'
+            - 'bootstrap.sh'
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'

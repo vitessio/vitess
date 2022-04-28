@@ -599,7 +599,14 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 
 	if ct.EnumValues != nil {
-		buf.astPrintf(ct, "(%s)", strings.Join(ct.EnumValues, ", "))
+		buf.WriteString("(")
+		for i, enum := range ct.EnumValues {
+			if i > 0 {
+				buf.WriteString(", ")
+			}
+			buf.astPrintf(ct, "%#s", enum)
+		}
+		buf.WriteString(")")
 	}
 
 	if ct.Unsigned {

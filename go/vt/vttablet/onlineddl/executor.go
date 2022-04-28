@@ -2518,9 +2518,9 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				} else {
 					// a TABLE
 					ddlAction = sqlparser.AlterDDLAction
-					onlineDDL.SQL = diff.StatementString()
+					onlineDDL.SQL = diff.CanonicalStatementString()
 				}
-				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, diff.StatementString())
+				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, diff.CanonicalStatementString())
 			} else {
 				{
 					// table does not exist, so this declarative CREATE turns out to really be an actual CREATE. No further action is needed here.

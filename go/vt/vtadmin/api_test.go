@@ -4826,6 +4826,15 @@ func TestVTExplain(t *testing.T) {
 	}
 }
 
+type ServeHTTPVtctldResponse struct {
+	Result ServeHTTPVtctldResult `json:"result"`
+	Ok     bool                  `json:"ok"`
+}
+
+type ServeHTTPVtctldResult struct {
+	Vtctlds []*vtadminpb.Vtctld `json:"vtctlds"`
+}
+
 type ServeHTTPResponse struct {
 	Result ServeHTTPResult `json:"result"`
 	Ok     bool            `json:"ok"`
@@ -4838,12 +4847,25 @@ type ServeHTTPResult struct {
 func TestServeHTTP(t *testing.T) {
 	t.Parallel()
 
+	testCluster, _ := cluster.Config{
+		ID:            "dynamiccluster1",
+		Name:          "dynamiccluster1",
+		DiscoveryImpl: "dynamic",
+		DiscoveryFlagsByImpl: cluster.FlagsByImpl{
+			"dynamic": {
+				"discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}",
+			},
+		},
+	}.Cluster()
+
 	tests := []struct {
 		name                  string
 		cookie                string
 		enableDynamicClusters bool
+		testClusterVtctld     string
 		clusters              []*cluster.Cluster
 		expected              []*vtadminpb.Cluster
+		expectedVtctlds       []*vtadminpb.Vtctld
 		repeat                bool
 	}{
 		{
@@ -4898,6 +4920,28 @@ func TestServeHTTP(t *testing.T) {
 				{
 					Id:   "dynamiccluster1",
 					Name: "dynamiccluster1",
+				},
+			},
+		},
+		{
+			name:                  "dynamic clusters - cluster is updated when values change",
+			enableDynamicClusters: true,
+			cookie:                `{"id": "dynamiccluster1", "name": "dynamiccluster1", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15001\", \"hostname\": \"localhost:15998\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}"}`,
+			clusters: []*cluster.Cluster{
+				testCluster,
+			},
+			expected: []*vtadminpb.Cluster{
+				{
+					Id:   "dynamiccluster1",
+					Name: "dynamiccluster1",
+				},
+			},
+			testClusterVtctld: "dynamiccluster1",
+			expectedVtctlds: []*vtadminpb.Vtctld{
+				{
+					Hostname: "localhost:15998",
+					Cluster:  &vtadminpb.Cluster{Id: "dynamiccluster1", Name: "dynamiccluster1"},
+					FQDN:     "localhost:15001",
 				},
 			},
 		},
@@ -4990,6 +5034,30 @@ func TestServeHTTP(t *testing.T) {
 
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, tt.expected, clustersResponse.Result.Clusters)
+
+			if tt.testClusterVtctld != "" {
+				req := httptest.NewRequest(http.MethodGet, "/api/vtctlds?cluster="+tt.testClusterVtctld, nil)
+				req.AddCookie(&http.Cookie{Name: "cluster", Value: url.QueryEscape(base64.StdEncoding.EncodeToString([]byte(tt.cookie)))})
+
+				w := httptest.NewRecorder()
+
+				api.ServeHTTP(w, req)
+
+				if tt.repeat {
+					api.ServeHTTP(w, req)
+				}
+
+				res := w.Result()
+				defer res.Body.Close()
+
+				dec := json.NewDecoder(res.Body)
+				dec.DisallowUnknownFields()
+				var vtctldsResponse ServeHTTPVtctldResponse
+				err := dec.Decode(&vtctldsResponse)
+
+				assert.NoError(t, err)
+				assert.ElementsMatch(t, tt.expectedVtctlds, vtctldsResponse.Result.Vtctlds)
+			}
 		})
 	}
 }

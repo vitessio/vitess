@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"text/template"
+	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -119,7 +120,7 @@ func shouldInclude(table string, excludes []string) bool {
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
-	externalCluster string, dropForeignKeys bool) error {
+	externalCluster string, dropForeignKeys bool, sourceTimeZone string) error {
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
@@ -245,6 +246,11 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		ExternalCluster:       externalCluster,
 	}
 
+	if sourceTimeZone != "" {
+		ms.SourceTimeZone = sourceTimeZone
+		ms.TargetTimeZone = "UTC"
+	}
+
 	createDDLMode := createDDLAsCopy
 	if dropForeignKeys {
 		createDDLMode = createDDLAsCopyDropForeignKeys
@@ -263,6 +269,13 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	if err != nil {
 		return err
 	}
+
+	if sourceTimeZone != "" {
+		if err := mz.checkTZConversion(ctx, sourceTimeZone); err != nil {
+			return err
+		}
+	}
+
 	tabletShards, err := wr.collectTargetStreams(ctx, mz)
 	if err != nil {
 		return err
@@ -935,6 +948,7 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	if err != nil {
 		return nil, err
 	}
+
 	return &materializer{
 		wr:            wr,
 		ms:            ms,
@@ -1143,6 +1157,8 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 			Filter:          &binlogdatapb.Filter{},
 			StopAfterCopy:   mz.ms.StopAfterCopy,
 			ExternalCluster: mz.ms.ExternalCluster,
+			SourceTimeZone:  mz.ms.SourceTimeZone,
+			TargetTimeZone:  mz.ms.TargetTimeZone,
 		}
 		for _, ts := range mz.ms.TableSettings {
 			rule := &binlogdatapb.Rule{
@@ -1296,4 +1312,30 @@ func (mz *materializer) forAllTargets(f func(*topo.ShardInfo) error) error {
 	}
 	wg.Wait()
 	return allErrors.AggrError(vterrors.Aggregate)
+}
+
+// checkTZConversion is a light-weight consistency check to validate that, if a source time zone is specified to MoveTables,
+// that the current primary has the time zone loaded in order to run the convert_tz() function used by VReplication to do the
+// datetime conversions. We only check the current primaries on each shard and note here that it is possible a new primary
+// gets elected: in this case user will either see errors during vreplication or vdiff will report mismatches.
+func (mz *materializer) checkTZConversion(ctx context.Context, tz string) error {
+	err := mz.forAllTargets(func(target *topo.ShardInfo) error {
+		targetPrimary, err := mz.wr.ts.GetTablet(ctx, target.PrimaryAlias)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
+		}
+		testDateTime := "2006-01-02 15:04:05"
+		query := fmt.Sprintf("select convert_tz(%s, %s, 'UTC')", encodeString(testDateTime), encodeString(tz))
+		qrproto, err := mz.wr.tmc.ExecuteFetchAsApp(ctx, targetPrimary.Tablet, false, []byte(query), 1)
+		if err != nil {
+			return vterrors.Wrapf(err, "ExecuteFetchAsApp(%v, %s)", targetPrimary.Tablet, query)
+		}
+		qr := sqltypes.Proto3ToResult(qrproto)
+		if gotDate, err := time.Parse(testDateTime, qr.Rows[0][0].ToString()); err != nil {
+			return fmt.Errorf("unable to perform time_zone conversions from %s to UTC — result of the attempt was: %s. Either the specified source time zone is invalid or the time zone tables have not been loaded on the %s tablet",
+				tz, gotDate, targetPrimary.Alias)
+		}
+		return nil
+	})
+	return err
 }

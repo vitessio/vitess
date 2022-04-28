@@ -23,19 +23,19 @@ import (
 )
 
 var (
-	ErrEntityTypeMismatch             = errors.New("mismatched entity type")
-	ErrStrictIndexOrderingUnsupported = errors.New("strict index ordering is unsupported")
-	ErrPartitioningUnsupported        = errors.New("partitions are unsupported")
-	ErrUnsupportedTableOption         = errors.New("unsupported table option")
-	ErrUnexpectedDiffAction           = errors.New("unexpected diff action")
-	ErrUnexpectedTableSpec            = errors.New("unexpected table spec")
-	ErrNotFullyParsed                 = errors.New("unable to fully parse statement")
-	ErrExpectedCreateTable            = errors.New("expected a CREATE TABLE statement")
-	ErrExpectedCreateView             = errors.New("expected a CREATE VIEW statement")
-	ErrUnsupportedEntity              = errors.New("Unsupported entity type")
-	ErrUnsupportedStatement           = errors.New("Unsupported statement")
-	ErrDuplicateName                  = errors.New("Duplicate name")
-	ErrViewDependencyUnresolved       = errors.New("Views have unresolved/loop dependencies")
+	ErrEntityTypeMismatch                          = errors.New("mismatched entity type")
+	ErrStrictIndexOrderingUnsupported              = errors.New("strict index ordering is unsupported")
+	ErrRangeRotattionStatementsStrategyUnsupported = errors.New("range rotation statement strategy unsupported")
+	ErrUnsupportedTableOption                      = errors.New("unsupported table option")
+	ErrUnexpectedDiffAction                        = errors.New("unexpected diff action")
+	ErrUnexpectedTableSpec                         = errors.New("unexpected table spec")
+	ErrNotFullyParsed                              = errors.New("unable to fully parse statement")
+	ErrExpectedCreateTable                         = errors.New("expected a CREATE TABLE statement")
+	ErrExpectedCreateView                          = errors.New("expected a CREATE VIEW statement")
+	ErrUnsupportedEntity                           = errors.New("Unsupported entity type")
+	ErrUnsupportedStatement                        = errors.New("Unsupported statement")
+	ErrDuplicateName                               = errors.New("Duplicate name")
+	ErrViewDependencyUnresolved                    = errors.New("Views have unresolved/loop dependencies")
 )
 
 // Entity stands for a database object we can diff:
@@ -61,6 +61,8 @@ type EntityDiff interface {
 	Statement() sqlparser.Statement
 	// StatementString "stringifies" the this diff's Statement(). It returns an empty string if the diff is empty
 	StatementString() string
+	// CanonicalStatementString "stringifies" the this diff's Statement() to a canonical string. It returns an empty string if the diff is empty
+	CanonicalStatementString() string
 }
 
 const (
@@ -69,8 +71,15 @@ const (
 	AutoIncrementApplyAlways
 )
 
+const (
+	RangeRotationFullSpec = iota
+	RangeRotationStatements
+	RangeRotationIgnore
+)
+
 // DiffHints is an assortment of rules for diffing entities
 type DiffHints struct {
 	StrictIndexOrdering   bool
 	AutoIncrementStrategy int
+	RangeRotationStrategy int
 }

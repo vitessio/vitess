@@ -28,22 +28,26 @@ import (
 )
 
 /*
+
+This test file only tests the V3 planner. It does not test the Subshard opcode
+
 For easy reference, opcodes are:
-	SelectUnsharded   0
-	SelectEqualUnique 1
-	SelectEqual       2
-	SelectIN          3
-	SelectMultiEqual  4
-	SelectScatter     5
-	SelectNext        6
-	SelectDBA         7
-	SelectReference   8
-	SelectNone        9
-	NumRouteOpcodes   10
+	Unsharded   	 0
+	EqualUnique 	 1
+	Equal       	 2
+	IN          	 3
+	MultiEqual  	 4
+	Scatter     	 5
+	Next        	 6
+	DBA         	 7
+	Reference   	 8
+	None        	 9
+	Subshard         10 <- not covered
+	NumRouteOpcodes  11
 */
 
 func TestJoinCanMerge(t *testing.T) {
-	testcases := [engine.NumOpcodes][engine.NumOpcodes]bool{
+	testcases := [][]bool{
 		{true, false, false, false, false, false, false, false, true, false, false},
 		{false, true, false, false, false, false, false, false, true, false, false},
 		{false, false, false, false, false, false, false, false, true, false, false},
@@ -60,7 +64,7 @@ func TestJoinCanMerge(t *testing.T) {
 	ks := &vindexes.Keyspace{}
 	for left, vals := range testcases {
 		for right, val := range vals {
-			name := fmt.Sprintf("%d:%d", left, right)
+			name := fmt.Sprintf("%s:%s", engine.Opcode(left).String(), engine.Opcode(right).String())
 			t.Run(name, func(t *testing.T) {
 				lRoute := &route{
 					// Setting condition will make SelectEqualUnique match itself.
@@ -81,7 +85,7 @@ func TestJoinCanMerge(t *testing.T) {
 }
 
 func TestSubqueryCanMerge(t *testing.T) {
-	testcases := [engine.NumOpcodes][engine.NumOpcodes]bool{
+	testcases := [][]bool{
 		{true, false, false, false, false, false, false, false, true, false, false},
 		{false, false, false, false, false, false, false, false, true, false, false},
 		{false, false, false, false, false, false, false, false, true, false, false},
@@ -111,7 +115,7 @@ func TestSubqueryCanMerge(t *testing.T) {
 }
 
 func TestUnionCanMerge(t *testing.T) {
-	testcases := [engine.NumOpcodes][engine.NumOpcodes]bool{
+	testcases := [][]bool{
 		{true, false, false, false, false, false, false, false, false, false, false},
 		{false, false, false, false, false, false, false, false, false, false, false},
 		{false, false, false, false, false, false, false, false, false, false, false},
@@ -124,6 +128,7 @@ func TestUnionCanMerge(t *testing.T) {
 		{false, false, false, false, false, false, false, false, false, false, false},
 		{false, false, false, false, false, false, false, false, false, false, false},
 	}
+
 	ks := &vindexes.Keyspace{}
 	lRoute := &route{}
 	rRoute := &route{}

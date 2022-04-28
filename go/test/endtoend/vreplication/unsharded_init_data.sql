@@ -26,3 +26,10 @@ insert into db_order_test (c_uuid, created_at, dstuff, dtstuff, dbstuff, cstuff)
 insert into db_order_test (c_uuid, created_at, dstuff, dtstuff, dbstuff, cstuff) values ('b169-7359cfb5-9ff5-064d3874effb-14e4', '2018-12-11 01:46:46', 'Fohk0aif4oov!e>ith)eeghoo`Goh)p0', 'shi3ahde9doo5Uph6CeiSheCh/uw0nae', 'audaek{eceenooPh8wichahcheiv9thu', 'chickens');
 insert into db_order_test (c_uuid, created_at, dstuff, dtstuff, dbstuff, cstuff) values ('b169-a8411858-a983-123139285dbf-14e2', '2020-03-23 04:42:39', 'ooM4pe<chooph2Zoothah>j>eashaeko', 'too$Shei&s2eing3ashoh0Sh9fiey7th', 'Ohx9saf#eiz*echoo0eechSues_u2que', 'dogs');
 
+insert into datze(id, dt2, ts1) values (1, '2022-01-01 00:00:00', current_timestamp);
+insert into datze(id, dt2, ts1) values (2, '2022-03-27 02:00:00', current_timestamp);
+insert into datze(id, dt2, ts1) values (3, '2022-03-27 02:15:00', current_timestamp);
+insert into datze(id, dt2, ts1) values (4, '2022-03-27 03:00:00', current_timestamp);
+insert into datze(id, dt2, ts1) values (5, '2022-03-27 03:15:00', current_timestamp);
+insert into datze(id, dt2, ts1) values (6, current_timestamp, current_timestamp);
+
