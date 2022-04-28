@@ -38,6 +38,14 @@ const getNodesAndEdges = (cell: vtctldata.ITopologyCell, path: string, depth: nu
         }
     }
 
+    if (depth === 0) {
+        parentNode.type = "input"
+    }
+
+    if (!cell.children) {
+        parentNode.type = "output"
+    }
+
     nodes.push(parentNode)
 
     if (cell.children) {
