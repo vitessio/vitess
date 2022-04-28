@@ -36,6 +36,8 @@ import { Backups } from './routes/Backups';
 import { Shard } from './routes/shard/Shard';
 import { Vtctlds } from './routes/Vtctlds';
 import { SnackbarContainer } from './Snackbar';
+import { Topology } from './routes/topology/Topology'
+import { ClusterTopology } from './routes/topology/ClusterTopology'
 
 export const App = () => {
     return (
@@ -112,6 +114,15 @@ export const App = () => {
                         </Route>
 
                         <Redirect exact from="/" to="/tablets" />
+
+                        <Route path="/topology/:clusterID">
+                            <ClusterTopology />
+                        </Route>
+
+                        <Route path="/topology">
+                            <Topology />
+                        </Route>
+
 
                         <Route>
                             <Error404 />

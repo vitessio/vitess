@@ -469,3 +469,16 @@ export const validateVersionKeyspace = async ({ clusterID, keyspace }: ValidateV
 
     return vtctldata.ValidateVersionKeyspaceResponse.create(result);
 };
+
+export interface FetchTopologyParams {
+    clusterID: string;
+}
+
+export const fetchTopology = async ({ clusterID }: FetchTopologyParams) => {
+    const { result } = await vtfetch(`/api/keyspace/${clusterID}/topology`);
+
+    const err = vtctldata.GetTopologyResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.GetTopologyResponse.create(result);
+};

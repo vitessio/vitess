@@ -98,5 +98,6 @@ export enum Icons {
     sort = 'sort',
     spinnerLoading = 'spinnerLoading',
     start = 'start',
+    topology = 'topology',
     wrench = 'wrench',
 }

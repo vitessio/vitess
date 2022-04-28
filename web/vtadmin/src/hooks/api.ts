@@ -57,8 +57,9 @@ import {
     ValidateSchemaKeyspaceParams,
     ValidateVersionKeyspaceParams,
     validateVersionKeyspace,
+    fetchTopology,
 } from '../api/http';
-import { vtadmin as pb } from '../proto/vtadmin';
+import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
 
 /**
@@ -405,4 +406,11 @@ export const useWorkflow = (
         },
         ...options,
     });
+};
+
+/**
+ * useTopology is a query hook that fetches topology for a given cluster
+ */
+ export const useTopology = (params: Parameters<typeof fetchTopology>[0], options?: UseQueryOptions<vtctldata.GetTopologyResponse, Error>) => {
+    return useQuery(['topology', params], () => fetchTopology(params));
 };
