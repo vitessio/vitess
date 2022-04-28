@@ -651,7 +651,8 @@ func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets
 
 		opcode := engine.AggregateSum
 		if aggr.OpCode == engine.AggregateMin ||
-			aggr.OpCode == engine.AggregateMax {
+			aggr.OpCode == engine.AggregateMax ||
+			aggr.OpCode == engine.AggregateRandom {
 			opcode = aggr.OpCode
 		}
 
