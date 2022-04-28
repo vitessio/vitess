@@ -25,12 +25,19 @@ import (
 
 //
 type AlterTableEntityDiff struct {
+	from       *CreateTableEntity
+	to         *CreateTableEntity
 	alterTable *sqlparser.AlterTable
 }
 
 // IsEmpty implements EntityDiff
 func (d *AlterTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
+}
+
+// IsEmpty implements EntityDiff
+func (d *AlterTableEntityDiff) Entities() (from Entity, to Entity) {
+	return d.from, d.to
 }
 
 // Statement implements EntityDiff
@@ -67,6 +74,11 @@ func (d *CreateTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// IsEmpty implements EntityDiff
+func (d *CreateTableEntityDiff) Entities() (from Entity, to Entity) {
+	return nil, &CreateTableEntity{CreateTable: *d.createTable}
+}
+
 // Statement implements EntityDiff
 func (d *CreateTableEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
@@ -93,12 +105,18 @@ func (d *CreateTableEntityDiff) CanonicalStatementString() (s string) {
 
 //
 type DropTableEntityDiff struct {
+	from      *CreateTableEntity
 	dropTable *sqlparser.DropTable
 }
 
 // IsEmpty implements EntityDiff
 func (d *DropTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
+}
+
+// IsEmpty implements EntityDiff
+func (d *DropTableEntityDiff) Entities() (from Entity, to Entity) {
+	return d.from, nil
 }
 
 // Statement implements EntityDiff
@@ -234,7 +252,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		// - reordered keys -- we treat that as non-diff
 		return nil, nil
 	}
-	return &AlterTableEntityDiff{alterTable: alterTable}, nil
+	return &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}, nil
 }
 
 func (c *CreateTableEntity) diffTableCharset(
@@ -779,5 +797,5 @@ func (c *CreateTableEntity) Drop() EntityDiff {
 	dropTable := &sqlparser.DropTable{
 		FromTables: []sqlparser.TableName{c.Table},
 	}
-	return &DropTableEntityDiff{dropTable: dropTable}
+	return &DropTableEntityDiff{from: c, dropTable: dropTable}
 }

@@ -30,6 +30,8 @@ func TestCreateTableDiff(t *testing.T) {
 		name     string
 		from     string
 		to       string
+		fromName string
+		toName   string
 		diff     string
 		cdiff    string
 		isError  bool
@@ -87,11 +89,13 @@ func TestCreateTableDiff(t *testing.T) {
 			cdiff: "ALTER TABLE `t1` ADD COLUMN `i` int NOT NULL DEFAULT 0",
 		},
 		{
-			name:  "dropped column",
-			from:  "create table t1 (id int primary key, `i` int not null default 0)",
-			to:    "create table t2 (`id` int primary key)",
-			diff:  "alter table t1 drop column i",
-			cdiff: "ALTER TABLE `t1` DROP COLUMN `i`",
+			name:     "dropped column",
+			from:     "create table t1 (id int primary key, `i` int not null default 0)",
+			to:       "create table t2 (`id` int primary key)",
+			diff:     "alter table t1 drop column i",
+			cdiff:    "ALTER TABLE `t1` DROP COLUMN `i`",
+			fromName: "t1",
+			toName:   "t2",
 		},
 		{
 			name:  "modified column",
@@ -645,6 +649,14 @@ func TestCreateTableDiff(t *testing.T) {
 					// validate we can parse back the statement
 					_, err := sqlparser.Parse(diff)
 					assert.NoError(t, err)
+
+					eFrom, eTo := alter.Entities()
+					if ts.fromName != "" {
+						assert.Equal(t, ts.fromName, eFrom.Name())
+					}
+					if ts.toName != "" {
+						assert.Equal(t, ts.toName, eTo.Name())
+					}
 				}
 				{
 					cdiff := alter.CanonicalStatementString()
@@ -652,6 +664,7 @@ func TestCreateTableDiff(t *testing.T) {
 					_, err := sqlparser.Parse(cdiff)
 					assert.NoError(t, err)
 				}
+
 			}
 		})
 	}
