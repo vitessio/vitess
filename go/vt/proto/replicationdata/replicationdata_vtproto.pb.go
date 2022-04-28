@@ -53,14 +53,28 @@ func (m *Status) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.LastSqlError)
 		i = encodeVarint(dAtA, i, uint64(len(m.LastSqlError)))
 		i--
-		dAtA[i] = 0x7a
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x8a
+	}
+	if m.SqlState != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.SqlState))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x80
 	}
 	if len(m.LastIoError) > 0 {
 		i -= len(m.LastIoError)
 		copy(dAtA[i:], m.LastIoError)
 		i = encodeVarint(dAtA, i, uint64(len(m.LastIoError)))
 		i--
-		dAtA[i] = 0x72
+		dAtA[i] = 0x7a
+	}
+	if m.IoState != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.IoState))
+		i--
+		dAtA[i] = 0x70
 	}
 	if m.IoThreadConnecting {
 		i--
@@ -319,13 +333,19 @@ func (m *Status) SizeVT() (n int) {
 	if m.IoThreadConnecting {
 		n += 2
 	}
+	if m.IoState != 0 {
+		n += 1 + sov(uint64(m.IoState))
+	}
 	l = len(m.LastIoError)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
+	if m.SqlState != 0 {
+		n += 2 + sov(uint64(m.SqlState))
+	}
 	l = len(m.LastSqlError)
 	if l > 0 {
-		n += 1 + l + sov(uint64(l))
+		n += 2 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -737,6 +757,25 @@ func (m *Status) UnmarshalVT(dAtA []byte) error {
 			}
 			m.IoThreadConnecting = bool(v != 0)
 		case 14:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IoState", wireType)
+			}
+			m.IoState = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.IoState |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 15:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field LastIoError", wireType)
 			}
@@ -768,7 +807,26 @@ func (m *Status) UnmarshalVT(dAtA []byte) error {
 			}
 			m.LastIoError = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 15:
+		case 16:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SqlState", wireType)
+			}
+			m.SqlState = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.SqlState |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 17:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field LastSqlError", wireType)
 			}
