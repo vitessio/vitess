@@ -5865,6 +5865,71 @@ func TestGetTablets(t *testing.T) {
 	}
 }
 
+func TestGetTopology(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell1", "cell2", "cell3")
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	err := ts.CreateKeyspace(ctx, "keyspace1", &topodatapb.Keyspace{})
+	require.NoError(t, err)
+
+	err = ts.CreateTablet(ctx, &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
+		Hostname:      "localhost",
+		Keyspace:      "keyspace1",
+		MysqlHostname: "localhost",
+		MysqlPort:     17100,
+	})
+	require.NoError(t, err)
+
+	resp, err := vtctld.GetTopology(ctx, &vtctldatapb.GetTopologyRequest{})
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, []*vtctldatapb.TopologyCell{
+		{Name: "global",
+			Children: []*vtctldatapb.TopologyCell{
+				{
+					Name: "cells",
+					Children: []*vtctldatapb.TopologyCell{
+						{Name: "cell1", Children: []*vtctldatapb.TopologyCell{{Name: "CellInfo"}}},
+						{Name: "cell2", Children: []*vtctldatapb.TopologyCell{{Name: "CellInfo"}}},
+						{Name: "cell3", Children: []*vtctldatapb.TopologyCell{{Name: "CellInfo"}}},
+					},
+				},
+				{
+					Name: "keyspaces",
+					Children: []*vtctldatapb.TopologyCell{
+						{Name: "keyspace1", Children: []*vtctldatapb.TopologyCell{
+							{Name: "Keyspace"},
+						}},
+					},
+				},
+			},
+		},
+		{Name: "cell1", Children: []*vtctldatapb.TopologyCell{
+			{
+				Name: "keyspaces", Children: []*vtctldatapb.TopologyCell{
+					{
+						Name: "keyspace1", Children: []*vtctldatapb.TopologyCell{
+							{Name: "shards", Children: []*vtctldatapb.TopologyCell{{Name: "ShardReplication", Data: "nodes:{tablet_alias:{cell:\"cell1\" uid:100}}"}}},
+						},
+					},
+				},
+			},
+			{
+				Name: "tablets", Children: []*vtctldatapb.TopologyCell{
+					{Name: "cell1-0000000100", Children: []*vtctldatapb.TopologyCell{{Name: "Tablet", Data: "alias:{cell:\"cell1\" uid:100} hostname:\"localhost\" keyspace:\"keyspace1\" mysql_hostname:\"localhost\" mysql_port:17100"}}},
+				},
+			},
+		}},
+		{Name: "cell2", Children: []*vtctldatapb.TopologyCell{}},
+		{Name: "cell3", Children: []*vtctldatapb.TopologyCell{}},
+	}, resp.Cells)
+}
+
 func TestGetVSchema(t *testing.T) {
 	t.Parallel()
 
