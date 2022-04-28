@@ -40,15 +40,15 @@ import (
 )
 
 type vcopier struct {
-	vr                *vreplicator
-	tablePlan         *TablePlan
-	throttlerAppNames []string
+	vr               *vreplicator
+	tablePlan        *TablePlan
+	throttlerAppName string
 }
 
 func newVCopier(vr *vreplicator) *vcopier {
 	return &vcopier{
-		vr:                vr,
-		throttlerAppNames: vr.throttlerAppNames(),
+		vr:               vr,
+		throttlerAppName: vr.throttlerAppName(),
 	}
 }
 
@@ -239,7 +239,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			default:
 			}
 			// verify throttler is happy, otherwise keep looping
-			if vc.vr.vre.throttlerClient.ThrottleCheckOKOrWait(ctx, vc.throttlerAppNames...) {
+			if vc.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vc.throttlerAppName) {
 				break
 			}
 		}

@@ -67,7 +67,7 @@ type vplayer struct {
 
 	phase string
 
-	throttlerAppNames []string
+	throttlerAppName string
 }
 
 // newVPlayer creates a new vplayer. Parameters:
@@ -86,16 +86,16 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		saveStop = false
 	}
 	return &vplayer{
-		vr:                vr,
-		startPos:          settings.StartPos,
-		pos:               settings.StartPos,
-		stopPos:           settings.StopPos,
-		saveStop:          saveStop,
-		copyState:         copyState,
-		timeLastSaved:     time.Now(),
-		tablePlans:        make(map[string]*TablePlan),
-		phase:             phase,
-		throttlerAppNames: vr.throttlerAppNames(),
+		vr:               vr,
+		startPos:         settings.StartPos,
+		pos:              settings.StartPos,
+		stopPos:          settings.StopPos,
+		saveStop:         saveStop,
+		copyState:        copyState,
+		timeLastSaved:    time.Now(),
+		tablePlans:       make(map[string]*TablePlan),
+		phase:            phase,
+		throttlerAppName: vr.throttlerAppName(),
 	}
 }
 
@@ -342,7 +342,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			return ctx.Err()
 		}
 		// check throttler.
-		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWait(ctx, vp.throttlerAppNames...) {
+		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vp.throttlerAppName) {
 			continue
 		}
 
