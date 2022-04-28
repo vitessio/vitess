@@ -54,6 +54,8 @@ $ vtctl -- --topo_implementation etcd2 AddCellInfo --root "/vitess/global"
 
 ### Online DDL changes
 
+See new SQL syntax for controlling/viewing throttling fomr Online DDL, down below.
+
 #### ddl_strategy: 'vitess'
 
 `ddl_strategy` now takes the value of `vitess` to indicate VReplication-based migrations. It is a synonym to `online` and uses the exact same functionality. In the future, the `online` term will phase out, and `vitess` will remain the term of preference.
@@ -87,6 +89,42 @@ API endpoint `/throttler/throttle-app` now accepts a `ratio` query argument, a f
 - `0` means "do not throttle at all"
 - `1` means "always throttle"
 - any numbr in between is allowd. For example, `0.3` means "throttle in 0.3 probability", ie on a per request and based on a dice roll, there's a `30%` change a request is denied. Overall we can expect about `30%` of requests to be denied. Example: `/throttler/throttle-app?app=vreplication&ratio=0.25`
+
+See new SQL syntax for controlling/viewing throttling, down below.
+
+### New Syntax
+
+#### Control and view Online DDL throttling
+
+We introduce the following syntax, to:
+
+- Start/stop throttling for all Online DDL migrations, in general
+- Start/stop throttling for a particular Online DDL migration
+- View throttler state
+
+
+```sql
+ALTER VITESS_MIGRATION '<uuid>' THROTTLE [EXPIRE '<duration>'] [RATIO <ratio>];
+ALTER VITESS_MIGRATION THROTTLE ALL [EXPIRE '<duration>'] [RATIO <ratio>];
+ALTER VITESS_MIGRATION '<uuid>' UNTHROTTLE;
+ALTER VITESS_MIGRATION UNTHROTTLE ALL;
+SHOW VITESS_THROTTLED_APPS;
+```
+
+default `duration` is `24h`
+- allowed units are (s)ec, (m)in, (h)our
+ratio is in the range `[0..1]`.
+- `1` means full throttle - the app will not make any progress
+- `0` means no throttling at all
+- `0.8` means on 8 out of 10 checks the app makes, it gets refused
+
+The syntax `SHOW VITESS_THROTTLED_APPS` is a generic call to the throttler, and returns information about all throttled apps, not specific to migrations
+
+`SHOW VITESS_MIGRATIONS ...` output now includes `user_throttle_ratio`
+
+This column is updated "once in a while", while a migration is running. Normally this is once a minute, but can be more frequent. The migration reports back what was the throttling instruction set by the user while it was/is running.
+This column does not indicate any actual lag-based throttling that takes place per production state. It only reports the explicit throttling value set by the user.
+
 
 ### Compatibility
 
