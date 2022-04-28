@@ -282,3 +282,31 @@ func (s *Schema) Diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err 
 	}
 	return diffs, err
 }
+
+// Entity returns an entity by name, or nil if nonexistent
+func (s *Schema) Entity(name string) Entity {
+	return s.named[name]
+}
+
+// ToStatements returns an ordered list of statements which can be applied to create the schema
+func (s *Schema) ToStatements() []sqlparser.Statement {
+	stmts := []sqlparser.Statement{}
+	for _, e := range s.Entities() {
+		stmts = append(stmts, e.Create().Statement())
+	}
+	return stmts
+}
+
+// ToQueries returns an ordered list of queries which can be applied to create the schema
+func (s *Schema) ToQueries() []string {
+	queries := []string{}
+	for _, e := range s.Entities() {
+		queries = append(queries, e.Create().CanonicalStatementString())
+	}
+	return queries
+}
+
+// ToSQL returns a SQL blob with ordered sequence of queries which can be applied to create the schema
+func (s *Schema) ToSQL() string {
+	return strings.Join(s.ToQueries(), "\n")
+}
