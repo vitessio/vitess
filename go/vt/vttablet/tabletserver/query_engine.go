@@ -50,7 +50,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-//_______________________________________________
+// _______________________________________________
 
 // TabletPlan wraps the planbuilder's exec plan to enforce additional rules
 // and track stats.
@@ -98,7 +98,7 @@ func (ep *TabletPlan) buildAuthorized() {
 	}
 }
 
-//_______________________________________________
+// _______________________________________________
 
 // QueryEngine implements the core functionality of tabletserver.
 // It assumes that no requests will be sent to it before Open is
@@ -315,7 +315,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	plan := &TabletPlan{Plan: splan, Original: sql}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableNames()...)
 	plan.buildAuthorized()
-	if plan.PlanID.IsSelect() {
+	if !isReservedConn && plan.PlanID.IsSelect() {
 		if !skipQueryPlanCache && qe.enableQueryPlanFieldCaching && plan.FieldQuery != nil {
 			conn, err := qe.conns.Get(ctx)
 			if err != nil {
