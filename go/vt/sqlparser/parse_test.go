@@ -4816,6 +4816,42 @@ func TestParseLobstersQueries(t *testing.T) {
 	}
 }
 
+func TestParseVersionedComments(t *testing.T) {
+	testcases := []struct {
+		input        string
+		mysqlVersion string
+		output       string
+	}{
+		{
+			input:        `CREATE TABLE table1 (id int) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*!50900 PARTITION BY RANGE (id) (PARTITION x VALUES LESS THAN (5) ENGINE = InnoDB, PARTITION t VALUES LESS THAN (20) ENGINE = InnoDB) */`,
+			mysqlVersion: "50401",
+			output: `create table table1 (
+	id int
+) ENGINE InnoDB,
+  CHARSET utf8mb4`,
+		}, {
+			input:        `CREATE TABLE table1 (id int) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*!50900 PARTITION BY RANGE (id) (PARTITION x VALUES LESS THAN (5) ENGINE = InnoDB, PARTITION t VALUES LESS THAN (20) ENGINE = InnoDB) */`,
+			mysqlVersion: "80001",
+			output: `create table table1 (
+	id int
+) ENGINE InnoDB,
+  CHARSET utf8mb4 partition by range (id) (partition x values less than (5) engine InnoDB, partition t values less than (20) engine InnoDB)`,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.input+":"+testcase.mysqlVersion, func(t *testing.T) {
+			oldMySQLVersion := MySQLVersion
+			defer func() { MySQLVersion = oldMySQLVersion }()
+			MySQLVersion = testcase.mysqlVersion
+			tree, err := Parse(testcase.input)
+			require.NoError(t, err, testcase.input)
+			out := String(tree)
+			require.Equal(t, testcase.output, out)
+		})
+	}
+}
+
 func BenchmarkParseTraces(b *testing.B) {
 	for _, trace := range []string{"django_queries.txt", "lobsters.sql.gz"} {
 		b.Run(trace, func(b *testing.B) {
