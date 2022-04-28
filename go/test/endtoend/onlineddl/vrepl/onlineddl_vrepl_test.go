@@ -39,11 +39,12 @@ import (
 )
 
 var (
-	clusterInstance  *cluster.LocalProcessCluster
-	shards           []cluster.Shard
-	vtParams         mysql.ConnParams
-	httpClient       = throttlebase.SetupHTTPClient(time.Second)
-	throttlerAppName = "vreplication"
+	clusterInstance       *cluster.LocalProcessCluster
+	shards                []cluster.Shard
+	vtParams              mysql.ConnParams
+	httpClient            = throttlebase.SetupHTTPClient(time.Second)
+	throttlerAppName      = "vreplication"
+	throttlerOnlineDDLApp = "online-ddl"
 
 	hostname              = "localhost"
 	keyspaceName          = "ks"
@@ -328,10 +329,9 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("throttled migration", func(t *testing.T) {
 		insertRows(t, 2)
-		for i := range shards {
-			throttleApp(shards[i].Vttablets[0], throttlerAppName)
-			defer unthrottleApp(shards[i].Vttablets[0], throttlerAppName)
-		}
+		onlineddl.ThrottleAllMigrations(t, &vtParams)
+		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
+
 		uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "online", providedUUID, providedMigrationContext, "vtgate", "vrepl_col", "", true)
 		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
 		testRows(t)
@@ -342,22 +342,21 @@ func TestSchemaChange(t *testing.T) {
 
 	t.Run("throttled and unthrottled migration", func(t *testing.T) {
 		insertRows(t, 2)
-		for i := range shards {
-			_, body, err := throttleApp(shards[i].Vttablets[0], throttlerAppName)
-			assert.NoError(t, err)
-			assert.Contains(t, body, throttlerAppName)
 
-			defer unthrottleApp(shards[i].Vttablets[0], throttlerAppName)
-		}
+		// begin throttling:
+		onlineddl.ThrottleAllMigrations(t, &vtParams)
+		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
+		onlineddl.CheckThrottledApps(t, &vtParams, throttlerOnlineDDLApp, true)
+
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)
 		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 		testRows(t)
-		for i := range shards {
-			_, body, err := unthrottleApp(shards[i].Vttablets[0], throttlerAppName)
-			assert.NoError(t, err)
-			assert.Contains(t, body, throttlerAppName)
-		}
+
+		// unthrottle
+		onlineddl.UnthrottleAllMigrations(t, &vtParams)
+		onlineddl.CheckThrottledApps(t, &vtParams, throttlerOnlineDDLApp, false)
+
 		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 	})
@@ -380,10 +379,10 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckCancelAllMigrationsViaVtctl(t, &clusterInstance.VtctlclientProcess, keyspaceName)
 	})
 	t.Run("cancel all migrations: some migrations to cancel", func(t *testing.T) {
-		for i := range shards {
-			throttleApp(shards[i].Vttablets[0], throttlerAppName)
-			defer unthrottleApp(shards[i].Vttablets[0], throttlerAppName)
-		}
+		onlineddl.ThrottleAllMigrations(t, &vtParams)
+		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
+		onlineddl.CheckThrottledApps(t, &vtParams, throttlerOnlineDDLApp, true)
+
 		// spawn n migrations; cancel them via cancel-all
 		var wg sync.WaitGroup
 		count := 4
@@ -398,10 +397,10 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckCancelAllMigrations(t, &vtParams, len(shards)*count)
 	})
 	t.Run("cancel all migrations: some migrations to cancel via vtctl", func(t *testing.T) {
-		for i := range shards {
-			throttleApp(shards[i].Vttablets[0], throttlerAppName)
-			defer unthrottleApp(shards[i].Vttablets[0], throttlerAppName)
-		}
+		onlineddl.ThrottleAllMigrations(t, &vtParams)
+		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
+		onlineddl.CheckThrottledApps(t, &vtParams, throttlerOnlineDDLApp, true)
+
 		// spawn n migrations; cancel them via cancel-all
 		var wg sync.WaitGroup
 		count := 4

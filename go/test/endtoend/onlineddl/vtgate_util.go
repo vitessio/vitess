@@ -235,3 +235,29 @@ func ReadMigrationLogs(t *testing.T, vtParams *mysql.ConnParams, uuid string) (l
 	}
 	return logs
 }
+
+// ThrottleAllMigrations fully throttles online-ddl apps
+func ThrottleAllMigrations(t *testing.T, vtParams *mysql.ConnParams) {
+	query := "alter vitess_migration throttle all expire '24h' ratio 1"
+	_ = VtgateExecQuery(t, vtParams, query, "")
+}
+
+// UnthrottleAllMigrations cancels migration throttling
+func UnthrottleAllMigrations(t *testing.T, vtParams *mysql.ConnParams) {
+	query := "alter vitess_migration unthrottle all"
+	_ = VtgateExecQuery(t, vtParams, query, "")
+}
+
+// CheckThrottledApps checks for existence or non-existence of an app in the throttled apps list
+func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, appName string, expectFind bool) {
+	query := "show vitess_throttled_apps"
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	found := false
+	for _, row := range r.Named().Rows {
+		if row.AsString("app", "") == appName {
+			found = true
+		}
+	}
+	assert.Equal(t, expectFind, found, "check app %v in throttled apps: %v", appName, found)
+}
