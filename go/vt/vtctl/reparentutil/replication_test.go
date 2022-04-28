@@ -1215,6 +1215,94 @@ func TestReplicaWasRunning(t *testing.T) {
 	}
 }
 
+func TestSQLThreadWasRunning(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		in        *replicationdatapb.StopReplicationStatus
+		expected  bool
+		shouldErr bool
+	}{
+		{
+			name: "io thread running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(mysql.ReplicationStateRunning),
+					SqlState: int32(mysql.ReplicationStateStopped),
+				},
+			},
+			expected:  false,
+			shouldErr: false,
+		},
+		{
+			name: "sql thread running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(mysql.ReplicationStateStopped),
+					SqlState: int32(mysql.ReplicationStateRunning),
+				},
+			},
+			expected:  true,
+			shouldErr: false,
+		},
+		{
+			name: "io and sql threads running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(mysql.ReplicationStateRunning),
+					SqlState: int32(mysql.ReplicationStateRunning),
+				},
+			},
+			expected:  true,
+			shouldErr: false,
+		},
+		{
+			name: "no replication threads running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(mysql.ReplicationStateStopped),
+					SqlState: int32(mysql.ReplicationStateStopped),
+				},
+			},
+			expected:  false,
+			shouldErr: false,
+		},
+		{
+			name:      "passing nil pointer results in an error",
+			in:        nil,
+			expected:  false,
+			shouldErr: true,
+		},
+		{
+			name: "status.Before is nil results in an error",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: nil,
+			},
+			expected:  false,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			actual, err := SQLThreadWasRunning(tt.in)
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
 // waitForRelayLogsToApplyTestTMClient implements just the WaitForPosition
 // method of the tmclient.TabletManagerClient interface for
 // TestWaitForRelayLogsToApply, with the necessary trackers to facilitate
