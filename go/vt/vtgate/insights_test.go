@@ -197,8 +197,8 @@ func TestInsightsErrors(t *testing.T) {
 			{sql: "select this does not parse", error: "syntax error at position 21"},
 		},
 		[]insightsKafkaExpectation{
-			expect(queryTopic, `error:{value:\"syntax error at position 21\"}`).butNot("this does not parse"),
-			expect(queryStatsBundleTopic, `normalized_sql:{value:\"<error>\"}`, "query_count:1", "error_count:1").butNot("this does not parse"),
+			expect(queryTopic, `normalized_sql:{value:\"<error>\"}`, `error:{value:\"syntax error at position 21\"}`, `statement_type:{value:\"ERROR\"}`).butNot("this does not parse"),
+			expect(queryStatsBundleTopic, `normalized_sql:{value:\"<error>\"}`, `statement_type:\"ERROR\"`, "query_count:1", "error_count:1").butNot("this does not parse"),
 		})
 }
 

@@ -318,6 +318,11 @@ func (ii *Insights) handleMessage(record interface{}) {
 		// comments with -- markers get stripped when newExecute calls getPlan around plan_execute.go:63.
 		sql, comments = splitComments(ls.SQL)
 		sql = compactSets(sql)
+	} else {
+		sql = "<error>"
+		if ls.StmtType == "" {
+			ls.StmtType = "ERROR"
+		}
 	}
 
 	ii.addToAggregates(ls, sql)
@@ -486,6 +491,7 @@ func (ii *Insights) makeQueryMessage(ls *LogStats, sql string, tags []*pbvtgate.
 		RemoteAddress:          stringOrNil(addr),
 		RemotePort:             port,
 		VtgateName:             hostnameOrEmpty(),
+		NormalizedSql:          stringOrNil(sql),
 		StatementType:          stringOrNil(ls.StmtType),
 		Tables:                 tables, // FIXME: ls.Table captures only one table, and only for simple queries
 		Keyspace:               stringOrNil(ls.Keyspace),
@@ -500,11 +506,6 @@ func (ii *Insights) makeQueryMessage(ls *LogStats, sql string, tags []*pbvtgate.
 		CommitDuration:         durationOrNil(ls.CommitTime),
 		Error:                  stringOrNil(ls.ErrorStr()),
 		CommentTags:            tags,
-	}
-
-	// If there was an error, then sql won't be normalized, and we shouldn't send it.
-	if ls.Error == nil {
-		obj.NormalizedSql = stringOrNil(sql)
 	}
 
 	var out []byte
