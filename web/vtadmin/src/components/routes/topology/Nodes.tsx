@@ -6,10 +6,12 @@ export const generateGraph = (topology: vtctldata.GetTopologyResponse): { nodes:
     const nodes: Array<Node> = []
     const edges: Array<Edge> = []
 
+    let offset = 0
     topology.cells.forEach((cell, i) => {
-        const { nodes: childNodes, edges: childEdges } = getNodesAndEdges(cell, cell.name as string, 0, i)
+        const { nodes: childNodes, edges: childEdges } = getNodesAndEdges(cell, cell.name as string, 0, i + offset)
         nodes.push(...childNodes)
         edges.push(...childEdges)
+        offset += maxWidth(cell)
     })
 
     return {
@@ -24,7 +26,7 @@ const getNodesAndEdges = (cell: vtctldata.ITopologyCell, path: string, depth: nu
 
     const parentNode: Node = {
         id: path,
-        position: { y: depth * 100, x: width * 100 },
+        position: { y: depth * 100, x: width * 150 },
         style: { width: 'min-content' },
         data: {
             label: cell.data ? (
@@ -53,14 +55,14 @@ const getNodesAndEdges = (cell: vtctldata.ITopologyCell, path: string, depth: nu
         cell.children.forEach((child, i) => {
             const childPath = `${path}/${child.name}`
             edges.push({
-                id: `${cell.name}-${child.name}`,
+                id: `${path}-${childPath}`,
                 source: path,
                 target: childPath,
                 markerEnd: {
                     type: MarkerType.ArrowClosed,
                 },
             })
-            const { nodes: childNodes, edges: childEdges } = getNodesAndEdges(child, childPath, depth + 1, width + i + offset)
+            const { nodes: childNodes, edges: childEdges } = getNodesAndEdges(child, childPath, depth + 1, width + offset)
             nodes.push(...childNodes)
             edges.push(...childEdges)
             offset += maxWidth(child)

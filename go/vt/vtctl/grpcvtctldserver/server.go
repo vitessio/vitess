@@ -1620,6 +1620,8 @@ func (s *VtctldServer) GetTopology(ctx context.Context, req *vtctldatapb.GetTopo
 		return nil, err
 	}
 
+	cells = append([]string{topo.GlobalCell}, cells...)
+
 	for _, cell := range cells {
 		topoCell, err := s.getTopologyCell(ctx, "/"+cell)
 		if err != nil {
