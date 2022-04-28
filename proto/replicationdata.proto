@@ -26,8 +26,8 @@ package replicationdata;
 message Status {
   string position = 1;
   // These fields should be removed in Vitess 15+ and fully replaced by the io_state and sql_state fields
-  // reserved 2, 3, 17;
-  // reserved "io_thread_running", "sql_thread_running", "io_thread_connecting";
+  // reserved 2, 3;
+  // reserved "io_thread_running", "sql_thread_running";
   bool io_thread_running = 2;
   bool sql_thread_running = 3;
   uint32 replication_lag_seconds = 4;
@@ -44,7 +44,6 @@ message Status {
   string last_io_error = 14;
   int32 sql_state = 15;
   string last_sql_error = 16;
-  bool io_thread_connecting = 17;
 }
 
 // StopReplicationStatus represents the replication status before calling StopReplication, and the replication status collected immediately after

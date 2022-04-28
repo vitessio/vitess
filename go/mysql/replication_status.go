@@ -75,7 +75,7 @@ func (s *ReplicationStatus) SQLHealthy() bool {
 
 // ReplicationStatusToProto translates a Status to proto3.
 func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
-	replstatus := replicationdatapb.Status{
+	return &replicationdatapb.Status{
 		Position:              EncodePosition(s.Position),
 		RelayLogPosition:      EncodePosition(s.RelayLogPosition),
 		FilePosition:          EncodePosition(s.FilePosition),
@@ -86,18 +86,11 @@ func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 		SourcePort:            int32(s.SourcePort),
 		ConnectRetry:          int32(s.ConnectRetry),
 		SourceUuid:            s.SourceUUID.String(),
+		IoState:               int32(s.IOState),
 		LastIoError:           s.LastIOError,
+		SqlState:              int32(s.SQLState),
 		LastSqlError:          s.LastSQLError,
 	}
-	if s.IOState == ReplicationStateRunning {
-		replstatus.IoThreadRunning = true
-	} else if s.IOState == ReplicationStateConnecting {
-		replstatus.IoThreadConnecting = true
-	}
-	if s.SQLState == ReplicationStateRunning {
-		replstatus.SqlThreadRunning = true
-	}
-	return &replstatus
 }
 
 // ProtoToReplicationStatus translates a proto Status, or panics.
@@ -136,18 +129,21 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 		SourcePort:            int(s.SourcePort),
 		ConnectRetry:          int(s.ConnectRetry),
 		SourceUUID:            sid,
+		IOState:               ReplicationState(s.IoState),
+		LastIOError:           s.LastIoError,
+		SQLState:              ReplicationState(s.SqlState),
+		LastSQLError:          s.LastSqlError,
 	}
-	if s.IoThreadRunning {
-		replstatus.IOState = ReplicationStateRunning
-	} else if s.IoThreadConnecting {
-		replstatus.IOState = ReplicationStateConnecting
-	} else {
-		replstatus.IOState = ReplicationStateStopped
-	}
-	if s.SqlThreadRunning {
-		replstatus.SQLState = ReplicationStateRunning
-	} else {
-		replstatus.SQLState = ReplicationStateStopped
+	// We need to be able to process gRPC response messages from v13 and older tablets.
+	// In those cases there will be no value (uknown) for the IoState but the message
+	// will have the IoThreadRunning boolean and we need to revert to our assumptions
+	// about a binary state as that's all the older tablet can provide.
+	if s.IoState == int32(ReplicationStateUnknown) {
+		if s.IoThreadRunning {
+			replstatus.IOState = ReplicationStateRunning
+		} else {
+			replstatus.IOState = ReplicationStateStopped
+		}
 	}
 	return replstatus
 }
