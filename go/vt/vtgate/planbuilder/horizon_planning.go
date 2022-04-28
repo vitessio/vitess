@@ -494,10 +494,6 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		return newPlan, nil
 	}
 
-	// if hp.qp.ProjectionError != nil {
-	// 	return nil, hp.qp.ProjectionError
-	// }
-
 	return hp.planAggrUsingOA(ctx, plan, grouping)
 }
 

@@ -46,7 +46,6 @@ type (
 		OrderExprs         []OrderBy
 		CanPushDownSorting bool
 		HasStar            bool
-		ProjectionError    error
 	}
 
 	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
@@ -165,19 +164,6 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 	err = qp.addOrderBy(sel.OrderBy, semTable)
 	if err != nil {
 		return nil, err
-	}
-
-	if qp.HasAggr || len(qp.groupByExprs) > 0 {
-		expr := qp.getNonAggrExprNotMatchingGroupByExprs()
-		// if we have aggregation functions, non aggregating columns and GROUP BY,
-		// the non-aggregating expressions must all be listed in the GROUP BY list
-		if expr != nil {
-			// TODO(@frouioui): check sql_mode here
-			// if len(qp.groupByExprs) == 0 {
-			// 	return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.MixOfGroupFuncAndFields, "In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column(s) '%s'; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
-			// }
-			// qp.ProjectionError = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongFieldWithGroup, "Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '%s' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
-		}
 	}
 
 	if qp.Distinct && !qp.HasAggr {

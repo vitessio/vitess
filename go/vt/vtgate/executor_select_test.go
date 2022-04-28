@@ -2090,30 +2090,6 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 	utils.MustMatch(t, wantResult, gotResult)
 }
 
-// func TestGroupByNonAggregatedColumns(t *testing.T) {
-// 	executor, sbc1, _, _ := createExecutorEnv()
-// 	logChan := QueryLogger.Subscribe("Test")
-// 	defer QueryLogger.Unsubscribe(logChan)
-//
-// 	sbc1.SetResults([]*sqltypes.Result{{
-// 		Fields: []*querypb.Field{
-// 			{Name: "city", Type: sqltypes.Int32},
-// 			{Name: "age", Type: sqltypes.Int32},
-// 			{Name: "weight_string(age)", Type: sqltypes.VarBinary},
-// 		},
-// 		InsertID: 0,
-// 		Rows: [][]sqltypes.Value{{
-// 			sqltypes.NewInt32(1),
-// 			sqltypes.NewInt32(4),
-// 			sqltypes.NULL,
-// 		}},
-// 	}})
-//
-// 	sql := "select city, age from user group by age"
-// 	_, err := executorExec(executor, sql, nil)
-// 	require.NoError(t, err)
-// }
-
 // TestSelectScatterLimit will run a limit query (ordered for consistency) against
 // a scatter route and verify that the limit primitive works as intended.
 func TestSelectScatterLimit(t *testing.T) {
