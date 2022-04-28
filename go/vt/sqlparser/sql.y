@@ -462,7 +462,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <convertType> convert_type convert_type_weight_string
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <literal> length_opt
+%type <literal> length_opt partition_comment partition_data_directory partition_index_directory
 %type <expr> func_datetime_precision
 %type <str> charset_opt collate_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
@@ -474,7 +474,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <constraintDefinition> constraint_definition check_constraint_definition
 %type <str> index_or_key index_symbols from_or_in index_or_key_opt
 %type <str> name_opt constraint_name_opt
-%type <str> equal_opt partition_comment partition_data_directory partition_index_directory partition_tablespace_name
+%type <str> equal_opt partition_tablespace_name
 %type <tableSpec> table_spec table_column_list
 %type <optLike> create_like
 %type <str> table_opt_value
@@ -3217,7 +3217,7 @@ partition_definition_attribute_list_opt:
   }
 | partition_definition_attribute_list_opt partition_comment
   {
-    $1.Comment = NewStrLiteral($2)
+    $1.Comment = $2
     $$ = $1
   }
 | partition_definition_attribute_list_opt partition_engine
@@ -3227,12 +3227,12 @@ partition_definition_attribute_list_opt:
   }
 | partition_definition_attribute_list_opt partition_data_directory
   {
-    $1.DataDirectory = NewStrLiteral($2)
+    $1.DataDirectory = $2
     $$ = $1
   }
 | partition_definition_attribute_list_opt partition_index_directory
   {
-    $1.IndexDirectory = NewStrLiteral($2)
+    $1.IndexDirectory = $2
     $$ = $1
   }
 | partition_definition_attribute_list_opt partition_max_rows
@@ -3294,19 +3294,19 @@ partition_engine:
 partition_comment:
   COMMENT_KEYWORD equal_opt STRING
   {
-    $$ = $3
+    $$ = NewStrLiteral($3)
   }
 
 partition_data_directory:
   DATA DIRECTORY equal_opt STRING
   {
-    $$ = $4
+    $$ = NewStrLiteral($4)
   }
 
 partition_index_directory:
   INDEX DIRECTORY equal_opt STRING
   {
-    $$ = $4
+    $$ = NewStrLiteral($4)
   }
 
 partition_max_rows:
