@@ -272,6 +272,10 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfParsedComments(in, f)
 	case *PartitionDefinition:
 		return VisitRefOfPartitionDefinition(in, f)
+	case *PartitionDefinitionOptions:
+		return VisitRefOfPartitionDefinitionOptions(in, f)
+	case *PartitionEngine:
+		return VisitRefOfPartitionEngine(in, f)
 	case *PartitionOption:
 		return VisitRefOfPartitionOption(in, f)
 	case *PartitionSpec:
@@ -2112,7 +2116,40 @@ func VisitRefOfPartitionDefinition(in *PartitionDefinition, f Visit) error {
 	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfPartitionDefinitionOptions(in.Options, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfPartitionDefinitionOptions(in *PartitionDefinitionOptions, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
 	if err := VisitRefOfPartitionValueRange(in.ValueRange, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.Comment, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfPartitionEngine(in.Engine, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.DataDirectory, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.IndexDirectory, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfPartitionEngine(in *PartitionEngine, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
 	return nil

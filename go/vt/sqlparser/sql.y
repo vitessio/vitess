@@ -118,6 +118,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   alterTable       *AlterTable
   tableOption      *TableOption
   columnTypeOptions *ColumnTypeOptions
+  partitionDefinitionOptions *PartitionDefinitionOptions
   constraintDefinition *ConstraintDefinition
   revertMigration *RevertMigration
   alterMigration  *AlterMigration
@@ -136,6 +137,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   jsonObjectParams []*JSONObjectParam
   partDefs      []*PartitionDefinition
   partitionValueRange	*PartitionValueRange
+  partitionEngine *PartitionEngine
   partSpecs     []*PartitionSpec
   characteristics []Characteristic
   selectExpr    SelectExpr
@@ -344,7 +346,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> PARTITIONS LINEAR RANGE LIST SUBPARTITION SUBPARTITIONS HASH
 
 %type <partitionByType> range_or_list
-%type <integer> partitions_opt algorithm_opt subpartitions_opt
+%type <integer> partitions_opt algorithm_opt subpartitions_opt partition_max_rows partition_min_rows
 %type <statement> command
 %type <selStmt> query_expression_parens query_expression query_expression_body select_statement query_primary select_stmt_with_into
 %type <statement> explain_statement explainable_statement
@@ -365,7 +367,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <alterDatabase> alter_database_prefix
 %type <collateAndCharset> collate character_set
 %type <collateAndCharsets> create_options create_options_opt
-%type <boolean> default_optional first_opt linear_opt jt_exists_opt jt_path_opt
+%type <boolean> default_optional first_opt linear_opt jt_exists_opt jt_path_opt partition_storage_opt
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement call_statement
@@ -377,6 +379,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
 %type <partitionOption> partitions_options_opt partitions_options_beginning
+%type <partitionDefinitionOptions> partition_definition_attribute_list_opt
 %type <subPartition> subpartition_opt
 %type <intervalType> interval_time_stamp interval
 %type <str> cache_opt separator_opt flush_option for_channel_opt maxvalue
@@ -459,7 +462,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <convertType> convert_type convert_type_weight_string
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <literal> length_opt
+%type <literal> length_opt partition_comment partition_data_directory partition_index_directory
 %type <expr> func_datetime_precision
 %type <str> charset_opt collate_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
@@ -471,7 +474,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <constraintDefinition> constraint_definition check_constraint_definition
 %type <str> index_or_key index_symbols from_or_in index_or_key_opt
 %type <str> name_opt constraint_name_opt
-%type <str> equal_opt
+%type <str> equal_opt partition_tablespace_name
 %type <tableSpec> table_spec table_column_list
 %type <optLike> create_like
 %type <str> table_opt_value
@@ -485,7 +488,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions partition_definitions_opt
 %type <partDef> partition_definition partition_name
-%type <partitionValueRange> partition_value_range_opt
+%type <partitionValueRange> partition_value_range
+%type <partitionEngine> partition_engine
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
@@ -3251,16 +3255,60 @@ partition_definitions:
   }
 
 partition_definition:
-  partition_name partition_value_range_opt
+  partition_name partition_definition_attribute_list_opt
   {
-    $$.ValueRange = $2
+    $$.Options = $2
   }
 
-partition_value_range_opt:
+partition_definition_attribute_list_opt:
   {
-    $$ = nil
+    $$ = &PartitionDefinitionOptions{}
   }
-| VALUES LESS THAN row_tuple
+| partition_definition_attribute_list_opt partition_value_range
+  {
+    $1.ValueRange = $2
+    $$ = $1
+  }
+| partition_definition_attribute_list_opt partition_comment
+  {
+    $1.Comment = $2
+    $$ = $1
+  }
+| partition_definition_attribute_list_opt partition_engine
+  {
+    $1.Engine = $2
+    $$ = $1
+  }
+| partition_definition_attribute_list_opt partition_data_directory
+  {
+    $1.DataDirectory = $2
+    $$ = $1
+  }
+| partition_definition_attribute_list_opt partition_index_directory
+  {
+    $1.IndexDirectory = $2
+    $$ = $1
+  }
+| partition_definition_attribute_list_opt partition_max_rows
+  {
+    val := $2
+    $1.MaxRows = &val
+    $$ = $1
+  }
+| partition_definition_attribute_list_opt partition_min_rows
+  {
+    val := $2
+    $1.MinRows = &val
+    $$ = $1
+  }
+| partition_definition_attribute_list_opt partition_tablespace_name
+  {
+    $1.TableSpace = $2
+    $$ = $1
+  }
+
+partition_value_range:
+  VALUES LESS THAN row_tuple
   {
     $$ = &PartitionValueRange{
     	Type: LessThanType,
@@ -3280,6 +3328,57 @@ partition_value_range_opt:
     	Type: InType,
     	Range: $3,
     }
+  }
+
+partition_storage_opt:
+  {
+    $$ = false
+  }
+| STORAGE
+  {
+    $$ = true
+  }
+
+partition_engine:
+  partition_storage_opt ENGINE equal_opt table_alias
+  {
+    $$ = &PartitionEngine{Storage:$1, Name: $4.String()}
+  }
+
+partition_comment:
+  COMMENT_KEYWORD equal_opt STRING
+  {
+    $$ = NewStrLiteral($3)
+  }
+
+partition_data_directory:
+  DATA DIRECTORY equal_opt STRING
+  {
+    $$ = NewStrLiteral($4)
+  }
+
+partition_index_directory:
+  INDEX DIRECTORY equal_opt STRING
+  {
+    $$ = NewStrLiteral($4)
+  }
+
+partition_max_rows:
+  MAX_ROWS equal_opt INTEGRAL
+  {
+    $$ = convertStringToInt($3)
+  }
+
+partition_min_rows:
+  MIN_ROWS equal_opt INTEGRAL
+  {
+    $$ = convertStringToInt($3)
+  }
+
+partition_tablespace_name:
+  TABLESPACE equal_opt table_alias
+  {
+    $$ = $3.String()
   }
 
 partition_name:

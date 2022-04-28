@@ -56,11 +56,15 @@ type Entity interface {
 type EntityDiff interface {
 	// IsEmpty returns true when the two entities are considered identical
 	IsEmpty() bool
+	// Entities returns the two diffed entitied, aka "from" and "to"
+	Entities() (from Entity, to Entity)
 	// Statement returns a valid SQL statement that applies the diff, e.g. an ALTER TABLE ...
 	// It returns nil if the diff is empty
 	Statement() sqlparser.Statement
 	// StatementString "stringifies" the this diff's Statement(). It returns an empty string if the diff is empty
 	StatementString() string
+	// CanonicalStatementString "stringifies" the this diff's Statement() to a canonical string. It returns an empty string if the diff is empty
+	CanonicalStatementString() string
 }
 
 const (
