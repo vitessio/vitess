@@ -39,12 +39,11 @@ import (
 )
 
 var (
-	clusterInstance       *cluster.LocalProcessCluster
-	shards                []cluster.Shard
-	vtParams              mysql.ConnParams
-	httpClient            = throttlebase.SetupHTTPClient(time.Second)
-	throttlerAppName      = "vreplication"
-	throttlerOnlineDDLApp = "online-ddl"
+	clusterInstance  *cluster.LocalProcessCluster
+	shards           []cluster.Shard
+	vtParams         mysql.ConnParams
+	httpClient       = throttlebase.SetupHTTPClient(time.Second)
+	throttlerAppName = "online-ddl"
 
 	hostname              = "localhost"
 	keyspaceName          = "ks"
@@ -214,6 +213,7 @@ func TestMain(m *testing.M) {
 
 }
 
+// direct per-tablet throttler API instruction
 func throttleResponse(tablet *cluster.Vttablet, path string) (resp *http.Response, respBody string, err error) {
 	apiURL := fmt.Sprintf("http://%s:%d/%s", tablet.VttabletProcess.TabletHostname, tablet.HTTPPort, path)
 	resp, err = httpClient.Get(apiURL)
@@ -225,10 +225,12 @@ func throttleResponse(tablet *cluster.Vttablet, path string) (resp *http.Respons
 	return resp, respBody, err
 }
 
+// direct per-tablet throttler API instruction
 func throttleApp(tablet *cluster.Vttablet, app string) (*http.Response, string, error) {
 	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", app))
 }
 
+// direct per-tablet throttler API instruction
 func unthrottleApp(tablet *cluster.Vttablet, app string) (*http.Response, string, error) {
 	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", app))
 }
@@ -327,7 +329,12 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
+	// Notes about throttling:
+	// In this endtoend test we test both direct tablet API for throttling, as well as VTGate queries.
+	// - VTGate queries (`ALTER VITESS_MIGRATION THROTTLE ALL ...`) are sent to all relevant shards/tablets via QueryExecutor
+	// - tablet API calls have to be sent per-shard to the primary tablet of that shard
 	t.Run("throttled migration", func(t *testing.T) {
+		// Use VTGate for throttling, issue a `ALTER VITESS_MIGRATION THROTTLE ALL ...`
 		insertRows(t, 2)
 		onlineddl.ThrottleAllMigrations(t, &vtParams)
 		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
@@ -343,10 +350,11 @@ func TestSchemaChange(t *testing.T) {
 	t.Run("throttled and unthrottled migration", func(t *testing.T) {
 		insertRows(t, 2)
 
+		// Use VTGate for throttling, issue a `ALTER VITESS_MIGRATION THROTTLE ALL ...`
 		// begin throttling:
 		onlineddl.ThrottleAllMigrations(t, &vtParams)
 		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
-		onlineddl.CheckThrottledApps(t, &vtParams, throttlerOnlineDDLApp, true)
+		onlineddl.CheckThrottledApps(t, &vtParams, throttlerAppName, true)
 
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)
 		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
@@ -355,7 +363,7 @@ func TestSchemaChange(t *testing.T) {
 
 		// unthrottle
 		onlineddl.UnthrottleAllMigrations(t, &vtParams)
-		onlineddl.CheckThrottledApps(t, &vtParams, throttlerOnlineDDLApp, false)
+		onlineddl.CheckThrottledApps(t, &vtParams, throttlerAppName, false)
 
 		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
@@ -379,9 +387,10 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckCancelAllMigrationsViaVtctl(t, &clusterInstance.VtctlclientProcess, keyspaceName)
 	})
 	t.Run("cancel all migrations: some migrations to cancel", func(t *testing.T) {
+		// Use VTGate for throttling, issue a `ALTER VITESS_MIGRATION THROTTLE ALL ...`
 		onlineddl.ThrottleAllMigrations(t, &vtParams)
 		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
-		onlineddl.CheckThrottledApps(t, &vtParams, throttlerOnlineDDLApp, true)
+		onlineddl.CheckThrottledApps(t, &vtParams, throttlerAppName, true)
 
 		// spawn n migrations; cancel them via cancel-all
 		var wg sync.WaitGroup
@@ -397,9 +406,10 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckCancelAllMigrations(t, &vtParams, len(shards)*count)
 	})
 	t.Run("cancel all migrations: some migrations to cancel via vtctl", func(t *testing.T) {
+		// Use VTGate for throttling, issue a `ALTER VITESS_MIGRATION THROTTLE ALL ...`
 		onlineddl.ThrottleAllMigrations(t, &vtParams)
 		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
-		onlineddl.CheckThrottledApps(t, &vtParams, throttlerOnlineDDLApp, true)
+		onlineddl.CheckThrottledApps(t, &vtParams, throttlerAppName, true)
 
 		// spawn n migrations; cancel them via cancel-all
 		var wg sync.WaitGroup
@@ -422,7 +432,7 @@ func TestSchemaChange(t *testing.T) {
 	// (two pretty much identical tests, the point is to end up with original state)
 	for currentPrimaryTabletIndex, reparentTabletIndex := range []int{1, 0} {
 		t.Run(fmt.Sprintf("PlannedReparentShard via throttling %d/2", (currentPrimaryTabletIndex+1)), func(t *testing.T) {
-			// resetRowCount()
+
 			insertRows(t, 2)
 			for i := range shards {
 				var body string
@@ -430,10 +440,12 @@ func TestSchemaChange(t *testing.T) {
 				switch i {
 				case 0:
 					// this is the shard where we run PRS
+					// Use per-tablet throttling API
 					_, body, err = throttleApp(shards[i].Vttablets[currentPrimaryTabletIndex], throttlerAppName)
 					defer unthrottleApp(shards[i].Vttablets[currentPrimaryTabletIndex], throttlerAppName)
 				case 1:
 					// no PRS on this shard
+					// Use per-tablet throttling API
 					_, body, err = throttleApp(shards[i].Vttablets[0], throttlerAppName)
 					defer unthrottleApp(shards[i].Vttablets[0], throttlerAppName)
 				}
@@ -485,9 +497,11 @@ func TestSchemaChange(t *testing.T) {
 					switch i {
 					case 0:
 						// this is the shard where we run PRS
+						// Use per-tablet throttling API
 						_, body, err = unthrottleApp(shards[i].Vttablets[currentPrimaryTabletIndex], throttlerAppName)
 					case 1:
 						// no PRS on this shard
+						// Use per-tablet throttling API
 						_, body, err = unthrottleApp(shards[i].Vttablets[0], throttlerAppName)
 					}
 					assert.NoError(t, err)
