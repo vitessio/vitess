@@ -21,14 +21,14 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"vitess.io/vitess/go/vt/proto/vtctldata"
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
 // GetTablets implements the http wrapper for /tablets[?cluster=[&cluster=]].
 func GetTopology(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := mux.Vars(r.Request)
 
-	tablets, err := api.server.GetTopology(ctx, &vtctldata.GetTopologyRequest{
+	tablets, err := api.server.GetTopology(ctx, &vtadminpb.GetTopologyRequest{
 		ClusterId: vars["cluster_id"],
 	})
 

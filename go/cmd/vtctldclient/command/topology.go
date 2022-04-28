@@ -27,24 +27,20 @@ import (
 )
 
 var (
-	// GetTopology fetches the topology for a given cluster
+	// GetTopology fetches the topology for a given cluster.
 	GetTopology = &cobra.Command{
-		Use:   "GetTopology <cluster-id>",
-		Short: "Gets topology map for specified cluster",
-		Long:  `Gets the topology map from the specified cluster's vtctld toposerver instance`,
+		Use:   "GetTopology",
+		Short: "Gets topology map from vtctld's topology server.",
+		Long:  `Gets the topology map from vtctld's topology server.`,
 		Args:  cobra.ExactArgs(1),
 		RunE:  commandGetTopology,
 	}
 )
 
 func commandGetTopology(cmd *cobra.Command, args []string) error {
-	clusterID := cmd.Flags().Arg(0)
-
 	cli.FinishedParsing(cmd)
 
-	req := &vtctldatapb.GetTopologyRequest{
-		ClusterId: clusterID,
-	}
+	req := &vtctldatapb.GetTopologyRequest{}
 
 	resp, err := client.GetTopology(commandCtx, req)
 	if err != nil {
@@ -56,7 +52,7 @@ func commandGetTopology(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Successfully fetched topology for cluster %s. Result:\n%s\n", clusterID, data)
+	fmt.Printf("%s", data)
 
 	return nil
 }

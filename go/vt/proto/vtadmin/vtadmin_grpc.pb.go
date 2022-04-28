@@ -80,7 +80,7 @@ type VTAdminClient interface {
 	// GetWorkflows returns the Workflows for all specified clusters.
 	GetWorkflows(ctx context.Context, in *GetWorkflowsRequest, opts ...grpc.CallOption) (*GetWorkflowsResponse, error)
 	// GetTopology returns the topology for the specified cluster
-	GetTopology(ctx context.Context, in *vtctldata.GetTopologyRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyResponse, error)
+	GetTopology(ctx context.Context, in *GetTopologyRequest, opts ...grpc.CallOption) (*GetTopologyResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
 	PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error)
 	// RefreshState reloads the tablet record on the specified tablet.
@@ -322,8 +322,8 @@ func (c *vTAdminClient) GetWorkflows(ctx context.Context, in *GetWorkflowsReques
 	return out, nil
 }
 
-func (c *vTAdminClient) GetTopology(ctx context.Context, in *vtctldata.GetTopologyRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyResponse, error) {
-	out := new(vtctldata.GetTopologyResponse)
+func (c *vTAdminClient) GetTopology(ctx context.Context, in *GetTopologyRequest, opts ...grpc.CallOption) (*GetTopologyResponse, error) {
+	out := new(GetTopologyResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetTopology", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -500,7 +500,7 @@ type VTAdminServer interface {
 	// GetWorkflows returns the Workflows for all specified clusters.
 	GetWorkflows(context.Context, *GetWorkflowsRequest) (*GetWorkflowsResponse, error)
 	// GetTopology returns the topology for the specified cluster
-	GetTopology(context.Context, *vtctldata.GetTopologyRequest) (*vtctldata.GetTopologyResponse, error)
+	GetTopology(context.Context, *GetTopologyRequest) (*GetTopologyResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
 	PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error)
 	// RefreshState reloads the tablet record on the specified tablet.
@@ -601,7 +601,7 @@ func (UnimplementedVTAdminServer) GetWorkflow(context.Context, *GetWorkflowReque
 func (UnimplementedVTAdminServer) GetWorkflows(context.Context, *GetWorkflowsRequest) (*GetWorkflowsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWorkflows not implemented")
 }
-func (UnimplementedVTAdminServer) GetTopology(context.Context, *vtctldata.GetTopologyRequest) (*vtctldata.GetTopologyResponse, error) {
+func (UnimplementedVTAdminServer) GetTopology(context.Context, *GetTopologyRequest) (*GetTopologyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTopology not implemented")
 }
 func (UnimplementedVTAdminServer) PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error) {
@@ -1068,7 +1068,7 @@ func _VTAdmin_GetWorkflows_Handler(srv interface{}, ctx context.Context, dec fun
 }
 
 func _VTAdmin_GetTopology_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtctldata.GetTopologyRequest)
+	in := new(GetTopologyRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -1080,7 +1080,7 @@ func _VTAdmin_GetTopology_Handler(srv interface{}, ctx context.Context, dec func
 		FullMethod: "/vtadmin.VTAdmin/GetTopology",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VTAdminServer).GetTopology(ctx, req.(*vtctldata.GetTopologyRequest))
+		return srv.(VTAdminServer).GetTopology(ctx, req.(*GetTopologyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

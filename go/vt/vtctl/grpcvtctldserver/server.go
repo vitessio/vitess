@@ -71,7 +71,6 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -1611,9 +1610,7 @@ func (s *VtctldServer) GetTopology(ctx context.Context, req *vtctldatapb.GetTopo
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetTopology")
 	defer span.Finish()
 
-	resp := vtctldatapb.GetTopologyResponse{
-		Cells: []*vtctldatapb.TopologyCell{},
-	}
+	resp := vtctldatapb.GetTopologyResponse{}
 
 	cells, err := s.ts.GetKnownCells(ctx)
 	if err != nil {
@@ -1621,14 +1618,30 @@ func (s *VtctldServer) GetTopology(ctx context.Context, req *vtctldatapb.GetTopo
 	}
 
 	cells = append([]string{topo.GlobalCell}, cells...)
+	resp.Cells = make([]*vtctldatapb.TopologyCell, len(cells))
 
-	for _, cell := range cells {
-		topoCell, err := s.getTopologyCell(ctx, "/"+cell)
-		if err != nil {
-			return nil, fmt.Errorf("Error fetching root cell %s: %v", cell, err)
-		}
+	var (
+		wg  sync.WaitGroup
+		rec concurrency.AllErrorRecorder
+	)
 
-		resp.Cells = append(resp.Cells, topoCell)
+	wg.Add(len(cells))
+	for i, cell := range cells {
+		go func(cell string, index int) {
+			defer wg.Done()
+			topoCell, err := s.getTopologyCell(ctx, "/"+cell)
+			if err != nil {
+				rec.RecordError(fmt.Errorf("Error fetching root cell %s: %v", cell, err))
+				return
+			}
+
+			resp.Cells[index] = topoCell
+		}(cell, i)
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
 	}
 
 	return &resp, nil
@@ -3841,7 +3854,7 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 }
 
 // getTopologyCell gets a cell and its children recursively, given a cell's path
-func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string) (*vtctldata.TopologyCell, error) {
+func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string) (*vtctldatapb.TopologyCell, error) {
 	// Extract cell and relative path
 	parts := strings.Split(cellPath, "/")
 	if parts[0] != "" || len(parts) < 2 {
@@ -3849,7 +3862,7 @@ func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string) (*v
 	}
 	cell := parts[1]
 	relativePath := cellPath[len(cell)+1:]
-	topoCell := vtctldata.TopologyCell{Name: parts[len(parts)-1]}
+	topoCell := vtctldatapb.TopologyCell{Name: parts[len(parts)-1]}
 
 	conn, err := s.ts.ConnForCell(ctx, cell)
 	if err != nil {
@@ -3874,13 +3887,30 @@ func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string) (*v
 		return nil, fmt.Errorf("Cell %s with path %s has no file contents and no children: %v", cell, cellPath, err)
 	}
 
-	for _, child := range topo.DirEntriesToStringArray(children) {
-		childCell, err := s.getTopologyCell(ctx, cellPath+"/"+child)
-		if err != nil {
-			return nil, fmt.Errorf("Error getting child cell %s for parent %s: %v", child, cell, err)
-		}
+	topoCell.Children = make([]*vtctldatapb.TopologyCell, len(children))
 
-		topoCell.Children = append(topoCell.Children, childCell)
+	var (
+		wg  sync.WaitGroup
+		rec concurrency.AllErrorRecorder
+	)
+
+	wg.Add(len(children))
+	for i, child := range topo.DirEntriesToStringArray(children) {
+		go func(child string, index int) {
+			defer wg.Done()
+			childCell, err := s.getTopologyCell(ctx, cellPath+"/"+child)
+			if err != nil {
+				rec.RecordError(fmt.Errorf("Error getting child cell %s for parent %s: %v", child, cell, err))
+				return
+			}
+
+			topoCell.Children[index] = childCell
+		}(child, i)
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
 	}
 
 	return &topoCell, nil

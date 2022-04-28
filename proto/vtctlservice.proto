@@ -133,7 +133,7 @@ service Vtctld {
   rpc GetTablet(vtctldata.GetTabletRequest) returns (vtctldata.GetTabletResponse) {};
   // GetTablets returns tablets, optionally filtered by keyspace and shard.
   rpc GetTablets(vtctldata.GetTabletsRequest) returns (vtctldata.GetTabletsResponse) {};
-  // GetTopology returns topology for the given cluster
+  // GetTopology returns topology from vtctld's topology server.
   rpc GetTopology(vtctldata.GetTopologyRequest) returns (vtctldata.GetTopologyResponse) {};
   // GetVersion returns the version of a tablet from its debug vars.
   rpc GetVersion(vtctldata.GetVersionRequest) returns (vtctldata.GetVersionResponse) {};

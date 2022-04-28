@@ -54,7 +54,6 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
-	"vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -977,7 +976,7 @@ func (api *API) DeleteTablet(ctx context.Context, req *vtadminpb.DeleteTabletReq
 	return &vtadminpb.DeleteTabletResponse{Status: "ok"}, nil
 }
 
-func (api *API) GetTopology(ctx context.Context, req *vtctldata.GetTopologyRequest) (*vtctldata.GetTopologyResponse, error) {
+func (api *API) GetTopology(ctx context.Context, req *vtadminpb.GetTopologyRequest) (*vtadminpb.GetTopologyResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.GetTopology")
 	defer span.Finish()
 
@@ -992,12 +991,12 @@ func (api *API) GetTopology(ctx context.Context, req *vtctldata.GetTopologyReque
 		return nil, err
 	}
 
-	result, err := c.Vtctld.GetTopology(ctx, &vtctldatapb.GetTopologyRequest{ClusterId: req.ClusterId})
+	result, err := c.Vtctld.GetTopology(ctx, &vtctldatapb.GetTopologyRequest{})
 	if err != nil {
 		return nil, err
 	}
 
-	return result, nil
+	return &vtadminpb.GetTopologyResponse{Cells: result.Cells}, nil
 }
 
 func (api *API) ReparentTablet(ctx context.Context, req *vtadminpb.ReparentTabletRequest) (*vtadminpb.ReparentTabletResponse, error) {

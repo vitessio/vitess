@@ -88,8 +88,8 @@ service VTAdmin {
     rpc GetWorkflow(GetWorkflowRequest) returns (Workflow) {};
     // GetWorkflows returns the Workflows for all specified clusters.
     rpc GetWorkflows(GetWorkflowsRequest) returns (GetWorkflowsResponse) {};
-    // GetTopology returns the topology for the specified cluster
-    rpc GetTopology(vtctldata.GetTopologyRequest) returns (vtctldata.GetTopologyResponse) {};
+    // GetTopology returns the topology from the topology server of the vtctld of the specified cluster.
+    rpc GetTopology(GetTopologyRequest) returns (GetTopologyResponse) {};
     // PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
     rpc PingTablet(PingTabletRequest) returns (PingTabletResponse) {};
     // RefreshState reloads the tablet record on the specified tablet.
@@ -445,6 +445,15 @@ message GetWorkflowsRequest {
 message GetWorkflowsResponse {
     map <string, ClusterWorkflows> workflows_by_cluster = 1;
 }
+
+message GetTopologyRequest {
+    string cluster_id = 1;
+}
+
+message GetTopologyResponse {
+    repeated vtctldata.TopologyCell cells = 1;
+}
+
 
 message PingTabletRequest {
     // Unique (per cluster) tablet alias of the standard form: "$cell-$uid"

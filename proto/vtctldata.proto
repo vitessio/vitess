@@ -688,7 +688,6 @@ message GetTabletsResponse {
 }
 
 message GetTopologyRequest {
-  string cluster_id = 1;
 }
 
 message GetTopologyResponse {
