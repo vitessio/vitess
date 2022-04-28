@@ -33,6 +33,9 @@ tags
 # generated protobuf files
 /go/vt/.proto.tmp
 
+# generated debug bin
+/go/cmd/vtadmin/__debug_bin
+
 # Godeps files
 /Godeps/_workspace/pkg
 /Godeps/_workspace/bin
