@@ -71,12 +71,36 @@ Gen4 error: cannot use column offsets in group statement when using `*`
 # group by must reference select list
 "select a from user group by b"
 "unsupported: in scatter query: group by column must reference column in SELECT list"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'a' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select a from user group by b",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "random(0) AS a",
+    "GroupBy": "(1|2)",
+    "ResultColumns": 1,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a, b, weight_string(b) from `user` where 1 != 1 group by b, weight_string(b)",
+        "OrderBy": "(1|2) ASC",
+        "Query": "select a, b, weight_string(b) from `user` group by b, weight_string(b) order by b asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # complex group by expression
 "select a from user group by a+1"
 "unsupported: in scatter query: only simple references allowed"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'a' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4 error: unsupported: in scatter query: complex order by expression: a + 1
 
 # Complex aggregate expression on scatter
 "select 1+count(*) from user"
@@ -91,7 +115,30 @@ Gen4 error: aggregate functions take a single argument 'count(a, b)'
 # scatter aggregate symtab lookup error
 "select id, b as id, count(*) from user order by id"
 "ambiguous symbol reference: id"
-Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'id'; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select id, b as id, count(*) from user order by id",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Scalar",
+    "Aggregates": "random(0) AS id, random(0) AS id, sum(2) AS count(*)",
+    "ResultColumns": 3,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, b as id, count(*), weight_string(b) from `user` where 1 != 1",
+        "OrderBy": "(1|3) ASC",
+        "Query": "select id, b as id, count(*), weight_string(b) from `user` order by id asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # scatter aggregate complex order by
 "select id from user group by id order by id+1"
@@ -101,7 +148,7 @@ Gen4 plan same as above
 # Scatter order by is complex with aggregates in select
 "select col, count(*) from user group by col order by col+1"
 "unsupported: in scatter query: complex order by expression: col + 1"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'col + 1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4 plan same as above
 
 # Aggregate detection (group_concat)
 "select group_concat(user.a) from user join user_extra"
@@ -111,12 +158,121 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
 # group by and ',' joins
 "select user.id from user, user_extra group by id"
 "unsupported: cross-shard query with aggregates"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '`user`.id' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select user.id from user, user_extra group by id",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "random(0) AS `user`.id",
+    "GroupBy": "(2|1)",
+    "ResultColumns": 1,
+    "Inputs": [
+      {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "[COLUMN 2] * [COLUMN 3] as `user`.id",
+          "[COLUMN 1]",
+          "[COLUMN 0]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,L:1,L:0,R:0",
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id, weight_string(id) from `user` where 1 != 1 group by id, weight_string(id)",
+                "OrderBy": "(0|1) ASC",
+                "Query": "select `user`.id, weight_string(id) from `user` group by id, weight_string(id) order by id asc",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                "Query": "select count(*) from user_extra",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # group by and ',' joins with condition
 "select user.col from user join user_extra on user_extra.col = user.col group by user.id"
 "unsupported: cross-shard query with aggregates"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '`user`.col' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra on user_extra.col = user.col group by user.id",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "random(0) AS `user`.col",
+    "GroupBy": "(2|1)",
+    "ResultColumns": 1,
+    "Inputs": [
+      {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "[COLUMN 2] * [COLUMN 3] as `user`.col",
+          "[COLUMN 1]",
+          "[COLUMN 0]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:2,L:3,L:1,R:0",
+            "JoinVars": {
+              "user_col": 0
+            },
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.col, `user`.col, `user`.id, weight_string(`user`.id) from `user` where 1 != 1 group by `user`.col, `user`.id, weight_string(`user`.id)",
+                "OrderBy": "(2|3) ASC",
+                "Query": "select `user`.col, `user`.col, `user`.id, weight_string(`user`.id) from `user` group by `user`.col, `user`.id, weight_string(`user`.id) order by `user`.id asc",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                "Query": "select count(*) from user_extra where user_extra.col = :user_col",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # subqueries not supported in group by
 "select id from user group by id, (select id from user_extra)"
@@ -435,7 +591,28 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'id'; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select id, count(*) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Scalar",
+    "Aggregates": "random(0) AS id, sum(1) AS count(*)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, count(*) from `user` where 1 != 1",
+        "Query": "select id, count(*) from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # avg function on scatter query
 "select avg(id) from user"

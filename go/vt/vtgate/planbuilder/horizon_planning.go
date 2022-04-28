@@ -494,10 +494,6 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		return newPlan, nil
 	}
 
-	if hp.qp.ProjectionError != nil {
-		return nil, hp.qp.ProjectionError
-	}
-
 	return hp.planAggrUsingOA(ctx, plan, grouping)
 }
 
@@ -651,15 +647,17 @@ func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets
 
 		opcode := engine.AggregateSum
 		if aggr.OpCode == engine.AggregateMin ||
-			aggr.OpCode == engine.AggregateMax {
+			aggr.OpCode == engine.AggregateMax ||
+			aggr.OpCode == engine.AggregateRandom {
 			opcode = aggr.OpCode
 		}
 
 		aggrParams[idx] = &engine.AggregateParams{
-			Opcode: opcode,
-			Col:    offset,
-			Alias:  aggr.Alias,
-			Expr:   aggr.Func,
+			Opcode:   opcode,
+			Col:      offset,
+			Alias:    aggr.Alias,
+			Expr:     aggr.Func,
+			Original: aggr.Original,
 		}
 	}
 	return aggrParams, nil
@@ -699,6 +697,7 @@ func addColumnsToOA(
 				WCol:        o.wsCol,
 				Alias:       a.Alias,
 				Expr:        a.Func,
+				Original:    a.Original,
 				CollationID: collID,
 			})
 		}
@@ -1093,8 +1092,8 @@ func findExprInOrderedAggr(plan *orderedAggregate, order abstract.OrderBy) (keyC
 		}
 	}
 	for _, aggregate := range plan.aggregates {
-		if sqlparser.EqualsExpr(order.WeightStrExpr, aggregate.Expr) ||
-			sqlparser.EqualsExpr(order.Inner.Expr, aggregate.Expr) {
+		if sqlparser.EqualsExpr(order.WeightStrExpr, aggregate.Original.Expr) ||
+			sqlparser.EqualsExpr(order.Inner.Expr, aggregate.Original.Expr) {
 			return aggregate.Col, -1, true
 		}
 	}

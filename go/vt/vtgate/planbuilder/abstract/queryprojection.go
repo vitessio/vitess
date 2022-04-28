@@ -46,7 +46,6 @@ type (
 		OrderExprs         []OrderBy
 		CanPushDownSorting bool
 		HasStar            bool
-		ProjectionError    error
 	}
 
 	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
@@ -65,6 +64,16 @@ type (
 
 		// The original aliased expression that this group by is referring
 		aliasedExpr *sqlparser.AliasedExpr
+	}
+
+	Aggr struct {
+		Original *sqlparser.AliasedExpr
+		Func     *sqlparser.FuncExpr
+		OpCode   engine.AggregateOpcode
+		Alias    string
+		// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
+		Index    *int
+		Distinct bool
 	}
 )
 
@@ -155,18 +164,6 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 	err = qp.addOrderBy(sel.OrderBy, semTable)
 	if err != nil {
 		return nil, err
-	}
-
-	if qp.HasAggr || len(qp.groupByExprs) > 0 {
-		expr := qp.getNonAggrExprNotMatchingGroupByExprs()
-		// if we have aggregation functions, non aggregating columns and GROUP BY,
-		// the non-aggregating expressions must all be listed in the GROUP BY list
-		if expr != nil {
-			if len(qp.groupByExprs) == 0 {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.MixOfGroupFuncAndFields, "In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column '%s'; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
-			}
-			qp.ProjectionError = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongFieldWithGroup, "Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '%s' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
-		}
 	}
 
 	if qp.Distinct && !qp.HasAggr {
@@ -272,40 +269,44 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Sel
 		if expr.Aggr {
 			continue
 		}
-		isGroupByOk := false
-		for _, groupByExpr := range qp.groupByExprs {
-			exp, err := expr.GetExpr()
-			if err != nil {
-				return expr.Col
-			}
-			if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, exp) {
-				isGroupByOk = true
-				break
-			}
-		}
-		if !isGroupByOk {
+		if !qp.isExprInGroupByExprs(expr) {
 			return expr.Col
 		}
 	}
 	for _, order := range qp.OrderExprs {
-		// ORDER BY NULL or Aggregation functions need not be present in group by
-		if sqlparser.IsNull(order.Inner.Expr) || sqlparser.IsAggregation(order.WeightStrExpr) {
-			continue
-		}
-		isGroupByOk := false
-		for _, groupByExpr := range qp.groupByExprs {
-			if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, order.WeightStrExpr) {
-				isGroupByOk = true
-				break
-			}
-		}
-		if !isGroupByOk {
+		if !qp.isOrderByExprInGroupBy(order) {
 			return &sqlparser.AliasedExpr{
 				Expr: order.Inner.Expr,
 			}
 		}
 	}
 	return nil
+}
+
+func (qp *QueryProjection) isOrderByExprInGroupBy(order OrderBy) bool {
+	// ORDER BY NULL or Aggregation functions need not be present in group by
+	if sqlparser.IsNull(order.Inner.Expr) || sqlparser.IsAggregation(order.WeightStrExpr) {
+		return true
+	}
+	for _, groupByExpr := range qp.groupByExprs {
+		if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, order.WeightStrExpr) {
+			return true
+		}
+	}
+	return false
+}
+
+func (qp *QueryProjection) isExprInGroupByExprs(expr SelectExpr) bool {
+	for _, groupByExpr := range qp.groupByExprs {
+		exp, err := expr.GetExpr()
+		if err != nil {
+			return false
+		}
+		if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, exp) {
+			return true
+		}
+	}
+	return false
 }
 
 // GetSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, and returns an expression that is simpler to evaluate
@@ -405,25 +406,34 @@ func (qp *QueryProjection) NeedsDistinct() bool {
 	return true
 }
 
-type Aggr struct {
-	Original *sqlparser.AliasedExpr
-	Func     *sqlparser.FuncExpr
-	OpCode   engine.AggregateOpcode
-	Alias    string
-	// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
-	Index    *int
-	Distinct bool
-}
-
 func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 	for idx, expr := range qp.SelectExprs {
-		if !sqlparser.ContainsAggregation(expr.Col) {
-			continue
-		}
 		aliasedExpr, err := expr.GetAliasedExpr()
 		if err != nil {
 			return nil, err
 		}
+
+		var alias string
+		if aliasedExpr.As.IsEmpty() {
+			alias = sqlparser.String(aliasedExpr.Expr)
+		} else {
+			alias = aliasedExpr.As.String()
+		}
+
+		idxCopy := idx
+
+		if !sqlparser.ContainsAggregation(expr.Col) {
+			if !qp.isExprInGroupByExprs(expr) {
+				out = append(out, Aggr{
+					Original: aliasedExpr,
+					OpCode:   engine.AggregateRandom,
+					Alias:    alias,
+					Index:    &idxCopy,
+				})
+			}
+			continue
+		}
+
 		fExpr, isFunc := aliasedExpr.Expr.(*sqlparser.FuncExpr)
 		if !isFunc {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
@@ -444,14 +454,6 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 			}
 		}
 
-		var alias string
-		if aliasedExpr.As.IsEmpty() {
-			alias = sqlparser.String(aliasedExpr.Expr)
-		} else {
-			alias = aliasedExpr.As.String()
-		}
-
-		idxCopy := idx
 		out = append(out, Aggr{
 			Original: aliasedExpr,
 			Func:     fExpr,
@@ -460,6 +462,28 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 			Index:    &idxCopy,
 			Distinct: fExpr.Distinct,
 		})
+	}
+	for i, orderExpr := range qp.OrderExprs {
+		newIdx := i + len(qp.SelectExprs)
+		if !qp.isOrderByExprInGroupBy(orderExpr) {
+
+			original := &sqlparser.AliasedExpr{Expr: orderExpr.Inner.Expr}
+			found := false
+			for _, aggr := range out {
+				if sqlparser.EqualsRefOfAliasedExpr(aggr.Original, original) {
+					found = true
+					break
+				}
+			}
+			if found {
+				continue
+			}
+			out = append(out, Aggr{
+				Original: original,
+				OpCode:   engine.AggregateRandom,
+				Index:    &newIdx,
+			})
+		}
 	}
 	return
 }
