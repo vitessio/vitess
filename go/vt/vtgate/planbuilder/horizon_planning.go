@@ -653,10 +653,11 @@ func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets
 		}
 
 		aggrParams[idx] = &engine.AggregateParams{
-			Opcode: opcode,
-			Col:    offset,
-			Alias:  aggr.Alias,
-			Expr:   aggr.Func,
+			Opcode:   opcode,
+			Col:      offset,
+			Alias:    aggr.Alias,
+			Expr:     aggr.Func,
+			Original: aggr.Original,
 		}
 	}
 	return aggrParams, nil
@@ -696,6 +697,7 @@ func addColumnsToOA(
 				WCol:        o.wsCol,
 				Alias:       a.Alias,
 				Expr:        a.Func,
+				Original:    a.Original,
 				CollationID: collID,
 			})
 		}
@@ -1090,8 +1092,8 @@ func findExprInOrderedAggr(plan *orderedAggregate, order abstract.OrderBy) (keyC
 		}
 	}
 	for _, aggregate := range plan.aggregates {
-		if sqlparser.EqualsExpr(order.WeightStrExpr, aggregate.Expr) ||
-			sqlparser.EqualsExpr(order.Inner.Expr, aggregate.Expr) {
+		if sqlparser.EqualsExpr(order.WeightStrExpr, aggregate.Original.Expr) ||
+			sqlparser.EqualsExpr(order.Inner.Expr, aggregate.Original.Expr) {
 			return aggregate.Col, -1, true
 		}
 	}

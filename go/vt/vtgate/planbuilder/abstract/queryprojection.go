@@ -466,8 +466,20 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 	for i, orderExpr := range qp.OrderExprs {
 		newIdx := i + len(qp.SelectExprs)
 		if !qp.isOrderByExprInGroupBy(orderExpr) {
+
+			original := &sqlparser.AliasedExpr{Expr: orderExpr.Inner.Expr}
+			found := false
+			for _, aggr := range out {
+				if sqlparser.EqualsRefOfAliasedExpr(aggr.Original, original) {
+					found = true
+					break
+				}
+			}
+			if found {
+				continue
+			}
 			out = append(out, Aggr{
-				Original: &sqlparser.AliasedExpr{Expr: orderExpr.Inner.Expr},
+				Original: original,
 				OpCode:   engine.AggregateRandom,
 				Index:    &newIdx,
 			})

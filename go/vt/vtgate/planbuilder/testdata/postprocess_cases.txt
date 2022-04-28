@@ -1915,7 +1915,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count(id), random(1) AS num, random(1)",
+    "Aggregates": "sum(0) AS count(id), random(1) AS num",
     "ResultColumns": 2,
     "Inputs": [
       {
@@ -1925,9 +1925,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select count(id), num, num, weight_string(num) from `user` where 1 != 1",
-        "OrderBy": "(1|3) ASC",
-        "Query": "select count(id), num, num, weight_string(num) from `user` order by num asc",
+        "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1",
+        "OrderBy": "(1|2) ASC",
+        "Query": "select count(id), num, weight_string(num) from `user` order by num asc",
         "Table": "`user`"
       }
     ]

@@ -102,8 +102,9 @@ type AggregateParams struct {
 	WAssigned   bool
 	CollationID collations.ID
 
-	Alias string `json:",omitempty"`
-	Expr  sqlparser.Expr
+	Alias    string `json:",omitempty"`
+	Expr     sqlparser.Expr
+	Original *sqlparser.AliasedExpr
 }
 
 func (ap *AggregateParams) isDistinct() bool {

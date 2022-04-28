@@ -41,8 +41,8 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "random(1) AS b, sum(2) AS count(*), random(1)",
-    "GroupBy": "(0|4)",
+    "Aggregates": "random(1) AS b, sum(2) AS count(*)",
+    "GroupBy": "(0|3)",
     "ResultColumns": 3,
     "Inputs": [
       {
@@ -52,9 +52,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, count(*), b, weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, weight_string(a)",
-        "OrderBy": "(1|5) ASC, (0|4) ASC",
-        "Query": "select a, b, count(*), b, weight_string(a), weight_string(b) from `user` group by a, weight_string(a) order by b asc, a asc",
+        "FieldQuery": "select a, b, count(*), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, weight_string(a)",
+        "OrderBy": "(1|4) ASC, (0|3) ASC",
+        "Query": "select a, b, count(*), weight_string(a), weight_string(b) from `user` group by a, weight_string(a) order by b asc, a asc",
         "Table": "`user`"
       }
     ]
@@ -128,7 +128,6 @@
   }
 }
 
-# scatter aggregate order by references multiple non-group-by expressions
 "select a, b, count(*) k from user group by a order by b, a, k"
 {
   "QueryType": "SELECT",
@@ -164,7 +163,38 @@
     ]
   }
 }
-Gen4 error: expected to find the order by expression (b asc) in orderedAggregate
+{
+  "QueryType": "SELECT",
+  "Original": "select a, b, count(*) k from user group by a order by b, a, k",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "1 ASC, (0|3) ASC, 2 ASC",
+    "ResultColumns": 3,
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "random(1) AS b, sum(2) AS k",
+        "GroupBy": "(0|3)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
+            "OrderBy": "(0|3) ASC",
+            "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a) order by a asc",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # scatter aggregate with memory sort and limit
 "select a, b, count(*) k from user group by a order by k desc limit 10"
