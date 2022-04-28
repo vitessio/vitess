@@ -223,20 +223,32 @@ func TestSetCompaction(t *testing.T) {
 		// nothing to change
 		{"foo", "foo"},
 
-		// unterminated
+		// invalid: unterminated
 		{"where xyz in (:v1, :v2) and abc in (:v3,", "where xyz in (<elements>) and abc in (:v3,"},
 
 		// case insensitive
-		{"WHERE xyz IN (:v1, :v2) AND abc in (:v3, :v4)", "WHERE xyz in (<elements>) AND abc in (<elements>)"},
+		{"WHERE xyz IN (:vtg1, :vtg2) AND abc in (:v3, :v4)", "WHERE xyz in (<elements>) AND abc in (<elements>)"},
 
 		// single element in list
-		{"where xyz in (:v1)", "where xyz in (<elements>)"},
-
-		// no elements in list
-		{"where xyz in ()", "where xyz in ()"},
+		{"where xyz in (:bv1)", "where xyz in (<elements>)"},
 
 		// very large :v sequence numbers
 		{"where xyz in (:v8675309, :v8765000)", "where xyz in (<elements>)"},
+
+		// nested, single
+		{"where (abc, xyz) in ((:v1, :v2))", "where (abc, xyz) in (<elements>)"},
+
+		// nested, multiple
+		{"where (abc, xyz) in ((:vtg1, :vtg2), (:vtg3, :vtg4), (:vtg5, :vtg6))", "where (abc, xyz) in (<elements>)"},
+
+		// invalid: nested, unterminated
+		{"where (abc, xyz) in ((:v1,", "where (abc, xyz) in ((:v1,"},
+
+		// invalid: no elements in list
+		{"where xyz in ()", "where xyz in ()"},
+
+		// invalid: mixed nested and simple
+		{"where xyz in ((:v1, :v2), :v3)", "where xyz in ((:v1, :v2), :v3)"},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.input, func(t *testing.T) {

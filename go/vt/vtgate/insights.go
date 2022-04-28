@@ -577,7 +577,14 @@ func (ii *Insights) makeEnvelope(contents []byte, topic string) ([]byte, error) 
 	return proto.Marshal(&envelope)
 }
 
-var reSetCompactor = regexp.MustCompile(`(?i)\bin \(:v\d+(?:,\s*:v\d+)*\)`)
+// a list like ":v1, :v2, :v3"
+const simpleListRegexp = `:[a-z]+\d+(?:,\s*:[a-z]+\d+)*`
+
+// a nested list like "(:v1, :v2), (:v3, :v4), (:v5, :v6)"
+const nestedListRegexp = `\(` + simpleListRegexp + `\)(?:,\s*\(` + simpleListRegexp + `\))*`
+
+// a string like "in (...)" containing either of the list types above
+var reSetCompactor = regexp.MustCompile(`(?i)\bin \((?:` + simpleListRegexp + `|` + nestedListRegexp + `)\)`)
 
 func compactSets(sql string) string {
 	if reSetCompactor.MatchString(sql) {
