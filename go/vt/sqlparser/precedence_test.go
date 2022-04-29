@@ -25,6 +25,8 @@ func readable(node Expr) string {
 	switch node := node.(type) {
 	case *OrExpr:
 		return fmt.Sprintf("(%s or %s)", readable(node.Left), readable(node.Right))
+	case *XorExpr:
+		return fmt.Sprintf("(%s xor %s)", readable(node.Left), readable(node.Right))
 	case *AndExpr:
 		return fmt.Sprintf("(%s and %s)", readable(node.Left), readable(node.Right))
 	case *BinaryExpr:
@@ -36,7 +38,7 @@ func readable(node Expr) string {
 	}
 }
 
-func TestAndOrPrecedence(t *testing.T) {
+func TestLogicOperatorPrecedence(t *testing.T) {
 	validSQL := []struct {
 		input  string
 		output string
@@ -46,6 +48,15 @@ func TestAndOrPrecedence(t *testing.T) {
 	}, {
 		input:  "select * from a where a=b or c=d and e=f",
 		output: "(a = b or (c = d and e = f))",
+	}, {
+		input:  "select * from a where f=g xor a=b and e=f",
+		output: "(f = g xor (a = b and e = f))",
+	}, {
+		input:  "select * from a where f=g xor a=b or c=d and e=f",
+		output: "((f = g xor a = b) or (c = d and e = f))",
+	}, {
+		input:  "select * from t where a = 5 or b xor d = 3 and c is not null",
+		output: "(a = 5 or (b xor (d = 3 and (c is not null))))",
 	}}
 	for _, tcase := range validSQL {
 		tree, err := Parse(tcase.input)

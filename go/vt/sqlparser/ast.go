@@ -516,11 +516,11 @@ func (node *Select) walkSubtree(visit Visit) error {
 
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition. If the expression
-// is an OR clause, it parenthesizes it. Currently,
-// the OR operator is the only one that's lower precedence
-// than AND.
+// is an OR clause, it parenthesizes it.
+// Both OR and XOR operators are lower precedence than AND.
 func (node *Select) AddWhere(expr Expr) {
-	if _, ok := expr.(*OrExpr); ok {
+	switch expr.(type) {
+	case *OrExpr, *XorExpr:
 		expr = &ParenExpr{Expr: expr}
 	}
 	if node.Where == nil {
@@ -538,11 +538,11 @@ func (node *Select) AddWhere(expr Expr) {
 
 // AddHaving adds the boolean expression to the
 // HAVING clause as an AND condition. If the expression
-// is an OR clause, it parenthesizes it. Currently,
-// the OR operator is the only one that's lower precedence
-// than AND.
+// is an OR clause, it parenthesizes it.
+// Both OR and XOR operators are lower precedence than AND.
 func (node *Select) AddHaving(expr Expr) {
-	if _, ok := expr.(*OrExpr); ok {
+	switch expr.(type) {
+	case *OrExpr, *XorExpr:
 		expr = &ParenExpr{Expr: expr}
 	}
 	if node.Having == nil {
@@ -3698,6 +3698,7 @@ type Expr interface {
 
 func (*AndExpr) iExpr()           {}
 func (*OrExpr) iExpr()            {}
+func (*XorExpr) iExpr()           {}
 func (*NotExpr) iExpr()           {}
 func (*ParenExpr) iExpr()         {}
 func (*ComparisonExpr) iExpr()    {}
@@ -3826,6 +3827,31 @@ func (node *OrExpr) walkSubtree(visit Visit) error {
 }
 
 func (node *OrExpr) replace(from, to Expr) bool {
+	return replaceExprs(from, to, &node.Left, &node.Right)
+}
+
+// XorExpr represents an XOR expression.
+type XorExpr struct {
+	Left, Right Expr
+}
+
+// Format formats the node.
+func (node *XorExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%v xor %v", node.Left, node.Right)
+}
+
+func (node *XorExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Left,
+		node.Right,
+	)
+}
+
+func (node *XorExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Left, &node.Right)
 }
 

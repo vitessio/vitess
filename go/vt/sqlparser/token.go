@@ -591,7 +591,7 @@ var keywords = map[string]int{
 	"work":                     WORK,
 	"write":                    WRITE,
 	"x509":                     X509,
-	"xor":                      UNUSED,
+	"xor":                      XOR,
 	"year":                     YEAR,
 	"year_month":               UNUSED,
 	"zerofill":                 ZEROFILL,

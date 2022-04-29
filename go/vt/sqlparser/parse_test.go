@@ -419,6 +419,8 @@ var (
 			input:  "select /* || */ 1 from t where a = b || a = c",
 			output: "select /* || */ 1 from t where a = b or a = c",
 		}, {
+			input: "select /* xor */ 1 from t where a = b xor a = c",
+		}, {
 			input: "select /* not */ 1 from t where not a = b",
 		}, {
 			input: "select /* ! */ 1 from t where a = !1",
@@ -767,9 +769,17 @@ var (
 		}, {
 			input: "select /* OR of columns in where */ * from t where a or b",
 		}, {
+			input: "select /* XOR of columns in where */ * from t where a xor b",
+		}, {
 			input: "select /* OR of mixed columns in where */ * from t where a = 5 or b and c is not null",
 		}, {
+			input: "select /* XOR of mixed columns in where */ * from t where a = 5 xor b and c is not null",
+		}, {
+			input: "select /* XOR of mixed columns in where */ * from t where a = 5 xor b or d = 3 and c is not null",
+		}, {
 			input: "select /* OR in select columns */ (a or b) from t where c = 5",
+		}, {
+			input: "select /* XOR in select columns */ (a xor b) from t where c = 5",
 		}, {
 			input: "select /* bool as select value */ a, true from t",
 		}, {
