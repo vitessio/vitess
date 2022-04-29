@@ -152,9 +152,24 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 
 	// v13 and older tablets will only provide the binary IoThreadRunning and
 	// SqlThreadRunning values while v14 and newer tablets will provide the
-	// non-binary replication states
+	// non-binary replication states.
+	// This backwards compatible check can be removed in v15.
 	return ((stopStatus.Before.IoState == int32(mysql.ReplicationStateRunning) || stopStatus.Before.IoThreadRunning) ||
 		(stopStatus.Before.SqlState == int32(mysql.ReplicationStateRunning) || stopStatus.Before.SqlThreadRunning)), nil
+}
+
+// SQLThreadWasRunning returns true if a StopReplicationStatus indicates that the
+// replica had a running sql thread. It returns an error if the Before state of
+// replication is nil.
+func SQLThreadWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (bool, error) {
+	if stopStatus == nil || stopStatus.Before == nil {
+		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
+	}
+
+	// v13 and older tablets will only provide the binary SqlThreadRunning value
+	// while v14 and newer tablets will provide the non-binary replication states.
+	// This backwards compatible check can be removed in v15.
+	return (stopStatus.Before.SqlState == int32(mysql.ReplicationStateRunning) || stopStatus.Before.SqlThreadRunning), nil
 }
 
 // SetReplicationSource is used to set the replication source on the specified
