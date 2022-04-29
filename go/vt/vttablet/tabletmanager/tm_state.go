@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"context"
 
@@ -98,7 +99,7 @@ func (ts *tmState) Open() {
 
 	ts.isOpen = true
 	ts.isOpening = true
-	ts.updateLocked(ts.ctx)
+	_ = ts.updateLocked(ts.ctx)
 	ts.isOpening = false
 	ts.publishStateLocked(ts.ctx)
 }
@@ -167,7 +168,7 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 		}
 	}
 
-	ts.updateLocked(ctx)
+	_ = ts.updateLocked(ctx)
 }
 
 func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.TabletType, action DBAction) error {
@@ -221,10 +222,11 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 	statsTabletType.Set(s)
 	statsTabletTypeCount.Add(s, 1)
 
-	ts.updateLocked(ctx)
+	err := ts.updateLocked(ctx)
+	// no need to short circuit. apply all steps and return error in the end.
 	ts.publishStateLocked(ctx)
 	ts.tm.notifyShardSync()
-	return nil
+	return err
 }
 
 func (ts *tmState) SetMysqlPort(mport int32) {
@@ -243,13 +245,19 @@ func (ts *tmState) UpdateTablet(update func(tablet *topodatapb.Tablet)) {
 	ts.publishForDisplay()
 }
 
-func (ts *tmState) updateLocked(ctx context.Context) {
+func (ts *tmState) updateLocked(ctx context.Context) error {
 	span, ctx := trace.NewSpan(ctx, "tmState.update")
 	defer span.Finish()
 	ts.publishForDisplay()
-
+	// SetServingType can result in error. Although we have forever retries to fix these transient errors
+	// but, under certain condition these errors are non-transient (see https://github.com/vitessio/vitess/issues/10145).
+	// There is no way to distinguish between retry (transient) and non-retryable errors, therefore we will
+	// always return error from 'SetServingType' and 'applyDenyList' to our client. It is up to them to handle it accordingly.
+	// UpdateLock is called from 'ChangeTableType', 'Open' and 'RefreshFromTopoInfo'. For 'Open' and 'RefreshTopoInfo' we don't need
+	// to propagate error to client hence no changes there but we will propagate error from 'ChangeTableType' to client.
+	var returnErr error
 	if !ts.isOpen {
-		return
+		return fmt.Errorf("TabletManager state is not open")
 	}
 
 	terTime := logutil.ProtoToTime(ts.tablet.PrimaryTermStartTime)
@@ -260,12 +268,18 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 	if reason != "" {
 		log.Infof("Disabling query service: %v", reason)
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, false, reason); err != nil {
-			log.Errorf("SetServingType(serving=false) failed: %v", err)
+			errStr := fmt.Sprintf("SetServingType(serving=false) failed: %v", err)
+			log.Errorf(errStr)
+			// no need to short circuit. apply all steps and return error in the end.
+			returnErr = vterrors.Wrapf(err, errStr)
 		}
 	}
 
 	if err := ts.applyDenyList(ctx); err != nil {
-		log.Errorf("Cannot update denied tables rule: %v", err)
+		errStr := fmt.Sprintf("Cannot update denied tables rule: %v", err)
+		log.Errorf(errStr)
+		// no need to short circuit. apply all steps and return error in the end.
+		returnErr = vterrors.Wrapf(err, errStr)
 	}
 
 	ts.tm.replManager.SetTabletType(ts.tablet.Type)
@@ -297,9 +311,13 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 	// Open TabletServer last so that it advertises serving after all other services are up.
 	if reason == "" {
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, true, ""); err != nil {
-			log.Errorf("Cannot start query service: %v", err)
+			errStr := fmt.Sprintf("Cannot start query service: %v", err)
+			log.Errorf(errStr)
+			returnErr = vterrors.Wrapf(err, errStr)
 		}
 	}
+
+	return returnErr
 }
 
 func (ts *tmState) populateLocalMetadataLocked() {
