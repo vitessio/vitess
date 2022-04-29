@@ -42,15 +42,6 @@ export const NavRail = () => {
             <div className={style.navLinks}>
                 <ul className={style.navList}>
                     <li>
-                        <NavRailLink icon={Icons.chart} text="Dashboard" to="/dashboard" count={0} />
-                    </li>
-                    <li>
-                        <NavRailLink icon={Icons.wrench} text="Workflows" to="/workflows" count={workflows.length} />
-                    </li>
-                </ul>
-
-                <ul className={style.navList}>
-                    <li>
                         {/* FIXME replace this with a C when we have one */}
                         <NavRailLink icon={Icons.keyR} text="Clusters" to="/clusters" count={clusters.length} />
                     </li>
@@ -69,6 +60,9 @@ export const NavRail = () => {
                     <li>
                         <NavRailLink icon={Icons.keyV} text="vtctlds" to="/vtctlds" count={vtctlds.length} />
                     </li>
+                    <li>
+                        <NavRailLink icon={Icons.wrench} text="Workflows" to="/workflows" count={workflows.length} />
+                    </li>
                 </ul>
 
                 <ul className={style.navList}>
@@ -78,9 +72,6 @@ export const NavRail = () => {
                     <li>
                         <NavRailLink icon={Icons.runQuery} text="VTExplain" to="/vtexplain" />
                     </li>
-                    <li>
-                        <NavRailLink icon={Icons.gear} text="Settings" to="/settings" />
-                    </li>
                 </ul>
             </div>
 
@@ -88,9 +79,6 @@ export const NavRail = () => {
                 <ul className={style.navList}>
                     <li>
                         <NavRailLink icon={Icons.bug} text="Debug" to="/debug" />
-                    </li>
-                    <li>
-                        <NavRailLink icon={Icons.keyboard} text="Shortcuts" to="/shortcuts" />
                     </li>
                 </ul>
             </div>
