@@ -36,6 +36,7 @@ import (
 func TestPRSForInitialization(t *testing.T) {
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster("zone1", "localhost")
+	defer utils.TeardownCluster(clusterInstance)
 	keyspace := &cluster.Keyspace{Name: utils.KeyspaceName}
 	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
 	// Start topo server
@@ -219,10 +220,10 @@ func TestPullFromRdonly(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestNoReplicationStatusAndReplicationStopped checks that ERS is able to fix
-// replicas which do not have any replication status and also succeeds if the replication
+// TestNoReplicationStatusAndIOThreadStopped checks that ERS is able to fix
+// replicas which do not have any replication status and also succeeds if the io thread
 // is stopped on the primary elect.
-func TestNoReplicationStatusAndReplicationStopped(t *testing.T) {
+func TestNoReplicationStatusAndIOThreadStopped(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
@@ -231,11 +232,9 @@ func TestNoReplicationStatusAndReplicationStopped(t *testing.T) {
 
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE; RESET SLAVE ALL`)
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[2].Alias, `STOP SLAVE;`)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[3].Alias, `STOP SLAVE IO_THREAD;`)
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[3].Alias, `STOP SLAVE SQL_THREAD;`)
-	require.NoError(t, err)
-	// Run an additional command in the current primary which will only be acked by tablets[3] and be in its relay log.
+	// Run an additional command in the current primary which will only be acked by tablets[2] and be in its relay log.
 	insertedVal := utils.ConfirmReplication(t, tablets[0], nil)
 	// Failover to tablets[3]
 	out, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
@@ -245,14 +244,15 @@ func TestNoReplicationStatusAndReplicationStopped(t *testing.T) {
 	require.NoError(t, err)
 	// Confirm that replication is setup correctly from tablets[3] to tablets[0]
 	utils.ConfirmReplication(t, tablets[3], tablets[:1])
-	// Confirm that tablets[2] which had replication stopped initially still has its replication stopped
-	utils.CheckReplicationStatus(context.Background(), t, tablets[2], false, false)
+	// Confirm that tablets[2] which had no replication status initially now has its replication started
+	utils.CheckReplicationStatus(context.Background(), t, tablets[1], true, true)
 }
 
 // TestERSForInitialization tests whether calling ERS in the beginning sets up the cluster properly or not
 func TestERSForInitialization(t *testing.T) {
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster("zone1", "localhost")
+	defer utils.TeardownCluster(clusterInstance)
 	keyspace := &cluster.Keyspace{Name: utils.KeyspaceName}
 	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
 	// Start topo server
@@ -319,4 +319,38 @@ func TestERSForInitialization(t *testing.T) {
 	assert.Equal(t, len(tablets), len(strArray))
 	assert.Contains(t, strArray[0], "primary") // primary first
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
+}
+
+// TestReplicationStopped checks that ERS ignores the tablets that have sql thread stopped.
+// If there are more than 1, we also fail.
+func TestReplicationStopped(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE SQL_THREAD;`)
+	require.NoError(t, err)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[2].Alias, `STOP SLAVE;`)
+	require.NoError(t, err)
+	// Run an additional command in the current primary which will only be acked by tablets[3] and be in its relay log.
+	insertedVal := utils.ConfirmReplication(t, tablets[0], nil)
+	// Failover to tablets[3]
+	_, err = utils.Ers(clusterInstance, tablets[3], "60s", "30s")
+	require.Error(t, err, "ERS should fail with 2 replicas having replication stopped")
+
+	// Start replication back on tablet[1]
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `START SLAVE;`)
+	require.NoError(t, err)
+	// Failover to tablets[3] again. This time it should succeed
+	out, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
+	require.NoError(t, err, out)
+	// Verify that the tablet has the inserted value
+	err = utils.CheckInsertedValues(context.Background(), t, tablets[3], insertedVal)
+	require.NoError(t, err)
+	// Confirm that replication is setup correctly from tablets[3] to tablets[0]
+	utils.ConfirmReplication(t, tablets[3], tablets[:1])
+	// Confirm that tablets[2] which had replication stopped initially still has its replication stopped
+	utils.CheckReplicationStatus(context.Background(), t, tablets[2], false, false)
 }
