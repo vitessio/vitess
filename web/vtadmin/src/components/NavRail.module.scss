@@ -118,7 +118,7 @@ a.navLink:hover .icon {
     fill: var(--colorPrimary);
 }
 
-.hotkey:before {
+.hotkey::before {
     $hotkeySize: 16px;
 
     @apply rounded-sm;
