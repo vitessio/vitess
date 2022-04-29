@@ -161,7 +161,8 @@ func SQLThreadWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (b
 		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
 	}
 
-	return stopStatus.Before.SqlState == int32(mysql.ReplicationStateRunning), nil
+	replStatus := mysql.ProtoToReplicationStatus(stopStatus.Before)
+	return replStatus.SQLState == mysql.ReplicationStateRunning, nil
 }
 
 // SetReplicationSource is used to set the replication source on the specified
