@@ -457,7 +457,7 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 		expected: "SELECT 1 from (select 2 from sys.test) t",
 	}, {
 		in:       "SELECT 1 from test where exists (select 2 from test)",
-		expected: "SELECT 1 from sys.test where exists (select 2 from sys.test)",
+		expected: "SELECT 1 from sys.test where exists (select 1 from sys.test limit 1)",
 	}, {
 		in:       "SELECT 1 from dual",
 		expected: "SELECT 1 from dual",
