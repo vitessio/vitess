@@ -63,6 +63,7 @@ $navRailHoverTransition: background-color 0.1s ease-in-out;
 }
 
 a.navLink {
+    align-items: center;
     border-left: solid 4px transparent;
     color: var(--textColorPrimary);
     display: flex;
@@ -108,7 +109,6 @@ a.navLink:hover .badge {
 .icon {
     fill: var(--colorScaffoldingForeground);
     height: 2rem;
-    margin-right: 1.2rem;
     transition: $navRailHoverTransition;
 }
 
@@ -116,4 +116,25 @@ a.navLinkActive .icon,
 a.navLink:focus .icon,
 a.navLink:hover .icon {
     fill: var(--colorPrimary);
+}
+
+.hotkey:before {
+    $hotkeySize: 16px;
+
+    @apply rounded-sm;
+
+    border: solid 1px var(--colorScaffoldingForeground);
+    color: var(--colorScaffoldingForeground);
+    content: attr(data-hotkey);
+    display: block;
+    font-family: theme('fontFamily.mono');
+    font-size: 10px;
+    font-weight: bold;
+    height: $hotkeySize;
+    line-height: 14px;
+    margin: 0 4px;
+    padding: 0;
+    text-align: center;
+    user-select: none;
+    width: $hotkeySize;
 }
