@@ -153,7 +153,7 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 	// v13 and older tablets will only provide the binary IoThreadRunning and
 	// SqlThreadRunning values while v14 and newer tablets will provide the
 	// non-binary replication states.
-	// This backwards compatible check can be removed in v15.
+	// This backwards compatible check can be removed in v15+.
 	return ((stopStatus.Before.IoState == int32(mysql.ReplicationStateRunning) || stopStatus.Before.IoThreadRunning) ||
 		(stopStatus.Before.SqlState == int32(mysql.ReplicationStateRunning) || stopStatus.Before.SqlThreadRunning)), nil
 }
@@ -168,7 +168,7 @@ func SQLThreadWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (b
 
 	// v13 and older tablets will only provide the binary SqlThreadRunning value
 	// while v14 and newer tablets will provide the non-binary replication states.
-	// This backwards compatible check can be removed in v15.
+	// This backwards compatible check can be removed in v15+.
 	return (stopStatus.Before.SqlState == int32(mysql.ReplicationStateRunning) || stopStatus.Before.SqlThreadRunning), nil
 }
 
