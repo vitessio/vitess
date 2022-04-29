@@ -19,20 +19,21 @@ package planbuilder
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/vt/sysvars"
-
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
-
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 func init() {
-	forSettings(sysvars.ReadOnly, buildSetOpReadOnly)
-	forSettings(sysvars.IgnoreThese, buildSetOpIgnore)
-	forSettings(sysvars.UseReservedConn, buildSetOpReservedConn)
-	forSettings(sysvars.CheckAndIgnore, buildSetOpCheckAndIgnore)
-	forSettings(sysvars.NotSupported, buildNotSupported)
-	forSettings(sysvars.VitessAware, buildSetOpVitessAware)
+	servenv.OnInit(func() {
+		forSettings(sysvars.ReadOnly, buildSetOpReadOnly)
+		forSettings(sysvars.IgnoreThese, buildSetOpIgnore)
+		forSettings(sysvars.UseReservedConn, buildSetOpReservedConn)
+		forSettings(sysvars.CheckAndIgnore, buildSetOpCheckAndIgnore)
+		forSettings(sysvars.NotSupported, buildNotSupported)
+		forSettings(sysvars.VitessAware, buildSetOpVitessAware)
+	})
 }
 
 func forSettings(systemVariables []sysvars.SystemVariable, f func(setting) planFunc) {
