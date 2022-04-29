@@ -712,7 +712,7 @@ func TestInsertShardedGeo(t *testing.T) {
 		" suffix",
 	)
 	for _, colVindex := range ks.Tables["t1"].ColumnVindexes {
-		if colVindex.IgnoreInDML() {
+		if colVindex.IsPartialVindex() {
 			continue
 		}
 		ins.ColVindexes = append(ins.ColVindexes, colVindex)

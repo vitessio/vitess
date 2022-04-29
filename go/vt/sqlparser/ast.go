@@ -1613,8 +1613,19 @@ type PartitionSpecAction int8
 
 // PartitionDefinition describes a very minimal partition definition
 type PartitionDefinition struct {
-	Name       ColIdent
-	ValueRange *PartitionValueRange
+	Name    ColIdent
+	Options *PartitionDefinitionOptions
+}
+
+type PartitionDefinitionOptions struct {
+	ValueRange     *PartitionValueRange
+	Comment        *Literal
+	Engine         *PartitionEngine
+	DataDirectory  *Literal
+	IndexDirectory *Literal
+	MaxRows        *int
+	MinRows        *int
+	TableSpace     string
 }
 
 // PartitionValueRangeType is an enum for PartitionValueRange.Type
@@ -1624,6 +1635,11 @@ type PartitionValueRange struct {
 	Type     PartitionValueRangeType
 	Range    ValTuple
 	Maxvalue bool
+}
+
+type PartitionEngine struct {
+	Storage bool
+	Name    string
 }
 
 // PartitionByType is an enum storing how we are partitioning a table

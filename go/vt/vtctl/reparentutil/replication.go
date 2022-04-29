@@ -150,7 +150,9 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
 	}
 
-	return stopStatus.Before.IoState == int32(mysql.ReplicationStateRunning) || stopStatus.Before.SqlState == int32(mysql.ReplicationStateRunning), nil
+	replStatus := mysql.ProtoToReplicationStatus(stopStatus.Before)
+	return (replStatus.IOState == mysql.ReplicationStateRunning) ||
+		(replStatus.SQLState == mysql.ReplicationStateRunning), nil
 }
 
 // SQLThreadWasRunning returns true if a StopReplicationStatus indicates that the

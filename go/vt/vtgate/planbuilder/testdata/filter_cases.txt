@@ -3838,7 +3838,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where cola = 1",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "Equal",
+    "Variant": "SubShard",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3875,16 +3875,17 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where cola = 1 and colb in (2,3)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "Equal",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "FieldQuery": "select * from multicol_tbl where 1 != 1",
-    "Query": "select * from multicol_tbl where cola = 1 and colb in (2, 3)",
+    "Query": "select * from multicol_tbl where cola = 1 and colb in ::__vals1",
     "Table": "multicol_tbl",
     "Values": [
-      "INT64(1)"
+      "INT64(1)",
+      "(INT64(2), INT64(3))"
     ],
     "Vindex": "multicolIdx"
   }

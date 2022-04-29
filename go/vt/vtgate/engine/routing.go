@@ -68,8 +68,8 @@ const (
 	// Is used when the query explicitly sets a target destination:
 	// in the clause e.g: UPDATE `keyspace[-]`.x1 SET foo=1
 	ByDestination
-	// NumOpcodes is the number of opcodes
-	NumOpcodes
+	// SubShard is for when we are missing one or more columns from a composite vindex
+	SubShard
 )
 
 var opName = map[Opcode]string{
@@ -84,6 +84,7 @@ var opName = map[Opcode]string{
 	Reference:     "Reference",
 	None:          "None",
 	ByDestination: "ByDestination",
+	SubShard:      "SubShard",
 }
 
 // MarshalJSON serializes the Opcode as a JSON string.
@@ -133,7 +134,7 @@ func (rp *RoutingParameters) findRoute(vcursor VCursor, bindVars map[string]*que
 		return rp.byDestination(vcursor, bindVars, key.DestinationAllShards{})
 	case ByDestination:
 		return rp.byDestination(vcursor, bindVars, rp.TargetDestination)
-	case Equal, EqualUnique:
+	case Equal, EqualUnique, SubShard:
 		switch rp.Vindex.(type) {
 		case vindexes.MultiColumn:
 			return rp.equalMultiCol(vcursor, bindVars)
