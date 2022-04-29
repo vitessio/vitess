@@ -1,11 +1,6 @@
 name: Build on PR
 
 on:
-  pull_request_review:
-    types:
-      - submitted
-      - edited
-
   pull_request:
     types:
       - opened
