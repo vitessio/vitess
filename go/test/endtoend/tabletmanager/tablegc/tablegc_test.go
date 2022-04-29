@@ -36,13 +36,17 @@ var (
 	hostname        = "localhost"
 	keyspaceName    = "ks"
 	cell            = "zone1"
-	sqlSchema       = `
-	create table if not exists t1(
-		id bigint not null auto_increment,
-		value varchar(32),
-		primary key(id)
-	) Engine=InnoDB;
-`
+	sqlCreateTable  = `
+		create table if not exists t1(
+			id bigint not null auto_increment,
+			value varchar(32),
+			primary key(id)
+		) Engine=InnoDB;
+	`
+	sqlCreateView = `
+		create or replace view v1 as select * from t1;
+	`
+	sqlSchema = sqlCreateTable + sqlCreateView
 
 	vSchema = `
 	{
@@ -81,14 +85,14 @@ func TestMain(m *testing.M) {
 
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-lock_tables_timeout", "5s",
-			"-watch_replication_stream",
-			"-enable_replication_reporter",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
-			"-gc_check_interval", "5s",
-			"-gc_purge_check_interval", "5s",
-			"-table_gc_lifecycle", "hold,purge,evac,drop",
+			"--lock_tables_timeout", "5s",
+			"--watch_replication_stream",
+			"--enable_replication_reporter",
+			"--heartbeat_enable",
+			"--heartbeat_interval", "250ms",
+			"--gc_check_interval", "5s",
+			"--gc_purge_check_interval", "5s",
+			"--table_gc_lifecycle", "hold,purge,evac,drop",
 		}
 		// We do not need semiSync for this test case.
 		clusterInstance.EnableSemiSync = false
@@ -336,5 +340,78 @@ func TestPurge(t *testing.T) {
 		checkTableRows(t, evacTableName, 0)
 		err = dropTable(evacTableName)
 		require.NoError(t, err)
+	}
+}
+
+func TestPurgeView(t *testing.T) {
+	populateTable(t)
+	query, tableName, err := schema.GenerateRenameStatement("v1", schema.PurgeTableGCState, time.Now().UTC().Add(10*time.Second))
+	require.NoError(t, err)
+
+	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	require.NoError(t, err)
+
+	{
+		// table untouched
+		exists, _, err := tableExists("t1")
+		require.NoError(t, err)
+		require.True(t, exists)
+	}
+	{
+		exists, _, err := tableExists("v1")
+		require.NoError(t, err)
+		require.False(t, exists)
+	}
+	{
+		exists, _, err := tableExists(tableName)
+		require.NoError(t, err)
+		require.True(t, exists)
+	}
+
+	time.Sleep(5 * time.Second)
+	{
+		// View was created with +10s timestamp, so it should still exist
+		exists, _, err := tableExists(tableName)
+		require.NoError(t, err)
+		require.True(t, exists)
+
+		// We're really reading the view here:
+		checkTableRows(t, tableName, 1024)
+	}
+
+	time.Sleep(15 * time.Second) // purgeReentranceInterval
+	{
+		// We're now both beyond view's timestamp as well as a tableGC interval
+		exists, _, err := tableExists(tableName)
+		require.NoError(t, err)
+		require.False(t, exists)
+	}
+	{
+		// table still untouched
+		exists, _, err := tableExists("t1")
+		require.NoError(t, err)
+		require.True(t, exists)
+	}
+	{
+		// View should be renamed as _vt_EVAC_ or _vt_DROP: views only spend a fraction of a second in "EVAC"
+		// because evacuation is irrelevant to views. They are immediately renamed to DROP.
+		// Because there might be a race condition, we allow both cases
+		evacTableExists, evacTableName, err := tableExists(`\_vt\_EVAC\_%`)
+		require.NoError(t, err)
+
+		dropTableExists, dropTableName, err := tableExists(`\_vt\_DROP\_%`)
+		require.NoError(t, err)
+
+		require.True(t, evacTableExists || dropTableExists)
+		switch {
+		case evacTableExists:
+			checkTableRows(t, evacTableName, 1024) // the renamed view still points to t1's data
+			err = dropTable(evacTableName)
+			require.NoError(t, err)
+		case dropTableExists:
+			checkTableRows(t, dropTableName, 1024) // the renamed view still points to t1's data
+			err = dropTable(dropTableName)
+			require.NoError(t, err)
+		}
 	}
 }

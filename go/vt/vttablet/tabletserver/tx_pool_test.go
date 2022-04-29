@@ -266,7 +266,7 @@ func TestTxPoolCancelledContextError(t *testing.T) {
 	// then
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "transaction pool aborting request due to already expired context")
-	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+	require.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
 	require.Empty(t, db.QueryLog())
 }
 

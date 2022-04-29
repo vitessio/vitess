@@ -82,7 +82,7 @@ func TestOptionalTLS(t *testing.T) {
 		t.Fatalf("failed to create credentials %v", err)
 	}
 
-	lis, err := net.Listen("tcp", "")
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("failed to listen %v", err)
 	}
@@ -114,12 +114,12 @@ func TestOptionalTLS(t *testing.T) {
 	}
 
 	t.Run("Plain2TLS", func(t *testing.T) {
-		for i := 0; i < 5; i += 1 {
+		for i := 0; i < 5; i++ {
 			testFunc(t, grpc.WithInsecure())
 		}
 	})
 	t.Run("TLS2TLS", func(t *testing.T) {
-		for i := 0; i < 5; i += 1 {
+		for i := 0; i < 5; i++ {
 			testFunc(t, grpc.WithTransportCredentials(tc.client))
 		}
 	})

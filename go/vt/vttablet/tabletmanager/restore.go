@@ -327,7 +327,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		Host: connParams.Host,
 		Port: connParams.Port,
 	}
-	dbCfgs.SetDbParams(*connParams, *connParams)
+	dbCfgs.SetDbParams(*connParams, *connParams, *connParams)
 	vsClient := vreplication.NewReplicaConnector(connParams)
 
 	filter := &binlogdatapb.Filter{
@@ -499,6 +499,15 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 		return vterrors.Wrap(err, "failed to set replication position")
 	}
 
+	// At this point we've restored the data from the backup _and_ we've saved the
+	// replication state metadata that is consistent with the snapshot of the data
+	// contained in the backup. This means that we have everything needed to start
+	// replication at a later time, and since with active parents disabled we do
+	// not ever start replication automatically, we can now safely return.
+	if *mysqlctl.DisableActiveReparents {
+		return nil
+	}
+
 	// Read the shard to find the current primary, and its location.
 	tablet := tm.Tablet()
 	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
@@ -527,7 +536,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 	}
 
 	// If using semi-sync, we need to enable it before connecting to primary.
-	if err := tm.fixSemiSync(tabletType); err != nil {
+	if err := tm.fixSemiSync(tabletType, SemiSyncActionNone); err != nil {
 		return err
 	}
 
@@ -536,11 +545,6 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 		return vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 
-	// If active reparents are disabled, we don't restart replication. So it makes no sense to wait for an update on the replica.
-	// Return immediately.
-	if *mysqlctl.DisableActiveReparents {
-		return nil
-	}
 	// wait for reliable replication_lag_seconds
 	// we have pos where we want to resume from
 	// if PrimaryPosition is the same, that means no writes

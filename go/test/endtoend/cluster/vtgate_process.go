@@ -50,7 +50,6 @@ type VtgateProcess struct {
 	Cell                  string
 	CellsToWatch          string
 	TabletTypesToWait     string
-	GatewayImplementation string
 	ServiceMap            string
 	MySQLAuthServerImpl   string
 	Directory             string
@@ -58,7 +57,7 @@ type VtgateProcess struct {
 	VSchemaURL            string
 	SysVarSetEnabled      bool
 	PlannerVersion        plancontext.PlannerVersion
-	//Extra Args to be set before starting the vtgate process
+	// Extra Args to be set before starting the vtgate process
 	ExtraArgs []string
 
 	proc *exec.Cmd
@@ -71,34 +70,33 @@ const defaultVtGatePlannerVersion = planbuilder.Gen4CompareV3
 func (vtgate *VtgateProcess) Setup() (err error) {
 
 	args := []string{
-		"-topo_implementation", vtgate.CommonArg.TopoImplementation,
-		"-topo_global_server_address", vtgate.CommonArg.TopoGlobalAddress,
-		"-topo_global_root", vtgate.CommonArg.TopoGlobalRoot,
-		"-log_dir", vtgate.LogDir,
-		"-log_queries_to_file", vtgate.FileToLogQueries,
-		"-port", fmt.Sprintf("%d", vtgate.Port),
-		"-grpc_port", fmt.Sprintf("%d", vtgate.GrpcPort),
-		"-mysql_server_port", fmt.Sprintf("%d", vtgate.MySQLServerPort),
-		"-mysql_server_socket_path", vtgate.MySQLServerSocketPath,
-		"-cell", vtgate.Cell,
-		"-cells_to_watch", vtgate.CellsToWatch,
-		"-tablet_types_to_wait", vtgate.TabletTypesToWait,
-		"-gateway_implementation", vtgate.GatewayImplementation,
-		"-service_map", vtgate.ServiceMap,
-		"-mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
+		"--topo_implementation", vtgate.CommonArg.TopoImplementation,
+		"--topo_global_server_address", vtgate.CommonArg.TopoGlobalAddress,
+		"--topo_global_root", vtgate.CommonArg.TopoGlobalRoot,
+		"--log_dir", vtgate.LogDir,
+		"--log_queries_to_file", vtgate.FileToLogQueries,
+		"--port", fmt.Sprintf("%d", vtgate.Port),
+		"--grpc_port", fmt.Sprintf("%d", vtgate.GrpcPort),
+		"--mysql_server_port", fmt.Sprintf("%d", vtgate.MySQLServerPort),
+		"--mysql_server_socket_path", vtgate.MySQLServerSocketPath,
+		"--cell", vtgate.Cell,
+		"--cells_to_watch", vtgate.CellsToWatch,
+		"--tablet_types_to_wait", vtgate.TabletTypesToWait,
+		"--service_map", vtgate.ServiceMap,
+		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
 	}
 	if vtgate.PlannerVersion > 0 {
-		args = append(args, "-planner_version", vtgate.PlannerVersion.String())
+		args = append(args, "--planner_version", vtgate.PlannerVersion.String())
 	}
 	if vtgate.SysVarSetEnabled {
-		args = append(args, "-enable_system_settings")
+		args = append(args, "--enable_system_settings")
 	}
 	vtgate.proc = exec.Command(
 		vtgate.Binary,
 		args...,
 	)
 	if *isCoverage {
-		vtgate.proc.Args = append(vtgate.proc.Args, "-test.coverprofile="+getCoveragePath("vtgate.out"))
+		vtgate.proc.Args = append(vtgate.proc.Args, "--test.coverprofile="+getCoveragePath("vtgate.out"))
 	}
 
 	vtgate.proc.Args = append(vtgate.proc.Args, vtgate.ExtraArgs...)
@@ -157,7 +155,7 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 		return false
 	}
 	if resp.StatusCode == 200 {
-		resultMap := make(map[string]interface{})
+		resultMap := make(map[string]any)
 		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
 		if err != nil {
@@ -244,7 +242,6 @@ func VtgateProcessInstance(
 		Cell:                  cell,
 		CellsToWatch:          cellsToWatch,
 		TabletTypesToWait:     tabletTypesToWait,
-		GatewayImplementation: "tabletgateway",
 		CommonArg:             *vtctl,
 		MySQLAuthServerImpl:   "none",
 		ExtraArgs:             extraArgs,
@@ -258,8 +255,8 @@ func VtgateProcessInstance(
 }
 
 // GetVars returns map of vars
-func (vtgate *VtgateProcess) GetVars() (map[string]interface{}, error) {
-	resultMap := make(map[string]interface{})
+func (vtgate *VtgateProcess) GetVars() (map[string]any, error) {
+	resultMap := make(map[string]any)
 	resp, err := http.Get(vtgate.VerifyURL)
 	if err != nil {
 		return nil, fmt.Errorf("error getting response from %s", vtgate.VerifyURL)

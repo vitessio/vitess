@@ -18,8 +18,13 @@ package vtadmin
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -42,7 +47,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vschema"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -139,6 +143,16 @@ func TestFindSchema(t *testing.T) {
 
 					DBConfig: vtadmintestutil.Dbcfg{
 						ShouldErr: true,
+					},
+					VtctldClient: &fakevtctldclient.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Keyspaces: []*vtctldatapb.Keyspace{
+								{Name: "testkeyspace"},
+							},
+						},
 					},
 				},
 			},
@@ -2719,7 +2733,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 							Id:   clusterID,
 							Name: clusterName,
 						},
-						SrvVSchema: &vschema.SrvVSchema{
+						SrvVSchema: &vschemapb.SrvVSchema{
 							Keyspaces: map[string]*vschemapb.Keyspace{
 								"commerce": {
 									Tables: map[string]*vschemapb.Table{
@@ -2756,7 +2770,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 							Id:   clusterID,
 							Name: clusterName,
 						},
-						SrvVSchema: &vschema.SrvVSchema{
+						SrvVSchema: &vschemapb.SrvVSchema{
 							RoutingRules: &vschemapb.RoutingRules{},
 						},
 					},
@@ -2813,7 +2827,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 							Id:   clusterID,
 							Name: clusterName,
 						},
-						SrvVSchema: &vschema.SrvVSchema{
+						SrvVSchema: &vschemapb.SrvVSchema{
 							RoutingRules: &vschemapb.RoutingRules{},
 						},
 					},
@@ -2854,7 +2868,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 							Id:   clusterID,
 							Name: clusterName,
 						},
-						SrvVSchema: &vschema.SrvVSchema{
+						SrvVSchema: &vschemapb.SrvVSchema{
 							RoutingRules: &vschemapb.RoutingRules{},
 						},
 					},
@@ -2881,7 +2895,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 							Id:   clusterID,
 							Name: clusterName,
 						},
-						SrvVSchema: &vschema.SrvVSchema{},
+						SrvVSchema: &vschemapb.SrvVSchema{},
 					},
 				},
 			},
@@ -4808,6 +4822,242 @@ func TestVTExplain(t *testing.T) {
 					assert.NotEmpty(t, resp.Response)
 				}
 			})
+		})
+	}
+}
+
+type ServeHTTPVtctldResponse struct {
+	Result ServeHTTPVtctldResult `json:"result"`
+	Ok     bool                  `json:"ok"`
+}
+
+type ServeHTTPVtctldResult struct {
+	Vtctlds []*vtadminpb.Vtctld `json:"vtctlds"`
+}
+
+type ServeHTTPResponse struct {
+	Result ServeHTTPResult `json:"result"`
+	Ok     bool            `json:"ok"`
+}
+
+type ServeHTTPResult struct {
+	Clusters []*vtadminpb.Cluster `json:"clusters"`
+}
+
+func TestServeHTTP(t *testing.T) {
+	t.Parallel()
+
+	testCluster, _ := cluster.Config{
+		ID:            "dynamiccluster1",
+		Name:          "dynamiccluster1",
+		DiscoveryImpl: "dynamic",
+		DiscoveryFlagsByImpl: cluster.FlagsByImpl{
+			"dynamic": {
+				"discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}",
+			},
+		},
+	}.Cluster()
+
+	tests := []struct {
+		name                  string
+		cookie                string
+		enableDynamicClusters bool
+		testClusterVtctld     string
+		clusters              []*cluster.Cluster
+		expected              []*vtadminpb.Cluster
+		expectedVtctlds       []*vtadminpb.Vtctld
+		repeat                bool
+	}{
+		{
+			name:                  "multiple clusters without dynamic clusters",
+			enableDynamicClusters: false,
+			clusters: []*cluster.Cluster{
+				{
+					ID:        "c1",
+					Name:      "cluster1",
+					Discovery: fakediscovery.New(),
+				},
+				{
+					ID:        "c2",
+					Name:      "cluster2",
+					Discovery: fakediscovery.New(),
+				},
+			},
+			expected: []*vtadminpb.Cluster{
+				{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				{
+					Id:   "c2",
+					Name: "cluster2",
+				},
+			},
+		},
+		{
+			name:                  "no clusters without dynamic clusters",
+			enableDynamicClusters: false,
+			clusters:              []*cluster.Cluster{},
+			expected:              []*vtadminpb.Cluster{},
+		},
+		{
+			name:                  "multiple clusters with dynamic clusters",
+			enableDynamicClusters: true,
+			cookie:                `{"id": "dynamiccluster1", "name": "dynamiccluster1", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}"}`,
+			clusters: []*cluster.Cluster{
+				{
+					ID:        "c1",
+					Name:      "cluster1",
+					Discovery: fakediscovery.New(),
+				},
+				{
+					ID:        "c2",
+					Name:      "cluster2",
+					Discovery: fakediscovery.New(),
+				},
+			},
+			expected: []*vtadminpb.Cluster{
+				{
+					Id:   "dynamiccluster1",
+					Name: "dynamiccluster1",
+				},
+			},
+		},
+		{
+			name:                  "dynamic clusters - cluster is updated when values change",
+			enableDynamicClusters: true,
+			cookie:                `{"id": "dynamiccluster1", "name": "dynamiccluster1", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15001\", \"hostname\": \"localhost:15998\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}"}`,
+			clusters: []*cluster.Cluster{
+				testCluster,
+			},
+			expected: []*vtadminpb.Cluster{
+				{
+					Id:   "dynamiccluster1",
+					Name: "dynamiccluster1",
+				},
+			},
+			testClusterVtctld: "dynamiccluster1",
+			expectedVtctlds: []*vtadminpb.Vtctld{
+				{
+					Hostname: "localhost:15998",
+					Cluster:  &vtadminpb.Cluster{Id: "dynamiccluster1", Name: "dynamiccluster1"},
+					FQDN:     "localhost:15001",
+				},
+			},
+		},
+		{
+			name:                  "multiple clusters with dynamic clusters - no duplicates",
+			enableDynamicClusters: true,
+			cookie:                `{"id": "dynamiccluster1", "name": "dynamiccluster1", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}"}`,
+			clusters: []*cluster.Cluster{
+				{
+					ID:        "c1",
+					Name:      "cluster1",
+					Discovery: fakediscovery.New(),
+				},
+				{
+					ID:        "c2",
+					Name:      "cluster2",
+					Discovery: fakediscovery.New(),
+				},
+			},
+			expected: []*vtadminpb.Cluster{
+				{
+					Id:   "dynamiccluster1",
+					Name: "dynamiccluster1",
+				},
+			},
+			repeat: true,
+		},
+		{
+			name:                  "multiple clusters with invalid json cookie and dynamic clusters",
+			enableDynamicClusters: true,
+			cookie:                `{"id "dynamiccluster1", "name": "dynamiccluster1", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}"}`,
+			clusters: []*cluster.Cluster{
+				{
+					ID:        "c1",
+					Name:      "cluster1",
+					Discovery: fakediscovery.New(),
+				},
+				{
+					ID:        "c2",
+					Name:      "cluster2",
+					Discovery: fakediscovery.New(),
+				},
+			},
+			expected: []*vtadminpb.Cluster{
+				{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				{
+					Id:   "c2",
+					Name: "cluster2",
+				},
+			},
+		},
+		{
+			name:                  "no clusters with dynamic clusters",
+			enableDynamicClusters: true,
+			clusters:              []*cluster.Cluster{},
+			expected:              []*vtadminpb.Cluster{},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			api := NewAPI(tt.clusters, Options{EnableDynamicClusters: tt.enableDynamicClusters})
+
+			// Copy the Cookie over to a new Request
+			req := httptest.NewRequest(http.MethodGet, "/api/clusters", nil)
+			req.AddCookie(&http.Cookie{Name: "cluster", Value: url.QueryEscape(base64.StdEncoding.EncodeToString([]byte(tt.cookie)))})
+
+			w := httptest.NewRecorder()
+
+			api.ServeHTTP(w, req)
+
+			if tt.repeat {
+				api.ServeHTTP(w, req)
+			}
+
+			res := w.Result()
+			defer res.Body.Close()
+
+			dec := json.NewDecoder(res.Body)
+			dec.DisallowUnknownFields()
+			var clustersResponse ServeHTTPResponse
+			err := dec.Decode(&clustersResponse)
+
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, tt.expected, clustersResponse.Result.Clusters)
+
+			if tt.testClusterVtctld != "" {
+				req := httptest.NewRequest(http.MethodGet, "/api/vtctlds?cluster="+tt.testClusterVtctld, nil)
+				req.AddCookie(&http.Cookie{Name: "cluster", Value: url.QueryEscape(base64.StdEncoding.EncodeToString([]byte(tt.cookie)))})
+
+				w := httptest.NewRecorder()
+
+				api.ServeHTTP(w, req)
+
+				if tt.repeat {
+					api.ServeHTTP(w, req)
+				}
+
+				res := w.Result()
+				defer res.Body.Close()
+
+				dec := json.NewDecoder(res.Body)
+				dec.DisallowUnknownFields()
+				var vtctldsResponse ServeHTTPVtctldResponse
+				err := dec.Decode(&vtctldsResponse)
+
+				assert.NoError(t, err)
+				assert.ElementsMatch(t, tt.expectedVtctlds, vtctldsResponse.Result.Vtctlds)
+			}
 		})
 	}
 }

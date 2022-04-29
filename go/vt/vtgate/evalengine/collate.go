@@ -18,7 +18,9 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -34,6 +36,12 @@ var collationNumeric = collations.TypedCollation{
 	Repertoire:   collations.RepertoireASCII,
 }
 
+var collationBinary = collations.TypedCollation{
+	Collation:    collations.CollationBinaryID,
+	Coercibility: collations.CoerceExplicit,
+	Repertoire:   collations.RepertoireASCII,
+}
+
 func (c *CollateExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	out.init(env, c.Inner)
 	if err := collations.Local().EnsureCollate(out.collation().Collation, c.TypedCollation.Collation); err != nil {
@@ -42,23 +50,60 @@ func (c *CollateExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	out.replaceCollation(c.TypedCollation)
 }
 
-func (c *CollateExpr) collation() collations.TypedCollation {
-	return c.TypedCollation
+func (c *CollateExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	return c.Inner.typeof(env)
 }
 
-func (t TupleExpr) collation() collations.TypedCollation {
-	// a Tuple does not have a collation, but an individual collation for every element of the tuple
-	return collations.TypedCollation{}
+type LookupDefaultCollation collations.ID
+
+func (d LookupDefaultCollation) ColumnLookup(_ *sqlparser.ColName) (int, error) {
+	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
 }
 
-func (l *Literal) collation() collations.TypedCollation {
-	return l.Val.collation()
+func (d LookupDefaultCollation) CollationForExpr(_ sqlparser.Expr) collations.ID {
+	return collations.Unknown
 }
 
-func (bv *BindVariable) collation() collations.TypedCollation {
-	return bv.coll
+func (d LookupDefaultCollation) DefaultCollation() collations.ID {
+	return collations.ID(d)
 }
 
-func (c *Column) collation() collations.TypedCollation {
-	return c.coll
+func mergeCollations(left, right *EvalResult) (collations.ID, error) {
+	lc := left.collation()
+	rc := right.collation()
+	if lc.Collation == rc.Collation {
+		return lc.Collation, nil
+	}
+
+	lt := left.isTextual()
+	rt := right.isTextual()
+	if !lt || !rt {
+		if lt {
+			return lc.Collation, nil
+		}
+		if rt {
+			return rc.Collation, nil
+		}
+		return collations.CollationBinaryID, nil
+	}
+
+	env := collations.Local()
+	mc, coerceLeft, coerceRight, err := env.MergeCollations(lc, rc, collations.CoercionOptions{
+		ConvertToSuperset:   true,
+		ConvertWithCoercion: true,
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	if coerceLeft != nil {
+		left.bytes_, _ = coerceLeft(nil, left.bytes())
+	}
+	if coerceRight != nil {
+		right.bytes_, _ = coerceRight(nil, right.bytes())
+	}
+
+	left.replaceCollation(mc)
+	right.replaceCollation(mc)
+	return mc.Collation, nil
 }

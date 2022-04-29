@@ -13,10 +13,11 @@
 # limitations under the License.
 
 ARG VT_BASE_VER=latest
+ARG DEBIAN_VER=stable-slim
 
 FROM vitess/k8s:${VT_BASE_VER} AS k8s
 
-FROM debian:buster-slim
+FROM debian:${DEBIAN_VER}
 
 # TODO: remove when https://github.com/vitessio/vitess/issues/3553 is fixed
 RUN apt-get update && \

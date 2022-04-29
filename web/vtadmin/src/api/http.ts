@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-import { vtadmin as pb } from '../proto/vtadmin';
+import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import * as errorHandler from '../errors/errorHandler';
 import { HttpFetchError, HttpResponseNotOkError, MalformedHttpResponseError } from '../errors/errorTypes';
 import { HttpOkResponse } from './responseTypes';
 import { TabletDebugVars } from '../util/tabletDebugVars';
+import { isReadOnlyMode } from '../util/env';
 
 /**
  * vtfetch makes HTTP requests against the given vtadmin-api endpoint
@@ -32,6 +33,14 @@ import { TabletDebugVars } from '../util/tabletDebugVars';
  */
 export const vtfetch = async (endpoint: string, options: RequestInit = {}): Promise<HttpOkResponse> => {
     try {
+        if (isReadOnlyMode() && options.method && options.method.toLowerCase() !== 'get') {
+            // Any UI controls that ultimately trigger a write request should be hidden when in read-only mode,
+            // so getting to this point (where we actually execute a write request) is an error.
+            // So: we fail obnoxiously, as failing silently (e.g, logging and returning an empty "ok" response)
+            // could imply to the user that a write action succeeded.
+            throw new Error(`Cannot execute write request in read-only mode: ${options.method} ${endpoint}`);
+        }
+
         const { REACT_APP_VTADMIN_API_ADDRESS } = process.env;
         const url = `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
         const opts = { ...vtfetchOpts(), ...options };
@@ -292,6 +301,32 @@ export const runHealthCheck = async ({ clusterID, alias }: RunHealthCheckParams)
     return pb.RunHealthCheckResponse.create(result);
 };
 
+export interface SetReadOnlyParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const setReadOnly = async ({ clusterID, alias }: SetReadOnlyParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/set_read_only?cluster=${clusterID}`, { method: 'put' });
+    const err = pb.SetReadOnlyResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.SetReadOnlyResponse.create(result);
+};
+
+export interface SetReadWriteParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const setReadWrite = async ({ clusterID, alias }: SetReadWriteParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/set_read_write?cluster=${clusterID}`, { method: 'put' });
+    const err = pb.SetReadWriteResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.SetReadWriteResponse.create(result);
+};
+
 export interface StartReplicationParams {
     clusterID?: string;
     alias: string;
@@ -391,4 +426,46 @@ export const fetchVTExplain = async <R extends pb.IVTExplainRequest>({ cluster, 
     if (err) throw Error(err);
 
     return pb.VTExplainResponse.create(result);
+};
+
+export interface ValidateKeyspaceParams {
+    clusterID: string;
+    keyspace: string;
+    pingTablets: boolean;
+}
+
+export const validateKeyspace = async ({ clusterID, keyspace, pingTablets }: ValidateKeyspaceParams) => {
+    const body = JSON.stringify({ pingTablets });
+
+    const { result } = await vtfetch(`/api/keyspace/${clusterID}/${keyspace}/validate`, { method: 'put', body });
+    const err = vtctldata.ValidateKeyspaceResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateKeyspaceResponse.create(result);
+};
+
+export interface ValidateSchemaKeyspaceParams {
+    clusterID: string;
+    keyspace: string;
+}
+
+export const validateSchemaKeyspace = async ({ clusterID, keyspace }: ValidateSchemaKeyspaceParams) => {
+    const { result } = await vtfetch(`/api/keyspace/${clusterID}/${keyspace}/validate/schema`, { method: 'put' });
+    const err = vtctldata.ValidateSchemaKeyspaceResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateSchemaKeyspaceResponse.create(result);
+};
+
+export interface ValidateVersionKeyspaceParams {
+    clusterID: string;
+    keyspace: string;
+}
+
+export const validateVersionKeyspace = async ({ clusterID, keyspace }: ValidateVersionKeyspaceParams) => {
+    const { result } = await vtfetch(`/api/keyspace/${clusterID}/${keyspace}/validate/version`, { method: 'put' });
+    const err = vtctldata.ValidateVersionKeyspaceResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateVersionKeyspaceResponse.create(result);
 };

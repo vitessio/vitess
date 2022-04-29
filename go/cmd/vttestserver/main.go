@@ -31,8 +31,9 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/log"
-	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 	"vitess.io/vitess/go/vt/vttest"
+
+	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
 type topoFlags struct {
@@ -87,8 +88,8 @@ func init() {
 		"If this flag is set, the MySQL data directory is not cleaned up"+
 			" when LocalCluster.TearDown() is called. This is useful for running"+
 			" vttestserver as a database container in local developer environments. Note"+
-			" that db migration files (-schema_dir option) and seeding of"+
-			" random data (-initialize_with_random_data option) will only run during"+
+			" that db migration files (--schema_dir option) and seeding of"+
+			" random data (--initialize_with_random_data option) will only run during"+
 			" cluster startup if the data directory does not already exist. vschema"+
 			" migrations are run every time the cluster starts, since persistence"+
 			" for the topology server has not been implemented yet")
@@ -136,12 +137,13 @@ func init() {
 		"Rdonly tablets per shard")
 
 	flag.StringVar(&config.Charset, "charset", "utf8mb4", "MySQL charset")
-	flag.StringVar(&config.Collation, "collation", "", "MySQL collation")
 
-	flag.StringVar(&config.PlannerVersion, "planner_version", "v3", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the new gen4 planner and falls back to the V3 planner if the gen4 fails. All Gen4 versions should be considered experimental!")
+	flag.StringVar(&config.PlannerVersion, "planner_version", "gen4", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the new gen4 planner and falls back to the V3 planner if the gen4 fails.")
 
 	flag.StringVar(&config.SnapshotFile, "snapshot_file", "",
 		"A MySQL DB snapshot file")
+
+	flag.BoolVar(&config.EnableSystemSettings, "enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
 
 	flag.StringVar(&config.TransactionMode, "transaction_mode", "MULTI", "Transaction mode MULTI (default), SINGLE or TWOPC ")
 	flag.Float64Var(&config.TransactionTimeout, "queryserver-config-transaction-timeout", 0, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")

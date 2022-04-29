@@ -26,6 +26,7 @@ package mysqlctl
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -41,8 +42,6 @@ import (
 	"time"
 
 	rice "github.com/GeertJohan/go.rice"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -185,17 +184,17 @@ versions should only matter if Vitess is managing the lifecycle of mysqld, in wh
 case we should have a local copy of the mysqld binary from which we can fetch
 the accurate version instead of falling back to this function (see GetVersionString).
 */
-func GetVersionFromEnv() (flavor mysqlFlavor, ver serverVersion, err error) {
+func GetVersionFromEnv() (flavor MySQLFlavor, ver ServerVersion, err error) {
 	env := os.Getenv("MYSQL_FLAVOR")
 	switch env {
 	case "MariaDB":
-		return FlavorMariaDB, serverVersion{10, 0, 10}, nil
+		return FlavorMariaDB, ServerVersion{10, 0, 10}, nil
 	case "MariaDB103":
-		return FlavorMariaDB, serverVersion{10, 3, 7}, nil
+		return FlavorMariaDB, ServerVersion{10, 3, 7}, nil
 	case "MySQL80":
-		return FlavorMySQL, serverVersion{8, 0, 11}, nil
+		return FlavorMySQL, ServerVersion{8, 0, 11}, nil
 	case "MySQL56":
-		return FlavorMySQL, serverVersion{5, 7, 10}, nil
+		return FlavorMySQL, ServerVersion{5, 7, 10}, nil
 	}
 	return flavor, ver, fmt.Errorf("could not determine version from MYSQL_FLAVOR: %s", env)
 }
@@ -218,7 +217,7 @@ func GetVersionString() (string, error) {
 }
 
 // ParseVersionString parses the output of mysqld --version into a flavor and version
-func ParseVersionString(version string) (flavor mysqlFlavor, ver serverVersion, err error) {
+func ParseVersionString(version string) (flavor MySQLFlavor, ver ServerVersion, err error) {
 	if strings.Contains(version, "Percona") {
 		flavor = FlavorPercona
 	} else if strings.Contains(version, "MariaDB") {
@@ -348,7 +347,7 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 	switch hr := hook.NewHook("mysqld_start", mysqldArgs).Execute(); hr.ExitStatus {
 	case hook.HOOK_SUCCESS:
 		// hook exists and worked, we can keep going
-		name = "mysqld_start hook" //nolint
+		name = "mysqld_start hook" // nolint
 	case hook.HOOK_DOES_NOT_EXIST:
 		// hook doesn't exist, run mysqld_safe ourselves
 		log.Infof("%v: No mysqld_start hook, running mysqld_safe directly", ts)
@@ -372,7 +371,7 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 			return err
 		}
 		args := []string{
-			"--defaults-file=" + cnf.path,
+			"--defaults-file=" + cnf.Path,
 			"--basedir=" + mysqlBaseDir,
 		}
 		args = append(args, mysqldArgs...)
@@ -630,8 +629,8 @@ func (mysqld *Mysqld) InitConfig(cnf *Mycnf) error {
 		return err
 	}
 	// Set up config files.
-	if err = mysqld.initConfig(cnf, cnf.path); err != nil {
-		log.Errorf("failed creating %v: %v", cnf.path, err)
+	if err = mysqld.initConfig(cnf, cnf.Path); err != nil {
+		log.Errorf("failed creating %v: %v", cnf.Path, err)
 		return err
 	}
 	return nil
@@ -663,7 +662,6 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	// user is created yet.
 	params := &mysql.ConnParams{
 		Uname:      "root",
-		Charset:    "utf8mb4",
 		UnixSocket: cnf.SocketFile,
 	}
 	if err = mysqld.wait(ctx, cnf, params); err != nil {
@@ -742,7 +740,7 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 	if mysqld.capabilities.hasInitializeInServer() {
 		log.Infof("Installing data dir with mysqld --initialize-insecure")
 		args := []string{
-			"--defaults-file=" + cnf.path,
+			"--defaults-file=" + cnf.Path,
 			"--basedir=" + mysqlBaseDir,
 			"--initialize-insecure", // Use empty 'root'@'localhost' password.
 		}
@@ -755,7 +753,7 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 
 	log.Infof("Installing data dir with mysql_install_db")
 	args := []string{
-		"--defaults-file=" + cnf.path,
+		"--defaults-file=" + cnf.Path,
 		"--basedir=" + mysqlBaseDir,
 	}
 	if mysqld.capabilities.hasMaria104InstallDb() {
@@ -860,7 +858,7 @@ func (mysqld *Mysqld) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 	}
 
 	log.Info("Checking for updates to my.cnf")
-	f, err := os.CreateTemp(path.Dir(cnf.path), "my.cnf")
+	f, err := os.CreateTemp(path.Dir(cnf.Path), "my.cnf")
 	if err != nil {
 		return fmt.Errorf("could not create temp file: %v", err)
 	}
@@ -871,9 +869,9 @@ func (mysqld *Mysqld) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 		return fmt.Errorf("could not initConfig in %v: %v", f.Name(), err)
 	}
 
-	existing, err := os.ReadFile(cnf.path)
+	existing, err := os.ReadFile(cnf.Path)
 	if err != nil {
-		return fmt.Errorf("could not read existing file %v: %v", cnf.path, err)
+		return fmt.Errorf("could not read existing file %v: %v", cnf.Path, err)
 	}
 	updated, err := os.ReadFile(f.Name())
 	if err != nil {
@@ -885,14 +883,14 @@ func (mysqld *Mysqld) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 		return nil
 	}
 
-	backupPath := cnf.path + ".previous"
-	err = os.Rename(cnf.path, backupPath)
+	backupPath := cnf.Path + ".previous"
+	err = os.Rename(cnf.Path, backupPath)
 	if err != nil {
-		return fmt.Errorf("could not back up existing %v: %v", cnf.path, err)
+		return fmt.Errorf("could not back up existing %v: %v", cnf.Path, err)
 	}
-	err = os.Rename(f.Name(), cnf.path)
+	err = os.Rename(f.Name(), cnf.Path)
 	if err != nil {
-		return fmt.Errorf("could not move %v to %v: %v", f.Name(), cnf.path, err)
+		return fmt.Errorf("could not move %v to %v: %v", f.Name(), cnf.Path, err)
 	}
 	log.Infof("Updated my.cnf. Backup of previous version available in %v", backupPath)
 
@@ -920,7 +918,7 @@ func (mysqld *Mysqld) ReinitConfig(ctx context.Context, cnf *Mycnf) error {
 	if err := cnf.RandomizeMysqlServerID(); err != nil {
 		return err
 	}
-	return mysqld.initConfig(cnf, cnf.path)
+	return mysqld.initConfig(cnf, cnf.Path)
 }
 
 func (mysqld *Mysqld) createDirs(cnf *Mycnf) error {

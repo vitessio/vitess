@@ -36,7 +36,7 @@ var (
 type StringListValue []string
 
 // Get returns the []string value of this flag.
-func (value StringListValue) Get() interface{} {
+func (value StringListValue) Get() any {
 	return []string(value)
 }
 
@@ -111,7 +111,7 @@ func (value *StringMapValue) Set(v string) error {
 }
 
 // Get returns the map[string]string value of this flag.
-func (value StringMapValue) Get() interface{} {
+func (value StringMapValue) Get() any {
 	return map[string]string(value)
 }
 

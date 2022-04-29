@@ -56,18 +56,20 @@ func TestMain(m *testing.M) {
 
 	cluster.PanicHandler(nil)
 
-	// stop vtorc first otherwise its logs get polluted
-	// with instances being unreachable triggering unnecessary operations
-	if clusterInfo.ClusterInstance.VtorcProcess != nil {
-		_ = clusterInfo.ClusterInstance.VtorcProcess.TearDown()
-	}
+	if clusterInfo != nil {
+		// stop vtorc first otherwise its logs get polluted
+		// with instances being unreachable triggering unnecessary operations
+		for _, vtorcProcess := range clusterInfo.ClusterInstance.VtorcProcesses {
+			_ = vtorcProcess.TearDown()
+		}
 
-	for _, cellInfo := range clusterInfo.CellInfos {
-		utils.KillTablets(cellInfo.ReplicaTablets)
-		utils.KillTablets(cellInfo.RdonlyTablets)
+		for _, cellInfo := range clusterInfo.CellInfos {
+			utils.KillTablets(cellInfo.ReplicaTablets)
+			utils.KillTablets(cellInfo.RdonlyTablets)
+		}
+		clusterInfo.ClusterInstance.Keyspaces[0].Shards[0].Vttablets = nil
+		clusterInfo.ClusterInstance.Teardown()
 	}
-	clusterInfo.ClusterInstance.Keyspaces[0].Shards[0].Vttablets = nil
-	clusterInfo.ClusterInstance.Teardown()
 
 	if err != nil {
 		fmt.Printf("%v\n", err)

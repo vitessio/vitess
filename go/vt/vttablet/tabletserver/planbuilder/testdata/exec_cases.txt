@@ -184,7 +184,17 @@
 
 # squence with bad value
 "select next 12345667852342342342323423423 values from seq"
-"strconv.ParseUint: parsing "12345667852342342342323423423": value out of range"
+{
+  "PlanID": "Nextval",
+  "TableName": "seq",
+  "Permissions": [
+    {
+      "TableName": "seq",
+      "Role": 0
+    }
+  ],
+  "NextCount": "DECIMAL(12345667852342342342323423423)"
+}
 
 # nextval on non-sequence table
 "select next value from a"
@@ -951,5 +961,5 @@ options:PassthroughDMLs
       "Role": 2
     }
   ],
-  "FullQuery": "create table function_default (\n\tx varchar(25) default (TRIM(' check '))\n)"
+  "FullQuery": "create table function_default (\n\tx varchar(25) default (trim(' check '))\n)"
 }

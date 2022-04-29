@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
@@ -45,15 +47,15 @@ func TestLockAndUnlock(t *testing.T) {
 	defer replicaConn.Close()
 
 	// first make sure that our writes to the primary make it to the replica
-	exec(t, conn, "delete from t1")
-	exec(t, conn, "insert into t1(id, value) values(1,'a'), (2,'b')")
+	utils.Exec(t, conn, "delete from t1")
+	utils.Exec(t, conn, "insert into t1(id, value) values(1,'a'), (2,'b')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	// now lock the replica
 	err = tmcLockTables(ctx, replicaTablet.GrpcPort)
 	require.Nil(t, err)
 	// make sure that writing to the primary does not show up on the replica while locked
-	exec(t, conn, "insert into t1(id, value) values(3,'c')")
+	utils.Exec(t, conn, "insert into t1(id, value) values(3,'c')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	// finally, make sure that unlocking the replica leads to the previous write showing up
@@ -69,7 +71,7 @@ func TestLockAndUnlock(t *testing.T) {
 	}
 
 	// Clean the table for further testing
-	exec(t, conn, "delete from t1")
+	utils.Exec(t, conn, "delete from t1")
 }
 
 // TestStartReplicationUntilAfter tests by writing three rows, noting the gtid after each, and then replaying them one by one
@@ -89,15 +91,15 @@ func TestStartReplicationUntilAfter(t *testing.T) {
 	err = tmcStopReplication(ctx, replicaTablet.GrpcPort)
 	require.Nil(t, err)
 
-	exec(t, conn, "insert into t1(id, value) values(1,'a')")
+	utils.Exec(t, conn, "insert into t1(id, value) values(1,'a')")
 	pos1, err := tmcPrimaryPosition(ctx, primaryTablet.GrpcPort)
 	require.Nil(t, err)
 
-	exec(t, conn, "insert into t1(id, value) values(2,'b')")
+	utils.Exec(t, conn, "insert into t1(id, value) values(2,'b')")
 	pos2, err := tmcPrimaryPosition(ctx, primaryTablet.GrpcPort)
 	require.Nil(t, err)
 
-	exec(t, conn, "insert into t1(id, value) values(3,'c')")
+	utils.Exec(t, conn, "insert into t1(id, value) values(3,'c')")
 	pos3, err := tmcPrimaryPosition(ctx, primaryTablet.GrpcPort)
 	require.Nil(t, err)
 
@@ -123,7 +125,7 @@ func TestStartReplicationUntilAfter(t *testing.T) {
 	err = tmcStartReplication(ctx, replicaTablet.GrpcPort)
 	require.Nil(t, err)
 	// Clean the table for further testing
-	exec(t, conn, "delete from t1")
+	utils.Exec(t, conn, "delete from t1")
 }
 
 // TestLockAndTimeout tests that the lock times out and updates can be seen after timeout
@@ -140,7 +142,7 @@ func TestLockAndTimeout(t *testing.T) {
 	defer replicaConn.Close()
 
 	// first make sure that our writes to the primary make it to the replica
-	exec(t, primaryConn, "insert into t1(id, value) values(1,'a')")
+	utils.Exec(t, primaryConn, "insert into t1(id, value) values(1,'a')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")]]`)
 
 	// now lock the replica
@@ -148,7 +150,7 @@ func TestLockAndTimeout(t *testing.T) {
 	require.Nil(t, err)
 
 	// make sure that writing to the primary does not show up on the replica while locked
-	exec(t, primaryConn, "insert into t1(id, value) values(2,'b')")
+	utils.Exec(t, primaryConn, "insert into t1(id, value) values(2,'b')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")]]`)
 
 	// the tests sets the lock timeout to 5 seconds, so sleeping 8 should be safe
@@ -156,13 +158,13 @@ func TestLockAndTimeout(t *testing.T) {
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	// Clean the table for further testing
-	exec(t, primaryConn, "delete from t1")
+	utils.Exec(t, primaryConn, "delete from t1")
 }
 
 func checkDataOnReplica(t *testing.T, replicaConn *mysql.Conn, want string) {
 	startTime := time.Now()
 	for {
-		qr := exec(t, replicaConn, "select value from t1")
+		qr := utils.Exec(t, replicaConn, "select value from t1")
 		got := fmt.Sprintf("%v", qr.Rows)
 
 		if time.Since(startTime) > 3*time.Second /* timeout */ {

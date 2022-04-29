@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -45,6 +46,7 @@ type (
 		// this allows identifiers (a.k.a. ColName) from the AST to be handled as if they are strings.
 		// SET transaction_mode = two_pc => SET transaction_mode = 'two_pc'
 		identifierAsString bool
+		supportSetVar      bool
 	}
 )
 
@@ -88,8 +90,20 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (engine.Prim
 				return nil, err
 			}
 			setOps = append(setOps, setOp)
+		case sqlparser.VitessMetadataScope:
+			value, err := getValueFor(expr)
+			if err != nil {
+				return nil, err
+			}
+			val, ok := value.(string)
+			if !ok {
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "unexpected value type for '%s': %v", expr.Name, value)
+			}
+
+			setOps = append(setOps,
+				&engine.VitessMetadata{Name: expr.Name.Lowered(), Value: val})
 		default:
-			return nil, ErrPlanNotSupported
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: undefined set type: %v", expr.Scope)
 		}
 	}
 
@@ -172,6 +186,7 @@ func buildSetOpReservedConn(s setting) planFunc {
 			Keyspace:          ks,
 			TargetDestination: vschema.Destination(),
 			Expr:              value,
+			SupportSetVar:     s.supportSetVar,
 		}, nil
 	}
 }
@@ -244,4 +259,42 @@ func extractValue(expr *sqlparser.SetExpr, boolean bool) (string, error) {
 	}
 
 	return sqlparser.String(expr.Expr), nil
+}
+
+func getValueFor(expr *sqlparser.SetExpr) (any, error) {
+	switch expr := expr.Expr.(type) {
+	case *sqlparser.Literal:
+		switch expr.Type {
+		case sqlparser.StrVal:
+			return strings.ToLower(expr.Val), nil
+		case sqlparser.IntVal:
+			num, err := strconv.ParseInt(expr.Val, 0, 64)
+			if err != nil {
+				return nil, err
+			}
+			return num, nil
+		case sqlparser.FloatVal, sqlparser.DecimalVal:
+			num, err := strconv.ParseFloat(expr.Val, 64)
+			if err != nil {
+				return nil, err
+			}
+			return num, nil
+		default:
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid value type: %v", sqlparser.String(expr))
+		}
+	case sqlparser.BoolVal:
+		var val int64
+		if expr {
+			val = 1
+		}
+		return val, nil
+	case *sqlparser.NullVal:
+		return nil, nil
+	case *sqlparser.ColName:
+		return expr.Name.String(), nil
+	case *sqlparser.Default:
+		return "default", nil
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid syntax: %s", sqlparser.String(expr))
+	}
 }

@@ -125,3 +125,23 @@ func Convert(dst []byte, dstCharset Charset, src []byte, srcCharset Charset) ([]
 func ConvertFromUTF8(dst []byte, dstCharset Charset, src []byte) ([]byte, error) {
 	return Convert(dst, dstCharset, src, Charset_utf8mb4{})
 }
+
+func ConvertFromBinary(dst []byte, dstCharset Charset, src []byte) ([]byte, error) {
+	switch dstCharset.(type) {
+	case Charset_utf16, Charset_utf16le, Charset_ucs2:
+		if len(src)%2 == 1 {
+			dst = append(dst, 0)
+		}
+	case Charset_utf32:
+		// TODO: it doesn't look like mysql pads binary for 4-byte encodings
+	}
+	if dst == nil {
+		dst = src
+	} else {
+		dst = append(dst, src...)
+	}
+	if !Validate(dstCharset, dst) {
+		return nil, ErrFailedConversion(1)
+	}
+	return dst, nil
+}

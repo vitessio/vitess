@@ -1,6 +1,5 @@
 module.exports = {
-    purge: ['./src/**/*.{js,jsx,ts,tsx}', './public/index.html'],
-    darkMode: false,
+    content: ['./src/**/*.{js,jsx,ts,tsx}', './public/index.html'],
     theme: {
         extend: {
             colors: {
@@ -75,9 +74,6 @@ module.exports = {
             '2xl': '2.8rem',
             '3xl': '3.6rem',
         },
-    },
-    variants: {
-        extend: {},
     },
     plugins: [],
 };

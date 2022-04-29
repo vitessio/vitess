@@ -25,6 +25,7 @@ import (
 type FastIterator900 struct {
 	iterator900
 	fastTable *[256]uint32
+	unicode   int
 }
 
 func (it *FastIterator900) Done() {
@@ -35,6 +36,7 @@ func (it *FastIterator900) Done() {
 
 func (it *FastIterator900) reset(input []byte) {
 	it.fastTable = &fastweightTable_uca900_page000L0
+	it.unicode = 0
 	it.iterator900.reset(input)
 }
 
@@ -45,7 +47,77 @@ func (it *FastIterator900) SkipLevel() int {
 	return it.level
 }
 
-// NextChunk takes a byte slice of 16 bytes and fills it with the next
+const maxUnicodeBlocks = 3
+
+// FastForward32 fast-forwards this iterator and the given it2 in parallel until
+// there is a mismatch in their weights, and returns their difference.
+// This function is similar to NextWeightBlock64 in that it only succeeds if the
+// iterators are composed of (mostly) ASCII characters. See the docs for NextWeightBlock64
+// for documentation on how these fast comparisons work.
+func (it *FastIterator900) FastForward32(it2 *FastIterator900) int {
+	// We use a heuristic to detect when we should stop using the FastForward32
+	// iterator: every time we encounter a 4-byte block that is fully Unicode,
+	// (i.e. without any ASCII characters), we increase the `it.unicode` counter.
+	// Encountering a block that is fully ASCII decreases the counter. If the
+	// counter ever gets to 4, further calls to FastForward32 are disabled.
+	if it.unicode > maxUnicodeBlocks || it.codepoint.ce != 0 || it2.codepoint.ce != 0 {
+		return 0
+	}
+
+	p1 := it.input
+	p2 := it2.input
+	var w1, w2 uint32
+
+	for len(p1) >= 4 && len(p2) >= 4 {
+		dword1 := *(*uint32)(unsafe.Pointer(&p1[0]))
+		dword2 := *(*uint32)(unsafe.Pointer(&p2[0]))
+		nonascii := (dword1 | dword2) & 0x80808080
+
+		if nonascii == 0 {
+			if dword1 != dword2 {
+				table := it.fastTable
+				if w1, w2 = table[p1[0]], table[p2[0]]; w1 != w2 {
+					goto mismatch
+				}
+				if w1, w2 = table[p1[1]], table[p2[1]]; w1 != w2 {
+					goto mismatch
+				}
+				if w1, w2 = table[p1[2]], table[p2[2]]; w1 != w2 {
+					goto mismatch
+				}
+				if w1, w2 = table[p1[3]], table[p2[3]]; w1 != w2 {
+					goto mismatch
+				}
+			}
+			p1 = p1[4:]
+			p2 = p2[4:]
+			it.unicode--
+			continue
+		} else if bits.OnesCount32(nonascii) == 4 {
+			it.unicode++
+		}
+		break
+	}
+	it.input = p1
+	it2.input = p2
+	return 0
+
+mismatch:
+	// If either of the weights was an ignorable, this is not really a mismatch;
+	// return 0 so we fall back to the slow path and increase `it.unicode`. Although
+	// these are _not_ unicode codepoints, if we find too many ignorable ASCII in
+	// an iterator we want to skip further calls to FastForward32 because they
+	// won't be able to optimize the comparisons at all
+	if w1 == 0 || w2 == 0 {
+		it.input = p1
+		it2.input = p2
+		it.unicode++
+		return 0
+	}
+	return int(w1) - int(w2)
+}
+
+// NextWeightBlock64 takes a byte slice of 16 bytes and fills it with the next
 // chunk of weights from this iterator. If the input slice is smaller than
 // 16 bytes, the function will panic.
 //
@@ -69,7 +141,7 @@ func (it *FastIterator900) SkipLevel() int {
 // in UCA900, all characters in the ASCII range have either 0 or 1 weight
 // triplets, so their weight can be calculated with a single lookup in a 128-entry
 // table for each level (0, 1, 2).
-func (it *FastIterator900) NextChunk(dstbytes []byte) int {
+func (it *FastIterator900) NextWeightBlock64(dstbytes []byte) int {
 	// Ensure the destination slice has at least 16 bytes; this bounds check
 	// removes all the other bound checks for the rest of the function.
 	_ = dstbytes[15]

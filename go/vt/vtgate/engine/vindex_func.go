@@ -110,7 +110,7 @@ func (vf *VindexFunc) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bi
 }
 
 func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	env := evalengine.EnvWithBindVars(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	k, err := env.Evaluate(vf.Value)
 	if err != nil {
 		return nil, err
@@ -149,22 +149,25 @@ func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.Bi
 					if err != nil {
 						return nil, err
 					}
-					kr, err := key.ParseShardingSpec(resolvedShards[0].Target.Shard)
-					if err != nil {
-						return nil, err
+					if len(resolvedShards) > 0 {
+						kr, err := key.ParseShardingSpec(resolvedShards[0].Target.Shard)
+						if err != nil {
+							return nil, err
+						}
+						row, err := vf.buildRow(vkey, d, kr[0])
+						if err != nil {
+							return result, err
+						}
+						result.Rows = append(result.Rows, row)
+						break
 					}
-					row, err := vf.buildRow(vkey, d, kr[0])
-					if err != nil {
-						return result, err
-					}
-					result.Rows = append(result.Rows, row)
-				} else {
-					row, err := vf.buildRow(vkey, d, nil)
-					if err != nil {
-						return result, err
-					}
-					result.Rows = append(result.Rows, row)
 				}
+
+				row, err := vf.buildRow(vkey, d, nil)
+				if err != nil {
+					return result, err
+				}
+				result.Rows = append(result.Rows, row)
 			}
 		case key.DestinationKeyspaceIDs:
 			for _, ksid := range d {
@@ -232,7 +235,7 @@ func (vf *VindexFunc) description() PrimitiveDescription {
 		fields[field.Name] = field.Type.String()
 	}
 
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Fields":  fields,
 		"Columns": vf.Cols,
 		"Value":   evalengine.FormatExpr(vf.Value),

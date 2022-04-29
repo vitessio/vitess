@@ -18,8 +18,11 @@ package informationschema
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"testing"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -28,9 +31,10 @@ import (
 var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
-	KeyspaceName    = "ks"
-	Cell            = "test"
-	SchemaSQL       = `create table t1(
+	mysqlParams     mysql.ConnParams
+	keyspaceName    = "ks"
+	cell            = "test"
+	schemaSQL       = `create table t1(
 	id1 bigint,
 	id2 bigint,
 	primary key(id1)
@@ -137,7 +141,7 @@ create table t8(
 ) Engine=InnoDB;
 `
 
-	VSchema = `
+	vschema = `
 {
   "sharded": true,
   "vindexes": {
@@ -395,7 +399,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
+		clusterInstance = cluster.NewCluster(cell, "localhost")
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -406,12 +410,12 @@ func TestMain(m *testing.M) {
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
+			Name:      keyspaceName,
+			SchemaSQL: schemaSQL,
+			VSchema:   vschema,
 		}
-		clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal"}
-		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-schema-change-signal", "-queryserver-config-schema-change-signal-interval", "0.1"}
+		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
 		if err != nil {
 			return 1
@@ -427,7 +431,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "-enable_system_settings=true")
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable_system_settings=true")
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {
@@ -438,6 +442,15 @@ func TestMain(m *testing.M) {
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
 		}
+
+		// create mysql instance and connection parameters
+		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL)
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+		defer closer()
+		mysqlParams = conn
 		return m.Run()
 	}()
 	os.Exit(exitCode)

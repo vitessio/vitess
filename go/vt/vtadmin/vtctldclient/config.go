@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/credentials"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -30,12 +31,12 @@ import (
 
 // Config represents the options that modify the behavior of a Proxy.
 type Config struct {
-	Discovery   discovery.Discovery
-	Credentials *grpcclient.StaticAuthClientCreds
-
+	Credentials     *grpcclient.StaticAuthClientCreds
 	CredentialsPath string
 
 	Cluster *vtadminpb.Cluster
+
+	ResolverOptions *resolver.Options
 }
 
 // Parse returns a new config with the given cluster and discovery, after
@@ -43,8 +44,10 @@ type Config struct {
 // (*Config).Parse() for more details.
 func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string) (*Config, error) {
 	cfg := &Config{
-		Cluster:   cluster,
-		Discovery: disco,
+		Cluster: cluster,
+		ResolverOptions: &resolver.Options{
+			Discovery: disco,
+		},
 	}
 
 	err := cfg.Parse(args)
@@ -60,6 +63,12 @@ func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string)
 // (*cluster.Cluster).New().
 func (c *Config) Parse(args []string) error {
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
+
+	if c.ResolverOptions == nil {
+		c.ResolverOptions = &resolver.Options{}
+	}
+
+	c.ResolverOptions.InstallFlags(fs)
 
 	credentialsTmplStr := fs.String("credentials-path-tmpl", "",
 		"Go template used to specify a path to a credentials file, which is a json file containing "+

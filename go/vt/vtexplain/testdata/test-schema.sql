@@ -73,3 +73,11 @@ create table email_customer_map (
    user_id bigint,
    primary key (email, user_id)
 ) Engine=InnoDB;
+
+create table user_region (
+   regionId bigint,
+   userId bigint,
+   name varchar(64),
+   email varchar(64),
+   primary key (regionId,userId)
+) Engine=InnoDB;

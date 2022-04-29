@@ -87,6 +87,8 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, rese
 		return err
 	case *sqlparser.JoinTableExpr:
 		return pb.processJoin(tableExpr, reservedVars, where)
+	case *sqlparser.JSONTableExpr:
+		return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: json_table expressions")
 	}
 	return fmt.Errorf("BUG: unexpected table expression type: %T", tableExpr)
 }
@@ -106,6 +108,9 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 	case sqlparser.TableName:
 		return pb.buildTablePrimitive(tableExpr, expr)
 	case *sqlparser.DerivedTable:
+		if expr.Lateral {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: lateral derived tables")
+		}
 		spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 		switch stmt := expr.Select.(type) {
 		case *sqlparser.Select:
@@ -191,7 +196,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 			return err
 		}
 		rb, st := newRoute(sel)
-		rb.eroute = engine.NewSimpleRoute(engine.SelectDBA, ks)
+		rb.eroute = engine.NewSimpleRoute(engine.DBA, ks)
 		rb.eroute.TableName = sqlparser.String(tableName)
 		pb.plan, pb.st = rb, st
 		// Add the table to symtab
@@ -248,20 +253,20 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 	var eroute *engine.Route
 	switch {
 	case vschemaTable.Type == vindexes.TypeSequence:
-		eroute = engine.NewSimpleRoute(engine.SelectNext, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRoute(engine.Next, vschemaTable.Keyspace)
 	case vschemaTable.Type == vindexes.TypeReference:
-		eroute = engine.NewSimpleRoute(engine.SelectReference, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRoute(engine.Reference, vschemaTable.Keyspace)
 	case !vschemaTable.Keyspace.Sharded:
-		eroute = engine.NewSimpleRoute(engine.SelectUnsharded, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRoute(engine.Unsharded, vschemaTable.Keyspace)
 	case vschemaTable.Pinned == nil:
-		eroute = engine.NewSimpleRoute(engine.SelectScatter, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRoute(engine.Scatter, vschemaTable.Keyspace)
 		eroute.TargetDestination = destTarget
 		eroute.TargetTabletType = destTableType
 	default:
 		// Pinned tables have their keyspace ids already assigned.
 		// Use the Binary vindex, which is the identity function
 		// for keyspace id.
-		eroute = engine.NewSimpleRoute(engine.SelectEqualUnique, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRoute(engine.EqualUnique, vschemaTable.Keyspace)
 		vindex, _ = vindexes.NewBinary("binary", nil)
 		eroute.Vindex = vindex
 		lit := evalengine.NewLiteralString(vschemaTable.Pinned, collations.TypedCollation{})
@@ -329,7 +334,7 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 		return newJoin(pb, rpb, ajoin, reservedVars)
 	}
 
-	if lRoute.eroute.Opcode == engine.SelectReference {
+	if lRoute.eroute.Opcode == engine.Reference {
 		// Swap the conditions & eroutes, and then merge.
 		lRoute.condition, rRoute.condition = rRoute.condition, lRoute.condition
 		lRoute.eroute, rRoute.eroute = rRoute.eroute, lRoute.eroute

@@ -178,15 +178,20 @@ func (s *shrinker) fillQueue() bool {
 			if oneLess != half {
 				s.queue = append(s.queue, sqlparser.NewIntLiteral(fmt.Sprintf("%d", oneLess)))
 			}
-		case sqlparser.FloatVal:
+		case sqlparser.FloatVal, sqlparser.DecimalVal:
 			fval, err := strconv.ParseFloat(e.Val, 64)
 			if err != nil {
 				panic(err)
 			}
 
-			intval := int(fval)
+			if e.Type == sqlparser.DecimalVal {
+				// if it's a decimal, try to simplify as float
+				fval := strconv.FormatFloat(fval, 'e', -1, 64)
+				s.queue = append(s.queue, sqlparser.NewFloatLiteral(fval))
+			}
 
 			// add the value as an integer
+			intval := int(fval)
 			s.queue = append(s.queue, sqlparser.NewIntLiteral(fmt.Sprintf("%d", intval)))
 
 			// we'll simplify by halving the current value and decreasing it by one

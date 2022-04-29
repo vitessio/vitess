@@ -57,6 +57,10 @@ func (mariadbFlavor) startReplicationUntilAfter(pos Position) string {
 	return fmt.Sprintf("START SLAVE UNTIL master_gtid_pos = \"%s\"", pos)
 }
 
+func (mariadbFlavor) startSQLThreadUntilAfter(pos Position) string {
+	return fmt.Sprintf("START SLAVE SQL_THREAD UNTIL master_gtid_pos = \"%s\"", pos)
+}
+
 func (mariadbFlavor) startReplicationCommand() string {
 	return "START SLAVE"
 }
@@ -75,6 +79,10 @@ func (mariadbFlavor) stopReplicationCommand() string {
 
 func (mariadbFlavor) stopIOThreadCommand() string {
 	return "STOP SLAVE IO_THREAD"
+}
+
+func (mariadbFlavor) stopSQLThreadCommand() string {
+	return "STOP SLAVE SQL_THREAD"
 }
 
 func (mariadbFlavor) startSQLThreadCommand() string {
@@ -233,5 +241,15 @@ func (mariadbFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 	case ErrPacket:
 		return nil, ParseErrorPacket(result)
 	}
-	return NewMariadbBinlogEvent(result[1:]), nil
+	buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(result[1:])
+	if err != nil {
+		return nil, err
+	}
+	ev := NewMariadbBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
+	return ev, nil
+}
+
+// supportsFastDropTable is part of the Flavor interface.
+func (mariadbFlavor) supportsFastDropTable(c *Conn) (bool, error) {
+	return false, nil
 }

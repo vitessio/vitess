@@ -1058,7 +1058,7 @@ func TestSplitCloneV2_NoPrimaryAvailable(t *testing.T) {
 		}
 
 		// Make leftReplica the new PRIMARY.
-		tc.leftReplica.TM.ChangeType(ctx, topodatapb.TabletType_PRIMARY)
+		tc.leftReplica.TM.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
 		t.Logf("resetting tablet back to PRIMARY")
 		tc.leftReplicaQs.UpdateType(topodatapb.TabletType_PRIMARY)
 		tc.leftReplicaQs.AddDefaultHealthResponse()

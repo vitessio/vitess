@@ -20,6 +20,8 @@ import (
 	"errors"
 	"testing"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/stretchr/testify/require"
@@ -115,7 +117,7 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 		`ExecuteMultiShard ks.0: dummy_insert {__seq0: type:INT64 value:"1" __seq1: type:INT64 value:"4" __seq2: type:INT64 value:"2" __seq3: type:INT64 value:"5" __seq4: type:INT64 value:"3"} true true`,
 	})
 
-	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerate.
+	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerateFromValues.
 	expectResult(t, "Execute", result, &sqltypes.Result{InsertID: 4})
 }
 
@@ -168,7 +170,7 @@ func TestInsertUnshardedGenerate_Zeros(t *testing.T) {
 		`ExecuteMultiShard ks.0: dummy_insert {__seq0: type:INT64 value:"1" __seq1: type:INT64 value:"4" __seq2: type:INT64 value:"2" __seq3: type:INT64 value:"5" __seq4: type:INT64 value:"3"} true true`,
 	})
 
-	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerate.
+	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerateFromValues.
 	expectResult(t, "Execute", result, &sqltypes.Result{InsertID: 4})
 }
 
@@ -199,6 +201,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	// A single row insert should be autocommitted
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -230,6 +233,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	// Multiple rows are not autocommitted by default
 	ins = NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -265,6 +269,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	// Optional flag overrides autocommit
 	ins = NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -332,6 +337,7 @@ func TestInsertShardedFail(t *testing.T) {
 
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -379,6 +385,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -441,7 +448,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 			`true false`,
 	})
 
-	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerate.
+	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerateFromValues.
 	expectResult(t, "Execute", result, &sqltypes.Result{InsertID: 2})
 }
 
@@ -495,6 +502,7 @@ func TestInsertShardedOwned(t *testing.T) {
 
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -601,6 +609,7 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -675,6 +684,7 @@ func TestInsertShardedGeo(t *testing.T) {
 
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: region, id
@@ -702,7 +712,7 @@ func TestInsertShardedGeo(t *testing.T) {
 		" suffix",
 	)
 	for _, colVindex := range ks.Tables["t1"].ColumnVindexes {
-		if colVindex.IgnoreInDML() {
+		if colVindex.IsPartialVindex() {
 			continue
 		}
 		ins.ColVindexes = append(ins.ColVindexes, colVindex)
@@ -784,7 +794,8 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsert(
-		InsertShardedIgnore,
+		InsertSharded,
+		true,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -940,7 +951,8 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsert(
-		InsertShardedIgnore,
+		InsertSharded,
+		true,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -1036,6 +1048,7 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -1159,7 +1172,8 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsert(
-		InsertShardedIgnore,
+		InsertSharded,
+		true,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -1261,6 +1275,7 @@ func TestInsertShardedIgnoreUnownedVerifyFail(t *testing.T) {
 
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -1335,6 +1350,7 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -1446,6 +1462,7 @@ func TestInsertShardedUnownedReverseMapSuccess(t *testing.T) {
 
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -1470,4 +1487,535 @@ func TestInsertShardedUnownedReverseMapSuccess(t *testing.T) {
 
 	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
+}
+
+func TestInsertSelectSimple(t *testing.T) {
+	invschema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {Type: "hash"}},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "hash",
+							Columns: []string{"id"}}}}}}}}
+
+	vs := vindexes.BuildVSchema(invschema)
+	ks := vs.Keyspaces["sharded"]
+
+	// A single row insert should be autocommitted
+	ins := &Insert{
+		Opcode:            InsertSelect,
+		Keyspace:          ks.Keyspace,
+		Query:             "dummy_insert",
+		Table:             ks.Tables["t1"],
+		VindexValueOffset: [][]int{{1}},
+		Input: &Route{
+			Query:      "dummy_select",
+			FieldQuery: "dummy_field_query",
+			RoutingParameters: &RoutingParameters{
+				Opcode:   Scatter,
+				Keyspace: ks.Keyspace}}}
+
+	ins.ColVindexes = append(ins.ColVindexes, ks.Tables["t1"].ColumnVindexes...)
+	ins.Prefix = "prefix "
+	ins.Suffix = " suffix"
+
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+	vc.results = []*sqltypes.Result{
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"name|id",
+				"varchar|int64"),
+			"a|1",
+			"a|3",
+			"b|2")}
+
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
+
+		// the select query
+		`ExecuteMultiShard sharded.-20: dummy_select {} sharded.20-: dummy_select {} false false`,
+		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(4eb190c9a2fa169c),DestinationKeyspaceID(06e7ea22ce92708f)`,
+
+		// two rows go to the 20- shard, and one row go to the -20 shard
+		`ExecuteMultiShard ` +
+			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) suffix ` +
+			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1"` +
+			` _c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"2"} ` +
+			`sharded.-20: prefix values (:_c1_0, :_c1_1) suffix` +
+			` {_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} true false`})
+}
+
+func TestInsertSelectOwned(t *testing.T) {
+	invschema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {Type: "hash"},
+					"onecol": {
+						Type: "lookup",
+						Params: map[string]string{
+							"table": "lkp1",
+							"from":  "from",
+							"to":    "toc"},
+						Owner: "t1"}},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "hash",
+							Columns: []string{"id"}}, {
+							Name:    "onecol",
+							Columns: []string{"c3"}}}}}}}}
+
+	vs := vindexes.BuildVSchema(invschema)
+	ks := vs.Keyspaces["sharded"]
+
+	ins := &Insert{
+		Opcode:   InsertSelect,
+		Keyspace: ks.Keyspace,
+		Query:    "dummy_insert",
+		Table:    ks.Tables["t1"],
+		VindexValueOffset: [][]int{
+			{1},  // The primary vindex has a single column as sharding key
+			{0}}, // the onecol vindex uses the 'name' column
+		Input: &Route{
+			Query:      "dummy_select",
+			FieldQuery: "dummy_field_query",
+			RoutingParameters: &RoutingParameters{
+				Opcode:   Scatter,
+				Keyspace: ks.Keyspace}}}
+
+	ins.ColVindexes = append(ins.ColVindexes, ks.Tables["t1"].ColumnVindexes...)
+	ins.Prefix = "prefix "
+	ins.Suffix = " suffix"
+
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+	vc.results = []*sqltypes.Result{
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"name|id",
+				"varchar|int64"),
+			"a|1",
+			"a|3",
+			"b|2")}
+
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
+
+		// the select query
+		`ExecuteMultiShard sharded.-20: dummy_select {} sharded.20-: dummy_select {} false false`,
+
+		// insert values into the owned lookup vindex
+		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0), (:from_1, :toc_1), (:from_2, :toc_2) from_0: type:VARCHAR value:"a" from_1: type:VARCHAR value:"a" from_2: type:VARCHAR value:"b" toc_0: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" toc_1: type:VARBINARY value:"N\xb1\x90ɢ\xfa\x16\x9c" toc_2: type:VARBINARY value:"\x06\xe7\xea\"Βp\x8f" true`,
+
+		// Values 0 1 2 come from the id column
+		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(4eb190c9a2fa169c),DestinationKeyspaceID(06e7ea22ce92708f)`,
+
+		// insert values into the main table
+		`ExecuteMultiShard ` +
+			// first we insert two rows on the 20- shard
+			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) suffix ` +
+			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1" _c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"2"} ` +
+
+			// next we insert one row on the -20 shard
+			`sharded.-20: prefix values (:_c1_0, :_c1_1) suffix ` +
+			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} ` +
+			`true false`})
+}
+
+func TestInsertSelectGenerate(t *testing.T) {
+	invschema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {
+						Type: "hash"}},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "hash",
+							Columns: []string{"id"}}}}}}}}
+
+	vs := vindexes.BuildVSchema(invschema)
+	ks := vs.Keyspaces["sharded"]
+
+	ins := &Insert{
+		Opcode:   InsertSelect,
+		Keyspace: ks.Keyspace,
+		Query:    "dummy_insert",
+		Table:    ks.Tables["t1"],
+		VindexValueOffset: [][]int{
+			{1}}, // The primary vindex has a single column as sharding key
+		Input: &Route{
+			Query:      "dummy_select",
+			FieldQuery: "dummy_field_query",
+			RoutingParameters: &RoutingParameters{
+				Opcode:   Scatter,
+				Keyspace: ks.Keyspace}}}
+
+	ins.Generate = &Generate{
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks2",
+			Sharded: false,
+		},
+		Query:  "dummy_generate",
+		Offset: 1,
+	}
+	ins.Prefix = "prefix "
+	ins.Suffix = " suffix"
+
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+	vc.results = []*sqltypes.Result{
+		// This is the result from the input SELECT
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"name|id",
+				"varchar|int64"),
+			"a|1",
+			"a|null",
+			"b|null"),
+		// This is the result for the sequence query
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"nextval",
+				"int64",
+			),
+			"2",
+		),
+		{InsertID: 1},
+	}
+
+	result, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
+		// this is the input query
+		`ExecuteMultiShard sharded.-20: dummy_select {} sharded.20-: dummy_select {} false false`,
+		`ResolveDestinations ks2 [] Destinations:DestinationAnyShard()`,
+
+		// this is the sequence table query
+		`ExecuteStandalone dummy_generate n: type:INT64 value:"2" ks2 -20`,
+		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
+		`ExecuteMultiShard ` +
+			// first we send the insert to the 20- shard
+			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) suffix ` +
+			`{_c0_0: type:VARCHAR value:"a" ` +
+			`_c0_1: type:INT64 value:"1" ` +
+			`_c2_0: type:VARCHAR value:"b" ` +
+			`_c2_1: type:INT64 value:"3"} ` +
+			// next we send the insert to the -20 shard
+			`sharded.-20: prefix values (:_c1_0, :_c1_1) suffix ` +
+			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"2"} ` +
+			`true false`,
+	})
+
+	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerateFromValues.
+	expectResult(t, "Execute", result, &sqltypes.Result{InsertID: 2})
+}
+
+func TestInsertSelectGenerateNotProvided(t *testing.T) {
+	invschema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {
+						Type: "hash"}},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "hash",
+							Columns: []string{"id"}}}}}}}}
+
+	vs := vindexes.BuildVSchema(invschema)
+	ks := vs.Keyspaces["sharded"]
+
+	ins := &Insert{
+		Opcode:   InsertSelect,
+		Keyspace: ks.Keyspace,
+		Query:    "dummy_insert",
+		Table:    ks.Tables["t1"],
+		VindexValueOffset: [][]int{
+			{1}}, // The primary vindex has a single column as sharding key
+		Input: &Route{
+			Query:      "dummy_select",
+			FieldQuery: "dummy_field_query",
+			RoutingParameters: &RoutingParameters{
+				Opcode:   Scatter,
+				Keyspace: ks.Keyspace}}}
+
+	ins.Generate = &Generate{
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks2",
+			Sharded: false,
+		},
+		Query:  "dummy_generate",
+		Offset: 2,
+	}
+	ins.Prefix = "prefix "
+	ins.Suffix = " suffix"
+
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+	vc.results = []*sqltypes.Result{
+		// This is the result from the input SELECT
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"name|id",
+				"varchar|int64"),
+			"a|1",
+			"a|2",
+			"b|3"),
+		// This is the result for the sequence query
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"nextval",
+				"int64",
+			),
+			"10",
+		),
+		{InsertID: 1},
+	}
+
+	result, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
+		// this is the input query
+		`ExecuteMultiShard sharded.-20: dummy_select {} sharded.20-: dummy_select {} false false`,
+		`ResolveDestinations ks2 [] Destinations:DestinationAnyShard()`,
+
+		// this is the sequence table query
+		`ExecuteStandalone dummy_generate n: type:INT64 value:"3" ks2 -20`,
+		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
+		`ExecuteMultiShard ` +
+			`sharded.20-: prefix values (:_c0_0, :_c0_1, :_c0_2), (:_c2_0, :_c2_1, :_c2_2) suffix ` +
+			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1" _c0_2: type:INT64 value:"10" ` +
+			`_c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"3" _c2_2: type:INT64 value:"12"} ` +
+			`sharded.-20: prefix values (:_c1_0, :_c1_1, :_c1_2) suffix ` +
+			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"2" _c1_2: type:INT64 value:"11"} ` +
+			`true false`,
+	})
+
+	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerateFromValues.
+	expectResult(t, "Execute", result, &sqltypes.Result{InsertID: 10})
+}
+
+func TestInsertSelectUnowned(t *testing.T) {
+	invschema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {Type: "hash"},
+					"onecol": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table": "lkp1",
+							"from":  "from",
+							"to":    "toc"},
+						Owner: "t1"}},
+				Tables: map[string]*vschemapb.Table{
+					"t2": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "onecol",
+							Columns: []string{"id"}}}}}}}}
+
+	vs := vindexes.BuildVSchema(invschema)
+	ks := vs.Keyspaces["sharded"]
+
+	ins := &Insert{
+		Opcode:   InsertSelect,
+		Keyspace: ks.Keyspace,
+		Query:    "dummy_insert",
+		Table:    ks.Tables["t2"],
+		VindexValueOffset: [][]int{
+			{0}}, // the onecol vindex as unowned lookup sharding column
+		Input: &Route{
+			Query:      "dummy_select",
+			FieldQuery: "dummy_field_query",
+			RoutingParameters: &RoutingParameters{
+				Opcode:   Scatter,
+				Keyspace: ks.Keyspace}}}
+
+	ins.ColVindexes = append(ins.ColVindexes, ks.Tables["t2"].ColumnVindexes...)
+	ins.Prefix = "prefix "
+	ins.Suffix = " suffix"
+
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+	vc.results = []*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1", "3", "2"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|tocol", "int64|int64"), "1|1", "3|2", "2|3"),
+	}
+
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
+
+		// the select query
+		`ExecuteMultiShard sharded.-20: dummy_select {} sharded.20-: dummy_select {} false false`,
+
+		// select values into the unowned lookup vindex for routing
+		`Execute select from, toc from lkp1 where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"3"} values:{type:INT64 value:"2"} false`,
+
+		// values from lookup vindex resolved to destination
+		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(31),DestinationKeyspaceID(32),DestinationKeyspaceID(33)`,
+
+		// insert values into the main table
+		`ExecuteMultiShard ` +
+			// first we insert two rows on the 20- shard
+			`sharded.20-: prefix values (:_c0_0), (:_c2_0) suffix ` +
+			`{_c0_0: type:INT64 value:"1" _c2_0: type:INT64 value:"2"} ` +
+
+			// next we insert one row on the -20 shard
+			`sharded.-20: prefix values (:_c1_0) suffix ` +
+			`{_c1_0: type:INT64 value:"3"} ` +
+			`true false`})
+}
+
+func TestInsertSelectShardingCases(t *testing.T) {
+	invschema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sks1": {
+				Sharded:  true,
+				Vindexes: map[string]*vschemapb.Vindex{"hash": {Type: "hash"}},
+				Tables: map[string]*vschemapb.Table{
+					"s1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "hash",
+							Columns: []string{"id"}}}}}},
+			"sks2": {
+				Sharded:  true,
+				Vindexes: map[string]*vschemapb.Vindex{"hash": {Type: "hash"}},
+				Tables: map[string]*vschemapb.Table{
+					"s2": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "hash",
+							Columns: []string{"id"}}}}}},
+			"uks1": {Tables: map[string]*vschemapb.Table{"u1": {}}},
+			"uks2": {Tables: map[string]*vschemapb.Table{"u2": {}}},
+		}}
+
+	vs := vindexes.BuildVSchema(invschema)
+	sks1 := vs.Keyspaces["sks1"]
+	sks2 := vs.Keyspaces["sks2"]
+	uks1 := vs.Keyspaces["uks1"]
+	uks2 := vs.Keyspaces["uks2"]
+
+	// sharded input route.
+	sRoute := &Route{
+		Query:             "dummy_select",
+		FieldQuery:        "dummy_field_query",
+		RoutingParameters: &RoutingParameters{Opcode: Scatter, Keyspace: sks2.Keyspace}}
+
+	// unsharded input route.
+	uRoute := &Route{
+		Query:             "dummy_select",
+		FieldQuery:        "dummy_field_query",
+		RoutingParameters: &RoutingParameters{Opcode: Unsharded, Keyspace: uks2.Keyspace}}
+
+	// sks1 and sks2
+	ins := &Insert{
+		Opcode:            InsertSelect,
+		Keyspace:          sks1.Keyspace,
+		Query:             "dummy_insert",
+		Table:             sks1.Tables["s1"],
+		Prefix:            "prefix ",
+		Suffix:            " suffix",
+		ColVindexes:       sks1.Tables["s1"].ColumnVindexes,
+		VindexValueOffset: [][]int{{0}},
+		Input:             sRoute,
+	}
+
+	vc := &loggingVCursor{
+		resolvedTargetTabletType: topodatapb.TabletType_PRIMARY,
+		ksShardMap: map[string][]string{
+			"sks1": {"-20", "20-"},
+			"sks2": {"-20", "20-"},
+			"uks1": {"0"},
+			"uks2": {"0"},
+		},
+	}
+	vc.results = []*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1")}
+
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		// the select query
+		`ResolveDestinations sks2 [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard sks2.-20: dummy_select {} sks2.20-: dummy_select {} false false`,
+
+		// the query exec
+		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
+
+	// sks1 and uks2
+	ins.Input = uRoute
+
+	vc.Rewind()
+	_, err = ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		// the select query
+		`ResolveDestinations uks2 [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard uks2.0: dummy_select {} false false`,
+
+		// the query exec
+		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
+
+	// uks1 and sks2
+	ins = &Insert{
+		Opcode:   InsertUnsharded,
+		Keyspace: uks1.Keyspace,
+		Query:    "dummy_insert",
+		Table:    uks1.Tables["s1"],
+		Prefix:   "prefix ",
+		Suffix:   " suffix",
+		Input:    sRoute,
+	}
+
+	vc.Rewind()
+	_, err = ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		// the select query
+		`ResolveDestinations sks2 [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard sks2.-20: dummy_select {} sks2.20-: dummy_select {} false false`,
+
+		// the query exec
+		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
+
+	// uks1 and uks2
+	ins.Input = uRoute
+
+	vc.Rewind()
+	_, err = ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		// the select query
+		`ResolveDestinations uks2 [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard uks2.0: dummy_select {} false false`,
+
+		// the query exec
+		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
 }

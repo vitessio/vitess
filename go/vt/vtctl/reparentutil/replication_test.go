@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/stretchr/testify/assert"
@@ -207,7 +209,7 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 
 // stopReplicationAndBuildStatusMapsTestTMClient implements
 // tmclient.TabletManagerClient to facilitate testing of
-// StopReplicationAndBuildStatusMaps.
+// stopReplicationAndBuildStatusMaps.
 type stopReplicationAndBuildStatusMapsTestTMClient struct {
 	tmclient.TabletManagerClient
 
@@ -268,13 +270,14 @@ func (fake *stopReplicationAndBuildStatusMapsTestTMClient) StopReplicationAndGet
 	return nil, nil, assert.AnError
 }
 
-func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
+func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	logger := logutil.NewMemoryLogger()
 	tests := []struct {
 		name                     string
+		durability               string
 		tmc                      *stopReplicationAndBuildStatusMapsTestTMClient
 		tabletMap                map[string]*topo.TabletInfo
 		waitReplicasTimeout      time.Duration
@@ -282,10 +285,12 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 		tabletToWaitFor          *topodatapb.TabletAlias
 		expectedStatusMap        map[string]*replicationdatapb.StopReplicationStatus
 		expectedPrimaryStatusMap map[string]*replicationdatapb.PrimaryStatus
+		expectedTabletsReachable []*topodatapb.Tablet
 		shouldErr                bool
 	}{
 		{
-			name: "success",
+			name:       "success",
+			durability: "none",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -308,6 +313,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  100,
@@ -316,6 +322,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 				},
 				"zone1-0000000101": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  101,
@@ -335,10 +342,210 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 				},
 			},
 			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
-			shouldErr:                false,
+			expectedTabletsReachable: []*topodatapb.Tablet{{
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, {
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			}},
+			shouldErr: false,
 		},
 		{
-			name: "ignore tablets",
+			name:       "success - 2 rdonly failures",
+			durability: "none",
+			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
+				stopReplicationAndGetStatusResults: map[string]*struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Err        error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{Position: "100-before"},
+							After:  &replicationdatapb.Status{Position: "100-after"},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{Position: "101-before"},
+							After:  &replicationdatapb.Status{Position: "101-after"},
+						},
+					},
+					"zone1-0000000102": {
+						Err: assert.AnError,
+					},
+					"zone1-0000000103": {
+						Err: assert.AnError,
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_RDONLY,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_RDONLY,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+					},
+				},
+			},
+			ignoredTablets: sets.NewString(),
+			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000100": {
+					Before: &replicationdatapb.Status{Position: "100-before"},
+					After:  &replicationdatapb.Status{Position: "100-after"},
+				},
+				"zone1-0000000101": {
+					Before: &replicationdatapb.Status{Position: "101-before"},
+					After:  &replicationdatapb.Status{Position: "101-after"},
+				},
+			},
+			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			expectedTabletsReachable: []*topodatapb.Tablet{{
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, {
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			}},
+			shouldErr: false,
+		},
+		{
+			name:       "success - 1 rdonly and 1 replica failures",
+			durability: "semi_sync",
+			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
+				stopReplicationAndGetStatusResults: map[string]*struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Err        error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{Position: "100-before"},
+							After:  &replicationdatapb.Status{Position: "100-after"},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{Position: "101-before"},
+							After:  &replicationdatapb.Status{Position: "101-after"},
+						},
+					},
+					"zone1-0000000102": {
+						Err: assert.AnError,
+					},
+					"zone1-0000000103": {
+						Err: assert.AnError,
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_RDONLY,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+					},
+				},
+			},
+			ignoredTablets: sets.NewString(),
+			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000100": {
+					Before: &replicationdatapb.Status{Position: "100-before"},
+					After:  &replicationdatapb.Status{Position: "100-after"},
+				},
+				"zone1-0000000101": {
+					Before: &replicationdatapb.Status{Position: "101-before"},
+					After:  &replicationdatapb.Status{Position: "101-after"},
+				},
+			},
+			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			expectedTabletsReachable: []*topodatapb.Tablet{{
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, {
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			}},
+			shouldErr: false,
+		},
+		{
+			name:       "ignore tablets",
+			durability: "none",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -361,6 +568,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  100,
@@ -369,6 +577,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 				},
 				"zone1-0000000101": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  101,
@@ -383,11 +592,19 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 					After:  &replicationdatapb.Status{Position: "101-after"},
 				},
 			},
+			expectedTabletsReachable: []*topodatapb.Tablet{{
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			}},
 			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
 			shouldErr:                false,
 		},
 		{
-			name: "have PRIMARY tablet and can demote",
+			name:       "have PRIMARY tablet and can demote",
+			durability: "none",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				demotePrimaryResults: map[string]*struct {
 					PrimaryStatus *replicationdatapb.PrimaryStatus
@@ -419,6 +636,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_PRIMARY,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  100,
@@ -427,6 +645,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 				},
 				"zone1-0000000101": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  101,
@@ -446,10 +665,24 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 					Position: "primary-position-100",
 				},
 			},
+			expectedTabletsReachable: []*topodatapb.Tablet{{
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, {
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			}},
 			shouldErr: false,
 		},
 		{
-			name: "one tablet is PRIMARY and cannot demote",
+			name:       "one tablet is PRIMARY and cannot demote",
+			durability: "none",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				demotePrimaryResults: map[string]*struct {
 					PrimaryStatus *replicationdatapb.PrimaryStatus
@@ -477,6 +710,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_PRIMARY,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  100,
@@ -485,6 +719,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 				},
 				"zone1-0000000101": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  101,
@@ -500,10 +735,18 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 				},
 			},
 			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{}, // zone1-0000000100 fails to demote, so does not appear
-			shouldErr:                false,
+			expectedTabletsReachable: []*topodatapb.Tablet{{
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			}},
+			shouldErr: false,
 		},
 		{
-			name: "multiple tablets are PRIMARY and cannot demote",
+			name:       "multiple tablets are PRIMARY and cannot demote",
+			durability: "none",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				demotePrimaryResults: map[string]*struct {
 					PrimaryStatus *replicationdatapb.PrimaryStatus
@@ -531,6 +774,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_PRIMARY,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  100,
@@ -539,6 +783,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 				},
 				"zone1-0000000101": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_PRIMARY,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  101,
@@ -549,10 +794,12 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 			ignoredTablets:           sets.NewString(),
 			expectedStatusMap:        nil,
 			expectedPrimaryStatusMap: nil,
+			expectedTabletsReachable: nil,
 			shouldErr:                true, // we get multiple errors, so we fail
 		},
 		{
-			name: "waitReplicasTimeout exceeded",
+			name:       "waitReplicasTimeout exceeded",
+			durability: "none",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusDelays: map[string]time.Duration{
 					"zone1-0000000100": time.Minute, // zone1-0000000100 will timeout and not be included
@@ -578,6 +825,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  100,
@@ -586,6 +834,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 				},
 				"zone1-0000000101": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  101,
@@ -601,11 +850,19 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 					After:  &replicationdatapb.Status{Position: "101-after"},
 				},
 			},
+			expectedTabletsReachable: []*topodatapb.Tablet{{
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			}},
 			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
 			shouldErr:                false,
 		},
 		{
-			name: "one tablet fails to StopReplication",
+			name:       "one tablet fails to StopReplication",
+			durability: "none",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -625,6 +882,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  100,
@@ -633,6 +891,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 				},
 				"zone1-0000000101": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  101,
@@ -648,10 +907,18 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 				},
 			},
 			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
-			shouldErr:                false,
+			expectedTabletsReachable: []*topodatapb.Tablet{{
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			}},
+			shouldErr: false,
 		},
 		{
-			name: "multiple tablets fail StopReplication",
+			name:       "multiple tablets fail StopReplication",
+			durability: "none",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -668,6 +935,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  100,
@@ -676,6 +944,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 				},
 				"zone1-0000000101": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  101,
@@ -686,10 +955,12 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 			ignoredTablets:           sets.NewString(),
 			expectedStatusMap:        nil,
 			expectedPrimaryStatusMap: nil,
+			expectedTabletsReachable: nil,
 			shouldErr:                true,
 		},
 		{
-			name: "slow tablet is the new primary requested",
+			name:       "slow tablet is the new primary requested",
+			durability: "none",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusDelays: map[string]time.Duration{
 					"zone1-0000000102": 1 * time.Second, // zone1-0000000102 is slow to respond but has to be included since it is the requested primary
@@ -721,6 +992,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  100,
@@ -729,6 +1001,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 				},
 				"zone1-0000000101": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  101,
@@ -737,6 +1010,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 				},
 				"zone1-0000000102": {
 					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  102,
@@ -763,6 +1037,25 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 					After:  &replicationdatapb.Status{Position: "102-after"},
 				},
 			},
+			expectedTabletsReachable: []*topodatapb.Tablet{{
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, {
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			}, {
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  102,
+				},
+			}},
 			waitReplicasTimeout:      time.Minute,
 			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
 			shouldErr:                false,
@@ -773,17 +1066,21 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			statusMap, primaryStatusMap, err := StopReplicationAndBuildStatusMaps(ctx, tt.tmc, &events.Reparent{}, tt.tabletMap, tt.waitReplicasTimeout, tt.ignoredTablets, tt.tabletToWaitFor, logger)
+			err := SetDurabilityPolicy(tt.durability)
+			require.NoError(t, err)
+			res, err := stopReplicationAndBuildStatusMaps(ctx, tt.tmc, &events.Reparent{}, tt.tabletMap, tt.waitReplicasTimeout, tt.ignoredTablets, tt.tabletToWaitFor, logger)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expectedStatusMap, statusMap, "StopReplicationStatus mismatch")
-			assert.Equal(t, tt.expectedPrimaryStatusMap, primaryStatusMap, "PrimaryStatusMap mismatch")
+			assert.Equal(t, tt.expectedStatusMap, res.statusMap, "StopReplicationStatus mismatch")
+			assert.Equal(t, tt.expectedPrimaryStatusMap, res.primaryStatusMap, "PrimaryStatusMap mismatch")
+			require.Equal(t, len(tt.expectedTabletsReachable), len(res.reachableTablets), "TabletsReached length mismatch")
+			for idx, tablet := range res.reachableTablets {
+				assert.True(t, topoproto.IsTabletInList(tablet, tt.expectedTabletsReachable), "TabletsReached[%d] not found - %s", idx, topoproto.TabletAliasString(tablet.Alias))
+			}
 		})
 	}
 }
@@ -801,8 +1098,8 @@ func TestReplicaWasRunning(t *testing.T) {
 			name: "io thread running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
-					IoThreadRunning:  true,
-					SqlThreadRunning: false,
+					IoState:  int32(mysql.ReplicationStateRunning),
+					SqlState: int32(mysql.ReplicationStateStopped),
 				},
 			},
 			expected:  true,
@@ -812,8 +1109,8 @@ func TestReplicaWasRunning(t *testing.T) {
 			name: "sql thread running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
-					IoThreadRunning:  false,
-					SqlThreadRunning: true,
+					IoState:  int32(mysql.ReplicationStateStopped),
+					SqlState: int32(mysql.ReplicationStateRunning),
 				},
 			},
 			expected:  true,
@@ -823,8 +1120,8 @@ func TestReplicaWasRunning(t *testing.T) {
 			name: "io and sql threads running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
-					IoThreadRunning:  true,
-					SqlThreadRunning: true,
+					IoState:  int32(mysql.ReplicationStateRunning),
+					SqlState: int32(mysql.ReplicationStateRunning),
 				},
 			},
 			expected:  true,
@@ -834,8 +1131,8 @@ func TestReplicaWasRunning(t *testing.T) {
 			name: "no replication threads running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
-					IoThreadRunning:  false,
-					SqlThreadRunning: false,
+					IoState:  int32(mysql.ReplicationStateStopped),
+					SqlState: int32(mysql.ReplicationStateStopped),
 				},
 			},
 			expected:  false,

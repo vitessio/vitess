@@ -291,14 +291,14 @@ func (fs *fuzzStore) callExecuteFetchAsApp() error {
 	return nil
 }
 
-// callInitMaster implements a wrapper
-// for fuzzing InitMaster
-func (fs *fuzzStore) callInitMaster() error {
+// callInitPrimary implements a wrapper
+// for fuzzing InitPrimary
+func (fs *fuzzStore) callInitPrimary() error {
 	tablet, err := fs.getTablet()
 	if err != nil {
 		return err
 	}
-	_, _ = fs.client.InitMaster(context.Background(), tablet)
+	_, _ = fs.client.InitPrimary(context.Background(), tablet, false)
 	return nil
 }
 
@@ -331,7 +331,7 @@ func (fs *fuzzStore) callStartReplication() error {
 	if err != nil {
 		return err
 	}
-	_ = fs.client.StartReplication(context.Background(), tablet)
+	_ = fs.client.StartReplication(context.Background(), tablet, false)
 	return nil
 }
 
@@ -346,25 +346,14 @@ func (fs *fuzzStore) callStopReplication() error {
 	return nil
 }
 
-// callMasterPosition implements a wrapper
-// for fuzzing MasterPosition
-func (fs *fuzzStore) callMasterPosition() error {
+// callPrimaryPosition implements a wrapper
+// for fuzzing PrimaryPosition
+func (fs *fuzzStore) callPrimaryPosition() error {
 	tablet, err := fs.getTablet()
 	if err != nil {
 		return err
 	}
-	_, _ = fs.client.MasterPosition(context.Background(), tablet)
-	return nil
-}
-
-// callDemoteMaster implements a wrapper
-// for fuzzing DemoteMaster
-func (fs *fuzzStore) callDemoteMaster() error {
-	tablet, err := fs.getTablet()
-	if err != nil {
-		return err
-	}
-	_, _ = fs.client.DemoteMaster(context.Background(), tablet)
+	_, _ = fs.client.PrimaryPosition(context.Background(), tablet)
 	return nil
 }
 
@@ -379,14 +368,14 @@ func (fs *fuzzStore) callReplicationStatus() error {
 	return nil
 }
 
-// callMasterStatus implements a wrapper
-// for fuzzing MasterStatus
-func (fs *fuzzStore) callMasterStatus() error {
+// callPrimaryStatus implements a wrapper
+// for fuzzing PrimaryStatus
+func (fs *fuzzStore) callPrimaryStatus() error {
 	tablet, err := fs.getTablet()
 	if err != nil {
 		return err
 	}
-	_, _ = fs.client.MasterStatus(context.Background(), tablet)
+	_, _ = fs.client.PrimaryStatus(context.Background(), tablet)
 	return nil
 }
 
@@ -401,17 +390,6 @@ func (fs *fuzzStore) callDemotePrimary() error {
 	return nil
 }
 
-// callUndoDemoteMaster implements a wrapper
-// for fuzzing UndoDemoteMaster
-func (fs *fuzzStore) callUndoDemoteMaster() error {
-	tablet, err := fs.getTablet()
-	if err != nil {
-		return err
-	}
-	_ = fs.client.UndoDemoteMaster(context.Background(), tablet)
-	return nil
-}
-
 // callUndoDemotePrimary implements a wrapper
 // for fuzzing UndoDemotePrimary
 func (fs *fuzzStore) callUndoDemotePrimary() error {
@@ -419,7 +397,7 @@ func (fs *fuzzStore) callUndoDemotePrimary() error {
 	if err != nil {
 		return err
 	}
-	_ = fs.client.UndoDemotePrimary(context.Background(), tablet)
+	_ = fs.client.UndoDemotePrimary(context.Background(), tablet, false)
 	return nil
 }
 
@@ -441,7 +419,7 @@ func (fs *fuzzStore) callPromoteReplica() error {
 	if err != nil {
 		return err
 	}
-	_, _ = fs.client.PromoteReplica(context.Background(), tablet)
+	_, _ = fs.client.PromoteReplica(context.Background(), tablet, false)
 	return nil
 }
 
@@ -543,9 +521,9 @@ func (fs *fuzzStore) callVReplicationWaitForPos() error {
 	return nil
 }
 
-// callSetMaster implements a wrapper
-// for fuzzing SetMaster
-func (fs *fuzzStore) callSetMaster() error {
+// callSetReplicationSource implements a wrapper
+// for fuzzing SetReplicationSource
+func (fs *fuzzStore) callSetReplicationSource() error {
 	tablet, err := fs.getTablet()
 	if err != nil {
 		return err
@@ -562,7 +540,7 @@ func (fs *fuzzStore) callSetMaster() error {
 	if err != nil {
 		return err
 	}
-	_ = fs.client.SetMaster(context.Background(), tablet, parent, int64(timeCreatedNS), pos, false)
+	_ = fs.client.SetReplicationSource(context.Background(), tablet, parent, int64(timeCreatedNS), pos, false, false)
 	return nil
 }
 
@@ -585,7 +563,7 @@ func (fs *fuzzStore) callInitReplica() error {
 	if err != nil {
 		return err
 	}
-	_ = fs.client.InitReplica(context.Background(), tablet, parent, replicationPosition, int64(timeCreatedNS))
+	_ = fs.client.InitReplica(context.Background(), tablet, parent, replicationPosition, int64(timeCreatedNS), false)
 	return nil
 }
 
@@ -624,7 +602,7 @@ func (fs *fuzzStore) executeInRandomOrder() {
 		var err error
 		switch execInt % maxTargets {
 		case 0:
-			err = fs.callInitMaster()
+			err = fs.callInitPrimary()
 		case 1:
 			err = fs.callResetReplication()
 		case 2:
@@ -634,17 +612,13 @@ func (fs *fuzzStore) executeInRandomOrder() {
 		case 4:
 			err = fs.callStopReplication()
 		case 5:
-			err = fs.callMasterPosition()
-		case 6:
-			err = fs.callDemoteMaster()
+			err = fs.callPrimaryPosition()
 		case 7:
 			err = fs.callReplicationStatus()
 		case 8:
-			err = fs.callMasterStatus()
+			err = fs.callPrimaryStatus()
 		case 9:
 			err = fs.callDemotePrimary()
-		case 10:
-			err = fs.callUndoDemoteMaster()
 		case 11:
 			err = fs.callUndoDemotePrimary()
 		case 12:
@@ -666,7 +640,7 @@ func (fs *fuzzStore) executeInRandomOrder() {
 		case 20:
 			err = fs.callVReplicationWaitForPos()
 		case 21:
-			err = fs.callSetMaster()
+			err = fs.callSetReplicationSource()
 		case 22:
 			err = fs.callInitReplica()
 		case 23:
@@ -692,7 +666,7 @@ func FuzzGRPCTMServer(data []byte) int {
 	t := &testing.T{}
 
 	// Listen on a random port
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return 0
 	}

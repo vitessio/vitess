@@ -178,6 +178,18 @@ func getTablet(tabletGrpcPort int, hostname string) *tabletpb.Tablet {
 	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
 }
 
+func filterResultForWarning(input string) string {
+	lines := strings.Split(input, "\n")
+	var result string
+	for _, line := range lines {
+		if strings.Contains(line, "WARNING: vtctl should only be used for VDiff workflows") {
+			continue
+		}
+		result = result + line + "\n"
+	}
+	return result
+}
+
 func filterResultWhenRunsForCoverage(input string) string {
 	if !*isCoverage {
 		return input
@@ -252,4 +264,20 @@ func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnPa
 
 	return cp
 
+}
+
+func filterDoubleDashArgs(args []string, version int) (filtered []string) {
+	if version > 13 {
+		return args
+	}
+
+	for _, arg := range args {
+		if arg == "--" {
+			continue
+		}
+
+		filtered = append(filtered, arg)
+	}
+
+	return filtered
 }

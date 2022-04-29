@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -31,9 +32,11 @@ import (
 
 const (
 	// BaseShowPrimary is the base query for fetching primary key info.
-	BaseShowPrimary = "SELECT table_name, column_name FROM information_schema.key_column_usage WHERE table_schema=database() AND constraint_name='PRIMARY' ORDER BY table_name, ordinal_position"
-	// BaseShowTableUniqueKey returns names of colunms covered by a given unique constraint on a given table, in key order
-	BaseShowTableUniqueKey = "SELECT column_name as column_name FROM information_schema.key_column_usage WHERE table_schema=database() AND table_name=%a AND constraint_name=%a ORDER BY ordinal_position"
+	BaseShowPrimary = `SELECT table_name as table_name, COLUMN_NAME as column_name
+		FROM INFORMATION_SCHEMA.COLUMNS
+		WHERE TABLE_SCHEMA = database()
+		AND COLUMN_KEY = 'PRI'
+		ORDER BY table_name, ordinal_position`
 	// ShowRowsRead is the query used to find the number of rows read.
 	ShowRowsRead = "show status like 'Innodb_rows_read'"
 
@@ -112,6 +115,9 @@ order by table_name, ordinal_position`
 from _vt.schemacopy 
 where table_schema = database() 
 order by table_name, ordinal_position`
+
+	// GetColumnNamesQueryPatternForTable is used for mocking queries in unit tests
+	GetColumnNamesQueryPatternForTable = `SELECT COLUMN_NAME.*TABLE_NAME.*%s.*`
 )
 
 // VTDatabaseInit contains all the schema creation queries needed to
@@ -131,7 +137,7 @@ var BaseShowTablesFields = []*querypb.Field{{
 	Database:     "information_schema",
 	OrgName:      "TABLE_NAME",
 	ColumnLength: 192,
-	Charset:      CharacterSetUtf8,
+	Charset:      collations.CollationUtf8ID,
 	Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 }, {
 	Name:         "t.table_type",
@@ -141,13 +147,13 @@ var BaseShowTablesFields = []*querypb.Field{{
 	Database:     "information_schema",
 	OrgName:      "TABLE_TYPE",
 	ColumnLength: 192,
-	Charset:      CharacterSetUtf8,
+	Charset:      collations.CollationUtf8ID,
 	Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 }, {
 	Name:         "unix_timestamp(t.create_time)",
 	Type:         querypb.Type_INT64,
 	ColumnLength: 11,
-	Charset:      CharacterSetBinary,
+	Charset:      collations.CollationBinaryID,
 	Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
 }, {
 	Name:         "t.table_comment",
@@ -157,19 +163,19 @@ var BaseShowTablesFields = []*querypb.Field{{
 	Database:     "information_schema",
 	OrgName:      "TABLE_COMMENT",
 	ColumnLength: 6144,
-	Charset:      CharacterSetUtf8,
+	Charset:      collations.CollationUtf8ID,
 	Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 }, {
 	Name:         "i.file_size",
 	Type:         querypb.Type_INT64,
 	ColumnLength: 11,
-	Charset:      CharacterSetBinary,
+	Charset:      collations.CollationBinaryID,
 	Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
 }, {
 	Name:         "i.allocated_size",
 	Type:         querypb.Type_INT64,
 	ColumnLength: 11,
-	Charset:      CharacterSetBinary,
+	Charset:      collations.CollationBinaryID,
 	Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
 }}
 

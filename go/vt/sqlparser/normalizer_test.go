@@ -42,7 +42,7 @@ func TestNormalize(t *testing.T) {
 		in:      "select * from t where v1 = 'aa'",
 		outstmt: "select * from t where v1 = :bv1",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.BytesBindVariable([]byte("aa")),
+			"bv1": sqltypes.StringBindVariable("aa"),
 		},
 	}, {
 		// placeholder
@@ -59,7 +59,7 @@ func TestNormalize(t *testing.T) {
 		in:      "select 'aa' from t",
 		outstmt: "select :bv1 from t",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.BytesBindVariable([]byte("aa")),
+			"bv1": sqltypes.StringBindVariable("aa"),
 		},
 	}, {
 		// int val
@@ -73,14 +73,14 @@ func TestNormalize(t *testing.T) {
 		in:      "select * from t where v1 = 1.2",
 		outstmt: "select * from t where v1 = :bv1",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.Float64BindVariable(1.2),
+			"bv1": sqltypes.DecimalBindVariable(1.2),
 		},
 	}, {
 		// multiple vals
 		in:      "select * from t where v1 = 1.2 and v2 = 2",
 		outstmt: "select * from t where v1 = :bv1 and v2 = :bv2",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.Float64BindVariable(1.2),
+			"bv1": sqltypes.DecimalBindVariable(1.2),
 			"bv2": sqltypes.Int64BindVariable(2),
 		},
 	}, {
@@ -103,7 +103,7 @@ func TestNormalize(t *testing.T) {
 		outstmt: "select * from t where v1 = :bv1 and v2 = :bv2",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.Int64BindVariable(1),
-			"bv2": sqltypes.BytesBindVariable([]byte("1")),
+			"bv2": sqltypes.StringBindVariable("1"),
 		},
 	}, {
 		// val should not be reused for non-select statements
@@ -128,7 +128,7 @@ func TestNormalize(t *testing.T) {
 		outstmt: "update a set v1 = :bv1 where v2 in ::bv2",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.Int64BindVariable(5),
-			"bv2": sqltypes.TestBindVariable([]interface{}{1, 4, 5}),
+			"bv2": sqltypes.TestBindVariable([]any{1, 4, 5}),
 		},
 	}, {
 		// Hex number values should work for selects
@@ -183,15 +183,15 @@ func TestNormalize(t *testing.T) {
 		in:      fmt.Sprintf("select * from t where v1 = '%256s' and v2 = '%256s'", "a", "a"),
 		outstmt: "select * from t where v1 = :bv1 and v2 = :bv1",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.BytesBindVariable([]byte(fmt.Sprintf("%256s", "a"))),
+			"bv1": sqltypes.StringBindVariable(fmt.Sprintf("%256s", "a")),
 		},
 	}, {
 		// Values greater than len 256 will not reuse.
 		in:      fmt.Sprintf("select * from t where v1 = '%257s' and v2 = '%257s'", "b", "b"),
 		outstmt: "select * from t where v1 = :bv1 and v2 = :bv2",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.BytesBindVariable([]byte(fmt.Sprintf("%257s", "b"))),
-			"bv2": sqltypes.BytesBindVariable([]byte(fmt.Sprintf("%257s", "b"))),
+			"bv1": sqltypes.StringBindVariable(fmt.Sprintf("%257s", "b")),
+			"bv2": sqltypes.StringBindVariable(fmt.Sprintf("%257s", "b")),
 		},
 	}, {
 		// bad int
@@ -220,14 +220,14 @@ func TestNormalize(t *testing.T) {
 		in:      "select * from t where v1 in (1, '2')",
 		outstmt: "select * from t where v1 in ::bv1",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.TestBindVariable([]interface{}{1, []byte("2")}),
+			"bv1": sqltypes.TestBindVariable([]any{1, "2"}),
 		},
 	}, {
 		// NOT IN clause
 		in:      "select * from t where v1 not in (1, '2')",
 		outstmt: "select * from t where v1 not in ::bv1",
 		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.TestBindVariable([]interface{}{1, []byte("2")}),
+			"bv1": sqltypes.TestBindVariable([]any{1, "2"}),
 		},
 	}, {
 		// Do not normalize cast/convert types
@@ -262,6 +262,28 @@ func TestNormalize(t *testing.T) {
 		if !reflect.DeepEqual(tc.outbv, bv) {
 			t.Errorf("Query:\n%s:\n%v, want\n%v", tc.in, bv, tc.outbv)
 		}
+	}
+}
+
+func TestNormalizeValidSQL(t *testing.T) {
+	for _, tcase := range validSQL {
+		t.Run(tcase.input, func(t *testing.T) {
+			if tcase.partialDDL || tcase.ignoreNormalizerTest {
+				return
+			}
+			tree, err := Parse(tcase.input)
+			require.NoError(t, err, tcase.input)
+			bv := make(map[string]*querypb.BindVariable)
+			known := make(BindVars)
+			err = Normalize(tree, NewReservedVars("vtg", known), bv)
+			require.NoError(t, err)
+			normalizerOutput := String(tree)
+			if normalizerOutput == "otheradmin" || normalizerOutput == "otherread" {
+				return
+			}
+			_, err = Parse(normalizerOutput)
+			require.NoError(t, err, normalizerOutput)
+		})
 	}
 }
 
@@ -357,7 +379,7 @@ func BenchmarkNormalizeVTGate(b *testing.B) {
 
 			// Normalize if possible and retry.
 			if CanNormalize(stmt) || MustRewriteAST(stmt, false) {
-				result, err := PrepareAST(stmt, NewReservedVars("vtg", reservedVars), bindVars, true, keyspace, SQLSelectLimitUnset)
+				result, err := PrepareAST(stmt, NewReservedVars("vtg", reservedVars), bindVars, true, keyspace, SQLSelectLimitUnset, "", nil)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -637,7 +659,7 @@ func benchmarkNormalization(b *testing.B, sqls []string) {
 			}
 
 			reservedVars := NewReservedVars("vtg", reserved)
-			_, err = PrepareAST(stmt, reservedVars, make(map[string]*querypb.BindVariable), true, "keyspace0", SQLSelectLimitUnset)
+			_, err = PrepareAST(stmt, reservedVars, make(map[string]*querypb.BindVariable), true, "keyspace0", SQLSelectLimitUnset, "", nil)
 			if err != nil {
 				b.Fatal(err)
 			}

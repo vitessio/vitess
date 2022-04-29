@@ -44,6 +44,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"github.com/google/uuid"
 )
@@ -83,6 +84,7 @@ var (
 // vtgateHandler implements the Listener interface.
 // It stores the Session in the ClientData of a Connection.
 type vtgateHandler struct {
+	mysql.UnimplementedHandler
 	mu sync.Mutex
 
 	vtg         *VTGate
@@ -101,8 +103,6 @@ func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {
 	defer vh.mu.Unlock()
 	vh.connections[c] = true
 }
-
-func (vh *vtgateHandler) ConnectionReady(_ *mysql.Conn) {}
 
 func (vh *vtgateHandler) numConnections() int {
 	vh.mu.Lock()
@@ -336,6 +336,11 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 
 func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {
 	return uint16(len(vh.session(c).GetWarnings()))
+}
+
+// ComBinlogDumpGTID is part of the mysql.Handler interface.
+func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, gtidSet mysql.GTIDSet) error {
+	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ComBinlogDumpGTID")
 }
 
 func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {

@@ -41,18 +41,15 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-const (
-	tabletGatewayImplementation = "tabletgateway"
-)
-
-func init() {
-	RegisterGatewayCreator(tabletGatewayImplementation, createTabletGateway)
-}
-
 var (
 	_ discovery.HealthCheck = (*discovery.HealthCheckImpl)(nil)
 	// CellsToWatch is the list of cells the healthcheck operates over. If it is empty, only the local cell is watched
 	CellsToWatch = flag.String("cells_to_watch", "", "comma-separated list of cells for watching tablets")
+
+	bufferImplementation = flag.String("buffer_implementation", "keyspace_events", "Allowed values: healthcheck (legacy implementation), keyspace_events (default)")
+	initialTabletTimeout = flag.Duration("gateway_initial_tablet_timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
+	// retryCount is the number of times a query will be retried on error
+	retryCount = flag.Int("retry-count", 2, "retry count")
 )
 
 // TabletGateway implements the Gateway interface.
@@ -76,17 +73,11 @@ type TabletGateway struct {
 	buffer *buffer.Buffer
 }
 
-func createTabletGateway(ctx context.Context, _ discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, _ int) Gateway {
-	// we ignore the passed in LegacyHealthCheck and let TabletGateway create it's own HealthCheck
-	return NewTabletGateway(ctx, nil /*discovery.Healthcheck*/, serv, cell)
-}
-
 func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, ts *topo.Server, cell, cellsToWatch string) discovery.HealthCheck {
 	return discovery.NewHealthCheck(ctx, retryDelay, timeout, ts, cell, cellsToWatch)
 }
 
 // NewTabletGateway creates and returns a new TabletGateway
-// NewTabletGateway is the default Gateway implementation
 func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, localCell string) *TabletGateway {
 	// hack to accomodate various users of gateway + tests
 	if hc == nil {
@@ -104,7 +95,7 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 		hc:                hc,
 		srvTopoServer:     serv,
 		localCell:         localCell,
-		retryCount:        *RetryCount,
+		retryCount:        *retryCount,
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 	}
 	gw.setupBuffering(ctx)
@@ -179,7 +170,25 @@ func (gw *TabletGateway) RegisterStats() {
 }
 
 // WaitForTablets is part of the Gateway interface.
-func (gw *TabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) error {
+func (gw *TabletGateway) WaitForTablets(tabletTypesToWait []topodatapb.TabletType) (err error) {
+	log.Infof("Gateway waiting for serving tablets of types %v ...", tabletTypesToWait)
+	ctx, cancel := context.WithTimeout(context.Background(), *initialTabletTimeout)
+	defer cancel()
+
+	defer func() {
+		switch err {
+		case nil:
+			// Log so we know everything is fine.
+			log.Infof("Waiting for tablets completed")
+		case context.DeadlineExceeded:
+			// In this scenario, we were able to reach the
+			// topology service, but some tablets may not be
+			// ready. We just warn and keep going.
+			log.Warningf("Timeout waiting for all keyspaces / shards to have healthy tablets of types %v, may be in degraded mode", tabletTypesToWait)
+			err = nil
+		}
+	}()
+
 	// Skip waiting for tablets if we are not told to do so.
 	if len(tabletTypesToWait) == 0 {
 		return nil
@@ -222,7 +231,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
 	// for transactions, we connect to a specific tablet instead of letting gateway choose one
 	if inTransaction && target.TabletType != topodatapb.TabletType_PRIMARY {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "gateway's query service can only be used for non-transactional queries on replicas")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tabletGateway's query service can only be used for non-transactional queries on replicas")
 	}
 	var tabletLastUsed *topodatapb.Tablet
 	var err error
@@ -375,13 +384,13 @@ func (gw *TabletGateway) shuffleTablets(cell string, tablets []*discovery.Tablet
 		}
 	}
 
-	//shuffle in same cell tablets
+	// shuffle in same cell tablets
 	for i := sameCellMax; i > 0; i-- {
 		swap := rand.Intn(i + 1)
 		tablets[i], tablets[swap] = tablets[swap], tablets[i]
 	}
 
-	//shuffle in diff cell tablets
+	// shuffle in diff cell tablets
 	for i, diffCellMin := length-1, sameCellMax+1; i > diffCellMin; i-- {
 		swap := rand.Intn(i-sameCellMax) + diffCellMin
 		tablets[i], tablets[swap] = tablets[swap], tablets[i]

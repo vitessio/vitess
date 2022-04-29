@@ -78,6 +78,10 @@ func (flv *filePosFlavor) stopIOThreadCommand() string {
 	return "unsupported"
 }
 
+func (flv *filePosFlavor) stopSQLThreadCommand() string {
+	return "unsupported"
+}
+
 func (flv *filePosFlavor) startSQLThreadCommand() string {
 	return "unsupported"
 }
@@ -112,7 +116,11 @@ func (flv *filePosFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 			return nil, ParseErrorPacket(result)
 		}
 
-		event := &filePosBinlogEvent{binlogEvent: binlogEvent(result[1:])}
+		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(result[1:])
+		if err != nil {
+			return nil, err
+		}
+		event := newFilePosBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 		switch event.Type() {
 		case eGTIDEvent, eAnonymousGTIDEvent, ePreviousGTIDsEvent, eMariaGTIDListEvent:
 			// Don't transmit fake or irrelevant events because we should not
@@ -265,6 +273,10 @@ func (*filePosFlavor) startReplicationUntilAfter(pos Position) string {
 	return "unsupported"
 }
 
+func (*filePosFlavor) startSQLThreadUntilAfter(pos Position) string {
+	return "unsupported"
+}
+
 // enableBinlogPlaybackCommand is part of the Flavor interface.
 func (*filePosFlavor) enableBinlogPlaybackCommand() string {
 	return ""
@@ -278,4 +290,9 @@ func (*filePosFlavor) disableBinlogPlaybackCommand() string {
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (*filePosFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize56
+}
+
+// supportsFastDropTable is part of the Flavor interface.
+func (*filePosFlavor) supportsFastDropTable(c *Conn) (bool, error) {
+	return false, nil
 }

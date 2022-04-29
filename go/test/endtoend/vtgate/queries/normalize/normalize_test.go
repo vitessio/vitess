@@ -25,11 +25,12 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
 )
 
 func TestNormalizeAllFields(t *testing.T) {
@@ -58,8 +59,8 @@ func TestNormalizeAllFields(t *testing.T) {
 	assert.True(t, found, "correctly normalized record not found in planner cache")
 }
 
-func getPlanCache(vtgateHostPort string) ([]map[string]interface{}, error) {
-	var results []map[string]interface{}
+func getPlanCache(vtgateHostPort string) ([]map[string]any, error) {
+	var results []map[string]any
 	client := http.Client{
 		Timeout: 10 * time.Second,
 	}

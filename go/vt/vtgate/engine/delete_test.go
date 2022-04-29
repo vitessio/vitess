@@ -33,11 +33,13 @@ import (
 
 func TestDeleteUnsharded(t *testing.T) {
 	del := &Delete{
-		DML: DML{
-			Opcode: Unsharded,
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks",
-				Sharded: false,
+		DML: &DML{
+			RoutingParameters: &RoutingParameters{
+				Opcode: Unsharded,
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: false,
+				},
 			},
 			Query: "dummy_delete",
 		},
@@ -58,21 +60,23 @@ func TestDeleteUnsharded(t *testing.T) {
 
 	vc = &loggingVCursor{}
 	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, "cannot send query to multiple shards for un-sharded database: []")
+	require.EqualError(t, err, "Keyspace 'ks' does not have exactly one shard: []")
 }
 
 func TestDeleteEqual(t *testing.T) {
 	vindex, _ := vindexes.NewHash("", nil)
 	del := &Delete{
-		DML: DML{
-			Opcode: Equal,
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks",
-				Sharded: true,
+		DML: &DML{
+			RoutingParameters: &RoutingParameters{
+				Opcode: Equal,
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				Vindex: vindex,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			},
-			Query:  "dummy_delete",
-			Vindex: vindex,
-			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
+			Query: "dummy_delete",
 		},
 	}
 
@@ -80,7 +84,7 @@ func TestDeleteEqual(t *testing.T) {
 	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		`ExecuteMultiShard ks.-20: dummy_delete {} true true`,
 	})
 
@@ -94,15 +98,17 @@ func TestDeleteEqual(t *testing.T) {
 func TestDeleteEqualMultiCol(t *testing.T) {
 	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
 	del := &Delete{
-		DML: DML{
-			Opcode: Equal,
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks",
-				Sharded: true,
+		DML: &DML{
+			RoutingParameters: &RoutingParameters{
+				Opcode: Equal,
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				Vindex: vindex,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
 			},
-			Query:  "dummy_delete",
-			Vindex: vindex,
-			Values: []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+			Query: "dummy_delete",
 		},
 	}
 
@@ -128,15 +134,17 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 		"to":    "toc",
 	})
 	del := &Delete{
-		DML: DML{
-			Opcode: Equal,
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks",
-				Sharded: true,
+		DML: &DML{
+			RoutingParameters: &RoutingParameters{
+				Opcode: Equal,
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				Vindex: vindex,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			},
-			Query:  "dummy_delete",
-			Vindex: vindex,
-			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
+			Query: "dummy_delete",
 		},
 	}
 
@@ -146,10 +154,12 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		// This lookup query will return no rows. So, the DML will not be sent anywhere.
 		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
+		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationNone()`,
 	})
 }
 
 func TestDeleteEqualNoScatter(t *testing.T) {
+	t.Skip("planner does not produces this plan anymore")
 	vindex, _ := vindexes.NewLookupUnique("", map[string]string{
 		"table":      "lkp",
 		"from":       "from",
@@ -157,15 +167,17 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 		"write_only": "true",
 	})
 	del := &Delete{
-		DML: DML{
-			Opcode: Equal,
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks",
-				Sharded: true,
+		DML: &DML{
+			RoutingParameters: &RoutingParameters{
+				Opcode: Equal,
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				Vindex: vindex,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			},
-			Query:  "dummy_delete",
-			Vindex: vindex,
-			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
+			Query: "dummy_delete",
 		},
 	}
 
@@ -177,12 +189,14 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 func TestDeleteOwnedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
-		DML: DML{
-			Opcode:           Equal,
-			Keyspace:         ks.Keyspace,
+		DML: &DML{
+			RoutingParameters: &RoutingParameters{
+				Opcode:   Equal,
+				Keyspace: ks.Keyspace,
+				Vindex:   ks.Vindexes["hash"],
+				Values:   []evalengine.Expr{evalengine.NewLiteralInt(1)},
+			},
 			Query:            "dummy_delete",
-			Vindex:           ks.Vindexes["hash"],
-			Values:           []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"],
@@ -204,7 +218,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ResolveDestinations sharded [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
@@ -220,7 +234,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ResolveDestinations sharded [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
@@ -243,7 +257,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ResolveDestinations sharded [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
@@ -261,12 +275,14 @@ func TestDeleteOwnedVindex(t *testing.T) {
 func TestDeleteOwnedVindexMultiCol(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
-		DML: DML{
-			Opcode:           Equal,
-			Keyspace:         ks.Keyspace,
+		DML: &DML{
+			RoutingParameters: &RoutingParameters{
+				Opcode:   Equal,
+				Keyspace: ks.Keyspace,
+				Vindex:   ks.Vindexes["rg_vdx"],
+				Values:   []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+			},
 			Query:            "dummy_delete",
-			Vindex:           ks.Vindexes["rg_vdx"],
-			Values:           []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
 			Table:            ks.Tables["rg_tbl"],
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["rg_vdx"],
@@ -342,11 +358,13 @@ func TestDeleteOwnedVindexMultiCol(t *testing.T) {
 func TestDeleteSharded(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
-		DML: DML{
-			Opcode:   Scatter,
-			Keyspace: ks.Keyspace,
-			Query:    "dummy_delete",
-			Table:    ks.Tables["t2"],
+		DML: &DML{
+			RoutingParameters: &RoutingParameters{
+				Opcode:   Scatter,
+				Keyspace: ks.Keyspace,
+			},
+			Query: "dummy_delete",
+			Table: ks.Tables["t2"],
 		},
 	}
 
@@ -367,11 +385,13 @@ func TestDeleteSharded(t *testing.T) {
 func TestDeleteShardedStreaming(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
-		DML: DML{
-			Opcode:   Scatter,
-			Keyspace: ks.Keyspace,
-			Query:    "dummy_delete",
-			Table:    ks.Tables["t2"],
+		DML: &DML{
+			RoutingParameters: &RoutingParameters{
+				Opcode:   Scatter,
+				Keyspace: ks.Keyspace,
+			},
+			Query: "dummy_delete",
+			Table: ks.Tables["t2"],
 		},
 	}
 
@@ -389,9 +409,11 @@ func TestDeleteShardedStreaming(t *testing.T) {
 func TestDeleteScatterOwnedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
-		DML: DML{
-			Opcode:           Scatter,
-			Keyspace:         ks.Keyspace,
+		DML: &DML{
+			RoutingParameters: &RoutingParameters{
+				Opcode:   Scatter,
+				Keyspace: ks.Keyspace,
+			},
 			Query:            "dummy_delete",
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
@@ -472,15 +494,17 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 func TestDeleteInChangedVindexMultiCol(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
-		DML: DML{
-			Opcode:   In,
-			Keyspace: ks.Keyspace,
-			Query:    "dummy_update",
-			Vindex:   ks.Vindexes["rg_vdx"],
-			Values: []evalengine.Expr{
-				&evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
-				evalengine.NewLiteralInt(3),
+		DML: &DML{
+			RoutingParameters: &RoutingParameters{
+				Opcode:   IN,
+				Keyspace: ks.Keyspace,
+				Vindex:   ks.Vindexes["rg_vdx"],
+				Values: []evalengine.Expr{
+					evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+					evalengine.NewLiteralInt(3),
+				},
 			},
+			Query:            "dummy_update",
 			Table:            ks.Tables["rg_tbl"],
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["rg_vdx"],
@@ -515,5 +539,42 @@ func TestDeleteInChangedVindexMultiCol(t *testing.T) {
 		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"7" toc: type:VARBINARY value:"\x02N\xb1\x90ɢ\xfa\x16\x9c" true`,
 		// Finally, the actual delete, which is also sent to -20, same route as the subquery.
 		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+	})
+}
+
+func TestDeleteEqualSubshard(t *testing.T) {
+	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	del := &Delete{
+		DML: &DML{
+			RoutingParameters: &RoutingParameters{
+				Opcode: SubShard,
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				Vindex: vindex,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
+			},
+			Query: "dummy_delete",
+		},
+	}
+
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"-20", "20-"}
+	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(1)]] Destinations:DestinationKeyRange(01-02)`,
+		`ExecuteMultiShard ks.-20: dummy_delete {} ks.20-: dummy_delete {} true false`,
+	})
+
+	vc.Rewind()
+	// as it is single shard so autocommit should be allowed.
+	vc.shardForKsid = []string{"-20"}
+	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(1)]] Destinations:DestinationKeyRange(01-02)`,
+		`ExecuteMultiShard ks.-20: dummy_delete {} true true`,
 	})
 }

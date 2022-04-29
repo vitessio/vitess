@@ -42,6 +42,7 @@ const (
 	LockOrActiveTransaction
 	MixOfGroupFuncAndFields
 	DupFieldName
+	WrongValueCountOnRow
 
 	// failed precondition
 	NoDB

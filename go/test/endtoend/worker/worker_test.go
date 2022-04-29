@@ -30,13 +30,13 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/sharding"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/sharding"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -63,7 +63,7 @@ var (
 	shard1Tablets    []*cluster.Vttablet
 	workerTestOffset = 0
 	commonTabletArg  = []string{
-		"-binlog_use_v3_resharding_mode=true"}
+		"--binlog_use_v3_resharding_mode=true"}
 	vtWorkerTest = `
 	create table worker_test (
 	id bigint unsigned,
@@ -261,7 +261,7 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 		// If MySQL is down, we wait until vtworker retried at least once to make
 		// sure it reached the point where a write failed due to MySQL being down.
 		// There should be two retries at least, one for each destination shard.
-		pollForVarsWorkerRetryCount(t, 1)
+		pollForVarsWorkerRetryCount(t, 2)
 
 		// Bring back primaries. Since we test with semi-sync now, we need at least
 		// one replica for the new primary. This test is already quite expensive,
@@ -304,11 +304,10 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 	}
 
 	// Reparent away from the old primaries.
-	localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
-		"test_keyspace/-80", "-new_primary", shard0Replica.Alias)
-
-	localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
-		"test_keyspace/80-", "-new_primary", shard1Replica.Alias)
+	localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard",
+		"test_keyspace/-80", "--new_primary", shard0Replica.Alias)
+	localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard",
+		"test_keyspace/80-", "--new_primary", shard1Replica.Alias)
 
 	proc.Wait()
 
@@ -321,9 +320,9 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 	cluster.WaitForReplicationPos(t, shard0Replica, shard0RdOnly1, "localhost", 60)
 	cluster.WaitForReplicationPos(t, shard1Replica, shard1RdOnly1, "localhost", 60)
 
-	err = localCluster.VtworkerProcess.ExecuteVtworkerCommand(localCluster.GetAndReservePort(), localCluster.GetAndReservePort(), "-cell", cell,
+	err = localCluster.VtworkerProcess.ExecuteVtworkerCommand(localCluster.GetAndReservePort(), localCluster.GetAndReservePort(), "--cell", cell,
 		"--use_v3_resharding_mode=true",
-		"SplitClone",
+		"SplitClone", "--",
 		"--online=false",
 		"--min_healthy_rdonly_tablets", "1",
 		"test_keyspace/0")
@@ -362,9 +361,9 @@ func runSplitDiff(t *testing.T, keyspaceShard string) {
 
 	err := localCluster.VtworkerProcess.ExecuteVtworkerCommand(localCluster.GetAndReservePort(),
 		localCluster.GetAndReservePort(),
-		"-cell", cell,
+		"--cell", cell,
 		"--use_v3_resharding_mode=true",
-		"SplitDiff",
+		"SplitDiff", "--",
 		"--min_healthy_rdonly_tablets", "1",
 		keyspaceShard)
 	assert.Nil(t, err)
@@ -373,7 +372,7 @@ func runSplitDiff(t *testing.T, keyspaceShard string) {
 
 func pollForVars(t *testing.T, mssg string) {
 	startTime := time.Now()
-	var resultMap map[string]interface{}
+	var resultMap map[string]any
 	var err error
 	var workerState string
 	for {
@@ -390,7 +389,7 @@ func pollForVars(t *testing.T, mssg string) {
 
 func pollForVarsWorkerRetryCount(t *testing.T, count int) {
 	startTime := time.Now()
-	var resultMap map[string]interface{}
+	var resultMap map[string]any
 	var err error
 	var workerRetryCountInt int
 	for {
@@ -406,7 +405,7 @@ func pollForVarsWorkerRetryCount(t *testing.T, count int) {
 		}
 		continue
 	}
-	assert.Greater(t, workerRetryCountInt, count)
+	assert.GreaterOrEqual(t, workerRetryCountInt, count)
 }
 
 // vttablet: the Tablet instance to modify.
@@ -526,7 +525,7 @@ func runShardTablets(t *testing.T, shardName string, tabletArr []*cluster.Vttabl
 
 func copySchemaToDestinationShard(t *testing.T) {
 	for _, keyspaceShard := range []string{"test_keyspace/-80", "test_keyspace/80-"} {
-		err := localCluster.VtctlclientProcess.ExecuteCommand("CopySchemaShard", "--exclude_tables", "unrelated", "test_keyspace/0", keyspaceShard)
+		err := localCluster.VtctlclientProcess.ExecuteCommand("CopySchemaShard", "--", "--exclude_tables", "unrelated", "test_keyspace/0", keyspaceShard)
 		assert.Nil(t, err)
 	}
 }

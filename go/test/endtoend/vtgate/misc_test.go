@@ -21,12 +21,13 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
 )
 
 func TestSelectNull(t *testing.T) {
@@ -285,15 +286,15 @@ func TestSwitchBetweenOlapAndOltp(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.AssertMatches(t, conn, "select @@workload", `[[VARBINARY("OLTP")]]`)
+	utils.AssertMatches(t, conn, "select @@workload", `[[VARCHAR("OLTP")]]`)
 
 	utils.Exec(t, conn, "set workload='olap'")
 
-	utils.AssertMatches(t, conn, "select @@workload", `[[VARBINARY("OLAP")]]`)
+	utils.AssertMatches(t, conn, "select @@workload", `[[VARCHAR("OLAP")]]`)
 
 	utils.Exec(t, conn, "set workload='oltp'")
 
-	utils.AssertMatches(t, conn, "select @@workload", `[[VARBINARY("OLTP")]]`)
+	utils.AssertMatches(t, conn, "select @@workload", `[[VARCHAR("OLTP")]]`)
 }
 
 func TestFoundRowsOnDualQueries(t *testing.T) {
@@ -303,7 +304,7 @@ func TestFoundRowsOnDualQueries(t *testing.T) {
 	defer conn.Close()
 
 	utils.Exec(t, conn, "select 42")
-	utils.AssertMatches(t, conn, "select found_rows()", "[[UINT64(1)]]")
+	utils.AssertMatches(t, conn, "select found_rows()", "[[INT64(1)]]")
 }
 
 func TestUseStmtInOLAP(t *testing.T) {
@@ -528,7 +529,7 @@ func TestRenameFieldsOnOLAP(t *testing.T) {
 	assert.Equal(t, `Tables_in_ks`, fmt.Sprintf("%v", qr.Fields[0].Name))
 	_ = utils.Exec(t, conn, "use mysql")
 	qr = utils.Exec(t, conn, "select @@workload")
-	assert.Equal(t, `[[VARBINARY("OLAP")]]`, fmt.Sprintf("%v", qr.Rows))
+	assert.Equal(t, `[[VARCHAR("OLAP")]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 func TestSelectEqualUniqueOuterJoinRightPredicate(t *testing.T) {
@@ -571,10 +572,10 @@ func TestSQLSelectLimit(t *testing.T) {
 		*/
 
 		//	without order by the results are not deterministic for testing purpose. Checking row count only.
-		qr := utils.Exec(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash")
+		qr := utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash")
 		assert.Equal(t, 2, len(qr.Rows))
 
-		qr = utils.Exec(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash limit 3")
+		qr = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash limit 3")
 		assert.Equal(t, 3, len(qr.Rows))
 	}
 }
@@ -650,7 +651,7 @@ func TestUnionWithManyInfSchemaQueries(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, `SELECT /* GEN4_COMPARE_ONLY_GEN4 */ 
+	utils.Exec(t, conn, `SELECT /*vt+ PLANNER=gen4 */ 
                     TABLE_SCHEMA,
                     TABLE_NAME
                 FROM
@@ -802,6 +803,16 @@ func TestFilterAfterLeftJoin(t *testing.T) {
 	utils.Exec(t, conn, "insert into t1 (id1,id2) values (2, 3)")
 	utils.Exec(t, conn, "insert into t1 (id1,id2) values (3, 2)")
 
-	query := "select /* GEN4_COMPARE_ONLY_GEN4 */ A.id1, A.id2 from t1 as A left join t1 as B on A.id1 = B.id2 WHERE B.id1 IS NULL"
+	query := "select /*vt+ PLANNER=gen4 */ A.id1, A.id2 from t1 as A left join t1 as B on A.id1 = B.id2 WHERE B.id1 IS NULL"
 	utils.AssertMatches(t, conn, query, `[[INT64(1) INT64(10)]]`)
+}
+
+func TestDescribeVindex(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.AssertContainsError(t, conn, "describe hash", "'vt_ks.hash' doesn't exist")
 }

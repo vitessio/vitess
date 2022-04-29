@@ -66,17 +66,24 @@ type flavor interface {
 	// restartReplicationCommands returns the commands to stop, reset and start the replication.
 	restartReplicationCommands() []string
 
-	// startReplicationUntilAfter will restart replication, but only allow it
+	// startReplicationUntilAfter will start replication, but only allow it
 	// to run until `pos` is reached. After reaching pos, replication will be stopped again
 	startReplicationUntilAfter(pos Position) string
+
+	// startSQLThreadUntilAfter will start replication's sql thread(s), but only allow it
+	// to run until `pos` is reached. After reaching pos, it will be stopped again
+	startSQLThreadUntilAfter(pos Position) string
 
 	// stopReplicationCommand returns the command to stop the replication.
 	stopReplicationCommand() string
 
-	// stopIOThreadCommand returns the command to stop the replica's io thread only.
+	// stopIOThreadCommand returns the command to stop the replica's IO thread only.
 	stopIOThreadCommand() string
 
-	// startSQLThreadCommand returns the command to start the replica's sql thread only.
+	// stopSQLThreadCommand returns the command to stop the replica's SQL thread(s) only.
+	stopSQLThreadCommand() string
+
+	// startSQLThreadCommand returns the command to start the replica's SQL thread only.
 	startSQLThreadCommand() string
 
 	// sendBinlogDumpCommand sends the packet required to start
@@ -120,12 +127,40 @@ type flavor interface {
 	disableBinlogPlaybackCommand() string
 
 	baseShowTablesWithSizes() string
+
+	// SupportsFastDropTable checks if the database server supports fast DROP TABLE operations that do not
+	// lock the buffer pool and other queries.
+	// Specifically, this is supported in MySQL 8.0.23 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-23.html
+	supportsFastDropTable(c *Conn) (bool, error)
 }
 
 // flavors maps flavor names to their implementation.
 // Flavors need to register only if they support being specified in the
 // connection parameters.
 var flavors = make(map[string]func() flavor)
+
+// serverVersionAtLeast returns true if current server is at least given value.
+// Example: if input is []int{8, 0, 23}... the function returns 'true' if we're on MySQL 8.0.23, 8.0.24, ...
+func serverVersionAtLeast(serverVersion string, parts ...int) (bool, error) {
+	versionPrefix := strings.Split(serverVersion, "-")[0]
+	versionTokens := strings.Split(versionPrefix, ".")
+	for i, part := range parts {
+		if len(versionTokens) <= i {
+			return false, nil
+		}
+		tokenValue, err := strconv.Atoi(versionTokens[i])
+		if err != nil {
+			return false, err
+		}
+		if tokenValue > part {
+			return true, nil
+		}
+		if tokenValue < part {
+			return false, nil
+		}
+	}
+	return true, nil
+}
 
 // fillFlavor fills in c.Flavor. If the params specify the flavor,
 // that is used. Otherwise, we auto-detect.
@@ -161,6 +196,12 @@ func (c *Conn) fillFlavor(params *ConnParams) {
 	default:
 		c.flavor = mysqlFlavor56{}
 	}
+}
+
+// ServerVersionAtLeast returns 'true' if server version is equal or greater than given parts. e.g.
+// "8.0.14-log" is at least [8, 0, 13] and [8, 0, 14], but not [8, 0, 15]
+func (c *Conn) ServerVersionAtLeast(parts ...int) (bool, error) {
+	return serverVersionAtLeast(c.ServerVersion, parts...)
 }
 
 //
@@ -202,19 +243,26 @@ func (c *Conn) PrimaryFilePosition() (Position, error) {
 	}, nil
 }
 
-// StartReplicationCommand returns the command to start the replication.
+// StartReplicationCommand returns the command to start replication.
 func (c *Conn) StartReplicationCommand() string {
 	return c.flavor.startReplicationCommand()
 }
 
-// RestartReplicationCommands returns the commands to stop, reset and start the replication.
+// RestartReplicationCommands returns the commands to stop, reset and start replication.
 func (c *Conn) RestartReplicationCommands() []string {
 	return c.flavor.restartReplicationCommands()
 }
 
-// StartReplicationUntilAfterCommand returns the command to start the replication.
+// StartReplicationUntilAfterCommand returns the command to start replication.
 func (c *Conn) StartReplicationUntilAfterCommand(pos Position) string {
 	return c.flavor.startReplicationUntilAfter(pos)
+}
+
+// StartSQLThreadUntilAfterCommand returns the command to start the replica's SQL
+// thread(s) and have it run until it has reached the given position, at which point
+// it will stop.
+func (c *Conn) StartSQLThreadUntilAfterCommand(pos Position) string {
+	return c.flavor.startSQLThreadUntilAfter(pos)
 }
 
 // StopReplicationCommand returns the command to stop the replication.
@@ -225,6 +273,11 @@ func (c *Conn) StopReplicationCommand() string {
 // StopIOThreadCommand returns the command to stop the replica's io thread.
 func (c *Conn) StopIOThreadCommand() string {
 	return c.flavor.stopIOThreadCommand()
+}
+
+// StopSQLThreadCommand returns the command to stop the replica's SQL thread(s).
+func (c *Conn) StopSQLThreadCommand() string {
+	return c.flavor.stopSQLThreadCommand()
 }
 
 // StartSQLThreadCommand returns the command to start the replica's SQL thread.
@@ -316,8 +369,10 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	status := ReplicationStatus{
 		SourceHost: fields["Master_Host"],
 		// These fields are returned from the underlying DB and cannot be renamed
-		IOThreadRunning:  fields["Slave_IO_Running"] == "Yes" || fields["Slave_IO_Running"] == "Connecting",
-		SQLThreadRunning: fields["Slave_SQL_Running"] == "Yes",
+		IOState:      ReplicationStatusToState(fields["Slave_IO_Running"]),
+		LastIOError:  fields["Last_IO_Error"],
+		SQLState:     ReplicationStatusToState(fields["Slave_SQL_Running"]),
+		LastSQLError: fields["Last_SQL_Error"],
 	}
 	parseInt, _ := strconv.ParseInt(fields["Master_Port"], 10, 0)
 	status.SourcePort = int(parseInt)
@@ -424,4 +479,11 @@ func (c *Conn) DisableBinlogPlaybackCommand() string {
 // BaseShowTables returns a query that shows tables and their sizes
 func (c *Conn) BaseShowTables() string {
 	return c.flavor.baseShowTablesWithSizes()
+}
+
+// SupportsFastDropTable checks if the database server supports fast DROP TABLE operations that do not
+// lock the buffer pool and other queries.
+// Specifically, this is supported in MySQL 8.0.23 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-23.html
+func (c *Conn) SupportsFastDropTable() (bool, error) {
+	return c.flavor.supportsFastDropTable(c)
 }

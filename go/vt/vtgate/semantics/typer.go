@@ -44,6 +44,7 @@ func newTyper() *typer {
 
 var typeInt32 = Type{Type: sqltypes.Int32}
 var decimal = Type{Type: sqltypes.Decimal}
+var floatval = Type{Type: sqltypes.Float64}
 
 func (t *typer) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
@@ -53,8 +54,10 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 			t.exprTypes[node] = typeInt32
 		case sqlparser.StrVal:
 			t.exprTypes[node] = Type{Type: sqltypes.VarChar} // TODO - add system default collation name
-		case sqlparser.FloatVal:
+		case sqlparser.DecimalVal:
 			t.exprTypes[node] = decimal
+		case sqlparser.FloatVal:
+			t.exprTypes[node] = floatval
 		}
 	case *sqlparser.FuncExpr:
 		code, ok := engine.SupportedAggregates[node.Name.Lowered()]

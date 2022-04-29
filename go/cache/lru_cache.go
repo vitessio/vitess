@@ -41,28 +41,30 @@ type LRUCache struct {
 	// list & table contain *entry objects.
 	list  *list.List
 	table map[string]*list.Element
-	cost  func(interface{}) int64
+	cost  func(any) int64
 
 	size      int64
 	capacity  int64
 	evictions int64
+	hits      int64
+	misses    int64
 }
 
 // Item is what is stored in the cache
 type Item struct {
 	Key   string
-	Value interface{}
+	Value any
 }
 
 type entry struct {
 	key          string
-	value        interface{}
+	value        any
 	size         int64
 	timeAccessed time.Time
 }
 
 // NewLRUCache creates a new empty cache with the given capacity.
-func NewLRUCache(capacity int64, cost func(interface{}) int64) *LRUCache {
+func NewLRUCache(capacity int64, cost func(any) int64) *LRUCache {
 	return &LRUCache{
 		list:     list.New(),
 		table:    make(map[string]*list.Element),
@@ -73,20 +75,22 @@ func NewLRUCache(capacity int64, cost func(interface{}) int64) *LRUCache {
 
 // Get returns a value from the cache, and marks the entry as most
 // recently used.
-func (lru *LRUCache) Get(key string) (v interface{}, ok bool) {
+func (lru *LRUCache) Get(key string) (v any, ok bool) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
 	element := lru.table[key]
 	if element == nil {
+		lru.misses++
 		return nil, false
 	}
 	lru.moveToFront(element)
+	lru.hits++
 	return element.Value.(*entry).value, true
 }
 
 // Set sets a value in the cache.
-func (lru *LRUCache) Set(key string, value interface{}) bool {
+func (lru *LRUCache) Set(key string, value any) bool {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
@@ -170,9 +174,23 @@ func (lru *LRUCache) Evictions() int64 {
 	return lru.evictions
 }
 
+// Hits returns number of cache hits since creation
+func (lru *LRUCache) Hits() int64 {
+	lru.mu.Lock()
+	defer lru.mu.Unlock()
+	return lru.hits
+}
+
+// Misses returns number of cache misses since creation
+func (lru *LRUCache) Misses() int64 {
+	lru.mu.Lock()
+	defer lru.mu.Unlock()
+	return lru.misses
+}
+
 // ForEach yields all the values for the cache, ordered from most recently
 // used to least recently used.
-func (lru *LRUCache) ForEach(callback func(value interface{}) bool) {
+func (lru *LRUCache) ForEach(callback func(value any) bool) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
@@ -198,7 +216,7 @@ func (lru *LRUCache) Items() []Item {
 	return items
 }
 
-func (lru *LRUCache) updateInplace(element *list.Element, value interface{}) {
+func (lru *LRUCache) updateInplace(element *list.Element, value any) {
 	valueSize := lru.cost(value)
 	sizeDiff := valueSize - element.Value.(*entry).size
 	element.Value.(*entry).value = value
@@ -213,7 +231,7 @@ func (lru *LRUCache) moveToFront(element *list.Element) {
 	element.Value.(*entry).timeAccessed = time.Now()
 }
 
-func (lru *LRUCache) addNew(key string, value interface{}) {
+func (lru *LRUCache) addNew(key string, value any) {
 	newEntry := &entry{key, value, lru.cost(value), time.Now()}
 	element := lru.list.PushFront(newEntry)
 	lru.table[key] = element

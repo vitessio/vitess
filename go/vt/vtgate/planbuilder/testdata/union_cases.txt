@@ -5,7 +5,7 @@
   "Original": "select id from user union all select id from music",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -30,7 +30,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -41,7 +41,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -60,16 +60,20 @@ Gen4 plan same as above
   "Original": "select id from user union select id from music",
   "Instructions": {
     "OperatorType": "Distinct",
+    "Collations": [
+      "(0:1)"
+    ],
+    "ResultColumns": 1,
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id from `user` where 1 != 1 union select id from music where 1 != 1",
-        "Query": "select id from `user` union select id from music",
+        "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1 union select id, weight_string(id) from music where 1 != 1",
+        "Query": "select id, weight_string(id) from `user` union select id, weight_string(id) from music",
         "Table": "`user`"
       }
     ]
@@ -86,7 +90,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -101,7 +105,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -133,7 +137,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -152,7 +156,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -177,7 +181,7 @@ Gen4 plan same as above
   "Original": "select col1, col2 from user union all select col1, col2 from user_extra",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -196,7 +200,7 @@ Gen4 plan same as above
   "Original": "select * from (select * from user union all select * from user_extra) as t",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -215,7 +219,7 @@ Gen4 plan same as above
   "Original": "select col1,col2 from (select col1, col2 from user union all select col1, col2 from user_extra) as t",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -241,7 +245,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -260,7 +264,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -288,7 +292,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -303,7 +307,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -330,7 +334,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -341,7 +345,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
+            "Variant": "Unsharded",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -366,7 +370,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -377,7 +381,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
+            "Variant": "Unsharded",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -405,7 +409,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
+            "Variant": "Unsharded",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -416,7 +420,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -441,7 +445,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
+            "Variant": "Unsharded",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -452,7 +456,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -486,7 +490,7 @@ Gen4 plan same as above
                 "Inputs": [
                   {
                     "OperatorType": "Route",
-                    "Variant": "SelectScatter",
+                    "Variant": "Scatter",
                     "Keyspace": {
                       "Name": "user",
                       "Sharded": true
@@ -497,7 +501,7 @@ Gen4 plan same as above
                   },
                   {
                     "OperatorType": "Route",
-                    "Variant": "SelectScatter",
+                    "Variant": "Scatter",
                     "Keyspace": {
                       "Name": "user",
                       "Sharded": true
@@ -512,7 +516,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectReference",
+            "Variant": "Reference",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -531,30 +535,34 @@ Gen4 plan same as above
   "Original": "(select id from user union select id from music) union select 1 from dual",
   "Instructions": {
     "OperatorType": "Distinct",
+    "Collations": [
+      "(0:1)"
+    ],
+    "ResultColumns": 1,
     "Inputs": [
       {
         "OperatorType": "Concatenate",
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from `user` where 1 != 1 union select id from music where 1 != 1",
-            "Query": "select id from `user` union select id from music",
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1 union select id, weight_string(id) from music where 1 != 1",
+            "Query": "select id, weight_string(id) from `user` union select id, weight_string(id) from music",
             "Table": "`user`"
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectReference",
+            "Variant": "Reference",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 from dual where 1 != 1",
-            "Query": "select distinct 1 from dual",
+            "FieldQuery": "select 1, weight_string(1) from dual where 1 != 1",
+            "Query": "select distinct 1, weight_string(1) from dual",
             "Table": "dual"
           }
         ]
@@ -576,7 +584,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -590,7 +598,7 @@ Gen4 plan same as above
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -601,7 +609,7 @@ Gen4 plan same as above
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectUnsharded",
+                "Variant": "Unsharded",
                 "Keyspace": {
                   "Name": "main",
                   "Sharded": false
@@ -632,7 +640,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -649,7 +657,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
                 "Inputs": [
                   {
                     "OperatorType": "Route",
-                    "Variant": "SelectScatter",
+                    "Variant": "Scatter",
                     "Keyspace": {
                       "Name": "user",
                       "Sharded": true
@@ -660,7 +668,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
                   },
                   {
                     "OperatorType": "Route",
-                    "Variant": "SelectUnsharded",
+                    "Variant": "Unsharded",
                     "Keyspace": {
                       "Name": "main",
                       "Sharded": false
@@ -693,7 +701,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -708,7 +716,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -737,7 +745,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -752,7 +760,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -784,7 +792,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -799,7 +807,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -822,13 +830,16 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
   "Original": "select 1 from music where id = 1 union select 1 from music where id = 2",
   "Instructions": {
     "OperatorType": "Distinct",
+    "Collations": [
+      "0: binary"
+    ],
     "Inputs": [
       {
         "OperatorType": "Concatenate",
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -843,7 +854,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -875,7 +886,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -888,7 +899,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -909,10 +920,14 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
   "Original": "(select id from user order by 1 desc) union (select id from user order by 1 asc)",
   "Instructions": {
     "OperatorType": "Distinct",
+    "Collations": [
+      "(0:1)"
+    ],
+    "ResultColumns": 1,
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -940,7 +955,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectReference",
+            "Variant": "Reference",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -951,7 +966,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -970,13 +985,16 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
   "Original": "select 1 union select null union select 1.0 union select '1' union select 2 union select 2.0 from user",
   "Instructions": {
     "OperatorType": "Distinct",
+    "Collations": [
+      "0: binary"
+    ],
     "Inputs": [
       {
         "OperatorType": "Concatenate",
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectReference",
+            "Variant": "Reference",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -987,7 +1005,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -1016,12 +1034,12 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
+            "JoinColumnIndexes": "L:0,L:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -1032,7 +1050,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -1045,7 +1063,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -1064,6 +1082,11 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
   "Original": "(select user.id, user.name from user join user_extra where user_extra.extra = 'asdf') union select 'b','c' from user",
   "Instructions": {
     "OperatorType": "Distinct",
+    "Collations": [
+      "(0:2)",
+      "(1:3)"
+    ],
+    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Concatenate",
@@ -1071,23 +1094,23 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
+            "JoinColumnIndexes": "L:0,L:1,L:2,L:3",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.id, `user`.`name` from `user` where 1 != 1",
-                "Query": "select `user`.id, `user`.`name` from `user`",
+                "FieldQuery": "select `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user` where 1 != 1",
+                "Query": "select `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user`",
                 "Table": "`user`"
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -1100,13 +1123,13 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 'b', 'c' from `user` where 1 != 1",
-            "Query": "select distinct 'b', 'c' from `user`",
+            "FieldQuery": "select 'b', 'c', weight_string('b'), weight_string('c') from `user` where 1 != 1",
+            "Query": "select distinct 'b', 'c', weight_string('b'), weight_string('c') from `user`",
             "Table": "`user`"
           }
         ]
@@ -1128,7 +1151,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -1140,12 +1163,12 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
+            "JoinColumnIndexes": "L:0,L:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -1156,7 +1179,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -1177,41 +1200,46 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
   "Original": "select 'b','c' from user union (select user.id, user.name from user join user_extra where user_extra.extra = 'asdf')",
   "Instructions": {
     "OperatorType": "Distinct",
+    "Collations": [
+      "(0:2)",
+      "(1:3)"
+    ],
+    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Concatenate",
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 'b', 'c' from `user` where 1 != 1",
-            "Query": "select distinct 'b', 'c' from `user`",
+            "FieldQuery": "select 'b', 'c', weight_string('b'), weight_string('c') from `user` where 1 != 1",
+            "Query": "select distinct 'b', 'c', weight_string('b'), weight_string('c') from `user`",
             "Table": "`user`"
           },
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
+            "JoinColumnIndexes": "L:0,L:1,L:2,L:3",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.id, `user`.`name` from `user` where 1 != 1",
-                "Query": "select `user`.id, `user`.`name` from `user`",
+                "FieldQuery": "select `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user` where 1 != 1",
+                "Query": "select `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user`",
                 "Table": "`user`"
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -1241,12 +1269,12 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         "Inputs": [
           {
             "OperatorType": "Aggregate",
-            "Variant": "Ordered",
+            "Variant": "Scalar",
             "Aggregates": "count(0)",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -1259,12 +1287,12 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           },
           {
             "OperatorType": "Aggregate",
-            "Variant": "Ordered",
+            "Variant": "Scalar",
             "Aggregates": "count(0)",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -1285,18 +1313,21 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
   "Original": "select count(*) as s from user union select count(*) as s from music",
   "Instructions": {
     "OperatorType": "Distinct",
+    "Collations": [
+      "0: binary"
+    ],
     "Inputs": [
       {
         "OperatorType": "Concatenate",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
-            "Variant": "Ordered",
-            "Aggregates": "count(0) AS s",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS s",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -1309,12 +1340,12 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           },
           {
             "OperatorType": "Aggregate",
-            "Variant": "Ordered",
-            "Aggregates": "count(0) AS s",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS s",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -1356,7 +1387,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
                     "Inputs": [
                       {
                         "OperatorType": "Route",
-                        "Variant": "SelectScatter",
+                        "Variant": "Scatter",
                         "Keyspace": {
                           "Name": "user",
                           "Sharded": true
@@ -1367,7 +1398,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
                       },
                       {
                         "OperatorType": "Route",
-                        "Variant": "SelectScatter",
+                        "Variant": "Scatter",
                         "Keyspace": {
                           "Name": "user",
                           "Sharded": true
@@ -1382,7 +1413,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -1409,16 +1440,19 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
     "Inputs": [
       {
         "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from `user` where 1 != 1 union all select id + 1 from `user` where 1 != 1 union select user_id from user_extra where 1 != 1",
-            "Query": "select id from `user` union all select id + 1 from `user` union select user_id from user_extra",
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1 union all select id + 1, weight_string(id + 1) from `user` where 1 != 1 union select user_id, weight_string(user_id) from user_extra where 1 != 1",
+            "Query": "select id, weight_string(id) from `user` union all select id + 1, weight_string(id + 1) from `user` union select user_id, weight_string(user_id) from user_extra",
             "Table": "`user`"
           }
         ]
@@ -1435,30 +1469,34 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
   "Original": "(select id from user union select id from music order by id) union select 1 from unsharded",
   "Instructions": {
     "OperatorType": "Distinct",
+    "Collations": [
+      "(0:1)"
+    ],
+    "ResultColumns": 1,
     "Inputs": [
       {
         "OperatorType": "Concatenate",
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from `user` where 1 != 1 union select id from music where 1 != 1",
-            "Query": "select id from `user` union select id from music",
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1 union select id, weight_string(id) from music where 1 != 1",
+            "Query": "select id, weight_string(id) from `user` union select id, weight_string(id) from music",
             "Table": "`user`"
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
+            "Variant": "Unsharded",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 from unsharded where 1 != 1",
-            "Query": "select distinct 1 from unsharded",
+            "FieldQuery": "select 1, weight_string(1) from unsharded where 1 != 1",
+            "Query": "select distinct 1, weight_string(1) from unsharded",
             "Table": "unsharded"
           }
         ]
@@ -1484,7 +1522,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -1495,7 +1533,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectReference",
+                "Variant": "Reference",
                 "Keyspace": {
                   "Name": "main",
                   "Sharded": false
@@ -1520,30 +1558,34 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
     "Inputs": [
       {
         "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Concatenate",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select id from `user` where 1 != 1",
-                "Query": "select distinct id from `user` limit :__upper_limit",
+                "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                "Query": "select distinct id, weight_string(id) from `user` limit :__upper_limit",
                 "Table": "`user`"
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectReference",
+                "Variant": "Reference",
                 "Keyspace": {
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select 3 from dual where 1 != 1",
-                "Query": "select distinct 3 from dual limit :__upper_limit",
+                "FieldQuery": "select 3, weight_string(3) from dual where 1 != 1",
+                "Query": "select distinct 3, weight_string(3) from dual limit :__upper_limit",
                 "Table": "dual"
               }
             ]
@@ -1561,7 +1603,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
   "Original": "(select 1 from unsharded union select 1 from unsharded union all select 1 from unsharded order by 1) union select 1 from unsharded union all select 1 from unsharded order by 1",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectUnsharded",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -1598,7 +1640,7 @@ Gen4 plan same as above
                         "Inputs": [
                           {
                             "OperatorType": "Route",
-                            "Variant": "SelectUnsharded",
+                            "Variant": "Unsharded",
                             "Keyspace": {
                               "Name": "main",
                               "Sharded": false
@@ -1609,7 +1651,7 @@ Gen4 plan same as above
                           },
                           {
                             "OperatorType": "Route",
-                            "Variant": "SelectScatter",
+                            "Variant": "Scatter",
                             "Keyspace": {
                               "Name": "user",
                               "Sharded": true
@@ -1624,7 +1666,7 @@ Gen4 plan same as above
                   },
                   {
                     "OperatorType": "Route",
-                    "Variant": "SelectUnsharded",
+                    "Variant": "Unsharded",
                     "Keyspace": {
                       "Name": "main",
                       "Sharded": false
@@ -1639,7 +1681,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -1658,30 +1700,34 @@ Gen4 plan same as above
   "Original": "select col from unsharded union select id from user union select col2 from unsharded union select col from user_extra",
   "Instructions": {
     "OperatorType": "Distinct",
+    "Collations": [
+      "(0:1)"
+    ],
+    "ResultColumns": 1,
     "Inputs": [
       {
         "OperatorType": "Concatenate",
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
+            "Variant": "Unsharded",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select col from unsharded where 1 != 1 union select col2 from unsharded where 1 != 1",
-            "Query": "select col from unsharded union select col2 from unsharded",
+            "FieldQuery": "select col, weight_string(col) from unsharded where 1 != 1 union select col2, weight_string(col2) from unsharded where 1 != 1",
+            "Query": "select col, weight_string(col) from unsharded union select col2, weight_string(col2) from unsharded",
             "Table": "unsharded"
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from `user` where 1 != 1 union select col from user_extra where 1 != 1",
-            "Query": "select id from `user` union select col from user_extra",
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1 union select col, weight_string(col) from user_extra where 1 != 1",
+            "Query": "select id, weight_string(id) from `user` union select col, weight_string(col) from user_extra",
             "Table": "`user`"
           }
         ]
@@ -1698,7 +1744,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "tbl1_id": 0
     },
@@ -1719,7 +1765,7 @@ Gen4 plan same as above
                 "Inputs": [
                   {
                     "OperatorType": "Route",
-                    "Variant": "SelectScatter",
+                    "Variant": "Scatter",
                     "Keyspace": {
                       "Name": "user",
                       "Sharded": true
@@ -1738,7 +1784,7 @@ Gen4 plan same as above
                 "Inputs": [
                   {
                     "OperatorType": "Route",
-                    "Variant": "SelectScatter",
+                    "Variant": "Scatter",
                     "Keyspace": {
                       "Name": "user",
                       "Sharded": true
@@ -1757,7 +1803,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1773,88 +1819,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select tbl2.id FROM ((select id from user order by id limit 5) union all (select id from user order by id desc limit 5)) as tbl1 INNER JOIN user as tbl2  ON tbl1.id = tbl2.id",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "1",
-    "JoinVars": {
-      "tbl1_id": 0
-    },
-    "TableName": "`user`_`user`",
-    "Inputs": [
-      {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Concatenate",
-            "Inputs": [
-              {
-                "OperatorType": "Limit",
-                "Count": "INT64(5)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "SelectScatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-                    "OrderBy": "(0|1) ASC",
-                    "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
-                    "ResultColumns": 1,
-                    "Table": "`user`"
-                  }
-                ]
-              },
-              {
-                "OperatorType": "Limit",
-                "Count": "INT64(5)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "SelectScatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-                    "OrderBy": "(0|1) DESC",
-                    "Query": "select id, weight_string(id) from `user` order by id desc limit :__upper_limit",
-                    "ResultColumns": 1,
-                    "Table": "`user`"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select tbl2.id from `user` as tbl2 where 1 != 1",
-        "Query": "select tbl2.id from `user` as tbl2 where tbl2.id = :tbl1_id",
-        "Table": "`user`",
-        "Values": [
-          ":tbl1_id"
-        ],
-        "Vindex": "user_index"
-      }
-    ]
-  }
-}
-
+Gen4 plan same as above
 
 # ambiguous LIMIT
 "select id from user limit 1 union all select id from music limit 1"
@@ -1880,3 +1845,53 @@ Gen4 error: Table 'user' from one of the SELECTs cannot be used in global ORDER 
 "select id from user union select 3 order by id"
 "can't do ORDER BY on top of UNION"
 Gen4 plan same as above
+
+"select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t"
+"unsupported: expression on results of a cross-shard subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      2
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id + 42 as foo, weight_string(id + 42), 1 from `user` where 1 != 1",
+                "Query": "select distinct id + 42 as foo, weight_string(id + 42), 1 from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 + id as foo, weight_string(1 + id), 1 from unsharded where 1 != 1",
+                "Query": "select distinct 1 + id as foo, weight_string(1 + id), 1 from unsharded",
+                "Table": "unsharded"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

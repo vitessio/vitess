@@ -111,7 +111,7 @@ func filterVindexFunc(node *vindexFunc, filter sqlparser.Expr) (logicalPlan, err
 		return nil, errors.New("unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (rhs is not a value)")
 	}
 	var err error
-	node.eVindexFunc.Value, err = evalengine.Convert(comparison.Right, semantics.EmptySemTable())
+	node.eVindexFunc.Value, err = evalengine.Translate(comparison.Right, semantics.EmptySemTable())
 	if err != nil {
 		return nil, fmt.Errorf("unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...): %v", err)
 	}

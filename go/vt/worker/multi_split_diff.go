@@ -407,7 +407,7 @@ func (msdw *MultiSplitDiffWorker) stopReplicationOnSourceTabletAt(ctx context.Co
 		msdw.wr.Logger().Infof("stopping Replication %v at a minimum of %v", msdw.sourceAlias, vreplicationPos)
 
 		shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-		msdw.wr.TabletManagerClient().StartReplication(shortCtx, sourceTablet.Tablet)
+		msdw.wr.StartReplication(shortCtx, sourceTablet.Tablet)
 		cancel()
 		if err != nil {
 			return "", err

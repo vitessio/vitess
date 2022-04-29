@@ -29,12 +29,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
@@ -1363,7 +1365,7 @@ func TestGetSchema(t *testing.T) {
 					Name: fmt.Sprintf("cluster%d", i),
 				},
 				VtctldClient: tt.vtctld,
-				Tablets:      nil,
+				Tablets:      []*vtadminpb.Tablet{tt.tablet},
 				DBConfig:     testutil.Dbcfg{},
 			})
 
@@ -1371,7 +1373,6 @@ func TestGetSchema(t *testing.T) {
 			require.NoError(t, err, "could not dial test vtctld")
 
 			schema, err := c.GetSchema(ctx, "testkeyspace", cluster.GetSchemaOptions{
-				Tablets:     []*vtadminpb.Tablet{tt.tablet},
 				BaseRequest: tt.req,
 			})
 			if tt.shouldErr {
@@ -1427,7 +1428,6 @@ func TestGetSchema(t *testing.T) {
 
 		_, _ = c.GetSchema(ctx, "testkeyspace", cluster.GetSchemaOptions{
 			BaseRequest: req,
-			Tablets:     []*vtadminpb.Tablet{tablet},
 		})
 
 		assert.NotEqual(t, req.TabletAlias, tablet.Tablet.Alias, "expected GetSchema to not modify original request object")
@@ -2232,9 +2232,10 @@ func TestGetSchema(t *testing.T) {
 							Tablet: &topodatapb.Tablet{
 								Alias: &topodatapb.TabletAlias{
 									Cell: "zone1",
-									Uid:  200,
+									Uid:  300,
 								},
-								Keyspace: "testkeyspace",
+								// Note this is for another keyspace, so we fail to find a tablet for testkeyspace/-80.
+								Keyspace: "otherkeyspace",
 								Shard:    "80-",
 							},
 							State: vtadminpb.Tablet_SERVING,
@@ -2328,31 +2329,6 @@ func TestGetSchema(t *testing.T) {
 				opts: cluster.GetSchemaOptions{
 					TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
 						AggregateSizes: true,
-					},
-					Tablets: []*vtadminpb.Tablet{
-						{
-							Tablet: &topodatapb.Tablet{
-								Alias: &topodatapb.TabletAlias{
-									Cell: "zone1",
-									Uid:  100,
-								},
-								Keyspace: "testkeyspace",
-								Shard:    "-80",
-							},
-							State: vtadminpb.Tablet_SERVING,
-						},
-						{
-							Tablet: &topodatapb.Tablet{
-								Alias: &topodatapb.TabletAlias{
-									Cell: "zone1",
-									Uid:  300,
-								},
-								// Note this is for another keyspace, so we fail to find a tablet for testkeyspace/-80.
-								Keyspace: "otherkeyspace",
-								Shard:    "80-",
-							},
-							State: vtadminpb.Tablet_SERVING,
-						},
 					},
 				},
 				expected:  nil,
@@ -2451,19 +2427,19 @@ func TestGetShardReplicationPositions(t *testing.T) {
 							Response: &vtctldatapb.ShardReplicationPositionsResponse{
 								ReplicationStatuses: map[string]*replicationdatapb.Status{
 									"zone1-001": {
-										IoThreadRunning:  false,
-										SqlThreadRunning: false,
-										Position:         "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
+										IoState:  int32(mysql.ReplicationStateStopped),
+										SqlState: int32(mysql.ReplicationStateStopped),
+										Position: "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
 									},
 									"zone1-002": { // Note: in reality other fields will be set on replicating hosts as well, but this is sufficient to illustrate in the testing.
-										IoThreadRunning:  true,
-										SqlThreadRunning: true,
-										Position:         "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
+										IoState:  int32(mysql.ReplicationStateRunning),
+										SqlState: int32(mysql.ReplicationStateRunning),
+										Position: "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
 									},
 									"zone1-003": {
-										IoThreadRunning:  true,
-										SqlThreadRunning: true,
-										Position:         "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
+										IoState:  int32(mysql.ReplicationStateRunning),
+										SqlState: int32(mysql.ReplicationStateRunning),
+										Position: "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
 									},
 								},
 								TabletMap: map[string]*topodatapb.Tablet{
@@ -2514,19 +2490,19 @@ func TestGetShardReplicationPositions(t *testing.T) {
 					PositionInfo: &vtctldatapb.ShardReplicationPositionsResponse{
 						ReplicationStatuses: map[string]*replicationdatapb.Status{
 							"zone1-001": {
-								IoThreadRunning:  false,
-								SqlThreadRunning: false,
-								Position:         "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
+								IoState:  int32(mysql.ReplicationStateStopped),
+								SqlState: int32(mysql.ReplicationStateStopped),
+								Position: "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
 							},
 							"zone1-002": {
-								IoThreadRunning:  true,
-								SqlThreadRunning: true,
-								Position:         "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
+								IoState:  int32(mysql.ReplicationStateRunning),
+								SqlState: int32(mysql.ReplicationStateRunning),
+								Position: "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
 							},
 							"zone1-003": {
-								IoThreadRunning:  true,
-								SqlThreadRunning: true,
-								Position:         "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
+								IoState:  int32(mysql.ReplicationStateRunning),
+								SqlState: int32(mysql.ReplicationStateRunning),
+								Position: "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
 							},
 						},
 						TabletMap: map[string]*topodatapb.Tablet{
@@ -2651,7 +2627,9 @@ func TestGetTablets(t *testing.T) {
 			Id:   "c1",
 			Name: "one",
 		},
-		Discovery: disco,
+		ResolverOptions: &resolver.Options{
+			Discovery: disco,
+		},
 	})
 	db.DialFunc = func(cfg vitessdriver.Configuration) (*sql.DB, error) {
 		return nil, assert.AnError

@@ -61,7 +61,7 @@ func TestEnsureDB(t *testing.T) {
 // TestLocalMetadata tests the contents of local_metadata table after vttablet startup
 func TestLocalMetadata(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	// by default tablets are started with -restore_from_backup
+	// by default tablets are started with --restore_from_backup
 	// so metadata should exist
 	cluster.VerifyLocalMetadata(t, &replicaTablet, keyspaceName, shardName, cell)
 
@@ -69,8 +69,8 @@ func TestLocalMetadata(t *testing.T) {
 	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	clusterInstance.VtTabletExtraArgs = []string{
-		"-lock_tables_timeout", "5s",
-		"-init_populate_metadata",
+		"--lock_tables_timeout", "5s",
+		"--init_populate_metadata",
 	}
 	rTablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(rTablet.TabletUID, rTablet.MySQLPort, clusterInstance.TmpDirectory)
 	err := rTablet.MysqlctlProcess.Start()
@@ -88,9 +88,9 @@ func TestLocalMetadata(t *testing.T) {
 	// Create another new tablet
 	rTablet2 := clusterInstance.NewVttabletInstance("replica", 0, "")
 
-	// start with -init_populate_metadata false (default)
+	// start with --init_populate_metadata false (default)
 	clusterInstance.VtTabletExtraArgs = []string{
-		"-lock_tables_timeout", "5s",
+		"--lock_tables_timeout", "5s",
 	}
 	rTablet2.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(rTablet2.TabletUID, rTablet2.MySQLPort, clusterInstance.TmpDirectory)
 	err = rTablet2.MysqlctlProcess.Start()

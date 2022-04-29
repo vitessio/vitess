@@ -25,11 +25,11 @@ It has two modes: single command or interactive.
 package main
 
 import (
+	"context"
 	"flag"
+	"io"
 	"os"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/callerid"
@@ -37,13 +37,18 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/worker"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
 	cell                   = flag.String("cell", "", "cell to pick servers from")
 	commandDisplayInterval = flag.Duration("command_display_interval", time.Second, "Interval between each status update when vtworker is executing a single command from the command line")
 	username               = flag.String("username", "", "If set, value is set as immediate caller id in the request and used by vttablet for TableACL check")
+	durabilityPolicy       = flag.String("durability_policy", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
 )
 
 func init() {
@@ -51,13 +56,16 @@ func init() {
 
 	logger := logutil.NewConsoleLogger()
 	flag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
-	flag.Usage = func() {
-		logger.Printf("Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
-		logger.Printf("\nThe global optional parameters are:\n")
-		flag.PrintDefaults()
-		logger.Printf("\nThe commands are listed below, sorted by group. Use '%s <command> -h' for more help.\n\n", os.Args[0])
-		worker.PrintAllCommands(logger)
-	}
+	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
+		Preface: func(w io.Writer) {
+			logger.Printf("Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
+			logger.Printf("\nThe global optional parameters are:\n")
+		},
+		Epilogue: func(w io.Writer) {
+			logger.Printf("\nThe commands are listed below, sorted by group. Use '%s <command> -h' for more help.\n\n", os.Args[0])
+			worker.PrintAllCommands(logger)
+		},
+	})
 }
 
 var (
@@ -67,8 +75,8 @@ var (
 func main() {
 	defer exit.Recover()
 
-	flag.Parse()
-	args := flag.Args()
+	_flag.Parse()
+	args := _flag.Args()
 
 	servenv.Init()
 	defer servenv.Close()
@@ -76,6 +84,11 @@ func main() {
 	if *servenv.Version {
 		servenv.AppVersion.Print()
 		os.Exit(0)
+	}
+
+	if err := reparentutil.SetDurabilityPolicy(*durabilityPolicy); err != nil {
+		log.Errorf("error in setting durability policy: %v", err)
+		exit.Return(1)
 	}
 
 	ts := topo.Open()

@@ -39,7 +39,7 @@ type SQLError struct {
 // NewSQLError creates a new SQLError.
 // If sqlState is left empty, it will default to "HY000" (general error).
 // TODO: Should be aligned with vterrors, stack traces and wrapping
-func NewSQLError(number int, sqlState string, format string, args ...interface{}) *SQLError {
+func NewSQLError(number int, sqlState string, format string, args ...any) *SQLError {
 	if sqlState == "" {
 		sqlState = SSUnknownSQLState
 	}
@@ -195,6 +195,7 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.RequiresPrimaryKey:           {num: ERRequiresPrimaryKey, state: SSClientError},
 	vterrors.NoSuchSession:                {num: ERUnknownComError, state: SSNetError},
 	vterrors.OperandColumns:               {num: EROperandColumns, state: SSWrongNumberOfColumns},
+	vterrors.WrongValueCountOnRow:         {num: ERWrongValueCountOnRow, state: SSWrongValueCountOnRow},
 }
 
 func init() {

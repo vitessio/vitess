@@ -47,7 +47,7 @@ const (
 )
 
 // ExecInstance executes a given query on the given MySQL topology instance
-func ExecInstance(instanceKey *InstanceKey, query string, args ...interface{}) (sql.Result, error) {
+func ExecInstance(instanceKey *InstanceKey, query string, args ...any) (sql.Result, error) {
 	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func ExecuteOnTopology(f func()) {
 }
 
 // ScanInstanceRow executes a read-a-single-row query on a given MySQL topology instance
-func ScanInstanceRow(instanceKey *InstanceKey, query string, dest ...interface{}) error {
+func ScanInstanceRow(instanceKey *InstanceKey, query string, dest ...any) error {
 	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return err
@@ -675,7 +675,7 @@ func ChangePrimaryTo(instanceKey *InstanceKey, primaryKey *InstanceKey, primaryB
 		return instance, log.Errore(err)
 	}
 
-	semiSync := ReplicaSemiSync(*primaryKey, *instanceKey)
+	semiSync := IsReplicaSemiSync(*primaryKey, *instanceKey)
 	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, false, semiSync); err != nil {
 		return instance, log.Errore(err)
 	}

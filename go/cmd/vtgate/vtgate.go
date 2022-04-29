@@ -44,7 +44,6 @@ var (
 )
 
 var resilientServer *srvtopo.ResilientServer
-var legacyHealthCheck discovery.LegacyHealthCheck
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -143,17 +142,8 @@ func main() {
 		log.Exitf("cells_to_watch validation failed: %v", err)
 	}
 
-	var vtg *vtgate.VTGate
-	if *vtgate.GatewayImplementation == vtgate.GatewayImplementationDiscovery {
-		// default value
-		legacyHealthCheck = discovery.NewLegacyHealthCheck(*vtgate.HealthCheckRetryDelay, *vtgate.HealthCheckTimeout)
-		legacyHealthCheck.RegisterStats()
-
-		vtg = vtgate.LegacyInit(context.Background(), legacyHealthCheck, resilientServer, *cell, *vtgate.RetryCount, tabletTypes)
-	} else {
-		// use new Init otherwise
-		vtg = vtgate.Init(context.Background(), resilientServer, *cell, tabletTypes)
-	}
+	// pass nil for HealthCheck and it will be created
+	vtg := vtgate.Init(context.Background(), nil, resilientServer, *cell, tabletTypes)
 
 	servenv.OnRun(func() {
 		// Flags are parsed now. Parse the template using the actual flag value and overwrite the current template.
@@ -162,9 +152,6 @@ func main() {
 	})
 	servenv.OnClose(func() {
 		_ = vtg.Gateway().Close(context.Background())
-		if legacyHealthCheck != nil {
-			_ = legacyHealthCheck.Close()
-		}
 	})
 	servenv.RunDefault()
 }

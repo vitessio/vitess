@@ -5,7 +5,7 @@
   "Original": "SELECT c FROM sbtest34 WHERE id=15",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -28,7 +28,7 @@ Gen4 plan same as above
   "Original": "SELECT c FROM sbtest12 WHERE id BETWEEN 1 AND 10",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -47,12 +47,12 @@ Gen4 plan same as above
   "Original": "SELECT SUM(k) FROM sbtest43 WHERE id BETWEEN 90 AND 990",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "sum(0)",
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true
@@ -69,12 +69,12 @@ Gen4 plan same as above
   "Original": "SELECT SUM(k) FROM sbtest43 WHERE id BETWEEN 90 AND 990",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "sum(0) AS SUM(k)",
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true
@@ -94,7 +94,7 @@ Gen4 plan same as above
   "Original": "SELECT c FROM sbtest1 WHERE id BETWEEN 50 AND 235 ORDER BY c",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -111,15 +111,14 @@ Gen4 plan same as above
   "Original": "SELECT c FROM sbtest1 WHERE id BETWEEN 50 AND 235 ORDER BY c",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select c, weight_string(c) from sbtest1 where 1 != 1",
-    "OrderBy": "(0|1) ASC COLLATE latin1_swedish_ci",
-    "Query": "select c, weight_string(c) from sbtest1 where id between 50 and 235 order by c asc",
-    "ResultColumns": 1,
+    "FieldQuery": "select c from sbtest1 where 1 != 1",
+    "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
+    "Query": "select c from sbtest1 where id between 50 and 235 order by c asc",
     "Table": "sbtest1"
   }
 }
@@ -137,7 +136,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true
@@ -157,18 +156,18 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "GroupBy": "(0|1)",
+    "GroupBy": "(0|1) COLLATE latin1_swedish_ci",
     "ResultColumns": 1,
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true
         },
         "FieldQuery": "select c, weight_string(c) from sbtest30 where 1 != 1",
-        "OrderBy": "(0|1) ASC COLLATE latin1_swedish_ci, (0|1) ASC COLLATE latin1_swedish_ci",
+        "OrderBy": "0 ASC COLLATE latin1_swedish_ci, 0 ASC COLLATE latin1_swedish_ci",
         "Query": "select distinct c, weight_string(c) from sbtest30 where id between 1 and 10 order by c asc, c asc",
         "Table": "sbtest30"
       }
@@ -198,7 +197,26 @@ Gen4 plan same as above
     "Vindex": "hash"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "UPDATE sbtest6 SET k=k+1 WHERE id=5",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update sbtest6 set k = k + 1 where id = 5",
+    "Table": "sbtest6",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "hash"
+  }
+}
 
 # OLTP non index update
 "UPDATE sbtest9 SET c=7 WHERE id=8"
@@ -222,7 +240,26 @@ Gen4 plan same as above
     "Vindex": "hash"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "UPDATE sbtest9 SET c=7 WHERE id=8",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update sbtest9 set c = 7 where id = 8",
+    "Table": "sbtest9",
+    "Values": [
+      "INT64(8)"
+    ],
+    "Vindex": "hash"
+  }
+}
 
 # OLTP delete
 "DELETE FROM sbtest15 WHERE id=7525"
@@ -263,7 +300,10 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into sbtest16(id, k, c, pad) values (:_id_0, 1, 2, 50)",
-    "TableName": "sbtest16"
+    "TableName": "sbtest16",
+    "VindexValues": {
+      "hash": "INT64(42)"
+    }
   }
 }
 Gen4 plan same as above

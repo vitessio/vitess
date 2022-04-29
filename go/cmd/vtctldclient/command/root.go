@@ -81,7 +81,7 @@ var (
 	}
 )
 
-var errNoServer = errors.New("please specify -server <vtctld_host:vtctld_port> to specify the vtctld server to connect to")
+var errNoServer = errors.New("please specify --server <vtctld_host:vtctld_port> to specify the vtctld server to connect to")
 
 // ensureServerArg validates that --server was passed to the CLI.
 func ensureServerArg() error {

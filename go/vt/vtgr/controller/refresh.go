@@ -60,7 +60,7 @@ type GRTopo interface {
 
 // GRTmcClient is VTGR wrapper for tmc client
 type GRTmcClient interface {
-	ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType) error
+	ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType, semiSync bool) error
 	Ping(ctx context.Context, tablet *topodatapb.Tablet) error
 }
 

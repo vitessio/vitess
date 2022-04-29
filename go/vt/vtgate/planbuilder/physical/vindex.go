@@ -54,7 +54,7 @@ func (v *Vindex) IPhysical() {}
 
 // Cost implements the PhysicalOperator interface
 func (v *Vindex) Cost() int {
-	return int(engine.SelectEqualUnique)
+	return int(engine.EqualUnique)
 }
 
 // Clone implements the PhysicalOperator interface

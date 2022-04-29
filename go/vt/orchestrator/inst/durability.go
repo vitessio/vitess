@@ -20,8 +20,8 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 )
 
-// ReplicaSemiSync returns the replica semi-sync setting for the instance.
-func ReplicaSemiSync(primaryKey, replicaKey InstanceKey) bool {
+// IsReplicaSemiSync returns the replica semi-sync setting for the instance.
+func IsReplicaSemiSync(primaryKey, replicaKey InstanceKey) bool {
 	primary, err := ReadTablet(primaryKey)
 	if err != nil {
 		return false
@@ -30,7 +30,7 @@ func ReplicaSemiSync(primaryKey, replicaKey InstanceKey) bool {
 	if err != nil {
 		return false
 	}
-	return reparentutil.ReplicaSemiSync(primary, replica)
+	return reparentutil.IsReplicaSemiSync(primary, replica)
 }
 
 // SemiSyncAckers returns the primary semi-sync setting for the instance.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -12,9 +13,11 @@ import (
 	"time"
 
 	"github.com/buger/jsonparser"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/schema"
 
 	"github.com/PuerkitoBio/goquery"
 
@@ -88,6 +91,18 @@ func waitForQueryToExecute(t *testing.T, conn *mysql.Conn, database string, quer
 		case <-time.After(5 * time.Second):
 			require.FailNow(t, "query %s.%s did not execute in time", database, query)
 		}
+	}
+}
+
+// verifyNoInternalTables can e.g. be used to confirm that no internal tables were
+// copied from a source to a target during a MoveTables or Reshard operation.
+func verifyNoInternalTables(t *testing.T, conn *mysql.Conn, keyspaceShard string) {
+	qr := execVtgateQuery(t, conn, keyspaceShard, "show tables")
+	require.NotNil(t, qr)
+	require.NotNil(t, qr.Rows)
+	for _, row := range qr.Rows {
+		tableName := row[0].ToString()
+		assert.False(t, schema.IsInternalOperationTableName(tableName), "found internal table %s in shard %s", tableName, keyspaceShard)
 	}
 }
 
@@ -228,7 +243,7 @@ func checkIfTableExists(t *testing.T, vc *VitessCluster, tabletAlias string, tab
 	var err error
 	found := false
 
-	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetSchema", "-tables", table, tabletAlias); err != nil {
+	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetSchema", "--", "--tables", table, tabletAlias); err != nil {
 		return false, err
 	}
 	jsonparser.ArrayEach([]byte(output), func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
@@ -273,7 +288,7 @@ func printShardPositions(vc *VitessCluster, ksShards []string) {
 }
 
 func clearRoutingRules(t *testing.T, vc *VitessCluster) error {
-	if _, err := vc.VtctlClient.ExecuteCommandWithOutput("ApplyRoutingRules", "-rules={}"); err != nil {
+	if _, err := vc.VtctlClient.ExecuteCommandWithOutput("ApplyRoutingRules", "--", "--rules={}"); err != nil {
 		return err
 	}
 	return nil
@@ -287,4 +302,10 @@ func printRoutingRules(t *testing.T, vc *VitessCluster, msg string) error {
 	}
 	fmt.Printf("Routing Rules::%s:\n%s\n", msg, output)
 	return nil
+}
+
+func osExec(t *testing.T, command string, args []string) (string, error) {
+	cmd := exec.Command(command, args...)
+	output, err := cmd.CombinedOutput()
+	return string(output), err
 }

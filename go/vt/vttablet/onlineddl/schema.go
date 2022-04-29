@@ -71,6 +71,10 @@ const (
 	alterSchemaMigrationsTableAllowConcurrent          = "ALTER TABLE _vt.schema_migrations add column allow_concurrent tinyint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableRevertedUUID             = "ALTER TABLE _vt.schema_migrations add column reverted_uuid varchar(64) NOT NULL DEFAULT ''"
 	alterSchemaMigrationsTableRevertedUUIDIndex        = "ALTER TABLE _vt.schema_migrations add KEY reverted_uuid_idx (reverted_uuid(64))"
+	alterSchemaMigrationsTableIsView                   = "ALTER TABLE _vt.schema_migrations add column is_view tinyint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableReadyToComplete          = "ALTER TABLE _vt.schema_migrations add column ready_to_complete tinyint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableStowawayTable            = "ALTER TABLE _vt.schema_migrations add column stowaway_table tinytext NOT NULL"
+	alterSchemaMigrationsTableVreplLivenessIndicator   = "ALTER TABLE _vt.schema_migrations add column vitess_liveness_indicator bigint NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -89,24 +93,21 @@ const (
 		retain_artifacts_seconds,
 		postpone_completion,
 		allow_concurrent,
-		reverted_uuid
+		reverted_uuid,
+		is_view
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a, %a, %a, %a, %a
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a, %a, %a, %a, %a, %a
 	)`
 
-	sqlScheduleSingleMigration = `UPDATE _vt.schema_migrations
-		SET
-			migration_status='ready',
-			ready_timestamp=NOW()
+	sqlSelectQueuedMigrations = `SELECT
+			migration_uuid,
+			ddl_action,
+			postpone_completion,
+			ready_to_complete
+		FROM _vt.schema_migrations
 		WHERE
 			migration_status='queued'
-			AND (
-				postpone_completion=0 OR ddl_action='alter'
-			)
-		ORDER BY
-			requested_timestamp ASC
-		LIMIT 1
-	`  // if the migration is CREATE or DROP, and postpone_completion=1, we just don't schedule it
+	`
 	sqlUpdateMySQLTable = `UPDATE _vt.schema_migrations
 			SET mysql_table=%a
 		WHERE
@@ -132,6 +133,21 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateMigrationIsView = `UPDATE _vt.schema_migrations
+			SET is_view=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationReadyToComplete = `UPDATE _vt.schema_migrations
+			SET ready_to_complete=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationStowawayTable = `UPDATE _vt.schema_migrations
+			SET stowaway_table=%a
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateMigrationStartedTimestamp = `UPDATE _vt.schema_migrations SET
 			started_timestamp =IFNULL(started_timestamp,  NOW()),
 			liveness_timestamp=IFNULL(liveness_timestamp, NOW())
@@ -140,6 +156,11 @@ const (
 	`
 	sqlUpdateMigrationTimestamp = `UPDATE _vt.schema_migrations
 			SET %s=NOW()
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationVitessLivenessIndicator = `UPDATE _vt.schema_migrations
+			SET vitess_liveness_indicator=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -261,6 +282,7 @@ const (
 	sqlSelectRunningMigrations = `SELECT
 			migration_uuid,
 			postpone_completion,
+			stowaway_table,
 			timestampdiff(second, started_timestamp, now()) as elapsed_seconds
 		FROM _vt.schema_migrations
 		WHERE
@@ -359,6 +381,12 @@ const (
 			removed_unique_keys,
 			migration_context,
 			retain_artifacts_seconds,
+			is_view,
+			ready_to_complete,
+			reverted_uuid,
+			stowaway_table,
+			rows_copied,
+			vitess_liveness_indicator,
 			postpone_completion
 		FROM _vt.schema_migrations
 		WHERE
@@ -472,6 +500,7 @@ const (
 	sqlAlterTableOptions = "ALTER TABLE `%a` %s"
 	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
 	sqlShowTableStatus   = "SHOW TABLE STATUS LIKE '%a'"
+	sqlShowCreateTable   = "SHOW CREATE TABLE `%a`"
 	sqlGetAutoIncrement  = `
 		SELECT
 			AUTO_INCREMENT
@@ -505,8 +534,9 @@ const (
 			_vt.copy_state
 		WHERE vrepl_id=%a
 		`
-	sqlSwapTables  = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
-	sqlRenameTable = "RENAME TABLE `%a` TO `%a`"
+	sqlSwapTables      = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
+	sqlRenameTable     = "RENAME TABLE `%a` TO `%a`"
+	sqlRenameTwoTables = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`"
 )
 
 const (
@@ -526,7 +556,7 @@ var (
 	}
 	sqlGrantOnlineDDLUser = []string{
 		`GRANT PROCESS, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO %s`,
-		`GRANT ALTER, CREATE, DELETE, DROP, INDEX, INSERT, LOCK TABLES, SELECT, TRIGGER, UPDATE ON *.* TO %s`,
+		`GRANT ALTER, CREATE, CREATE VIEW, SHOW VIEW, DELETE, DROP, INDEX, INSERT, LOCK TABLES, SELECT, TRIGGER, UPDATE ON *.* TO %s`,
 	}
 	sqlDropOnlineDDLUser = `DROP USER IF EXISTS %s`
 )
@@ -561,4 +591,8 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableAllowConcurrent,
 	alterSchemaMigrationsTableRevertedUUID,
 	alterSchemaMigrationsTableRevertedUUIDIndex,
+	alterSchemaMigrationsTableIsView,
+	alterSchemaMigrationsTableReadyToComplete,
+	alterSchemaMigrationsTableStowawayTable,
+	alterSchemaMigrationsTableVreplLivenessIndicator,
 }

@@ -493,18 +493,28 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
 }
 
 func (sm *stateManager) unserveCommon() {
+	log.Infof("Started execution of unserveCommon")
 	cancel := sm.handleShutdownGracePeriod()
+	log.Infof("Finished execution of handleShutdownGracePeriod")
 	defer cancel()
 
+	log.Infof("Started online ddl executor close")
 	sm.ddle.Close()
+	log.Infof("Finished online ddl executor close. Started table garbage collector close")
 	sm.tableGC.Close()
+	log.Infof("Finished table garbage collector close. Started lag throttler close")
 	sm.throttler.Close()
+	log.Infof("Finished lag throttler close. Started messager close")
 	sm.messager.Close()
+	log.Infof("Finished messager close. Started txEngine close")
 	sm.te.Close()
-	log.Info("Killing all OLAP queries.")
+	log.Infof("Finished txEngine close. Killing all OLAP queries")
 	sm.olapql.TerminateAll()
+	log.Info("Finished Killing all OLAP queries. Started tracker close")
 	sm.tracker.Close()
+	log.Infof("Finished tracker close. Started wait for requests")
 	sm.requests.Wait()
+	log.Infof("Finished wait for requests. Finished execution of unserveCommon")
 }
 
 func (sm *stateManager) handleShutdownGracePeriod() (cancel func()) {
@@ -518,7 +528,9 @@ func (sm *stateManager) handleShutdownGracePeriod() (cancel func()) {
 		}
 		log.Infof("Grace Period %v exceeded. Killing all OLTP queries.", sm.shutdownGracePeriod)
 		sm.statelessql.TerminateAll()
+		log.Infof("Killed all stateful OLTP queries.")
 		sm.statefulql.TerminateAll()
+		log.Infof("Killed all OLTP queries.")
 	}()
 	return cancel
 }

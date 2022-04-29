@@ -91,6 +91,10 @@
         "colc_map": {
           "type": "lookup_test",
           "owner": "multicol_tbl"
+        },
+        "name_muticoltbl_map": {
+          "type": "name_lkp_test",
+          "owner": "multicol_tbl"
         }
       },
       "tables": {
@@ -308,6 +312,10 @@
             {
               "column": "colc",
               "name": "colc_map"
+            },
+            {
+              "column": "name",
+              "name": "name_muticoltbl_map"
             }
           ]
         }

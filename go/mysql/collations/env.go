@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-
-	"vitess.io/vitess/go/vt/servenv"
 )
 
 type colldefaults struct {
@@ -123,32 +121,6 @@ func fetchCacheEnvironment(version collver) *Environment {
 	return env
 }
 
-// ResolveCollation returns the default collation that will be used for the given charset and collation.
-// Both charset and collation can be empty strings, in which case utf8mb4 will be used as a charset and its
-// default collation will be returned.
-func (env *Environment) ResolveCollation(charset, collation string) (Collation, error) {
-	// if there is no collation or charset, we default to utf8mb4
-	if collation == "" && charset == "" {
-		charset = "utf8mb4"
-	}
-
-	var coll Collation
-	if collation == "" {
-		// If there is no collation we will just use the charset's default collation
-		// otherwise we directly use the given collation.
-		coll = env.DefaultCollationForCharset(charset)
-	} else {
-		// Here we call the collations API to ensure the collation/charset exist
-		// and is supported by Vitess.
-		coll = env.LookupByName(collation)
-	}
-	if coll == nil {
-		// The given collation is most likely unknown or unsupported, we need to fail.
-		return nil, fmt.Errorf("cannot resolve collation: '%s'", collation)
-	}
-	return coll, nil
-}
-
 // NewEnvironment creates a collation Environment for the given MySQL version string.
 // The version string must be in the format that is sent by the server as the version packet
 // when opening a new MySQL connection
@@ -231,18 +203,52 @@ func makeEnv(version collver) *Environment {
 	return env
 }
 
-var defaultEnv *Environment
-var defaultEnvInit sync.Once
+// A few interesting character set values.
+// See http://dev.mysql.com/doc/internals/en/character-set.html#packet-Protocol::CharacterSet
+const (
+	CollationUtf8ID    = 33
+	CollationUtf8mb4ID = 255
+	CollationBinaryID  = 63
+)
 
-// Local is the default collation Environment for Vitess. This depends
-// on the value of the `mysql_server_version` flag passed to this Vitess process.
-func Local() *Environment {
-	defaultEnvInit.Do(func() {
-		if *servenv.MySQLServerVersion == "" {
-			defaultEnv = fetchCacheEnvironment(collverMySQL80)
-		} else {
-			defaultEnv = NewEnvironment(*servenv.MySQLServerVersion)
-		}
-	})
-	return defaultEnv
+// DefaultConnectionCharset is the default charset that Vitess will use when negotiating a
+// charset in a MySQL connection handshake. Note that in this context, a 'charset' is equivalent
+// to a Collation ID, with the exception that it can only fit in 1 byte.
+// For MySQL 8.0+ environments, the default charset is `utf8mb4_0900_ai_ci`.
+// For older MySQL environments, the default charset is `utf8mb4_general_ci`.
+func (env *Environment) DefaultConnectionCharset() uint8 {
+	switch env.version {
+	case collverMySQL80:
+		return CollationUtf8mb4ID
+	default:
+		return 45
+	}
+}
+
+// ParseConnectionCharset parses the given charset name and returns its numerical
+// identifier to be used in a MySQL connection handshake. The charset name can be:
+// - the name of a character set, in which case the default collation ID for the
+// character set is returned.
+// - the name of a collation, in which case the ID for the collation is returned,
+// UNLESS the collation itself has an ID greater than 255; such collations are not
+// supported because they cannot be negotiated in a single byte in our connection
+// handshake.
+// - empty, in which case the default connection charset for this MySQL version
+// is returned.
+func (env *Environment) ParseConnectionCharset(csname string) (uint8, error) {
+	if csname == "" {
+		return env.DefaultConnectionCharset(), nil
+	}
+
+	var collid ID = 0
+	csname = strings.ToLower(csname)
+	if defaults, ok := env.byCharset[csname]; ok {
+		collid = defaults.Default.ID()
+	} else if coll, ok := env.byName[csname]; ok {
+		collid = coll.ID()
+	}
+	if collid == 0 || collid > 255 {
+		return 0, fmt.Errorf("unsupported connection charset: %q", csname)
+	}
+	return uint8(collid), nil
 }

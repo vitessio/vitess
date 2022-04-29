@@ -48,7 +48,7 @@ type DDL struct {
 }
 
 func (ddl *DDL) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Query": ddl.SQL,
 	}
 	if ddl.CreateTempTable {

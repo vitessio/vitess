@@ -25,9 +25,9 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/olekukonko/tablewriter"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -45,7 +45,7 @@ import (
 const queriesGroupName = "Queries"
 
 var (
-	enableQueries = flag.Bool("enable_queries", false, "if set, allows vtgate and vttablet queries. May have security implications, as the queries will be run from this process.")
+	enableQueries = flag.Bool("enable_queries", false, "[DEPRECATED - query commands via vtctl are being deprecated] if set, allows vtgate and vttablet queries. May have security implications, as the queries will be run from this process.")
 )
 
 func init() {
@@ -53,46 +53,53 @@ func init() {
 
 	// VtGate commands
 	addCommand(queriesGroupName, command{
-		name:   "VtGateExecute",
-		method: commandVtGateExecute,
-		params: "-server <vtgate> [-bind_variables <JSON map>] [-keyspace <default keyspace>] [-tablet_type <tablet type>] [-options <proto text options>] [-json] <sql>",
-		help:   "Executes the given SQL query with the provided bound variables against the vtgate server.",
+		name:       "VtGateExecute",
+		method:     commandVtGateExecute,
+		params:     "-server <vtgate> [-bind_variables <JSON map>] [-keyspace <default keyspace>] [-tablet_type <tablet type>] [-options <proto text options>] [-json] <sql>",
+		help:       "Executes the given SQL query with the provided bound variables against the vtgate server.",
+		deprecated: true,
 	})
 
 	// VtTablet commands
 	addCommand(queriesGroupName, command{
-		name:   "VtTabletExecute",
-		method: commandVtTabletExecute,
-		params: "[-username <TableACL user>] [-transaction_id <transaction_id>] [-options <proto text options>] [-json] <tablet alias> <sql>",
-		help:   "Executes the given query on the given tablet. -transaction_id is optional. Use VtTabletBegin to start a transaction.",
+		name:         "VtTabletExecute",
+		method:       commandVtTabletExecute,
+		params:       "[-username <TableACL user>] [-transaction_id <transaction_id>] [-options <proto text options>] [-json] <tablet alias> <sql>",
+		help:         "Executes the given query on the given tablet. -transaction_id is optional. Use VtTabletBegin to start a transaction.",
+		deprecated:   true,
+		deprecatedBy: "ExecuteFetchAsApp",
 	})
 	addCommand(queriesGroupName, command{
-		name:   "VtTabletBegin",
-		method: commandVtTabletBegin,
-		params: "[-username <TableACL user>] <tablet alias>",
-		help:   "Starts a transaction on the provided server.",
+		name:       "VtTabletBegin",
+		method:     commandVtTabletBegin,
+		params:     "[-username <TableACL user>] <tablet alias>",
+		help:       "Starts a transaction on the provided server.",
+		deprecated: true,
 	})
 	addCommand(queriesGroupName, command{
-		name:   "VtTabletCommit",
-		method: commandVtTabletCommit,
-		params: "[-username <TableACL user>] <transaction_id>",
-		help:   "Commits the given transaction on the provided server.",
+		name:       "VtTabletCommit",
+		method:     commandVtTabletCommit,
+		params:     "[-username <TableACL user>] <transaction_id>",
+		help:       "Commits the given transaction on the provided server.",
+		deprecated: true,
 	})
 	addCommand(queriesGroupName, command{
-		name:   "VtTabletRollback",
-		method: commandVtTabletRollback,
-		params: "[-username <TableACL user>] <tablet alias> <transaction_id>",
-		help:   "Rollbacks the given transaction on the provided server.",
+		name:       "VtTabletRollback",
+		method:     commandVtTabletRollback,
+		params:     "[-username <TableACL user>] <tablet alias> <transaction_id>",
+		help:       "Rollbacks the given transaction on the provided server.",
+		deprecated: true,
 	})
 	addCommand(queriesGroupName, command{
-		name:   "VtTabletStreamHealth",
-		method: commandVtTabletStreamHealth,
-		params: "[-count <count, default 1>] <tablet alias>",
-		help:   "Executes the StreamHealth streaming query to a vttablet process. Will stop after getting <count> answers.",
+		name:       "VtTabletStreamHealth",
+		method:     commandVtTabletStreamHealth,
+		params:     "[-count <count, default 1>] <tablet alias>",
+		help:       "Executes the StreamHealth streaming query to a vttablet process. Will stop after getting <count> answers.",
+		deprecated: true,
 	})
 }
 
-type bindvars map[string]interface{}
+type bindvars map[string]any
 
 func (bv *bindvars) String() string {
 	b, err := json.Marshal(bv)
@@ -122,7 +129,7 @@ func (bv *bindvars) Set(s string) (err error) {
 }
 
 // For internal flag compatibility
-func (bv *bindvars) Get() interface{} {
+func (bv *bindvars) Get() any {
 	return bv
 }
 
@@ -145,7 +152,7 @@ func parseExecuteOptions(value string) (*querypb.ExecuteOptions, error) {
 
 func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if !*enableQueries {
-		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
+		return fmt.Errorf("query commands are disabled (set the --enable_queries flag to enable)")
 	}
 
 	server := subFlags.String("server", "", "VtGate server to connect to")
@@ -190,7 +197,7 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 
 func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if !*enableQueries {
-		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
+		return fmt.Errorf("query commands are disabled (set the --enable_queries flag to enable)")
 	}
 
 	username := subFlags.String("username", "", "If set, value is set as immediate caller id in the request and used by vttablet for TableACL check")
@@ -253,7 +260,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 
 func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if !*enableQueries {
-		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
+		return fmt.Errorf("query commands are disabled (set the --enable_queries flag to enable)")
 	}
 
 	username := subFlags.String("username", "", "If set, value is set as immediate caller id in the request and used by vttablet for TableACL check")
@@ -300,7 +307,7 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 
 func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if !*enableQueries {
-		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
+		return fmt.Errorf("query commands are disabled (set the --enable_queries flag to enable)")
 	}
 
 	username := subFlags.String("username", "", "If set, value is set as immediate caller id in the request and used by vttablet for TableACL check")
@@ -346,7 +353,7 @@ func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 
 func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if !*enableQueries {
-		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
+		return fmt.Errorf("query commands are disabled (set the --enable_queries flag to enable)")
 	}
 
 	username := subFlags.String("username", "", "If set, value is set as immediate caller id in the request and used by vttablet for TableACL check")
@@ -392,7 +399,7 @@ func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlag
 
 func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if !*enableQueries {
-		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
+		return fmt.Errorf("query commands are disabled (set the --enable_queries flag to enable)")
 	}
 
 	count := subFlags.Int("count", 1, "number of responses to wait for")
@@ -452,32 +459,5 @@ func (lw loggerWriter) Write(p []byte) (int, error) {
 
 // printQueryResult will pretty-print a QueryResult to the logger.
 func printQueryResult(writer io.Writer, qr *sqltypes.Result) {
-	if qr == nil {
-		return
-	}
-	if len(qr.Rows) == 0 {
-		return
-	}
-
-	table := tablewriter.NewWriter(writer)
-	table.SetAutoFormatHeaders(false)
-
-	// Make header.
-	header := make([]string, 0, len(qr.Fields))
-	for _, field := range qr.Fields {
-		header = append(header, field.Name)
-	}
-	table.SetHeader(header)
-
-	// Add rows.
-	for _, row := range qr.Rows {
-		vals := make([]string, 0, len(row))
-		for _, val := range row {
-			vals = append(vals, val.ToString())
-		}
-		table.Append(vals)
-	}
-
-	// Print table.
-	table.Render()
+	cli.WriteQueryResultTable(writer, qr)
 }

@@ -34,6 +34,12 @@ declare namespace NodeJS {
         // Overriding this can be useful to differentiate between multiple VTAdmin deployments,
         // e.g., "VTAdmin (staging)".
         REACT_APP_DOCUMENT_TITLE?: string;
+
+        // Optional. Defaults to "false". If "true", UI controls that correspond to write actions (PUT, POST, DELETE) will be hidden.
+        // Note that this *only* affects the UI. If write actions are a concern, Vitess operators are encouraged
+        // to also configure vtadmin-api for role-based access control (RBAC) if needed;
+        // see https://github.com/vitessio/vitess/blob/main/go/vt/vtadmin/rbac/rbac.go
+        REACT_APP_READONLY_MODE?: string;
     }
 }
 

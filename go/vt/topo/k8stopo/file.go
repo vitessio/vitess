@@ -25,6 +25,7 @@ import (
 	"io"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"context"
@@ -228,6 +229,31 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 	}
 
 	return out, KubernetesVersion(result.GetResourceVersion()), nil
+}
+
+// List is part of the topo.Conn interface.
+func (s *Server) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
+	nodeList, err := s.resourceClient.List(ctx, metav1.ListOptions{})
+
+	results := []topo.KVInfo{}
+	if err != nil {
+		return results, convertError(err, filePathPrefix)
+	}
+	nodes := nodeList.Items
+	if len(nodes) == 0 {
+		return results, topo.NewError(topo.NoNode, filePathPrefix)
+	}
+	for _, node := range nodes {
+		if strings.HasPrefix(node.Data.Value, filePathPrefix) {
+			results = append(results, topo.KVInfo{
+				Key:     []byte(node.Data.Key),
+				Value:   []byte(node.Data.Value),
+				Version: KubernetesVersion(node.GetResourceVersion()),
+			})
+		}
+	}
+
+	return results, nil
 }
 
 // Delete is part of the topo.Conn interface.

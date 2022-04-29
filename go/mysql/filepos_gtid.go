@@ -70,17 +70,17 @@ func (gtid filePosGTID) Flavor() string {
 }
 
 // SequenceDomain implements GTID.SequenceDomain().
-func (gtid filePosGTID) SequenceDomain() interface{} {
+func (gtid filePosGTID) SequenceDomain() any {
 	return nil
 }
 
 // SourceServer implements GTID.SourceServer().
-func (gtid filePosGTID) SourceServer() interface{} {
+func (gtid filePosGTID) SourceServer() any {
 	return nil
 }
 
 // SequenceNumber implements GTID.SequenceNumber().
-func (gtid filePosGTID) SequenceNumber() interface{} {
+func (gtid filePosGTID) SequenceNumber() any {
 	return nil
 }
 

@@ -25,6 +25,7 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/mysql/collations"
 	vtschema "vitess.io/vitess/go/vt/schema"
 
 	"vitess.io/vitess/go/mysql"
@@ -38,6 +39,12 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+)
+
+const (
+	trxHistoryLenQuery = `select count as history_len from information_schema.INNODB_METRICS where name = 'trx_rseg_history_len'`
+	replicaLagQuery    = `show slave status`
+	hostQuery          = `select @@hostname as hostname, @@port as port`
 )
 
 // HeartbeatTime is set to slightly below 1s, compared to idleTimeout
@@ -185,6 +192,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		bufferedEvents []*binlogdatapb.VEvent
 		curSize        int
 	)
+
 	// Only the following patterns are possible:
 	// BEGIN->ROWs or Statements->GTID->COMMIT. In the case of large transactions, this can be broken into chunks.
 	// BEGIN->JOURNAL->GTID->COMMIT
@@ -201,6 +209,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	bufferAndTransmit := func(vevent *binlogdatapb.VEvent) error {
 		vevent.Keyspace = vs.vse.keyspace
 		vevent.Shard = vs.vse.shard
+
 		switch vevent.Type {
 		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD,
 			binlogdatapb.VEventType_JOURNAL:
@@ -250,8 +259,6 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				return vs.send(vevents)
 			}
 			curSize += newSize
-			bufferedEvents = append(bufferedEvents, vevent)
-		case binlogdatapb.VEventType_SAVEPOINT:
 			bufferedEvents = append(bufferedEvents, vevent)
 		default:
 			vs.vse.errorCounts.Add("BufferAndTransmit", 1)
@@ -483,13 +490,15 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				vs.se.ReloadAt(context.Background(), vs.pos)
 			}
 		case sqlparser.StmtSavepoint:
-			mustSend := mustSendStmt(q, vs.cp.DBName())
-			if mustSend {
-				vevents = append(vevents, &binlogdatapb.VEvent{
-					Type:      binlogdatapb.VEventType_SAVEPOINT,
-					Statement: q.SQL,
-				})
-			}
+			// We currently completely skip `SAVEPOINT ...` statements.
+			//
+			// MySQL inserts `SAVEPOINT ...` statements into the binlog in row based, statement based
+			// and in mixed replication modes, but only ever writes `ROLLBACK TO ...` statements to the
+			// binlog in mixed or statement based replication modes. Without `ROLLBACK TO ...` statements,
+			// savepoints are side-effect free.
+			//
+			// Vitess only supports row based replication, so skipping the creation of savepoints
+			// reduces the amount of data send over to vplayer.
 		case sqlparser.StmtOther, sqlparser.StmtPriv, sqlparser.StmtSet, sqlparser.StmtComment, sqlparser.StmtFlush:
 			// These are either:
 			// 1) DBA statements like REPAIR that can be ignored.
@@ -513,14 +522,23 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		// will generate a new plan and FIELD event.
 		id := ev.TableID(vs.format)
 
-		if _, ok := vs.plans[id]; ok {
-			return nil, nil
-		}
-
 		tm, err := ev.TableMap(vs.format)
 		if err != nil {
 			return nil, err
 		}
+
+		if plan, ok := vs.plans[id]; ok {
+			// When the underlying mysql server restarts the table map can change.
+			// Usually the vstreamer will also error out when this happens, and vstreamer re-initializes its table map.
+			// But if the vstreamer is not aware of the restart, we could get an id that matches one in the cache, but
+			// is for a different table. We then invalidate and recompute the plan for this id.
+			if plan == nil || plan.Table.Name == tm.Name {
+				return nil, nil
+			}
+			vs.plans[id] = nil
+			log.Infof("table map changed: id %d for %s has changed to %s", id, plan.Table.Name, tm.Name)
+		}
+
 		if tm.Database == "_vt" && tm.Name == "resharding_journal" {
 			// A journal is a special case that generates a JOURNAL event.
 			return nil, vs.buildJournalPlan(id, tm)
@@ -601,7 +619,7 @@ func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
 	}
 	fields := qr.Fields
 	if len(fields) < len(tm.Types) {
-		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, fields)
+		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema has %v", tm.Name, tm.Types, fields)
 	}
 	table := &Table{
 		Name:   "_vt.resharding_journal",
@@ -634,7 +652,7 @@ func (vs *vstreamer) buildVersionPlan(id uint64, tm *mysql.TableMap) error {
 	}
 	fields := qr.Fields
 	if len(fields) < len(tm.Types) {
-		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, fields)
+		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema has %v", tm.Name, tm.Types, fields)
 	}
 	table := &Table{
 		Name:   "_vt.schema_version",
@@ -712,7 +730,7 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 	if len(st.Fields) < len(tm.Types) {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
 			log.Infof("Cannot determine columns for table %s", tm.Name)
-			return nil, fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, st.Fields)
+			return nil, fmt.Errorf("cannot determine table columns for %s: event has %v, schema has %v", tm.Name, tm.Types, st.Fields)
 		}
 		return fields, nil
 	}
@@ -884,6 +902,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		return false, nil, nil
 	}
 	values := make([]sqltypes.Value, dataColumns.Count())
+	charsets := make([]collations.ID, len(values))
 	valueIndex := 0
 	pos := 0
 	for colNum := 0; colNum < dataColumns.Count(); colNum++ {
@@ -902,11 +921,12 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		}
 		pos += l
 
+		charsets[colNum] = collations.ID(plan.Table.Fields[colNum].Charset)
 		values[colNum] = value
 		valueIndex++
 	}
 	filtered := make([]sqltypes.Value, len(plan.ColExprs))
-	ok, err := plan.filter(values, filtered)
+	ok, err := plan.filter(values, filtered, charsets)
 	return ok, filtered, err
 }
 

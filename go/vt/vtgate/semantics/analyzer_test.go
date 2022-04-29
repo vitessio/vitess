@@ -1352,7 +1352,7 @@ func parseAndAnalyze(t *testing.T, query, dbName string) (sqlparser.Statement, *
 	parse, err := sqlparser.Parse(query)
 	require.NoError(t, err)
 
-	semTable, err := Analyze(parse.(sqlparser.SelectStatement), dbName, fakeSchemaInfo())
+	semTable, err := Analyze(parse, dbName, fakeSchemaInfo())
 	require.NoError(t, err)
 	return parse, semTable
 }

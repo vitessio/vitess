@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/mysql"
@@ -60,9 +61,12 @@ type QueryExecutor struct {
 	tabletType     topodatapb.TabletType
 }
 
-const streamRowsSize = 256
+const (
+	streamRowsSize         = 256
+	maxQueryBufferDuration = 10 * time.Second
+)
 
-var streamResultPool = sync.Pool{New: func() interface{} {
+var streamResultPool = sync.Pool{New: func() any {
 	return &sqltypes.Result{
 		Rows: make([][]sqltypes.Value, 0, streamRowsSize),
 	}
@@ -111,11 +115,11 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		}
 
 		if reply == nil {
-			qre.tsv.qe.AddStats(planName, tableName, 1, duration, mysqlTime, 0, 1)
+			qre.tsv.qe.AddStats(qre.plan.PlanID, tableName, 1, duration, mysqlTime, 0, 0, 1)
 			qre.plan.AddStats(1, duration, mysqlTime, 0, 0, 1)
 			return
 		}
-		qre.tsv.qe.AddStats(planName, tableName, 1, duration, mysqlTime, int64(reply.RowsAffected), 0)
+		qre.tsv.qe.AddStats(qre.plan.PlanID, tableName, 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0)
 		qre.plan.AddStats(1, duration, mysqlTime, reply.RowsAffected, uint64(len(reply.Rows)), 0)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
@@ -386,14 +390,31 @@ func (qre *QueryExecutor) checkPermissions() error {
 		remoteAddr = ci.RemoteAddr()
 		username = ci.Username()
 	}
-	action, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars, qre.marginComments)
+
+	bufferingTimeoutCtx, cancel := context.WithTimeout(qre.ctx, maxQueryBufferDuration)
+	defer cancel()
+
+	action, ruleCancelCtx, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars, qre.marginComments)
 	switch action {
 	case rules.QRFail:
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed due to rule: %s", desc)
 	case rules.QRFailRetry:
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "disallowed due to rule: %s", desc)
+	case rules.QRBuffer:
+		if ruleCancelCtx != nil {
+			// We buffer up to some timeout. The timeout is determined by ctx.Done().
+			// If we're not at timeout yet, we fail the query
+			select {
+			case <-ruleCancelCtx.Done():
+				// good! We have buffered the query, and buffering is completed
+			case <-bufferingTimeoutCtx.Done():
+				// Sorry, timeout while waiting for buffering to complete
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "buffer timeout in rule: %s", desc)
+			}
+		}
+	default:
+		// no rules against this query. Good to proceed
 	}
-
 	// Skip ACL check for queries against the dummy dual table
 	if qre.plan.TableName().String() == "dual" {
 		return nil
@@ -523,7 +544,7 @@ func (*QueryExecutor) BeginAgain(ctx context.Context, dc *StatefulConnection) er
 }
 
 func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
-	env := evalengine.EnvWithBindVars(qre.bindVars)
+	env := evalengine.EnvWithBindVars(qre.bindVars, collations.Unknown)
 	result, err := env.Evaluate(qre.plan.NextCount)
 	if err != nil {
 		return nil, err
@@ -647,7 +668,7 @@ func (qre *QueryExecutor) verifyRowCount(count, maxrows int64) error {
 	if warnThreshold > 0 && count > warnThreshold {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 		qre.tsv.Stats().Warnings.Add("ResultsExceeded", 1)
-		log.Warningf("caller id: %s row count %v exceeds warning threshold %v: %q", callerID.Username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars))
+		log.Warningf("caller id: %s row count %v exceeds warning threshold %v: %q", callerID.Username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars, qre.tsv.Config().SanitizeLogMessages))
 	}
 	return nil
 }
@@ -757,7 +778,6 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	if err != nil {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
 	}
-
 	if qre.tsv.config.AnnotateQueries {
 		username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(qre.ctx))
 		if username == "" {

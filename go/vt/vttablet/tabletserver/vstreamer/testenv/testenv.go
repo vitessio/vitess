@@ -95,6 +95,7 @@ func Init() (*Env, error) {
 			},
 		},
 		OnlyMySQL: true,
+		Charset:   "utf8mb4_general_ci",
 	}
 	te.cluster = &vttest.LocalCluster{
 		Config: cfg,

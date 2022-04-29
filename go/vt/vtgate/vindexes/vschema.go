@@ -22,7 +22,9 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
+	"vitess.io/vitess/go/sqlescape"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -78,6 +80,7 @@ func (rr *RoutingRule) MarshalJSON() ([]byte, error) {
 	for _, t := range rr.Tables {
 		tables = append(tables, t.Keyspace.Name+"."+t.Name.String())
 	}
+
 	return json.Marshal(tables)
 }
 
@@ -103,14 +106,14 @@ type Keyspace struct {
 
 // ColumnVindex contains the index info for each index of a table.
 type ColumnVindex struct {
-	Columns     []sqlparser.ColIdent `json:"columns"`
-	Type        string               `json:"type"`
-	Name        string               `json:"name"`
-	Owned       bool                 `json:"owned,omitempty"`
-	Vindex      Vindex               `json:"vindex"`
-	isUnique    bool
-	cost        int
-	ignoreInDML bool
+	Columns  []sqlparser.ColIdent `json:"columns"`
+	Type     string               `json:"type"`
+	Name     string               `json:"name"`
+	Owned    bool                 `json:"owned,omitempty"`
+	Vindex   Vindex               `json:"vindex"`
+	isUnique bool
+	cost     int
+	partial  bool
 }
 
 // IsUnique is used to tell whether the ColumnVindex
@@ -126,9 +129,9 @@ func (c *ColumnVindex) Cost() int {
 	return c.cost
 }
 
-// IgnoreInDML is used to let planner and engine know that they need to be ignored for dml queries.
-func (c *ColumnVindex) IgnoreInDML() bool {
-	return c.ignoreInDML
+// IsPartialVindex is used to let planner and engine know that this is a composite vindex missing one or more columns
+func (c *ColumnVindex) IsPartialVindex() bool {
+	return c.partial
 }
 
 // Column describes a column.
@@ -371,13 +374,13 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				columnSubset := columns[:i]
 				cost++
 				columnVindex = &ColumnVindex{
-					Columns:     columnSubset,
-					Type:        vindexInfo.Type,
-					Name:        ind.Name,
-					Owned:       owned,
-					Vindex:      vindex,
-					cost:        cost,
-					ignoreInDML: true,
+					Columns: columnSubset,
+					Type:    vindexInfo.Type,
+					Name:    ind.Name,
+					Owned:   owned,
+					Vindex:  vindex,
+					cost:    cost,
+					partial: true,
 				}
 				t.ColumnVindexes = append(t.ColumnVindexes, columnVindex)
 			}
@@ -448,7 +451,25 @@ func addDual(vschema *VSchema) {
 	}
 }
 
+// expects table name of the form <keyspace>.<tablename>
+func escapeQualifiedTable(qualifiedTableName string) (string, error) {
+	// It's possible to have a database or table name with a dot in it, but that's not otherwise supported within vitess today
+	arr := strings.Split(qualifiedTableName, ".")
+	switch len(arr) {
+	case 1:
+		return "", fmt.Errorf("table %s must be qualified", qualifiedTableName)
+	case 2:
+		keyspace, tableName := arr[0], arr[1]
+		return fmt.Sprintf("%s.%s",
+			// unescape() first in case an already escaped string was passed
+			sqlescape.EscapeID(sqlescape.UnescapeID(keyspace)),
+			sqlescape.EscapeID(sqlescape.UnescapeID(tableName))), nil
+	}
+	return "", fmt.Errorf("invalid table name: %s, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)", qualifiedTableName)
+}
+
 func buildRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
+	var err error
 	if source.RoutingRules == nil {
 		return
 	}
@@ -468,20 +489,31 @@ outer:
 				}
 				continue outer
 			}
-			toks, totabname, err := sqlparser.ParseTable(toTable)
+
+			// we need to backtick the keyspace and table name before calling ParseTable
+			toTable, err = escapeQualifiedTable(toTable)
 			if err != nil {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
 					Error: err,
 				}
 				continue outer
 			}
-			if toks == "" {
+
+			toKeyspace, toTableName, err := sqlparser.ParseTable(toTable)
+
+			if err != nil {
+				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
+					Error: err,
+				}
+				continue outer
+			}
+			if toKeyspace == "" {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
 					Error: fmt.Errorf("table %s must be qualified", toTable),
 				}
 				continue outer
 			}
-			t, err := vschema.FindTable(toks, totabname)
+			t, err := vschema.FindTable(toKeyspace, toTableName)
 			if err != nil {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
 					Error: err,
@@ -683,7 +715,7 @@ func ChooseVindexForType(typ querypb.Type) (string, error) {
 
 // FindBestColVindex finds the best ColumnVindex for VReplication.
 func FindBestColVindex(table *Table) (*ColumnVindex, error) {
-	if len(table.ColumnVindexes) == 0 {
+	if table.ColumnVindexes == nil || len(table.ColumnVindexes) == 0 {
 		return nil, fmt.Errorf("table %s has no vindex", table.Name.String())
 	}
 	var result *ColumnVindex

@@ -215,7 +215,7 @@ func buildAlterView(vschema plancontext.VSchema, ddl *sqlparser.AlterView, reser
 	if keyspace.Name != keyspaceName {
 		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewDifferentKeyspace)
 	}
-	if opCode != engine.SelectUnsharded && opCode != engine.SelectEqualUnique && opCode != engine.SelectScatter {
+	if opCode != engine.Unsharded && opCode != engine.EqualUnique && opCode != engine.Scatter {
 		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
 	}
 	_ = sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
@@ -251,7 +251,7 @@ func buildCreateView(vschema plancontext.VSchema, ddl *sqlparser.CreateView, res
 	if keyspace.Name != keyspaceName {
 		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewDifferentKeyspace)
 	}
-	if opCode != engine.SelectUnsharded && opCode != engine.SelectEqualUnique && opCode != engine.SelectScatter {
+	if opCode != engine.Unsharded && opCode != engine.EqualUnique && opCode != engine.Scatter {
 		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
 	}
 	_ = sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
@@ -364,13 +364,13 @@ func buildRenameTable(vschema plancontext.VSchema, renameTable *sqlparser.Rename
 	return destination, keyspace, nil
 }
 
-func tryToGetRoutePlan(selectPlan engine.Primitive) (valid bool, keyspaceName string, opCode engine.RouteOpcode) {
+func tryToGetRoutePlan(selectPlan engine.Primitive) (valid bool, keyspaceName string, opCode engine.Opcode) {
 	switch plan := selectPlan.(type) {
 	case *engine.Route:
 		return true, plan.Keyspace.Name, plan.Opcode
 	case engine.Gen4Comparer:
 		return tryToGetRoutePlan(plan.GetGen4Primitive())
 	default:
-		return false, "", engine.RouteOpcode(0)
+		return false, "", engine.Opcode(0)
 	}
 }

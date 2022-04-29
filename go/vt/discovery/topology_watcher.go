@@ -118,7 +118,7 @@ func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, tr TabletR
 // the tablets in a cell, and starts refreshing.
 func NewCellTabletsWatcher(ctx context.Context, topoServer *topo.Server, tr TabletRecorder, f TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *TopologyWatcher {
 	return NewTopologyWatcher(ctx, topoServer, tr, f, cell, refreshInterval, refreshKnownTablets, topoReadConcurrency, func(tw *TopologyWatcher) ([]*topodata.TabletAlias, error) {
-		return tw.topoServer.GetTabletsByCell(ctx, tw.cell)
+		return tw.topoServer.GetTabletAliasesByCell(ctx, tw.cell)
 	})
 }
 

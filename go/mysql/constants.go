@@ -213,6 +213,9 @@ const (
 	// ComBinlogDump is COM_BINLOG_DUMP.
 	ComBinlogDump = 0x12
 
+	// ComSemiSyncAck is SEMI_SYNC_ACK.
+	ComSemiSyncAck = 0xef
+
 	// ComPrepare is COM_PREPARE.
 	ComPrepare = 0x16
 
@@ -419,6 +422,8 @@ const (
 	ErNoReferencedRow2              = 1452
 	ErSPNotVarArg                   = 1414
 	ERInnodbReadOnly                = 1874
+	ERMasterFatalReadingBinlog      = 1236
+	ERNoDefaultForField             = 1364
 
 	// already exists
 	ERTableExists    = 1050
@@ -531,6 +536,7 @@ const (
 	ERQueryInterrupted             = 1317
 	ERTruncatedWrongValueForField  = 1366
 	ERDataTooLong                  = 1406
+	ERWarnDataTruncated            = 1265
 	ERForbidSchemaChange           = 1450
 	ERDataOutOfRange               = 1690
 
@@ -552,6 +558,9 @@ const (
 
 	// SSWrongNumberOfColumns is related to columns error
 	SSWrongNumberOfColumns = "21000"
+
+	// SSWrongValueCountOnRow is related to columns count mismatch error
+	SSWrongValueCountOnRow = "21S01"
 
 	// SSDataTooLong is ER_DATA_TOO_LONG
 	SSDataTooLong = "22001"
@@ -589,21 +598,6 @@ const (
 
 	// SSQueryInterrupted is ER_QUERY_INTERRUPTED;
 	SSQueryInterrupted = "70100"
-)
-
-// A few interesting character set values.
-// See http://dev.mysql.com/doc/internals/en/character-set.html#packet-Protocol::CharacterSet
-const (
-	DefaultCollation = "utf8mb4_general_ci"
-
-	// CharacterSetUtf8 is for UTF8.
-	CharacterSetUtf8 = 33
-
-	// CharacterSetUtf8mb4 is for 4-bytes UTF8.
-	CharacterSetUtf8mb4 = 45
-
-	// CharacterSetBinary is for binary. Use by integer fields for instance.
-	CharacterSetBinary = 63
 )
 
 // CharacterSetEncoding maps a charset name to a golang encoder.
@@ -687,4 +681,34 @@ func IsSchemaApplyError(err error) bool {
 		return true
 	}
 	return false
+}
+
+type ReplicationState int
+
+const (
+	ReplicationStateUnknown ReplicationState = iota
+	ReplicationStateStopped
+	ReplicationStateConnecting
+	ReplicationStateRunning
+)
+
+// ReplicationStatusToState converts a value you have for the IO thread(s) or SQL
+// thread(s) or Group Replication applier thread(s) from MySQL or intermediate
+// layers to a mysql.ReplicationState.
+// on,yes,true == ReplicationStateRunning
+// off,no,false == ReplicationStateStopped
+// connecting == ReplicationStateConnecting
+// anything else == ReplicationStateUnknown
+func ReplicationStatusToState(s string) ReplicationState {
+	// Group Replication uses ON instead of Yes
+	switch strings.ToLower(s) {
+	case "yes", "on", "true":
+		return ReplicationStateRunning
+	case "no", "off", "false":
+		return ReplicationStateStopped
+	case "connecting":
+		return ReplicationStateConnecting
+	default:
+		return ReplicationStateUnknown
+	}
 }

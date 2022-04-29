@@ -60,6 +60,7 @@ func WithTestServer(
 
 	client, err := vtctldclient.New("grpc", lis.Addr().String())
 	require.NoError(t, err, "cannot create vtctld client")
+	defer client.Close()
 
 	test(t, client)
 }
@@ -251,5 +252,11 @@ func UpdateSrvKeyspaces(ctx context.Context, t *testing.T, ts *topo.Server, srvk
 			err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace)
 			require.NoError(t, err, "UpdateSrvKeyspace(%v, %v, %v)", cell, keyspace, srvKeyspace)
 		}
+	}
+}
+
+func MockGetVersionFromTablet(addrVersionMap map[string]string) func(ta string) (string, error) {
+	return func(tabletAddr string) (string, error) {
+		return addrVersionMap[tabletAddr], nil
 	}
 }

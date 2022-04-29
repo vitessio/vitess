@@ -27,14 +27,6 @@ import (
 	"unsafe"
 )
 
-const (
-	m1 = 0xa0761d6478bd642f
-	m2 = 0xe7037ed1a0b428db
-	m3 = 0x8ebc6af09c88c6e3
-	m4 = 0x589965cc75374cc3
-	m5 = 0x1d8e4e27c47d124f
-)
-
 func memhash(src []byte, seed uintptr) uintptr {
 	srclen := len(src)
 	if srclen == 0 {

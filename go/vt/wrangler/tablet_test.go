@@ -44,7 +44,7 @@ func TestInitTabletShardConversion(t *testing.T) {
 		Shard: "80-C0",
 	}
 
-	if err := wr.InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+	if err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
 
@@ -74,7 +74,7 @@ func TestDeleteTabletBasic(t *testing.T) {
 		Shard: "0",
 	}
 
-	if err := wr.InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+	if err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
 
@@ -104,7 +104,7 @@ func TestDeleteTabletTruePrimary(t *testing.T) {
 		Type:     topodatapb.TabletType_PRIMARY,
 	}
 
-	if err := wr.InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+	if err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
 	if _, err := ts.GetTablet(context.Background(), tablet.Alias); err != nil {
@@ -148,7 +148,7 @@ func TestDeleteTabletFalsePrimary(t *testing.T) {
 		Type:     topodatapb.TabletType_PRIMARY,
 	}
 
-	if err := wr.InitTablet(context.Background(), tablet1, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+	if err := wr.TopoServer().InitTablet(context.Background(), tablet1, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
 
@@ -161,7 +161,7 @@ func TestDeleteTabletFalsePrimary(t *testing.T) {
 		Shard:    "0",
 		Type:     topodatapb.TabletType_PRIMARY,
 	}
-	if err := wr.InitTablet(context.Background(), tablet2, true /*allowPrimaryOverride*/, false /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+	if err := wr.TopoServer().InitTablet(context.Background(), tablet2, true /*allowPrimaryOverride*/, false /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
 

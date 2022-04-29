@@ -100,7 +100,7 @@ func (lu *ConsistentLookup) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.De
 		return out, nil
 	}
 
-	results, err := lu.lkp.Lookup(vcursor, ids, vtgatepb.CommitOrder_PRE)
+	results, err := lu.lkp.Lookup(vcursor, ids, vcursor.LookupRowLockShardSession())
 	if err != nil {
 		return nil, err
 	}

@@ -63,14 +63,19 @@ var (
 
 //region cluster setup/teardown
 
+// SetupReparentClusterLegacy is used to setup the reparent cluster
+func SetupReparentClusterLegacy(t *testing.T, enableSemiSync bool) *cluster.LocalProcessCluster {
+	return setupClusterLegacy(context.Background(), t, ShardName, []string{cell1, cell2}, []int{3, 1}, enableSemiSync)
+}
+
 // SetupReparentCluster is used to setup the reparent cluster
-func SetupReparentCluster(t *testing.T) *cluster.LocalProcessCluster {
-	return setupCluster(context.Background(), t, ShardName, []string{cell1, cell2}, []int{3, 1})
+func SetupReparentCluster(t *testing.T, enableSemiSync bool) *cluster.LocalProcessCluster {
+	return setupCluster(context.Background(), t, ShardName, []string{cell1, cell2}, []int{3, 1}, enableSemiSync)
 }
 
 // SetupRangeBasedCluster sets up the range based cluster
 func SetupRangeBasedCluster(ctx context.Context, t *testing.T) *cluster.LocalProcessCluster {
-	return setupCluster(ctx, t, ShardName, []string{cell1}, []int{2})
+	return setupClusterLegacy(ctx, t, ShardName, []string{cell1}, []int{2}, true)
 }
 
 // TeardownCluster is used to teardown the reparent cluster
@@ -78,25 +83,25 @@ func TeardownCluster(clusterInstance *cluster.LocalProcessCluster) {
 	clusterInstance.Teardown()
 }
 
-func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []string, numTablets []int) *cluster.LocalProcessCluster {
+func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []string, numTablets []int, enableSemiSync bool) *cluster.LocalProcessCluster {
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster(cells[0], Hostname)
 	keyspace := &cluster.Keyspace{Name: KeyspaceName}
+
+	if enableSemiSync {
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
+		clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
+	}
+
 	// Start topo server
 	err := clusterInstance.StartTopo()
-	if err != nil {
-		t.Fatalf("Error starting topo: %s", err.Error())
-	}
+	require.NoError(t, err, "Error starting topo")
 	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cells[0])
-	if err != nil {
-		t.Fatalf("Error managing topo: %s", err.Error())
-	}
+	require.NoError(t, err, "Error managing topo")
 	numCell := 1
 	for numCell < len(cells) {
 		err = clusterInstance.VtctlProcess.AddCellInfo(cells[numCell])
-		if err != nil {
-			t.Fatalf("Error managing topo: %s", err.Error())
-		}
+		require.NoError(t, err, "Error managing topo")
 		numCell++
 	}
 
@@ -115,34 +120,27 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	shard := &cluster.Shard{Name: shardName}
 	shard.Vttablets = tablets
 
-	clusterInstance.VtTabletExtraArgs = []string{
-		"-lock_tables_timeout", "5s",
-		"-enable_semi_sync",
-		"-init_populate_metadata",
-		"-track_schema_versions=true",
+	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
+		"--lock_tables_timeout", "5s",
+		"--init_populate_metadata",
+		"--track_schema_versions=true",
 		// disabling online-ddl for reparent tests. This is done to reduce flakiness.
 		// All the tests in this package reparent frequently between different tablets
 		// This means that Promoting a tablet to primary is sometimes immediately followed by a DemotePrimary call.
 		// In this case, the close method and initSchema method of the onlineDDL executor race.
 		// If the initSchema acquires the lock, then it takes about 30 seconds for it to run during which time the
 		// DemotePrimary rpc is stalled!
-		"-queryserver_enable_online_ddl=false",
-	}
-	if clusterInstance.VtTabletMajorVersion >= 13 && clusterInstance.VtctlMajorVersion >= 13 {
+		"--queryserver_enable_online_ddl=false",
 		// disabling active reparents on the tablet since we don't want the replication manager
 		// to fix replication if it is stopped. Some tests deliberately do that. Also, we don't want
 		// the replication manager to silently fix the replication in case ERS or PRS mess up. All the
 		// tests in this test suite should work irrespective of this flag. Each run of ERS, PRS should be
 		// setting up the replication correctly.
-		// However, due to the bugs in old vitess components we can only do this for version >= 13.
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "-disable_active_reparents")
-	}
+		"--disable_active_reparents")
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
-	if err != nil {
-		t.Fatalf("Cannot launch cluster: %s", err.Error())
-	}
+	require.NoError(t, err, "Cannot launch cluster")
 
 	//Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
@@ -150,9 +148,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		for _, tablet := range shard.Vttablets {
 			log.Infof("Starting MySql for tablet %v", tablet.Alias)
 			proc, err := tablet.MysqlctlProcess.StartProcess()
-			if err != nil {
-				t.Fatalf("Error starting start mysql: %s", err.Error())
-			}
+			require.NoError(t, err, "Error starting start mysql")
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 		}
 	}
@@ -160,7 +156,8 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	// Wait for mysql processes to start
 	for _, proc := range mysqlCtlProcessList {
 		if err := proc.Wait(); err != nil {
-			t.Fatalf("Error starting mysql: %s", err.Error())
+			clusterInstance.PrintMysqlctlLogFiles()
+			require.FailNow(t, "Error starting mysql: %s", err.Error())
 		}
 	}
 
@@ -169,6 +166,118 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 }
 
 func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster, shardName string, tablets []*cluster.Vttablet) {
+	for _, tablet := range tablets {
+		// Start the tablet
+		err := tablet.VttabletProcess.Setup()
+		require.NoError(t, err)
+	}
+
+	for _, tablet := range tablets {
+		err := tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
+		require.NoError(t, err)
+	}
+
+	// Initialize shard
+	err := clusterInstance.VtctlclientProcess.InitializeShard(KeyspaceName, shardName, tablets[0].Cell, tablets[0].TabletUID)
+	require.NoError(t, err)
+
+	ValidateTopology(t, clusterInstance, true)
+
+	// create Tables
+	RunSQL(ctx, t, sqlSchema, tablets[0])
+
+	CheckPrimaryTablet(t, clusterInstance, tablets[0])
+
+	ValidateTopology(t, clusterInstance, false)
+	time.Sleep(100 * time.Millisecond) // wait for replication to catchup
+	strArray := GetShardReplicationPositions(t, clusterInstance, KeyspaceName, shardName, true)
+	assert.Equal(t, len(tablets), len(strArray))
+	assert.Contains(t, strArray[0], "primary") // primary first
+}
+
+func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cells []string, numTablets []int, enableSemiSync bool) *cluster.LocalProcessCluster {
+	var tablets []*cluster.Vttablet
+	clusterInstance := cluster.NewCluster(cells[0], Hostname)
+	keyspace := &cluster.Keyspace{Name: KeyspaceName}
+
+	if enableSemiSync {
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
+		clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
+	}
+
+	// Start topo server
+	err := clusterInstance.StartTopo()
+	require.NoError(t, err, "Error starting topo")
+	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cells[0])
+	require.NoError(t, err, "Error managing topo")
+	numCell := 1
+	for numCell < len(cells) {
+		err = clusterInstance.VtctlProcess.AddCellInfo(cells[numCell])
+		require.NoError(t, err, "Error managing topo")
+		numCell++
+	}
+
+	// Adding another cell in the same cluster
+	numCell = 0
+	for numCell < len(cells) {
+		i := 0
+		for i < numTablets[numCell] {
+			i++
+			tablet := clusterInstance.NewVttabletInstance("replica", 100*(numCell+1)+i, cells[numCell])
+			tablets = append(tablets, tablet)
+		}
+		numCell++
+	}
+
+	shard := &cluster.Shard{Name: shardName}
+	shard.Vttablets = tablets
+
+	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
+		"--lock_tables_timeout", "5s",
+		"--init_populate_metadata",
+		"--track_schema_versions=true",
+		// disabling online-ddl for reparent tests. This is done to reduce flakiness.
+		// All the tests in this package reparent frequently between different tablets
+		// This means that Promoting a tablet to primary is sometimes immediately followed by a DemotePrimary call.
+		// In this case, the close method and initSchema method of the onlineDDL executor race.
+		// If the initSchema acquires the lock, then it takes about 30 seconds for it to run during which time the
+		// DemotePrimary rpc is stalled!
+		"--queryserver_enable_online_ddl=false",
+		// disabling active reparents on the tablet since we don't want the replication manager
+		// to fix replication if it is stopped. Some tests deliberately do that. Also, we don't want
+		// the replication manager to silently fix the replication in case ERS or PRS mess up. All the
+		// tests in this test suite should work irrespective of this flag. Each run of ERS, PRS should be
+		// setting up the replication correctly.
+		"--disable_active_reparents")
+
+	// Initialize Cluster
+	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
+	require.NoError(t, err, "Cannot launch cluster")
+
+	//Start MySql
+	var mysqlCtlProcessList []*exec.Cmd
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		for _, tablet := range shard.Vttablets {
+			log.Infof("Starting MySql for tablet %v", tablet.Alias)
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			require.NoError(t, err, "Error starting start mysql")
+			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
+		}
+	}
+
+	// Wait for mysql processes to start
+	for _, proc := range mysqlCtlProcessList {
+		if err := proc.Wait(); err != nil {
+			clusterInstance.PrintMysqlctlLogFiles()
+			require.FailNow(t, "Error starting mysql: %s", err.Error())
+		}
+	}
+
+	setupShardLegacy(ctx, t, clusterInstance, shardName, tablets)
+	return clusterInstance
+}
+
+func setupShardLegacy(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster, shardName string, tablets []*cluster.Vttablet) {
 	for _, tablet := range tablets {
 		// create database
 		err := tablet.VttabletProcess.CreateDB(KeyspaceName)
@@ -184,8 +293,8 @@ func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.Loca
 	}
 
 	// Force the replica to reparent assuming that all the datasets are identical.
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
-		"-force", fmt.Sprintf("%s/%s", KeyspaceName, shardName), tablets[0].Alias)
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary", "--",
+		"--force", fmt.Sprintf("%s/%s", KeyspaceName, shardName), tablets[0].Alias)
 	require.NoError(t, err)
 
 	ValidateTopology(t, clusterInstance, true)
@@ -247,18 +356,18 @@ func PrsAvoid(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *c
 // PrsWithTimeout runs PRS
 func PrsWithTimeout(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, avoid bool, actionTimeout, waitTimeout string) (string, error) {
 	args := []string{
-		"PlannedReparentShard",
-		"-keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
+		"PlannedReparentShard", "--",
+		"--keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
 	if actionTimeout != "" {
-		args = append(args, "-action_timeout", actionTimeout)
+		args = append(args, "--action_timeout", actionTimeout)
 	}
 	if waitTimeout != "" {
-		args = append(args, "-wait_replicas_timeout", waitTimeout)
+		args = append(args, "--wait_replicas_timeout", waitTimeout)
 	}
 	if avoid {
-		args = append(args, "-avoid_tablet")
+		args = append(args, "--avoid_tablet")
 	} else {
-		args = append(args, "-new_primary")
+		args = append(args, "--new_primary")
 	}
 	args = append(args, tab.Alias)
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
@@ -274,17 +383,17 @@ func Ers(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, to
 func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, timeout, waitReplicasTimeout string, tabletsToIgnore []*cluster.Vttablet, preventCrossCellPromotion bool) (string, error) {
 	var args []string
 	if timeout != "" {
-		args = append(args, "-action_timeout", timeout)
+		args = append(args, "--action_timeout", timeout)
 	}
-	args = append(args, "EmergencyReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName))
+	args = append(args, "EmergencyReparentShard", "--", "--keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName))
 	if tab != nil {
-		args = append(args, "-new_primary", tab.Alias)
+		args = append(args, "--new_primary", tab.Alias)
 	}
 	if waitReplicasTimeout != "" {
-		args = append(args, "-wait_replicas_timeout", waitReplicasTimeout)
+		args = append(args, "--wait_replicas_timeout", waitReplicasTimeout)
 	}
 	if preventCrossCellPromotion {
-		args = append(args, "-prevent_cross_cell_promotion=true")
+		args = append(args, "--prevent_cross_cell_promotion=true")
 	}
 	if len(tabletsToIgnore) != 0 {
 		tabsString := ""
@@ -295,14 +404,14 @@ func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.
 				tabsString = tabsString + "," + vttablet.Alias
 			}
 		}
-		args = append(args, "-ignore_replicas", tabsString)
+		args = append(args, "--ignore_replicas", tabsString)
 	}
 	return clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
 }
 
 // ErsWithVtctl runs ERS via vtctl binary
 func ErsWithVtctl(clusterInstance *cluster.LocalProcessCluster) (string, error) {
-	args := []string{"EmergencyReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
+	args := []string{"--durability_policy=semi_sync", "EmergencyReparentShard", "--", "--keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
 	return clusterInstance.VtctlProcess.ExecuteCommandWithOutput(args...)
 }
 
@@ -315,7 +424,7 @@ func ValidateTopology(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 	args := []string{"Validate"}
 
 	if pingTablets {
-		args = append(args, "-ping-tablets=true")
+		args = append(args, "--", "--ping-tablets=true")
 	}
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
 	require.Empty(t, out)
@@ -355,7 +464,7 @@ func CheckPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessClust
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, tabletInfo.GetType())
 
 	// make sure the health stream is updated
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", tablet.Alias)
+	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "1", tablet.Alias)
 	require.NoError(t, err)
 	var streamHealthResponse querypb.StreamHealthResponse
 
@@ -379,7 +488,7 @@ func isHealthyPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessC
 	}
 
 	// make sure the health stream is updated
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", tablet.Alias)
+	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "1", tablet.Alias)
 	require.Nil(t, err)
 	var streamHealthResponse querypb.StreamHealthResponse
 
@@ -407,6 +516,12 @@ func CheckInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vtta
 		i++
 	}
 	return fmt.Errorf("data is not yet replicated on tablet %s", tablet.Alias)
+}
+
+func CheckSemiSyncSetupCorrectly(t *testing.T, tablet *cluster.Vttablet, semiSyncVal string) {
+	dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", "")
+	require.NoError(t, err)
+	require.Equal(t, semiSyncVal, dbVar)
 }
 
 // CheckCountOfInsertedValues checks that the number of inserted values matches the given count on the given tablet
@@ -463,8 +578,8 @@ func ResurrectTablet(ctx context.Context, t *testing.T, clusterInstance *cluster
 // DeleteTablet is used to delete the given tablet
 func DeleteTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet) {
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"DeleteTablet",
-		"-allow_primary",
+		"DeleteTablet", "--",
+		"--allow_primary",
 		tab.Alias)
 	require.NoError(t, err)
 }
@@ -535,8 +650,8 @@ func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProces
 	require.NoError(t, err)
 
 	streamHealth, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"VtTabletStreamHealth",
-		"-count", "1", tablet.Alias)
+		"VtTabletStreamHealth", "--",
+		"--count", "1", tablet.Alias)
 	require.NoError(t, err)
 
 	var streamHealthResponse querypb.StreamHealthResponse
@@ -572,7 +687,7 @@ func positionAtLeast(t *testing.T, tablet *cluster.Vttablet, a string, b string)
 }
 
 func assertNodeCount(t *testing.T, result string, want int) {
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	err := json.Unmarshal([]byte(result), &resultMap)
 	require.NoError(t, err)
 
@@ -611,10 +726,7 @@ func CheckDBstatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, 
 // unable to setReplicationSource. Since some tests are used in upgrade-downgrade testing, we need this function to
 // work with different versions of vtctl.
 func SetReplicationSourceFailed(tablet *cluster.Vttablet, prsOut string) bool {
-	if strings.Contains(prsOut, fmt.Sprintf("tablet %s failed to SetReplicationSource", tablet.Alias)) {
-		return true
-	}
-	return strings.Contains(prsOut, fmt.Sprintf("tablet %s failed to SetMaster", tablet.Alias))
+	return strings.Contains(prsOut, fmt.Sprintf("tablet %s failed to SetReplicationSource", tablet.Alias))
 }
 
 // CheckReplicationStatus checks that the replication for sql and io threads is setup as expected

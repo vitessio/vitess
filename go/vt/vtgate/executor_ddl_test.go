@@ -26,7 +26,7 @@ import (
 )
 
 func TestDDLFlags(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
 	defer func() {
 		*enableOnlineDDL = true

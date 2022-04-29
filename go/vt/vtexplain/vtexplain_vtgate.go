@@ -86,7 +86,7 @@ func initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts *Options) error {
 func newFakeResolver(opts *Options, serv srvtopo.Server, cell string) *vtgate.Resolver {
 	ctx := context.Background()
 	gw := vtgate.NewTabletGateway(ctx, healthCheck, serv, cell)
-	_ = gw.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
+	_ = gw.WaitForTablets([]topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 
 	txMode := vtgatepb.TransactionMode_MULTI
 	if opts.ExecutionMode == ModeTwoPC {
@@ -209,7 +209,7 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error
 	}
 
 	var plans []*engine.Plan
-	planCache.ForEach(func(value interface{}) bool {
+	planCache.ForEach(func(value any) bool {
 		plan := value.(*engine.Plan)
 		plan.ExecTime = 0
 		plans = append(plans, plan)

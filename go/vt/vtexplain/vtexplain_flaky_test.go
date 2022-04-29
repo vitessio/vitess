@@ -27,6 +27,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
@@ -155,6 +157,12 @@ func TestExplain(t *testing.T) {
 			Normalize:       false,
 			Target:          "ks_sharded/40-80",
 		}},
+		{"gen4", &Options{
+			ReplicationMode: "ROW",
+			NumShards:       4,
+			Normalize:       true,
+			PlannerVersion:  querypb.ExecuteOptions_Gen4,
+		}},
 	}
 
 	for _, tst := range tests {
@@ -218,16 +226,16 @@ func TestJSONOutput(t *testing.T) {
 	}
 	explainJSON := ExplainsAsJSON(explains)
 
-	var data interface{}
+	var data any
 	err = json.Unmarshal([]byte(explainJSON), &data)
 	require.NoError(t, err, "error unmarshaling json")
 
-	array, ok := data.([]interface{})
+	array, ok := data.([]any)
 	if !ok || len(array) != 1 {
 		t.Errorf("expected single-element top-level array, got:\n%s", explainJSON)
 	}
 
-	explain, ok := array[0].(map[string]interface{})
+	explain, ok := array[0].(map[string]any)
 	if !ok {
 		t.Errorf("expected explain map, got:\n%s", explainJSON)
 	}
@@ -236,12 +244,12 @@ func TestJSONOutput(t *testing.T) {
 		t.Errorf("expected SQL, got:\n%s", explainJSON)
 	}
 
-	plans, ok := explain["Plans"].([]interface{})
+	plans, ok := explain["Plans"].([]any)
 	if !ok || len(plans) != 1 {
 		t.Errorf("expected single-element plans array, got:\n%s", explainJSON)
 	}
 
-	actions, ok := explain["TabletActions"].(map[string]interface{})
+	actions, ok := explain["TabletActions"].(map[string]any)
 	if !ok {
 		t.Errorf("expected TabletActions map, got:\n%s", explainJSON)
 	}

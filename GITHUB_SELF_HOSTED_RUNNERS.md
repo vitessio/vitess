@@ -25,6 +25,12 @@ access to Vitess.
 8. Set up a cron job to remove docker volumes and images every week
    1. `crontab -e`
    2. Within the file add a line `8 5 * * 6 docker system prune -f --volumes --all`
+9. Vtorc, Cluster 14 and some other tests use multiple MySQL instances which are all brought up with asynchronous I/O setup in InnoDB. This sometimes leads to us hitting the Linux asynchronous I/O limit.
+To fix this we increase the default limit on the self-hosted runners by -
+   1. To set the aio-max-nr value, add the following line to the /etc/sysctl.conf file:
+      1. `fs.aio-max-nr = 1048576`
+   2. To activate the new setting, run the following command:
+      1. `sysctl -p /etc/sysctl.conf`
 
 ### Moving a test to a self-hosted runner
 Most of the code for running the tests is generated code by `make generate_ci_workflows` which uses the file `ci_workflow_gen.go`
@@ -45,3 +51,23 @@ You will need access to the self-hosted runner machine to be able to connect to 
 8. Alternately, execute `docker cp <docker-id>:/vt/vtdataroot ./debugFiles/` to copy the files from the docker container to the servers local file system
 9. You can browse the files there or go a step further and download them locally via `scp`.
 10. Please remember to cleanup the folders created and remove the docker container via `docker stop <docker-id>`.
+
+## Single Self-Hosted runners
+There is currently one self-hosted runner which only hosts a single runner. This allows us to run tests
+that do not use docker on that runner.
+
+All that is needed to be done is to add `runs-on: single-self-hosted`, remove any code that downloads
+dependencies (since they are already present on the self-hosted runner) and add a couple of lines to save
+the vtdataroot output if needed.
+
+[9944](https://github.com/vitessio/vitess/pull/9944/) is an example PR that moves one of the tests to a single-self-hosted runner.
+
+**NOTE** - It is essential to ensure that all the binaries spawned while running the test be stopped even on failure.
+Otherwise, they will keep on running until someone goes ahead and removes them manually. They might interfere
+with the future runs as well.
+
+### Using a single-self-hosted runner to debug a flaky test
+The logs will be stored in the `savedRuns` directory and can be copied locally via `scp`.
+
+A cronjob is already setup to empty the `savedRuns` directory every week so please download the runs
+before they are deleted.

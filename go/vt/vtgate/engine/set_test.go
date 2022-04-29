@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -64,6 +66,7 @@ func TestSetSystemVariableAsString(t *testing.T) {
 		"ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)",
 		"ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false",
 		"SysVar set with (x,'foobar')",
+		"Needs Reserved Conn",
 	})
 }
 
@@ -77,6 +80,8 @@ func TestSetTable(t *testing.T) {
 		expectedError    string
 		input            Primitive
 		execErr          error
+		mysqlVersion     string
+		disableSetVar    bool
 	}
 
 	ks := &vindexes.Keyspace{Name: "ks", Sharded: true}
@@ -234,6 +239,7 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`Needs Reserved Conn`,
 			`ExecuteMultiShard ks.-20: set @@x = dummy_expr {} false false`,
 		},
 	}, {
@@ -262,6 +268,7 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false`,
 			`SysVar set with (x,123456)`,
+			`Needs Reserved Conn`,
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
@@ -338,9 +345,10 @@ func TestSetTable(t *testing.T) {
 		testName: "sql_mode no change - same multiple",
 		setOps: []SetOp{
 			&SysVarReservedConn{
-				Name:     "sql_mode",
-				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:     "'B,a,A,B,b,a'",
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'B,a,A,B,b,a'",
+				SupportSetVar: true,
 			},
 		},
 		expectedQueryLog: []string{
@@ -351,35 +359,39 @@ func TestSetTable(t *testing.T) {
 			"a,b|B,a,A,B,b,a",
 		)},
 	}, {
-		testName: "sql_mode no change - changed additional",
+		testName: "sql_mode change - changed additional",
 		setOps: []SetOp{
 			&SysVarReservedConn{
-				Name:     "sql_mode",
-				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:     "'B,a,A,B,b,a,c'",
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'B,a,A,B,b,a,c'",
+				SupportSetVar: true,
 			},
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'B,a,A,B,b,a,c' new {} false false`,
 			"SysVar set with (sql_mode,'B,a,A,B,b,a,c')",
+			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"a,b|B,a,A,B,b,a,c",
 		)},
 	}, {
-		testName: "sql_mode no change - changed less",
+		testName: "sql_mode change - changed less",
 		setOps: []SetOp{
 			&SysVarReservedConn{
-				Name:     "sql_mode",
-				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:     "'B,b,B,b'",
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'B,b,B,b'",
+				SupportSetVar: true,
 			},
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'B,b,B,b' new {} false false`,
 			"SysVar set with (sql_mode,'B,b,B,b')",
+			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"a,b|B,b,B,b",
@@ -388,9 +400,10 @@ func TestSetTable(t *testing.T) {
 		testName: "sql_mode no change - empty list",
 		setOps: []SetOp{
 			&SysVarReservedConn{
-				Name:     "sql_mode",
-				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:     "''",
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "''",
+				SupportSetVar: true,
 			},
 		},
 		expectedQueryLog: []string{
@@ -401,38 +414,122 @@ func TestSetTable(t *testing.T) {
 			"|",
 		)},
 	}, {
-		testName: "sql_mode no change - empty orig",
+		testName: "sql_mode change - empty orig",
 		setOps: []SetOp{
 			&SysVarReservedConn{
-				Name:     "sql_mode",
-				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:     "'a'",
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'a'",
+				SupportSetVar: true,
 			},
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'a' new {} false false`,
 			"SysVar set with (sql_mode,'a')",
+			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|a",
 		)},
 	}, {
-		testName: "sql_mode no change - empty new",
+		testName: "sql_mode change - empty new",
 		setOps: []SetOp{
 			&SysVarReservedConn{
-				Name:     "sql_mode",
-				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:     "''",
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "''",
+				SupportSetVar: true,
 			},
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
 			"SysVar set with (sql_mode,'')",
+			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"a|",
+		)},
+	}, {
+		testName:     "sql_mode change - empty orig - MySQL80",
+		mysqlVersion: "80000",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'a'",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'a' new {} false false`,
+			"SysVar set with (sql_mode,'a')",
+			"SET_VAR can be used",
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"|a",
+		)},
+	}, {
+		testName:     "sql_mode change to empty - non empty orig - MySQL80 - should use reserved conn",
+		mysqlVersion: "80000",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "''",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
+			"SysVar set with (sql_mode,'')",
+			"Needs Reserved Conn",
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"a|",
+		)},
+	}, {
+		testName:     "sql_mode change - empty orig - MySQL80 - SET_VAR disabled",
+		mysqlVersion: "80000",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'a'",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'a' new {} false false`,
+			"SysVar set with (sql_mode,'a')",
+			"Needs Reserved Conn",
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"|a",
+		)},
+		disableSetVar: true,
+	}, {
+		testName:     "default_week_format change - empty orig - MySQL80",
+		mysqlVersion: "80000",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:     "default_week_format",
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:     "'a'",
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select 'a' from dual where @@default_week_format != 'a' {} false false`,
+			"SysVar set with (default_week_format,'a')",
+			"Needs Reserved Conn",
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "varchar"),
+			"a",
 		)},
 	}}
 
@@ -441,6 +538,13 @@ func TestSetTable(t *testing.T) {
 			if tc.input == nil {
 				tc.input = &SingleRow{}
 			}
+
+			oldMySQLVersion := sqlparser.MySQLVersion
+			defer func() { sqlparser.MySQLVersion = oldMySQLVersion }()
+			if tc.mysqlVersion != "" {
+				sqlparser.MySQLVersion = tc.mysqlVersion
+			}
+
 			set := &Set{
 				Ops:   tc.setOps,
 				Input: tc.input,
@@ -449,6 +553,7 @@ func TestSetTable(t *testing.T) {
 				shards:         []string{"-20", "20-"},
 				results:        tc.qr,
 				multiShardErrs: []error{tc.execErr},
+				disableSetVar:  tc.disableSetVar,
 			}
 			_, err := set.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError == "" {
@@ -478,6 +583,7 @@ func TestSysVarSetErr(t *testing.T) {
 
 	expectedQueryLog := []string{
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+		"Needs Reserved Conn",
 		`ExecuteMultiShard ks.-20: set @@x = dummy_expr {} false false`,
 	}
 

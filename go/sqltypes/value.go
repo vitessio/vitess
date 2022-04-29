@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -49,21 +48,25 @@ var (
 	ErrIncompatibleTypeCast = errors.New("Cannot convert value to desired type")
 )
 
-// BinWriter interface is used for encoding values.
-// Types like bytes.Buffer conform to this interface.
-// We expect the writer objects to be in-memory buffers.
-// So, we don't expect the write operations to fail.
-type BinWriter interface {
-	Write([]byte) (int, error)
-}
+type (
+	// BinWriter interface is used for encoding values.
+	// Types like bytes.Buffer conform to this interface.
+	// We expect the writer objects to be in-memory buffers.
+	// So, we don't expect the write operations to fail.
+	BinWriter interface {
+		Write([]byte) (int, error)
+	}
 
-// Value can store any SQL value. If the value represents
-// an integral type, the bytes are always stored as a canonical
-// representation that matches how MySQL returns such values.
-type Value struct {
-	typ querypb.Type
-	val []byte
-}
+	// Value can store any SQL value. If the value represents
+	// an integral type, the bytes are always stored as a canonical
+	// representation that matches how MySQL returns such values.
+	Value struct {
+		typ querypb.Type
+		val []byte
+	}
+
+	Row = []Value
+)
 
 // NewValue builds a Value using typ and val. If the value and typ
 // don't match, it returns an error.
@@ -202,7 +205,7 @@ func NewIntegral(val string) (n Value, err error) {
 // string and []byte.
 // This function is deprecated. Use the type-specific
 // functions instead.
-func InterfaceToValue(goval interface{}) (Value, error) {
+func InterfaceToValue(goval any) (Value, error) {
 	switch goval := goval.(type) {
 	case nil:
 		return NULL, nil
@@ -244,18 +247,16 @@ func (v Value) RawStr() string {
 // match MySQL's representation for hex encoded binary data or newer types.
 // If the value is not convertible like in the case of Expression, it returns an error.
 func (v Value) ToBytes() ([]byte, error) {
-	if v.typ == Expression {
+	switch v.typ {
+	case Expression:
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "expression cannot be converted to bytes")
+	case HexVal:
+		return v.decodeHexVal()
+	case HexNum:
+		return v.decodeHexNum()
+	default:
+		return v.val, nil
 	}
-	if v.typ == HexVal {
-		dv, err := v.decodeHexVal()
-		return dv, err
-	}
-	if v.typ == HexNum {
-		dv, err := v.decodeHexNum()
-		return dv, err
-	}
-	return v.val, nil
 }
 
 // Len returns the length.
@@ -269,7 +270,7 @@ func (v Value) ToInt64() (int64, error) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
-	return strconv.ParseInt(v.ToString(), 10, 64)
+	return strconv.ParseInt(v.RawStr(), 10, 64)
 }
 
 // ToFloat64 returns the value as MySQL would return it as a float64.
@@ -278,7 +279,7 @@ func (v Value) ToFloat64() (float64, error) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
-	return strconv.ParseFloat(v.ToString(), 64)
+	return strconv.ParseFloat(v.RawStr(), 64)
 }
 
 // ToUint64 returns the value as MySQL would return it as a uint64.
@@ -287,7 +288,7 @@ func (v Value) ToUint64() (uint64, error) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
-	return strconv.ParseUint(v.ToString(), 10, 64)
+	return strconv.ParseUint(v.RawStr(), 10, 64)
 }
 
 // ToBool returns the value as a bool value
@@ -457,7 +458,7 @@ func (v *Value) UnmarshalJSON(b []byte) error {
 	if len(b) == 0 {
 		return fmt.Errorf("error unmarshaling empty bytes")
 	}
-	var val interface{}
+	var val any
 	var err error
 	switch b[0] {
 	case '-':
@@ -486,8 +487,7 @@ func (v *Value) UnmarshalJSON(b []byte) error {
 // array matching what MySQL would return when querying the column where
 // an INSERT was performed with x'A1' having been specified as a value
 func (v *Value) decodeHexVal() ([]byte, error) {
-	match, err := regexp.Match("^x'.*'$", v.val)
-	if !match || err != nil {
+	if len(v.val) < 3 || (v.val[0] != 'x' && v.val[0] != 'X') || v.val[1] != '\'' || v.val[len(v.val)-1] != '\'' {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid hex value: %v", v.val)
 	}
 	hexBytes := v.val[2 : len(v.val)-1]
@@ -502,8 +502,7 @@ func (v *Value) decodeHexVal() ([]byte, error) {
 // array matching what MySQL would return when querying the column where
 // an INSERT was performed with 0xA1 having been specified as a value
 func (v *Value) decodeHexNum() ([]byte, error) {
-	match, err := regexp.Match("^0x.*$", v.val)
-	if !match || err != nil {
+	if len(v.val) < 3 || v.val[0] != '0' || v.val[1] != 'x' {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid hex number: %v", v.val)
 	}
 	hexBytes := v.val[2:]

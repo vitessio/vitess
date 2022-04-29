@@ -49,6 +49,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	{{- end }}
+	{{ if .NeedsGRPCShim -}}
+	"vitess.io/vitess/go/vt/vtctl/internal/grpcshim"
+	{{- end }}
 
 	{{ range .Imports -}}
 	{{ if ne .Alias "" }}{{ .Alias }} {{ end }}"{{ .Path }}"
@@ -57,15 +60,25 @@ import (
 {{ range .Methods }}
 {{ if and $.Local .IsStreaming -}}
 type {{ streamAdapterName .Name }} struct {
-	*bidiStream
+	*grpcshim.BidiStream
 	ch chan {{ .StreamMessage.Type }}
 }
 
 func (stream *{{ streamAdapterName .Name }}) Recv() ({{ .StreamMessage.Type }}, error) {
 	select {
-	case <-stream.ctx.Done():
-		return nil, stream.ctx.Err()
-	case err := <-stream.errch:
+	case <-stream.Context().Done():
+		return nil, stream.Context().Err()
+	case <-stream.Closed():
+		// Stream has been closed for future sends. If there are messages that
+		// have already been sent, receive them until there are no more. After
+		// all sent messages have been received, Recv will return the CloseErr.
+		select {
+		case msg := <-stream.ch:
+			return msg, nil
+		default:
+			return nil, stream.CloseErr()
+		}
+	case err := <-stream.ErrCh:
 		return nil, err
 	case msg := <-stream.ch:
 		return msg, nil
@@ -73,16 +86,11 @@ func (stream *{{ streamAdapterName .Name }}) Recv() ({{ .StreamMessage.Type }}, 
 }
 
 func (stream *{{ streamAdapterName .Name }}) Send(msg {{ .StreamMessage.Type }}) error {
-	stream.m.RLock()
-	defer stream.m.RUnlock()
-
-	if stream.sendClosed {
-		return errStreamClosed
-	}
-
 	select {
-	case <-stream.ctx.Done():
-		return stream.ctx.Err()
+	case <-stream.Context().Done():
+		return stream.Context().Err()
+	case <-stream.Closed():
+		return grpcshim.ErrStreamClosed
 	case stream.ch <- msg:
 		return nil
 	}
@@ -99,12 +107,12 @@ func (client *{{ $.Type }}) {{ .Name }}(ctx context.Context, {{ .Param.Name }} {
 	{{- else -}}
 	{{- if .IsStreaming -}}
 	stream := &{{ streamAdapterName .Name }}{
-		bidiStream: newBidiStream(ctx),
+		BidiStream: grpcshim.NewBidiStream(ctx),
 		ch:         make(chan {{ .StreamMessage.Type }}, 1),
 	}
 	go func() {
 		err := client.s.{{ .Name }}(in, stream)
-		stream.close(err)
+		stream.CloseWithError(err)
 	}()
 
 	return stream, nil
@@ -115,7 +123,7 @@ func (client *{{ $.Type }}) {{ .Name }}(ctx context.Context, {{ .Param.Name }} {
 }
 {{ end }}`
 
-var tmpl = template.Must(template.New("vtctldclient-generator").Funcs(map[string]interface{}{
+var tmpl = template.Must(template.New("vtctldclient-generator").Funcs(map[string]any{
 	"streamAdapterName": func(s string) string {
 		if len(s) == 0 {
 			return s

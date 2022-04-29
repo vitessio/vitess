@@ -25,10 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
@@ -56,7 +53,8 @@ var (
 		id bigint,
 		value varchar(16),
 		primary key(id)
-	) Engine=InnoDB;
+	) Engine=InnoDB DEFAULT CHARSET=utf8;
+	CREATE VIEW v1 AS SELECT id, value FROM t1;
 `
 
 	vSchema = `
@@ -96,16 +94,16 @@ func TestMain(m *testing.M) {
 
 		// List of users authorized to execute vschema ddl operations
 		clusterInstance.VtGateExtraArgs = []string{
-			"-vschema_ddl_authorized_users=%",
-			"-discovery_low_replication_lag", tabletUnhealthyThreshold.String(),
+			"--vschema_ddl_authorized_users=%",
+			"--discovery_low_replication_lag", tabletUnhealthyThreshold.String(),
 		}
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-lock_tables_timeout", "5s",
-			"-watch_replication_stream",
-			"-enable_replication_reporter",
-			"-health_check_interval", tabletHealthcheckRefreshInterval.String(),
-			"-unhealthy_threshold", tabletUnhealthyThreshold.String(),
+			"--lock_tables_timeout", "5s",
+			"--watch_replication_stream",
+			"--heartbeat_enable",
+			"--health_check_interval", tabletHealthcheckRefreshInterval.String(),
+			"--unhealthy_threshold", tabletUnhealthyThreshold.String(),
 		}
 		// We do not need semiSync for this test case.
 		clusterInstance.EnableSemiSync = false
@@ -158,13 +156,6 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.Nil(t, err)
-	return qr
-}
-
 func tmcLockTables(ctx context.Context, tabletGrpcPort int) error {
 	vtablet := getTablet(tabletGrpcPort)
 	return tmClient.LockTables(ctx, vtablet)
@@ -182,7 +173,7 @@ func tmcStopReplication(ctx context.Context, tabletGrpcPort int) error {
 
 func tmcStartReplication(ctx context.Context, tabletGrpcPort int) error {
 	vtablet := getTablet(tabletGrpcPort)
-	return tmClient.StartReplication(ctx, vtablet)
+	return tmClient.StartReplication(ctx, vtablet, false)
 }
 
 func tmcPrimaryPosition(ctx context.Context, tabletGrpcPort int) (string, error) {

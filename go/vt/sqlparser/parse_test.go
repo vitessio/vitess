@@ -37,13 +37,23 @@ import (
 
 var (
 	validSQL = []struct {
-		input      string
-		output     string
-		partialDDL bool
+		input                string
+		output               string
+		partialDDL           bool
+		ignoreNormalizerTest bool
 	}{{
 		input:      "create table x(location GEOMETRYCOLLECTION DEFAULT POINT(7.0, 3.0))",
 		output:     "create table x",
 		partialDDL: true,
+	}, {
+		input:  "create table t (id int primary key, dt datetime DEFAULT (CURRENT_TIMESTAMP))",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default current_timestamp()\n)",
+	}, {
+		input:  "create table t (id int primary key, dt datetime DEFAULT now())",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default now()\n)",
+	}, {
+		input:  "create table t (id int primary key, dt datetime DEFAULT (now()))",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default now()\n)",
 	}, {
 		input:  "create table x (e enum('red','yellow') null collate 'utf8_bin')",
 		output: "create table x (\n\te enum('red', 'yellow') collate 'utf8_bin' null\n)",
@@ -185,6 +195,9 @@ var (
 		input: "select n, d from something",
 	}, {
 		input: "insert into sys_message_assign(message_id, assign_user_id, read_state, id, is_delete, create_time, update_time, remark) values (N'3477028275831808', N'4104487936', N'1', N'0', N'0', '2021-09-22 14:24:17.922', '2021-09-22 14:24:17.922', null), (N'3477028275831808', N'3454139190608923', N'1', N'0', N'0', '2021-09-22 14:24:17.922', '2021-09-22 14:24:17.922', null)",
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
 	}, {
 		input:  "select name, numbers from (select * from users) as x(name, numbers)",
 		output: "select `name`, numbers from (select * from users) as x(`name`, numbers)",
@@ -208,7 +221,7 @@ var (
 		input: "select -1 from t where b = -2",
 	}, {
 		input:  "select - -1 from t",
-		output: "select 1 from t",
+		output: "select - -1 from t",
 	}, {
 		input: "select a from t",
 	}, {
@@ -398,6 +411,18 @@ var (
 		input: "select /* table list */ 1 from t1, t2",
 	}, {
 		input: "select /* parenthessis in table list 1 */ 1 from (t1), t2",
+	}, {
+		input:  "SELECT * FROM t1 USE INDEX (i1) IGNORE INDEX FOR ORDER BY (i2) ORDER BY a",
+		output: "select * from t1 use index (i1) ignore index for order by (i2) order by a asc",
+	}, {
+		input:  "SELECT * FROM t1 USE INDEX FOR JOIN (i1) FORCE INDEX FOR JOIN (i2)",
+		output: "select * from t1 use index for join (i1) force index for join (i2)",
+	}, {
+		input:  "SELECT * FROM t1 USE INDEX FOR JOIN (i1) FORCE INDEX FOR JOIN (i2) IGNORE KEY FOR GROUP BY (i1, i2)",
+		output: "select * from t1 use index for join (i1) force index for join (i2) ignore index for group by (i1, i2)",
+	}, {
+		input:  "SELECT * FROM t1 USE KEY (), t2 FORCE KEY (i2), t3 IGNORE INDEX FOR GROUP BY (i1, i2)",
+		output: "select * from t1 use index (), t2 force index (i2), t3 ignore index for group by (i1, i2)",
 	}, {
 		input: "select /* parenthessis in table list 2 */ 1 from t1, (t2)",
 	}, {
@@ -785,13 +810,16 @@ var (
 		output: "select /* binary unary */ a - -b from t",
 	}, {
 		input:  "select /* - - */ - -b from t",
-		output: "select /* - - */ b from t",
+		output: "select /* - - */ - -b from t",
 	}, {
-		input: "select /* binary binary */ binary  binary b from t",
+		input:  "select /* binary binary */ binary  binary b from t",
+		output: "select /* binary binary */ convert(convert(b, binary), binary) from t",
 	}, {
-		input: "select /* binary ~ */ binary  ~b from t",
+		input:  "select /* binary ~ */ binary  ~b from t",
+		output: "select /* binary ~ */ convert(~b, binary) from t",
 	}, {
-		input: "select /* ~ binary */ ~ binary b from t",
+		input:  "select /* ~ binary */ ~ binary b from t",
+		output: "select /* ~ binary */ ~convert(b, binary) from t",
 	}, {
 		input: "select /* interval */ adddate('2008-01-02', interval 31 day) from t",
 	}, {
@@ -1093,10 +1121,10 @@ var (
 		input: "set @period.variable = 42",
 	}, {
 		input:  "set S= +++-++-+(4+1)",
-		output: "set S = 4 + 1",
+		output: "set S = - -(4 + 1)",
 	}, {
 		input:  "set S= +- - - - -(4+1)",
-		output: "set S = -(4 + 1)",
+		output: "set S = - - - - -(4 + 1)",
 	}, {
 		input:  "alter table a add foo int references simple (a) on delete restrict first",
 		output: "alter table a add column foo int references simple (a) on delete restrict first",
@@ -1172,9 +1200,9 @@ var (
 		input: "alter table e comment 'hello' remove partitioning",
 	}, {
 		input:  "alter table a reorganize partition b into (partition c values less than (?), partition d values less than (maxvalue))",
-		output: "alter table a reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue))",
+		output: "alter table a reorganize partition b into (partition c values less than (:v1), partition d values less than maxvalue)",
 	}, {
-		input: "alter table a algorithm = default, lock none, add partition (partition d values less than (maxvalue))",
+		input: "alter table a algorithm = default, lock none, add partition (partition d values less than maxvalue)",
 	}, {
 		input: "alter table a discard partition all tablespace",
 	}, {
@@ -1213,9 +1241,9 @@ var (
 		input:  "alter table t2 add primary key `zzz` (id)",
 		output: "alter table t2 add primary key (id)",
 	}, {
-		input:      "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
-		output:     "alter table a",
-		partialDDL: true,
+		input: "alter table a partition by hash (id) partitions 4",
+	}, {
+		input: "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than maxvalue)",
 	}, {
 		input:      "create database a garbage values",
 		output:     "create database a",
@@ -1354,9 +1382,11 @@ var (
 	}, {
 		input: "create table a (\n\ta int not null default 0\n)",
 	}, {
-		input: "create table a (\n\ta float not null default -1\n)",
+		input:  "create table a (\n\ta float not null default -1\n)",
+		output: "create table a (\n\ta float not null default -1\n)",
 	}, {
-		input: "create table a (\n\ta float not null default -2.1\n)",
+		input:  "create table a (\n\ta float not null default -2.1\n)",
+		output: "create table a (\n\ta float not null default -2.1\n)",
 	}, {
 		input:  "create table a (a int not null default 0, primary key(a))",
 		output: "create table a (\n\ta int not null default 0,\n\tprimary key (a)\n)",
@@ -1424,72 +1454,130 @@ var (
 		input:  "create table t (pur date) partition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2 (partition p0 values less than (2015), partition p2 values less than (2018))",
 		output: "create table t (\n\tpur date\n) partition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2 (partition p0 values less than (2015), partition p2 values less than (2018))",
 	}, {
-		input: "alter vschema create vindex hash_vdx using `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema create vindex hash_vdx using `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema create vindex keyspace.hash_vdx using `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema create vindex keyspace.hash_vdx using `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema drop vindex hash_vdx",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema drop vindex hash_vdx",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema drop vindex ks.hash_vdx",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema drop vindex ks.hash_vdx",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema add table a",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema add table a",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema add table ks.a",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema add table ks.a",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema add sequence a_seq",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema add sequence a_seq",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema add sequence ks.a_seq",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema add sequence ks.a_seq",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on a add auto_increment id using a_seq",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add auto_increment id using a_seq",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on ks.a add auto_increment id using a_seq",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on ks.a add auto_increment id using a_seq",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema drop table a",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema drop table a",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema drop table ks.a",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema drop table ks.a",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on a add vindex `hash` (id)",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add vindex `hash` (id)",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on ks.a add vindex `hash` (id)",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on ks.a add vindex `hash` (id)",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on a add vindex `hash` (`id`)",
-		output: "alter vschema on a add vindex `hash` (id)",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add vindex `hash` (`id`)",
+		output:               "alter vschema on a add vindex `hash` (id)",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on `ks`.a add vindex `hash` (`id`)",
-		output: "alter vschema on ks.a add vindex `hash` (id)",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on `ks`.a add vindex `hash` (`id`)",
+		output:               "alter vschema on ks.a add vindex `hash` (id)",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on a add vindex hash (id) using `hash`",
-		output: "alter vschema on a add vindex `hash` (id) using `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add vindex hash (id) using `hash`",
+		output:               "alter vschema on a add vindex `hash` (id) using `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on a add vindex `add` (`add`)",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add vindex `add` (`add`)",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on a add vindex `hash` (id) using `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add vindex `hash` (id) using `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on a add vindex hash (id) using `hash`",
-		output: "alter vschema on a add vindex `hash` (id) using `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a add vindex hash (id) using `hash`",
+		output:               "alter vschema on a add vindex `hash` (id) using `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
-		output: "alter vschema on `user` add vindex name_lookup_vdx (`name`) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+		output:               "alter vschema on `user` add vindex name_lookup_vdx (`name`) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
-		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (`name`, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
+		output:               "alter vschema on user2 add vindex name_lastname_lookup_vdx (`name`, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on a drop vindex `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a drop vindex `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input: "alter vschema on ks.a drop vindex `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on ks.a drop vindex `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on a drop vindex `hash`",
-		output: "alter vschema on a drop vindex `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a drop vindex `hash`",
+		output:               "alter vschema on a drop vindex `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on a drop vindex hash",
-		output: "alter vschema on a drop vindex `hash`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a drop vindex hash",
+		output:               "alter vschema on a drop vindex `hash`",
+		ignoreNormalizerTest: true,
 	}, {
-		input:  "alter vschema on a drop vindex `add`",
-		output: "alter vschema on a drop vindex `add`",
+		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
+		input:                "alter vschema on a drop vindex `add`",
+		output:               "alter vschema on a drop vindex `add`",
+		ignoreNormalizerTest: true,
 	}, {
 		input:  "create index a on b (col1)",
 		output: "alter table b add index a (col1)",
@@ -1527,17 +1615,48 @@ var (
 		output: "create algorithm = merge sql security definer view a(b, c, d) as select * from e with cascaded check option",
 	}, {
 		input:  "create algorithm = temptable definer = a@b.c.d view a(b,c,d) as select * from e with local check option",
-		output: "create algorithm = temptable definer = a@b.c.d view a(b, c, d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = a@`b.c.d` view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = temptable definer = a@b view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = a@b view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = temptable definer = 'create'@b view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = 'create'@b view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = temptable definer = a@'create' view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = a@'create' view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = temptable definer = 'a' view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = 'a' view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = temptable definer = 'select'@'create' view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = 'select'@'create' view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = temptable definer = `create`@b view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = `create`@b view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = temptable definer = a@`create` view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = a@`create` view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = temptable definer = `select`@`create` view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = `select`@`create` view a(b, c, d) as select * from e with local check option",
 	}, {
 		input:  "create or replace algorithm = temptable definer = a@b.c.d sql security definer view a(b,c,d) as select * from e with local check option",
-		output: "create or replace algorithm = temptable definer = a@b.c.d sql security definer view a(b, c, d) as select * from e with local check option",
+		output: "create or replace algorithm = temptable definer = a@`b.c.d` sql security definer view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = undefined definer = `msandbox`@`localhost` sql security definer view `v3` as select `t`.`id` as `id` from `t`",
+		output: "create algorithm = undefined definer = msandbox@localhost sql security definer view v3 as select t.id as id from t",
 	}, {
 		input:  "create definer = 'sa'@b.c.d view a(b,c,d) as select * from e",
-		output: "create definer = 'sa'@b.c.d view a(b, c, d) as select * from e",
+		output: "create definer = 'sa'@`b.c.d` view a(b, c, d) as select * from e",
+	}, {
+		input: "create /*vt+ strategy=online */ or replace view v as select a, b, c from t",
 	}, {
 		input: "alter view a as select * from t",
 	}, {
-		input: "alter algorithm = merge definer = m@172.0.1.01 sql security definer view a as select * from t with local check option",
+		input: "alter /*vt+ strategy=online */ view a as select * from t",
+	}, {
+		input: "alter algorithm = merge definer = m@`172.0.1.01` sql security definer view a as select * from t with local check option",
 	}, {
 		input:  "rename table a to b",
 		output: "rename table a to b",
@@ -1547,6 +1666,8 @@ var (
 	}, {
 		input:  "drop view a,B,c",
 		output: "drop view a, b, c",
+	}, {
+		input: "drop /*vt+ strategy=online */ view if exists v",
 	}, {
 		input: "drop table a",
 	}, {
@@ -1797,6 +1918,8 @@ var (
 		input:  "show vitess_keyspaces like '%'",
 		output: "show keyspaces like '%'",
 	}, {
+		input: "show vitess_metadata variables",
+	}, {
 		input: "show vitess_replication_status",
 	}, {
 		input: "show vitess_replication_status like '%'",
@@ -1811,11 +1934,16 @@ var (
 	}, {
 		input: "show vitess_tablets where hostname = 'some-tablet'",
 	}, {
+		input: "show vitess_targets",
+	}, {
 		input: "show vschema tables",
 	}, {
 		input: "show vschema vindexes",
 	}, {
-		input: "show vschema vindexes on t",
+		input: "show vschema vindexes from t",
+	}, {
+		input:  "show vschema vindexes on t",
+		output: "show vschema vindexes from t",
 	}, {
 		input: "show vitess_migrations",
 	}, {
@@ -2000,7 +2128,8 @@ var (
 		input:  "select sql_calc_found_rows 'foo' from t",
 		output: "select sql_calc_found_rows 'foo' from t",
 	}, {
-		input: "select binary 'a' = 'A' from t",
+		input:  "select binary 'a' = 'A' from t",
+		output: "select convert('a', binary) = 'A' from t",
 	}, {
 		input: "select 1 from t where foo = _binary 'bar'",
 	}, {
@@ -2213,8 +2342,549 @@ var (
 	}, {
 		input: "call proc(@param)",
 	}, {
+		input:  "PREPARE stmt1 FROM 'SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse'",
+		output: "prepare stmt1 from 'SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse'",
+	}, {
+		input:  "PREPARE stmt2 FROM @s",
+		output: "prepare stmt2 from @s",
+	}, {
+		input:  "PREPARE /* comment */ stmt2 FROM @s",
+		output: "prepare /* comment */ stmt2 from @s",
+	}, {
+		input:  "EXECUTE stmt1",
+		output: "execute stmt1",
+	}, {
+		input:  "EXECUTE /* comment */ stmt1",
+		output: "execute /* comment */ stmt1",
+	}, {
+		input:  "EXECUTE stmt1 USING @a",
+		output: "execute stmt1 using @a",
+	}, {
+		input:  "EXECUTE stmt1 USING @a, @b",
+		output: "execute stmt1 using @a, @b",
+	}, {
+		input:  "DEALLOCATE PREPARE stmt1",
+		output: "deallocate prepare stmt1",
+	}, {
+		input:  "DROP PREPARE stmt1",
+		output: "drop prepare stmt1",
+	}, {
+		input:  "DROP /* comment */ PREPARE stmt1",
+		output: "drop /* comment */ prepare stmt1",
+	}, {
 		input:  "create table unused_reserved_keywords (dense_rank bigint, lead VARCHAR(255), percent_rank decimal(3, 0), row TINYINT, rows CHAR(10), constraint PK_project PRIMARY KEY (dense_rank))",
 		output: "create table unused_reserved_keywords (\n\t`dense_rank` bigint,\n\t`lead` VARCHAR(255),\n\t`percent_rank` decimal(3,0),\n\t`row` TINYINT,\n\t`rows` CHAR(10),\n\tconstraint PK_project PRIMARY KEY (`dense_rank`)\n)",
+	}, {
+		input:  `SELECT JSON_PRETTY('{"a":"10","b":"15","x":"25"}')`,
+		output: `select json_pretty('{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
+	}, {
+		input:  `SELECT JSON_PRETTY(N'{"a":"10","b":"15","x":"25"}')`,
+		output: `select json_pretty(N'{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
+	}, {
+		input:  "SELECT jcol, JSON_PRETTY(jcol) from jtable",
+		output: "select jcol, json_pretty(jcol) from jtable",
+	}, {
+		input:  "SELECT JSON_PRETTY(@j)",
+		output: "select json_pretty(@j) from dual",
+	}, {
+		input:  "SELECT jcol, JSON_STORAGE_SIZE(jcol) AS Size FROM jtable",
+		output: "select jcol, json_storage_size(jcol) as Size from jtable",
+	}, {
+		input:  `SELECT jcol, JSON_STORAGE_SIZE(N'{"a":"10","b":"15","x":"25"}') AS Size FROM jtable`,
+		output: `select jcol, json_storage_size(N'{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') as Size from jtable`,
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
+	}, {
+		input:  `SELECT JSON_STORAGE_SIZE('[100, "sakila", [1, 3, 5], 425.05]') AS A, JSON_STORAGE_SIZE('{"a": 1000, "b": "a", "c": "[1, 3, 5, 7]"}') AS B, JSON_STORAGE_SIZE('{"a": 1000, "b": "wxyz", "c": "[1, 3, 5, 7]"}') AS C,JSON_STORAGE_SIZE('[100, "json", [[10, 20, 30], 3, 5], 425.05]') AS D`,
+		output: `select json_storage_size('[100, \"sakila\", [1, 3, 5], 425.05]') as A, json_storage_size('{\"a\": 1000, \"b\": \"a\", \"c\": \"[1, 3, 5, 7]\"}') as B, json_storage_size('{\"a\": 1000, \"b\": \"wxyz\", \"c\": \"[1, 3, 5, 7]\"}') as C, json_storage_size('[100, \"json\", [[10, 20, 30], 3, 5], 425.05]') as D from dual`,
+	}, {
+		input:  "SELECT JSON_STORAGE_SIZE(@j)",
+		output: "select json_storage_size(@j) from dual",
+	}, {
+		input:  "SELECT JSON_STORAGE_FREE(jcol) FROM jtable",
+		output: "select json_storage_free(jcol) from jtable",
+	}, {
+		input:  `SELECT JSON_STORAGE_FREE('{"a":"10","b":"15","x":"25"}')`,
+		output: `select json_storage_free('{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
+	}, {
+		input:  `SELECT JSON_STORAGE_FREE(N'{"a":"10","b":"15","x":"25"}')`,
+		output: `select json_storage_free(N'{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
+	}, {
+		input:  "SELECT JSON_STORAGE_FREE(@j)",
+		output: "select json_storage_free(@j) from dual",
+	}, {
+		input:  "SELECT LTRIM('abc')",
+		output: "select ltrim('abc') from dual",
+	}, {
+		input:  "SELECT RTRIM('abc')",
+		output: "select rtrim('abc') from dual",
+	}, {
+		input:  "SELECT TRIM('  abc  ')",
+		output: "select trim('  abc  ') from dual",
+	}, {
+		input:  "SELECT TRIM('aa' FROM 'aabccaaa')",
+		output: "select trim('aa' from 'aabccaaa') from dual",
+	}, {
+		input:  "SELECT TRIM(LEADING FROM 'aabccaaa')",
+		output: "select trim(leading from 'aabccaaa') from dual",
+	}, {
+		input:  "SELECT TRIM(TRAILING FROM 'abca')",
+		output: "select trim(trailing from 'abca') from dual",
+	}, {
+		input:  "SELECT TRIM(BOTH FROM 'abc')",
+		output: "select trim(both from 'abc') from dual",
+	}, {
+		input:  "SELECT TRIM(LEADING 'a' FROM 'abc')",
+		output: "select trim(leading 'a' from 'abc') from dual",
+	}, {
+		input:  "SELECT TRIM(TRAILING 'a' FROM 'abc')",
+		output: "select trim(trailing 'a' from 'abc') from dual",
+	}, {
+		input:  "SELECT TRIM(BOTH 'a' FROM 'abc')",
+		output: "select trim(both 'a' from 'abc') from dual",
+	}, {
+		input: `SELECT * FROM JSON_TABLE('[ {"c1": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt`,
+		output: `select * from json_table('[ {\"c1\": null} ]', '$[*]' columns(
+	c1 INT path '$.c1' error on error 
+	)
+) as jt`,
+	}, {
+		input: `SELECT * FROM  JSON_TABLE(    '[{"a": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}]', '$[*]' COLUMNS(a INT PATH '$.a', NESTED PATH '$.b[*]' COLUMNS (b1 INT PATH '$'), NESTED PATH '$.b[*]' COLUMNS (b2 INT PATH '$'))) AS jt`,
+		output: `select * from json_table('[{\"a\": 1, \"b\": [11,111]}, {\"a\": 2, \"b\": [22,222]}]', '$[*]' columns(
+	a INT path '$.a' ,
+	nested path '$.b[*]' columns(
+	b1 INT path '$' 
+),
+	nested path '$.b[*]' columns(
+	b2 INT path '$' 
+)
+	)
+) as jt`,
+	}, {
+		input: `SELECT * FROM JSON_TABLE('[ {"c1": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt`,
+		output: `select * from json_table('[ {\"c1\": null} ]', '$[*]' columns(
+	c1 INT path '$.c1' error on error 
+	)
+) as jt`,
+	}, {
+		input: `SELECT * FROM JSON_TABLE('[{"a":"3"},{"a":2},{"b":1},{"a":0},{"a":[1,2]}]', "$[*]" COLUMNS(rowid FOR ORDINALITY, ac VARCHAR(100) PATH "$.a" DEFAULT '111' ON EMPTY DEFAULT '999' ON ERROR,  aj JSON PATH "$.a" DEFAULT '{"x": 333}' ON EMPTY, bx INT EXISTS PATH "$.b" ) ) AS tt`,
+		output: `select * from json_table('[{\"a\":\"3\"},{\"a\":2},{\"b\":1},{\"a\":0},{\"a\":[1,2]}]', '$[*]' columns(
+	rowid for ordinality,
+	ac VARCHAR(100) path '$.a' default '111' on empty default '999' on error ,
+	aj JSON path '$.a' default '{\"x\": 333}' on empty ,
+	bx INT exists path '$.b' 
+	)
+) as tt`,
+	}, {
+		input: `SELECT * FROM  JSON_TABLE(    '[ {"a": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3}]',    '$[*]' COLUMNS(            a INT PATH '$.a',            NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$')           )   ) AS jt WHERE b IS NOT NULL`,
+		output: `select * from json_table('[ {\"a\": 1, \"b\": [11,111]}, {\"a\": 2, \"b\": [22,222]}, {\"a\":3}]', '$[*]' columns(
+	a INT path '$.a' ,
+	nested path '$.b[*]' columns(
+	b INT path '$' 
+)
+	)
+) as jt where b is not null`,
+	}, {
+		input: `SELECT * FROM  JSON_TABLE(    '[{"x":2,"y":"8"},{"x":"3","y":"7"},{"x":"4","y":6}]',    "$[1]" COLUMNS(      xval VARCHAR(100) PATH "$.x",      yval VARCHAR(100) PATH "$.y"    )  ) AS  jt1`,
+		output: `select * from json_table('[{\"x\":2,\"y\":\"8\"},{\"x\":\"3\",\"y\":\"7\"},{\"x\":\"4\",\"y\":6}]', '$[1]' columns(
+	xval VARCHAR(100) path '$.x' ,
+	yval VARCHAR(100) path '$.y' 
+	)
+) as jt1`,
+	}, {
+		input: `SELECT * FROM  JSON_TABLE(    '[{"a": "a_val","b": [{"c": "c_val", "l": [1,2]}]},{"a": "a_val", "b": [{"c": "c_val","l": [11]}, {"c": "c_val", "l": [22]}]}]',    '$[*]' COLUMNS(      top_ord FOR ORDINALITY,      apath VARCHAR(10) PATH '$.a',      NESTED PATH '$.b[*]' COLUMNS (        bpath VARCHAR(10) PATH '$.c',        ord FOR ORDINALITY,        NESTED PATH '$.l[*]' COLUMNS (lpath varchar(10) PATH '$')        )    )) as jt`,
+		output: `select * from json_table('[{\"a\": \"a_val\",\"b\": [{\"c\": \"c_val\", \"l\": [1,2]}]},{\"a\": \"a_val\", \"b\": [{\"c\": \"c_val\",\"l\": [11]}, {\"c\": \"c_val\", \"l\": [22]}]}]', '$[*]' columns(
+	top_ord for ordinality,
+	apath VARCHAR(10) path '$.a' ,
+	nested path '$.b[*]' columns(
+	bpath VARCHAR(10) path '$.c' ,
+	ord for ordinality,
+	nested path '$.l[*]' columns(
+	lpath varchar(10) path '$' 
+)
+)
+	)
+) as jt`,
+	}, {
+		input: `SELECT * FROM JSON_TABLE('[{"x":2,"y":"8"},{"x":"3","y":"7"},{"x":"4","y":6}]', "$[1]" COLUMNS( xval VARCHAR(100) PATH "$.x", yval VARCHAR(100) PATH "$.y")) AS  jt1;`,
+		output: `select * from json_table('[{\"x\":2,\"y\":\"8\"},{\"x\":\"3\",\"y\":\"7\"},{\"x\":\"4\",\"y\":6}]', '$[1]' columns(
+	xval VARCHAR(100) path '$.x' ,
+	yval VARCHAR(100) path '$.y' 
+	)
+) as jt1`,
+	}, {
+		input:  "SELECT JSON_ARRAY()",
+		output: "select json_array() from dual",
+	}, {
+		input:  "SELECT JSON_ARRAY(1)",
+		output: "select json_array(1) from dual",
+	}, {
+		input:  "SELECT JSON_ARRAY('abc')",
+		output: "select json_array('abc') from dual",
+	}, {
+		input:  "SELECT JSON_ARRAY(BIN(11))",
+		output: "select json_array(BIN(11)) from dual",
+	}, {
+		input:  `SELECT JSON_ARRAY(1, "abc", NULL, TRUE, CURTIME());`,
+		output: `select json_array(1, 'abc', null, true, CURTIME()) from dual`,
+	}, {
+		input:  "SELECT JSON_OBJECT(1,2)",
+		output: "select json_object(1, 2) from dual",
+	}, {
+		input:  "SELECT JSON_OBJECT(1,'abc')",
+		output: "select json_object(1, 'abc') from dual",
+	}, {
+		input:  "SELECT JSON_OBJECT('abc',1)",
+		output: "select json_object('abc', 1) from dual",
+	}, {
+		input:  "SELECT JSON_OBJECT(BIN(1),2)",
+		output: "select json_object(BIN(1), 2) from dual",
+	}, {
+		input:  "SELECT JSON_OBJECT(BIN(1),2,'abc',ASCII(4))",
+		output: "select json_object(BIN(1), 2, 'abc', ASCII(4)) from dual",
+	}, {
+		input:  "SELECT JSON_QUOTE(BIN(11))",
+		output: "select json_quote(BIN(11)) from dual",
+	}, {
+		input:  `SELECT JSON_QUOTE('null'), JSON_QUOTE('"null"')`,
+		output: `select json_quote('null'), json_quote('\"null\"') from dual`,
+	}, {
+		input:  "select t1.a, dt.a from t1, lateral (select t1.a+t2.a as a from t2) dt",
+		output: "select t1.a, dt.a from t1, lateral (select t1.a + t2.a as a from t2) as dt",
+	}, {
+		input:  "select b from v1 vq1, lateral (select count(*) from v1 vq2 having vq1.b = 3) dt",
+		output: "select b from v1 as vq1, lateral (select count(*) from v1 as vq2 having vq1.b = 3) as dt",
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALID('{"type":"string","pattern":"("}', '"abc"')`,
+		output: `select json_schema_valid('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual`,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALID('{"type":"string","pattern":"("}', @a)`,
+		output: `select json_schema_valid('{\"type\":\"string\",\"pattern\":\"(\"}', @a) from dual`,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALID(@b, BIN(1))`,
+		output: `select json_schema_valid(@b, BIN(1)) from dual`,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALID(N'{"type":"string","pattern":"("}', '"abc"')`,
+		output: `select json_schema_valid(N'{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual`,
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALIDATION_REPORT('{"type":"string","pattern":"("}', '"abc"')`,
+		output: `select json_schema_validation_report('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual`,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALIDATION_REPORT('{"type":"string","pattern":"("}', @a)`,
+		output: `select json_schema_validation_report('{\"type\":\"string\",\"pattern\":\"(\"}', @a) from dual`,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALIDATION_REPORT(@b, BIN(1))`,
+		output: `select json_schema_validation_report(@b, BIN(1)) from dual`,
+	}, {
+		input:  `SELECT JSON_SCHEMA_VALIDATION_REPORT(N'{"type":"string","pattern":"("}', '"abc"')`,
+		output: `select json_schema_validation_report(N'{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual`,
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
+	}, {
+		input:  `SELECT JSON_CONTAINS('{"a": 1, "b": 2, "c": {"d": 4}}', '1')`,
+		output: `select json_contains('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1') from dual`,
+	}, {
+		input:  "SELECT JSON_CONTAINS(@j, @j2)",
+		output: "select json_contains(@j, @j2) from dual",
+	}, {
+		input:  "SELECT JSON_CONTAINS(@j, @j2,'$.a', @j)",
+		output: "select json_contains(@j, @j2, '$.a', @j) from dual",
+	}, {
+		input:  "SELECT JSON_CONTAINS_PATH(@j, 'one', '$.a', '$.e')",
+		output: "select json_contains_path(@j, 'one', '$.a', '$.e') from dual",
+	}, {
+		input:  `SELECT JSON_CONTAINS_PATH('{"a": 1, "b": 2, "c": {"d": 4}}', 'one', '$.a', '$.e')`,
+		output: `select json_contains_path('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e') from dual`,
+	}, {
+		input:  "SELECT JSON_CONTAINS_PATH(@j, TRIM('one'), '$.a', '$.e')",
+		output: "select json_contains_path(@j, trim('one'), '$.a', '$.e') from dual",
+	}, {
+		input:  "SELECT JSON_CONTAINS_PATH(@j, @k, '$.a', @i)",
+		output: "select json_contains_path(@j, @k, '$.a', @i) from dual",
+	}, {
+		input:  "SELECT JSON_EXTRACT(@j, '$.a')",
+		output: "select json_extract(@j, '$.a') from dual",
+	}, {
+		input:  `SELECT c, JSON_EXTRACT(c, "$.id"), g FROM jemp WHERE JSON_EXTRACT(c, "$.id") > 1 ORDER BY JSON_EXTRACT(c, "$.name")`,
+		output: "select c, json_extract(c, '$.id'), g from jemp where json_extract(c, '$.id') > 1 order by json_extract(c, '$.name') asc",
+	}, {
+		input:  `SELECT JSON_EXTRACT('{"a": 1, "b": 2, "c": {"d": 4}}', '$.a', @j)`,
+		output: `select json_extract('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a', @j) from dual`,
+	}, {
+		input:  `SELECT JSON_KEYS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a')`,
+		output: `select json_keys('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a') from dual`,
+	}, {
+		input:  `SELECT JSON_KEYS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}')`,
+		output: `select json_keys('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}') from dual`,
+	}, {
+		input:  `SELECT JSON_OVERLAPS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a')`,
+		output: `select json_overlaps('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a') from dual`,
+	}, {
+		input:  "SELECT JSON_OVERLAPS(@j, @k)",
+		output: "select json_overlaps(@j, @k) from dual",
+	}, {
+		input:  "SELECT JSON_OVERLAPS(@j, BIN(1))",
+		output: "select json_overlaps(@j, BIN(1)) from dual",
+	}, {
+		input:  "SELECT JSON_SEARCH(@j, 'one', 'abc')",
+		output: "select json_search(@j, 'one', 'abc') from dual",
+	}, {
+		input:  `SELECT JSON_SEARCH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', @j, BIN(2))`,
+		output: `select json_search('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', @j, BIN(2)) from dual`,
+	}, {
+		input:  `SELECT JSON_SEARCH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'all', '10', NULL)`,
+		output: `select json_search('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'all', '10', null) from dual`,
+	}, {
+		input:  "SELECT JSON_SEARCH(@j, 'all', '%b%', '', '$[3]')",
+		output: "select json_search(@j, 'all', '%b%', '', '$[3]') from dual",
+	}, {
+		input:  "SELECT JSON_SEARCH(@j, 'all', '%b%', 'a', '$[3]')",
+		output: "select json_search(@j, 'all', '%b%', 'a', '$[3]') from dual",
+	}, {
+		input:  `SELECT JSON_VALUE('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a')`,
+		output: `select json_value('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a') from dual`,
+	}, {
+		input:  `SELECT JSON_VALUE(@j, @k)`,
+		output: `select json_value(@j, @k) from dual`,
+	}, {
+		input:  `SELECT 17 MEMBER OF ('[23, "abc", 17, "ab", 10]')`,
+		output: `select 17 member of ('[23, \"abc\", 17, \"ab\", 10]') from dual`,
+	}, {
+		input:  "SELECT @j MEMBER OF (@k)",
+		output: "select @j member of (@k) from dual",
+	}, {
+		input:  `SELECT 17 MEMBER OF('[23, "abc", "17", "ab", 10]'), "17" MEMBER OF('[23, "abc", 17, "ab", 10]')`,
+		output: `select 17 member of ('[23, \"abc\", \"17\", \"ab\", 10]'), '17' member of ('[23, \"abc\", 17, \"ab\", 10]') from dual`,
+	}, {
+		input:  `SELECT JSON_DEPTH('{}'), JSON_DEPTH('[]'), JSON_DEPTH('true')`,
+		output: `select json_depth('{}'), json_depth('[]'), json_depth('true') from dual`,
+	}, {
+		input:  `SELECT JSON_LENGTH('{"a": 1, "b": {"c": 30}}')`,
+		output: `select json_length('{\"a\": 1, \"b\": {\"c\": 30}}') from dual`,
+	}, {
+		input:  `SELECT JSON_LENGTH('{"a": 1, "b": {"c": 30}}', '$.b');`,
+		output: `select json_length('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b') from dual`,
+	}, {
+		input:  `SELECT JSON_LENGTH('{\"a\": 1, \"b\": {\"c\": 30}}', @j);`,
+		output: `select json_length('{\"a\": 1, \"b\": {\"c\": 30}}', @j) from dual`,
+	}, {
+		input:  `SELECT jcol, JSON_LENGTH(jcol)`,
+		output: `select jcol, json_length(jcol) from dual`,
+	}, {
+		input:  "SELECT JSON_TYPE(@j)",
+		output: "select json_type(@j) from dual",
+	}, {
+		input:  `SELECT JSON_TYPE(JSON_EXTRACT(@j, '$.a[0]'))`,
+		output: `select json_type(json_extract(@j, '$.a[0]')) from dual`,
+	}, {
+		input:  `SELECT JSON_VALID('{\"a\": 1}')`,
+		output: `select json_valid('{\"a\": 1}') from dual`,
+	}, {
+		input:  "SELECT JSON_VALID(@j)",
+		output: "select json_valid(@j) from dual",
+	}, {
+		input:  `SELECT JSON_ARRAY_APPEND('{ "a": 1, "b": [2, 3]}','$[1]', 'x')`,
+		output: `select json_array_append('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x') from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_APPEND('{ "a": 1, "b": [2, 3]}','$[1]', 'x', '$[2]', 1)`,
+		output: `select json_array_append('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', '$[2]', 1) from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_APPEND('{ "a": 1, "b": [2, 3]}','$[1]', 'x', @i, @j)`,
+		output: `select json_array_append('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', @i, @j) from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_APPEND('{ "a": 1, "b": [2, 3]}', @j, 1)`,
+		output: `select json_array_append('{ \"a\": 1, \"b\": [2, 3]}', @j, 1) from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_APPEND('{ "a": 1, "b": [2, 3]}', '$[1]', @j)`,
+		output: `select json_array_append('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', @j) from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_APPEND('{ "a": 1, "b": [2, 3]}', @j, @k)`,
+		output: `select json_array_append('{ \"a\": 1, \"b\": [2, 3]}', @j, @k) from dual`,
+	}, {
+		input:  "SELECT JSON_ARRAY_APPEND(@i,@j,@k)",
+		output: `select json_array_append(@i, @j, @k) from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_INSERT('{ "a": 1, "b": [2, 3]}','$[1]', 'x')`,
+		output: `select json_array_insert('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x') from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_INSERT('{ "a": 1, "b": [2, 3]}','$[1]', 'x', '$[2]', 1)`,
+		output: `select json_array_insert('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', '$[2]', 1) from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_INSERT('{ "a": 1, "b": [2, 3]}','$[1]', 'x', @i, @j)`,
+		output: `select json_array_insert('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', @i, @j) from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_INSERT('{ "a": 1, "b": [2, 3]}', @j, 1)`,
+		output: `select json_array_insert('{ \"a\": 1, \"b\": [2, 3]}', @j, 1) from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_INSERT('{ "a": 1, "b": [2, 3]}', '$[1]', @j)`,
+		output: `select json_array_insert('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', @j) from dual`,
+	}, {
+		input:  `SELECT JSON_ARRAY_INSERT('{ "a": 1, "b": [2, 3]}', @j, @k)`,
+		output: `select json_array_insert('{ \"a\": 1, \"b\": [2, 3]}', @j, @k) from dual`,
+	}, {
+		input:  "SELECT JSON_ARRAY_INSERT(@i,@j,@k)",
+		output: "select json_array_insert(@i, @j, @k) from dual",
+	}, {
+		input:  "SELECT JSON_ARRAY_INSERT(@j, '$[0]', 'x', '$[2][1]', 'y')",
+		output: "select json_array_insert(@j, '$[0]', 'x', '$[2][1]', 'y') from dual",
+	}, {
+		input:  `SELECT JSON_INSERT('{ "a": 1, "b": [2, 3]}','$[1]', 'x')`,
+		output: `select json_insert('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x') from dual`,
+	}, {
+		input:  `SELECT JSON_INSERT('{ "a": 1, "b": [2, 3]}','$[1]', 'x', '$[2]', 1)`,
+		output: `select json_insert('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', '$[2]', 1) from dual`,
+	}, {
+		input:  `SELECT JSON_INSERT('{ "a": 1, "b": [2, 3]}','$[1]', 'x', @i, @j)`,
+		output: `select json_insert('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', @i, @j) from dual`,
+	}, {
+		input:  `SELECT JSON_INSERT('{ "a": 1, "b": [2, 3]}', @j, 1)`,
+		output: `select json_insert('{ \"a\": 1, \"b\": [2, 3]}', @j, 1) from dual`,
+	}, {
+		input:  `SELECT JSON_INSERT('{ "a": 1, "b": [2, 3]}', '$[1]', @j)`,
+		output: `select json_insert('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', @j) from dual`,
+	}, {
+		input:  `SELECT JSON_INSERT('{ "a": 1, "b": [2, 3]}', @j, @k)`,
+		output: `select json_insert('{ \"a\": 1, \"b\": [2, 3]}', @j, @k) from dual`,
+	}, {
+		input:  "SELECT JSON_INSERT(@i,@j,@k)",
+		output: "select json_insert(@i, @j, @k) from dual",
+	}, {
+		input:  "SELECT JSON_INSERT(@j, '$.a', 10, '$.c', '[true, false]')",
+		output: "select json_insert(@j, '$.a', 10, '$.c', '[true, false]') from dual",
+	}, {
+		input:  `SELECT JSON_REPLACE('{ "a": 1, "b": [2, 3]}','$[1]', 'x')`,
+		output: `select json_replace('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x') from dual`,
+	}, {
+		input:  `SELECT JSON_REPLACE('{ "a": 1, "b": [2, 3]}','$[1]', 'x', '$[2]', 1)`,
+		output: `select json_replace('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', '$[2]', 1) from dual`,
+	}, {
+		input:  `SELECT JSON_REPLACE('{ "a": 1, "b": [2, 3]}','$[1]', 'x', @i, @j)`,
+		output: `select json_replace('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', @i, @j) from dual`,
+	}, {
+		input:  `SELECT JSON_REPLACE('{ "a": 1, "b": [2, 3]}', @j, 1)`,
+		output: `select json_replace('{ \"a\": 1, \"b\": [2, 3]}', @j, 1) from dual`,
+	}, {
+		input:  `SELECT JSON_REPLACE('{ "a": 1, "b": [2, 3]}', '$[1]', @j)`,
+		output: `select json_replace('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', @j) from dual`,
+	}, {
+		input:  `SELECT JSON_REPLACE('{ "a": 1, "b": [2, 3]}', @j, @k)`,
+		output: `select json_replace('{ \"a\": 1, \"b\": [2, 3]}', @j, @k) from dual`,
+	}, {
+		input:  "SELECT JSON_REPLACE(@i,@j,@k)",
+		output: "select json_replace(@i, @j, @k) from dual",
+	}, {
+		input:  "SELECT JSON_REPLACE(@j, '$.a', 10, '$.c', '[true, false]')",
+		output: "select json_replace(@j, '$.a', 10, '$.c', '[true, false]') from dual",
+	}, {
+		input:  `SELECT JSON_SET('{ "a": 1, "b": [2, 3]}','$[1]', 'x')`,
+		output: `select json_set('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x') from dual`,
+	}, {
+		input:  `SELECT JSON_SET('{ "a": 1, "b": [2, 3]}','$[1]', 'x', '$[2]', 1)`,
+		output: `select json_set('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', '$[2]', 1) from dual`,
+	}, {
+		input:  `SELECT JSON_SET('{ "a": 1, "b": [2, 3]}','$[1]', 'x', @i, @j)`,
+		output: `select json_set('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', 'x', @i, @j) from dual`,
+	}, {
+		input:  `SELECT JSON_SET('{ "a": 1, "b": [2, 3]}', @j, 1)`,
+		output: `select json_set('{ \"a\": 1, \"b\": [2, 3]}', @j, 1) from dual`,
+	}, {
+		input:  `SELECT JSON_SET('{ "a": 1, "b": [2, 3]}', '$[1]', @j)`,
+		output: `select json_set('{ \"a\": 1, \"b\": [2, 3]}', '$[1]', @j) from dual`,
+	}, {
+		input:  `SELECT JSON_SET('{ "a": 1, "b": [2, 3]}', @j, @k)`,
+		output: `select json_set('{ \"a\": 1, \"b\": [2, 3]}', @j, @k) from dual`,
+	}, {
+		input:  "SELECT JSON_SET(@i,@j,@k)",
+		output: "select json_set(@i, @j, @k) from dual",
+	}, {
+		input:  "SELECT JSON_SET(@j, '$.a', 10, '$.c', '[true, false]')",
+		output: "select json_set(@j, '$.a', 10, '$.c', '[true, false]') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE('[1, 2]', '[true, false]')",
+		output: "select json_merge('[1, 2]', '[true, false]') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE('[1, 2]', '[true, false]', 'hello')",
+		output: "select json_merge('[1, 2]', '[true, false]', 'hello') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE('[1, 2]', @i)",
+		output: "select json_merge('[1, 2]', @i) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE(@i, @j)",
+		output: "select json_merge(@i, @j) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE(@i, @j, @k)",
+		output: "select json_merge(@i, @j, @k) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE(@i, '[true, false]')",
+		output: "select json_merge(@i, '[true, false]') from dual",
+	}, {
+		input:  `SELECT JSON_MERGE_PATCH('{"name": "x"}', '{"id": 47}')`,
+		output: `select json_merge_patch('{\"name\": \"x\"}', '{\"id\": 47}') from dual`,
+	}, {
+		input:  `SELECT JSON_MERGE_PATCH('{ "a": 1, "b":2 }','{ "a": 3, "c":4 }','{ "a": 5, "d":6 }');`,
+		output: `select json_merge_patch('{ \"a\": 1, \"b\":2 }', '{ \"a\": 3, \"c\":4 }', '{ \"a\": 5, \"d\":6 }') from dual`,
+	}, {
+		input:  "SELECT JSON_MERGE_PATCH('[1, 2]', '[true, false]', 'hello')",
+		output: "select json_merge_patch('[1, 2]', '[true, false]', 'hello') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PATCH('[1, 2]', @i)",
+		output: "select json_merge_patch('[1, 2]', @i) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PATCH(@i, @j)",
+		output: "select json_merge_patch(@i, @j) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PATCH(@i, '[true, false]')",
+		output: "select json_merge_patch(@i, '[true, false]') from dual",
+	}, {
+		input:  `SELECT JSON_MERGE_PRESERVE('{"name": "x"}', '{"id": 47}')`,
+		output: `select json_merge_preserve('{\"name\": \"x\"}', '{\"id\": 47}') from dual`,
+	}, {
+		input:  `SELECT JSON_MERGE_PRESERVE('{ "a": 1, "b":2 }','{ "a": 3, "c":4 }','{ "a": 5, "d":6 }');`,
+		output: `select json_merge_preserve('{ \"a\": 1, \"b\":2 }', '{ \"a\": 3, \"c\":4 }', '{ \"a\": 5, \"d\":6 }') from dual`,
+	}, {
+		input:  "SELECT JSON_MERGE_PRESERVE('[1, 2]', '[true, false]', 'hello')",
+		output: "select json_merge_preserve('[1, 2]', '[true, false]', 'hello') from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PRESERVE('[1, 2]', @i)",
+		output: "select json_merge_preserve('[1, 2]', @i) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PRESERVE(@i, @j)",
+		output: "select json_merge_preserve(@i, @j) from dual",
+	}, {
+		input:  "SELECT JSON_MERGE_PRESERVE(@i, '[true, false]')",
+		output: "select json_merge_preserve(@i, '[true, false]') from dual",
+	}, {
+		input:  "SELECT JSON_REMOVE(@i, '$[1]')",
+		output: "select json_remove(@i, '$[1]') from dual",
+	}, {
+		input:  `SELECT JSON_REMOVE('["a", ["b", "c"], "d"]', '$[1]')`,
+		output: `select json_remove('[\"a\", [\"b\", \"c\"], \"d\"]', '$[1]') from dual`,
+	}, {
+		input:  `SELECT JSON_REMOVE('["a", ["b", "c"], "d"]', @i)`,
+		output: `select json_remove('[\"a\", [\"b\", \"c\"], \"d\"]', @i) from dual`,
+	}, {
+		input:  `SELECT JSON_REMOVE('["a", ["b", "c"], "d"]', @i, @j, '$[0]', '$[1]','$[2]')`,
+		output: `select json_remove('[\"a\", [\"b\", \"c\"], \"d\"]', @i, @j, '$[0]', '$[1]', '$[2]') from dual`,
+	}, {
+		input:  "SELECT JSON_UNQUOTE('abc')",
+		output: "select json_unquote('abc') from dual",
+	}, {
+		input:  `SELECT JSON_UNQUOTE('\"\\\\t\\\\u0032\"')`,
+		output: `select json_unquote('\"\\\\t\\\\u0032\"') from dual`,
+	}, {
+		input:  "SELECT JSON_UNQUOTE(@j)",
+		output: "select json_unquote(@j) from dual",
 	}}
 )
 
@@ -2318,6 +2988,90 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "select 1, next value from seq",
 		err:   "syntax error",
+	}, {
+		input: "SELECT jcol, JSON_PRETTY(jcol, jcol) from jtable",
+		err:   "syntax error at position 31",
+	}, {
+		input: "SELECT JSON_ARRAY(1,)",
+		err:   "syntax error at position 22",
+	}, {
+		input: "SELECT JSON_OBJECT(1)",
+		err:   "syntax error at position 22",
+	}, {
+		input: "SELECT JSON_OBJECT(1,2,)",
+		err:   "syntax error at position 25",
+	}, {
+		input: "SELECT JSON_OBJECT(1,)",
+		err:   "syntax error at position 23",
+	}, {
+		input: "SELECT JSON_QUOTE()",
+		err:   "syntax error at position 20",
+	}, {
+		input: "select from t1, lateral (with qn as (select t1.a) select (select max(a) from qn)) as dt",
+		err:   "syntax error at position 12 near 'from'",
+	}, {
+		input: `SELECT JSON_SCHEMA_VALID('{"type":"string","pattern":"("}')`,
+		err:   `syntax error at position 60`,
+	}, {
+		input: `SELECT JSON_SCHEMA_VALIDATION_REPORT('{"type":"string","pattern":"("}')`,
+		err:   `syntax error at position 72`,
+	}, {
+		input: "SELECT JSON_CONTAINS(@j, @j2, )",
+		err:   "syntax error at position 32",
+	}, {
+		input: "SELECT JSON_CONTAINS_PATH(@j, @j2)",
+		err:   "syntax error at position 35",
+	}, {
+		input: "SELECT JSON_EXTRACT(@k, TRIM('abc'))",
+		err:   "syntax error at position 30",
+	}, {
+		input: "SELECT JSON_EXTRACT(@k)",
+		err:   "syntax error at position 24",
+	}, {
+		input: `SELECT JSON_KEYS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}',)`,
+		err:   `syntax error at position 61`,
+	}, {
+		input: "SELECT JSON_ARRAY_APPEND('{ \"a\": 1, \"b\": [2, 3]}')",
+		err:   "syntax error at position 51",
+	}, {
+		input: "SELECT JSON_ARRAY_APPEND('{ \"a\": 1, \"b\": [2, 3]}','$[1]',)",
+		err:   "syntax error at position 59",
+	}, {
+		input: "SELECT JSON_ARRAY_INSERT('{ \"a\": 1, \"b\": [2, 3]}')",
+		err:   "syntax error at position 51",
+	}, {
+		input: "SELECT JSON_ARRAY_INSERT('{ \"a\": 1, \"b\": [2, 3]}','$[1]',)",
+		err:   "syntax error at position 59",
+	}, {
+		input: "SELECT JSON_INSERT('{ \"a\": 1, \"b\": [2, 3]}')",
+		err:   "syntax error at position 45",
+	}, {
+		input: "SELECT JSON_INSERT('{ \"a\": 1, \"b\": [2, 3]}','$[1]',)",
+		err:   "syntax error at position 53",
+	}, {
+		input: "SELECT JSON_REPLACE('{ \"a\": 1, \"b\": [2, 3]}')",
+		err:   "syntax error at position 46",
+	}, {
+		input: "SELECT JSON_REPLACE('{ \"a\": 1, \"b\": [2, 3]}','$[1]',)",
+		err:   "syntax error at position 54",
+	}, {
+		input: "SELECT JSON_SET('{ \"a\": 1, \"b\": [2, 3]}')",
+		err:   "syntax error at position 42",
+	}, {
+		input: "SELECT JSON_SET('{ \"a\": 1, \"b\": [2, 3]}','$[1]',)",
+		err:   "syntax error at position 50",
+	}, {
+		input: "SELECT JSON_MERGE('[1, 2]')",
+		err:   "syntax error at position 28",
+	}, {
+		input: "SELECT JSON_MERGE_PATCH('[1, 2]')",
+		err:   "syntax error at position 34",
+	}, {
+		input: "SELECT JSON_MERGE_PRESERVE('[1, 2]')",
+		err:   "syntax error at position 37",
+	}, {
+		input: "SELECT JSON_REMOVE('[\"a\", [\"b\", \"c\"], \"d\"]')",
+		err:   "syntax error at position 45",
 	}}
 
 	for _, tcase := range invalidSQL {
@@ -2643,8 +3397,8 @@ func TestKeywords(t *testing.T) {
 		input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
 		output: "select /* share and mode as cols */ `share`, `mode` from t where `share` = 'foo'",
 	}, {
-		input:  "select /* unused keywords as cols */ `write`, varying from t where trailing = 'foo'",
-		output: "select /* unused keywords as cols */ `write`, `varying` from t where `trailing` = 'foo'",
+		input:  "select /* unused keywords as cols */ `write`, varying from t where `trailing` = 'foo' and `leading` = 'foo' and `both` = 'foo'",
+		output: "select /* unused keywords as cols */ `write`, `varying` from t where `trailing` = 'foo' and `leading` = 'foo' and `both` = 'foo'",
 	}, {
 		input:  "select status from t",
 		output: "select `status` from t",
@@ -2692,9 +3446,11 @@ func TestConvert(t *testing.T) {
 	}, {
 		input: "select convert('abc', char character set binary) from t",
 	}, {
-		input: "select convert('abc', char(4) ascii) from t",
+		input:  "select convert('abc', char(4) ascii) from t",
+		output: "select convert('abc', char(4) character set latin1) from t",
 	}, {
-		input: "select convert('abc', char unicode) from t",
+		input:  "select convert('abc', char unicode) from t",
+		output: "select convert('abc', char character set ucs2) from t",
 	}, {
 		input: "select convert('abc', char(4)) from t",
 	}, {
@@ -2731,8 +3487,6 @@ func TestConvert(t *testing.T) {
 		input: "select convert('abc', datetime) from t",
 	}, {
 		input: "select convert('abc', json) from t",
-	}, {
-		input: "select convert('abc' using ascii) from t",
 	}}
 
 	for _, tcase := range validSQL {
@@ -3099,6 +3853,26 @@ func TestCreateTable(t *testing.T) {
 	unique index by_username4 (username) using BTREE key_block_size 4 comment 'hi'
 )`,
 		},
+		{
+			input: `create table t1 (
+	first_name varchar(10),
+	last_name varchar(10),
+	full_name varchar(255) character set utf8mb4 collate utf8mb4_0900_ai_ci as (concat(first_name, ' ', last_name)) virtual,
+	middle_name varchar(255) character set utf8mb4 collate utf8mb4_0900_ai_ci default '' collate utf8mb4_bin
+)`,
+			output: `create table t1 (
+	first_name varchar(10),
+	last_name varchar(10),
+	full_name varchar(255) character set utf8mb4 collate utf8mb4_0900_ai_ci as (concat(first_name, ' ', last_name)) virtual,
+	middle_name varchar(255) character set utf8mb4 collate utf8mb4_bin default ''
+)`,
+		},
+		{
+			input: "create table t1 (`idb` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci GENERATED ALWAYS AS (json_unquote(json_extract(`jsonobj`,_utf8mb4'$._id'))) STORED NOT NULL)",
+			output: `create table t1 (
+	idb varchar(36) character set utf8mb4 collate utf8mb4_0900_ai_ci as (json_unquote(json_extract(jsonobj, _utf8mb4 '$._id'))) stored not null
+)`,
+		},
 		// multi-column indexes
 		{
 			input: `create table t (
@@ -3219,6 +3993,7 @@ func TestCreateTable(t *testing.T) {
 	s2 varchar default 'this is a string',
 	s3 varchar default null,
 	s4 timestamp default current_timestamp,
+	s41 timestamp default now,
 	s5 bit(1) default B'0'
 )`,
 			output: `create table t (
@@ -3229,6 +4004,7 @@ func TestCreateTable(t *testing.T) {
 	s2 varchar default 'this is a string',
 	` + "`" + `s3` + "`" + ` varchar default null,
 	s4 timestamp default current_timestamp(),
+	s41 timestamp default now(),
 	s5 bit(1) default B'0'
 )`,
 		}, {
@@ -3272,6 +4048,24 @@ func TestCreateTable(t *testing.T) {
 	time3 timestamp default current_timestamp() on update current_timestamp(),
 	time4 timestamp default current_timestamp() on update current_timestamp(),
 	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)
+)`,
+		}, {
+			// test now with and without ()
+			input: `create table t (
+	time1 timestamp default now,
+	time2 timestamp default now(),
+	time3 timestamp default (now()),
+	time4 timestamp default now on update now,
+	time5 timestamp default now() on update now(),
+	time6 timestamp(3) default now(3) on update now(3)
+)`,
+			output: `create table t (
+	time1 timestamp default now(),
+	time2 timestamp default now(),
+	time3 timestamp default now(),
+	time4 timestamp default now() on update now(),
+	time5 timestamp default now() on update now(),
+	time6 timestamp(3) default now(3) on update now(3)
 )`,
 		}, {
 			// test localtime with and without ()
@@ -3389,6 +4183,327 @@ func TestCreateTable(t *testing.T) {
 	id int(11)
 ) ENGINE FOOBAR`,
 		},
+		// partitions
+		{
+			input: `
+CREATE TABLE employees (
+    id INT NOT NULL,
+    fname VARCHAR(30),
+    lname VARCHAR(30),
+    hired DATE NOT NULL DEFAULT '1970-01-01',
+    separated DATE NOT NULL DEFAULT '9999-12-31',
+    job_code INT NOT NULL,
+    store_id INT NOT NULL
+)
+PARTITION BY RANGE (store_id) (
+    PARTITION p0 VALUES LESS THAN (6),
+    PARTITION p1 VALUES LESS THAN (11),
+    PARTITION p2 VALUES LESS THAN (16),
+    PARTITION p3 VALUES LESS THAN (21)
+)`,
+			output: `create table employees (
+	id INT not null,
+	fname VARCHAR(30),
+	lname VARCHAR(30),
+	hired DATE not null default '1970-01-01',
+	separated DATE not null default '9999-12-31',
+	job_code INT not null,
+	store_id INT not null
+) partition by range (store_id) (partition p0 values less than (6), partition p1 values less than (11), partition p2 values less than (16), partition p3 values less than (21))`,
+		},
+		{
+			input: `CREATE TABLE employees (
+    id INT NOT NULL,
+    fname VARCHAR(30),
+    lname VARCHAR(30),
+    hired DATE NOT NULL DEFAULT '1970-01-01',
+    separated DATE NOT NULL DEFAULT '9999-12-31',
+    job_code INT NOT NULL,
+    store_id INT NOT NULL
+)
+PARTITION BY RANGE (store_id) (
+    PARTITION p0 VALUES LESS THAN (6),
+    PARTITION p1 VALUES LESS THAN (11),
+    PARTITION p2 VALUES LESS THAN (16),
+    PARTITION p3 VALUES LESS THAN MAXVALUE
+)`,
+			output: `create table employees (
+	id INT not null,
+	fname VARCHAR(30),
+	lname VARCHAR(30),
+	hired DATE not null default '1970-01-01',
+	separated DATE not null default '9999-12-31',
+	job_code INT not null,
+	store_id INT not null
+) partition by range (store_id) (partition p0 values less than (6), partition p1 values less than (11), partition p2 values less than (16), partition p3 values less than maxvalue)`,
+		},
+		{
+			input: `CREATE TABLE employees (
+    id INT NOT NULL,
+    fname VARCHAR(30),
+    lname VARCHAR(30),
+    hired DATE NOT NULL DEFAULT '1970-01-01',
+    separated DATE NOT NULL DEFAULT '9999-12-31',
+    job_code INT NOT NULL,
+    store_id INT NOT NULL
+)
+PARTITION BY RANGE (job_code) (
+    PARTITION p0 VALUES LESS THAN (100),
+    PARTITION p1 VALUES LESS THAN (1000),
+    PARTITION p2 VALUES LESS THAN (10000)
+)`,
+			output: `create table employees (
+	id INT not null,
+	fname VARCHAR(30),
+	lname VARCHAR(30),
+	hired DATE not null default '1970-01-01',
+	separated DATE not null default '9999-12-31',
+	job_code INT not null,
+	store_id INT not null
+) partition by range (job_code) (partition p0 values less than (100), partition p1 values less than (1000), partition p2 values less than (10000))`,
+		},
+		{
+			input: `CREATE TABLE employees (
+    id INT NOT NULL,
+    fname VARCHAR(30),
+    lname VARCHAR(30),
+    hired DATE NOT NULL DEFAULT '1970-01-01',
+    separated DATE NOT NULL DEFAULT '9999-12-31',
+    job_code INT,
+    store_id INT
+)
+PARTITION BY RANGE ( YEAR(separated) ) (
+    PARTITION p0 VALUES LESS THAN (1991),
+    PARTITION p1 VALUES LESS THAN (1996),
+    PARTITION p2 VALUES LESS THAN (2001),
+    PARTITION p3 VALUES LESS THAN MAXVALUE
+)`,
+			output: `create table employees (
+	id INT not null,
+	fname VARCHAR(30),
+	lname VARCHAR(30),
+	hired DATE not null default '1970-01-01',
+	separated DATE not null default '9999-12-31',
+	job_code INT,
+	store_id INT
+) partition by range (YEAR(separated)) (partition p0 values less than (1991), partition p1 values less than (1996), partition p2 values less than (2001), partition p3 values less than maxvalue)`,
+		},
+		{
+			input: `CREATE TABLE quarterly_report_status (
+    report_id INT NOT NULL,
+    report_status VARCHAR(20) NOT NULL,
+    report_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)
+PARTITION BY RANGE ( UNIX_TIMESTAMP(report_updated) ) (
+    PARTITION p0 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-01-01 00:00:00') ),
+    PARTITION p1 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-04-01 00:00:00') ),
+    PARTITION p2 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-07-01 00:00:00') ),
+    PARTITION p3 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-10-01 00:00:00') ),
+    PARTITION p4 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-01-01 00:00:00') ),
+    PARTITION p5 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-04-01 00:00:00') ),
+    PARTITION p6 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-07-01 00:00:00') ),
+    PARTITION p7 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-10-01 00:00:00') ),
+    PARTITION p8 VALUES LESS THAN ( UNIX_TIMESTAMP('2010-01-01 00:00:00') ),
+    PARTITION p9 VALUES LESS THAN (MAXVALUE)
+)`,
+			output: `create table quarterly_report_status (
+	report_id INT not null,
+	report_status VARCHAR(20) not null,
+	report_updated TIMESTAMP not null default current_timestamp() on update current_timestamp()
+) partition by range (UNIX_TIMESTAMP(report_updated)) (partition p0 values less than (UNIX_TIMESTAMP('2008-01-01 00:00:00')), partition p1 values less than (UNIX_TIMESTAMP('2008-04-01 00:00:00')), partition p2 values less than (UNIX_TIMESTAMP('2008-07-01 00:00:00')), partition p3 values less than (UNIX_TIMESTAMP('2008-10-01 00:00:00')), partition p4 values less than (UNIX_TIMESTAMP('2009-01-01 00:00:00')), partition p5 values less than (UNIX_TIMESTAMP('2009-04-01 00:00:00')), partition p6 values less than (UNIX_TIMESTAMP('2009-07-01 00:00:00')), partition p7 values less than (UNIX_TIMESTAMP('2009-10-01 00:00:00')), partition p8 values less than (UNIX_TIMESTAMP('2010-01-01 00:00:00')), partition p9 values less than maxvalue)`,
+		},
+		{
+			input: `CREATE TABLE quarterly_report_status (
+    report_id INT NOT NULL,
+    report_status VARCHAR(20) NOT NULL,
+    report_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)
+PARTITION BY RANGE ( UNIX_TIMESTAMP(report_updated) ) (
+    PARTITION p0 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-01-01 00:00:00') ),
+    PARTITION p1 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-04-01 00:00:00') ),
+    PARTITION p2 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-07-01 00:00:00') ),
+    PARTITION p3 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-10-01 00:00:00') ),
+    PARTITION p4 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-01-01 00:00:00') ),
+    PARTITION p5 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-04-01 00:00:00') ),
+    PARTITION p6 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-07-01 00:00:00') ),
+    PARTITION p7 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-10-01 00:00:00') ),
+    PARTITION p8 VALUES LESS THAN ( UNIX_TIMESTAMP('2010-01-01 00:00:00') ),
+    PARTITION p9 VALUES LESS THAN (MAXVALUE)
+)`,
+			output: `create table quarterly_report_status (
+	report_id INT not null,
+	report_status VARCHAR(20) not null,
+	report_updated TIMESTAMP not null default current_timestamp() on update current_timestamp()
+) partition by range (UNIX_TIMESTAMP(report_updated)) (partition p0 values less than (UNIX_TIMESTAMP('2008-01-01 00:00:00')), partition p1 values less than (UNIX_TIMESTAMP('2008-04-01 00:00:00')), partition p2 values less than (UNIX_TIMESTAMP('2008-07-01 00:00:00')), partition p3 values less than (UNIX_TIMESTAMP('2008-10-01 00:00:00')), partition p4 values less than (UNIX_TIMESTAMP('2009-01-01 00:00:00')), partition p5 values less than (UNIX_TIMESTAMP('2009-04-01 00:00:00')), partition p6 values less than (UNIX_TIMESTAMP('2009-07-01 00:00:00')), partition p7 values less than (UNIX_TIMESTAMP('2009-10-01 00:00:00')), partition p8 values less than (UNIX_TIMESTAMP('2010-01-01 00:00:00')), partition p9 values less than maxvalue)`,
+		},
+		{
+			input: `CREATE TABLE members (
+    firstname VARCHAR(25) NOT NULL,
+    lastname VARCHAR(25) NOT NULL,
+    username VARCHAR(16) NOT NULL,
+    email VARCHAR(35),
+    joined DATE NOT NULL
+)
+PARTITION BY RANGE COLUMNS(joined) (
+    PARTITION p0 VALUES LESS THAN ('1960-01-01'),
+    PARTITION p1 VALUES LESS THAN ('1970-01-01'),
+    PARTITION p2 VALUES LESS THAN ('1980-01-01'),
+    PARTITION p3 VALUES LESS THAN ('1990-01-01'),
+    PARTITION p4 VALUES LESS THAN MAXVALUE
+)`,
+			output: `create table members (
+	firstname VARCHAR(25) not null,
+	lastname VARCHAR(25) not null,
+	username VARCHAR(16) not null,
+	email VARCHAR(35),
+	joined DATE not null
+) partition by range columns (joined) (partition p0 values less than ('1960-01-01'), partition p1 values less than ('1970-01-01'), partition p2 values less than ('1980-01-01'), partition p3 values less than ('1990-01-01'), partition p4 values less than maxvalue)`,
+		},
+		{
+			input: `CREATE TABLE ti (id INT, amount DECIMAL(7,2), tr_date DATE)
+    ENGINE=INNODB
+    PARTITION BY HASH( MONTH(tr_date) )
+    PARTITIONS 6`,
+			output: `create table ti (
+	id INT,
+	amount DECIMAL(7,2),
+	tr_date DATE
+) ENGINE INNODB partition by hash (MONTH(tr_date)) partitions 6`,
+		},
+		{
+			input: `CREATE TABLE members (
+    firstname VARCHAR(25) NOT NULL,
+    lastname VARCHAR(25) NOT NULL,
+    username VARCHAR(16) NOT NULL,
+    email VARCHAR(35),
+    joined DATE NOT NULL
+)
+PARTITION BY KEY(joined)
+PARTITIONS 6`,
+			output: `create table members (
+	firstname VARCHAR(25) not null,
+	lastname VARCHAR(25) not null,
+	username VARCHAR(16) not null,
+	email VARCHAR(35),
+	joined DATE not null
+) partition by key (joined) partitions 6`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5),
+	PARTITION MyPart VALUES IN (2,4,6)
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5), partition MyPart values in (2, 4, 6))`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE = FOOBAR,
+	PARTITION MyPart VALUES IN (2,4,6)
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR, partition MyPart values in (2, 4, 6))`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) ENGINE = FOOBAR,
+	PARTITION MyPart VALUES IN (2,4,6)
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) engine FOOBAR, partition MyPart values in (2, 4, 6))`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE FOOBAR,
+	PARTITION MyPart VALUES IN (2,4,6)
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR, partition MyPart values in (2, 4, 6))`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE FOOBAR COMMENT = 'test',
+	PARTITION MyPart VALUES IN (2,4,6) comment 'test2'
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR comment 'test', partition MyPart values in (2, 4, 6) comment 'test2')`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE FOOBAR DATA DIRECTORY = 'test',
+	PARTITION MyPart VALUES IN (2,4,6) DATA DIRECTORY 'test2'
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR data directory 'test', partition MyPart values in (2, 4, 6) data directory 'test2')`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) INDEX DIRECTORY = 'test',
+	PARTITION MyPart VALUES IN (2,4,6) INDEX DIRECTORY 'test2'
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) index directory 'test', partition MyPart values in (2, 4, 6) index directory 'test2')`,
+		},
+		{
+			input: `create table t1 (id int primary key) partition by list (id) (partition p1 values in(11,21), partition p2 values in (12,22))`,
+			output: `create table t1 (
+	id int primary key
+) partition by list (id) (partition p1 values in (11, 21), partition p2 values in (12, 22))`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) COMMENT = 'before' STORAGE ENGINE FOOBAR DATA DIRECTORY = 'test',
+	PARTITION MyPart VALUES IN (2,4,6) DATA DIRECTORY 'test2'
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR comment 'before' data directory 'test', partition MyPart values in (2, 4, 6) data directory 'test2')`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) MAX_ROWS = 4,
+	PARTITION MyPart VALUES IN (2,4,6) MAX_ROWS 10
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) max_rows 4, partition MyPart values in (2, 4, 6) max_rows 10)`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) MIN_ROWS = 4,
+	PARTITION MyPart VALUES IN (2,4,6) MIN_ROWS 10
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) min_rows 4, partition MyPart values in (2, 4, 6) min_rows 10)`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) TABLESPACE = innodb_system,
+	PARTITION MyPart VALUES IN (2,4,6) TABLESPACE innodb_system
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) tablespace innodb_system, partition MyPart values in (2, 4, 6) tablespace innodb_system)`,
+		},
 	}
 	for _, test := range createTableQueries {
 		sql := strings.TrimSpace(test.input)
@@ -3495,6 +4610,15 @@ var (
 	}{{
 		input:  "select : from t",
 		output: "syntax error at position 9 near ':'",
+	}, {
+		input:  "execute stmt using 1;",
+		output: "syntax error at position 21 near '1'",
+	}, {
+		input:  "PREPARE stmt FROM a;",
+		output: "syntax error at position 20 near 'a'",
+	}, {
+		input:  "PREPARE stmt FROM @@a;",
+		output: "syntax error at position 22 near 'a'",
 	}, {
 		input:  "select x'78 from t",
 		output: "syntax error at position 12 near '78'",
@@ -3689,6 +4813,42 @@ func TestParseLobstersQueries(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to parse %q: %v", query, err)
 		}
+	}
+}
+
+func TestParseVersionedComments(t *testing.T) {
+	testcases := []struct {
+		input        string
+		mysqlVersion string
+		output       string
+	}{
+		{
+			input:        `CREATE TABLE table1 (id int) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*!50900 PARTITION BY RANGE (id) (PARTITION x VALUES LESS THAN (5) ENGINE = InnoDB, PARTITION t VALUES LESS THAN (20) ENGINE = InnoDB) */`,
+			mysqlVersion: "50401",
+			output: `create table table1 (
+	id int
+) ENGINE InnoDB,
+  CHARSET utf8mb4`,
+		}, {
+			input:        `CREATE TABLE table1 (id int) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*!50900 PARTITION BY RANGE (id) (PARTITION x VALUES LESS THAN (5) ENGINE = InnoDB, PARTITION t VALUES LESS THAN (20) ENGINE = InnoDB) */`,
+			mysqlVersion: "80001",
+			output: `create table table1 (
+	id int
+) ENGINE InnoDB,
+  CHARSET utf8mb4 partition by range (id) (partition x values less than (5) engine InnoDB, partition t values less than (20) engine InnoDB)`,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.input+":"+testcase.mysqlVersion, func(t *testing.T) {
+			oldMySQLVersion := MySQLVersion
+			defer func() { MySQLVersion = oldMySQLVersion }()
+			MySQLVersion = testcase.mysqlVersion
+			tree, err := Parse(testcase.input)
+			require.NoError(t, err, testcase.input)
+			out := String(tree)
+			require.Equal(t, testcase.output, out)
+		})
 	}
 }
 

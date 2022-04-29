@@ -20,6 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
@@ -28,6 +29,7 @@ import (
 	"path"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -87,7 +89,7 @@ type LocalProcessCluster struct {
 	VtgateProcess   VtgateProcess
 	VtworkerProcess VtworkerProcess
 	VtbackupProcess VtbackupProcess
-	VtorcProcess    *VtorcProcess
+	VtorcProcesses  []*VtorcProcess
 
 	nextPortForProcess int
 
@@ -245,7 +247,7 @@ func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, re
 // rdonly: whether readonly tablets needed
 // customizers: functions like "func(*VttabletProcess)" that can modify settings of various objects
 // after they're created.
-func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, customizers ...interface{}) (err error) {
+func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, customizers ...any) (err error) {
 	totalTabletsRequired := replicaCount + 1 // + 1 is for primary
 	if rdonly {
 		totalTabletsRequired = totalTabletsRequired + 1 // + 1 for rdonly
@@ -362,7 +364,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 		}
 	}
 
-	//Apply VSchema
+	// Apply VSchema
 	if keyspace.VSchema != "" {
 		if err = cluster.VtctlclientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
 			log.Errorf("error applying vschema: %v, %v", keyspace.VSchema, err)
@@ -386,7 +388,7 @@ func (cluster *LocalProcessCluster) StartUnshardedKeyspaceLegacy(keyspace Keyspa
 // rdonly: whether readonly tablets needed
 // customizers: functions like "func(*VttabletProcess)" that can modify settings of various objects
 // after they're created.
-func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, customizers ...interface{}) (err error) {
+func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, customizers ...any) (err error) {
 	totalTabletsRequired := replicaCount + 1 // + 1 is for primary
 	if rdonly {
 		totalTabletsRequired = totalTabletsRequired + 1 // + 1 for rdonly
@@ -510,7 +512,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 		}
 	}
 
-	//Apply VSchema
+	// Apply VSchema
 	if keyspace.VSchema != "" {
 		if err = cluster.VtctlclientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
 			log.Errorf("error applying vschema: %v, %v", keyspace.VSchema, err)
@@ -642,15 +644,15 @@ func NewCluster(cell string, hostname string) *LocalProcessCluster {
 // populateVersionInfo is used to populate the version information for the binaries used to setup the cluster.
 func (cluster *LocalProcessCluster) populateVersionInfo() error {
 	var err error
-	cluster.VtTabletMajorVersion, err = getMajorVersion("vttablet")
+	cluster.VtTabletMajorVersion, err = GetMajorVersion("vttablet")
 	if err != nil {
 		return err
 	}
-	cluster.VtctlMajorVersion, err = getMajorVersion("vtctl")
+	cluster.VtctlMajorVersion, err = GetMajorVersion("vtctl")
 	return err
 }
 
-func getMajorVersion(binaryName string) (int, error) {
+func GetMajorVersion(binaryName string) (int, error) {
 	version, err := exec.Command(binaryName, "--version").Output()
 	if err != nil {
 		return 0, err
@@ -724,13 +726,14 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Errorf("Error in vtgate teardown: %v", err)
 	}
 
-	if cluster.VtorcProcess != nil {
-		if err := cluster.VtorcProcess.TearDown(); err != nil {
+	for _, vtorcProcess := range cluster.VtorcProcesses {
+		if err := vtorcProcess.TearDown(); err != nil {
 			log.Errorf("Error in vtorc teardown: %v", err)
 		}
 	}
 
 	var mysqlctlProcessList []*exec.Cmd
+	var mysqlctlTabletUIDs []int
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			for _, tablet := range shard.Vttablets {
@@ -739,6 +742,7 @@ func (cluster *LocalProcessCluster) Teardown() {
 						log.Errorf("Error in mysqlctl teardown: %v", err)
 					} else {
 						mysqlctlProcessList = append(mysqlctlProcessList, proc)
+						mysqlctlTabletUIDs = append(mysqlctlTabletUIDs, tablet.MysqlctlProcess.TabletUID)
 					}
 				}
 				if tablet.MysqlctldProcess.TabletUID > 0 {
@@ -754,11 +758,11 @@ func (cluster *LocalProcessCluster) Teardown() {
 		}
 	}
 
-	for _, proc := range mysqlctlProcessList {
-		if err := proc.Wait(); err != nil {
-			log.Errorf("Error in mysqlctl teardown wait: %v", err)
-		}
-	}
+	// On the CI it was noticed that MySQL shutdown hangs sometimes and
+	// on local investigation it was waiting on SEMI_SYNC acks for an internal command
+	// of Vitess even after closing the socket file.
+	// To prevent this process for hanging for 5 minutes, we will add a 30-second timeout.
+	cluster.waitForMySQLProcessToExit(mysqlctlProcessList, mysqlctlTabletUIDs)
 
 	if err := cluster.VtctldProcess.TearDown(); err != nil {
 		log.Errorf("Error in vtctld teardown: %v", err)
@@ -772,6 +776,49 @@ func (cluster *LocalProcessCluster) Teardown() {
 	os.Setenv("VTDATAROOT", cluster.OriginalVTDATAROOT)
 
 	cluster.teardownCompleted = true
+}
+
+func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessList []*exec.Cmd, mysqlctlTabletUIDs []int) {
+	wg := sync.WaitGroup{}
+	for i, cmd := range mysqlctlProcessList {
+		wg.Add(1)
+		go func(cmd *exec.Cmd, tabletUID int) {
+			defer func() {
+				wg.Done()
+			}()
+			exit := make(chan error)
+			go func() {
+				exit <- cmd.Wait()
+			}()
+			select {
+			case <-time.After(30 * time.Second):
+				break
+			case err := <-exit:
+				if err == nil {
+					return
+				}
+				log.Errorf("Error in mysqlctl teardown wait: %v", err)
+				break
+			}
+			pidFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.pid", tabletUID))
+			pidBytes, err := os.ReadFile(pidFile)
+			if err != nil {
+				// We can't read the file which means the PID file does not exist
+				// The server must have stopped
+				return
+			}
+			pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
+			if err != nil {
+				log.Errorf("Error in conversion to integer: %v", err)
+				return
+			}
+			err = syscall.Kill(pid, syscall.SIGKILL)
+			if err != nil {
+				log.Errorf("Error in killing process: %v", err)
+			}
+		}(cmd, mysqlctlTabletUIDs[i])
+	}
+	wg.Wait()
 }
 
 // StartVtworker starts a vtworker
@@ -905,13 +952,14 @@ func (cluster *LocalProcessCluster) NewVttabletInstance(tabletType string, UID i
 }
 
 // NewOrcProcess creates a new VtorcProcess object
-func (cluster *LocalProcessCluster) NewOrcProcess(configFile string) *VtorcProcess {
+func (cluster *LocalProcessCluster) NewOrcProcess(config VtorcConfiguration) *VtorcProcess {
 	base := VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
 	base.Binary = "vtorc"
 	return &VtorcProcess{
 		VtctlProcess: *base,
 		LogDir:       cluster.TmpDirectory,
-		Config:       configFile,
+		Config:       config,
+		WebPort:      cluster.GetAndReservePort(),
 	}
 }
 
@@ -985,4 +1033,17 @@ func getCoveragePath(fileName string) string {
 		covDir = os.TempDir()
 	}
 	return path.Join(covDir, fileName)
+}
+
+// PrintMysqlctlLogFiles prints all the log files associated with the mysqlctl binary
+func (cluster *LocalProcessCluster) PrintMysqlctlLogFiles() {
+	logDir := cluster.TmpDirectory
+	files, _ := ioutil.ReadDir(logDir)
+	for _, fileInfo := range files {
+		if !fileInfo.IsDir() && strings.Contains(fileInfo.Name(), "mysqlctl") {
+			log.Errorf("Printing the log file - " + fileInfo.Name())
+			logOut, _ := ioutil.ReadFile(path.Join(logDir, fileInfo.Name()))
+			log.Errorf(string(logOut))
+		}
+	}
 }

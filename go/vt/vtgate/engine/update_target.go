@@ -39,7 +39,7 @@ type UpdateTarget struct {
 func (updTarget *UpdateTarget) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "UpdateTarget",
-		Other:        map[string]interface{}{"target": updTarget.Target},
+		Other:        map[string]any{"target": updTarget.Target},
 	}
 }
 

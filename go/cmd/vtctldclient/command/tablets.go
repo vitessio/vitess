@@ -73,6 +73,14 @@ Note: hook names may not contain slash (/) characters.
 		Args:                  cobra.MinimumNArgs(2),
 		RunE:                  commandExecuteHook,
 	}
+	// GetPermissions makes a GetPermissions gRPC call to a vtctld.
+	GetPermissions = &cobra.Command{
+		Use:                   "GetPermissions <tablet_alias>",
+		Short:                 "Displays the permissions for a tablet.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetPermissions,
+	}
 	// GetTablet makes a GetTablet gRPC call to a vtctld.
 	GetTablet = &cobra.Command{
 		Use:                   "GetTablet <alias>",
@@ -102,6 +110,15 @@ Valid output formats are "awk" and "json".`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.NoArgs,
 		RunE:                  commandGetTablets,
+	}
+	// GetTabletVersion makes a GetVersion RPC to a vtctld.
+	GetTabletVersion = &cobra.Command{
+		Use:                   "GetTabletVersion <alias>",
+		Aliases:               []string{"GetVersion"},
+		Short:                 "Print the version of a tablet from its debug vars.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetTabletVersion,
 	}
 	// PingTablet makes a PingTablet gRPC call to a vtctld.
 	PingTablet = &cobra.Command{
@@ -282,6 +299,29 @@ func commandExecuteHook(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandGetPermissions(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.GetPermissions(commandCtx, &vtctldatapb.GetPermissionsRequest{
+		TabletAlias: alias,
+	})
+	if err != nil {
+		return err
+	}
+	p, err := cli.MarshalJSON(resp.Permissions)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s\n", p)
+
+	return nil
+}
+
 func commandGetTablet(cmd *cobra.Command, args []string) error {
 	aliasStr := cmd.Flags().Arg(0)
 	alias, err := topoproto.ParseTabletAlias(aliasStr)
@@ -376,6 +416,25 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 		fmt.Printf("%s\n", data)
 	}
 
+	return nil
+}
+
+func commandGetTabletVersion(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.GetVersion(commandCtx, &vtctldatapb.GetVersionRequest{
+		TabletAlias: alias,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(resp.Version)
 	return nil
 }
 
@@ -537,6 +596,7 @@ func init() {
 	Root.AddCommand(DeleteTablets)
 
 	Root.AddCommand(ExecuteHook)
+	Root.AddCommand(GetPermissions)
 	Root.AddCommand(GetTablet)
 
 	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.TabletAliasStrings, "tablet-alias", "t", nil, "List of tablet aliases to filter by")
@@ -547,6 +607,7 @@ func init() {
 	GetTablets.Flags().BoolVar(&getTabletsOptions.Strict, "strict", false, "Require all cells to return successful tablet data. Without --strict, tablet listings may be partial.")
 	Root.AddCommand(GetTablets)
 
+	Root.AddCommand(GetTabletVersion)
 	Root.AddCommand(PingTablet)
 	Root.AddCommand(RefreshState)
 

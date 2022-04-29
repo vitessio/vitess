@@ -41,8 +41,8 @@ func (noopTracingServer) AddGrpcClientOptions(addInterceptors func(s grpc.Stream
 // NoopSpan implements Span with no-op methods.
 type NoopSpan struct{}
 
-func (NoopSpan) Finish()                      {}
-func (NoopSpan) Annotate(string, interface{}) {}
+func (NoopSpan) Finish()              {}
+func (NoopSpan) Annotate(string, any) {}
 
 func init() {
 	tracingBackendFactories["noop"] = func(_ string) (tracingService, io.Closer, error) {

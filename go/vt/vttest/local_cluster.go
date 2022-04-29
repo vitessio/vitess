@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,7 +30,12 @@ import (
 	"strings"
 	"unicode"
 
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/proto/logutil"
+
 	// we need to import the grpcvtctlclient library so the gRPC
 	// vtctl client is registered and can be used.
 	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
@@ -79,11 +85,6 @@ type Config struct {
 	// Charset is the default charset used by MySQL
 	Charset string
 
-	// Collation is the default collation used by MySQL
-	// If Collation is set and Charset is not set, Collation will be used
-	// to define the value of Charset
-	Collation string
-
 	// PlannerVersion is the planner version to use for the vtgate.
 	// Choose between V3, Gen4, Gen4Greedy and Gen4Fallback
 	PlannerVersion string
@@ -111,6 +112,9 @@ type Config struct {
 	// initialize the mysqld instance in the cluster. Note that some environments
 	// do not suppport initialization through snapshot files.
 	SnapshotFile string
+
+	// Enable system settings to be changed per session at the database connection level
+	EnableSystemSettings bool
 
 	// TransactionMode is SINGLE, MULTI or TWOPC
 	TransactionMode string
@@ -199,6 +203,33 @@ func (cfg *Config) DbName() string {
 	return ""
 }
 
+type TopoData struct {
+	vtTestTopology *vttestpb.VTTestTopology
+	unmarshal      func(b []byte, m proto.Message) error
+}
+
+func (td *TopoData) String() string {
+	return prototext.Format(td.vtTestTopology)
+}
+
+func (td *TopoData) Set(value string) error {
+	return td.unmarshal([]byte(value), td.vtTestTopology)
+}
+
+func TextTopoData(tpb *vttestpb.VTTestTopology) flag.Value {
+	return &TopoData{
+		vtTestTopology: tpb,
+		unmarshal:      prototext.Unmarshal,
+	}
+}
+
+func JsonTopoData(tpb *vttestpb.VTTestTopology) flag.Value {
+	return &TopoData{
+		vtTestTopology: tpb,
+		unmarshal:      protojson.Unmarshal,
+	}
+}
+
 // LocalCluster controls a local Vitess setup for testing, containing
 // a MySQL instance and one or more vtgate-equivalent access points.
 // To use, simply create a new LocalCluster instance and either pass in
@@ -225,7 +256,9 @@ type LocalCluster struct {
 // This connection should be used for debug/introspection purposes; normal
 // cluster access should be performed through the vtgate port.
 func (db *LocalCluster) MySQLConnParams() mysql.ConnParams {
-	return db.mysql.Params(db.DbName())
+	connParams := db.mysql.Params(db.DbName())
+	connParams.Charset = db.Config.Charset
+	return connParams
 }
 
 // MySQLAppDebugConnParams returns a mysql.ConnParams struct that can be used
@@ -510,12 +543,12 @@ func (db *LocalCluster) Query(sql, dbname string, limit int) (*sqltypes.Result, 
 // JSONConfig returns a key/value object with the configuration
 // settings for the local cluster. It should be serialized with
 // `json.Marshal`
-func (db *LocalCluster) JSONConfig() interface{} {
+func (db *LocalCluster) JSONConfig() any {
 	if db.OnlyMySQL {
 		return db.mysql.Params("")
 	}
 
-	config := map[string]interface{}{
+	config := map[string]any{
 		"port":               db.vt.Port,
 		"socket":             db.mysql.UnixSocket(),
 		"vtcombo_mysql_port": db.Env.PortForProtocol("vtcombo_mysql_port", ""),
@@ -536,7 +569,7 @@ func (db *LocalCluster) GrpcPort() int {
 
 func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
-	args := []string{"ApplyVSchema", "-sql", migration, keyspace}
+	args := []string{"ApplyVSchema", "--sql", migration, keyspace}
 	fmt.Printf("Applying vschema %v", args)
 	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
 		log.Info(e)
@@ -547,7 +580,7 @@ func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
 
 func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
-	args := []string{"ReloadSchemaKeyspace", "-include_primary=true", keyspace}
+	args := []string{"ReloadSchemaKeyspace", "--include_primary=true", keyspace}
 	fmt.Printf("Reloading keyspace schema %v", args)
 
 	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {

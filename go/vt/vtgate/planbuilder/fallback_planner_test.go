@@ -30,26 +30,24 @@ import (
 )
 
 type testPlanner struct {
-	panic       interface{}
+	panic       any
 	err         error
 	res         engine.Primitive
 	messWithAST func(sqlparser.Statement)
 	called      bool
 }
 
-var _ selectPlanner = (*testPlanner)(nil).plan
+var _ stmtPlanner = (*testPlanner)(nil).plan
 
-func (tp *testPlanner) plan(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error) {
-	return func(statement sqlparser.Statement, vars *sqlparser.ReservedVars, schema plancontext.VSchema) (engine.Primitive, error) {
-		tp.called = true
-		if tp.panic != nil {
-			panic(tp.panic)
-		}
-		if tp.messWithAST != nil {
-			tp.messWithAST(statement)
-		}
-		return tp.res, tp.err
+func (tp *testPlanner) plan(statement sqlparser.Statement, vars *sqlparser.ReservedVars, schema plancontext.VSchema) (engine.Primitive, error) {
+	tp.called = true
+	if tp.panic != nil {
+		panic(tp.panic)
 	}
+	if tp.messWithAST != nil {
+		tp.messWithAST(statement)
+	}
+	return tp.res, tp.err
 }
 
 func TestFallbackPlanner(t *testing.T) {
@@ -64,14 +62,14 @@ func TestFallbackPlanner(t *testing.T) {
 	var vschema plancontext.VSchema
 
 	// first planner succeeds
-	_, _ = fb.plan("query")(stmt, nil, vschema)
+	_, _ = fb.plan(stmt, nil, vschema)
 	assert.True(t, a.called)
 	assert.False(t, b.called)
 	a.called = false
 
 	// first planner errors
 	a.err = fmt.Errorf("fail")
-	_, _ = fb.plan("query")(stmt, nil, vschema)
+	_, _ = fb.plan(stmt, nil, vschema)
 	assert.True(t, a.called)
 	assert.True(t, b.called)
 
@@ -80,7 +78,7 @@ func TestFallbackPlanner(t *testing.T) {
 
 	// first planner panics
 	a.panic = "oh noes"
-	_, _ = fb.plan("query")(stmt, nil, vschema)
+	_, _ = fb.plan(stmt, nil, vschema)
 	assert.True(t, a.called)
 	assert.True(t, b.called)
 }
@@ -104,7 +102,7 @@ func TestFallbackClonesBeforePlanning(t *testing.T) {
 	var vschema plancontext.VSchema
 
 	// first planner succeeds
-	_, _ = fb.plan("query")(stmt, nil, vschema)
+	_, _ = fb.plan(stmt, nil, vschema)
 
 	assert.NotNilf(t, stmt.SelectExprs, "should not have changed")
 }

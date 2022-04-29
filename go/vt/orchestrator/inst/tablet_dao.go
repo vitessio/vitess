@@ -46,7 +46,7 @@ var ErrTabletAliasNil = errors.New("tablet alias is nil")
 // The proactive propagation allows a competing Orchestrator from discovering
 // the successful action of a previous one, which reduces churn.
 func SwitchPrimary(newPrimaryKey, oldPrimaryKey InstanceKey) error {
-	newPrimaryTablet, err := ChangeTabletType(newPrimaryKey, topodatapb.TabletType_PRIMARY)
+	newPrimaryTablet, err := ChangeTabletType(newPrimaryKey, topodatapb.TabletType_PRIMARY, SemiSyncAckers(newPrimaryKey) > 0)
 	if err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func SwitchPrimary(newPrimaryKey, oldPrimaryKey InstanceKey) error {
 		log.Errore(err)
 		return nil
 	}
-	if _, err := ChangeTabletType(oldPrimaryKey, topodatapb.TabletType_REPLICA); err != nil {
+	if _, err := ChangeTabletType(oldPrimaryKey, topodatapb.TabletType_REPLICA, IsReplicaSemiSync(newPrimaryKey, oldPrimaryKey)); err != nil {
 		// This is best effort.
 		log.Errore(err)
 	}
@@ -88,7 +88,7 @@ func SwitchPrimary(newPrimaryKey, oldPrimaryKey InstanceKey) error {
 }
 
 // ChangeTabletType designates the tablet that owns an instance as the primary.
-func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType) (*topodatapb.Tablet, error) {
+func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType, semiSync bool) (*topodatapb.Tablet, error) {
 	if instanceKey.Hostname == "" {
 		return nil, errors.New("can't set tablet to primary: instance is unspecified")
 	}
@@ -99,7 +99,7 @@ func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType)
 	tmc := tmclient.NewTabletManagerClient()
 	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 	defer tmcCancel()
-	if err := tmc.ChangeType(tmcCtx, tablet, tabletType); err != nil {
+	if err := tmc.ChangeType(tmcCtx, tablet, tabletType, semiSync); err != nil {
 		return nil, err
 	}
 	tsCtx, tsCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)

@@ -57,46 +57,46 @@ var (
 	vtgateUser      = "vtgate_user"
 	vtgatePassword  = "password123"
 	commonTabletArg = []string{
-		"-vreplication_healthcheck_topology_refresh", "1s",
-		"-vreplication_healthcheck_retry_delay", "1s",
-		"-vreplication_retry_delay", "1s",
-		"-degraded_threshold", "5s",
-		"-lock_tables_timeout", "5s",
-		"-watch_replication_stream",
+		"--vreplication_healthcheck_topology_refresh", "1s",
+		"--vreplication_healthcheck_retry_delay", "1s",
+		"--vreplication_retry_delay", "1s",
+		"--degraded_threshold", "5s",
+		"--lock_tables_timeout", "5s",
+		"--watch_replication_stream",
 		// Frequently reload schema, generating some tablet traffic,
 		//   so we can speed up token refresh
-		"-queryserver-config-schema-reload-time", "5",
-		"-serving_state_grace_period", "1s"}
+		"--queryserver-config-schema-reload-time", "5",
+		"--serving_state_grace_period", "1s"}
 	vaultTabletArg = []string{
-		"-db-credentials-server", "vault",
-		"-db-credentials-vault-timeout", "3s",
-		"-db-credentials-vault-path", "kv/prod/dbcreds",
+		"--db-credentials-server", "vault",
+		"--db-credentials-vault-timeout", "3s",
+		"--db-credentials-vault-path", "kv/prod/dbcreds",
 		// This is overriden by our env VAULT_ADDR
-		"-db-credentials-vault-addr", "https://127.0.0.1:8200",
+		"--db-credentials-vault-addr", "https://127.0.0.1:8200",
 		// This is overriden by our env VAULT_CACERT
-		"-db-credentials-vault-tls-ca", "/path/to/ca.pem",
+		"--db-credentials-vault-tls-ca", "/path/to/ca.pem",
 		// This is provided by our env VAULT_ROLEID
-		//"-db-credentials-vault-roleid", "34644576-9ffc-8bb5-d046-4a0e41194e15",
+		//"--db-credentials-vault-roleid", "34644576-9ffc-8bb5-d046-4a0e41194e15",
 		// Contents of this file provided by our env VAULT_SECRETID
-		//"-db-credentials-vault-secretidfile", "/path/to/file/containing/secret_id",
+		//"--db-credentials-vault-secretidfile", "/path/to/file/containing/secret_id",
 		// Make this small, so we can get a renewal
-		"-db-credentials-vault-ttl", "21s"}
+		"--db-credentials-vault-ttl", "21s"}
 	vaultVTGateArg = []string{
-		"-mysql_auth_server_impl", "vault",
-		"-mysql_auth_vault_timeout", "3s",
-		"-mysql_auth_vault_path", "kv/prod/vtgatecreds",
+		"--mysql_auth_server_impl", "vault",
+		"--mysql_auth_vault_timeout", "3s",
+		"--mysql_auth_vault_path", "kv/prod/vtgatecreds",
 		// This is overriden by our env VAULT_ADDR
-		"-mysql_auth_vault_addr", "https://127.0.0.1:8200",
+		"--mysql_auth_vault_addr", "https://127.0.0.1:8200",
 		// This is overriden by our env VAULT_CACERT
-		"-mysql_auth_vault_tls_ca", "/path/to/ca.pem",
+		"--mysql_auth_vault_tls_ca", "/path/to/ca.pem",
 		// This is provided by our env VAULT_ROLEID
-		//"-mysql_auth_vault_roleid", "34644576-9ffc-8bb5-d046-4a0e41194e15",
+		//"--mysql_auth_vault_roleid", "34644576-9ffc-8bb5-d046-4a0e41194e15",
 		// Contents of this file provided by our env VAULT_SECRETID
-		//"-mysql_auth_vault_role_secretidfile", "/path/to/file/containing/secret_id",
+		//"--mysql_auth_vault_role_secretidfile", "/path/to/file/containing/secret_id",
 		// Make this small, so we can get a renewal
-		"-mysql_auth_vault_ttl", "21s"}
+		"--mysql_auth_vault_ttl", "21s"}
 	mysqlctlArg = []string{
-		"-db_dba_password", mysqlPassword}
+		"--db_dba_password", mysqlPassword}
 	vttabletLogFileName = "vttablet.INFO"
 	tokenRenewalString  = "Vault client status: token renewed"
 )
@@ -218,6 +218,7 @@ func setupVaultServer(t *testing.T, vs *VaultServer) (string, string) {
 func initializeClusterEarly(t *testing.T) {
 	clusterInstance = cluster.NewCluster(cell, hostname)
 
+	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 	// Start topo server
 	err := clusterInstance.StartTopo()
 	require.NoError(t, err)

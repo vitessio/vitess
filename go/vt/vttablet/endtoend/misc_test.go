@@ -17,6 +17,7 @@ limitations under the License.
 package endtoend
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,8 +30,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/test/utils"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -126,7 +125,7 @@ func TestNocacheListArgs(t *testing.T) {
 	qr, err := client.Execute(
 		query,
 		map[string]*querypb.BindVariable{
-			"list": sqltypes.TestBindVariable([]interface{}{2, 3, 4}),
+			"list": sqltypes.TestBindVariable([]any{2, 3, 4}),
 		},
 	)
 	if err != nil {
@@ -138,7 +137,7 @@ func TestNocacheListArgs(t *testing.T) {
 	qr, err = client.Execute(
 		query,
 		map[string]*querypb.BindVariable{
-			"list": sqltypes.TestBindVariable([]interface{}{3, 4}),
+			"list": sqltypes.TestBindVariable([]any{3, 4}),
 		},
 	)
 	if err != nil {
@@ -150,7 +149,7 @@ func TestNocacheListArgs(t *testing.T) {
 	qr, err = client.Execute(
 		query,
 		map[string]*querypb.BindVariable{
-			"list": sqltypes.TestBindVariable([]interface{}{3}),
+			"list": sqltypes.TestBindVariable([]any{3}),
 		},
 	)
 	if err != nil {
@@ -163,7 +162,7 @@ func TestNocacheListArgs(t *testing.T) {
 	_, err = client.Execute(
 		query,
 		map[string]*querypb.BindVariable{
-			"list": sqltypes.TestBindVariable([]interface{}{}),
+			"list": sqltypes.TestBindVariable([]any{}),
 		},
 	)
 	want := "empty list supplied for list (CallerID: dev)"
@@ -468,13 +467,86 @@ func TestQueryStats(t *testing.T) {
 		RowsReturned: 0,
 		ErrorCount:   1,
 	}
-	if stat != want {
-		t.Errorf("stat: %+v, want %+v", stat, want)
-	}
+	utils.MustMatch(t, want, stat)
 	vend := framework.DebugVars()
+	require.False(t, framework.IsPresent(vend, "QueryRowsAffected/vitess_a.Select"))
 	compareIntDiff(t, vend, "QueryCounts/vitess_a.Select", vstart, 2)
 	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.Select", vstart, 0)
+	compareIntDiff(t, vend, "QueryRowsReturned/vitess_a.Select", vstart, 2)
 	compareIntDiff(t, vend, "QueryErrorCounts/vitess_a.Select", vstart, 1)
+
+	query = "update /* query_stats */ vitess_a set name = 'a'"
+	_, _ = client.Execute(query, bv)
+	defer func() {
+		// restore the table rows for other tests to use
+		query = "update /* query_stats */ vitess_a set name = 'abcd' where id = 1"
+		_, _ = client.Execute(query, bv)
+		query = "update /* query_stats */ vitess_a set name = 'bcde' where id = 2"
+		_, _ = client.Execute(query, bv)
+	}()
+	stat = framework.QueryStats()[query]
+	stat.Time = 0
+	stat.MysqlTime = 0
+	want = framework.QueryStat{
+		Query:        query,
+		Table:        "vitess_a",
+		Plan:         "UpdateLimit",
+		QueryCount:   1,
+		RowsAffected: 2,
+		RowsReturned: 0,
+		ErrorCount:   0,
+	}
+	utils.MustMatch(t, want, stat)
+	vend = framework.DebugVars()
+	require.False(t, framework.IsPresent(vend, "QueryRowsReturned/vitess_a.UpdateLimit"))
+	compareIntDiff(t, vend, "QueryCounts/vitess_a.UpdateLimit", vstart, 1)
+	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.UpdateLimit", vstart, 2)
+	compareIntDiff(t, vend, "QueryRowsAffected/vitess_a.UpdateLimit", vstart, 2)
+	compareIntDiff(t, vend, "QueryErrorCounts/vitess_a.UpdateLimit", vstart, 0)
+
+	query = "insert /* query_stats */ into vitess_a (eid, id, name, foo) values(100, 100, 'sdf', 'asdf')"
+	_, _ = client.Execute(query, bv)
+	stat = framework.QueryStats()[query]
+	stat.Time = 0
+	stat.MysqlTime = 0
+	want = framework.QueryStat{
+		Query:        query,
+		Table:        "vitess_a",
+		Plan:         "Insert",
+		QueryCount:   1,
+		RowsAffected: 1,
+		RowsReturned: 0,
+		ErrorCount:   0,
+	}
+	utils.MustMatch(t, want, stat)
+	vend = framework.DebugVars()
+	require.False(t, framework.IsPresent(vend, "QueryRowsReturned/vitess_a.Insert"))
+	compareIntDiff(t, vend, "QueryCounts/vitess_a.Insert", vstart, 1)
+	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.Insert", vstart, 1)
+	compareIntDiff(t, vend, "QueryRowsAffected/vitess_a.Insert", vstart, 1)
+	compareIntDiff(t, vend, "QueryErrorCounts/vitess_a.Insert", vstart, 0)
+
+	query = "delete /* query_stats */ from vitess_a where eid = 100"
+	_, _ = client.Execute(query, bv)
+	stat = framework.QueryStats()[query]
+	stat.Time = 0
+	stat.MysqlTime = 0
+	want = framework.QueryStat{
+		Query:        query,
+		Table:        "vitess_a",
+		Plan:         "DeleteLimit",
+		QueryCount:   1,
+		RowsAffected: 1,
+		RowsReturned: 0,
+		ErrorCount:   0,
+	}
+	utils.MustMatch(t, want, stat)
+	vend = framework.DebugVars()
+	require.False(t, framework.IsPresent(vend, "QueryRowsReturned/vitess_a.DeleteLimit"))
+	compareIntDiff(t, vend, "QueryCounts/vitess_a.DeleteLimit", vstart, 1)
+	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.DeleteLimit", vstart, 1)
+	compareIntDiff(t, vend, "QueryRowsAffected/vitess_a.DeleteLimit", vstart, 1)
+	compareIntDiff(t, vend, "QueryErrorCounts/vitess_a.DeleteLimit", vstart, 0)
 
 	// Ensure BeginExecute also updates the stats and strips comments.
 	query = "select /* begin_execute */ 1 /* trailing comment */"
@@ -523,8 +595,8 @@ func TestDBAStatements(t *testing.T) {
 
 type testLogger struct {
 	logs        []string
-	savedInfof  func(format string, args ...interface{})
-	savedErrorf func(format string, args ...interface{})
+	savedInfof  func(format string, args ...any)
+	savedErrorf func(format string, args ...any)
 }
 
 func newTestLogger() *testLogger {
@@ -542,13 +614,13 @@ func (tl *testLogger) Close() {
 	log.Errorf = tl.savedErrorf
 }
 
-func (tl *testLogger) recordInfof(format string, args ...interface{}) {
+func (tl *testLogger) recordInfof(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	tl.logs = append(tl.logs, msg)
 	tl.savedInfof(msg)
 }
 
-func (tl *testLogger) recordErrorf(format string, args ...interface{}) {
+func (tl *testLogger) recordErrorf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	tl.logs = append(tl.logs, msg)
 	tl.savedErrorf(msg)
@@ -571,7 +643,7 @@ func TestLogTruncation(t *testing.T) {
 		"insert into vitess_test values(123, null, :data, null)",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	wantLog := `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null)", BindVars: {data: "type:VARBINARY value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\""}`
+	wantLog := `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null)", BindVars: {data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\""}`
 	wantErr := wantLog
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
@@ -591,7 +663,7 @@ func TestLogTruncation(t *testing.T) {
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
 	wantLog = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess [TRUNCATED]", BindVars: {data: " [TRUNCATED]`
-	wantErr = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null)", BindVars: {data: "type:VARBINARY value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\""}`
+	wantErr = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null)", BindVars: {data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\""}`
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
@@ -609,7 +681,7 @@ func TestLogTruncation(t *testing.T) {
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
 	wantLog = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess [TRUNCATED] /* KEEP ME */", BindVars: {data: " [TRUNCATED]`
-	wantErr = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null) /* KEEP ME */", BindVars: {data: "type:VARBINARY value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\""}`
+	wantErr = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null) /* KEEP ME */", BindVars: {data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\""}`
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}

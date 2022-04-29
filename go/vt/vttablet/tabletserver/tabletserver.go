@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -182,7 +183,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
-	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tabletTypeFunc)
+	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tabletTypeFunc, tsv.onlineDDLExecutorToggleTableBuffer)
 	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tabletTypeFunc, tsv.lagThrottler)
 
 	tsv.sm = &stateManager{
@@ -224,6 +225,26 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.registerDebugEnvHandler()
 
 	return tsv
+}
+
+// onlineDDLExecutorToggleTableBuffer is called by onlineDDLExecutor as a callback function. onlineDDLExecutor
+// uses it to start/stop query buffering for a given table.
+// It is onlineDDLExecutor's responsibility to make sure beffering is stopped after some definite amount of time.
+// There are two layers to buffering/unbuffering:
+// 1. the creation and destruction of a QueryRuleSource. The existence of such source affects query plan rules
+//    for all new queries (see Execute() function and call to GetPlan())
+// 2. affecting already existing rules: a Rule has a concext.WithCancel, that is cancelled by onlineDDLExecutor
+func (tsv *TabletServer) onlineDDLExecutorToggleTableBuffer(bufferingCtx context.Context, tableName string, bufferQueries bool) {
+	queryRuleSource := fmt.Sprintf("onlineddl/%s", tableName)
+
+	if bufferQueries {
+		tsv.RegisterQueryRuleSource(queryRuleSource)
+		bufferRules := rules.New()
+		bufferRules.Add(rules.NewBufferedTableQueryRule(bufferingCtx, tableName, "buffered for cut-over"))
+		tsv.SetQueryRules(queryRuleSource, bufferRules)
+	} else {
+		tsv.UnRegisterQueryRuleSource(queryRuleSource) // new rules will not have buffering. Existing rules will be affected by bufferingContext.Done()
+	}
 }
 
 // InitDBConfig initializes the db config variables for TabletServer. You must call this function
@@ -823,97 +844,6 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 	)
 }
 
-// ExecuteBatch executes a group of queries and returns their results as a list.
-// ExecuteBatch can be called for an existing transaction, or it can be called with
-// the AsTransaction flag which will execute all statements inside an independent
-// transaction. If AsTransaction is true, TransactionId must be 0.
-// TODO(reserve-conn): Validate the use-case and Add support for reserve connection in ExecuteBatch
-func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) (results []sqltypes.Result, err error) {
-	span, ctx := trace.NewSpan(ctx, "TabletServer.ExecuteBatch")
-	defer span.Finish()
-
-	if len(queries) == 0 {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.EmptyQuery, "Query was empty")
-	}
-	if asTransaction && transactionID != 0 {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.CantDoThisInTransaction, "You are not allowed to execute this command in a transaction")
-	}
-
-	if tsv.enableHotRowProtection && asTransaction {
-		// Serialize transactions which target the same hot row range.
-		// NOTE: We put this intentionally at this place *before* StartRequest()
-		// gets called below. Otherwise, the StartRequest()/EndRequest() section from
-		// below would overlap with the StartRequest()/EndRequest() section executed
-		// by tsv.beginWaitForSameRangeTransactions().
-		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, queries[0].Sql, queries[0].BindVariables)
-		if err != nil {
-			return nil, err
-		}
-		if txDone != nil {
-			defer txDone()
-		}
-	}
-
-	allowOnShutdown := transactionID != 0
-	// TODO(sougou): Convert StartRequest/EndRequest pattern to use wrapper
-	// function tsv.execRequest() instead.
-	// Note that below we always return "err" right away and do not call
-	// tsv.convertAndLogError. That's because the methods which returned "err",
-	// e.g. tsv.Execute(), already called that function and therefore already
-	// converted and logged the error.
-	if err = tsv.sm.StartRequest(ctx, target, allowOnShutdown); err != nil {
-		return nil, err
-	}
-	defer tsv.sm.EndRequest()
-	defer tsv.handlePanicAndSendLogStats("batch", nil, nil)
-
-	if options == nil {
-		options = &querypb.ExecuteOptions{}
-	}
-
-	// When all these conditions are met, we send the queries directly
-	// to the MySQL without creating a transaction. This optimization
-	// yields better throughput.
-	// Setting ExecuteOptions_AUTOCOMMIT will get a connection out of the
-	// pool without actually begin/commit the transaction.
-	if (options.TransactionIsolation == querypb.ExecuteOptions_DEFAULT) &&
-		asTransaction &&
-		planbuilder.PassthroughDMLs {
-		options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
-	}
-
-	if asTransaction {
-		// We ignore the return alias because this transaction only exists in the scope of this call
-		transactionID, _, err = tsv.Begin(ctx, target, options)
-		if err != nil {
-			return nil, err
-		}
-		// If transaction was not committed by the end, it means
-		// that there was an error, roll it back.
-		defer func() {
-			if transactionID != 0 {
-				tsv.Rollback(ctx, target, transactionID)
-			}
-		}()
-	}
-	results = make([]sqltypes.Result, 0, len(queries))
-	for _, bound := range queries {
-		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, transactionID, 0, options)
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, *localReply)
-	}
-	if asTransaction {
-		if _, err = tsv.Commit(ctx, target, transactionID); err != nil {
-			transactionID = 0
-			return nil, err
-		}
-		transactionID = 0
-	}
-	return results, nil
-}
-
 // BeginExecute combines Begin and Execute.
 func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 
@@ -1033,19 +963,6 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 	// Example: table1 where id = 1 and sub_id = 2
 	key := fmt.Sprintf("%s%s", tableName, where)
 	return key, tableName.String()
-}
-
-// BeginExecuteBatch combines Begin and ExecuteBatch.
-func (tsv *TabletServer) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
-	// TODO(mberlin): Integrate hot row protection here as we did for BeginExecute()
-	// and ExecuteBatch(asTransaction=true).
-	transactionID, alias, err := tsv.Begin(ctx, target, options)
-	if err != nil {
-		return nil, 0, nil, err
-	}
-
-	results, err := tsv.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
-	return results, transactionID, alias, err
 }
 
 // MessageStream streams messages from the requested table.
@@ -1402,22 +1319,20 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 	logStats *tabletenv.LogStats,
 ) {
 	if x := recover(); x != nil {
-		var errorMessage string
-		if tsv.TerseErrors && len(bindVariables) != 0 {
-			errorMessage = fmt.Sprintf(
-				"Uncaught panic for %v:\n%v\n%s",
-				queryAsString(sql, nil),
-				x,
-				tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
+		// Redaction/sanitization of the client error message is controlled by TerseErrors while
+		// the log message is controlled by SanitizeLogMessages.
+		// We are handling an unrecoverable panic, so the cost of the dual message handling is
+		// not a concern.
+		var messagef, errMessage, logMessage string
+		messagef = fmt.Sprintf("Uncaught panic for %%v:\n%v\n%s", x, tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
+		errMessage = fmt.Sprintf(messagef, queryAsString(sql, bindVariables, tsv.TerseErrors))
+		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", errMessage)
+		if tsv.TerseErrors == tsv.Config().SanitizeLogMessages {
+			logMessage = errMessage
 		} else {
-			errorMessage = fmt.Sprintf(
-				"Uncaught panic for %v:\n%v\n%s",
-				queryAsString(sql, bindVariables),
-				x,
-				tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
+			logMessage = fmt.Sprintf(messagef, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages))
 		}
-		log.Errorf(errorMessage)
-		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", errorMessage)
+		log.Error(logMessage)
 		tsv.stats.InternalErrors.Add("Panic", 1)
 		if logStats != nil {
 			logStats.Error = terr
@@ -1476,26 +1391,20 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		sqlState := sqlErr.SQLState()
 		errnum := sqlErr.Number()
 		if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
-			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, nil))
+			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors))
 			if logMethod != nil {
-				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, truncateSQLAndBindVars(sql, nil))
+				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
 			}
 		} else {
-			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables))
+			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, false))
 			if logMethod != nil {
-				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables))
+				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
 			}
 		}
 	} else {
 		err = vterrors.Errorf(errCode, "%v%s", err.Error(), callerID)
-		if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
-			if logMethod != nil {
-				message = fmt.Sprintf("%v: %v", err, truncateSQLAndBindVars(sql, nil))
-			}
-		} else {
-			if logMethod != nil {
-				message = fmt.Sprintf("%v: %v", err, truncateSQLAndBindVars(sql, bindVariables))
-			}
+		if logMethod != nil {
+			message = fmt.Sprintf("%v: %v", err, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
 		}
 	}
 
@@ -1511,22 +1420,26 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 }
 
 // truncateSQLAndBindVars calls TruncateForLog which:
-//  splits off trailing comments, truncates the query, and re-adds the trailing comments
-// appends quoted bindvar: value pairs in sorted order
-// truncates the resulting string
-func truncateSQLAndBindVars(sql string, bindVariables map[string]*querypb.BindVariable) string {
+//  splits off trailing comments, truncates the query, re-adds the trailing comments,
+//  if sanitize is false appends quoted bindvar:value pairs in sorted order, and
+//  lastly it truncates the resulting string
+func truncateSQLAndBindVars(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool) string {
 	truncatedQuery := sqlparser.TruncateForLog(sql)
 	buf := &bytes.Buffer{}
 	fmt.Fprintf(buf, "BindVars: {")
-	var keys []string
-	for key := range bindVariables {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	var valString string
-	for _, key := range keys {
-		valString = fmt.Sprintf("%v", bindVariables[key])
-		fmt.Fprintf(buf, "%s: %q", key, valString)
+	if len(bindVariables) > 0 {
+		if sanitize {
+			fmt.Fprintf(buf, "[REDACTED]")
+		} else {
+			var keys []string
+			for key := range bindVariables {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			for _, key := range keys {
+				fmt.Fprintf(buf, "%s: %q", key, fmt.Sprintf("%v", bindVariables[key]))
+			}
+		}
 	}
 	fmt.Fprintf(buf, "}")
 	bv := buf.String()
@@ -1552,7 +1465,7 @@ func convertErrorCode(err error) vtrpcpb.Code {
 		errCode = vtrpcpb.Code_RESOURCE_EXHAUSTED
 	case mysql.ERLockWaitTimeout:
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
-	case mysql.CRServerGone, mysql.ERServerShutdown, mysql.ERServerIsntAvailable:
+	case mysql.CRServerGone, mysql.ERServerShutdown, mysql.ERServerIsntAvailable, mysql.CRConnectionError, mysql.CRConnHostError:
 		errCode = vtrpcpb.Code_UNAVAILABLE
 	case mysql.ERFormNotFound, mysql.ERKeyNotFound, mysql.ERBadFieldError, mysql.ERNoSuchThread, mysql.ERUnknownTable, mysql.ERCantFindUDF, mysql.ERNonExistingGrant,
 		mysql.ERNoSuchTable, mysql.ERNonExistingTableGrant, mysql.ERKeyDoesNotExist:
@@ -1727,7 +1640,7 @@ func (tsv *TabletServer) registerMigrationStatusHandler() {
 	tsv.exporter.HandleFunc("/schema-migration/report-status", func(w http.ResponseWriter, r *http.Request) {
 		ctx := tabletenv.LocalContext()
 		query := r.URL.Query()
-		if err := tsv.onlineDDLExecutor.OnSchemaMigrationStatus(ctx, query.Get("uuid"), query.Get("status"), query.Get("dryrun"), query.Get("progress"), query.Get("eta"), query.Get("rowscopied")); err != nil {
+		if err := tsv.onlineDDLExecutor.OnSchemaMigrationStatus(ctx, query.Get("uuid"), query.Get("status"), query.Get("dryrun"), query.Get("progress"), query.Get("eta"), query.Get("rowscopied"), query.Get("hint")); err != nil {
 			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -1789,7 +1702,15 @@ func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
 			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
 			return
 		}
-		appThrottle := tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(d), 1)
+		var ratio = 1.0
+		if ratioParam := r.URL.Query().Get("ratio"); ratioParam != "" {
+			ratio, err = strconv.ParseFloat(ratioParam, 64)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
+				return
+			}
+		}
+		appThrottle := tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(d), ratio)
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(appThrottle)
@@ -1800,6 +1721,12 @@ func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(appThrottle)
+	})
+	tsv.exporter.HandleFunc("/throttler/throttled-apps", func(w http.ResponseWriter, r *http.Request) {
+		throttledApps := tsv.lagThrottler.ThrottledApps()
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(throttledApps)
 	})
 }
 
@@ -1959,20 +1886,29 @@ func (tsv *TabletServer) ConsolidatorMode() string {
 	return tsv.qe.consolidatorMode.Get()
 }
 
-// queryAsString returns a readable version of query+bind variables.
-func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable) string {
+// queryAsString returns a readable normalized version of the query and if sanitize
+// is false it also includes the bind variables.
+func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool) string {
 	buf := &bytes.Buffer{}
+	// sql is the normalized query without the bind vars
 	fmt.Fprintf(buf, "Sql: %q", sql)
+	// Add the bind vars unless this needs to be sanitized, e.g. for log messages
 	fmt.Fprintf(buf, ", BindVars: {")
-	var keys []string
-	for key := range bindVariables {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	var valString string
-	for _, key := range keys {
-		valString = fmt.Sprintf("%v", bindVariables[key])
-		fmt.Fprintf(buf, "%s: %q", key, valString)
+	if len(bindVariables) > 0 {
+		if sanitize {
+			fmt.Fprintf(buf, "[REDACTED]")
+		} else {
+			var keys []string
+			for key := range bindVariables {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			var valString string
+			for _, key := range keys {
+				valString = fmt.Sprintf("%v", bindVariables[key])
+				fmt.Fprintf(buf, "%s: %q", key, valString)
+			}
+		}
 	}
 	fmt.Fprintf(buf, "}")
 	return buf.String()

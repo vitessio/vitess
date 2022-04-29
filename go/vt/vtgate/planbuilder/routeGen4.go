@@ -158,11 +158,7 @@ func (rb *routeGen4) Inputs() []logicalPlan {
 }
 
 func (rb *routeGen4) isSingleShard() bool {
-	switch rb.eroute.Opcode {
-	case engine.SelectUnsharded, engine.SelectDBA, engine.SelectNext, engine.SelectEqualUnique, engine.SelectReference:
-		return true
-	}
-	return false
+	return rb.eroute.Opcode.IsSingleShard()
 }
 
 func (rb *routeGen4) unionCanMerge(other *routeGen4, distinct bool) bool {
@@ -170,45 +166,45 @@ func (rb *routeGen4) unionCanMerge(other *routeGen4, distinct bool) bool {
 		return false
 	}
 	switch rb.eroute.Opcode {
-	case engine.SelectUnsharded, engine.SelectReference:
+	case engine.Unsharded, engine.Reference:
 		return rb.eroute.Opcode == other.eroute.Opcode
-	case engine.SelectDBA:
-		return other.eroute.Opcode == engine.SelectDBA &&
+	case engine.DBA:
+		return other.eroute.Opcode == engine.DBA &&
 			len(rb.eroute.SysTableTableSchema) == 0 &&
 			len(rb.eroute.SysTableTableName) == 0 &&
 			len(other.eroute.SysTableTableSchema) == 0 &&
 			len(other.eroute.SysTableTableName) == 0
-	case engine.SelectEqualUnique:
+	case engine.EqualUnique:
 		// Check if they target the same shard.
-		if other.eroute.Opcode == engine.SelectEqualUnique && rb.eroute.Vindex == other.eroute.Vindex && valEqual(rb.condition, other.condition) {
+		if other.eroute.Opcode == engine.EqualUnique && rb.eroute.Vindex == other.eroute.Vindex && valEqual(rb.condition, other.condition) {
 			return true
 		}
-	case engine.SelectScatter:
-		return other.eroute.Opcode == engine.SelectScatter && !distinct
-	case engine.SelectNext:
+	case engine.Scatter:
+		return other.eroute.Opcode == engine.Scatter && !distinct
+	case engine.Next:
 		return false
 	}
 	return false
 }
 
-func (rb *routeGen4) updateRoute(opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
+func (rb *routeGen4) updateRoute(opcode engine.Opcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
 	rb.eroute.Opcode = opcode
 	rb.eroute.Vindex = vindex
 	rb.condition = condition
 }
 
 // computeNotInPlan looks for null values to produce a SelectNone if found
-func (rb *routeGen4) computeNotInPlan(right sqlparser.Expr) engine.RouteOpcode {
+func (rb *routeGen4) computeNotInPlan(right sqlparser.Expr) engine.Opcode {
 	switch node := right.(type) {
 	case sqlparser.ValTuple:
 		for _, n := range node {
 			if sqlparser.IsNull(n) {
-				return engine.SelectNone
+				return engine.None
 			}
 		}
 	}
 
-	return engine.SelectScatter
+	return engine.Scatter
 }
 
 // exprIsValue returns true if the expression can be treated as a value

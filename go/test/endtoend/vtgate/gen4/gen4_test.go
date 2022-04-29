@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/assert"
 
@@ -199,7 +199,7 @@ func TestSubQueries(t *testing.T) {
 	utils.AssertMatches(t, conn, `select t2.tcol1, t2.tcol2 from t2 where t2.id IN (select t3.id from t3 join t2 on t2.id = t3.id) order by t2.id`, `[[VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("C")] [VARCHAR("A") VARCHAR("C")] [VARCHAR("C") VARCHAR("A")] [VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("C")] [VARCHAR("B") VARCHAR("A")] [VARCHAR("C") VARCHAR("B")]]`)
 
 	utils.AssertMatches(t, conn, `select u_a.a from u_a left join t2 on t2.id IN (select id from t2)`, `[]`)
-	//inserting some data in u_a
+	// inserting some data in u_a
 	utils.Exec(t, conn, `insert into u_a(id, a) values (1, 1)`)
 
 	// execute same query again.
@@ -362,7 +362,6 @@ func TestSubShardVindex(t *testing.T) {
 		exp:      `[[INT64(109) VARBINARY("28") VARCHAR("28") VARCHAR("shard-20c0-")]]`,
 	}}
 
-	defer utils.ExecAllowError(t, conn, `delete from multicol_tbl`)
 	uid := 1
 	// insert data in all shards to know where the query fan-out
 	for _, s := range shardedKsShards {
@@ -377,6 +376,7 @@ func TestSubShardVindex(t *testing.T) {
 	require.NoError(t, err)
 	defer newConn.Close()
 
+	defer utils.ExecAllowError(t, newConn, `delete from multicol_tbl`)
 	for _, workload := range []string{"olap", "oltp"} {
 		utils.Exec(t, newConn, fmt.Sprintf(`set workload = %s`, workload))
 		for _, tcase := range tcases {
@@ -386,4 +386,86 @@ func TestSubShardVindex(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestSubShardVindexDML(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	tcases := []struct {
+		regionID       int
+		shardsAffected int
+	}{{
+		regionID:       140, // shard--19a0
+		shardsAffected: 1,
+	}, {
+		regionID:       412, // shard--19a0 and shard-19a0-20
+		shardsAffected: 2,
+	}, {
+		regionID:       24, // shard-19a0-20
+		shardsAffected: 1,
+	}, {
+		regionID:       89, // shard-20-20c0 and shard-20c0-
+		shardsAffected: 2,
+	}, {
+		regionID:       109, // shard-20c0-
+		shardsAffected: 1,
+	}}
+
+	uid := 1
+	// insert data in all shards to know where the query fan-out
+	for _, s := range shardedKsShards {
+		utils.Exec(t, conn, fmt.Sprintf("use `%s:%s`", shardedKs, s))
+		for _, tcase := range tcases {
+			utils.Exec(t, conn, fmt.Sprintf("insert into multicol_tbl(cola,colb,colc,msg) values(%d,_binary '%d','%d','shard-%s')", tcase.regionID, uid, uid, s))
+			uid++
+		}
+	}
+
+	newConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer newConn.Close()
+
+	defer utils.ExecAllowError(t, newConn, `delete from multicol_tbl`)
+	for _, tcase := range tcases {
+		t.Run(strconv.Itoa(tcase.regionID), func(t *testing.T) {
+			qr := utils.Exec(t, newConn, fmt.Sprintf("update multicol_tbl set msg = 'bar' where cola = %d", tcase.regionID))
+			assert.EqualValues(t, tcase.shardsAffected, qr.RowsAffected)
+		})
+	}
+
+	for _, tcase := range tcases {
+		t.Run(strconv.Itoa(tcase.regionID), func(t *testing.T) {
+			qr := utils.Exec(t, newConn, fmt.Sprintf("delete from multicol_tbl where cola = %d", tcase.regionID))
+			assert.EqualValues(t, tcase.shardsAffected, qr.RowsAffected)
+		})
+	}
+}
+
+func TestOuterJoin(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, _ = utils.ExecAllowError(t, conn, `delete from t1`)
+	_, _ = utils.ExecAllowError(t, conn, `delete from t2`)
+	defer func() {
+		_, _ = utils.ExecAllowError(t, conn, `delete from t1`)
+		_, _ = utils.ExecAllowError(t, conn, `delete from t2`)
+	}()
+
+	// insert some data.
+	utils.Exec(t, conn, `insert into t1(id, col) values (100, 123), (10, 123), (1, 13), (1000, 1234)`)
+	utils.Exec(t, conn, `insert into t2(id, tcol1, tcol2) values (12, 13, 1),(123, 7, 15),(1, 123, 123),(1004, 134, 123)`)
+
+	// Gen4 only supported query.
+	utils.AssertMatchesNoOrder(t, conn, `select t1.id, t2.tcol1+t2.tcol2 from t1 left join t2 on t1.col = t2.id`, `[[INT64(10) FLOAT64(22)] [INT64(1) NULL] [INT64(100) FLOAT64(22)] [INT64(1000) NULL]]`)
+	utils.AssertMatchesNoOrder(t, conn, `select t1.id, t2.id, t2.tcol1+t1.col+t2.tcol2 from t1 left join t2 on t1.col = t2.id`,
+		`[[INT64(10) INT64(123) FLOAT64(145)]`+
+			` [INT64(1) NULL NULL]`+
+			` [INT64(100) INT64(123) FLOAT64(145)]`+
+			` [INT64(1000) NULL NULL]]`)
 }

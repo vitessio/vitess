@@ -791,7 +791,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 				Error: errors.New("duplicate rule for entry dup"),
 			},
 			"badname": {
-				Error: errors.New("invalid table name: t1.t2.t3"),
+				Error: errors.New("invalid table name: t1.t2.t3, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
 			},
 			"unqualified": {
 				Error: errors.New("table t1 must be qualified"),

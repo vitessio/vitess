@@ -35,7 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildSelectPlan(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error) {
+func buildSelectPlan(query string) stmtPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
 		sel := stmt.(*sqlparser.Select)
 		if sel.With != nil {
@@ -93,7 +93,7 @@ func rewriteToCNFAndReplan(stmt sqlparser.Statement, getPlan func(sel *sqlparser
 
 func shouldRetryWithCNFRewriting(plan logicalPlan) bool {
 	// if we have a I_S query, but have not found table_schema or table_name, let's try CNF
-	var opcode engine.RouteOpcode
+	var opcode engine.Opcode
 	var sysTableTableName map[string]evalengine.Expr
 	var sysTableTableSchema []evalengine.Expr
 
@@ -110,7 +110,7 @@ func shouldRetryWithCNFRewriting(plan logicalPlan) bool {
 		return false
 	}
 
-	return opcode == engine.SelectDBA &&
+	return opcode == engine.DBA &&
 		len(sysTableTableName) == 0 &&
 		len(sysTableTableSchema) == 0
 }
@@ -190,12 +190,11 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars *s
 
 	if rb, ok := pb.plan.(*route); ok {
 		// TODO(sougou): this can probably be improved.
-		directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+		directives := sel.Comments.Directives()
 		rb.eroute.QueryTimeout = queryTimeout(directives)
 		if rb.eroute.TargetDestination != nil {
 			return errors.New("unsupported: SELECT with a target destination")
 		}
-
 		if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
 			rb.eroute.ScatterErrorsAsWarnings = true
 		}
@@ -255,12 +254,12 @@ func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
 	return nil
 }
 
-func copyCommentsAndLocks(statement sqlparser.SelectStatement, sel *sqlparser.Select, opcode engine.RouteOpcode) error {
+func copyCommentsAndLocks(statement sqlparser.SelectStatement, sel *sqlparser.Select, opcode engine.Opcode) error {
 	query := sqlparser.GetFirstSelect(statement)
 	query.Comments = sel.Comments
 	query.Lock = sel.Lock
 	if sel.Into != nil {
-		if opcode != engine.SelectUnsharded {
+		if opcode != engine.Unsharded {
 			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "INTO is not supported on sharded keyspace")
 		}
 		query.Into = sel.Into
@@ -349,7 +348,7 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 			// if we are using any locking functions, we bail out here and send the whole query to a single destination
 			return buildLockingPrimitive(sel, vschema)
 		}
-		exprs[i], err = evalengine.Convert(expr.Expr, nil)
+		exprs[i], err = evalengine.Translate(expr.Expr, evalengine.LookupDefaultCollation(vschema.ConnCollation()))
 		if err != nil {
 			return nil, nil
 		}
@@ -409,7 +408,7 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string, rese
 			return err
 		}
 		rut, isRoute := origin.(*route)
-		if isRoute && rut.eroute.Opcode == engine.SelectDBA {
+		if isRoute && rut.eroute.Opcode == engine.DBA {
 			err := pb.findSysInfoRoutingPredicates(expr, rut, reservedVars)
 			if err != nil {
 				return err
@@ -514,10 +513,10 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs, 
 				// This code is unreachable because the parser doesn't allow joins for next val statements.
 				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard query")
 			}
-			if rb.eroute.Opcode != engine.SelectNext {
+			if rb.eroute.Opcode != engine.Next {
 				return nil, errors.New("NEXT used on a non-sequence table")
 			}
-			rb.eroute.Opcode = engine.SelectNext
+			rb.eroute.Opcode = engine.Next
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
 		default:
 			return nil, fmt.Errorf("BUG: unexpected select expression type: %T", node)

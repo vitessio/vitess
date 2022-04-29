@@ -25,10 +25,13 @@ import (
 	"strings"
 	"sync"
 	"text/template"
+	"time"
 
+	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -61,8 +64,9 @@ type materializer struct {
 }
 
 const (
-	createDDLAsCopy               = "copy"
-	createDDLAsCopyDropConstraint = "copy:drop_constraint"
+	createDDLAsCopy                = "copy"
+	createDDLAsCopyDropConstraint  = "copy:drop_constraint"
+	createDDLAsCopyDropForeignKeys = "copy:drop_foreign_keys"
 )
 
 // addTablesToVSchema adds tables to an (unsharded) vschema. Depending on copyAttributes It will also add any sequence info
@@ -93,10 +97,30 @@ func (wr *Wrangler) addTablesToVSchema(ctx context.Context, sourceKeyspace strin
 	return nil
 }
 
+func shouldInclude(table string, excludes []string) bool {
+	// We filter out internal tables elsewhere when processing SchemaDefinition
+	// structures built from the GetSchema database related API calls. In this
+	// case, however, the table list comes from the user via the -tables flag
+	// so we need to filter out internal table names here in case a user has
+	// explicitly specified some.
+	// This could happen if there's some automated tooling that creates the list of
+	// tables to explicitly specify.
+	// But given that this should never be done in practice, we ignore the request.
+	if schema.IsInternalOperationTableName(table) {
+		return false
+	}
+	for _, t := range excludes {
+		if t == table {
+			return false
+		}
+	}
+	return true
+}
+
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
-	externalCluster string) error {
+	externalCluster string, dropForeignKeys bool, sourceTimeZone string) error {
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
@@ -147,34 +171,29 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			}
 		} else {
 			if allTables {
-				var excludeTablesList []string
-				excludeTables = strings.TrimSpace(excludeTables)
-				if excludeTables != "" {
-					excludeTablesList = strings.Split(excludeTables, ",")
-				}
-				err = wr.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, excludeTablesList)
-				if err != nil {
-					return err
-				}
-				if len(excludeTablesList) > 0 {
-					for _, ksTable := range ksTables {
-						exclude := false
-						for _, table := range excludeTablesList {
-							if ksTable == table {
-								exclude = true
-								break
-							}
-						}
-						if !exclude {
-							tables = append(tables, ksTable)
-						}
-					}
-				} else {
-					tables = ksTables
-				}
+				tables = ksTables
 			} else {
 				return fmt.Errorf("no tables to move")
 			}
+		}
+		var excludeTablesList []string
+		excludeTables = strings.TrimSpace(excludeTables)
+		if excludeTables != "" {
+			excludeTablesList = strings.Split(excludeTables, ",")
+			err = wr.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, excludeTablesList)
+			if err != nil {
+				return err
+			}
+		}
+		var tables2 []string
+		for _, t := range tables {
+			if shouldInclude(t, excludeTablesList) {
+				tables2 = append(tables2, t)
+			}
+		}
+		tables = tables2
+		if len(tables) == 0 {
+			return fmt.Errorf("no tables to move")
 		}
 		log.Infof("Found tables to move: %s", strings.Join(tables, ","))
 
@@ -226,19 +245,37 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		StopAfterCopy:         stopAfterCopy,
 		ExternalCluster:       externalCluster,
 	}
+
+	if sourceTimeZone != "" {
+		ms.SourceTimeZone = sourceTimeZone
+		ms.TargetTimeZone = "UTC"
+	}
+
+	createDDLMode := createDDLAsCopy
+	if dropForeignKeys {
+		createDDLMode = createDDLAsCopyDropForeignKeys
+	}
+
 	for _, table := range tables {
 		buf := sqlparser.NewTrackedBuffer(nil)
 		buf.Myprintf("select * from %v", sqlparser.NewTableIdent(table))
 		ms.TableSettings = append(ms.TableSettings, &vtctldatapb.TableMaterializeSettings{
 			TargetTable:      table,
 			SourceExpression: buf.String(),
-			CreateDdl:        createDDLAsCopy,
+			CreateDdl:        createDDLMode,
 		})
 	}
 	mz, err := wr.prepareMaterializerStreams(ctx, ms)
 	if err != nil {
 		return err
 	}
+
+	if sourceTimeZone != "" {
+		if err := mz.checkTZConversion(ctx, sourceTimeZone); err != nil {
+			return err
+		}
+	}
+
 	tabletShards, err := wr.collectTargetStreams(ctx, mz)
 	if err != nil {
 		return err
@@ -275,13 +312,10 @@ func (wr *Wrangler) validateSourceTablesExist(ctx context.Context, sourceKeyspac
 	// validate that tables provided are present in the source keyspace
 	var missingTables []string
 	for _, table := range tables {
-		found := false
-
-		// Skip Vitess internal tables
 		if schema.IsInternalOperationTableName(table) {
-			log.Infof("found internal table %s, ignoring in materialization schema validation", table)
 			continue
 		}
+		found := false
 
 		for _, ksTable := range ksTables {
 			if table == ksTable {
@@ -435,11 +469,11 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	if !strings.Contains(vindex.Type, "lookup") {
 		return nil, nil, nil, fmt.Errorf("vindex %s is not a lookup type", vindex.Type)
 	}
-	strs := strings.Split(vindex.Params["table"], ".")
-	if len(strs) != 2 {
-		return nil, nil, nil, fmt.Errorf("vindex 'table' must be <keyspace>.<table>: %v", vindex)
+
+	targetKeyspace, targetTableName, err = sqlparser.ParseTable(vindex.Params["table"])
+	if err != nil || targetKeyspace == "" {
+		return nil, nil, nil, fmt.Errorf("vindex table name must be in the form <keyspace>.<table>. Got: %v", vindex.Params["table"])
 	}
-	targetKeyspace, targetTableName = strs[0], strs[1]
 
 	vindexFromCols = strings.Split(vindex.Params["from"], ",")
 	if strings.Contains(vindex.Type, "unique") {
@@ -522,9 +556,7 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	}
 	sourceVSchemaTable = sourceVSchema.Tables[sourceTableName]
 	if sourceVSchemaTable == nil {
-		if schema.IsInternalOperationTableName(sourceTableName) {
-			log.Infof("found internal table %s, ignoring in materialization", sourceTableName)
-		} else {
+		if !schema.IsInternalOperationTableName(sourceTableName) {
 			return nil, nil, nil, fmt.Errorf("source table %s not found in vschema", sourceTableName)
 		}
 	}
@@ -576,15 +608,15 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	}
 
 	if vindex.Params["data_type"] == "" || strings.EqualFold(vindex.Type, "consistent_lookup_unique") || strings.EqualFold(vindex.Type, "consistent_lookup") {
-		modified = append(modified, fmt.Sprintf("  `%s` varbinary(128),", vindexToCol))
+		modified = append(modified, fmt.Sprintf("  %s varbinary(128),", sqlescape.EscapeID(vindexToCol)))
 	} else {
-		modified = append(modified, fmt.Sprintf("  `%s` `%s`,", vindexToCol, vindex.Params["data_type"]))
+		modified = append(modified, fmt.Sprintf("  %s %s,", sqlescape.EscapeID(vindexToCol), sqlescape.EscapeID(vindex.Params["data_type"])))
 	}
 	buf := sqlparser.NewTrackedBuffer(nil)
 	fmt.Fprintf(buf, "  PRIMARY KEY (")
 	prefix := ""
 	for _, col := range vindexFromCols {
-		fmt.Fprintf(buf, "%s`%s`", prefix, col)
+		fmt.Fprintf(buf, "%s%s", prefix, sqlescape.EscapeID(col))
 		prefix = ", "
 	}
 	fmt.Fprintf(buf, ")")
@@ -682,8 +714,9 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 }
 
 func generateColDef(lines []string, sourceVindexCol, vindexFromCol string) (string, error) {
-	source := fmt.Sprintf("`%s`", sourceVindexCol)
-	target := fmt.Sprintf("`%s`", vindexFromCol)
+	source := sqlescape.EscapeID(sourceVindexCol)
+	target := sqlescape.EscapeID(vindexFromCol)
+
 	for _, line := range lines[1:] {
 		if strings.Contains(line, source) {
 			line = strings.Replace(line, source, target, 1)
@@ -710,12 +743,11 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 	if sourceVindex == nil {
 		return fmt.Errorf("vindex %s not found in vschema", qualifiedVindexName)
 	}
-	qualifiedTableName := sourceVindex.Params["table"]
-	splits = strings.Split(qualifiedTableName, ".")
-	if len(splits) != 2 {
-		return fmt.Errorf("table name in vindex should be of the form keyspace.table: %s", qualifiedTableName)
+
+	targetKeyspace, targetTableName, err := sqlparser.ParseTable(sourceVindex.Params["table"])
+	if err != nil || targetKeyspace == "" {
+		return fmt.Errorf("vindex table name must be in the form <keyspace>.<table>. Got: %v", sourceVindex.Params["table"])
 	}
-	targetKeyspace, targetTableName := splits[0], splits[1]
 	workflow := targetTableName + "_vdx"
 	targetShards, err := wr.ts.GetServingShards(ctx, targetKeyspace)
 	if err != nil {
@@ -745,7 +777,7 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 		if err != nil {
 			return err
 		}
-		p3qr, err := wr.tmc.VReplicationExec(ctx, targetPrimary.Tablet, fmt.Sprintf("select id, state, message from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(targetPrimary.DbName())))
+		p3qr, err := wr.tmc.VReplicationExec(ctx, targetPrimary.Tablet, fmt.Sprintf("select id, state, message, source from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(targetPrimary.DbName())))
 		if err != nil {
 			return err
 		}
@@ -757,8 +789,17 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 			}
 			state := row[1].ToString()
 			message := row[2].ToString()
-			if sourceVindex.Owner == "" {
-				// If there's no owner, all streams need to be running.
+			var bls binlogdatapb.BinlogSource
+			sourceBytes, err := row[3].ToBytes()
+			if err != nil {
+				return err
+			}
+			if err := prototext.Unmarshal(sourceBytes, &bls); err != nil {
+				return err
+			}
+			if sourceVindex.Owner == "" || !bls.StopAfterCopy {
+				// If there's no owner or we've requested that the workflow NOT be stopped
+				// after the copy phase completes, then all streams need to be running.
 				if state != binlogplayer.BlpRunning {
 					return fmt.Errorf("stream %d for %v.%v is not in Running state: %v", id, targetShard.Keyspace(), targetShard.ShardName(), state)
 				}
@@ -907,6 +948,7 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	if err != nil {
 		return nil, err
 	}
+
 	return &materializer{
 		wr:            wr,
 		ms:            ms,
@@ -987,7 +1029,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			}
 
 			createDDL := ts.CreateDdl
-			if createDDL == createDDLAsCopy || createDDL == createDDLAsCopyDropConstraint {
+			if createDDL == createDDLAsCopy || createDDL == createDDLAsCopyDropConstraint || createDDL == createDDLAsCopyDropForeignKeys {
 				if ts.SourceExpression != "" {
 					// Check for table if non-empty SourceExpression.
 					sourceTableName, err := sqlparser.TableFromStatement(ts.SourceExpression)
@@ -1007,6 +1049,15 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 
 				if createDDL == createDDLAsCopyDropConstraint {
 					strippedDDL, err := stripTableConstraints(ddl)
+					if err != nil {
+						return err
+					}
+
+					ddl = strippedDDL
+				}
+
+				if createDDL == createDDLAsCopyDropForeignKeys {
+					strippedDDL, err := stripTableForeignKeys(ddl)
 					if err != nil {
 						return err
 					}
@@ -1035,6 +1086,36 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 
 		return nil
 	})
+}
+
+func stripTableForeignKeys(ddl string) (string, error) {
+
+	ast, err := sqlparser.ParseStrictDDL(ddl)
+	if err != nil {
+		return "", err
+	}
+
+	stripFKConstraints := func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case sqlparser.DDLStatement:
+			if node.GetTableSpec() != nil {
+				var noFKConstraints []*sqlparser.ConstraintDefinition
+				for _, constraint := range node.GetTableSpec().Constraints {
+					if constraint.Details != nil {
+						if _, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition); !ok {
+							noFKConstraints = append(noFKConstraints, constraint)
+						}
+					}
+				}
+				node.GetTableSpec().Constraints = noFKConstraints
+			}
+		}
+		return true
+	}
+
+	noFKConstraintAST := sqlparser.Rewrite(ast, stripFKConstraints, nil)
+	newDDL := sqlparser.String(noFKConstraintAST)
+	return newDDL, nil
 }
 
 func stripTableConstraints(ddl string) (string, error) {
@@ -1076,6 +1157,8 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 			Filter:          &binlogdatapb.Filter{},
 			StopAfterCopy:   mz.ms.StopAfterCopy,
 			ExternalCluster: mz.ms.ExternalCluster,
+			SourceTimeZone:  mz.ms.SourceTimeZone,
+			TargetTimeZone:  mz.ms.TargetTimeZone,
 		}
 		for _, ts := range mz.ms.TableSettings {
 			rule := &binlogdatapb.Rule{
@@ -1229,4 +1312,30 @@ func (mz *materializer) forAllTargets(f func(*topo.ShardInfo) error) error {
 	}
 	wg.Wait()
 	return allErrors.AggrError(vterrors.Aggregate)
+}
+
+// checkTZConversion is a light-weight consistency check to validate that, if a source time zone is specified to MoveTables,
+// that the current primary has the time zone loaded in order to run the convert_tz() function used by VReplication to do the
+// datetime conversions. We only check the current primaries on each shard and note here that it is possible a new primary
+// gets elected: in this case user will either see errors during vreplication or vdiff will report mismatches.
+func (mz *materializer) checkTZConversion(ctx context.Context, tz string) error {
+	err := mz.forAllTargets(func(target *topo.ShardInfo) error {
+		targetPrimary, err := mz.wr.ts.GetTablet(ctx, target.PrimaryAlias)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
+		}
+		testDateTime := "2006-01-02 15:04:05"
+		query := fmt.Sprintf("select convert_tz(%s, %s, 'UTC')", encodeString(testDateTime), encodeString(tz))
+		qrproto, err := mz.wr.tmc.ExecuteFetchAsApp(ctx, targetPrimary.Tablet, false, []byte(query), 1)
+		if err != nil {
+			return vterrors.Wrapf(err, "ExecuteFetchAsApp(%v, %s)", targetPrimary.Tablet, query)
+		}
+		qr := sqltypes.Proto3ToResult(qrproto)
+		if gotDate, err := time.Parse(testDateTime, qr.Rows[0][0].ToString()); err != nil {
+			return fmt.Errorf("unable to perform time_zone conversions from %s to UTC — result of the attempt was: %s. Either the specified source time zone is invalid or the time zone tables have not been loaded on the %s tablet",
+				tz, gotDate, targetPrimary.Alias)
+		}
+		return nil
+	})
+	return err
 }

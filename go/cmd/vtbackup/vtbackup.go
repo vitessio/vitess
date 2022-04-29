@@ -312,7 +312,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	case mysqlctl.ErrNoBackup:
 		// There is no backup found, but we may be taking the initial backup of a shard
 		if !*allowFirstBackup {
-			return fmt.Errorf("no backup found; not starting up empty since -initial_backup flag was not enabled")
+			return fmt.Errorf("no backup found; not starting up empty since --initial_backup flag was not enabled")
 		}
 		restorePos = mysql.Position{}
 	default:
@@ -378,7 +378,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 			log.Infof("Replication caught up to %v after %v", status.Position, time.Since(waitStartTime))
 			break
 		}
-		if !status.ReplicationRunning() {
+		if !status.Healthy() {
 			log.Warning("Replication has stopped before backup could be taken. Trying to restart replication.")
 			if err := startReplication(ctx, mysqld, topoServer); err != nil {
 				log.Warningf("Failed to restart replication: %v", err)
@@ -634,14 +634,14 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 
 	// We need at least one backup so we can restore first, unless the user explicitly says we don't
 	if len(backups) == 0 && !*allowFirstBackup {
-		return false, fmt.Errorf("no existing backups to restore from; backup is not possible since -initial_backup flag was not enabled")
+		return false, fmt.Errorf("no existing backups to restore from; backup is not possible since --initial_backup flag was not enabled")
 	}
 	if lastBackup == nil {
 		if *allowFirstBackup {
 			// There's no complete backup, but we were told to take one from scratch anyway.
 			return true, nil
 		}
-		return false, fmt.Errorf("no complete backups to restore from; backup is not possible since -initial_backup flag was not enabled")
+		return false, fmt.Errorf("no complete backups to restore from; backup is not possible since --initial_backup flag was not enabled")
 	}
 
 	// Has it been long enough since the last complete backup to need a new one?

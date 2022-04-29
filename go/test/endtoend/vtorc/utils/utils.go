@@ -40,13 +40,13 @@ import (
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -134,9 +134,8 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 		}
 	}
 	clusterInstance.VtTabletExtraArgs = []string{
-		"-lock_tables_timeout", "5s",
-		"-disable_active_reparents",
-		"-use_super_read_only=false",
+		"--lock_tables_timeout", "5s",
+		"--disable_active_reparents",
 	}
 	// Initialize Cluster
 	shard0.Vttablets = tablets
@@ -241,31 +240,35 @@ func demotePrimaryTablet(ts *topo.Server) (err error) {
 	return
 }
 
-// startVtorc is used to start the orchestrator with the given extra arguments
-func startVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, orcExtraArgs []string, pathToConfig string) {
+// StartVtorcs is used to start the orchestrator with the given extra arguments
+func StartVtorcs(t *testing.T, clusterInfo *VtOrcClusterInfo, orcExtraArgs []string, config cluster.VtorcConfiguration, count int) {
 	t.Helper()
 	// Start vtorc
-	clusterInfo.ClusterInstance.VtorcProcess = clusterInfo.ClusterInstance.NewOrcProcess(pathToConfig)
-	clusterInfo.ClusterInstance.VtorcProcess.ExtraArgs = orcExtraArgs
-	err := clusterInfo.ClusterInstance.VtorcProcess.Setup()
-	require.NoError(t, err)
+	for i := 0; i < count; i++ {
+		vtorcProcess := clusterInfo.ClusterInstance.NewOrcProcess(config)
+		vtorcProcess.ExtraArgs = orcExtraArgs
+		err := vtorcProcess.Setup()
+		require.NoError(t, err)
+		clusterInfo.ClusterInstance.VtorcProcesses = append(clusterInfo.ClusterInstance.VtorcProcesses, vtorcProcess)
+	}
 }
 
-// stopVtorc is used to stop the orchestrator
-func stopVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo) {
+// StopVtorcs is used to stop the orchestrator
+func StopVtorcs(t *testing.T, clusterInfo *VtOrcClusterInfo) {
 	t.Helper()
 	// Stop vtorc
-	if clusterInfo.ClusterInstance.VtorcProcess != nil {
-		err := clusterInfo.ClusterInstance.VtorcProcess.TearDown()
-		require.NoError(t, err)
+	for _, vtorcProcess := range clusterInfo.ClusterInstance.VtorcProcesses {
+		if err := vtorcProcess.TearDown(); err != nil {
+			log.Errorf("Error in vtorc teardown: %v", err)
+		}
 	}
-	clusterInfo.ClusterInstance.VtorcProcess = nil
+	clusterInfo.ClusterInstance.VtorcProcesses = nil
 }
 
 // SetupVttabletsAndVtorc is used to setup the vttablets and start the orchestrator
-func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, configFileName string) {
+func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, config cluster.VtorcConfiguration, vtorcCount int) {
 	// stop vtorc if it is running
-	stopVtorc(t, clusterInfo)
+	StopVtorcs(t, clusterInfo)
 
 	// remove all the vttablets so that each test can add the amount that they require
 	err := shutdownVttablets(clusterInfo)
@@ -305,22 +308,18 @@ func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numRepl
 		require.NoError(t, err)
 	}
 
-	workingDir := os.Getenv("PWD")
-	idx := strings.Index(workingDir, "vtorc")
-	if idx == -1 {
-		t.Fatalf("SetupVttabletsAndVtorc should only be used from a package inside the vtorc directory")
-	}
-
-	pathToConfig := path.Join(workingDir[:idx], "vtorc", "utils", configFileName)
 	// start vtorc
-	startVtorc(t, clusterInfo, orcExtraArgs, pathToConfig)
+	StartVtorcs(t, clusterInfo, orcExtraArgs, config, vtorcCount)
 }
 
 // cleanAndStartVttablet cleans the MySQL instance underneath for running a new test. It also starts the vttablet.
 func cleanAndStartVttablet(t *testing.T, clusterInfo *VtOrcClusterInfo, vttablet *cluster.Vttablet) {
 	t.Helper()
+	// set super-read-only to false
+	_, err := RunSQL(t, "SET GLOBAL super_read_only = OFF", vttablet, "")
+	require.NoError(t, err)
 	// remove the databases if they exist
-	_, err := RunSQL(t, "DROP DATABASE IF EXISTS vt_ks", vttablet, "")
+	_, err = RunSQL(t, "DROP DATABASE IF EXISTS vt_ks", vttablet, "")
 	require.NoError(t, err)
 	_, err = RunSQL(t, "DROP DATABASE IF EXISTS _vt", vttablet, "")
 	require.NoError(t, err)
@@ -387,7 +386,7 @@ func CheckPrimaryTablet(t *testing.T, clusterInfo *VtOrcClusterInfo, tablet *clu
 			continue
 		}
 		// make sure the health stream is updated
-		result, err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", tablet.Alias)
+		result, err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "1", tablet.Alias)
 		require.NoError(t, err)
 		var streamHealthResponse querypb.StreamHealthResponse
 
@@ -524,7 +523,7 @@ func validateTopology(t *testing.T, clusterInfo *VtOrcClusterInfo, pingTablets b
 				var err error
 				var output string
 				if pingTablets {
-					output, err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate", "-ping-tablets=true")
+					output, err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate", "--", "--ping-tablets=true")
 				} else {
 					output, err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate")
 				}
@@ -743,4 +742,93 @@ func MakeAPICallUntilRegistered(t *testing.T, url string) (status int, response 
 			return status, response
 		}
 	}
+}
+
+// SetupNewClusterSemiSync is used to setup a new cluster with semi-sync set.
+// It creates a cluster with 4 tablets, one of which is a Replica
+func SetupNewClusterSemiSync(t *testing.T) *VtOrcClusterInfo {
+	var tablets []*cluster.Vttablet
+	clusterInstance := cluster.NewCluster(Cell1, Hostname)
+	keyspace := &cluster.Keyspace{Name: keyspaceName}
+	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
+	// Start topo server
+	err := clusterInstance.StartTopo()
+	require.NoError(t, err, "Error starting topo: %v", err)
+
+	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+Cell1)
+	require.NoError(t, err, "Error managing topo: %v", err)
+
+	for i := 0; i < 3; i++ {
+		tablet := clusterInstance.NewVttabletInstance("replica", 100+i, Cell1)
+		tablets = append(tablets, tablet)
+	}
+	tablet := clusterInstance.NewVttabletInstance("rdonly", 103, Cell1)
+	tablets = append(tablets, tablet)
+
+	shard := &cluster.Shard{Name: shardName}
+	shard.Vttablets = tablets
+
+	clusterInstance.VtTabletExtraArgs = []string{
+		"--lock_tables_timeout", "5s",
+		"--disable_active_reparents",
+		"--enable_semi_sync",
+	}
+
+	// Initialize Cluster
+	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
+	require.NoError(t, err, "Cannot launch cluster: %v", err)
+
+	//Start MySql
+	var mysqlCtlProcessList []*exec.Cmd
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		for _, tablet := range shard.Vttablets {
+			log.Infof("Starting MySql for tablet %v", tablet.Alias)
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
+				require.NoError(t, err, "Error starting start mysql: %v", err)
+			}
+			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
+		}
+	}
+
+	// Wait for mysql processes to start
+	for _, proc := range mysqlCtlProcessList {
+		if err := proc.Wait(); err != nil {
+			require.NoError(t, err, "Error starting mysql: %v", err)
+		}
+	}
+
+	for _, tablet := range tablets {
+		require.NoError(t, err)
+		// Start the tablet
+		err = tablet.VttabletProcess.Setup()
+		require.NoError(t, err)
+	}
+
+	for _, tablet := range tablets {
+		err := tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
+		require.NoError(t, err)
+	}
+
+	clusterInfo := &VtOrcClusterInfo{
+		ClusterInstance: clusterInstance,
+		Ts:              nil,
+		CellInfos:       nil,
+		lastUsedValue:   100,
+	}
+	return clusterInfo
+}
+
+// IsSemiSyncSetupCorrectly checks that the semi-sync is setup correctly on the given vttablet
+func IsSemiSyncSetupCorrectly(t *testing.T, tablet *cluster.Vttablet, semiSyncVal string) bool {
+	dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", "")
+	require.NoError(t, err)
+	return semiSyncVal == dbVar
+}
+
+// IsPrimarySemiSyncSetupCorrectly checks that the priamry side semi-sync is setup correctly on the given vttablet
+func IsPrimarySemiSyncSetupCorrectly(t *testing.T, tablet *cluster.Vttablet, semiSyncVal string) bool {
+	dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_master_enabled", "")
+	require.NoError(t, err)
+	return semiSyncVal == dbVar
 }

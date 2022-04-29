@@ -26,12 +26,13 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -77,7 +78,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// List of users authorized to execute vschema ddl operations
-		clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal"}
+		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
@@ -91,8 +92,8 @@ func TestMain(m *testing.M) {
 		// restart the tablet so that the schema.Engine gets a chance to start with existing schema
 		tablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 		tablet.VttabletProcess.ExtraArgs = []string{
-			"-queryserver-config-schema-change-signal",
-			fmt.Sprintf("-queryserver-config-schema-change-signal-interval=%d", signalInterval),
+			"--queryserver-config-schema-change-signal",
+			fmt.Sprintf("--queryserver-config-schema-change-signal-interval=%d", signalInterval),
 		}
 		if err := tablet.RestartOnlyTablet(); err != nil {
 			return 1
@@ -119,7 +120,7 @@ func TestVSchemaTrackerInit(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	qr := exec(t, conn, "SHOW VSCHEMA TABLES")
+	qr := utils.Exec(t, conn, "SHOW VSCHEMA TABLES")
 	got := fmt.Sprintf("%v", qr.Rows)
 	want := `[[VARCHAR("dual")] [VARCHAR("main")] [VARCHAR("test_table")] [VARCHAR("vt_user")]]`
 	assert.Equal(t, want, got)
@@ -134,7 +135,7 @@ func TestVSchemaTrackerKeyspaceReInit(t *testing.T) {
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 
 	// get the vschema prior to the restarts
-	var originalResults interface{}
+	var originalResults any
 	readVSchema(t, &clusterInstance.VtgateProcess, &originalResults)
 	assert.NotNil(t, originalResults)
 
@@ -147,23 +148,14 @@ func TestVSchemaTrackerKeyspaceReInit(t *testing.T) {
 		err = clusterInstance.WaitForTabletsToHealthyInVtgate()
 		require.NoError(t, err)
 		time.Sleep(time.Duration(signalInterval*2) * time.Second)
-		var newResults interface{}
+		var newResults any
 		readVSchema(t, &clusterInstance.VtgateProcess, &newResults)
 		assert.Equal(t, originalResults, newResults)
 		newResults = nil
 	}
 }
 
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return qr
-}
-
-func readVSchema(t *testing.T, vtgate *cluster.VtgateProcess, results *interface{}) {
+func readVSchema(t *testing.T, vtgate *cluster.VtgateProcess, results *any) {
 	httpClient := &http.Client{Timeout: 5 * time.Second}
 	resp, err := httpClient.Get(vtgate.VSchemaURL)
 	require.Nil(t, err)

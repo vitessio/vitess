@@ -38,7 +38,7 @@ func TestVtworkerServer(t *testing.T) {
 	wi := vtworkerclienttest.CreateWorkerInstance(t)
 
 	// Listen on a random port.
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestVtworkerServerAuth(t *testing.T) {
 	wi := vtworkerclienttest.CreateWorkerInstance(t)
 
 	// Listen on a random port.
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}

@@ -5,7 +5,7 @@
   "Original": "select col from information_schema.foo",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -24,7 +24,7 @@ Gen4 plan same as above
   "Original": "select a.id,b.id from information_schema.a as a, information_schema.b as b",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -43,7 +43,7 @@ Gen4 plan same as above
   "Original": "select column_name from information_schema.columns where table_schema = (select schema())",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -62,7 +62,7 @@ Gen4 plan same as above
   "Original": "select * from information_schema.a join information_schema.b",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -77,7 +77,7 @@ Gen4 plan same as above
   "Original": "select * from information_schema.a join information_schema.b",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -95,7 +95,7 @@ Gen4 plan same as above
   "Original": "select * from information_schema.a where b=10",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -114,7 +114,7 @@ Gen4 plan same as above
   "Original": "select * from information_schema.a where information_schema.a.b=10",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -129,7 +129,7 @@ Gen4 plan same as above
   "Original": "select * from information_schema.a where information_schema.a.b=10",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -147,7 +147,7 @@ Gen4 plan same as above
   "Original": "select * from information_schema.a union select * from information_schema.b",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -172,26 +172,26 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
             },
             "FieldQuery": "select * from information_schema.`tables` where 1 != 1",
             "Query": "select * from information_schema.`tables` where table_schema = :__vtschemaname",
-            "SysTableTableSchema": "[VARBINARY(\"user\")]",
+            "SysTableTableSchema": "[VARCHAR(\"user\")]",
             "Table": "information_schema.`tables`"
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
             },
             "FieldQuery": "select * from information_schema.`tables` where 1 != 1",
             "Query": "select * from information_schema.`tables` where table_schema = :__vtschemaname",
-            "SysTableTableSchema": "[VARBINARY(\"main\")]",
+            "SysTableTableSchema": "[VARCHAR(\"main\")]",
             "Table": "information_schema.`tables`"
           }
         ]
@@ -210,26 +210,26 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
             },
             "FieldQuery": "select * from information_schema.`tables` where 1 != 1",
             "Query": "select distinct * from information_schema.`tables` where table_schema = :__vtschemaname",
-            "SysTableTableSchema": "[VARBINARY(\"user\")]",
+            "SysTableTableSchema": "[VARCHAR(\"user\")]",
             "Table": "information_schema.`tables`"
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
             },
             "FieldQuery": "select * from information_schema.`tables` where 1 != 1",
             "Query": "select distinct * from information_schema.`tables` where table_schema = :__vtschemaname",
-            "SysTableTableSchema": "[VARBINARY(\"main\")]",
+            "SysTableTableSchema": "[VARCHAR(\"main\")]",
             "Table": "information_schema.`tables`"
           }
         ]
@@ -245,15 +245,15 @@ Gen4 plan same as above
   "Original": "SELECT DELETE_RULE, UPDATE_RULE FROM  INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.COLUMN_NAME = 'id' AND KCU.REFERENCED_TABLE_SCHEMA = 'test' AND KCU.CONSTRAINT_NAME = 'data_type_table_id_fkey' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select DELETE_RULE, UPDATE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where 1 != 1",
     "Query": "select DELETE_RULE, UPDATE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where KCU.TABLE_SCHEMA = :__vtschemaname and KCU.TABLE_NAME = :KCU_TABLE_NAME and KCU.COLUMN_NAME = 'id' and KCU.REFERENCED_TABLE_SCHEMA = 'test' and KCU.CONSTRAINT_NAME = 'data_type_table_id_fkey' order by KCU.CONSTRAINT_NAME asc, KCU.COLUMN_NAME asc",
-    "SysTableTableName": "[KCU_TABLE_NAME:VARBINARY(\"data_type_table\")]",
-    "SysTableTableSchema": "[VARBINARY(\"test\")]",
+    "SysTableTableName": "[KCU_TABLE_NAME:VARCHAR(\"data_type_table\")]",
+    "SysTableTableSchema": "[VARCHAR(\"test\")]",
     "Table": "INFORMATION_SCHEMA.KEY_COLUMN_USAGE, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS"
   }
 }
@@ -262,15 +262,15 @@ Gen4 plan same as above
   "Original": "SELECT DELETE_RULE, UPDATE_RULE FROM  INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.COLUMN_NAME = 'id' AND KCU.REFERENCED_TABLE_SCHEMA = 'test' AND KCU.CONSTRAINT_NAME = 'data_type_table_id_fkey' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select DELETE_RULE, UPDATE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC where 1 != 1",
     "Query": "select DELETE_RULE, UPDATE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC where KCU.TABLE_SCHEMA = :__vtschemaname and KCU.TABLE_NAME = :KCU_TABLE_NAME and KCU.COLUMN_NAME = 'id' and KCU.REFERENCED_TABLE_SCHEMA = 'test' and KCU.CONSTRAINT_NAME = 'data_type_table_id_fkey' and KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME order by KCU.CONSTRAINT_NAME asc, KCU.COLUMN_NAME asc",
-    "SysTableTableName": "[KCU_TABLE_NAME:VARBINARY(\"data_type_table\")]",
-    "SysTableTableSchema": "[VARBINARY(\"test\")]",
+    "SysTableTableName": "[KCU_TABLE_NAME:VARCHAR(\"data_type_table\")]",
+    "SysTableTableSchema": "[VARCHAR(\"test\")]",
     "Table": "INFORMATION_SCHEMA.KEY_COLUMN_USAGE, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS"
   }
 }
@@ -283,33 +283,33 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "TableName": "INFORMATION_SCHEMA.KEY_COLUMN_USAGE, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS_INFORMATION_SCHEMA.K",
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
         },
         "FieldQuery": "select KCU.DELETE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where 1 != 1",
         "Query": "select KCU.DELETE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where KCU.TABLE_SCHEMA = :__vtschemaname and KCU.TABLE_NAME = :KCU_TABLE_NAME and KCU.TABLE_NAME = :KCU_TABLE_NAME1 order by KCU.CONSTRAINT_NAME asc, KCU.COLUMN_NAME asc",
-        "SysTableTableName": "[KCU_TABLE_NAME1:VARBINARY(\"data_type_table\"), KCU_TABLE_NAME:VARBINARY(\"data_type_table\")]",
-        "SysTableTableSchema": "[VARBINARY(\"test\")]",
+        "SysTableTableName": "[KCU_TABLE_NAME1:VARCHAR(\"data_type_table\"), KCU_TABLE_NAME:VARCHAR(\"data_type_table\")]",
+        "SysTableTableSchema": "[VARCHAR(\"test\")]",
         "Table": "INFORMATION_SCHEMA.KEY_COLUMN_USAGE, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS"
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
         },
         "FieldQuery": "select S.UPDATE_RULE from INFORMATION_SCHEMA.K as S where 1 != 1",
         "Query": "select S.UPDATE_RULE from INFORMATION_SCHEMA.K as S where S.TABLE_SCHEMA = :__vtschemaname and S.TABLE_NAME = :S_TABLE_NAME",
-        "SysTableTableName": "[S_TABLE_NAME:VARBINARY(\"sc\")]",
-        "SysTableTableSchema": "[VARBINARY(\"test\")]",
+        "SysTableTableName": "[S_TABLE_NAME:VARCHAR(\"sc\")]",
+        "SysTableTableSchema": "[VARCHAR(\"test\")]",
         "Table": "INFORMATION_SCHEMA.K"
       }
     ]
@@ -320,15 +320,15 @@ Gen4 plan same as above
   "Original": "SELECT KCU.DELETE_RULE, S.UPDATE_RULE FROM  INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME, INFORMATION_SCHEMA.K AS S WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.TABLE_NAME = 'data_type_table' AND S.TABLE_SCHEMA = 'test' AND S.TABLE_NAME = 'sc' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select KCU.DELETE_RULE, S.UPDATE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC, INFORMATION_SCHEMA.K as S where 1 != 1",
     "Query": "select KCU.DELETE_RULE, S.UPDATE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC, INFORMATION_SCHEMA.K as S where S.TABLE_SCHEMA = :__vtschemaname and S.TABLE_NAME = :S_TABLE_NAME and KCU.TABLE_SCHEMA = :__vtschemaname and KCU.TABLE_NAME = :KCU_TABLE_NAME and KCU.TABLE_NAME = :KCU_TABLE_NAME1 and KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME order by KCU.CONSTRAINT_NAME asc, KCU.COLUMN_NAME asc",
-    "SysTableTableName": "[KCU_TABLE_NAME1:VARBINARY(\"data_type_table\"), KCU_TABLE_NAME:VARBINARY(\"data_type_table\"), S_TABLE_NAME:VARBINARY(\"sc\")]",
-    "SysTableTableSchema": "[VARBINARY(\"test\"), VARBINARY(\"test\")]",
+    "SysTableTableName": "[KCU_TABLE_NAME1:VARCHAR(\"data_type_table\"), KCU_TABLE_NAME:VARCHAR(\"data_type_table\"), S_TABLE_NAME:VARCHAR(\"sc\")]",
+    "SysTableTableSchema": "[VARCHAR(\"test\"), VARCHAR(\"test\")]",
     "Table": "INFORMATION_SCHEMA.K, INFORMATION_SCHEMA.KEY_COLUMN_USAGE, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS"
   }
 }
@@ -340,7 +340,7 @@ Gen4 plan same as above
   "Original": "SELECT routine_name AS name, routine_definition AS definition FROM information_schema.routines WHERE ROUTINE_SCHEMA = ? AND ROUTINE_TYPE = 'PROCEDURE'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -360,7 +360,7 @@ Gen4 plan same as above
   "Original": "SELECT SUM(data_length + index_length) as size FROM information_schema.TABLES WHERE table_schema = ?",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -380,7 +380,7 @@ Gen4 plan same as above
   "Original": "SELECT kcu.constraint_name constraint_name, kcu.column_name column_name, kcu.referenced_table_name referenced_table_name, kcu.referenced_column_name referenced_column_name, kcu.ordinal_position ordinal_position, kcu.table_name table_name, rc.delete_rule delete_rule, rc.update_rule update_rule FROM information_schema.key_column_usage AS kcu INNER JOIN information_schema.referential_constraints AS rc ON kcu.constraint_name = rc.constraint_name WHERE kcu.table_schema = ? AND rc.constraint_schema = ? AND kcu.referenced_column_name IS NOT NULL ORDER BY ordinal_position",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -396,7 +396,7 @@ Gen4 plan same as above
   "Original": "SELECT kcu.constraint_name constraint_name, kcu.column_name column_name, kcu.referenced_table_name referenced_table_name, kcu.referenced_column_name referenced_column_name, kcu.ordinal_position ordinal_position, kcu.table_name table_name, rc.delete_rule delete_rule, rc.update_rule update_rule FROM information_schema.key_column_usage AS kcu INNER JOIN information_schema.referential_constraints AS rc ON kcu.constraint_name = rc.constraint_name WHERE kcu.table_schema = ? AND rc.constraint_schema = ? AND kcu.referenced_column_name IS NOT NULL ORDER BY ordinal_position",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -415,33 +415,18 @@ Gen4 plan same as above
   "Original": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as name, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk using (constraint_schema, constraint_name) where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = ':vtg1' and rc.constraint_schema = database() and rc.table_name = ':vtg1'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name where 1 != 1",
-    "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = :fk_table_name and rc.constraint_schema = database() and rc.table_name = :rc_table_name",
-    "SysTableTableName": "[fk_table_name:VARBINARY(\":vtg1\"), rc_table_name:VARBINARY(\":vtg1\")]",
+    "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk using (constraint_schema, constraint_name) where 1 != 1",
+    "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk using (constraint_schema, constraint_name) where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = :fk_table_name and rc.constraint_schema = database() and rc.table_name = :rc_table_name",
+    "SysTableTableName": "[fk_table_name:VARCHAR(\":vtg1\"), rc_table_name:VARCHAR(\":vtg1\")]",
     "Table": "information_schema.referential_constraints, information_schema.key_column_usage"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as name, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk using (constraint_schema, constraint_name) where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = ':vtg1' and rc.constraint_schema = database() and rc.table_name = ':vtg1'",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc, information_schema.key_column_usage as fk where 1 != 1",
-    "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc, information_schema.key_column_usage as fk where rc.constraint_schema = database() and rc.table_name = :rc_table_name and fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = :fk_table_name and rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name",
-    "SysTableTableName": "[fk_table_name:VARBINARY(\":vtg1\"), rc_table_name:VARBINARY(\":vtg1\")]",
-    "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
-  }
-}
+Gen4 error: unsupported: join with USING(column_list) clause for complex queries
 
 #rails_query 2
 "SELECT * FROM information_schema.schemata WHERE schema_name = 'user'"
@@ -450,14 +435,14 @@ Gen4 plan same as above
   "Original": "SELECT * FROM information_schema.schemata WHERE schema_name = 'user'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select * from information_schema.schemata where 1 != 1",
     "Query": "select * from information_schema.schemata where schema_name = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"user\")]",
+    "SysTableTableSchema": "[VARCHAR(\"user\")]",
     "Table": "information_schema.schemata"
   }
 }
@@ -470,15 +455,15 @@ Gen4 plan same as above
   "Original": "SELECT table_comment FROM information_schema.tables WHERE table_schema = 'schema_name' AND table_name = 'table_name'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select table_comment from information_schema.`tables` where 1 != 1",
     "Query": "select table_comment from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name",
-    "SysTableTableName": "[table_name:VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"schema_name\")]",
+    "SysTableTableName": "[table_name:VARCHAR(\"table_name\")]",
+    "SysTableTableSchema": "[VARCHAR(\"schema_name\")]",
     "Table": "information_schema.`tables`"
   }
 }
@@ -491,35 +476,19 @@ Gen4 plan same as above
   "Original": "SELECT fk.referenced_table_name AS 'to_table', fk.referenced_column_name AS 'primary_key',fk.column_name AS 'column',fk.constraint_name AS 'name',rc.update_rule AS 'on_update',rc.delete_rule AS 'on_delete' FROM information_schema.referential_constraints rc JOIN information_schema.key_column_usage fk USING (constraint_schema, constraint_name) WHERE fk.referenced_column_name IS NOT NULL AND fk.table_schema = 'table_schema' AND fk.table_name = 'table_name' AND rc.constraint_schema = 'table_schema' AND rc.table_name = 'table_name'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name where 1 != 1",
-    "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name where fk.referenced_column_name is not null and fk.table_schema = :__vtschemaname and fk.table_name = :fk_table_name and rc.constraint_schema = :__vtschemaname and rc.table_name = :rc_table_name",
-    "SysTableTableName": "[fk_table_name:VARBINARY(\"table_name\"), rc_table_name:VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\"), VARBINARY(\"table_schema\")]",
+    "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk using (constraint_schema, constraint_name) where 1 != 1",
+    "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk using (constraint_schema, constraint_name) where fk.referenced_column_name is not null and fk.table_schema = :__vtschemaname and fk.table_name = :fk_table_name and rc.constraint_schema = :__vtschemaname and rc.table_name = :rc_table_name",
+    "SysTableTableName": "[fk_table_name:VARCHAR(\"table_name\"), rc_table_name:VARCHAR(\"table_name\")]",
+    "SysTableTableSchema": "[VARCHAR(\"table_schema\"), VARCHAR(\"table_schema\")]",
     "Table": "information_schema.referential_constraints, information_schema.key_column_usage"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT fk.referenced_table_name AS 'to_table', fk.referenced_column_name AS 'primary_key',fk.column_name AS 'column',fk.constraint_name AS 'name',rc.update_rule AS 'on_update',rc.delete_rule AS 'on_delete' FROM information_schema.referential_constraints rc JOIN information_schema.key_column_usage fk USING (constraint_schema, constraint_name) WHERE fk.referenced_column_name IS NOT NULL AND fk.table_schema = 'table_schema' AND fk.table_name = 'table_name' AND rc.constraint_schema = 'table_schema' AND rc.table_name = 'table_name'",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc, information_schema.key_column_usage as fk where 1 != 1",
-    "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc, information_schema.key_column_usage as fk where rc.constraint_schema = :__vtschemaname and rc.table_name = :rc_table_name and fk.referenced_column_name is not null and fk.table_schema = :__vtschemaname and fk.table_name = :fk_table_name and rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name",
-    "SysTableTableName": "[fk_table_name:VARBINARY(\"table_name\"), rc_table_name:VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\"), VARBINARY(\"table_schema\")]",
-    "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
-  }
-}
+Gen4 error: unsupported: join with USING(column_list) clause for complex queries
 
 #rails_query 5
 "SELECT cc.constraint_name AS 'name', cc.check_clause AS 'expression' FROM information_schema.check_constraints cc JOIN information_schema.table_constraints tc USING (constraint_schema, constraint_name) WHERE tc.table_schema = 'table_schema' AND tc.table_name = 'table_name' AND cc.constraint_schema = 'constraint_schema'"
@@ -528,35 +497,19 @@ Gen4 plan same as above
   "Original": "SELECT cc.constraint_name AS 'name', cc.check_clause AS 'expression' FROM information_schema.check_constraints cc JOIN information_schema.table_constraints tc USING (constraint_schema, constraint_name) WHERE tc.table_schema = 'table_schema' AND tc.table_name = 'table_name' AND cc.constraint_schema = 'constraint_schema'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc join information_schema.table_constraints as tc on cc.constraint_schema = tc.constraint_schema and cc.constraint_name = tc.constraint_name where 1 != 1",
-    "Query": "select cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc join information_schema.table_constraints as tc on cc.constraint_schema = tc.constraint_schema and cc.constraint_name = tc.constraint_name where tc.table_schema = :__vtschemaname and tc.table_name = :tc_table_name and cc.constraint_schema = :__vtschemaname",
-    "SysTableTableName": "[tc_table_name:VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\"), VARBINARY(\"constraint_schema\")]",
+    "FieldQuery": "select cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc join information_schema.table_constraints as tc using (constraint_schema, constraint_name) where 1 != 1",
+    "Query": "select cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc join information_schema.table_constraints as tc using (constraint_schema, constraint_name) where tc.table_schema = :__vtschemaname and tc.table_name = :tc_table_name and cc.constraint_schema = :__vtschemaname",
+    "SysTableTableName": "[tc_table_name:VARCHAR(\"table_name\")]",
+    "SysTableTableSchema": "[VARCHAR(\"table_schema\"), VARCHAR(\"constraint_schema\")]",
     "Table": "information_schema.check_constraints, information_schema.table_constraints"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT cc.constraint_name AS 'name', cc.check_clause AS 'expression' FROM information_schema.check_constraints cc JOIN information_schema.table_constraints tc USING (constraint_schema, constraint_name) WHERE tc.table_schema = 'table_schema' AND tc.table_name = 'table_name' AND cc.constraint_schema = 'constraint_schema'",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc, information_schema.table_constraints as tc where 1 != 1",
-    "Query": "select cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc, information_schema.table_constraints as tc where cc.constraint_schema = :__vtschemaname and tc.table_schema = :__vtschemaname and tc.table_name = :tc_table_name and cc.constraint_schema = tc.constraint_schema and cc.constraint_name = tc.constraint_name",
-    "SysTableTableName": "[tc_table_name:VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"constraint_schema\"), VARBINARY(\"table_schema\")]",
-    "Table": "information_schema.check_constraints, information_schema.table_constraints"
-  }
-}
+Gen4 error: unsupported: join with USING(column_list) clause for complex queries
 
 #rails_query 6
 "SELECT column_name FROM information_schema.statistics WHERE index_name = 'PRIMARY' AND table_schema = 'table_schema' AND table_name = 'table_name' ORDER BY seq_in_index"
@@ -565,15 +518,15 @@ Gen4 plan same as above
   "Original": "SELECT column_name FROM information_schema.statistics WHERE index_name = 'PRIMARY' AND table_schema = 'table_schema' AND table_name = 'table_name' ORDER BY seq_in_index",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select column_name from information_schema.statistics where 1 != 1",
     "Query": "select column_name from information_schema.statistics where index_name = 'PRIMARY' and table_schema = :__vtschemaname and table_name = :table_name order by seq_in_index asc",
-    "SysTableTableName": "[table_name:VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]",
+    "SysTableTableName": "[table_name:VARCHAR(\"table_name\")]",
+    "SysTableTableSchema": "[VARCHAR(\"table_schema\")]",
     "Table": "information_schema.statistics"
   }
 }
@@ -586,15 +539,15 @@ Gen4 plan same as above
   "Original": "SELECT generation_expression FROM information_schema.columns WHERE table_schema = 'table_schema' AND table_name = 'table_name' AND column_name = 'column_name'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select generation_expression from information_schema.`columns` where 1 != 1",
     "Query": "select generation_expression from information_schema.`columns` where table_schema = :__vtschemaname and table_name = :table_name and column_name = 'column_name'",
-    "SysTableTableName": "[table_name:VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]",
+    "SysTableTableName": "[table_name:VARCHAR(\"table_name\")]",
+    "SysTableTableSchema": "[VARCHAR(\"table_schema\")]",
     "Table": "information_schema.`columns`"
   }
 }
@@ -607,7 +560,7 @@ Gen4 plan same as above
   "Original": "SELECT id FROM information_schema.processlist WHERE info LIKE '% FOR UPDATE'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -626,14 +579,14 @@ Gen4 plan same as above
   "Original": "SELECT table_name FROM (SELECT * FROM information_schema.tables WHERE table_schema = 'table_schema') _subquery",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select table_name from (select * from information_schema.`tables` where 1 != 1) as _subquery where 1 != 1",
     "Query": "select table_name from (select * from information_schema.`tables` where table_schema = :__vtschemaname) as _subquery",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]",
+    "SysTableTableSchema": "[VARCHAR(\"table_schema\")]",
     "Table": "information_schema.`tables`"
   }
 }
@@ -646,15 +599,15 @@ Gen4 plan same as above
   "Original": "SELECT table_name FROM (SELECT * FROM information_schema.tables WHERE table_schema = 'table_schema') _subquery WHERE _subquery.table_type = 'table_type' AND _subquery.table_name = 'table_name'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select table_name from (select * from information_schema.`tables` where 1 != 1) as _subquery where 1 != 1",
     "Query": "select table_name from (select * from information_schema.`tables` where table_schema = :__vtschemaname) as _subquery where _subquery.table_type = 'table_type' and _subquery.table_name = :_subquery_table_name",
-    "SysTableTableName": "[_subquery_table_name:VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]",
+    "SysTableTableName": "[_subquery_table_name:VARCHAR(\"table_name\")]",
+    "SysTableTableSchema": "[VARCHAR(\"table_schema\")]",
     "Table": "information_schema.`tables`"
   }
 }
@@ -663,14 +616,14 @@ Gen4 plan same as above
   "Original": "SELECT table_name FROM (SELECT * FROM information_schema.tables WHERE table_schema = 'table_schema') _subquery WHERE _subquery.table_type = 'table_type' AND _subquery.table_name = 'table_name'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select table_name from (select * from information_schema.`tables` where 1 != 1) as _subquery where 1 != 1",
     "Query": "select table_name from (select * from information_schema.`tables` where table_schema = :__vtschemaname and table_type = 'table_type' and table_name = 'table_name') as _subquery",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]",
+    "SysTableTableSchema": "[VARCHAR(\"table_schema\")]",
     "Table": "information_schema.`tables`"
   }
 }
@@ -682,14 +635,14 @@ Gen4 plan same as above
   "Original": "SELECT cc.constraint_name AS 'name' FROM information_schema.check_constraints cc  WHERE cc.constraint_schema = 'a' AND cc.table_schema = 'a'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where 1 != 1",
     "Query": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname and cc.table_schema = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"a\"), VARBINARY(\"a\")]",
+    "SysTableTableSchema": "[VARCHAR(\"a\"), VARCHAR(\"a\")]",
     "Table": "information_schema.check_constraints"
   }
 }
@@ -702,15 +655,15 @@ Gen4 plan same as above
   "Original": "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = 'performance_schema' AND table_name = 'foo'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` where table_schema = :__vtschemaname and table_name = :table_name",
-    "SysTableTableName": "[table_name:VARBINARY(\"foo\")]",
-    "SysTableTableSchema": "[VARBINARY(\"performance_schema\")]",
+    "SysTableTableName": "[table_name:VARCHAR(\"foo\")]",
+    "SysTableTableSchema": "[VARCHAR(\"performance_schema\")]",
     "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
@@ -723,7 +676,7 @@ Gen4 plan same as above
   "Original": "select * from information_schema.a where id in (select * from information_schema.b)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -742,14 +695,14 @@ Gen4 plan same as above
   "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'user' AND TABLE_SCHEMA = 'main'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and TABLE_SCHEMA = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"user\"), VARBINARY(\"main\")]",
+    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname",
+    "SysTableTableSchema": "[VARCHAR(\"user\"), VARCHAR(\"main\")]",
     "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
@@ -762,7 +715,7 @@ Gen4 plan same as above
   "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -781,14 +734,14 @@ Gen4 plan same as above
   "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE 'ks' = TABLE_SCHEMA",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"ks\")]",
+    "SysTableTableSchema": "[VARCHAR(\"ks\")]",
     "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
@@ -801,15 +754,15 @@ Gen4 plan same as above
   "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 'route1'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and TABLE_NAME = :TABLE_NAME",
-    "SysTableTableName": "[TABLE_NAME:VARBINARY(\"route1\")]",
-    "SysTableTableSchema": "[VARBINARY(\"ks\")]",
+    "SysTableTableName": "[TABLE_NAME:VARCHAR(\"route1\")]",
+    "SysTableTableSchema": "[VARCHAR(\"ks\")]",
     "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
@@ -822,14 +775,14 @@ Gen4 plan same as above
   "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' and other_column = 42",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and other_column = 42",
-    "SysTableTableSchema": "[VARBINARY(\"ks\")]",
+    "SysTableTableSchema": "[VARCHAR(\"ks\")]",
     "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
@@ -842,14 +795,14 @@ Gen4 plan same as above
   "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA = 'ks' and other_column = 42) OR (TABLE_SCHEMA = 'ks' and foobar = 'value')",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and (other_column = 42 or TABLE_SCHEMA = 'ks') and (other_column = 42 or foobar = 'value')",
-    "SysTableTableSchema": "[VARBINARY(\"ks\")]",
+    "SysTableTableSchema": "[VARCHAR(\"ks\")]",
     "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
@@ -862,7 +815,7 @@ Gen4 plan same as above
   "Original": "select x.table_name from (select a.* from information_schema.key_column_usage a) x",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -882,7 +835,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "JoinVars": {
       "x_id": 1
     },
@@ -890,7 +843,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -901,7 +854,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -923,7 +876,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2",
+    "JoinColumnIndexes": "L:1",
     "JoinVars": {
       "x_id": 0
     },
@@ -931,7 +884,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -942,7 +895,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -966,7 +919,7 @@ Gen4 plan same as above
   "Original": "select a.*, b.* from information_schema.a a, information_schema.b b",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -985,14 +938,14 @@ Gen4 plan same as above
   "Original": "select a.table_name from (select * from information_schema.key_column_usage a where a.table_name = 'users') a join (select * from information_schema.referential_constraints where table_name = 'users') b",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select a.table_name from (select * from information_schema.key_column_usage as a where 1 != 1) as a join (select * from information_schema.referential_constraints where 1 != 1) as b where 1 != 1",
     "Query": "select a.table_name from (select * from information_schema.key_column_usage as a where a.table_name = :a_table_name) as a join (select * from information_schema.referential_constraints where table_name = :table_name) as b",
-    "SysTableTableName": "[a_table_name:VARBINARY(\"users\"), table_name:VARBINARY(\"users\")]",
+    "SysTableTableName": "[a_table_name:VARCHAR(\"users\"), table_name:VARCHAR(\"users\")]",
     "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
   }
 }
@@ -1001,14 +954,14 @@ Gen4 plan same as above
   "Original": "select a.table_name from (select * from information_schema.key_column_usage a where a.table_name = 'users') a join (select * from information_schema.referential_constraints where table_name = 'users') b",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select a.table_name from (select * from information_schema.key_column_usage as a where 1 != 1) as a, (select * from information_schema.referential_constraints where 1 != 1) as b where 1 != 1",
     "Query": "select a.table_name from (select * from information_schema.key_column_usage as a where a.table_name = :a_table_name) as a, (select * from information_schema.referential_constraints where table_name = :table_name) as b",
-    "SysTableTableName": "[a_table_name:VARBINARY(\"users\"), table_name:VARBINARY(\"users\")]",
+    "SysTableTableName": "[a_table_name:VARCHAR(\"users\"), table_name:VARCHAR(\"users\")]",
     "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
   }
 }
@@ -1020,14 +973,14 @@ Gen4 plan same as above
   "Original": "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select sum(found) from (select 1 as found from information_schema.`tables` where 1 != 1 union all (select 1 as found from information_schema.views where 1 != 1)) as t where 1 != 1",
     "Query": "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1)) as t",
-    "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"music\")]",
+    "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"music\")]",
     "Table": "information_schema.`tables`"
   }
 }
@@ -1048,26 +1001,26 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
             },
             "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
             "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname",
-            "SysTableTableSchema": "[VARBINARY(\"music\")]",
+            "SysTableTableSchema": "[VARCHAR(\"music\")]",
             "Table": "information_schema.`tables`"
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
             },
             "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
             "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1",
-            "SysTableTableSchema": "[VARBINARY(\"music\")]",
+            "SysTableTableSchema": "[VARCHAR(\"music\")]",
             "Table": "information_schema.views"
           }
         ]
@@ -1080,14 +1033,14 @@ Gen4 plan same as above
   "Original": "select found from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select found from (select 1 as found from information_schema.`tables` where 1 != 1 union all (select 1 as found from information_schema.views where 1 != 1)) as t where 1 != 1",
     "Query": "select found from (select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1)) as t",
-    "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"music\")]",
+    "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"music\")]",
     "Table": "information_schema.`tables`"
   }
 }
@@ -1102,26 +1055,26 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
         },
         "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
-        "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname and table_schema = :__vtschemaname",
-        "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"Music\")]",
+        "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname",
+        "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"Music\")]",
         "Table": "information_schema.`tables`"
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
         },
         "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
-        "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname and table_schema = :__vtschemaname limit 1",
-        "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"user\")]",
+        "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1",
+        "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"user\")]",
         "Table": "information_schema.views"
       }
     ]
@@ -1132,14 +1085,14 @@ Gen4 plan same as above
   "Original": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1 union all (select 1 as found from information_schema.views where 1 != 1)",
-    "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname and table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname and table_schema = :__vtschemaname limit 1)",
-    "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"Music\"), VARBINARY(\"music\"), VARBINARY(\"user\")]",
+    "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1)",
+    "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"Music\"), VARCHAR(\"music\"), VARCHAR(\"user\")]",
     "Table": "information_schema.`tables`"
   }
 }
@@ -1154,26 +1107,26 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
         },
         "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
-        "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname and table_schema = :__vtschemaname",
-        "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"Music\")]",
+        "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname",
+        "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"Music\")]",
         "Table": "information_schema.`tables`"
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
         },
         "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
-        "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname and table_schema = :__vtschemaname limit 1",
-        "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"user\")]",
+        "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1",
+        "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"user\")]",
         "Table": "information_schema.views"
       }
     ]
@@ -1184,14 +1137,14 @@ Gen4 plan same as above
   "Original": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1 union all (select 1 as found from information_schema.views where 1 != 1)",
-    "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname and table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname and table_schema = :__vtschemaname limit 1)",
-    "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"Music\"), VARBINARY(\"music\"), VARBINARY(\"user\")]",
+    "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1)",
+    "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"Music\"), VARCHAR(\"music\"), VARCHAR(\"user\")]",
     "Table": "information_schema.`tables`"
   }
 }
@@ -1214,40 +1167,40 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
             },
             "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
             "Query": "select 1 as found from information_schema.`tables` where table_name = :table_name2 and table_name = :table_name3",
-            "SysTableTableName": "[table_name2:VARBINARY(\"music\"), table_name3:VARBINARY(\"Music\")]",
+            "SysTableTableName": "[table_name2:VARCHAR(\"music\"), table_name3:VARCHAR(\"Music\")]",
             "Table": "information_schema.`tables`"
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
             },
             "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
             "Query": "select 1 as found from information_schema.views where table_name = :table_name4 and table_name = :table_name5 limit 1",
-            "SysTableTableName": "[table_name4:VARBINARY(\"music\"), table_name5:VARBINARY(\"user\")]",
+            "SysTableTableName": "[table_name4:VARCHAR(\"music\"), table_name5:VARCHAR(\"user\")]",
             "Table": "information_schema.views"
           }
         ]
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
         },
         "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
         "Query": "select 1 as found from information_schema.`tables` where table_name = :table_name and table_name = :table_name1 and :__sq_has_values1",
-        "SysTableTableName": "[table_name1:VARBINARY(\"Music\"), table_name:VARBINARY(\"music\")]",
+        "SysTableTableName": "[table_name1:VARCHAR(\"Music\"), table_name:VARCHAR(\"music\")]",
         "Table": "information_schema.`tables`"
       }
     ]
@@ -1258,14 +1211,14 @@ Gen4 plan same as above
   "Original": "select 1 as found from information_schema.`tables` where table_name = 'music' and table_name = 'Music' and exists (select 1 as found from information_schema.`tables` where table_name = 'music' and table_name = 'Music' union all (select 1 as found from information_schema.views where table_name = 'music' and table_name = 'user' limit 1))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
     "Query": "select 1 as found from information_schema.`tables` where table_name = :table_name and table_name = :table_name1 and exists (select 1 as found from information_schema.`tables` where table_name = :table_name2 and table_name = :table_name3 union all (select 1 as found from information_schema.views where table_name = :table_name4 and table_name = :table_name5 limit 1))",
-    "SysTableTableName": "[table_name1:VARBINARY(\"Music\"), table_name2:VARBINARY(\"music\"), table_name3:VARBINARY(\"Music\"), table_name4:VARBINARY(\"music\"), table_name5:VARBINARY(\"user\"), table_name:VARBINARY(\"music\")]",
+    "SysTableTableName": "[table_name1:VARCHAR(\"Music\"), table_name2:VARCHAR(\"music\"), table_name3:VARCHAR(\"Music\"), table_name4:VARCHAR(\"music\"), table_name5:VARCHAR(\"user\"), table_name:VARCHAR(\"music\")]",
     "Table": "information_schema.`tables`"
   }
 }
@@ -1289,19 +1242,19 @@ Gen4 plan same as above
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectDBA",
+                "Variant": "DBA",
                 "Keyspace": {
                   "Name": "main",
                   "Sharded": false
                 },
                 "FieldQuery": "select id from information_schema.`table` as t where 1 != 1",
                 "Query": "select id from information_schema.`table` as t where t.schema_name = :__vtschemaname",
-                "SysTableTableSchema": "[VARBINARY(\"a\")]",
+                "SysTableTableSchema": "[VARCHAR(\"a\")]",
                 "Table": "information_schema.`table`"
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectDBA",
+                "Variant": "DBA",
                 "Keyspace": {
                   "Name": "main",
                   "Sharded": false
@@ -1322,14 +1275,14 @@ Gen4 plan same as above
   "Original": "select id from (select id from information_schema.table t where t.schema_name = 'a' union select id from information_schema.columns) dt",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select id from (select id from information_schema.`table` as t where 1 != 1 union select id from information_schema.`columns` where 1 != 1) as dt where 1 != 1",
     "Query": "select id from (select id from information_schema.`table` as t where t.schema_name = :__vtschemaname union select id from information_schema.`columns`) as dt",
-    "SysTableTableSchema": "[VARBINARY(\"a\")]",
+    "SysTableTableSchema": "[VARCHAR(\"a\")]",
     "Table": "information_schema.`table`"
   }
 }
@@ -1355,19 +1308,19 @@ Gen4 plan same as above
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectDBA",
+                "Variant": "DBA",
                 "Keyspace": {
                   "Name": "main",
                   "Sharded": false
                 },
                 "FieldQuery": "select id from information_schema.`table` as t where 1 != 1",
                 "Query": "select id from information_schema.`table` as t where t.schema_name = :__vtschemaname",
-                "SysTableTableSchema": "[VARBINARY(\"a\")]",
+                "SysTableTableSchema": "[VARCHAR(\"a\")]",
                 "Table": "information_schema.`table`"
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectDBA",
+                "Variant": "DBA",
                 "Keyspace": {
                   "Name": "main",
                   "Sharded": false
@@ -1382,7 +1335,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -1399,14 +1352,14 @@ Gen4 plan same as above
   "Original": "select id from information_schema.random t where t.col in (select id from information_schema.table t where t.schema_name = 'a' union select id from information_schema.columns)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select id from information_schema.random as t where 1 != 1",
     "Query": "select id from information_schema.random as t where t.col in (select id from information_schema.`table` as t where t.schema_name = :__vtschemaname union select id from information_schema.`columns`)",
-    "SysTableTableSchema": "[VARBINARY(\"a\")]",
+    "SysTableTableSchema": "[VARCHAR(\"a\")]",
     "Table": "information_schema.random"
   }
 }
@@ -1419,15 +1372,15 @@ Gen4 plan same as above
   "Original": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "FieldQuery": "select * from (select * from information_schema.key_column_usage as kcu where 1 != 1 union select * from information_schema.key_column_usage as kcu where 1 != 1) as kcu where 1 != 1",
     "Query": "select * from (select * from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name and constraint_name = 'primary' union select * from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name1 and constraint_name = 'primary') as kcu",
-    "SysTableTableName": "[kcu_table_name1:VARBINARY(\"music\"), kcu_table_name:VARBINARY(\"user_extra\")]",
-    "SysTableTableSchema": "[VARBINARY(\"user\"), VARBINARY(\"user\")]",
+    "SysTableTableName": "[kcu_table_name1:VARCHAR(\"music\"), kcu_table_name:VARCHAR(\"user_extra\")]",
+    "SysTableTableSchema": "[VARCHAR(\"user\"), VARCHAR(\"user\")]",
     "Table": "information_schema.key_column_usage"
   }
 }

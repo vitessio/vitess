@@ -31,7 +31,7 @@ type rewriter struct {
 	err          error
 }
 
-func queryRewrite(semTable *semantics.SemTable, reservedVars *sqlparser.ReservedVars, statement sqlparser.SelectStatement) error {
+func queryRewrite(semTable *semantics.SemTable, reservedVars *sqlparser.ReservedVars, statement sqlparser.Statement) error {
 	r := rewriter{
 		semTable:     semTable,
 		reservedVars: reservedVars,
@@ -147,8 +147,8 @@ func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.Cursor, node *sqlpars
 	}
 
 	r.inSubquery++
-	argName := r.reservedVars.ReserveHasValuesSubQuery()
-	semTableSQ.SetArgName(argName)
+	hasValuesArg := r.reservedVars.ReserveHasValuesSubQuery()
+	semTableSQ.SetHasValuesArg(hasValuesArg)
 	cursor.Replace(semTableSQ)
 	return nil
 }

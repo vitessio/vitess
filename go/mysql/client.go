@@ -167,14 +167,6 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 		}
 	}
 
-	// Once we are connected to the server, we set the collation for this connection.
-	// This step usually occurs during the handshake, however, the handshake protocol
-	// grants us 8 bits for the collation ID, which is lower than the range of supported
-	// collations. For this reason, we manually set the collation for the connection.
-	if err := setCollationForConnection(c, params); err != nil {
-		return nil, err
-	}
-
 	return c, nil
 }
 
@@ -202,62 +194,16 @@ func (c *Conn) Ping() error {
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected packet type: %d", data[0])
 }
 
-// setCollationForConnection sets the connection's collation to the given collation.
-//
-// The charset should always be set as it has a default value ("utf8mb4"),
-// however, one can always override its default to an empty string, which
-// is not a problem as long as the user has specified the collation.
-// If the collation flag was not specified when starting the tablet, we
-// attempt to find the default collation for the current charset.
-// If either the collation and charset are missing, or the resolution of
-// the default collation using the given charset fails, we error out.
-//
-// This method is also responsible for creating and storing the collation
-// environment that will be used by this connection. The collation environment
-// allows us to make informed decisions around charset's default collation
-// depending on the MySQL/MariaDB version we are using.
-func setCollationForConnection(c *Conn, params *ConnParams) error {
-	// Once we have done the initial handshake with MySQL, we receive the server version
-	// string. This string is critical as it enables the instantiation of a new collation
-	// environment variable.
-	// Certain MySQL or MariaDB versions might have different default collations for some
-	// charsets, so it is important to use a database-version-aware collation system/API.
-	env := collations.NewEnvironment(c.ServerVersion)
-	coll, err := env.ResolveCollation(params.Charset, params.Collation)
-	if err != nil {
-		return err
-	}
-
-	// We send a query to MySQL to set the connection's collation.
-	// See: https://dev.mysql.com/doc/refman/8.0/en/charset-connection.html
-	querySetCollation := fmt.Sprintf("SET collation_connection = %s;", coll.Name())
-	if _, err := c.ExecuteFetch(querySetCollation, 1, false); err != nil {
-		return err
-	}
-
-	c.Collation = coll.ID()
-	return nil
-}
-
-// getHandshakeCharacterSet returns the collation ID of DefaultCollation in an
-// 8 bits integer which will be used to feed the handshake protocol's packet.
-func getHandshakeCharacterSet() (uint8, error) {
-	coll := collations.Local().LookupByName(DefaultCollation)
-	if coll == nil {
-		// theoretically, this should never happen from an end user perspective
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot resolve collation ID for collation: '%s'", DefaultCollation)
-	}
-	if coll.ID() > 255 {
-		// same here, this should never happen
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "collation ID for '%s' will overflow, value: %d", DefaultCollation, coll.ID())
-	}
-	return uint8(coll.ID()), nil
-}
-
 // clientHandshake handles the client side of the handshake.
 // Note the connection can be closed while this is running.
 // Returns a SQLError.
 func (c *Conn) clientHandshake(params *ConnParams) error {
+	// if EnableQueryInfo is set, make sure that all queries starting with the handshake
+	// will actually process the INFO fields in QUERY_OK packets
+	if params.EnableQueryInfo {
+		c.enableQueryInfo = true
+	}
+
 	// Wait for the server initial handshake packet, and parse it.
 	data, err := c.readPacket()
 	if err != nil {
@@ -282,24 +228,7 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 		c.Capabilities = capabilities & (CapabilityClientDeprecateEOF)
 	}
 
-	// The MySQL handshake package uses the "character set" field to define
-	// which character set must be used. But, the value we give to this field
-	// correspond in fact to the collation ID. MySQL will then deduce what the
-	// character set for this collation ID is, and use it.
-	// Problem is, this field is 8-bits long meaning that the ID can range from
-	// 0 to 255, which is smaller than the range of IDs we support.
-	// If, for instance, we used the collation "utf8mb4_0900_as_ci" that has an
-	// ID equal to 305, the value would overflow when transformed into an 8 bits
-	// integer.
-	// To alleviate this issue, we use a default and safe collation for the handshake
-	// and once the connection is established, we will manually set the collation.
-	// The code below gets that default character set for the Handshake packet.
-	//
-	// Note: this character set might be different from the one we will use
-	// for the connection.
-	//
-	// See: https://dev.mysql.com/doc/internals/en/connection-phase-packets.html
-	characterSet, err := getHandshakeCharacterSet()
+	charset, err := collations.Local().ParseConnectionCharset(params.Charset)
 	if err != nil {
 		return err
 	}
@@ -340,7 +269,7 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 		}
 
 		// Send the SSLRequest packet.
-		if err := c.writeSSLRequest(capabilities, characterSet, params); err != nil {
+		if err := c.writeSSLRequest(capabilities, charset, params); err != nil {
 			return err
 		}
 
@@ -371,7 +300,7 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 
 	// Build and send our handshake response 41.
 	// Note this one will never have SSL flag on.
-	if err := c.writeHandshakeResponse41(capabilities, scrambledPassword, characterSet, params); err != nil {
+	if err := c.writeHandshakeResponse41(capabilities, scrambledPassword, charset, params); err != nil {
 		return err
 	}
 
@@ -473,7 +402,7 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 	if !ok {
 		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no character set")
 	}
-	c.CharacterSet = characterSet
+	c.CharacterSet = collations.ID(characterSet)
 
 	// Status flags. Ignored.
 	_, pos, ok = readUint16(data, pos)

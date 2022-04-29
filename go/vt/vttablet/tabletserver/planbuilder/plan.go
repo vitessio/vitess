@@ -152,7 +152,10 @@ func (pt PlanType) MarshalJSON() ([]byte, error) {
 // Plan contains the parameters for executing a request.
 type Plan struct {
 	PlanID PlanType
-	Table  *schema.Table
+	// When the query indicates a single table
+	Table *schema.Table
+	// SELECT, UPDATE, DELETE statements may list multiple tables
+	AllTables []*schema.Table
 
 	// Permissions stores the permissions for the tables accessed in the query.
 	Permissions []Permission
@@ -181,6 +184,18 @@ func (plan *Plan) TableName() sqlparser.TableIdent {
 		tableName = plan.Table.Name
 	}
 	return tableName
+}
+
+// TableNames returns the table names for all tables in the plan.
+func (plan *Plan) TableNames() (names []string) {
+	if len(plan.AllTables) == 0 {
+		tableName := plan.TableName()
+		return []string{tableName.String()}
+	}
+	for _, table := range plan.AllTables {
+		names = append(names, table.Name.String())
+	}
+	return names
 }
 
 // Build builds a plan based on the schema.
@@ -278,7 +293,7 @@ func BuildStreaming(sql string, tables map[string]*schema.Table, isReservedConn 
 		if stmt.Lock != sqlparser.NoLock {
 			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "select with lock not allowed for streaming")
 		}
-		plan.Table = lookupTable(stmt.From, tables)
+		plan.Table, plan.AllTables = lookupTables(stmt.From, tables)
 	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
 		// pass
 	default:

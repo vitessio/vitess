@@ -53,7 +53,7 @@ func (l *Limit) GetTableName() string {
 
 // TryExecute satisfies the Primitive interface.
 func (l *Limit) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	count, offset, err := l.getCountAndOffset(bindVars)
+	count, offset, err := l.getCountAndOffset(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -83,10 +83,12 @@ func (l *Limit) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 
 // TryStreamExecute satisfies the Primitive interface.
 func (l *Limit) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	count, offset, err := l.getCountAndOffset(bindVars)
+	count, offset, err := l.getCountAndOffset(vcursor, bindVars)
 	if err != nil {
 		return err
 	}
+
+	bindVars = copyBindVars(bindVars)
 
 	// When offset is present, we hijack the limit value so we can calculate
 	// the offset in memory from the result of the scatter query with count + offset.
@@ -159,8 +161,8 @@ func (l *Limit) NeedsTransaction() bool {
 	return l.Input.NeedsTransaction()
 }
 
-func (l *Limit) getCountAndOffset(bindVars map[string]*querypb.BindVariable) (count int, offset int, err error) {
-	env := evalengine.EnvWithBindVars(bindVars)
+func (l *Limit) getCountAndOffset(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (count int, offset int, err error) {
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	count, err = getIntFrom(env, l.Count)
 	if err != nil {
 		return
@@ -197,7 +199,7 @@ func getIntFrom(env *evalengine.ExpressionEnv, expr evalengine.Expr) (int, error
 }
 
 func (l *Limit) description() PrimitiveDescription {
-	other := map[string]interface{}{}
+	other := map[string]any{}
 
 	if l.Count != nil {
 		other["Count"] = evalengine.FormatExpr(l.Count)

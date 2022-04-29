@@ -43,7 +43,6 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -73,12 +72,18 @@ type iExecute interface {
 	ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
 	ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
 
+	showVitessReplicationStatus(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
+	showShards(ctx context.Context, filter *sqlparser.ShowFilter, destTabletType topodatapb.TabletType) (*sqltypes.Result, error)
+	showTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
+	showVitessMetadata(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
+	setVitessMetadata(ctx context.Context, name, value string) error
+
 	// TODO: remove when resolver is gone
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
 	VSchema() *vindexes.VSchema
 }
 
-//VSchemaOperator is an interface to Vschema Operations
+// VSchemaOperator is an interface to Vschema Operations
 type VSchemaOperator interface {
 	GetCurrentSrvVschema() *vschemapb.SrvVSchema
 	UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error
@@ -129,10 +134,6 @@ func newVCursorImpl(
 		return nil, err
 	}
 
-	// With DiscoveryGateway transactions are only allowed on primary.
-	if UsingLegacyGateway() && safeSession.InTransaction() && tabletType != topodatapb.TabletType_PRIMARY {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for primary tablet type, current type: %v", tabletType)
-	}
 	var ts *topo.Server
 	// We don't have access to the underlying TopoServer if this vtgate is
 	// filtering keyspaces because we don't have an accurate view of the topo.
@@ -144,7 +145,6 @@ func newVCursorImpl(
 	}
 
 	// we only support collations for the new TabletGateway implementation
-	collationEnv := collations.Local()
 	var connCollation collations.ID
 	if executor != nil {
 		if gw, isTabletGw := executor.resolver.resolver.GetGateway().(*TabletGateway); isTabletGw {
@@ -152,11 +152,7 @@ func newVCursorImpl(
 		}
 	}
 	if connCollation == collations.Unknown {
-		coll, err := collationEnv.ResolveCollation("", "")
-		if err != nil {
-			panic("should never happen: don't know how to resolve default collation")
-		}
-		connCollation = coll.ID()
+		connCollation = collations.Default()
 	}
 
 	return &vcursorImpl{
@@ -175,6 +171,16 @@ func newVCursorImpl(
 		topoServer:      ts,
 		warnShardedOnly: warnShardedOnly,
 	}, nil
+}
+
+// HasSystemVariables returns whether the session has set system variables or not
+func (vc *vcursorImpl) HasSystemVariables() bool {
+	return vc.safeSession.HasSystemVariables()
+}
+
+// GetSystemVariables takes a visitor function that will save each system variables of the session
+func (vc *vcursorImpl) GetSystemVariables(f func(k string, v string)) {
+	vc.safeSession.GetSystemVariables(f)
 }
 
 // ConnCollation returns the collation of this session
@@ -216,6 +222,15 @@ func (vc *vcursorImpl) ErrorGroupCancellableContext() (*errgroup.Group, func()) 
 	g, ctx := errgroup.WithContext(vc.ctx)
 	vc.ctx = ctx
 	return g, func() {
+		vc.ctx = origCtx
+	}
+}
+
+// SetContextWithValue implements the VCursor interface.
+func (vc *vcursorImpl) SetContextWithValue(k, v interface{}) func() {
+	origCtx := vc.ctx
+	vc.ctx = context.WithValue(vc.ctx, k, v)
+	return func() {
 		vc.ctx = origCtx
 	}
 }
@@ -315,14 +330,22 @@ func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 		return nil, errNoDbAvailable
 	}
 
-	// Looks for any sharded keyspace if present, otherwise take any keyspace.
+	var keyspaces = make([]*vindexes.Keyspace, 0, len(vc.vschema.Keyspaces))
 	for _, ks := range vc.vschema.Keyspaces {
-		keyspace = ks.Keyspace
-		if keyspace.Sharded {
-			return keyspace, nil
+		keyspaces = append(keyspaces, ks.Keyspace)
+	}
+	sort.Slice(keyspaces, func(i, j int) bool {
+		return keyspaces[i].Name < keyspaces[j].Name
+	})
+
+	// Look for any sharded keyspace if present, otherwise take the first keyspace,
+	// sorted alphabetically
+	for _, ks := range keyspaces {
+		if ks.Sharded {
+			return ks, nil
 		}
 	}
-	return keyspace, nil
+	return keyspaces[0], nil
 }
 
 func (vc *vcursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
@@ -361,25 +384,28 @@ func (vc *vcursorImpl) AllKeyspace() ([]*vindexes.Keyspace, error) {
 	return kss, nil
 }
 
+// FindKeyspace implements the VSchema interface
+func (vc *vcursorImpl) FindKeyspace(keyspace string) (*vindexes.Keyspace, error) {
+	if len(vc.vschema.Keyspaces) == 0 {
+		return nil, errNoDbAvailable
+	}
+	for _, ks := range vc.vschema.Keyspaces {
+		if ks.Keyspace.Name == keyspace {
+			return ks.Keyspace, nil
+		}
+	}
+	return nil, nil
+}
+
 // Planner implements the ContextVSchema interface
 func (vc *vcursorImpl) Planner() plancontext.PlannerVersion {
 	if vc.safeSession.Options != nil &&
 		vc.safeSession.Options.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
 		return vc.safeSession.Options.PlannerVersion
 	}
-	switch strings.ToLower(*plannerVersion) {
-	case "v3":
-		return planbuilder.V3
-	case "gen4":
-		return planbuilder.Gen4
-	case "gen4greedy", "greedy":
-		return planbuilder.Gen4GreedyOnly
-	case "left2right":
-		return planbuilder.Gen4Left2Right
-	case "gen4fallback":
-		return planbuilder.Gen4WithFallback
-	case "gen4comparev3":
-		return planbuilder.Gen4CompareV3
+	version, done := plancontext.PlannerNameToVersion(*plannerVersion)
+	if done {
+		return version
 	}
 
 	log.Warning("unknown planner version configured. using the default")
@@ -588,7 +614,7 @@ func ignoreKeyspace(keyspace string) bool {
 	return keyspace == "" || sqlparser.SystemSchema(keyspace)
 }
 
-func (vc *vcursorImpl) SetUDV(key string, value interface{}) error {
+func (vc *vcursorImpl) SetUDV(key string, value any) error {
 	bindValue, err := sqltypes.BuildBindVariable(value)
 	if err != nil {
 		return err
@@ -601,7 +627,7 @@ func (vc *vcursorImpl) SetSysVar(name string, expr string) {
 	vc.safeSession.SetSystemVariable(name, expr)
 }
 
-//NeedsReservedConn implements the SessionActions interface
+// NeedsReservedConn implements the SessionActions interface
 func (vc *vcursorImpl) NeedsReservedConn() {
 	vc.safeSession.SetReservedConn(true)
 }
@@ -633,19 +659,6 @@ func (vc *vcursorImpl) Destination() key.Destination {
 // TabletType implements the ContextVSchema interface
 func (vc *vcursorImpl) TabletType() topodatapb.TabletType {
 	return vc.tabletType
-}
-
-// SubmitOnlineDDL implements the VCursor interface
-func (vc *vcursorImpl) SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error {
-	if vc.topoServer == nil {
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "Unable to apply DDL toposerver unavailable, ensure this vtgate is not using filtered keyspaces")
-	}
-	conn, err := vc.topoServer.ConnForCell(vc.ctx, topo.GlobalCell)
-	if err != nil {
-		return err
-	}
-	// Submit an online schema change by writing a migration request in topo
-	return onlineDDl.WriteTopo(vc.ctx, conn, schema.MigrationRequestsPath())
 }
 
 func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sqlparser.MarginComments) []*querypb.BoundQuery {
@@ -791,7 +804,7 @@ func (vc *vcursorImpl) KeyspaceAvailable(ks string) bool {
 }
 
 // ErrorIfShardedF implements the VCursor interface
-func (vc *vcursorImpl) ErrorIfShardedF(ks *vindexes.Keyspace, warn, errFormat string, params ...interface{}) error {
+func (vc *vcursorImpl) ErrorIfShardedF(ks *vindexes.Keyspace, warn, errFormat string, params ...any) error {
 	if ks.Sharded {
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, errFormat, params...)
 	}
@@ -801,7 +814,7 @@ func (vc *vcursorImpl) ErrorIfShardedF(ks *vindexes.Keyspace, warn, errFormat st
 }
 
 // WarnUnshardedOnly implements the VCursor interface
-func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...interface{}) {
+func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...any) {
 	if vc.warnShardedOnly {
 		vc.warnings = append(vc.warnings, &querypb.QueryWarning{
 			Code:    mysql.ERNotSupportedYet,
@@ -911,4 +924,35 @@ func (vc *vcursorImpl) MessageStream(rss []*srvtopo.ResolvedShard, tableName str
 
 func (vc *vcursorImpl) VStream(rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
 	return vc.executor.ExecuteVStream(vc.ctx, rss, filter, gtid, callback)
+}
+
+func (vc *vcursorImpl) ShowExec(command sqlparser.ShowCommandType, filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
+	switch command {
+	case sqlparser.VitessReplicationStatus:
+		return vc.executor.showVitessReplicationStatus(vc.ctx, filter)
+	case sqlparser.VitessShards:
+		return vc.executor.showShards(vc.ctx, filter, vc.tabletType)
+	case sqlparser.VitessTablets:
+		return vc.executor.showTablets(filter)
+	case sqlparser.VitessVariables:
+		return vc.executor.showVitessMetadata(vc.ctx, filter)
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "bug: unexpected show command: %v", command)
+	}
+}
+
+func (vc *vcursorImpl) GetVSchema() *vindexes.VSchema {
+	return vc.vschema
+}
+
+func (vc *vcursorImpl) GetSrvVschema() *vschemapb.SrvVSchema {
+	return vc.vm.GetCurrentSrvVschema()
+}
+
+func (vc *vcursorImpl) SetExec(name string, value string) error {
+	return vc.executor.setVitessMetadata(vc.ctx, name, value)
+}
+
+func (vc *vcursorImpl) CanUseSetVar() bool {
+	return sqlparser.IsMySQL80AndAbove() && *setVarEnabled
 }

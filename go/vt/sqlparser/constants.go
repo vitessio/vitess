@@ -53,6 +53,7 @@ const (
 	// DDL strings.
 	CreateStr           = "create"
 	AlterStr            = "alter"
+	DeallocateStr       = "deallocate"
 	DropStr             = "drop"
 	RenameStr           = "rename"
 	TruncateStr         = "truncate"
@@ -65,6 +66,16 @@ const (
 	DropColVindexStr    = "on table drop vindex"
 	AddSequenceStr      = "add sequence"
 	AddAutoIncStr       = "add auto_increment"
+
+	// Partition and subpartition type strings
+	HashTypeStr  = "hash"
+	KeyTypeStr   = "key"
+	RangeTypeStr = "range"
+	ListTypeStr  = "list"
+
+	// Partition value range type strings
+	LessThanTypeStr = "less than"
+	InTypeStr       = "in"
 
 	// Online DDL hint
 	OnlineStr = "online"
@@ -102,6 +113,11 @@ const (
 	UseStr    = "use "
 	IgnoreStr = "ignore "
 	ForceStr  = "force "
+
+	// Index hints For types.
+	JoinForStr    = "join"
+	GroupByForStr = "group by"
+	OrderByForStr = "order by"
 
 	// Where.Type
 	WhereStr  = "where"
@@ -150,7 +166,6 @@ const (
 	UMinusStr   = "-"
 	TildaStr    = "~"
 	BangStr     = "!"
-	BinaryStr   = "binary "
 	Armscii8Str = "_armscii8"
 	ASCIIStr    = "_ascii"
 	Big5Str     = "_big5"
@@ -196,7 +211,6 @@ const (
 
 	// ConvertType.Operator
 	CharacterSetStr = " character set"
-	NoOperatorStr   = ""
 
 	// CollateAndCharset.Type
 	CollateStr = " collate"
@@ -245,41 +259,78 @@ const (
 	LowPriorityWriteStr = "low_priority write"
 
 	// ShowCommand Types
-	CharsetStr          = " charset"
-	CollationStr        = " collation"
-	ColumnStr           = " columns"
-	CreateDbStr         = " create database"
-	CreateEStr          = " create event"
-	CreateFStr          = " create function"
-	CreateProcStr       = " create procedure"
-	CreateTblStr        = " create table"
-	CreateTrStr         = " create trigger"
-	CreateVStr          = " create view"
-	DatabaseStr         = " databases"
-	FunctionCStr        = " function code"
-	FunctionStr         = " function status"
-	GtidExecGlobalStr   = " global gtid_executed"
-	IndexStr            = " indexes"
-	OpenTableStr        = " open tables"
-	PrivilegeStr        = " privileges"
-	ProcedureCStr       = " procedure code"
-	ProcedureStr        = " procedure status"
-	StatusGlobalStr     = " global status"
-	StatusSessionStr    = " status"
-	TableStr            = " tables"
-	TableStatusStr      = " table status"
-	TriggerStr          = " triggers"
-	VariableGlobalStr   = " global variables"
-	VariableSessionStr  = " variables"
-	VGtidExecGlobalStr  = " global vgtid_executed"
-	KeyspaceStr         = " keyspaces"
-	VitessMigrationsStr = " vitess_migrations"
-	WarningsStr         = " warnings"
+	CharsetStr                 = " charset"
+	CollationStr               = " collation"
+	ColumnStr                  = " columns"
+	CreateDbStr                = " create database"
+	CreateEStr                 = " create event"
+	CreateFStr                 = " create function"
+	CreateProcStr              = " create procedure"
+	CreateTblStr               = " create table"
+	CreateTrStr                = " create trigger"
+	CreateVStr                 = " create view"
+	DatabaseStr                = " databases"
+	EnginesStr                 = " engines"
+	FunctionCStr               = " function code"
+	FunctionStr                = " function status"
+	GtidExecGlobalStr          = " global gtid_executed"
+	IndexStr                   = " indexes"
+	OpenTableStr               = " open tables"
+	PluginsStr                 = " plugins"
+	PrivilegeStr               = " privileges"
+	ProcedureCStr              = " procedure code"
+	ProcedureStr               = " procedure status"
+	StatusGlobalStr            = " global status"
+	StatusSessionStr           = " status"
+	TableStr                   = " tables"
+	TableStatusStr             = " table status"
+	TriggerStr                 = " triggers"
+	VariableGlobalStr          = " global variables"
+	VariableSessionStr         = " variables"
+	VGtidExecGlobalStr         = " global vgtid_executed"
+	KeyspaceStr                = " keyspaces"
+	VitessMigrationsStr        = " vitess_migrations"
+	VitessReplicationStatusStr = " vitess_replication_status"
+	VitessShardsStr            = " vitess_shards"
+	VitessTabletsStr           = " vitess_tablets"
+	VitessTargetStr            = " vitess_target"
+	VitessVariablesStr         = " vitess_metadata variables"
+	VschemaTablesStr           = " vschema tables"
+	VschemaVindexesStr         = " vschema vindexes"
+	WarningsStr                = " warnings"
 
 	// DropKeyType strings
 	PrimaryKeyTypeStr = "primary key"
 	ForeignKeyTypeStr = "foreign key"
 	NormalKeyTypeStr  = "key"
+
+	// TrimType strings
+	BothTrimStr     = "both"
+	LeadingTrimStr  = "leading"
+	TrailingTrimStr = "trailing"
+
+	// TrimFuncType strings
+	NormalTrimStr = "trim"
+	LTrimStr      = "ltrim"
+	RTrimStr      = "rtrim"
+
+	// JSONAttributeType strings
+	DepthAttributeStr  = "json_depth"
+	ValidAttributeStr  = "json_valid"
+	TypeAttributeStr   = "json_type"
+	LengthAttributeStr = "json_length"
+
+	// JSONValueModifierType strings
+	JSONArrayAppendStr = "json_array_append"
+	JSONArrayInsertStr = "json_array_insert"
+	JSONInsertStr      = "json_insert"
+	JSONReplaceStr     = "json_replace"
+	JSONSetStr         = "json_set"
+
+	// JSONValueMergeType strings
+	JSONMergeStr         = "json_merge"
+	JSONMergePatchStr    = "json_merge_patch"
+	JSONMergePreserveStr = "json_merge_preserve"
 
 	// LockOptionType strings
 	NoneTypeStr      = "none"
@@ -365,6 +416,45 @@ const (
 	ShareModeLock
 )
 
+// Constants for Enum Type - TrimType
+const (
+	NoTrimType TrimType = iota
+	BothTrimType
+	LeadingTrimType
+	TrailingTrimType
+)
+
+// Constants for Enum Type - TrimFuncType
+const (
+	NormalTrimType TrimFuncType = iota
+	LTrimType
+	RTrimType
+)
+
+// Constants for Enum Type - JSONAttributeType
+const (
+	DepthAttributeType JSONAttributeType = iota
+	ValidAttributeType
+	TypeAttributeType
+	LengthAttributeType
+)
+
+// Constants for Enum Type - JSONValueModifierType
+const (
+	JSONArrayAppendType JSONValueModifierType = iota
+	JSONArrayInsertType
+	JSONInsertType
+	JSONReplaceType
+	JSONSetType
+)
+
+// Constants for Enum Type - JSONValueMergeType
+const (
+	JSONMergeType JSONValueMergeType = iota
+	JSONMergePatchType
+	JSONMergePreserveType
+)
+
 // Constants for Enum Type - WhereType
 const (
 	WhereClause WhereType = iota
@@ -432,7 +522,6 @@ const (
 	UMinusOp
 	TildaOp
 	BangOp
-	BinaryOp
 	NStringOp
 )
 
@@ -451,17 +540,19 @@ const (
 	DescOrder
 )
 
-// Constant for Enum Type - ConvertTypeOperator
+// Constant for Enum Type - IndexHintType
 const (
-	NoOperator ConvertTypeOperator = iota
-	CharacterSetOp
-)
-
-// Constant for Enum Type - IndexHintsType
-const (
-	UseOp IndexHintsType = iota
+	UseOp IndexHintType = iota
 	IgnoreOp
 	ForceOp
+)
+
+// Constant for Enum Type - IndexHintForType
+const (
+	NoForType IndexHintForType = iota
+	JoinForType
+	GroupByForType
+	OrderByForType
 )
 
 // Constant for Enum Type - PartitionSpecAction
@@ -483,6 +574,20 @@ const (
 	UpgradeAction
 )
 
+// Constant for Enum Type - PartitionByType
+const (
+	HashType PartitionByType = iota
+	KeyType
+	RangeType
+	ListType
+)
+
+// Constant for Enum Type - PartitionValueRangeType
+const (
+	LessThanType PartitionValueRangeType = iota
+	InType
+)
+
 // Constant for Enum Type - ExplainType
 const (
 	EmptyType ExplainType = iota
@@ -498,6 +603,19 @@ const (
 	IntoOutfile SelectIntoType = iota
 	IntoOutfileS3
 	IntoDumpfile
+)
+
+// Constant for Enum Type - DeallocateStmtType
+const (
+	DeallocateType DeallocateStmtType = iota
+	DropType
+)
+
+// Constant for Enum Type - JtOnResponseType
+const (
+	ErrorJSONType JtOnResponseType = iota
+	NullJSONType
+	DefaultJSONType
 )
 
 // Constant for Enum Type - CollateAndCharsetType
@@ -529,11 +647,13 @@ const (
 	CreateTr
 	CreateV
 	Database
+	Engines
 	FunctionC
 	Function
 	GtidExecGlobal
 	Index
 	OpenTable
+	Plugins
 	Privilege
 	ProcedureC
 	Procedure
@@ -546,6 +666,13 @@ const (
 	VariableSession
 	VGtidExecGlobal
 	VitessMigrations
+	VitessReplicationStatus
+	VitessShards
+	VitessTablets
+	VitessTarget
+	VitessVariables
+	VschemaTables
+	VschemaVindexes
 	Warnings
 	Keyspace
 )

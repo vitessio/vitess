@@ -189,7 +189,7 @@ func shardSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string]stri
 	return result, nil
 }
 
-func interactiveMultiSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, _ http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
+func interactiveMultiSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, _ http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]any, error) {
 	if err := r.ParseForm(); err != nil {
 		return nil, nil, nil, vterrors.Wrap(err, "cannot parse form")
 	}
@@ -198,7 +198,7 @@ func interactiveMultiSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.W
 
 	if keyspace == "" || shard == "" {
 		// display the list of possible shards to chose from
-		result := make(map[string]interface{})
+		result := make(map[string]any)
 		shards, err := shardSources(ctx, wr)
 		if err != nil {
 			result["Error"] = err.Error()
@@ -211,7 +211,7 @@ func interactiveMultiSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.W
 	submitButtonValue := r.FormValue("submit")
 	if submitButtonValue == "" {
 		// display the input form
-		result := make(map[string]interface{})
+		result := make(map[string]any)
 		result["Keyspace"] = keyspace
 		result["Shard"] = shard
 		result["DefaultSourceUID"] = "0"
