@@ -390,7 +390,7 @@ func TestReplicationStatus(t *testing.T) {
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE SQL_THREAD;`)
 	require.NoError(t, err)
 	// Check the replication status on tablets[1] and assert that the IO thread is read to be running and SQL thread is stopped
-	replicationStatus := cluster.GetReplicationPosition(t, tablets[1], utils.Hostname)
+	replicationStatus := cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
 	ioThread, sqlThread := utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
 	require.True(t, ioThread)
 	require.False(t, sqlThread)
@@ -398,7 +398,7 @@ func TestReplicationStatus(t *testing.T) {
 	// Stop replication on tablets[1] and verify that both the threads are reported as not running
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE;`)
 	require.NoError(t, err)
-	replicationStatus = cluster.GetReplicationPosition(t, tablets[1], utils.Hostname)
+	replicationStatus = cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
 	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
 	require.False(t, ioThread)
 	require.False(t, sqlThread)
@@ -406,7 +406,7 @@ func TestReplicationStatus(t *testing.T) {
 	// Start replication on tablets[1] and verify that both the threads are reported as running
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `START SLAVE;`)
 	require.NoError(t, err)
-	replicationStatus = cluster.GetReplicationPosition(t, tablets[1], utils.Hostname)
+	replicationStatus = cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
 	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
 	require.True(t, ioThread)
 	require.True(t, sqlThread)
@@ -414,7 +414,7 @@ func TestReplicationStatus(t *testing.T) {
 	// Stop IO_THREAD on tablets[1] and verify that the IO thread is read to be stopped and SQL thread is running
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE IO_THREAD;`)
 	require.NoError(t, err)
-	replicationStatus = cluster.GetReplicationPosition(t, tablets[1], utils.Hostname)
+	replicationStatus = cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
 	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
 	require.False(t, ioThread)
 	require.True(t, sqlThread)

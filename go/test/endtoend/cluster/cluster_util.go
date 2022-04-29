@@ -88,8 +88,8 @@ func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (strin
 	return pos, gtID
 }
 
-// GetReplicationPosition gets the replication status of given vttablet
-func GetReplicationPosition(t *testing.T, vttablet *Vttablet, hostname string) *replicationdatapb.Status {
+// GetReplicationStatus gets the replication status of given vttablet
+func GetReplicationStatus(t *testing.T, vttablet *Vttablet, hostname string) *replicationdatapb.Status {
 	ctx := context.Background()
 	vtablet := getTablet(vttablet.GrpcPort, hostname)
 	pos, err := tmClient.ReplicationStatus(ctx, vtablet)
