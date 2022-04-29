@@ -1722,15 +1722,21 @@ Gen4 plan same as above
     ],
     "Inputs": [
       {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
-        "Table": "`user`"
+        "OperatorType": "Limit",
+        "Count": "INT64(1)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` limit :__upper_limit",
+            "Table": "`user`"
+          }
+        ]
       },
       {
         "OperatorType": "Route",
@@ -1757,15 +1763,21 @@ Gen4 plan same as above
     ],
     "Inputs": [
       {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
-        "Table": "`user`"
+        "OperatorType": "Limit",
+        "Count": "INT64(1)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` limit :__upper_limit",
+            "Table": "`user`"
+          }
+        ]
       },
       {
         "OperatorType": "Route",
@@ -2614,7 +2626,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
-    "Query": "select u1.col from `user` as u1 where u1.id = 5 and exists (select u2.`name` from `user` as u2 where u2.id = 5)",
+    "Query": "select u1.col from `user` as u1 where u1.id = 5 and exists (select 1 from `user` as u2 where u2.id = 5 limit 1)",
     "Table": "`user`",
     "Values": [
       "INT64(5)"
@@ -2637,7 +2649,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
-    "Query": "select u1.col from `user` as u1 where u1.id = 5 and not exists (select u2.`name` from `user` as u2 where u2.id = 5)",
+    "Query": "select u1.col from `user` as u1 where u1.id = 5 and not exists (select 1 from `user` as u2 where u2.id = 5 limit 1)",
     "Table": "`user`",
     "Values": [
       "INT64(5)"
@@ -2667,8 +2679,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select u2.`name` from `user` as u2 where 1 != 1",
-        "Query": "select u2.`name` from `user` as u2 where u2.id = 5",
+        "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
+        "Query": "select 1 from `user` as u2 where u2.id = 5 limit 1",
         "Table": "`user`",
         "Values": [
           "INT64(5)"
@@ -2706,8 +2718,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select u2.`name` from `user` as u2 where 1 != 1",
-        "Query": "select u2.`name` from `user` as u2 where u2.id = 5",
+        "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
+        "Query": "select 1 from `user` as u2 where u2.id = 5 limit 1",
         "Table": "`user`",
         "Values": [
           "INT64(5)"

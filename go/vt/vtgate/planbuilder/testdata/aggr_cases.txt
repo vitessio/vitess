@@ -2496,7 +2496,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select count(*) from `user` where 1 != 1",
-        "Query": "select count(*) from `user` where exists (select 1 from user_extra where user_id = `user`.id group by user_id having max(col) \u003e 10)",
+        "Query": "select count(*) from `user` where exists (select 1 from user_extra where user_id = `user`.id group by user_id having max(col) \u003e 10 limit 1)",
         "Table": "`user`"
       }
     ]
@@ -2518,7 +2518,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select count(*) from `user` where 1 != 1",
-        "Query": "select count(*) from `user` where exists (select 1 from user_extra where user_id = `user`.id group by user_id having max(col) \u003e 10)",
+        "Query": "select count(*) from `user` where exists (select 1 from user_extra where user_id = `user`.id group by user_id having max(col) \u003e 10 limit 1)",
         "Table": "`user`"
       }
     ]
