@@ -25,9 +25,11 @@ package replicationdata;
 // flavor-specific command and parsed into a Position and fields.
 message Status {
   string position = 1;
-  // These two fields were removed in Vitess 14 and replaced by the io_state and sql_state fields
-  reserved 2, 3;
-  reserved "io_thread_running", "sql_thread_running";
+  // These fields should be removed in Vitess 15+ and fully replaced by the io_state and sql_state fields
+  // reserved 2, 3;
+  // reserved "io_thread_running", "sql_thread_running";
+  bool io_thread_running = 2;
+  bool sql_thread_running = 3;
   uint32 replication_lag_seconds = 4;
   string source_host = 5;
   int32 source_port = 6;
