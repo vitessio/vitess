@@ -75,7 +75,7 @@ func (s *ReplicationStatus) SQLHealthy() bool {
 
 // ReplicationStatusToProto translates a Status to proto3.
 func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
-	return &replicationdatapb.Status{
+	replstatuspb := &replicationdatapb.Status{
 		Position:              EncodePosition(s.Position),
 		RelayLogPosition:      EncodePosition(s.RelayLogPosition),
 		FilePosition:          EncodePosition(s.FilePosition),
@@ -91,6 +91,21 @@ func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 		SqlState:              int32(s.SQLState),
 		LastSqlError:          s.LastSQLError,
 	}
+
+	// We need to be able to send gRPC response messages from v14 and newer tablets to
+	// v13 and older clients. The older clients will not be processing the IoState or
+	// SqlState values in the message but instead looking at the IoThreadRunning and
+	// SqlThreadRunning booleans so we need to map and share this dual state.
+	// Note: v13 and older clients considered the IO thread state of connecting to
+	//       be equal to running. That is why we do so here when mapping the states.
+	// This backwards compatibility can be removed in v15+.
+	if s.IOState == ReplicationStateRunning || s.IOState == ReplicationStateConnecting {
+		replstatuspb.IoThreadRunning = true
+	}
+	if s.SQLState == ReplicationStateRunning {
+		replstatuspb.SqlThreadRunning = true
+	}
+	return replstatuspb
 }
 
 // ProtoToReplicationStatus translates a proto Status, or panics.
