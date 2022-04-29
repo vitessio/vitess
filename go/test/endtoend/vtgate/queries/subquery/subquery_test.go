@@ -91,3 +91,37 @@ func TestSubqueryInINClause(t *testing.T) {
 	utils.Exec(t, conn, "insert into t1(id1, id2) values(0,0),(1,1)")
 	utils.AssertMatches(t, conn, `SELECT id2 FROM t1 WHERE id1 IN (SELECT 1 FROM dual)`, `[[INT64(1)]]`)
 }
+
+func TestSubqueryInReference(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	defer utils.Exec(t, conn, `delete from t1`)
+
+	utils.Exec(t, conn, `insert into t1(id1, id2) values (1,10), (2, 20), (3, 30), (4, 40), (5, 50)`)
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ exists(select * from t1 where id1 = 3)`, `[[INT64(1)]]`)
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ exists(select * from t1 where id1 = 9)`, `[[INT64(0)]]`)
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ exists(select * from t1)`, `[[INT64(1)]]`)
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ exists(select * from t1 where id2 = 30)`, `[[INT64(1)]]`)
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ exists(select * from t1 where id2 = 9)`, `[[INT64(0)]]`)
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ count(*) from t1 where id2 = 9`, `[[INT64(0)]]`)
+
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ 1 in (select 1 from t1 where id1 = 3)`, `[[INT64(1)]]`)
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ 1 in (select 1 from t1 where id1 = 9)`, `[[INT64(0)]]`)
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ 1 in (select id1 from t1)`, `[[INT64(1)]]`)
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ 1 in (select 1 from t1 where id2 = 30)`, `[[INT64(1)]]`)
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ 1 in (select 1 from t1 where id2 = 9)`, `[[INT64(0)]]`)
+
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ 1 not in (select 1 from t1 where id1 = 3)`, `[[INT64(0)]]`)
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ 1 not in (select 1 from t1 where id1 = 9)`, `[[INT64(1)]]`)
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ 1 not in (select id1 from t1)`, `[[INT64(0)]]`)
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ 1 not in (select 1 from t1 where id2 = 30)`, `[[INT64(0)]]`)
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ 1 not in (select 1 from t1 where id2 = 9)`, `[[INT64(1)]]`)
+
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ (select id2 from t1 where id1 = 3)`, `[[INT64(30)]]`)
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ (select id2 from t1 where id1 = 9)`, `[[NULL]]`)
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ (select id1 from t1 where id2 = 30)`, `[[INT64(3)]]`)
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ (select id1 from t1 where id2 = 9)`, `[[NULL]]`)
+}
