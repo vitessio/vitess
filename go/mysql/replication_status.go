@@ -141,14 +141,14 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 	// need to revert to our assumptions about a binary state as that's all the older
 	// tablet can provide (really only applicable to the IO status as that is NOT binary
 	// but rather has three states: Running, Stopped, Connecting).
-	if s.IoState == int32(ReplicationStateUnknown) {
+	if replstatus.IOState == ReplicationStateUnknown {
 		if s.IoThreadRunning {
 			replstatus.IOState = ReplicationStateRunning
 		} else {
 			replstatus.IOState = ReplicationStateStopped
 		}
 	}
-	if s.SqlState == int32(ReplicationStateUnknown) {
+	if replstatus.SQLState == ReplicationStateUnknown {
 		if s.SqlThreadRunning {
 			replstatus.SQLState = ReplicationStateRunning
 		} else {

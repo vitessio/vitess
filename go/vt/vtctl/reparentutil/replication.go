@@ -150,7 +150,11 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
 	}
 
-	return stopStatus.Before.IoState == int32(mysql.ReplicationStateRunning) || stopStatus.Before.SqlState == int32(mysql.ReplicationStateRunning), nil
+	// v13 and older tablets will only provide the binary IoThreadRunning and
+	// SqlThreadRunning values while v14 and newer tablets will provide the
+	// non-binary replication states
+	return ((stopStatus.Before.IoState == int32(mysql.ReplicationStateRunning) || stopStatus.Before.IoThreadRunning) ||
+		(stopStatus.Before.SqlState == int32(mysql.ReplicationStateRunning) || stopStatus.Before.SqlThreadRunning)), nil
 }
 
 // SetReplicationSource is used to set the replication source on the specified
