@@ -19,6 +19,9 @@ package mysqlctl
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	rice "github.com/GeertJohan/go.rice"
@@ -29,15 +32,23 @@ const (
 	mysqlCtlRiceBoxLocation string = "../../../config"
 )
 
-var riceBoxFiles = []string{
-	"init_db.sql",
-}
-
 // TestMySQLCtlRiceBox validates that this rice box is fresh: that `make embed_config` has been run after
 // any changes to the embedded files
 func TestMySQLCtlRiceBox(t *testing.T) {
+	var riceBoxFiles []string
+
 	riceBox := rice.MustFindBox(mysqlCtlRiceBoxLocation)
 
+	err := filepath.Walk(mysqlCtlRiceBoxLocation,
+		func(path string, info os.FileInfo, err error) error {
+			require.NoError(t, err)
+			if !info.IsDir() {
+				name := strings.Replace(path, mysqlCtlRiceBoxLocation+"/", "", 1)
+				riceBoxFiles = append(riceBoxFiles, name)
+			}
+			return nil
+		})
+	require.NoError(t, err)
 	for _, fileName := range riceBoxFiles {
 		t.Run(fileName, func(t *testing.T) {
 			riceContents, err := riceBox.String(fileName)
