@@ -53,7 +53,7 @@ var expectSortedNames = []string{
 	"v6", // level 3
 }
 
-var toSQL = "CREATE TABLE `t1` (\n\t`id` int\n)\nCREATE TABLE `t2` (\n\t`id` int\n)\nCREATE TABLE `t3` (\n\t`id` int\n)\nCREATE TABLE `t5` (\n\t`id` int\n)\nCREATE VIEW `v0` AS SELECT 1 FROM `dual`\nCREATE VIEW `v3` AS SELECT * FROM `t3` AS `t3`\nCREATE VIEW `v9` AS SELECT 1 FROM `dual`\nCREATE VIEW `v1` AS SELECT * FROM `v3`\nCREATE VIEW `v2` AS SELECT * FROM `v3`, `t2`\nCREATE VIEW `v4` AS SELECT * FROM `t2` AS `something_else`, `v3`\nCREATE VIEW `v5` AS SELECT * FROM `t1`, (SELECT * FROM `v3`) AS `some_alias`\nCREATE VIEW `v6` AS SELECT * FROM `v4`"
+var toSQL = "CREATE TABLE `t1` (\n\t`id` int\n);\nCREATE TABLE `t2` (\n\t`id` int\n);\nCREATE TABLE `t3` (\n\t`id` int\n);\nCREATE TABLE `t5` (\n\t`id` int\n);\nCREATE VIEW `v0` AS SELECT 1 FROM `dual`;\nCREATE VIEW `v3` AS SELECT * FROM `t3` AS `t3`;\nCREATE VIEW `v9` AS SELECT 1 FROM `dual`;\nCREATE VIEW `v1` AS SELECT * FROM `v3`;\nCREATE VIEW `v2` AS SELECT * FROM `v3`, `t2`;\nCREATE VIEW `v4` AS SELECT * FROM `t2` AS `something_else`, `v3`;\nCREATE VIEW `v5` AS SELECT * FROM `t1`, (SELECT * FROM `v3`) AS `some_alias`;\nCREATE VIEW `v6` AS SELECT * FROM `v4`;\n"
 
 func TestNewSchemaFromQueries(t *testing.T) {
 	schema, err := NewSchemaFromQueries(createQueries)
