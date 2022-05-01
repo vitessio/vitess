@@ -485,6 +485,17 @@ func TestDiffSchemas(t *testing.T) {
 					_, err := sqlparser.Parse(s)
 					assert.NoError(t, err)
 				}
+
+				{
+					// Validate "apply()" on "from" converges with "to"
+					schema1, err := NewSchemaFromSQL(ts.from)
+					assert.NoError(t, err)
+					schema2, err := NewSchemaFromSQL(ts.to)
+					assert.NoError(t, err)
+					applied, err := schema1.Apply(diffs)
+					require.NoError(t, err)
+					assert.Equal(t, schema2.ToQueries(), applied.ToQueries())
+				}
 			}
 		})
 	}

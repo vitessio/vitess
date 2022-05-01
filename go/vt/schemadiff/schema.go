@@ -135,6 +135,8 @@ func getViewDependentTableNames(createView *sqlparser.CreateView) (names []strin
 // normalize is called as part of Schema creation process. The user may only get a hold of normalized schema.
 // It validates some cross-entity constraints, and orders entity based on dependencies (e.g. tables, views that read from tables, 2nd level views, etc.)
 func (s *Schema) normalize() error {
+	s.named = map[string]Entity{}
+	s.sorted = []Entity{}
 	// Verify no two entities share same name
 	for _, t := range s.tables {
 		name := t.Name()
@@ -315,4 +317,109 @@ func (s *Schema) ToSQL() string {
 		buf.WriteString(";\n")
 	}
 	return buf.String()
+}
+
+func (s *Schema) apply(diffs []EntityDiff) error {
+	for _, diff := range diffs {
+		switch diff := diff.(type) {
+		case *CreateTableEntityDiff:
+			if _, ok := s.named[diff.createTable.Table.Name.String()]; ok {
+				return ErrApplyDuplicateTableOrView
+			}
+			s.tables = append(s.tables, &CreateTableEntity{CreateTable: *diff.createTable})
+		case *CreateViewEntityDiff:
+			if _, ok := s.named[diff.createView.ViewName.Name.String()]; ok {
+				return ErrApplyDuplicateTableOrView
+			}
+			s.views = append(s.views, &CreateViewEntity{CreateView: *diff.createView})
+		case *DropTableEntityDiff:
+			found := false
+			for i, t := range s.tables {
+				if t.Table.Name.String() == diff.from.Table.Name.String() {
+					s.tables = append(s.tables[0:i], s.tables[i+1:]...)
+					delete(s.named, t.Table.Name.String())
+					found = true
+					break
+				}
+			}
+			if !found {
+				return ErrApplyTableNotFound
+			}
+		case *DropViewEntityDiff:
+			found := false
+			for i, v := range s.views {
+				if v.ViewName.Name.String() == diff.from.ViewName.Name.String() {
+					s.views = append(s.views[0:i], s.views[i+1:]...)
+					delete(s.named, v.ViewName.Name.String())
+					found = true
+					break
+				}
+			}
+			if !found {
+				return ErrApplyViewNotFound
+			}
+		case *AlterTableEntityDiff:
+			found := false
+			for i, t := range s.tables {
+				if t.Table.Name.String() == diff.from.Table.Name.String() {
+					to, err := t.Apply(diff)
+					if err != nil {
+						return err
+					}
+					toCreateTableEntity, ok := to.(*CreateTableEntity)
+					if !ok {
+						return ErrEntityTypeMismatch
+					}
+					s.tables[i] = toCreateTableEntity
+					found = true
+					break
+				}
+			}
+			if !found {
+				return ErrApplyTableNotFound
+			}
+		case *AlterViewEntityDiff:
+			found := false
+			for i, v := range s.views {
+				if v.ViewName.Name.String() == diff.from.ViewName.Name.String() {
+					to, err := v.Apply(diff)
+					if err != nil {
+						return err
+					}
+					toCreateViewEntity, ok := to.(*CreateViewEntity)
+					if !ok {
+						return ErrEntityTypeMismatch
+					}
+					s.views[i] = toCreateViewEntity
+					found = true
+					break
+				}
+			}
+			if !found {
+				return ErrApplyViewNotFound
+			}
+		default:
+			return ErrUnsupportedApplyOperation
+		}
+	}
+	if err := s.normalize(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
+	dup := &Schema{
+		tables: s.tables[:],
+		views:  s.views[:],
+		named:  map[string]Entity{},
+		sorted: s.sorted[:],
+	}
+	for k, v := range s.named {
+		dup.named[k] = v
+	}
+	if err := dup.apply(diffs); err != nil {
+		return nil, err
+	}
+	return dup, nil
 }

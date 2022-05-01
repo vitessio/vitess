@@ -1026,9 +1026,9 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 		Comments:    c.Comments,
 		FullyParsed: c.FullyParsed,
 	}
-	dupEntity := &CreateTableEntity{CreateTable: *dupCreateTable}
-	if err := dupEntity.apply(alterDiff); err != nil {
+	dup := &CreateTableEntity{CreateTable: *dupCreateTable}
+	if err := dup.apply(alterDiff); err != nil {
 		return nil, err
 	}
-	return dupEntity, nil
+	return dup, nil
 }
