@@ -319,20 +319,25 @@ func (s *Schema) ToSQL() string {
 	return buf.String()
 }
 
+// apply attempts to apply given list of diffs to this object.
+// These diffs are CREATE/DROP/ALTER TABLE/VIEW.
 func (s *Schema) apply(diffs []EntityDiff) error {
 	for _, diff := range diffs {
 		switch diff := diff.(type) {
 		case *CreateTableEntityDiff:
+			// We expect the table to not exist
 			if _, ok := s.named[diff.createTable.Table.Name.String()]; ok {
 				return ErrApplyDuplicateTableOrView
 			}
 			s.tables = append(s.tables, &CreateTableEntity{CreateTable: *diff.createTable})
 		case *CreateViewEntityDiff:
+			// We expect the view to not exist
 			if _, ok := s.named[diff.createView.ViewName.Name.String()]; ok {
 				return ErrApplyDuplicateTableOrView
 			}
 			s.views = append(s.views, &CreateViewEntity{CreateView: *diff.createView})
 		case *DropTableEntityDiff:
+			// We expect the table to exist
 			found := false
 			for i, t := range s.tables {
 				if t.Table.Name.String() == diff.from.Table.Name.String() {
@@ -346,6 +351,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 				return ErrApplyTableNotFound
 			}
 		case *DropViewEntityDiff:
+			// We expect the view to exist
 			found := false
 			for i, v := range s.views {
 				if v.ViewName.Name.String() == diff.from.ViewName.Name.String() {
@@ -359,6 +365,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 				return ErrApplyViewNotFound
 			}
 		case *AlterTableEntityDiff:
+			// We expect the table to exist
 			found := false
 			for i, t := range s.tables {
 				if t.Table.Name.String() == diff.from.Table.Name.String() {
@@ -379,6 +386,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 				return ErrApplyTableNotFound
 			}
 		case *AlterViewEntityDiff:
+			// We expect the view to exist
 			found := false
 			for i, v := range s.views {
 				if v.ViewName.Name.String() == diff.from.ViewName.Name.String() {
@@ -408,6 +416,9 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 	return nil
 }
 
+// Apply attempts to apply given list of diffs to the schema described by this object.
+// These diffs are CREATE/DROP/ALTER TABLE/VIEW.
+// The operation does not modify this object. Instead, if successful, a new (modified) Schema is returned.
 func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
 	dup, err := NewSchemaFromStatements(s.ToStatements())
 	if err != nil {

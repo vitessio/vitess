@@ -209,11 +209,15 @@ func (c *CreateViewEntity) Drop() EntityDiff {
 	return &DropViewEntityDiff{from: c, dropView: dropView}
 }
 
+// apply attempts to apply an ALTER VIEW diff onto this entity's view definition.
+// supported modifications are only those created by schemadiff's Diff() function.
 func (c *CreateViewEntity) apply(diff *AlterViewEntityDiff) error {
 	c.CreateView = diff.to.CreateView
 	return nil
 }
 
+// Apply attempts to apply given ALTER VIEW diff onto the view defined by this entity.
+// This entity is unmodified. If successful, a new CREATE VIEW entity is returned.
 func (c *CreateViewEntity) Apply(diff EntityDiff) (Entity, error) {
 	alterDiff, ok := diff.(*AlterViewEntityDiff)
 	if !ok {
