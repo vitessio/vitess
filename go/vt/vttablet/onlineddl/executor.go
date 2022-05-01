@@ -1697,7 +1697,7 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) 
 }
 
 func (e *Executor) validateThrottleParams(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal) (duration time.Duration, ratio float64, err error) {
-	duration = 24 * time.Hour
+	duration = time.Hour * 24 * 365 * 100
 	if expireString != "" {
 		duration, err = time.ParseDuration(expireString)
 		if err != nil || duration < 0 {

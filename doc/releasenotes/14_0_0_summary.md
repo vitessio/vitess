@@ -111,7 +111,8 @@ ALTER VITESS_MIGRATION UNTHROTTLE ALL;
 SHOW VITESS_THROTTLED_APPS;
 ```
 
-default `duration` is `24h`
+default `duration` is "infinite" (set as 100 years)
+
 - allowed units are (s)ec, (m)in, (h)our
 ratio is in the range `[0..1]`.
 - `1` means full throttle - the app will not make any progress
