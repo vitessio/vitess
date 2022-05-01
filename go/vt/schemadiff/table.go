@@ -657,7 +657,7 @@ func evaluateColumnReordering(t1SharedColumns, t2SharedColumns []*sqlparser.Colu
 	}
 	for i, t2Col := range t2SharedColumns {
 		t2ColName := t2Col.Name.String()
-		// see if this column is in longest common subsequence. If so, need to reorder it. If not, it must be reordered.
+		// see if this column is in longest common subsequence. If so, no need to reorder it. If not, it must be reordered.
 		if _, ok := lcsNames[t2ColName]; !ok {
 			minimalColumnReordering[t2ColName] = i
 		}
