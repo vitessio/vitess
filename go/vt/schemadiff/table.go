@@ -1017,16 +1017,15 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 	if !ok {
 		return nil, ErrEntityTypeMismatch
 	}
-	dupCreateTable := &sqlparser.CreateTable{
-		Temp:        c.Temp,
-		Table:       c.Table,
-		IfNotExists: c.IfNotExists,
-		TableSpec:   c.TableSpec,
-		OptLike:     c.OptLike,
-		Comments:    c.Comments,
-		FullyParsed: c.FullyParsed,
+	stmt, err := sqlparser.Parse(sqlparser.CanonicalString(c))
+	if err != nil {
+		return nil, err
 	}
-	dup := &CreateTableEntity{CreateTable: *dupCreateTable}
+	createTable, ok := stmt.(*sqlparser.CreateTable)
+	if !ok {
+		return nil, ErrEntityTypeMismatch
+	}
+	dup := &CreateTableEntity{CreateTable: *createTable}
 	if err := dup.apply(alterDiff); err != nil {
 		return nil, err
 	}
