@@ -409,11 +409,9 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 }
 
 func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
-	dup := &Schema{
-		tables: s.tables[:],
-		views:  s.views[:],
-		named:  map[string]Entity{},
-		sorted: s.sorted[:],
+	dup, err := NewSchemaFromStatements(s.ToStatements())
+	if err != nil {
+		return nil, err
 	}
 	for k, v := range s.named {
 		dup.named[k] = v
