@@ -45,6 +45,11 @@ func TestCreateTableDiff(t *testing.T) {
 			to:   "create table t (id int primary key)",
 		},
 		{
+			name: "identical 2",
+			from: "create table t (id int, primary key(id))",
+			to:   "create table t (id int, primary key(id))",
+		},
+		{
 			name: "identical, spacing",
 			from: "create   table     t    (id int   primary  key)",
 			to: `create table t (
@@ -672,7 +677,13 @@ func TestCreateTableDiff(t *testing.T) {
 						require.NotNil(t, applied)
 						appliedDiff, err := eTo.Diff(applied, &hints)
 						require.NoError(t, err)
-						assert.True(t, appliedDiff.IsEmpty(), "expected empty diff, found changes: %v", appliedDiff.CanonicalStatementString())
+						assert.True(t, appliedDiff.IsEmpty(), "expected empty diff, found changes: %v.\nc=%v\n,alter=%v\n,eTo=%v\napplied=%v\n",
+							appliedDiff.CanonicalStatementString(),
+							c.Create().CanonicalStatementString(),
+							alter.CanonicalStatementString(),
+							eTo.Create().CanonicalStatementString(),
+							applied.Create().CanonicalStatementString(),
+						)
 					}
 				}
 				{
