@@ -36,6 +36,13 @@ var (
 	ErrUnsupportedStatement                        = errors.New("Unsupported statement")
 	ErrDuplicateName                               = errors.New("Duplicate name")
 	ErrViewDependencyUnresolved                    = errors.New("Views have unresolved/loop dependencies")
+
+	ErrUnsupportedApplyOperation = errors.New("unsupported Apply operation")
+	ErrApplyKeyNotFound          = errors.New("key not found")
+	ErrApplyColumnNotFound       = errors.New("column not found")
+	ErrApplyDuplicateKey         = errors.New("duplicate key")
+	ErrApplyDuplicateColumn      = errors.New("duplicate column")
+	ErrApplyDuplicateConstraint  = errors.New("duplicate constraint")
 )
 
 // Entity stands for a database object we can diff:

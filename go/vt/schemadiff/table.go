@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -273,6 +275,46 @@ func (c *CreateTableEntity) diffTableCharset(
 		return t2Charset
 	}
 	return ""
+}
+
+// isDefaultTableOptionValue sees if the value for a TableOption is also its default value
+func isDefaultTableOptionValue(option *sqlparser.TableOption) bool {
+	switch strings.ToUpper(option.Name) {
+	case "CHECKSUM":
+		return sqlparser.String(option.Value) == "0"
+	case "COMMENT":
+		return option.String == ""
+	case "COMPRESSION":
+		return sqlparser.String(option.Value) == "" || sqlparser.String(option.Value) == "''"
+	case "CONNECTION":
+		return sqlparser.String(option.Value) == "" || sqlparser.String(option.Value) == "''"
+	case "DATA DIRECTORY":
+		return sqlparser.String(option.Value) == "" || sqlparser.String(option.Value) == "''"
+	case "DELAY_KEY_WRITE":
+		return sqlparser.String(option.Value) == "0"
+	case "ENCRYPTION":
+		return sqlparser.String(option.Value) == "N"
+	case "INDEX DIRECTORY":
+		return sqlparser.String(option.Value) == "" || sqlparser.String(option.Value) == "''"
+	case "KEY_BLOCK_SIZE":
+		return sqlparser.String(option.Value) == "0"
+	case "MAX_ROWS":
+		return sqlparser.String(option.Value) == "0"
+	case "MIN_ROWS":
+		return sqlparser.String(option.Value) == "0"
+	case "PACK_KEYS":
+		return option.String == "DEFAULT"
+	case "ROW_FORMAT":
+		return option.String == "DEFAULT"
+	case "STATS_AUTO_RECALC":
+		return option.String == "DEFAULT"
+	case "STATS_PERSISTENT":
+		return option.String == "DEFAULT"
+	case "STATS_SAMPLE_PAGES":
+		return option.String == "DEFAULT"
+	default:
+		return false
+	}
 }
 
 func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
@@ -798,4 +840,195 @@ func (c *CreateTableEntity) Drop() EntityDiff {
 		FromTables: []sqlparser.TableName{c.Table},
 	}
 	return &DropTableEntityDiff{from: c, dropTable: dropTable}
+}
+
+func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
+	if spec := diff.alterTable.PartitionSpec; spec != nil {
+		switch {
+		case spec.Action == sqlparser.RemoveAction && spec.IsAll:
+			// Remove partitioning
+			c.TableSpec.PartitionOption = nil
+		default:
+			return errors.Wrapf(ErrUnsupportedApplyOperation, "%v", sqlparser.String(spec))
+		}
+	}
+	if diff.alterTable.PartitionOption != nil {
+		// Specify new spec:
+		c.CreateTable.TableSpec.PartitionOption = diff.alterTable.PartitionOption
+	}
+	reorderColumn := func(colIndex int, first bool, after *sqlparser.ColName) error {
+		var newCols []*sqlparser.ColumnDefinition
+		col := c.TableSpec.Columns[colIndex]
+		switch {
+		case first:
+			newCols = append(newCols, col)
+			newCols = append(newCols, c.TableSpec.Columns[0:colIndex]...)
+			newCols = append(newCols, c.TableSpec.Columns[colIndex+1:]...)
+		case after != nil:
+			afterColFound := false
+			for a, afterCol := range c.TableSpec.Columns {
+				if afterCol.Name.String() == after.Name.String() {
+					if colIndex < a {
+						// moving column i to the right
+						newCols = append(newCols, c.TableSpec.Columns[0:colIndex]...)
+						newCols = append(newCols, c.TableSpec.Columns[colIndex+1:a+1]...)
+						newCols = append(newCols, col)
+						newCols = append(newCols, c.TableSpec.Columns[a+1:]...)
+					} else {
+						// moving column i to the left
+						newCols = append(newCols, c.TableSpec.Columns[0:a+1]...)
+						newCols = append(newCols, col)
+						newCols = append(newCols, c.TableSpec.Columns[a+1:colIndex]...)
+						newCols = append(newCols, c.TableSpec.Columns[colIndex+1:]...)
+					}
+					afterColFound = true
+					break
+				}
+			}
+			if !afterColFound {
+				return errors.Wrapf(ErrApplyColumnNotFound, "%v", after.Name.String())
+			}
+		default:
+			// nothing to change
+		}
+
+		if newCols != nil {
+			c.TableSpec.Columns = newCols
+		}
+		return nil
+	}
+	applyAlterOption := func(opt sqlparser.AlterOption) error {
+		switch opt := opt.(type) {
+		case *sqlparser.DropKey:
+			// applies both indexes and FK constraints
+			found := false
+			switch opt.Type {
+			case sqlparser.NormalKeyType, sqlparser.PrimaryKeyType:
+				for i, index := range c.TableSpec.Indexes {
+					if index.Info.Name.String() == opt.Name.String() {
+						found = true
+						c.TableSpec.Indexes = append(c.TableSpec.Indexes[0:i], c.TableSpec.Indexes[i+1:]...)
+						break
+					}
+				}
+			case sqlparser.ForeignKeyType:
+				for i, constraint := range c.TableSpec.Constraints {
+					if constraint.Name.String() == opt.Name.String() {
+						found = true
+						c.TableSpec.Constraints = append(c.TableSpec.Constraints[0:i], c.TableSpec.Constraints[i+1:]...)
+						break
+					}
+				}
+			default:
+				return errors.Wrapf(ErrUnsupportedApplyOperation, "%v", sqlparser.String(opt))
+			}
+			if !found {
+				return errors.Wrapf(ErrApplyKeyNotFound, "%v", opt.Name.String())
+			}
+		case *sqlparser.AddIndexDefinition:
+			for _, index := range c.TableSpec.Indexes {
+				if index.Info.Name.String() == opt.IndexDefinition.Info.Name.String() {
+					return errors.Wrapf(ErrApplyDuplicateKey, "%v", opt.IndexDefinition.Info.Name.String())
+				}
+			}
+			c.TableSpec.Indexes = append(c.TableSpec.Indexes, opt.IndexDefinition)
+		case *sqlparser.AddConstraintDefinition:
+			for _, c := range c.TableSpec.Constraints {
+				if c.Name.String() == opt.ConstraintDefinition.Name.String() {
+					return errors.Wrapf(ErrApplyDuplicateConstraint, "%v", opt.ConstraintDefinition.Name.String())
+				}
+			}
+			c.TableSpec.Constraints = append(c.TableSpec.Constraints, opt.ConstraintDefinition)
+		case *sqlparser.DropColumn:
+			found := false
+			for i, col := range c.TableSpec.Columns {
+				if col.Name.String() == opt.Name.Name.String() {
+					found = true
+					c.TableSpec.Columns = append(c.TableSpec.Columns[0:i], c.TableSpec.Columns[i+1:]...)
+					break
+				}
+			}
+			if !found {
+				return errors.Wrapf(ErrApplyColumnNotFound, "%v", opt.Name.Name.String())
+			}
+		case *sqlparser.AddColumns:
+			if len(opt.Columns) != 1 {
+				return errors.Wrapf(ErrUnsupportedApplyOperation, "%v", sqlparser.String(opt))
+			}
+			addedCol := opt.Columns[0]
+			for _, col := range c.TableSpec.Columns {
+				if col.Name.String() == addedCol.Name.String() {
+					return errors.Wrapf(ErrApplyDuplicateColumn, "%v", addedCol.Name.String())
+				}
+			}
+			c.TableSpec.Columns = append(c.TableSpec.Columns, addedCol)
+			if err := reorderColumn(len(c.TableSpec.Columns)-1, opt.First, opt.After); err != nil {
+				return err
+			}
+		case *sqlparser.ModifyColumn:
+			found := false
+			for i, col := range c.TableSpec.Columns {
+				if col.Name.String() == opt.NewColDefinition.Name.String() {
+					found = true
+					c.TableSpec.Columns[i] = opt.NewColDefinition
+					if err := reorderColumn(i, opt.First, opt.After); err != nil {
+						return err
+					}
+					break
+				}
+			}
+			if !found {
+				return errors.Wrapf(ErrApplyColumnNotFound, "%v", opt.NewColDefinition.Name.String())
+			}
+		case sqlparser.TableOptions:
+			for _, option := range opt {
+				func() {
+					for i, existingOption := range c.TableSpec.Options {
+						if option.Name == existingOption.Name {
+							if isDefaultTableOptionValue(option) {
+								// remove the option
+								c.TableSpec.Options = append(c.TableSpec.Options[0:i], c.TableSpec.Options[i+1:]...)
+							} else {
+								c.TableSpec.Options[i] = option
+							}
+							// option found. No need for further iteration.
+							return
+						}
+					}
+					// option not found. We add it
+					c.TableSpec.Options = append(c.TableSpec.Options, option)
+				}()
+			}
+		default:
+			return errors.Wrapf(ErrUnsupportedApplyOperation, "%v", sqlparser.String(opt))
+		}
+		return nil
+	}
+	for _, alterOption := range diff.alterTable.AlterOptions {
+		if err := applyAlterOption(alterOption); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
+	alterDiff, ok := diff.(*AlterTableEntityDiff)
+	if !ok {
+		return nil, ErrEntityTypeMismatch
+	}
+	dupCreateTable := &sqlparser.CreateTable{
+		Temp:        c.Temp,
+		Table:       c.Table,
+		IfNotExists: c.IfNotExists,
+		TableSpec:   c.TableSpec,
+		OptLike:     c.OptLike,
+		Comments:    c.Comments,
+		FullyParsed: c.FullyParsed,
+	}
+	dupEntity := &CreateTableEntity{CreateTable: *dupCreateTable}
+	if err := dupEntity.apply(alterDiff); err != nil {
+		return nil, err
+	}
+	return dupEntity, nil
 }

@@ -16,7 +16,9 @@ limitations under the License.
 
 package schemadiff
 
-import "vitess.io/vitess/go/vt/sqlparser"
+import (
+	"vitess.io/vitess/go/vt/sqlparser"
+)
 
 //
 type AlterViewEntityDiff struct {
@@ -205,4 +207,22 @@ func (c *CreateViewEntity) Drop() EntityDiff {
 		FromTables: []sqlparser.TableName{c.ViewName},
 	}
 	return &DropViewEntityDiff{from: c, dropView: dropView}
+}
+
+func (c *CreateViewEntity) apply(diff *AlterViewEntityDiff) error {
+	c.CreateView = diff.to.CreateView
+	return nil
+}
+
+func (c *CreateViewEntity) Apply(diff EntityDiff) (Entity, error) {
+	alterDiff, ok := diff.(*AlterViewEntityDiff)
+	if !ok {
+		return nil, ErrEntityTypeMismatch
+	}
+	dupCreateView := &sqlparser.CreateView{}
+	dupEntity := &CreateViewEntity{CreateView: *dupCreateView}
+	if err := dupEntity.apply(alterDiff); err != nil {
+		return nil, err
+	}
+	return dupEntity, nil
 }

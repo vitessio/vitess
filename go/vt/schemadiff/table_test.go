@@ -245,6 +245,13 @@ func TestCreateTableDiff(t *testing.T) {
 			cdiff: "ALTER TABLE `t1` ADD PRIMARY KEY (`id`)",
 		},
 		{
+			name:  "dropped primary key",
+			from:  "create table t1 (id int, primary key(id))",
+			to:    "create table t2 (id int)",
+			diff:  "alter table t1 drop key `PRIMARY`",
+			cdiff: "ALTER TABLE `t1` DROP KEY `PRIMARY`",
+		},
+		{
 			name:  "dropped key",
 			from:  "create table t1 (`id` int primary key, i int, key i_idx(i))",
 			to:    "create table t2 (`id` int primary key, i int)",
@@ -650,12 +657,22 @@ func TestCreateTableDiff(t *testing.T) {
 					_, err := sqlparser.Parse(diff)
 					assert.NoError(t, err)
 
+					// Validate "from/to" entities
 					eFrom, eTo := alter.Entities()
 					if ts.fromName != "" {
 						assert.Equal(t, ts.fromName, eFrom.Name())
 					}
 					if ts.toName != "" {
 						assert.Equal(t, ts.toName, eTo.Name())
+					}
+
+					{ // Validate "apply()" on "from" converges with "to"
+						applied, err := c.Apply(alter)
+						assert.NoError(t, err)
+						require.NotNil(t, applied)
+						appliedDiff, err := eTo.Diff(applied, &hints)
+						require.NoError(t, err)
+						assert.True(t, appliedDiff.IsEmpty(), "expected empty diff, found changes: %v", appliedDiff.CanonicalStatementString())
 					}
 				}
 				{
