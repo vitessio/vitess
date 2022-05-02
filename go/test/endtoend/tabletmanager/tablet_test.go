@@ -44,6 +44,7 @@ func TestEnsureDB(t *testing.T) {
 
 	// Make it the primary.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", tablet.Alias)
+	//log.Info(fmt.Sprintf("error: %s", err))
 	require.NoError(t, err)
 
 	// It is still NOT_SERVING because the db is read-only.
