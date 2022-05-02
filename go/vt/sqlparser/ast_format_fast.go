@@ -3159,7 +3159,7 @@ func (node *LockingFunc) formatFast(buf *TrackedBuffer) {
 		buf.printExpr(node, node.Name, true)
 	}
 	if node.Type == GetLock {
-		buf.WriteByte(',')
+		buf.WriteString(", ")
 		buf.printExpr(node, node.Timeout, true)
 	}
 	buf.WriteString(")")

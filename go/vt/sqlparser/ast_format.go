@@ -2416,7 +2416,7 @@ func (node *LockingFunc) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "%v", node.Name)
 	}
 	if node.Type == GetLock {
-		buf.astPrintf(node, ",%v", node.Timeout)
+		buf.astPrintf(node, ", %v", node.Timeout)
 	}
 	buf.WriteString(")")
 }
