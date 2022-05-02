@@ -1021,6 +1021,9 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			return err
 		}
 	}
+	if err := c.validate(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1057,4 +1060,23 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 		return nil, err
 	}
 	return dup, nil
+}
+
+// validate checks that the table structure is valid:
+// - all columns referenced by keys exist
+func (c *CreateTableEntity) validate() error {
+	// validate all columns referenced by indexes do in fact exist
+	columnExists := map[string]bool{}
+	for _, col := range c.CreateTable.TableSpec.Columns {
+		columnExists[col.Name.String()] = true
+	}
+	for _, key := range c.CreateTable.TableSpec.Indexes {
+		for _, col := range key.Columns {
+			colName := col.Column.String()
+			if !columnExists[colName] {
+				return errors.Wrapf(ErrInvalidColumnInKey, "key: %v, column: %v", key.Info.Name.String(), colName)
+			}
+		}
+	}
+	return nil
 }

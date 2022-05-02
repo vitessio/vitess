@@ -17,6 +17,7 @@ limitations under the License.
 package schemadiff
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -701,6 +702,107 @@ func TestCreateTableDiff(t *testing.T) {
 					assert.NoError(t, err)
 				}
 
+			}
+		})
+	}
+}
+
+func TestValidate(t *testing.T) {
+	tt := []struct {
+		name      string
+		from      string
+		alter     string
+		expectErr error
+	}{
+		{
+			name:  "add column",
+			from:  "create table t (id int primary key)",
+			alter: "alter table t add column i int",
+		},
+		{
+			name:  "add key",
+			from:  "create table t (id int primary key, i int)",
+			alter: "alter table t add key i_idx(i)",
+		},
+		{
+			name:  "add column and key",
+			from:  "create table t (id int primary key)",
+			alter: "alter table t add column i int, add key i_idx(i)",
+		},
+		{
+			name:      "add key, missing column",
+			from:      "create table t (id int primary key, i int)",
+			alter:     "alter table t add key j_idx(j)",
+			expectErr: ErrInvalidColumnInKey,
+		},
+		{
+			name:      "add key, missing column 2",
+			from:      "create table t (id int primary key, i int)",
+			alter:     "alter table t add key j_idx(j, i)",
+			expectErr: ErrInvalidColumnInKey,
+		},
+		{
+			name:  "drop column, ok",
+			from:  "create table t (id int primary key, i int, i2 int, key i_idx(i))",
+			alter: "alter table t drop column i2",
+		},
+		{
+			name:      "drop column, break key",
+			from:      "create table t (id int primary key, i int, key i_idx(i))",
+			alter:     "alter table t drop column i",
+			expectErr: ErrInvalidColumnInKey,
+		},
+		{
+			name:      "drop column, break key 2",
+			from:      "create table t (id int primary key, i int, i2 int, key i_idx(i, i2))",
+			alter:     "alter table t drop column i",
+			expectErr: ErrInvalidColumnInKey,
+		},
+		{
+			name:      "drop column, break key 3",
+			from:      "create table t (id int primary key, i int, i2 int, key i_idx(i, i2))",
+			alter:     "alter table t drop column i2",
+			expectErr: ErrInvalidColumnInKey,
+		},
+		{
+			name:      "drop column, break key 4",
+			from:      "create table t (id int primary key, i int, i2 int, key some_key(id, i), key i_idx(i, i2))",
+			alter:     "alter table t drop column i2",
+			expectErr: ErrInvalidColumnInKey,
+		},
+		{
+			name:  "add multiple keys, multi columns, ok",
+			from:  "create table t (id int primary key, i1 int, i2 int, i3 int)",
+			alter: "alter table t add key i12_idx(i1, i2), add key i32_idx(i3, i2), add key i21_idx(i2, i1)",
+		},
+		{
+			name:      "add multiple keys, multi columns, missing column",
+			from:      "create table t (id int primary key, i1 int, i2 int, i4 int)",
+			alter:     "alter table t add key i12_idx(i1, i2), add key i32_idx(i3, i2), add key i21_idx(i2, i1)",
+			expectErr: ErrInvalidColumnInKey,
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.name, func(t *testing.T) {
+			stmt, err := sqlparser.Parse(ts.from)
+			require.NoError(t, err)
+			fromCreateTable, ok := stmt.(*sqlparser.CreateTable)
+			require.True(t, ok)
+
+			stmt, err = sqlparser.Parse(ts.alter)
+			require.NoError(t, err)
+			alterTable, ok := stmt.(*sqlparser.AlterTable)
+			require.True(t, ok)
+
+			c := NewCreateTableEntity(fromCreateTable)
+			a := &AlterTableEntityDiff{from: c, alterTable: alterTable}
+			applied, err := c.Apply(a)
+			if ts.expectErr != nil {
+				assert.Error(t, err)
+				assert.True(t, errors.Is(err, ts.expectErr))
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, applied)
 			}
 		})
 	}
