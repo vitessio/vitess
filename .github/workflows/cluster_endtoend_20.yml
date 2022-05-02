@@ -82,7 +82,7 @@ jobs:
         if [[ -n ${XTRABACKUP_VERSION} ]]; then
           debfile="percona-xtrabackup-24_${XTRABACKUP_VERSION}.$(lsb_release -sc)_amd64.deb"
           wget "https://repo.percona.com/pxb-24/apt/pool/main/p/percona-xtrabackup-24/${debfile}"
-          dpkg -i "${debfile}"
+          sudo dpkg -i "${debfile}"
         else
           sudo apt-get install percona-xtrabackup-24
         fi
