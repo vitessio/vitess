@@ -711,6 +711,7 @@ func TestValidate(t *testing.T) {
 	tt := []struct {
 		name      string
 		from      string
+		to        string
 		alter     string
 		expectErr error
 	}{
@@ -718,16 +719,19 @@ func TestValidate(t *testing.T) {
 			name:  "add column",
 			from:  "create table t (id int primary key)",
 			alter: "alter table t add column i int",
+			to:    "create table t (id int primary key, i int)",
 		},
 		{
 			name:  "add key",
 			from:  "create table t (id int primary key, i int)",
 			alter: "alter table t add key i_idx(i)",
+			to:    "create table t (id int primary key, i int, key i_idx(i))",
 		},
 		{
 			name:  "add column and key",
 			from:  "create table t (id int primary key)",
 			alter: "alter table t add column i int, add key i_idx(i)",
+			to:    "create table t (id int primary key, i int, key i_idx(i))",
 		},
 		{
 			name:      "add key, missing column",
@@ -745,6 +749,7 @@ func TestValidate(t *testing.T) {
 			name:  "drop column, ok",
 			from:  "create table t (id int primary key, i int, i2 int, key i_idx(i))",
 			alter: "alter table t drop column i2",
+			to:    "create table t (id int primary key, i int, key i_idx(i))",
 		},
 		{
 			name:      "drop column, break key",
@@ -774,6 +779,7 @@ func TestValidate(t *testing.T) {
 			name:  "add multiple keys, multi columns, ok",
 			from:  "create table t (id int primary key, i1 int, i2 int, i3 int)",
 			alter: "alter table t add key i12_idx(i1, i2), add key i32_idx(i3, i2), add key i21_idx(i2, i1)",
+			to:    "create table t (id int primary key, i1 int, i2 int, i3 int, key i12_idx(i1, i2), key i32_idx(i3, i2), key i21_idx(i2, i1))",
 		},
 		{
 			name:      "add multiple keys, multi columns, missing column",
@@ -782,6 +788,7 @@ func TestValidate(t *testing.T) {
 			expectErr: ErrInvalidColumnInKey,
 		},
 	}
+	hints := DiffHints{}
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
 			stmt, err := sqlparser.Parse(ts.from)
@@ -794,15 +801,25 @@ func TestValidate(t *testing.T) {
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
 
-			c := NewCreateTableEntity(fromCreateTable)
-			a := &AlterTableEntityDiff{from: c, alterTable: alterTable}
-			applied, err := c.Apply(a)
+			from := NewCreateTableEntity(fromCreateTable)
+			a := &AlterTableEntityDiff{from: from, alterTable: alterTable}
+			applied, err := from.Apply(a)
 			if ts.expectErr != nil {
 				assert.Error(t, err)
 				assert.True(t, errors.Is(err, ts.expectErr))
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, applied)
+
+				stmt, err := sqlparser.Parse(ts.to)
+				require.NoError(t, err)
+				toCreateTable, ok := stmt.(*sqlparser.CreateTable)
+				require.True(t, ok)
+
+				to := NewCreateTableEntity(toCreateTable)
+				diff, err := applied.Diff(to, &hints)
+				require.NoError(t, err)
+				assert.Empty(t, diff, "diff found: %v.\applied: %v\nto: %v", diff.CanonicalStatementString(), applied.Create().CanonicalStatementString(), to.Create().CanonicalStatementString())
 			}
 		})
 	}
