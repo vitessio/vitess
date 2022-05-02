@@ -140,7 +140,7 @@ func TestCreateTableDiff(t *testing.T) {
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `c` int FIRST, MODIFY COLUMN `id` int PRIMARY KEY AFTER `d`",
 		},
 		{
-			name:  "reorder column, far jump, another reorder, extra columns",
+			name:  "reorder column, far jump, another reorder 3",
 			from:  "create table t1 (id int primary key, a int, b int, c int, d int, e int, f int)",
 			to:    "create table t2 (a int, c int, b int, d int, id int primary key, e int, f int)",
 			diff:  "alter table t1 modify column c int after a, modify column id int primary key after d",
@@ -159,6 +159,13 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, b int, a int, c int, e int, d int, f int)",
 			diff:  "alter table t1 modify column b int after id, modify column e int after c",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `b` int AFTER `id`, MODIFY COLUMN `e` int AFTER `c`",
+		},
+		{
+			name:  "two reorders, added and removed columns",
+			from:  "create table t1 (id int primary key, a int, b int, c int, d int, e int, f int)",
+			to:    "create table t2 (g int, id int primary key, h int, b int, a int, i int, e int, d int, j int, f int, k int)",
+			diff:  "alter table t1 drop column c, modify column b int after id, modify column e int after a, add column g int first, add column h int after id, add column i int after a, add column j int after d, add column k int",
+			cdiff: "ALTER TABLE `t1` DROP COLUMN `c`, MODIFY COLUMN `b` int AFTER `id`, MODIFY COLUMN `e` int AFTER `a`, ADD COLUMN `g` int FIRST, ADD COLUMN `h` int AFTER `id`, ADD COLUMN `i` int AFTER `a`, ADD COLUMN `j` int AFTER `d`, ADD COLUMN `k` int",
 		},
 		{
 			name:  "reorder column and change data type",
