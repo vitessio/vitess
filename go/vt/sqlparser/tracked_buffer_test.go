@@ -137,6 +137,10 @@ func TestCanonicalOutput(t *testing.T) {
 			"ALTER TABLE `t1` ROW_FORMAT COMPRESSED, CHARSET utf8",
 		},
 		{
+			"create table a (id int primary key) row_format=compressed, character set=utf8mb4 collate=utf8mb4_0900_ai_ci",
+			"CREATE TABLE `a` (\n\t`id` int PRIMARY KEY\n) ROW_FORMAT COMPRESSED,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci",
+		},
+		{
 			"create table a (e enum('red','green','blue','orange','yellow'))",
 			"CREATE TABLE `a` (\n\t`e` enum('red', 'green', 'blue', 'orange', 'yellow')\n)",
 		},
