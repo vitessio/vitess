@@ -119,22 +119,22 @@ a.navLink:hover .icon {
 }
 
 .hotkey::before {
+    @apply block;
+    @apply border;
+    @apply font-mono font-bold;
+    @apply p-0;
+    @apply rounded-sm;
+    @apply text-center;
+    @apply select-none;
+
     $hotkeySize: 16px;
 
-    @apply rounded-sm;
-
-    border: solid 1px var(--colorScaffoldingForeground);
+    border-color: var(--colorScaffoldingForeground);
     color: var(--colorScaffoldingForeground);
     content: attr(data-hotkey);
-    display: block;
-    font-family: theme('fontFamily.mono');
     font-size: 10px;
-    font-weight: bold;
     height: $hotkeySize;
     line-height: 14px;
     margin: 0 4px;
-    padding: 0;
-    text-align: center;
-    user-select: none;
     width: $hotkeySize;
 }
