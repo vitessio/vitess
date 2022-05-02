@@ -340,7 +340,7 @@ func TestDiffSchemas(t *testing.T) {
 			},
 		},
 		{
-			name: "create table (2)",
+			name: "create table 2",
 			from: ";;; ; ;    ;;;",
 			to:   "create table t(id int primary key)",
 			diffs: []string{
@@ -513,7 +513,6 @@ func TestDiffSchemas(t *testing.T) {
 					schema1, err := NewSchemaFromSQL(ts.from)
 					assert.NoError(t, err)
 					schema1SQL := schema1.ToSQL()
-					assert.NotEmpty(t, schema1SQL)
 
 					schema2, err := NewSchemaFromSQL(ts.to)
 					assert.NoError(t, err)
