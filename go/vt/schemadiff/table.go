@@ -18,6 +18,8 @@ package schemadiff
 
 import (
 	"fmt"
+	"math"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -869,9 +871,37 @@ func (c *CreateTableEntity) Drop() EntityDiff {
 	return &DropTableEntityDiff{from: c, dropTable: dropTable}
 }
 
+func sortAlterOptions(diff *AlterTableEntityDiff) {
+	optionOrder := func(opt sqlparser.AlterOption) int {
+		switch opt.(type) {
+		case *sqlparser.DropKey:
+			return 1
+		case *sqlparser.DropColumn:
+			return 2
+		case *sqlparser.ModifyColumn:
+			return 3
+		case *sqlparser.AddColumns:
+			return 4
+		case *sqlparser.AddIndexDefinition:
+			return 5
+		case *sqlparser.AddConstraintDefinition:
+			return 6
+		case sqlparser.TableOptions, *sqlparser.TableOptions:
+			return 7
+		default:
+			return math.MaxInt
+		}
+	}
+	opts := diff.alterTable.AlterOptions
+	sort.SliceStable(opts, func(i, j int) bool {
+		return optionOrder(opts[i]) < optionOrder(opts[j])
+	})
+}
+
 // apply attempts to apply an ALTER TABLE diff onto this entity's table definition.
 // supported modifications are only those created by schemadiff's Diff() function.
 func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
+	sortAlterOptions(diff)
 	if spec := diff.alterTable.PartitionSpec; spec != nil {
 		switch {
 		case spec.Action == sqlparser.RemoveAction && spec.IsAll:
