@@ -174,7 +174,7 @@ func (c *CreateTableEntity) normalize() {
 			// like MySQL, we first try to call our index by the name of the first column:
 			suggestedKeyName := colName
 			// now let's see if that name is taken; if it is, enumerate new news until we find a free name
-			for enumerate := 2; keyNameExists[suggestedKeyName] == true; enumerate++ {
+			for enumerate := 2; keyNameExists[suggestedKeyName]; enumerate++ {
 				suggestedKeyName = fmt.Sprintf("%s_%d", colName, enumerate)
 			}
 			// OK we found a free slot!
