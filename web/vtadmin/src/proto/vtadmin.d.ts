@@ -26860,6 +26860,12 @@ export namespace replicationdata {
         /** Status position */
         position?: (string|null);
 
+        /** Status io_thread_running */
+        io_thread_running?: (boolean|null);
+
+        /** Status sql_thread_running */
+        sql_thread_running?: (boolean|null);
+
         /** Status replication_lag_seconds */
         replication_lag_seconds?: (number|null);
 
@@ -26911,6 +26917,12 @@ export namespace replicationdata {
 
         /** Status position. */
         public position: string;
+
+        /** Status io_thread_running. */
+        public io_thread_running: boolean;
+
+        /** Status sql_thread_running. */
+        public sql_thread_running: boolean;
 
         /** Status replication_lag_seconds. */
         public replication_lag_seconds: number;
@@ -28584,6 +28596,12 @@ export namespace vtctldata {
 
         /** MaterializeSettings materialization_intent */
         materialization_intent?: (vtctldata.MaterializationIntent|null);
+
+        /** MaterializeSettings source_time_zone */
+        source_time_zone?: (string|null);
+
+        /** MaterializeSettings target_time_zone */
+        target_time_zone?: (string|null);
     }
 
     /** Represents a MaterializeSettings. */
@@ -28621,6 +28639,12 @@ export namespace vtctldata {
 
         /** MaterializeSettings materialization_intent. */
         public materialization_intent: vtctldata.MaterializationIntent;
+
+        /** MaterializeSettings source_time_zone. */
+        public source_time_zone: string;
+
+        /** MaterializeSettings target_time_zone. */
+        public target_time_zone: string;
 
         /**
          * Creates a new MaterializeSettings instance using the specified properties.
@@ -45813,6 +45837,12 @@ export namespace binlogdata {
 
         /** BinlogSource external_cluster */
         external_cluster?: (string|null);
+
+        /** BinlogSource source_time_zone */
+        source_time_zone?: (string|null);
+
+        /** BinlogSource target_time_zone */
+        target_time_zone?: (string|null);
     }
 
     /** Represents a BinlogSource. */
@@ -45853,6 +45883,12 @@ export namespace binlogdata {
 
         /** BinlogSource external_cluster. */
         public external_cluster: string;
+
+        /** BinlogSource source_time_zone. */
+        public source_time_zone: string;
+
+        /** BinlogSource target_time_zone. */
+        public target_time_zone: string;
 
         /**
          * Creates a new BinlogSource instance using the specified properties.

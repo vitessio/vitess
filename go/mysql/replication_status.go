@@ -75,7 +75,7 @@ func (s *ReplicationStatus) SQLHealthy() bool {
 
 // ReplicationStatusToProto translates a Status to proto3.
 func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
-	return &replicationdatapb.Status{
+	replstatuspb := &replicationdatapb.Status{
 		Position:              EncodePosition(s.Position),
 		RelayLogPosition:      EncodePosition(s.RelayLogPosition),
 		FilePosition:          EncodePosition(s.FilePosition),
@@ -91,6 +91,21 @@ func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 		SqlState:              int32(s.SQLState),
 		LastSqlError:          s.LastSQLError,
 	}
+
+	// We need to be able to send gRPC response messages from v14 and newer tablets to
+	// v13 and older clients. The older clients will not be processing the IoState or
+	// SqlState values in the message but instead looking at the IoThreadRunning and
+	// SqlThreadRunning booleans so we need to map and share this dual state.
+	// Note: v13 and older clients considered the IO thread state of connecting to
+	//       be equal to running. That is why we do so here when mapping the states.
+	// This backwards compatibility can be removed in v15+.
+	if s.IOState == ReplicationStateRunning || s.IOState == ReplicationStateConnecting {
+		replstatuspb.IoThreadRunning = true
+	}
+	if s.SQLState == ReplicationStateRunning {
+		replstatuspb.SqlThreadRunning = true
+	}
+	return replstatuspb
 }
 
 // ProtoToReplicationStatus translates a proto Status, or panics.
@@ -118,7 +133,7 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 			panic(vterrors.Wrapf(err, "cannot decode SourceUUID"))
 		}
 	}
-	return ReplicationStatus{
+	replstatus := ReplicationStatus{
 		Position:              pos,
 		RelayLogPosition:      relayPos,
 		FilePosition:          filePos,
@@ -134,6 +149,30 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 		SQLState:              ReplicationState(s.SqlState),
 		LastSQLError:          s.LastSqlError,
 	}
+
+	// We need to be able to process gRPC response messages from v13 and older tablets.
+	// In those cases there will be no value (unknown) for the IoState or SqlState but
+	// the message will have the IoThreadRunning and SqlThreadRunning booleans and we
+	// need to revert to our assumptions about a binary state as that's all the older
+	// tablet can provide (really only applicable to the IO status as that is NOT binary
+	// but rather has three states: Running, Stopped, Connecting).
+	// This backwards compatibility can be removed in v15+.
+	if replstatus.IOState == ReplicationStateUnknown {
+		if s.IoThreadRunning {
+			replstatus.IOState = ReplicationStateRunning
+		} else {
+			replstatus.IOState = ReplicationStateStopped
+		}
+	}
+	if replstatus.SQLState == ReplicationStateUnknown {
+		if s.SqlThreadRunning {
+			replstatus.SQLState = ReplicationStateRunning
+		} else {
+			replstatus.SQLState = ReplicationStateStopped
+		}
+	}
+
+	return replstatus
 }
 
 // FindErrantGTIDs can be used to find errant GTIDs in the receiver's relay log, by comparing it against all known replicas,
