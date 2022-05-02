@@ -326,23 +326,27 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 		switch diff := diff.(type) {
 		case *CreateTableEntityDiff:
 			// We expect the table to not exist
-			if _, ok := s.named[diff.createTable.Table.Name.String()]; ok {
+			name := diff.createTable.Table.Name.String()
+			if _, ok := s.named[name]; ok {
 				return ErrApplyDuplicateTableOrView
 			}
 			s.tables = append(s.tables, &CreateTableEntity{CreateTable: *diff.createTable})
+			_, s.named[name] = diff.Entities()
 		case *CreateViewEntityDiff:
 			// We expect the view to not exist
-			if _, ok := s.named[diff.createView.ViewName.Name.String()]; ok {
+			name := diff.createView.ViewName.Name.String()
+			if _, ok := s.named[name]; ok {
 				return ErrApplyDuplicateTableOrView
 			}
 			s.views = append(s.views, &CreateViewEntity{CreateView: *diff.createView})
+			_, s.named[name] = diff.Entities()
 		case *DropTableEntityDiff:
 			// We expect the table to exist
 			found := false
 			for i, t := range s.tables {
-				if t.Table.Name.String() == diff.from.Table.Name.String() {
+				if name := t.Table.Name.String(); name == diff.from.Table.Name.String() {
 					s.tables = append(s.tables[0:i], s.tables[i+1:]...)
-					delete(s.named, t.Table.Name.String())
+					delete(s.named, name)
 					found = true
 					break
 				}
@@ -354,9 +358,9 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 			// We expect the view to exist
 			found := false
 			for i, v := range s.views {
-				if v.ViewName.Name.String() == diff.from.ViewName.Name.String() {
+				if name := v.ViewName.Name.String(); name == diff.from.ViewName.Name.String() {
 					s.views = append(s.views[0:i], s.views[i+1:]...)
-					delete(s.named, v.ViewName.Name.String())
+					delete(s.named, name)
 					found = true
 					break
 				}
@@ -368,7 +372,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 			// We expect the table to exist
 			found := false
 			for i, t := range s.tables {
-				if t.Table.Name.String() == diff.from.Table.Name.String() {
+				if name := t.Table.Name.String(); name == diff.from.Table.Name.String() {
 					to, err := t.Apply(diff)
 					if err != nil {
 						return err
@@ -378,6 +382,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 						return ErrEntityTypeMismatch
 					}
 					s.tables[i] = toCreateTableEntity
+					s.named[name] = toCreateTableEntity
 					found = true
 					break
 				}
@@ -389,7 +394,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 			// We expect the view to exist
 			found := false
 			for i, v := range s.views {
-				if v.ViewName.Name.String() == diff.from.ViewName.Name.String() {
+				if name := v.ViewName.Name.String(); name == diff.from.ViewName.Name.String() {
 					to, err := v.Apply(diff)
 					if err != nil {
 						return err
@@ -399,6 +404,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 						return ErrEntityTypeMismatch
 					}
 					s.views[i] = toCreateViewEntity
+					s.named[name] = toCreateViewEntity
 					found = true
 					break
 				}
