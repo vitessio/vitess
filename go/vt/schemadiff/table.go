@@ -1053,6 +1053,9 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			return err
 		}
 	}
+	if err := c.postApplyNormalize(); err != nil {
+		return err
+	}
 	if err := c.validate(); err != nil {
 		return err
 	}
@@ -1092,6 +1095,35 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 		return nil, err
 	}
 	return dup, nil
+}
+
+// postApplyNormalize runs at the end of apply() and to reorganize/edit things that
+// a MySQL will do implicitly:
+// - edit or remove keys if referenced columns are dropped
+func (c *CreateTableEntity) postApplyNormalize() error {
+	// reduce or remove keys based on existing column list
+	// (a column may have been removed)postApplyNormalize
+	columnExists := map[string]bool{}
+	for _, col := range c.CreateTable.TableSpec.Columns {
+		columnExists[col.Name.String()] = true
+	}
+	nonEmptyIndexes := []*sqlparser.IndexDefinition{}
+	for _, key := range c.CreateTable.TableSpec.Indexes {
+		existingColumns := []*sqlparser.IndexColumn{}
+		for _, col := range key.Columns {
+			colName := col.Column.String()
+			if columnExists[colName] {
+				existingColumns = append(existingColumns, col)
+			}
+		}
+		if len(existingColumns) > 0 {
+			key.Columns = existingColumns
+			nonEmptyIndexes = append(nonEmptyIndexes, key)
+		}
+	}
+	c.CreateTable.TableSpec.Indexes = nonEmptyIndexes
+
+	return nil
 }
 
 // validate checks that the table structure is valid:
