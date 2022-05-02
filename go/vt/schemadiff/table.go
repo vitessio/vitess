@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"strings"
 
+	golcs "github.com/yudai/golcs"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -630,44 +632,37 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 	}
 }
 
-// evaluateColumnReordering produces a minimal uni-directional reordering set of columns. To elaborate:
+// evaluateColumnReordering produces a minimal reordering set of columns. To elaborate:
 // The function receives two sets of columns. the two must be permutations of one another. Specifically,
 // these are the columns shared between the from&to tables.
-// The function evaluates the minimal number of steps such that:
-// - each steps reorders a column, specificly moving it backwards (never forward)
-// - the final set of steps permutate the "from" columns order in to the "to" columns order
+// The function uses longest-common-subsequence (lcs) algorithm to compute which columns should not be moved.
+// any column not in the lcs need to be reordered.
+// The function a map of column names that need to be reordered, and the index into which they are reordered.
 func evaluateColumnReordering(t1SharedColumns, t2SharedColumns []*sqlparser.ColumnDefinition) map[string]int {
 	minimalColumnReordering := map[string]int{}
-	// buf is an ever changing space. It begins with the "from" set of columns.
-	// In neach step of th ealgorithm we will remove one element from the buffer. So each
-	// step the buffer will become smaller, with less work to be done
-	buf := t1SharedColumns[:]
-	colIndexInBuf := func(name string) int {
-		for i := range buf {
-			if buf[i].Name.String() == name {
-				return i
-			}
-		}
-		return -1
+
+	t1SharedColNames := []interface{}{}
+	for _, col := range t1SharedColumns {
+		t1SharedColNames = append(t1SharedColNames, col.Name.String())
 	}
-	// t2Col is our desired state. It's the "to" table's ordered list of columns
+	t2SharedColNames := []interface{}{}
+	for _, col := range t2SharedColumns {
+		t2SharedColNames = append(t2SharedColNames, col.Name.String())
+	}
+
+	lcs := golcs.New(t1SharedColNames, t2SharedColNames)
+	lcsNames := map[string]bool{}
+	for _, v := range lcs.Values() {
+		lcsNames[v.(string)] = true
+	}
 	for i, t2Col := range t2SharedColumns {
-		// for each position in the target list of columns, we check whether we need to
-		// reorder a column.
-		// t2ColName is the desired column name at this position:
 		t2ColName := t2Col.Name.String()
-		if t2ColName == buf[0].Name.String() {
-			// no need to reorder this column. continue
-			buf = buf[1:]
-			continue
+		// see if this column is in longest common subsequence. If so, no need to reorder it. If not, it must be reordered.
+		if _, ok := lcsNames[t2ColName]; !ok {
+			minimalColumnReordering[t2ColName] = i
 		}
-		// we already know where we want this column: in position i, and we know that
-		// because we iterate t2SharedColumns
-		minimalColumnReordering[t2ColName] = i
-		// Remove the column from buf. This makes buf one element shorter with less work for next steps
-		colIndex := colIndexInBuf(t2ColName)
-		buf = append(buf[0:colIndex], buf[colIndex+1:]...)
 	}
+
 	return minimalColumnReordering
 }
 
