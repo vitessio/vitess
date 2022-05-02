@@ -224,6 +224,27 @@ func TestCreateTableDiff(t *testing.T) {
 			cdiff: "ALTER TABLE `t1` ADD KEY `i_idx` (`i`)",
 		},
 		{
+			name:  "added key without name",
+			from:  "create table t1 (`id` int primary key, i int)",
+			to:    "create table t2 (id int primary key, `i` int, key (i))",
+			diff:  "alter table t1 add key i (i)",
+			cdiff: "ALTER TABLE `t1` ADD KEY `i` (`i`)",
+		},
+		{
+			name:  "added key without name, conflicting name",
+			from:  "create table t1 (`id` int primary key, i int, key i(i))",
+			to:    "create table t2 (id int primary key, `i` int, key i(i), key (i))",
+			diff:  "alter table t1 add key i_2 (i)",
+			cdiff: "ALTER TABLE `t1` ADD KEY `i_2` (`i`)",
+		},
+		{
+			name:  "added key without name, conflicting name 2",
+			from:  "create table t1 (`id` int primary key, i int, key i(i), key i_2(i))",
+			to:    "create table t2 (id int primary key, `i` int, key i(i), key i_2(i), key (i))",
+			diff:  "alter table t1 add key i_3 (i)",
+			cdiff: "ALTER TABLE `t1` ADD KEY `i_3` (`i`)",
+		},
+		{
 			name:  "added column and key",
 			from:  "create table t1 (`id` int primary key)",
 			to:    "create table t2 (id int primary key, `i` int, key `i_idx` (i))",
@@ -286,6 +307,11 @@ func TestCreateTableDiff(t *testing.T) {
 			name: "reordered key, no diff 3",
 			from: "CREATE TABLE `pets` (`id` int, `name` VARCHAR(255), `login` VARCHAR(255), PRIMARY KEY (`id`), KEY (`login`), KEY (`name`) )",
 			to:   "CREATE TABLE `pets` (`id` int, `name` VARCHAR(255), `login` VARCHAR(255), PRIMARY KEY (`id`), KEY (`name`), KEY (`login`) )",
+		},
+		{
+			name: "reordered key, no diff 4",
+			from: "CREATE TABLE `pets` (`id` int, `name` VARCHAR(255), `login` VARCHAR(255), PRIMARY KEY (`id`), KEY login (login, name), KEY (`login`), KEY (`name`) )",
+			to:   "CREATE TABLE `pets` (`id` int, `name` VARCHAR(255), `login` VARCHAR(255), PRIMARY KEY (`id`), KEY (`name`), KEY (`login`), KEY login (login, name) )",
 		},
 		{
 			name:  "reordered key, add key",
