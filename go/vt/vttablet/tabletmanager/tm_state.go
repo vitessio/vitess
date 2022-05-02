@@ -249,15 +249,9 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 	span, ctx := trace.NewSpan(ctx, "tmState.update")
 	defer span.Finish()
 	ts.publishForDisplay()
-	// SetServingType can result in error. Although we have forever retries to fix these transient errors
-	// but, under certain condition these errors are non-transient (see https://github.com/vitessio/vitess/issues/10145).
-	// There is no way to distinguish between retry (transient) and non-retryable errors, therefore we will
-	// always return error from 'SetServingType' and 'applyDenyList' to our client. It is up to them to handle it accordingly.
-	// UpdateLock is called from 'ChangeTableType', 'Open' and 'RefreshFromTopoInfo'. For 'Open' and 'RefreshTopoInfo' we don't need
-	// to propagate error to client hence no changes there but we will propagate error from 'ChangeTableType' to client.
 	var returnErr error
 	if !ts.isOpen {
-		return fmt.Errorf("TabletManager state is not open")
+		return nil
 	}
 
 	terTime := logutil.ProtoToTime(ts.tablet.PrimaryTermStartTime)
@@ -267,6 +261,12 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 	reason := ts.canServe(ts.tablet.Type)
 	if reason != "" {
 		log.Infof("Disabling query service: %v", reason)
+		// SetServingType can result in error. Although we have forever retries to fix these transient errors
+		// but, under certain conditions these errors are non-transient (see https://github.com/vitessio/vitess/issues/10145).
+		// There is no way to distinguish between retry (transient) and non-retryable errors, therefore we will
+		// always return error from 'SetServingType' and 'applyDenyList' to our client. It is up to them to handle it accordingly.
+		// UpdateLock is called from 'ChangeTabletType', 'Open' and 'RefreshFromTopoInfo'. For 'Open' and 'RefreshFromTopoInfo' we don't need
+		// to propagate error to client hence no changes there but we will propagate error from 'ChangeTabletType' to client.
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, false, reason); err != nil {
 			errStr := fmt.Sprintf("SetServingType(serving=false) failed: %v", err)
 			log.Errorf(errStr)
