@@ -17,6 +17,7 @@ limitations under the License.
 package schemadiff
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -80,7 +81,7 @@ func (d *CreateTableEntityDiff) IsEmpty() bool {
 
 // IsEmpty implements EntityDiff
 func (d *CreateTableEntityDiff) Entities() (from Entity, to Entity) {
-	return nil, &CreateTableEntity{CreateTable: *d.createTable}
+	return nil, NewCreateTableEntity(d.createTable)
 }
 
 // Statement implements EntityDiff
@@ -153,7 +154,38 @@ type CreateTableEntity struct {
 }
 
 func NewCreateTableEntity(c *sqlparser.CreateTable) *CreateTableEntity {
-	return &CreateTableEntity{CreateTable: *c}
+	entity := &CreateTableEntity{CreateTable: *c}
+	entity.normalize()
+	return entity
+}
+
+// normalize normalizes table definition:
+// - setting names to all keys
+func (c *CreateTableEntity) normalize() {
+	// let's verify all keys have names
+	keyNameExists := map[string]bool{}
+	// first, we iterate and take note for all keys that do aleady have names
+	for _, key := range c.CreateTable.TableSpec.Indexes {
+		if name := key.Info.Name.String(); name != "" {
+			keyNameExists[name] = true
+		}
+	}
+	// now, let's look at keys that do not have names, and assign them new names
+	for _, key := range c.CreateTable.TableSpec.Indexes {
+		if name := key.Info.Name.String(); name == "" {
+			// we know there must be at least one column covered by this key
+			colName := key.Columns[0].Column.String()
+			// like MySQL, we first try to call our index by the name of the first column:
+			suggestedKeyName := colName
+			// now let's see if that name is taken; if it is, enumerate new news until we find a free name
+			for enumerate := 2; keyNameExists[suggestedKeyName]; enumerate++ {
+				suggestedKeyName = fmt.Sprintf("%s_%d", colName, enumerate)
+			}
+			// OK we found a free slot!
+			key.Info.Name = sqlparser.NewColIdent(suggestedKeyName)
+			keyNameExists[suggestedKeyName] = true
+		}
+	}
 }
 
 // Name implements Entity interface
