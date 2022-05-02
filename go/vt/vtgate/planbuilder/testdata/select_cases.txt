@@ -3058,3 +3058,139 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# Reference with a subquery which can be merged
+"select exists(select id from user where id = 4)"
+{
+  "QueryType": "SELECT",
+  "Original": "select exists(select id from user where id = 4)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 4",
+        "Table": "`user`",
+        "Values": [
+          "INT64(4)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select :__sq_has_values1 from dual where 1 != 1",
+        "Query": "select :__sq_has_values1 from dual",
+        "Table": "dual"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select exists(select id from user where id = 4)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select exists (select id from `user` where 1 != 1) from dual where 1 != 1",
+    "Query": "select exists (select id from `user` where id = 4) from dual",
+    "Table": "dual",
+    "Values": [
+      "INT64(4)"
+    ],
+    "Vindex": "user_index"
+  }
+}
+
+# Reference with a subquery which cannot be merged
+"select exists(select * from user)"
+{
+  "QueryType": "SELECT",
+  "Original": "select exists(select * from user)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from `user` where 1 != 1",
+        "Query": "select * from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select :__sq_has_values1 from dual where 1 != 1",
+        "Query": "select :__sq_has_values1 from dual",
+        "Table": "dual"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select exists(select * from user)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from `user` where 1 != 1",
+        "Query": "select * from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select :__sq_has_values1 from dual where 1 != 1",
+        "Query": "select :__sq_has_values1 from dual",
+        "Table": "dual"
+      }
+    ]
+  }
+}
