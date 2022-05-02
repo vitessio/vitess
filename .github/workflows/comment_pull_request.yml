@@ -8,7 +8,7 @@ permissions:
   pull-requests: write
 
 jobs:
-    review_checklist:
+  review_checklist:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     name: Comment Pull Request with the Review Checklist
