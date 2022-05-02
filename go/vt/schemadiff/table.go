@@ -851,7 +851,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			// Remove partitioning
 			c.TableSpec.PartitionOption = nil
 		default:
-			return errors.Wrapf(ErrUnsupportedApplyOperation, "%v", sqlparser.String(spec))
+			return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.String(spec))
 		}
 	}
 	if diff.alterTable.PartitionOption != nil {
@@ -891,10 +891,10 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				}
 			}
 			if !afterColFound {
-				return errors.Wrapf(ErrApplyColumnNotFound, "%v", after.Name.String())
+				return errors.Wrap(ErrApplyColumnNotFound, after.Name.String())
 			}
 		default:
-			// no change in positiion
+			// no change in position
 		}
 
 		if newCols != nil {
@@ -928,16 +928,16 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					}
 				}
 			default:
-				return errors.Wrapf(ErrUnsupportedApplyOperation, "%v", sqlparser.String(opt))
+				return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.String(opt))
 			}
 			if !found {
-				return errors.Wrapf(ErrApplyKeyNotFound, "%v", opt.Name.String())
+				return errors.Wrap(ErrApplyKeyNotFound, opt.Name.String())
 			}
 		case *sqlparser.AddIndexDefinition:
 			// validate no existing key by same name
 			for _, index := range c.TableSpec.Indexes {
 				if index.Info.Name.String() == opt.IndexDefinition.Info.Name.String() {
-					return errors.Wrapf(ErrApplyDuplicateKey, "%v", opt.IndexDefinition.Info.Name.String())
+					return errors.Wrap(ErrApplyDuplicateKey, opt.IndexDefinition.Info.Name.String())
 				}
 			}
 			c.TableSpec.Indexes = append(c.TableSpec.Indexes, opt.IndexDefinition)
@@ -945,7 +945,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			// validate no existing constraint by same name
 			for _, c := range c.TableSpec.Constraints {
 				if c.Name.String() == opt.ConstraintDefinition.Name.String() {
-					return errors.Wrapf(ErrApplyDuplicateConstraint, "%v", opt.ConstraintDefinition.Name.String())
+					return errors.Wrap(ErrApplyDuplicateConstraint, opt.ConstraintDefinition.Name.String())
 				}
 			}
 			c.TableSpec.Constraints = append(c.TableSpec.Constraints, opt.ConstraintDefinition)
@@ -960,18 +960,18 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				}
 			}
 			if !found {
-				return errors.Wrapf(ErrApplyColumnNotFound, "%v", opt.Name.Name.String())
+				return errors.Wrap(ErrApplyColumnNotFound, opt.Name.Name.String())
 			}
 		case *sqlparser.AddColumns:
 			if len(opt.Columns) != 1 {
 				// our Diff only ever generates a single column per AlterOption
-				return errors.Wrapf(ErrUnsupportedApplyOperation, "%v", sqlparser.String(opt))
+				return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.String(opt))
 			}
 			// validate no column by same name
 			addedCol := opt.Columns[0]
 			for _, col := range c.TableSpec.Columns {
 				if col.Name.String() == addedCol.Name.String() {
-					return errors.Wrapf(ErrApplyDuplicateColumn, "%v", addedCol.Name.String())
+					return errors.Wrap(ErrApplyDuplicateColumn, addedCol.Name.String())
 				}
 			}
 			c.TableSpec.Columns = append(c.TableSpec.Columns, addedCol)
@@ -994,7 +994,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				}
 			}
 			if !found {
-				return errors.Wrapf(ErrApplyColumnNotFound, "%v", opt.NewColDefinition.Name.String())
+				return errors.Wrap(ErrApplyColumnNotFound, opt.NewColDefinition.Name.String())
 			}
 		case sqlparser.TableOptions:
 			// Apply table options. Options that have their DEFAULT value are actually remvoed.
@@ -1017,7 +1017,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				}()
 			}
 		default:
-			return errors.Wrapf(ErrUnsupportedApplyOperation, "%v", sqlparser.String(opt))
+			return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.String(opt))
 		}
 		return nil
 	}
