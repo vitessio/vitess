@@ -20,6 +20,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pkg/errors"
+
+	golcs "github.com/yudai/golcs"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -273,6 +277,46 @@ func (c *CreateTableEntity) diffTableCharset(
 		return t2Charset
 	}
 	return ""
+}
+
+// isDefaultTableOptionValue sees if the value for a TableOption is also its default value
+func isDefaultTableOptionValue(option *sqlparser.TableOption) bool {
+	switch strings.ToUpper(option.Name) {
+	case "CHECKSUM":
+		return sqlparser.String(option.Value) == "0"
+	case "COMMENT":
+		return option.String == ""
+	case "COMPRESSION":
+		return sqlparser.String(option.Value) == "" || sqlparser.String(option.Value) == "''"
+	case "CONNECTION":
+		return sqlparser.String(option.Value) == "" || sqlparser.String(option.Value) == "''"
+	case "DATA DIRECTORY":
+		return sqlparser.String(option.Value) == "" || sqlparser.String(option.Value) == "''"
+	case "DELAY_KEY_WRITE":
+		return sqlparser.String(option.Value) == "0"
+	case "ENCRYPTION":
+		return sqlparser.String(option.Value) == "N"
+	case "INDEX DIRECTORY":
+		return sqlparser.String(option.Value) == "" || sqlparser.String(option.Value) == "''"
+	case "KEY_BLOCK_SIZE":
+		return sqlparser.String(option.Value) == "0"
+	case "MAX_ROWS":
+		return sqlparser.String(option.Value) == "0"
+	case "MIN_ROWS":
+		return sqlparser.String(option.Value) == "0"
+	case "PACK_KEYS":
+		return option.String == "DEFAULT"
+	case "ROW_FORMAT":
+		return option.String == "DEFAULT"
+	case "STATS_AUTO_RECALC":
+		return option.String == "DEFAULT"
+	case "STATS_PERSISTENT":
+		return option.String == "DEFAULT"
+	case "STATS_SAMPLE_PAGES":
+		return option.String == "DEFAULT"
+	default:
+		return false
+	}
 }
 
 func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
@@ -630,44 +674,37 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 	}
 }
 
-// evaluateColumnReordering produces a minimal uni-directional reordering set of columns. To elaborate:
+// evaluateColumnReordering produces a minimal reordering set of columns. To elaborate:
 // The function receives two sets of columns. the two must be permutations of one another. Specifically,
 // these are the columns shared between the from&to tables.
-// The function evaluates the minimal number of steps such that:
-// - each steps reorders a column, specificly moving it backwards (never forward)
-// - the final set of steps permutate the "from" columns order in to the "to" columns order
+// The function uses longest-common-subsequence (lcs) algorithm to compute which columns should not be moved.
+// any column not in the lcs need to be reordered.
+// The function a map of column names that need to be reordered, and the index into which they are reordered.
 func evaluateColumnReordering(t1SharedColumns, t2SharedColumns []*sqlparser.ColumnDefinition) map[string]int {
 	minimalColumnReordering := map[string]int{}
-	// buf is an ever changing space. It begins with the "from" set of columns.
-	// In neach step of th ealgorithm we will remove one element from the buffer. So each
-	// step the buffer will become smaller, with less work to be done
-	buf := t1SharedColumns[:]
-	colIndexInBuf := func(name string) int {
-		for i := range buf {
-			if buf[i].Name.String() == name {
-				return i
-			}
-		}
-		return -1
+
+	t1SharedColNames := []interface{}{}
+	for _, col := range t1SharedColumns {
+		t1SharedColNames = append(t1SharedColNames, col.Name.String())
 	}
-	// t2Col is our desired state. It's the "to" table's ordered list of columns
+	t2SharedColNames := []interface{}{}
+	for _, col := range t2SharedColumns {
+		t2SharedColNames = append(t2SharedColNames, col.Name.String())
+	}
+
+	lcs := golcs.New(t1SharedColNames, t2SharedColNames)
+	lcsNames := map[string]bool{}
+	for _, v := range lcs.Values() {
+		lcsNames[v.(string)] = true
+	}
 	for i, t2Col := range t2SharedColumns {
-		// for each position in the target list of columns, we check whether we need to
-		// reorder a column.
-		// t2ColName is the desired column name at this position:
 		t2ColName := t2Col.Name.String()
-		if t2ColName == buf[0].Name.String() {
-			// no need to reorder this column. continue
-			buf = buf[1:]
-			continue
+		// see if this column is in longest common subsequence. If so, no need to reorder it. If not, it must be reordered.
+		if _, ok := lcsNames[t2ColName]; !ok {
+			minimalColumnReordering[t2ColName] = i
 		}
-		// we already know where we want this column: in position i, and we know that
-		// because we iterate t2SharedColumns
-		minimalColumnReordering[t2ColName] = i
-		// Remove the column from buf. This makes buf one element shorter with less work for next steps
-		colIndex := colIndexInBuf(t2ColName)
-		buf = append(buf[0:colIndex], buf[colIndex+1:]...)
 	}
+
 	return minimalColumnReordering
 }
 
@@ -798,4 +835,226 @@ func (c *CreateTableEntity) Drop() EntityDiff {
 		FromTables: []sqlparser.TableName{c.Table},
 	}
 	return &DropTableEntityDiff{from: c, dropTable: dropTable}
+}
+
+// apply attempts to apply an ALTER TABLE diff onto this entity's table definition.
+// supported modifications are only those created by schemadiff's Diff() function.
+func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
+	if spec := diff.alterTable.PartitionSpec; spec != nil {
+		switch {
+		case spec.Action == sqlparser.RemoveAction && spec.IsAll:
+			// Remove partitioning
+			c.TableSpec.PartitionOption = nil
+		default:
+			return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.String(spec))
+		}
+	}
+	if diff.alterTable.PartitionOption != nil {
+		// Specify new spec:
+		c.CreateTable.TableSpec.PartitionOption = diff.alterTable.PartitionOption
+	}
+	// reorderColumn attempts to reorder column that is right now in position 'colIndex',
+	// based on its FIRST or AFTER specs (if any)
+	reorderColumn := func(colIndex int, first bool, after *sqlparser.ColName) error {
+		var newCols []*sqlparser.ColumnDefinition // nil
+		col := c.TableSpec.Columns[colIndex]
+		switch {
+		case first:
+			newCols = append(newCols, col)
+			newCols = append(newCols, c.TableSpec.Columns[0:colIndex]...)
+			newCols = append(newCols, c.TableSpec.Columns[colIndex+1:]...)
+		case after != nil:
+			afterColFound := false
+			// look for the AFTER column; it has to exist!
+			for a, afterCol := range c.TableSpec.Columns {
+				if afterCol.Name.String() == after.Name.String() {
+					if colIndex < a {
+						// moving column i to the right
+						newCols = append(newCols, c.TableSpec.Columns[0:colIndex]...)
+						newCols = append(newCols, c.TableSpec.Columns[colIndex+1:a+1]...)
+						newCols = append(newCols, col)
+						newCols = append(newCols, c.TableSpec.Columns[a+1:]...)
+					} else {
+						// moving column i to the left
+						newCols = append(newCols, c.TableSpec.Columns[0:a+1]...)
+						newCols = append(newCols, col)
+						newCols = append(newCols, c.TableSpec.Columns[a+1:colIndex]...)
+						newCols = append(newCols, c.TableSpec.Columns[colIndex+1:]...)
+					}
+					afterColFound = true
+					break
+				}
+			}
+			if !afterColFound {
+				return errors.Wrap(ErrApplyColumnNotFound, after.Name.String())
+			}
+		default:
+			// no change in position
+		}
+
+		if newCols != nil {
+			c.TableSpec.Columns = newCols
+		}
+		return nil
+	}
+
+	// apply a single AlterOption; only supported types are those generated by Diff()
+	applyAlterOption := func(opt sqlparser.AlterOption) error {
+		switch opt := opt.(type) {
+		case *sqlparser.DropKey:
+			// applies to either indexes or FK constraints
+			// we expect the named key to be found
+			found := false
+			switch opt.Type {
+			case sqlparser.NormalKeyType, sqlparser.PrimaryKeyType:
+				for i, index := range c.TableSpec.Indexes {
+					if index.Info.Name.String() == opt.Name.String() {
+						found = true
+						c.TableSpec.Indexes = append(c.TableSpec.Indexes[0:i], c.TableSpec.Indexes[i+1:]...)
+						break
+					}
+				}
+			case sqlparser.ForeignKeyType:
+				for i, constraint := range c.TableSpec.Constraints {
+					if constraint.Name.String() == opt.Name.String() {
+						found = true
+						c.TableSpec.Constraints = append(c.TableSpec.Constraints[0:i], c.TableSpec.Constraints[i+1:]...)
+						break
+					}
+				}
+			default:
+				return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.String(opt))
+			}
+			if !found {
+				return errors.Wrap(ErrApplyKeyNotFound, opt.Name.String())
+			}
+		case *sqlparser.AddIndexDefinition:
+			// validate no existing key by same name
+			for _, index := range c.TableSpec.Indexes {
+				if index.Info.Name.String() == opt.IndexDefinition.Info.Name.String() {
+					return errors.Wrap(ErrApplyDuplicateKey, opt.IndexDefinition.Info.Name.String())
+				}
+			}
+			c.TableSpec.Indexes = append(c.TableSpec.Indexes, opt.IndexDefinition)
+		case *sqlparser.AddConstraintDefinition:
+			// validate no existing constraint by same name
+			for _, c := range c.TableSpec.Constraints {
+				if c.Name.String() == opt.ConstraintDefinition.Name.String() {
+					return errors.Wrap(ErrApplyDuplicateConstraint, opt.ConstraintDefinition.Name.String())
+				}
+			}
+			c.TableSpec.Constraints = append(c.TableSpec.Constraints, opt.ConstraintDefinition)
+		case *sqlparser.DropColumn:
+			// we expect the column to exist
+			found := false
+			for i, col := range c.TableSpec.Columns {
+				if col.Name.String() == opt.Name.Name.String() {
+					found = true
+					c.TableSpec.Columns = append(c.TableSpec.Columns[0:i], c.TableSpec.Columns[i+1:]...)
+					break
+				}
+			}
+			if !found {
+				return errors.Wrap(ErrApplyColumnNotFound, opt.Name.Name.String())
+			}
+		case *sqlparser.AddColumns:
+			if len(opt.Columns) != 1 {
+				// our Diff only ever generates a single column per AlterOption
+				return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.String(opt))
+			}
+			// validate no column by same name
+			addedCol := opt.Columns[0]
+			for _, col := range c.TableSpec.Columns {
+				if col.Name.String() == addedCol.Name.String() {
+					return errors.Wrap(ErrApplyDuplicateColumn, addedCol.Name.String())
+				}
+			}
+			c.TableSpec.Columns = append(c.TableSpec.Columns, addedCol)
+			// see if we need to position it anywhere other than end of table
+			if err := reorderColumn(len(c.TableSpec.Columns)-1, opt.First, opt.After); err != nil {
+				return err
+			}
+		case *sqlparser.ModifyColumn:
+			// we expect the column to exist
+			found := false
+			for i, col := range c.TableSpec.Columns {
+				if col.Name.String() == opt.NewColDefinition.Name.String() {
+					found = true
+					// redefine. see if we need to position it anywhere other than end of table
+					c.TableSpec.Columns[i] = opt.NewColDefinition
+					if err := reorderColumn(i, opt.First, opt.After); err != nil {
+						return err
+					}
+					break
+				}
+			}
+			if !found {
+				return errors.Wrap(ErrApplyColumnNotFound, opt.NewColDefinition.Name.String())
+			}
+		case sqlparser.TableOptions:
+			// Apply table options. Options that have their DEFAULT value are actually remvoed.
+			for _, option := range opt {
+				func() {
+					for i, existingOption := range c.TableSpec.Options {
+						if option.Name == existingOption.Name {
+							if isDefaultTableOptionValue(option) {
+								// remove the option
+								c.TableSpec.Options = append(c.TableSpec.Options[0:i], c.TableSpec.Options[i+1:]...)
+							} else {
+								c.TableSpec.Options[i] = option
+							}
+							// option found. No need for further iteration.
+							return
+						}
+					}
+					// option not found. We add it
+					c.TableSpec.Options = append(c.TableSpec.Options, option)
+				}()
+			}
+		default:
+			return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.String(opt))
+		}
+		return nil
+	}
+	for _, alterOption := range diff.alterTable.AlterOptions {
+		if err := applyAlterOption(alterOption); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Apply attempts to apply given ALTER TABLE diff onto the table defined by this entity.
+// This entity is unmodified. If successful, a new CREATE TABLE entity is returned.
+func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
+	alterDiff, ok := diff.(*AlterTableEntityDiff)
+	if !ok {
+		return nil, ErrEntityTypeMismatch
+	}
+	dupCreateTable := &sqlparser.CreateTable{
+		Temp:        c.Temp,
+		Table:       c.Table,
+		IfNotExists: c.IfNotExists,
+		TableSpec:   nil,
+		OptLike:     nil,
+		Comments:    nil,
+		FullyParsed: c.FullyParsed,
+	}
+	if c.TableSpec != nil {
+		d := *c.TableSpec
+		dupCreateTable.TableSpec = &d
+	}
+	if c.OptLike != nil {
+		d := *c.OptLike
+		dupCreateTable.OptLike = &d
+	}
+	if c.Comments != nil {
+		d := *c.Comments
+		dupCreateTable.Comments = &d
+	}
+	dup := &CreateTableEntity{CreateTable: *dupCreateTable}
+	if err := dup.apply(alterDiff); err != nil {
+		return nil, err
+	}
+	return dup, nil
 }

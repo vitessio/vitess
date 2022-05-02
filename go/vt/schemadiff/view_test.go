@@ -185,6 +185,14 @@ func TestCreateViewDiff(t *testing.T) {
 					if ts.toName != "" {
 						assert.Equal(t, ts.toName, eTo.Name())
 					}
+					{ // Validate "apply()" on "from" converges with "to"
+						applied, err := c.Apply(alter)
+						assert.NoError(t, err)
+						require.NotNil(t, applied)
+						appliedDiff, err := eTo.Diff(applied, hints)
+						require.NoError(t, err)
+						assert.True(t, appliedDiff.IsEmpty(), "expected empty diff, found changes: %v", appliedDiff.CanonicalStatementString())
+					}
 				}
 				{
 					cdiff := alter.CanonicalStatementString()
