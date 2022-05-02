@@ -45,11 +45,11 @@ func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 		}, {
 			prevAnalysisCode: inst.PrimaryHasPrimary,
 			newAnalysisCode:  inst.DeadPrimaryAndSomeReplicas,
-			shouldBeEqual:    true,
+			shouldBeEqual:    false,
 		}, {
 			prevAnalysisCode: inst.DeadPrimary,
 			newAnalysisCode:  inst.PrimaryHasPrimary,
-			shouldBeEqual:    true,
+			shouldBeEqual:    false,
 		}, {
 			prevAnalysisCode: inst.LockedSemiSyncPrimary,
 			newAnalysisCode:  inst.PrimaryHasPrimary,

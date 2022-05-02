@@ -612,6 +612,23 @@ func replacePromotedReplicaWithCandidate(topologyRecovery *TopologyRecovery, dea
 	return promotedReplica, nil
 }
 
+// recoverPrimaryHasPrimary resets the replication on the primary instance
+func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false, true)
+	if topologyRecovery == nil {
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixPrimaryHasPrimary.", analysisEntry.AnalyzedInstanceKey))
+		return false, nil, err
+	}
+	log.Infof("Analysis: %v, will fix incorrect primaryship %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
+
+	// Reset replication on current primary.
+	_, err = inst.ResetReplicationOperation(&analysisEntry.AnalyzedInstanceKey)
+	if err != nil {
+		return false, topologyRecovery, err
+	}
+	return true, topologyRecovery, nil
+}
+
 // recoverDeadPrimary checks a given analysis, decides whether to take action, and possibly takes action
 // Returns true when action was taken.
 func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
@@ -1203,24 +1220,26 @@ func getCheckAndRecoverFunction(analysisCode inst.AnalysisCode, analyzedInstance
 ) {
 	switch analysisCode {
 	// primary
-	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryHasPrimary:
+	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas:
 		if isInEmergencyOperationGracefulPeriod(analyzedInstanceKey) {
 			return checkAndRecoverGenericProblem, 1, false
 		}
 		return recoverDeadPrimary, 2, true
+	case inst.PrimaryHasPrimary:
+		return recoverPrimaryHasPrimary, 3, true
 	case inst.LockedSemiSyncPrimary:
 		if isInEmergencyOperationGracefulPeriod(analyzedInstanceKey) {
 			return checkAndRecoverGenericProblem, 1, false
 		}
-		return checkAndRecoverLockedSemiSyncPrimary, 3, true
+		return checkAndRecoverLockedSemiSyncPrimary, 4, true
 	case inst.ClusterHasNoPrimary:
-		return electNewPrimary, 4, true
+		return electNewPrimary, 5, true
 	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet:
-		return fixPrimary, 5, true
+		return fixPrimary, 6, true
 	// replica
 	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
 		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet:
-		return fixReplica, 6, true
+		return fixReplica, 7, true
 	// primary, non actionable
 	case inst.DeadPrimaryAndReplicas:
 		return checkAndRecoverGenericProblem, 1, false
