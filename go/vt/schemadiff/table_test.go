@@ -283,6 +283,11 @@ func TestCreateTableDiff(t *testing.T) {
 			to:   "create table t2 (`id` int, i int, key i2_idx (`i`, id), key i_idx ( i ), primary key(id) )",
 		},
 		{
+			name: "reordered key, no diff 3",
+			from: "CREATE TABLE `pets` (`id` int, `name` VARCHAR(255), `login` VARCHAR(255), PRIMARY KEY (`id`), KEY (`login`), KEY (`name`) )",
+			to:   "CREATE TABLE `pets` (`id` int, `name` VARCHAR(255), `login` VARCHAR(255), PRIMARY KEY (`id`), KEY (`name`), KEY (`login`) )",
+		},
+		{
 			name:  "reordered key, add key",
 			from:  "create table t1 (`id` int primary key, i int, key i_idx(i), key i2_idx(i, `id`))",
 			to:    "create table t2 (`id` int primary key, i int, key i2_idx (`i`, id), key i_idx3(id), key i_idx ( i ) )",
