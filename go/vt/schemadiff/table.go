@@ -22,7 +22,7 @@ import (
 
 	"github.com/pkg/errors"
 
-  golcs "github.com/yudai/golcs"
+	golcs "github.com/yudai/golcs"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
