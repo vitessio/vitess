@@ -114,11 +114,13 @@ var (
 		"12",
 		"18",
 	}
-	clusterDockerList = []string{}
-	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
-	// this by only installing them in the required clusters
-	clustersRequiringXtraBackup = append(clusterList, clusterSelfHostedList...)
-	clustersRequiringMakeTools  = []string{
+	clusterDockerList           = []string{}
+	clustersRequiringXtraBackup = []string{
+		"20",
+		"xb_recovery",
+		"vtctlbackup_sharded_clustertest_heavy",
+	}
+	clustersRequiringMakeTools = []string{
 		"18",
 		"24",
 		"vtgate_topo_consul",
