@@ -94,6 +94,7 @@ func TestSubqueryInINClause(t *testing.T) {
 
 func TestSubqueryInReference(t *testing.T) {
 	defer cluster.PanicHandler(t)
+	utils.SkipIfBinaryIsBelowVersion(t, 14, "vtgate")
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
