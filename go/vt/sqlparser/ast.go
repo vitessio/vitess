@@ -2601,6 +2601,16 @@ type (
 		Position   Expr
 		MatchType  Expr
 	}
+
+	// LockingFuncType is an enum that get types of LockingFunc
+	LockingFuncType int8
+
+	// LockingFunc represents the advisory lock functions.
+	LockingFunc struct {
+		Type    LockingFuncType
+		Name    Expr
+		Timeout Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2666,6 +2676,7 @@ func (*RegexpInstrExpr) iExpr()                    {}
 func (*RegexpLikeExpr) iExpr()                     {}
 func (*RegexpReplaceExpr) iExpr()                  {}
 func (*RegexpSubstrExpr) iExpr()                   {}
+func (*LockingFunc) iExpr()                        {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}

@@ -2997,6 +2997,8 @@ var (
 	}, {
 		input:  "SELECT TRIM('Michael!') RLIKE @j",
 		output: "select trim('Michael!') regexp @j from dual",
+	}, {
+		input: "select get_lock('a', 10), is_free_lock('b'), is_used_lock('c'), release_all_locks(), release_lock('d') from dual",
 	}}
 )
 

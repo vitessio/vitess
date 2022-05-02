@@ -2408,3 +2408,15 @@ func (node *JSONUnquoteExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "json_unquote(%v", node.JSONValue)
 	buf.WriteString(")")
 }
+
+// Format formats the node.
+func (node *LockingFunc) Format(buf *TrackedBuffer) {
+	buf.WriteString(node.Type.ToString() + "(")
+	if node.Type != ReleaseAllLocks {
+		buf.astPrintf(node, "%v", node.Name)
+	}
+	if node.Type == GetLock {
+		buf.astPrintf(node, ",%v", node.Timeout)
+	}
+	buf.WriteString(")")
+}

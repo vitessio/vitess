@@ -332,6 +332,13 @@ const (
 	JSONMergePatchStr    = "json_merge_patch"
 	JSONMergePreserveStr = "json_merge_preserve"
 
+	// LockingFuncType strings
+	GetLockStr         = "get_lock"
+	IsFreeLockStr      = "is_free_lock"
+	IsUsedLockStr      = "is_used_lock"
+	ReleaseAllLocksStr = "release_all_locks"
+	ReleaseLockStr     = "release_lock"
+
 	// LockOptionType strings
 	NoneTypeStr      = "none"
 	SharedTypeStr    = "shared"
@@ -453,6 +460,15 @@ const (
 	JSONMergeType JSONValueMergeType = iota
 	JSONMergePatchType
 	JSONMergePreserveType
+)
+
+// Constants for Enum Type - LockingFuncType
+const (
+	GetLock LockingFuncType = iota
+	IsFreeLock
+	IsUsedLock
+	ReleaseAllLocks
+	ReleaseLock
 )
 
 // Constants for Enum Type - WhereType
