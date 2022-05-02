@@ -566,6 +566,56 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 	return &tabletmanagerdatapb.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
 }
 
+// getPrimaryKeyEquivalentColumns can be used if the table has no
+// defined PRIMARY KEY. It will return the columns for a viable
+// PRIMARY KEY equivalent (PKE), which is often a NON-NULL
+// UNIQUE KEY. For the latter, we use all columns that make up
+// the total set of PKE indexes. This means that if e.g. you
+// have a single column PKE index and a a second PKE index on
+// two columns, this function will return all three:
+//   CREATE TABLE t1 (
+//   id1 INT NOT NULL,
+//   id2 INT NOT NULL,
+//   id3 INT NOT NULL,
+//   col1 VARCHAR(100),
+//   UNIQUE INDEX (id1),
+//   UNIQUE INDEX (id2, id3);
+// Will result in the id1,id2,id3 columns being treated as the
+// PK (equivalent) columns.
+func (mysqld *Mysqld) getPrimaryKeyEquivalentColumns(ctx context.Context, dbName string, tables ...string) (map[string][]string, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+
+	tableList, err := tableListSQL(tables)
+	if err != nil {
+		return nil, err
+	}
+
+	// sql uses column name aliases to guarantee lower case sensitivity.
+	sql := `SELECT table_name as table_name, ordinal_position as ordinal_position, COLUMN_NAME as column_name
+				FROM INFORMATION_SCHEMA.COLUMNS
+				WHERE TABLE_SCHEMA = '%s'
+				AND TABLE_NAME IN %s
+				AND IS_NULLABLE = 'NO' AND COLUMN_KEY = 'UNI'
+				ORDER BY table_name, ordinal_position;`
+	sql = fmt.Sprintf(sql, dbName, tableList)
+	qr, err := conn.ExecuteFetch(sql, len(tables)*100, true)
+	if err != nil {
+		return nil, err
+	}
+
+	named := qr.Named()
+	colMap := map[string][]string{}
+	for _, row := range named.Rows {
+		tableName := row.AsString("table_name", "")
+		colMap[tableName] = append(colMap[tableName], row.AsString("column_name", ""))
+	}
+	return colMap, err
+}
+
 //tableDefinitions is a sortable collection of table definitions
 type tableDefinitions []*tabletmanagerdatapb.TableDefinition
 
