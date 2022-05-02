@@ -527,6 +527,11 @@ func (fmd *FakeMysqlDaemon) GetPrimaryKeyColumns(ctx context.Context, dbName, ta
 	return []string{}, nil
 }
 
+// GetPrimaryKeyEquivalentColumns is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, error) {
+	return []string{}, nil
+}
+
 // PreflightSchemaChange is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) PreflightSchemaChange(ctx context.Context, dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if fmd.PreflightSchemaChangeResult == nil {

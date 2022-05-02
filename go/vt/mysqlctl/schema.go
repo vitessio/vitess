@@ -355,15 +355,16 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(ctx context.Context, dbName, table st
 // columns for a viable PRIMARY KEY equivalent (PKE), which is
 // often a NON-NULL UNIQUE KEY. For the latter, we use all columns
 // that make up the total set of PKE indexes. This means that if
-// e.g. you have a single column PKE index and a a second PKE
+// e.g. you have a single column PKE index and a second PKE
 // index on two columns, this function will return all three:
 //   CREATE TABLE t1 (
-//   id1 INT NOT NULL,
-//   id2 INT NOT NULL,
-//   id3 INT NOT NULL,
-//   col1 VARCHAR(100),
-//   UNIQUE INDEX (id1),
-//   UNIQUE INDEX (id2, id3);
+//     id1 INT NOT NULL,
+//     id2 INT NOT NULL,
+//     id3 INT NOT NULL,
+//     col1 VARCHAR(100),
+//     UNIQUE INDEX (id1),
+//     UNIQUE INDEX (id2, id3)
+//   );
 // Will result in the id1,id2,id3 columns being treated as the
 // PK (equivalent) columns.
 func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, tables ...string) (map[string][]string, error) {
@@ -566,20 +567,47 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 	return &tabletmanagerdatapb.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
 }
 
+// GetPrimaryKeyEquivalentColumns can be used if the table has no
+// defined PRIMARY KEY. It will return the columns for a viable
+// PRIMARY KEY equivalent (PKE), which is often a NON-NULL
+// UNIQUE KEY. For the latter, we use all columns that make up
+// the total set of PKE indexes. This means that if e.g. you
+// have a single column PKE index and a second PKE index on
+// two columns, this function will return all three:
+//   CREATE TABLE t1 (
+//     id1 INT NOT NULL,
+//     id2 INT NOT NULL,
+//     id3 INT NOT NULL,
+//     col1 VARCHAR(100),
+//     UNIQUE INDEX (id1),
+//     UNIQUE INDEX (id2, id3)
+//   );
+// Will result in the id1,id2,id3 columns being treated as the
+// PK (equivalent) columns.
+func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, error) {
+	cs, err := mysqld.getPrimaryKeyEquivalentColumns(ctx, dbName, table)
+	if err != nil {
+		return nil, err
+	}
+
+	return cs[dbName], nil
+}
+
 // getPrimaryKeyEquivalentColumns can be used if the table has no
 // defined PRIMARY KEY. It will return the columns for a viable
 // PRIMARY KEY equivalent (PKE), which is often a NON-NULL
 // UNIQUE KEY. For the latter, we use all columns that make up
 // the total set of PKE indexes. This means that if e.g. you
-// have a single column PKE index and a a second PKE index on
+// have a single column PKE index and a second PKE index on
 // two columns, this function will return all three:
 //   CREATE TABLE t1 (
-//   id1 INT NOT NULL,
-//   id2 INT NOT NULL,
-//   id3 INT NOT NULL,
-//   col1 VARCHAR(100),
-//   UNIQUE INDEX (id1),
-//   UNIQUE INDEX (id2, id3);
+//     id1 INT NOT NULL,
+//     id2 INT NOT NULL,
+//     id3 INT NOT NULL,
+//     col1 VARCHAR(100),
+//     UNIQUE INDEX (id1),
+//     UNIQUE INDEX (id2, id3)
+//   );
 // Will result in the id1,id2,id3 columns being treated as the
 // PK (equivalent) columns.
 func (mysqld *Mysqld) getPrimaryKeyEquivalentColumns(ctx context.Context, dbName string, tables ...string) (map[string][]string, error) {
