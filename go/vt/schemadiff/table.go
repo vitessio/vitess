@@ -1036,29 +1036,26 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 	if !ok {
 		return nil, ErrEntityTypeMismatch
 	}
-	var tableSpec *sqlparser.TableSpec
-	if c.TableSpec != nil {
-		d := *c.TableSpec
-		tableSpec = &d
-	}
-	var optLike *sqlparser.OptLike
-	if c.OptLike != nil {
-		d := *c.OptLike
-		optLike = &d
-	}
-	var comments *sqlparser.ParsedComments
-	if c.OptLike != nil {
-		d := *c.Comments
-		comments = &d
-	}
 	dupCreateTable := &sqlparser.CreateTable{
 		Temp:        c.Temp,
 		Table:       c.Table,
 		IfNotExists: c.IfNotExists,
-		TableSpec:   tableSpec,
-		OptLike:     optLike,
-		Comments:    comments,
+		TableSpec:   nil,
+		OptLike:     nil,
+		Comments:    nil,
 		FullyParsed: c.FullyParsed,
+	}
+	if c.TableSpec != nil {
+		d := *c.TableSpec
+		dupCreateTable.TableSpec = &d
+	}
+	if c.OptLike != nil {
+		d := *c.OptLike
+		dupCreateTable.OptLike = &d
+	}
+	if c.Comments != nil {
+		d := *c.Comments
+		dupCreateTable.Comments = &d
 	}
 	dup := &CreateTableEntity{CreateTable: *dupCreateTable}
 	if err := dup.apply(alterDiff); err != nil {
