@@ -39,6 +39,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
+            - '.github/workflows/**'
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'
