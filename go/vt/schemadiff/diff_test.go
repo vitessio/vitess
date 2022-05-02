@@ -297,7 +297,7 @@ func TestDiffSchemas(t *testing.T) {
 			to:   "create table t(id int primary key)",
 		},
 		{
-			name: "change of table columns",
+			name: "change of table columns, added",
 			from: "create table t(id int primary key)",
 			to:   "create table t(id int primary key, i int)",
 			diffs: []string{
@@ -305,6 +305,17 @@ func TestDiffSchemas(t *testing.T) {
 			},
 			cdiffs: []string{
 				"ALTER TABLE `t` ADD COLUMN `i` int",
+			},
+		},
+		{
+			name: "change of table columns, removed",
+			from: "create table t(id int primary key, i int)",
+			to:   "create table t(id int primary key)",
+			diffs: []string{
+				"alter table t drop column i",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t` DROP COLUMN `i`",
 			},
 		},
 		{
@@ -485,6 +496,83 @@ func TestDiffSchemas(t *testing.T) {
 					_, err := sqlparser.Parse(s)
 					assert.NoError(t, err)
 				}
+
+				{
+					// Validate "apply()" on "from" converges with "to"
+					schema1, err := NewSchemaFromSQL(ts.from)
+					assert.NoError(t, err)
+					schema2, err := NewSchemaFromSQL(ts.to)
+					assert.NoError(t, err)
+					applied, err := schema1.Apply(diffs)
+					require.NoError(t, err)
+
+					appliedDiff, err := schema2.Diff(applied, hints)
+					require.NoError(t, err)
+					assert.Empty(t, appliedDiff)
+					assert.Equal(t, schema2.ToQueries(), applied.ToQueries())
+				}
+			}
+		})
+	}
+}
+
+func TestSchemaApplyError(t *testing.T) {
+	tt := []struct {
+		name string
+		from string
+		to   string
+	}{
+		{
+			name: "added table",
+			to:   "create table t2(id int primary key)",
+		},
+		{
+			name: "different tables",
+			from: "create table t1(id int primary key)",
+			to:   "create table t2(id int primary key)",
+		},
+		{
+			name: "added table 2",
+			from: "create table t1(id int primary key)",
+			to:   "create table t1(id int primary key); create table t2(id int primary key)",
+		},
+		{
+			name: "modified tables",
+			from: "create table t(id int primary key, i int)",
+			to:   "create table t(id int primary key)",
+		},
+		{
+			name: "added view",
+			from: "create table t(id int); create view v1 as select * from t",
+			to:   "create table t(id int); create view v1 as select * from t; create view v2 as select * from t",
+		},
+	}
+	hints := &DiffHints{}
+	for _, ts := range tt {
+		t.Run(ts.name, func(t *testing.T) {
+			// Validate "apply()" on "from" converges with "to"
+			schema1, err := NewSchemaFromSQL(ts.from)
+			assert.NoError(t, err)
+			schema2, err := NewSchemaFromSQL(ts.to)
+			assert.NoError(t, err)
+
+			{
+				diffs, err := schema1.Diff(schema2, hints)
+				assert.NoError(t, err)
+				assert.NotEmpty(t, diffs)
+				_, err = schema1.Apply(diffs)
+				require.NoError(t, err)
+				_, err = schema2.Apply(diffs)
+				require.Error(t, err, "expected error applying to schema2. diffs: %v", diffs)
+			}
+			{
+				diffs, err := schema2.Diff(schema1, hints)
+				assert.NoError(t, err)
+				assert.NotEmpty(t, diffs, "schema1: %v, schema2: %v", schema1.ToSQL(), schema2.ToSQL())
+				_, err = schema2.Apply(diffs)
+				require.NoError(t, err)
+				_, err = schema1.Apply(diffs)
+				require.Error(t, err, "applying diffs to schema1: %v", schema1.ToSQL())
 			}
 		})
 	}
