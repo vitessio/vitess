@@ -118,7 +118,6 @@ var (
 	clustersRequiringXtraBackup = []string{
 		"20",
 		"xb_recovery",
-		"vtctlbackup_sharded_clustertest_heavy",
 	}
 	clustersRequiringMakeTools = []string{
 		"18",
