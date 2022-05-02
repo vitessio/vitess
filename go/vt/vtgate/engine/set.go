@@ -98,6 +98,8 @@ type (
 	}
 )
 
+var unsupportedSQLModes = []string{"ANSI_QUOTES", "NO_BACKSLASH_ESCAPES", "PIPES_AS_CONCAT", "REAL_AS_FLOAT"}
+
 var _ Primitive = (*Set)(nil)
 
 // RouteType implements the Primitive interface method.
@@ -350,7 +352,10 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(vcursor VCursor, res *evalen
 
 	var value sqltypes.Value
 	if svs.Name == "sql_mode" {
-		changed, value = sqlModeChangedValue(qr)
+		changed, value, err = sqlModeChangedValue(qr)
+		if err != nil {
+			return false, err
+		}
 		if !changed {
 			return false, nil
 		}
@@ -371,12 +376,12 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(vcursor VCursor, res *evalen
 	return false, nil
 }
 
-func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value) {
+func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value, error) {
 	if len(qr.Fields) != 2 {
-		return false, sqltypes.Value{}
+		return false, sqltypes.Value{}, nil
 	}
 	if len(qr.Rows[0]) != 2 {
-		return false, sqltypes.Value{}
+		return false, sqltypes.Value{}, nil
 	}
 	orig := qr.Rows[0][0].ToString()
 	newVal := qr.Rows[0][1].ToString()
@@ -395,6 +400,12 @@ func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value) {
 	newValArr := strings.Split(newVal, ",")
 	for _, nVal := range newValArr {
 		nVal = strings.ToUpper(nVal)
+		for _, mode := range unsupportedSQLModes {
+			if mode == nVal {
+				// we are setting an unsupported sql_mode
+				return false, sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "setting the %s sql_mode is unsupported", nVal)
+			}
+		}
 		notSeen, exists := origMap[nVal]
 		if !exists {
 			changed = true
@@ -410,7 +421,7 @@ func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value) {
 		changed = true
 	}
 
-	return changed, qr.Rows[0][1]
+	return changed, qr.Rows[0][1], nil
 }
 
 var _ SetOp = (*SysVarSetAware)(nil)
