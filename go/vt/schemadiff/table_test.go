@@ -117,6 +117,7 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:  "alter table t1 drop column c, modify column i bigint unsigned, add column ts timestamp after id",
 			cdiff: "ALTER TABLE `t1` DROP COLUMN `c`, MODIFY COLUMN `i` bigint UNSIGNED, ADD COLUMN `ts` timestamp AFTER `id`",
 		},
+		// columns, reordering
 		{
 			name:  "reorder column",
 			from:  "create table t1 (id int primary key, a int, b int, c int, d int)",
@@ -860,6 +861,12 @@ func TestValidate(t *testing.T) {
 			alter:     "alter table t add key i12_idx(i1, i2), add key i32_idx(i3, i2), add key i21_idx(i2, i1)",
 			expectErr: ErrInvalidColumnInKey,
 		},
+		{
+			name:  "nullable timestamp",
+			from:  "create table t (id int primary key, t datetime)",
+			alter: "alter table t modify column t timestamp null",
+			to:    "create table t (id int primary key, t timestamp null)",
+		},
 	}
 	hints := DiffHints{}
 	for _, ts := range tt {
@@ -884,6 +891,10 @@ func TestValidate(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotNil(t, applied)
 
+				c, ok := applied.(*CreateTableEntity)
+				require.True(t, ok)
+				applied = c.normalize()
+
 				stmt, err := sqlparser.Parse(ts.to)
 				require.NoError(t, err)
 				toCreateTable, ok := stmt.(*sqlparser.CreateTable)
@@ -892,7 +903,7 @@ func TestValidate(t *testing.T) {
 				to := NewCreateTableEntity(toCreateTable)
 				diff, err := applied.Diff(to, &hints)
 				require.NoError(t, err)
-				assert.Empty(t, diff, "diff found: %v.\applied: %v\nto: %v", diff.CanonicalStatementString(), applied.Create().CanonicalStatementString(), to.Create().CanonicalStatementString())
+				assert.Empty(t, diff, "diff found: %v.\napplied: %v\nto: %v", diff.CanonicalStatementString(), applied.Create().CanonicalStatementString(), to.Create().CanonicalStatementString())
 			}
 		})
 	}
@@ -913,6 +924,11 @@ func TestNormalize(t *testing.T) {
 			name: "removes default null",
 			from: "create table t (id int primary key, i int default null)",
 			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+		},
+		{
+			name: "timestamp null",
+			from: "create table t (id int primary key, t timestamp null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`t` timestamp\n)",
 		},
 		{
 			name: "uses lowercase type",
