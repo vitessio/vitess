@@ -14,34 +14,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -e
+set -ex
 
 # This script builds the front-end into a set of static files,
 # which are then placed in the same folder as vtadmin-api's "web" package,
 # to be embedded as part of the final "vtadmin" binary.
 
-# TODO check node version
-# TODO check npm install
-# TODO check that this script can run from anywhere
+web_root="web/vtadmin"
 
-script_root=$(dirname "${BASH_SOURCE[0]}")
-web_root="$script_root/.."
-
-# Initially build into the local web/vtadmin/build/ directory,
-# which simplifies the react-snap postbuild step by not requiring
-# a separate "reactSnap.source" config in the package.json".
-build_path="$web_root/build"
+# Initially build into the web/vtadmin/build directory since
+# - it simplifies react-snap configuration
+# - it acts as a temporary/working (gitignored) directory for react-snap
+build_folder="build"
+build_path="$web_root/$build_folder"
 
 # Clear out any existing build, since react-snap requires a clean directory.
 rm -rf "$build_path"
 
 # The destination directory of the build must be in the same package directory
 # (or subdirectory) as the file with the "//go:embed" directive.
-dest_path="$script_root/../../../go/vt/vtadmin/web/build"
+dest_path="go/vt/vtadmin/web/build"
 
-BUILD_PATH="$build_path" \
+BUILD_PATH="$build_folder" \
     REACT_APP_VTADMIN_API_ADDRESS="" \
     npm --prefix "$web_root" run build
 
+# Overwrite the files we just built in build/ with the react-snap output.
+npm --prefix "$web_root" run build:embed
+
 rm -rf "$dest_path"
 mv "$build_path" "$dest_path"
+rm -rf "$build_path"
