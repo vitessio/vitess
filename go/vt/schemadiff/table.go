@@ -189,14 +189,6 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 	}
 }
 
-var integralTypes = map[string]bool{
-	"tinyint":   true,
-	"smallint":  true,
-	"mediumint": true,
-	"int":       true,
-	"bigint":    true,
-}
-
 func (c *CreateTableEntity) normalizeColumnOptions() {
 	tableCharset := ""
 	tableCollation := ""
