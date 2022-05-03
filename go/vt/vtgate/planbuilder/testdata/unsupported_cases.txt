@@ -178,11 +178,6 @@ Gen4 plan same as above
 "unsupported: You can't update primary vindex columns. Invalid update on vindex: multicolIdx"
 Gen4 plan same as above
 
-# update changes non owned vindex column
-"update music_extra set music_id = 1 where user_id = 1"
-"unsupported: You can only update owned vindexes. Invalid update on vindex: music_user_map"
-Gen4 plan same as above
-
 # update changes non lookup vindex column
 "update user_metadata set md5 = 1 where user_id = 1"
 "unsupported: You can only update lookup vindexes. Invalid update on vindex: user_md5_index"
@@ -336,7 +331,7 @@ Gen4 plan same as above
 "is_free_lock('xyz') allowed only with dual"
 Gen4 plan same as above
 
-# union with SQL_CALC_FOUND_ROWS 
+# union with SQL_CALC_FOUND_ROWS
 "(select sql_calc_found_rows id from user where id = 1 limit 1) union select id from user where id = 1"
 "SQL_CALC_FOUND_ROWS not supported with union"
 Gen4 plan same as above
