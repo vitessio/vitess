@@ -26,6 +26,7 @@ import (
 	"github.com/pkg/errors"
 	golcs "github.com/yudai/golcs"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -191,8 +192,35 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 	}
 }
 
+// Right now we assume MySQL 8.0 for the collation normalization handling.
+const mysqlCollationVersion = "8.0.0"
+
+var collationEnv = collations.NewEnvironment(mysqlCollationVersion)
+
+func defaultCharset() string {
+	collation := collationEnv.LookupByID(collations.ID(collationEnv.DefaultConnectionCharset()))
+	if collation == nil {
+		return ""
+	}
+	return collation.Charset().Name()
+}
+
+func defaultCharsetCollation(charset string) string {
+	// The collation tables are based on utf8, not the utf8mb3 alias.
+	// We already normalize to utf8mb3 to be explicit, so we have to
+	// map it back here to find the default collation for utf8mb3.
+	if charset == "utf8mb3" {
+		charset = "utf8"
+	}
+	collation := collationEnv.DefaultCollationForCharset(charset)
+	if collation == nil {
+		return ""
+	}
+	return collation.Name()
+}
+
 func (c *CreateTableEntity) normalizeColumnOptions() {
-	tableCharset := defaultCharset
+	tableCharset := defaultCharset()
 	tableCollation := ""
 	for _, option := range c.CreateTable.TableSpec.Options {
 		switch strings.ToUpper(option.Name) {
@@ -202,8 +230,9 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			tableCollation = option.String
 		}
 	}
+	defaultCollation := defaultCharsetCollation(tableCharset)
 	if tableCollation == "" {
-		tableCollation = defaultCollations[tableCharset]
+		tableCollation = defaultCollation
 	}
 
 	for _, col := range c.CreateTable.TableSpec.Columns {
@@ -279,7 +308,6 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			// We have a matching charset as the default, but it is explicitly set. In that
 			// case we still want to clear it, but set the default collation for the given charset
 			// if no collation is defined yet. We set then the collation to the default collation.
-			defaultCollation := defaultCollations[tableCharset]
 			if col.Type.Charset != "" {
 				col.Type.Charset = ""
 				if col.Type.Options.Collate == "" {
