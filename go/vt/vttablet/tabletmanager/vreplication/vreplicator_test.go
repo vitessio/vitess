@@ -87,6 +87,12 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 		wantErr bool
 	}{
 		{
+			name:  "WITHPK",
+			table: "withpk_t",
+			ddl:   `CREATE TABLE withpk_t (pkid INT NOT NULL AUTO_INCREMENT, col1 VARCHAR(25), PRIMARY KEY (pkid))`,
+			want:  []string{"pkid"},
+		},
+		{
 			name:  "0PKE",
 			table: "zeropke_t",
 			ddl:   `CREATE TABLE zeropke_t (id INT NULL, col1 VARCHAR(25), UNIQUE KEY (id))`,
@@ -102,7 +108,13 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 			name:  "2PKE",
 			table: "twopke_t",
 			ddl:   `CREATE TABLE twopke_t (id INT NOT NULL, col1 VARCHAR(25), col2 VARCHAR(25) NOT NULL, id2 INT NOT NULL, UNIQUE KEY (id), UNIQUE KEY (col2, id2))`,
-			want:  []string{"id", "col2", "id2"},
+			want:  []string{"id"},
+		},
+		{
+			name:  "2MULTICOLPKE",
+			table: "threemcpke_t",
+			ddl:   `CREATE TABLE threemcpke_t (col1 VARCHAR(25), col2 VARCHAR(25) NOT NULL, col3 VARCHAR(25) NOT NULL, col4 VARCHAR(25), UNIQUE KEY (col1, col2), UNIQUE KEY (col1, col2, col3))`,
+			want:  []string{"col1", "col2"},
 		},
 	}
 	for _, tt := range tests {

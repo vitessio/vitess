@@ -534,81 +534,41 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 	return &tabletmanagerdatapb.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
 }
 
-// GetPrimaryKeyEquivalentColumns can be used if the table has no
-// defined PRIMARY KEY. It will return the columns for a viable
-// PRIMARY KEY equivalent (PKE), which is often a NON-NULL
-// UNIQUE KEY. For the latter, we use all columns that make up
-// the total set of PKE indexes. This means that if e.g. you
-// have a single column PKE index and a second PKE index on
-// two columns, this function will return all three:
-//   CREATE TABLE t1 (
-//     id1 INT NOT NULL,
-//     id2 INT NOT NULL,
-//     id3 INT NOT NULL,
-//     col1 VARCHAR(100),
-//     UNIQUE INDEX (id1),
-//     UNIQUE INDEX (id2, id3)
-//   );
-// Will result in the id1,id2,id3 columns being treated as the
-// PK (equivalent) columns.
-func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, error) {
-	cs, err := mysqld.getPrimaryKeyEquivalentColumns(ctx, dbName, table)
-	if err != nil {
-		return nil, err
-	}
-
-	return cs[dbName], nil
-}
-
-// getPrimaryKeyEquivalentColumns can be used if the tables have
+// getPrimaryKeyEquivalentColumns can be used if the table has
 // no defined PRIMARY KEY. It will return the columns for a
-// viable PRIMARY KEY equivalent (PKE), which is often a NON-NULL
-// UNIQUE KEY. For the latter, we use all columns that make up
-// the total set of PKE indexes. This means that if e.g. you
-// have a single column PKE index and a second PKE index on
-// two columns, this function will return all three:
-//   CREATE TABLE t1 (
-//     id1 INT NOT NULL,
-//     id2 INT NOT NULL,
-//     id3 INT NOT NULL,
-//     col1 VARCHAR(100),
-//     UNIQUE INDEX (id1),
-//     UNIQUE INDEX (id2, id3)
-//   );
-// Will result in the id1,id2,id3 columns being treated as the
-// PK (equivalent) columns.
-func (mysqld *Mysqld) getPrimaryKeyEquivalentColumns(ctx context.Context, dbName string, tables ...string) (map[string][]string, error) {
+// viable PRIMARY KEY equivalent (PKE) -- a NON-NULL UNIQUE
+// KEY -- in the specified table. When multiple PKE indexes
+// are available it will use the one with the fewest columns
+// in it.
+// If this function is used on a table that DOES have a
+// defined PRIMARY KEY then it may return the columns for
+// that index if it has the fewest columns in it among the
+// available PKE indexes on the table.
+func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
 
-	tableList, err := tableListSQL(tables)
-	if err != nil {
-		return nil, err
-	}
-
 	// sql uses column name aliases to guarantee lower case sensitivity.
-	sql := `SELECT table_name as table_name, ordinal_position as ordinal_position, COLUMN_NAME as column_name
-				FROM INFORMATION_SCHEMA.COLUMNS
-				WHERE TABLE_SCHEMA = '%s'
-				AND TABLE_NAME IN %s
-				AND IS_NULLABLE = 'NO' AND COLUMN_KEY = 'UNI'
-				ORDER BY table_name, ordinal_position;`
-	sql = fmt.Sprintf(sql, dbName, tableList)
-	qr, err := conn.ExecuteFetch(sql, len(tables)*100, true)
+	sql := `SELECT COLUMN_NAME AS column_name FROM INFORMATION_SCHEMA.STATISTICS AS indexes INNER JOIN
+				(SELECT DISTINCT INDEX_NAME, COUNT(COLUMN_NAME) AS col_count FROM INFORMATION_SCHEMA.STATISTICS
+				WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s' AND NON_UNIQUE = 0 AND NULLABLE != 'YES'
+				GROUP BY INDEX_NAME ORDER BY col_count ASC LIMIT 1) uindexes
+			WHERE indexes.TABLE_SCHEMA = '%s' AND indexes.TABLE_NAME = '%s' AND indexes.INDEX_NAME = uindexes.INDEX_NAME`
+	sql = fmt.Sprintf(sql, dbName, table, dbName, table)
+	qr, err := conn.ExecuteFetch(sql, 1000, true)
 	if err != nil {
 		return nil, err
 	}
 
 	named := qr.Named()
-	colMap := map[string][]string{}
-	for _, row := range named.Rows {
-		tableName := row.AsString("table_name", "")
-		colMap[tableName] = append(colMap[tableName], row.AsString("column_name", ""))
+	cols := make([]string, len(qr.Rows))
+	for i, row := range named.Rows {
+		cols[i] = row.AsString("column_name", "")
 	}
-	return colMap, err
+	return cols, err
 }
 
 //tableDefinitions is a sortable collection of table definitions
