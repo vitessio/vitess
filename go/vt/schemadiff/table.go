@@ -210,12 +210,31 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 		if col.Type.Options == nil {
 			col.Type.Options = &sqlparser.ColumnTypeOptions{}
 		}
+
+		// Map known lowercase fields to always be lowercase
+		col.Type.Type = strings.ToLower(col.Type.Type)
+		col.Type.Charset = strings.ToLower(col.Type.Charset)
+		col.Type.Options.Collate = strings.ToLower(col.Type.Options.Collate)
+
 		// See https://dev.mysql.com/doc/refman/8.0/en/create-table.html
 		// If neither NULL nor NOT NULL is specified, the column is treated as though NULL had been specified.
-		if col.Type.Options.Null != nil && *col.Type.Options.Null {
-			col.Type.Options.Null = nil
+		// That documentation though is not 100% true. There's an exception, and that is
+		// the `explicit_defaults_for_timestamp` flag. When that is disabled (the default on 5.7),
+		// a timestamp defaults to `NOT NULL`.
+		//
+		// We opt here to instead remove that difference and always then add `NULL` and treat
+		// `explicit_defaults_for_timestamp` as always enabled in the context of DDL for diffing.
+		if col.Type.Type == "timestamp" {
+			if col.Type.Options.Null == nil || *col.Type.Options.Null {
+				timestampNull := true
+				col.Type.Options.Null = &timestampNull
+			}
+		} else {
+			if col.Type.Options.Null != nil && *col.Type.Options.Null {
+				col.Type.Options.Null = nil
+			}
 		}
-		if col.Type.Options.Null == nil {
+		if col.Type.Options.Null == nil || *col.Type.Options.Null {
 			// If `DEFAULT NULL` is specified and the column allows NULL,
 			// we drop that in the normalized form since that is equivalent to the default value.
 			// See also https://dev.mysql.com/doc/refman/8.0/en/data-type-defaults.html
@@ -223,11 +242,6 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 				col.Type.Options.Default = nil
 			}
 		}
-
-		// Map known lowercase fields to always be lowercase
-		col.Type.Type = strings.ToLower(col.Type.Type)
-		col.Type.Charset = strings.ToLower(col.Type.Charset)
-		col.Type.Options.Collate = strings.ToLower(col.Type.Options.Collate)
 
 		// Map any charset aliases to the real charset. This applies mainly right
 		// now to utf8 being an alias for utf8mb3.

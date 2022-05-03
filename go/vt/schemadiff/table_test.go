@@ -114,8 +114,8 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "added column, dropped column, modified column",
 			from:  "create table t1 (id int primary key, `i` int not null default 0, c char(3) default '')",
 			to:    "create table t2 (id int primary key, ts timestamp null, `i` bigint unsigned default null)",
-			diff:  "alter table t1 drop column c, modify column i bigint unsigned, add column ts timestamp after id",
-			cdiff: "ALTER TABLE `t1` DROP COLUMN `c`, MODIFY COLUMN `i` bigint UNSIGNED, ADD COLUMN `ts` timestamp AFTER `id`",
+			diff:  "alter table t1 drop column c, modify column i bigint unsigned, add column ts timestamp null after id",
+			cdiff: "ALTER TABLE `t1` DROP COLUMN `c`, MODIFY COLUMN `i` bigint UNSIGNED, ADD COLUMN `ts` timestamp NULL AFTER `id`",
 		},
 		// columns, reordering
 		{
@@ -928,7 +928,12 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "timestamp null",
 			from: "create table t (id int primary key, t timestamp null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`t` timestamp\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`t` timestamp NULL\n)",
+		},
+		{
+			name: "timestamp default null",
+			from: "create table t (id int primary key, t timestamp default null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`t` timestamp NULL\n)",
 		},
 		{
 			name: "uses lowercase type",
