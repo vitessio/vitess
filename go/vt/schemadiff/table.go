@@ -192,7 +192,7 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 }
 
 func (c *CreateTableEntity) normalizeColumnOptions() {
-	tableCharset := ""
+	tableCharset := defaultCharset
 	tableCollation := ""
 	for _, option := range c.CreateTable.TableSpec.Options {
 		switch strings.ToUpper(option.Name) {
@@ -202,13 +202,20 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			tableCollation = option.String
 		}
 	}
+	if tableCollation == "" {
+		tableCollation = defaultCollations[tableCharset]
+	}
+
 	for _, col := range c.CreateTable.TableSpec.Columns {
+		if col.Type.Options == nil {
+			col.Type.Options = &sqlparser.ColumnTypeOptions{}
+		}
 		// See https://dev.mysql.com/doc/refman/8.0/en/create-table.html
 		// If neither NULL nor NOT NULL is specified, the column is treated as though NULL had been specified.
-		if col.Type.Options != nil && col.Type.Options.Null != nil && *col.Type.Options.Null {
+		if col.Type.Options.Null != nil && *col.Type.Options.Null {
 			col.Type.Options.Null = nil
 		}
-		if col.Type.Options != nil && col.Type.Options.Null == nil {
+		if col.Type.Options.Null == nil {
 			// If `DEFAULT NULL` is specified and the column allows NULL,
 			// we drop that in the normalized form since that is equivalent to the default value.
 			// See also https://dev.mysql.com/doc/refman/8.0/en/data-type-defaults.html
@@ -220,9 +227,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 		// Map known lowercase fields to always be lowercase
 		col.Type.Type = strings.ToLower(col.Type.Type)
 		col.Type.Charset = strings.ToLower(col.Type.Charset)
-		if col.Type.Options != nil {
-			col.Type.Options.Collate = strings.ToLower(col.Type.Options.Collate)
-		}
+		col.Type.Options.Collate = strings.ToLower(col.Type.Options.Collate)
 
 		// Map any charset aliases to the real charset. This applies mainly right
 		// now to utf8 being an alias for utf8mb3.
@@ -236,13 +241,43 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			col.Type.Length = nil
 		}
 
-		// Drop any default charset or collation if it's the same
-		// as the table level specification.
-		if col.Type.Charset == tableCharset {
-			col.Type.Charset = ""
-		}
-		if col.Type.Options != nil && col.Type.Options.Collate == tableCollation {
-			col.Type.Options.Collate = ""
+		if _, ok := charsetTypes[col.Type.Type]; ok {
+			// If the charset is explicitly configured and it mismatches, we don't normalize
+			// anything for charsets or collations and move on.
+			if col.Type.Charset != "" && col.Type.Charset != tableCharset {
+				continue
+			}
+
+			// Alright, first check if both charset and collation are the same as
+			// the table level options, in that case we can remove both since that's equivalent.
+			if col.Type.Charset == tableCharset && col.Type.Options.Collate == tableCollation {
+				col.Type.Charset = ""
+				col.Type.Options.Collate = ""
+			}
+			// If we have no charset or collation defined, we inherit the table defaults
+			// and don't need to do anything here and can continue to the next column.
+			// It doesn't matter if that's because it's not defined, or if it was because
+			// it was explicitly set to the same values.
+			if col.Type.Charset == "" && col.Type.Options.Collate == "" {
+				continue
+			}
+
+			// We have a matching charset as the default, but it is explicitly set. In that
+			// case we still want to clear it, but set the default collation for the given charset
+			// if no collation is defined yet. We set then the collation to the default collation.
+			defaultCollation := defaultCollations[tableCharset]
+			if col.Type.Charset != "" {
+				col.Type.Charset = ""
+				if col.Type.Options.Collate == "" {
+					col.Type.Options.Collate = defaultCollation
+				}
+			}
+
+			// We now have one case left, which is when we have set a collation but it's the same
+			// as the table level. In that case, we can clear it since that is equivalent.
+			if col.Type.Options.Collate == tableCollation {
+				col.Type.Options.Collate = ""
+			}
 		}
 	}
 }

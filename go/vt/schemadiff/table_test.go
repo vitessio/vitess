@@ -961,28 +961,63 @@ func TestNormalize(t *testing.T) {
 			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb4",
 		},
 		{
-			name: "removes matching collation",
+			name: "removes matching collation if default",
 			from: "create table t (id int signed primary key, v varchar(255) collate utf8mb4_0900_ai_ci) collate utf8mb4_0900_ai_ci",
 			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) COLLATE utf8mb4_0900_ai_ci",
 		},
 		{
-			name: "removes matching collation case insensitive",
+			name: "removes matching collation case insensitive if default",
 			from: "create table t (id int signed primary key, v varchar(255) collate UTF8MB4_0900_AI_CI) collate utf8mb4_0900_ai_ci",
 			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) COLLATE utf8mb4_0900_ai_ci",
 		},
 		{
-			name: "removes matching charset & collation",
+			name: "removes matching charset & collation if default",
 			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb4 collate utf8mb4_0900_ai_ci) charset utf8mb4 collate utf8mb4_0900_ai_ci",
 			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci",
 		},
 		{
+			name: "sets collation for non default collation at table level",
+			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb4) charset utf8mb4 collate utf8mb4_0900_bin",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255) COLLATE utf8mb4_0900_ai_ci\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_bin",
+		},
+		{
+			name: "does not add collation for a non default collation at table level",
+			from: "create table t (id int signed primary key, v varchar(255)) charset utf8mb4 collate utf8mb4_0900_bin",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_bin",
+		},
+		{
+			name: "cleans up collation at the column level if it matches the tabel level and both are given",
+			from: "create table t (id int signed primary key, v varchar(255) collate utf8mb4_0900_bin) charset utf8mb4 collate utf8mb4_0900_bin",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_bin",
+		},
+		{
+			name: "cleans up charset and collation at the column level if it matches the tabel level and both are given",
+			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb4 collate utf8mb4_0900_bin) charset utf8mb4 collate utf8mb4_0900_bin",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_bin",
+		},
+		{
+			name: "keeps existing collation even if default for non default collation at table level",
+			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb4 collate utf8mb4_0900_ai_ci) charset utf8mb4 collate utf8mb4_0900_bin",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255) COLLATE utf8mb4_0900_ai_ci\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_bin",
+		},
+		{
+			name: "keeps existing collation even if another non default collation",
+			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb4 collate utf8mb4_german2_ci) charset utf8mb4 collate utf8mb4_0900_bin",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255) COLLATE utf8mb4_german2_ci\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_bin",
+		},
+		{
 			name: "maps utf8 to utf8mb3",
-			from: "create table t (id int signed primary key, v varchar(255) charset utf8 collate utf8_unicode_ci) charset utf8 collate utf8_unicode_ci",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb3,\n  COLLATE utf8_unicode_ci",
+			from: "create table t (id int signed primary key, v varchar(255) charset utf8 collate utf8_general_ci) charset utf8 collate utf8_general_ci",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb3,\n  COLLATE utf8_general_ci",
 		},
 		{
 			name: "lowercase table options for charset and collation",
-			from: "create table t (id int signed primary key, v varchar(255) charset utf8 collate utf8_unicode_ci) charset UTF8 collate UTF8_UNICODE_CI",
+			from: "create table t (id int signed primary key, v varchar(255) charset utf8 collate utf8_general_ci) charset UTF8 collate UTF8_GENERAL_CI",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb3,\n  COLLATE utf8_general_ci",
+		},
+		{
+			name: "drops existing collation if it matches table default at column level for non default charset",
+			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb3 collate utf8_unicode_ci) charset utf8mb3 collate utf8_unicode_ci",
 			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb3,\n  COLLATE utf8_unicode_ci",
 		},
 		{
