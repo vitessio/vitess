@@ -28,6 +28,7 @@ jobs:
               - 'tools/**'
               - 'config/**'
               - 'bootstrap.sh'
+              - '.github/workflows/**'
 
       - name: Build Docker Image
         if: steps.changes.outputs.unit_tests == 'true'
