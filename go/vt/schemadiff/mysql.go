@@ -16,8 +16,11 @@ limitations under the License.
 
 package schemadiff
 
-var tableOptionEnforcedCaseValues = map[string]string{
+var engineCasing = map[string]string{
 	"INNODB": "InnoDB",
 	"MYISAM": "MyISAM",
-	"UTF8":   "utf8mb3",
+}
+
+var charsetAliases = map[string]string{
+	"utf8": "utf8mb3",
 }

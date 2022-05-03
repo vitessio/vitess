@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-
 	golcs "github.com/yudai/golcs"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -167,6 +166,8 @@ func NewCreateTableEntity(c *sqlparser.CreateTable) *CreateTableEntity {
 func (c *CreateTableEntity) normalize() {
 	c.normalizeUnnamedKeys()
 	c.normalizeTableOptions()
+	c.normalizeColumnOptions()
+	c.normalizePartitionOptions()
 }
 
 func (c *CreateTableEntity) normalizeTableOptions() {
@@ -174,21 +175,100 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 		switch strings.ToUpper(opt.Name) {
 		case "CHARSET", "COLLATE":
 			opt.String = strings.ToLower(opt.String)
+			if charset, ok := charsetAliases[opt.String]; ok {
+				opt.String = charset
+			}
 		case "ENGINE":
 			opt.String = strings.ToUpper(opt.String)
-			// InnoDB and MyISAM special cases are handled below
+			if engineName, ok := engineCasing[opt.String]; ok {
+				opt.String = engineName
+			}
 		case "ROW_FORMAT":
 			opt.String = strings.ToUpper(opt.String)
 		}
-		switch {
-		case opt.String != "":
-			if enforcedVal, ok := tableOptionEnforcedCaseValues[strings.ToUpper(opt.String)]; ok {
-				opt.String = enforcedVal
+	}
+}
+
+var integralTypes = map[string]bool{
+	"tinyint":   true,
+	"smallint":  true,
+	"mediumint": true,
+	"int":       true,
+	"bigint":    true,
+}
+
+func (c *CreateTableEntity) normalizeColumnOptions() {
+	tableCharset := ""
+	tableCollation := ""
+	for _, option := range c.CreateTable.TableSpec.Options {
+		switch strings.ToUpper(option.Name) {
+		case "CHARSET":
+			tableCharset = option.String
+		case "COLLATE":
+			tableCollation = option.String
+		}
+	}
+	for _, col := range c.CreateTable.TableSpec.Columns {
+		// See https://dev.mysql.com/doc/refman/8.0/en/create-table.html
+		// If neither NULL nor NOT NULL is specified, the column is treated as though NULL had been specified.
+		if col.Type.Options != nil && col.Type.Options.Null != nil && *col.Type.Options.Null {
+			col.Type.Options.Null = nil
+		}
+		if col.Type.Options != nil && col.Type.Options.Null == nil {
+			// If `DEFAULT NULL` is specified and the column allows NULL,
+			// we drop that in the normalized form since that is equivalent to the default value.
+			// See also https://dev.mysql.com/doc/refman/8.0/en/data-type-defaults.html
+			if _, ok := col.Type.Options.Default.(*sqlparser.NullVal); ok {
+				col.Type.Options.Default = nil
 			}
-		case opt.Value != nil:
-			if enforcedVal, ok := tableOptionEnforcedCaseValues[strings.ToUpper(sqlparser.String(opt.Value))]; ok {
-				opt.Value = sqlparser.NewStrLiteral(enforcedVal)
-			}
+		}
+
+		// Map known lowercase fields to always be lowercase
+		col.Type.Type = strings.ToLower(col.Type.Type)
+		col.Type.Charset = strings.ToLower(col.Type.Charset)
+		if col.Type.Options != nil {
+			col.Type.Options.Collate = strings.ToLower(col.Type.Options.Collate)
+		}
+
+		// Map any charset aliases to the real charset. This applies mainly right
+		// now to utf8 being an alias for utf8mb3.
+		if charset, ok := charsetAliases[col.Type.Charset]; ok {
+			col.Type.Charset = charset
+		}
+
+		// Remove any lengths for integral types since it is deprecated there and
+		// doesn't mean anything anymore.
+		if _, ok := integralTypes[col.Type.Type]; ok {
+			col.Type.Length = nil
+		}
+
+		// Drop any default charset or collation if it's the same
+		// as the table level specification.
+		if col.Type.Charset == tableCharset {
+			col.Type.Charset = ""
+		}
+		if col.Type.Options != nil && col.Type.Options.Collate == tableCollation {
+			col.Type.Options.Collate = ""
+		}
+	}
+}
+
+func (c *CreateTableEntity) normalizePartitionOptions() {
+	if c.CreateTable.TableSpec.PartitionOption == nil {
+		return
+	}
+
+	for _, def := range c.CreateTable.TableSpec.PartitionOption.Definitions {
+		if def.Options == nil {
+			continue
+		}
+		if def.Options.Engine == nil {
+			continue
+		}
+
+		def.Options.Engine.Name = strings.ToUpper(def.Options.Engine.Name)
+		if engineName, ok := engineCasing[def.Options.Engine.Name]; ok {
+			def.Options.Engine.Name = engineName
 		}
 	}
 }
