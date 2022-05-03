@@ -288,10 +288,7 @@ func (c *CreateTableEntity) normalizePartitionOptions() {
 	}
 
 	for _, def := range c.CreateTable.TableSpec.PartitionOption.Definitions {
-		if def.Options == nil {
-			continue
-		}
-		if def.Options.Engine == nil {
+		if def.Options == nil || def.Options.Engine == nil {
 			continue
 		}
 
