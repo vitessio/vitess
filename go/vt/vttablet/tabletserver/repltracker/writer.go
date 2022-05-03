@@ -74,7 +74,7 @@ type heartbeatWriter struct {
 	allPrivsPool *dbconnpool.ConnectionPool
 	ticks        *timer.Timer
 
-	byDemandDuration                time.Duration
+	onDemandDuration                time.Duration
 	concurrentHeartbeatRequests     int64
 	requestHeartbeatsReentranceFlag int64
 }
@@ -94,7 +94,7 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 		tabletAlias:      proto.Clone(alias).(*topodatapb.TabletAlias),
 		now:              time.Now,
 		interval:         heartbeatInterval,
-		byDemandDuration: config.ReplicationTracker.HeartbeatByDemandSeconds.Get(),
+		onDemandDuration: config.ReplicationTracker.HeartbeatOnDemandSeconds.Get(),
 		ticks:            timer.NewTimer(heartbeatInterval),
 		errorLog:         logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
 		// We make this pool size 2; to prevent pool exhausted
@@ -130,9 +130,9 @@ func (w *heartbeatWriter) Open() {
 	// keeping us safe from hanging the main thread.
 	w.appPool.Open(w.env.Config().DB.AppWithDB())
 	w.allPrivsPool.Open(w.env.Config().DB.AllPrivsWithDB())
-	if w.byDemandDuration == 0 {
+	if w.onDemandDuration == 0 {
 		w.enableWrites(true)
-		// when byDemandDuration > 0 we only enable writes per request
+		// when onDemandDuration > 0 we only enable writes per request
 	}
 	w.isOpen = true
 }
@@ -222,22 +222,22 @@ func (w *heartbeatWriter) enableWrites(enable bool) {
 }
 
 func (w *heartbeatWriter) RequestHeartbeats() {
-	if w.byDemandDuration == 0 {
+	if w.onDemandDuration == 0 {
 		// heartbeats are not by demand. Therefore they are just coming in on their own (if enabled)
 		return
 	}
 	// In this function we're going to create a timer to activate heartbeats by-demand. Creating a timer has a cost.
 	// Now, this function can be spammed by clients (the lag throttler). We therefore only allow this function to
-	// actually once per X seconds (1/4 of byDemandDuration as a reasonable oversampling value):
+	// actually once per X seconds (1/4 of onDemandDuration as a reasonable oversampling value):
 	if atomic.CompareAndSwapInt64(&w.requestHeartbeatsReentranceFlag, 0, 1) {
-		defer time.AfterFunc(w.byDemandDuration/4, func() { atomic.StoreInt64(&w.requestHeartbeatsReentranceFlag, 0) })
+		defer time.AfterFunc(w.onDemandDuration/4, func() { atomic.StoreInt64(&w.requestHeartbeatsReentranceFlag, 0) })
 	} else {
 		// An instance of this function is already running
 		return
 	}
 
 	// Now for the actual logic. A client requests heartbeats. If it were only this client, we would
-	// activate heartbeats for the duration of byDemandDuration, and then turn heartbeats off.
+	// activate heartbeats for the duration of onDemandDuration, and then turn heartbeats off.
 	// However, there may be multiple clients interested in heartbeats, or maybe the same single client
 	// requesting heartbeats again and again. So we keep track of how many _concurrent_ requests we have.
 	// We enable heartbeats as soon as we have a single concurrent request; we turn heartbeats off once
@@ -246,7 +246,7 @@ func (w *heartbeatWriter) RequestHeartbeats() {
 		// means we previously had 0 clients interested in heartbeats.
 		w.enableWrites(true)
 	}
-	time.AfterFunc(w.byDemandDuration, func() {
+	time.AfterFunc(w.onDemandDuration, func() {
 		if numClients := atomic.AddInt64(&w.concurrentHeartbeatRequests, -1); numClients == 0 {
 			// means there are currently no more clients interested in heartbeats
 			w.enableWrites(false)
