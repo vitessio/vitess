@@ -163,11 +163,13 @@ func NewCreateTableEntity(c *sqlparser.CreateTable) *CreateTableEntity {
 // normalize normalizes table definition:
 // - setting names to all keys
 // - table option case (upper/lower/special)
-func (c *CreateTableEntity) normalize() {
+// The function returns this receiver as courtesy
+func (c *CreateTableEntity) normalize() *CreateTableEntity {
 	c.normalizeUnnamedKeys()
 	c.normalizeTableOptions()
 	c.normalizeColumnOptions()
 	c.normalizePartitionOptions()
+	return c
 }
 
 func (c *CreateTableEntity) normalizeTableOptions() {
