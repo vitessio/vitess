@@ -172,18 +172,22 @@ func (opts *Options) InstallFlags(fs *pflag.FlagSet) {
 			strings.Join(allBalancerPolicies, ",")))
 
 	fs.DurationVar(&opts.MinDiscoveryInterval, "min-rediscovery-interval", time.Second*30,
-		"") // TODO: help text
+		"Minimum amount of time to wait between successful discovery resolution calls. "+
+			"Useful to avoid spamming the backing discovery service if multiple ResolveNow calls are made in rapid succession "+
+			"(Note that the interval for failed discovery resolutions are governed by the backoff strategy and configuration, not this flag).")
 
 	fs.StringVar(&opts.BackoffStrategy, "backoff-strategy", "",
-		"") // TODO: help text
+		"Backoff strategy to use when backing off of failed discovery resolutions. "+
+			`Permitted values are "exponential", "linear", and "none", and the empty string defaults to "exponential".`)
 	fs.DurationVar(&opts.BackoffConfig.BaseDelay, "backoff-base-delay", defaultBackoffConfig.BaseDelay,
-		"") // TODO: help text
+		"The amount of time to backoff after the first failure.")
 	fs.DurationVar(&opts.BackoffConfig.MaxDelay, "backoff-max-delay", defaultBackoffConfig.MaxDelay,
-		"") // TODO: help text
+		"The upper bound of time to wait, including backoffs offset by jitter.")
 	fs.Float64Var(&opts.BackoffConfig.Multiplier, "backoff-multiplier", defaultBackoffConfig.Multiplier,
-		"") // TODO: help text
+		"The factor to multiply (or add, in the case of \"linear\" backoff after a failed retry. "+
+			"Ideally should be greater than 1.")
 	fs.Float64Var(&opts.BackoffConfig.Jitter, "backoff-jitter", defaultBackoffConfig.Jitter,
-		"") // TODO: help text
+		"The factor to which backoffs are randomized.")
 }
 
 // Build is part of the resolver.Builder interface. See the commentary on
