@@ -191,10 +191,11 @@ func TestResolveWithTags(t *testing.T) {
 	testopts.Discovery = disco
 
 	cc := newMockClientConn(1)
-	r := mustBuild(t, &builder{opts: testopts}, grpcresolver.Target{
+	opts := testopts
+	opts.DiscoveryTags = []string{"tag2"}
+	r := mustBuild(t, &builder{opts: opts}, grpcresolver.Target{
 		URL: url.URL{Host: "vtgate"},
 	}, cc, grpcresolver.BuildOptions{})
-	r.opts.DiscoveryTags = []string{"tag2"}
 
 	expectedUpdate := grpcresolver.State{
 		Addresses: []grpcresolver.Address{{
