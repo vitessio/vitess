@@ -89,8 +89,12 @@ func TestCanonicalOutput(t *testing.T) {
 			"CREATE TABLE `insert` (\n\t`update` int,\n\tPRIMARY KEY (`delete`)\n)",
 		},
 		{
-			"alter table a engine=innodb",
-			"ALTER TABLE `a` ENGINE INNODB",
+			"alter table a engine=InnoDB",
+			"ALTER TABLE `a` ENGINE InnoDB",
+		},
+		{
+			"create table a (v varchar(32)) engine=InnoDB",
+			"CREATE TABLE `a` (\n\t`v` varchar(32)\n) ENGINE InnoDB",
 		},
 		{
 			"alter table a comment='a b c'",
