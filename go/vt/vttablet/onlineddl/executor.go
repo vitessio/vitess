@@ -2893,10 +2893,12 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	defer e.migrationMutex.Unlock()
 
 	var currentUserThrottleRatio float64
-	for _, app := range e.lagThrottler.ThrottledApps() {
-		if app.AppName == throttlerOnlineDDLApp {
-			currentUserThrottleRatio = app.Ratio
-			break
+	if e.lagThrottler.IsEnabled() {
+		for _, app := range e.lagThrottler.ThrottledApps() {
+			if app.AppName == throttlerOnlineDDLApp {
+				currentUserThrottleRatio = app.Ratio
+				break
+			}
 		}
 	}
 
