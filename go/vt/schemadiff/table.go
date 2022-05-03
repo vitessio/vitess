@@ -163,8 +163,38 @@ func NewCreateTableEntity(c *sqlparser.CreateTable) *CreateTableEntity {
 
 // normalize normalizes table definition:
 // - setting names to all keys
+// - table option case (upper/lower/special)
 func (c *CreateTableEntity) normalize() {
-	// let's verify all keys have names
+	c.normalizeUnnamedKeys()
+	c.normalizeTableOptions()
+}
+
+func (c *CreateTableEntity) normalizeTableOptions() {
+	for _, opt := range c.CreateTable.TableSpec.Options {
+		switch strings.ToUpper(opt.Name) {
+		case "CHARSET", "COLLATE":
+			opt.String = strings.ToLower(opt.String)
+		case "ENGINE":
+			opt.String = strings.ToUpper(opt.String)
+			// InnoDB and MyISAM special cases are handled below
+		case "ROW_FORMAT":
+			opt.String = strings.ToUpper(opt.String)
+		}
+		switch {
+		case opt.String != "":
+			if enforcedVal, ok := tableOptionEnforcedCaseValues[strings.ToUpper(opt.String)]; ok {
+				opt.String = enforcedVal
+			}
+		case opt.Value != nil:
+			if enforcedVal, ok := tableOptionEnforcedCaseValues[strings.ToUpper(sqlparser.String(opt.Value))]; ok {
+				opt.Value = sqlparser.NewStrLiteral(enforcedVal)
+			}
+		}
+	}
+}
+
+func (c *CreateTableEntity) normalizeUnnamedKeys() {
+	// let's ensure all keys have names
 	keyNameExists := map[string]bool{}
 	// first, we iterate and take note for all keys that do aleady have names
 	for _, key := range c.CreateTable.TableSpec.Indexes {
