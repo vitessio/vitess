@@ -60,6 +60,21 @@ const (
 	IntermediatePrimaryRecovery RecoveryType = "IntermediatePrimaryRecovery"
 )
 
+// recoveryFunction is the code of the recovery function to be used
+// this is returned from getCheckAndRecoverFunction to compare the functions returned
+type recoveryFunction int
+
+const (
+	noRecoveryFunc recoveryFunction = iota
+	recoverGenericProblemFunc
+	recoverDeadPrimaryFunc
+	recoverPrimaryHasPrimaryFunc
+	recoverLockedSemiSyncPrimaryFunc
+	electNewPrimaryFunc
+	fixPrimaryFunc
+	fixReplicaFunc
+)
+
 type RecoveryAcknowledgement struct {
 	CreatedAt time.Time
 	Owner     string
@@ -1210,54 +1225,54 @@ func checkAndExecuteFailureDetectionProcesses(analysisEntry inst.ReplicationAnal
 	return true, true, err
 }
 
-// getCheckAndRecoverFunction gets the recoveryFunction to use for the given analysis.
-// It also returns an integer which is supposed to be unique for each function that we return.
+// getCheckAndRecoverFunction gets the recovery function to use for the given analysis.
+// It also returns a recoveryFunction which is supposed to be unique for each function that we return.
 // It is used for checking the equality of the returned function.
 func getCheckAndRecoverFunction(analysisCode inst.AnalysisCode, analyzedInstanceKey *inst.InstanceKey) (
 	checkAndRecoverFunction func(ctx context.Context, analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error),
-	recoverFunctionCode int,
+	recoverFunctionCode recoveryFunction,
 	isActionableRecovery bool,
 ) {
 	switch analysisCode {
 	// primary
 	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas:
 		if isInEmergencyOperationGracefulPeriod(analyzedInstanceKey) {
-			return checkAndRecoverGenericProblem, 1, false
+			return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
 		}
-		return recoverDeadPrimary, 2, true
+		return recoverDeadPrimary, recoverDeadPrimaryFunc, true
 	case inst.PrimaryHasPrimary:
-		return recoverPrimaryHasPrimary, 3, true
+		return recoverPrimaryHasPrimary, recoverPrimaryHasPrimaryFunc, true
 	case inst.LockedSemiSyncPrimary:
 		if isInEmergencyOperationGracefulPeriod(analyzedInstanceKey) {
-			return checkAndRecoverGenericProblem, 1, false
+			return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
 		}
-		return checkAndRecoverLockedSemiSyncPrimary, 4, true
+		return checkAndRecoverLockedSemiSyncPrimary, recoverLockedSemiSyncPrimaryFunc, true
 	case inst.ClusterHasNoPrimary:
-		return electNewPrimary, 5, true
+		return electNewPrimary, electNewPrimaryFunc, true
 	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet:
-		return fixPrimary, 6, true
+		return fixPrimary, fixPrimaryFunc, true
 	// replica
 	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
 		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet:
-		return fixReplica, 7, true
+		return fixReplica, fixReplicaFunc, true
 	// primary, non actionable
 	case inst.DeadPrimaryAndReplicas:
-		return checkAndRecoverGenericProblem, 1, false
+		return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
 	case inst.UnreachablePrimary:
-		return checkAndRecoverGenericProblem, 1, false
+		return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
 	case inst.UnreachablePrimaryWithLaggingReplicas:
-		return checkAndRecoverGenericProblem, 1, false
+		return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
 	case inst.AllPrimaryReplicasNotReplicating:
-		return checkAndRecoverGenericProblem, 1, false
+		return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
 	case inst.AllPrimaryReplicasNotReplicatingOrDead:
-		return checkAndRecoverGenericProblem, 1, false
+		return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
 	}
 	// Right now this is mostly causing noise with no clear action.
 	// Will revisit this in the future.
 	// case inst.AllPrimaryReplicasStale:
-	//   return checkAndRecoverGenericProblem, 1, false
+	//   return checkAndRecoverGenericProblem, recoverGenericProblemFunc, false
 
-	return nil, 0, false
+	return nil, noRecoveryFunc, false
 }
 
 // analysisEntriesHaveSameRecovery tells whether the two analysis entries have the same recovery function or not
