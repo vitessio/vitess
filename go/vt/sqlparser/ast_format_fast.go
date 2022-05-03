@@ -651,7 +651,6 @@ func (node *PartitionEngine) formatFast(buf *TrackedBuffer) {
 		buf.WriteString("storage ")
 	}
 	buf.WriteString("engine ")
-
 	buf.WriteString(node.Name)
 }
 
