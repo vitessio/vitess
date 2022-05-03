@@ -3588,25 +3588,25 @@ func (e *Executor) CompleteMigration(ctx context.Context, uuid string) (result *
 
 func (e *Executor) submittedMigrationConflictsWithPendingMigrationInSingletonContext(
 	ctx context.Context, submittedMigration, pendingOnlineDDL *schema.OnlineDDL,
-) (bool, error) {
+) bool {
 	if pendingOnlineDDL.MigrationContext == submittedMigration.MigrationContext {
 		// same migration context. this is obviously allowed
-		return false, nil
+		return false
 	}
 	// Let's see if the pending migration is a revert:
 	revertedUUID, _ := pendingOnlineDDL.GetRevertUUID()
 	if revertedUUID == "" {
 		// Not a revert. So the pending migration definitely conflicts with our migration.
-		return true, nil
+		return true
 	}
 
 	// The pending migration is a revert
 	if !pendingOnlineDDL.StrategySetting().IsSingletonContext() {
 		// Aha! So, our "conflict" is with a REVERT migration, which does _not_ have a -singleton-context
 		// flag. Because we want to allow REVERT migrations to run as concurrently as possible, we allow this scenario.
-		return false, nil
+		return false
 	}
-	return true, nil
+	return true
 }
 
 // SubmitMigration inserts a new migration request
@@ -3690,11 +3690,7 @@ func (e *Executor) SubmitMigration(
 					if err != nil {
 						return err
 					}
-					conflictFound, err := e.submittedMigrationConflictsWithPendingMigrationInSingletonContext(ctx, onlineDDL, pendingOnlineDDL)
-					if err != nil {
-						return err
-					}
-					if conflictFound {
+					if e.submittedMigrationConflictsWithPendingMigrationInSingletonContext(ctx, onlineDDL, pendingOnlineDDL) {
 						return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton-context migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
 					}
 					// no conflict? continue looking for other pending migrations
