@@ -3594,8 +3594,7 @@ func (e *Executor) submittedMigrationConflictsWithPendingMigrationInSingletonCon
 		return false
 	}
 	// Let's see if the pending migration is a revert:
-	revertedUUID, _ := pendingOnlineDDL.GetRevertUUID()
-	if revertedUUID == "" {
+	if _, err := pendingOnlineDDL.GetRevertUUID(); err != nil {
 		// Not a revert. So the pending migration definitely conflicts with our migration.
 		return true
 	}
