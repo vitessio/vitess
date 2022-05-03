@@ -2405,7 +2405,7 @@ table_option:
   }
 | ENGINE equal_opt table_alias
   {
-    $$ = &TableOption{Name:string($1), String:$3.String()}
+    $$ = &TableOption{Name:string($1), String:$3.String(), CaseSensitive: true}
   }
 | INSERT_METHOD equal_opt insert_method_options
   {
