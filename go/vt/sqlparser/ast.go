@@ -1991,6 +1991,8 @@ type TrimFuncType int8
 // TrimType is an enum to get types of Trim
 type TrimType int8
 
+// WindowSpecification represents window_spec
+// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html
 type WindowSpecification struct {
 	Name            string
 	PartitionClause Exprs
@@ -1998,6 +2000,8 @@ type WindowSpecification struct {
 	FrameClause     *FrameClause
 }
 
+// FrameClause represents frame_clause
+// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html
 type FrameClause struct {
 	Unit      FrameUnitType
 	IsBetween bool
@@ -2005,24 +2009,35 @@ type FrameClause struct {
 	End       *FramePoint
 }
 
+// FramePoint refers to frame_start/frame_end
+// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html
 type FramePoint struct {
 	Type FramePointType
 	Expr Expr
 }
 
+// OverClause refers to over_clause
+// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html
 type OverClause struct {
 	WindowName string
 	WindowSpec *WindowSpecification
 }
 
+// FrameUnitType is an enum to get types of Unit used in FrameClause.
 type FrameUnitType int8
 
+// FrameUnitType is an enum to get types of FramePoint.
 type FramePointType int8
 
+// NullTreatmentClause refers to null_treatment
+// According to SQL Docs:  Some window functions permit a null_treatment clause that specifies how to handle NULL values when calculating results.
+// This clause is optional. It is part of the SQL standard, but the MySQL implementation permits only RESPECT NULLS (which is also the default).
+// This means that NULL values are considered when calculating results. IGNORE NULLS is parsed, but produces an error.
 type NullTreatmentClause struct {
 	Type NullTreatmentType
 }
 
+// NullTreatmentType is an enum to get types for NullTreatmentClause
 type NullTreatmentType int8
 
 // *********** Expressions
