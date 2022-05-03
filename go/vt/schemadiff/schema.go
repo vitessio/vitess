@@ -426,7 +426,11 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 // These diffs are CREATE/DROP/ALTER TABLE/VIEW.
 // The operation does not modify this object. Instead, if successful, a new (modified) Schema is returned.
 func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
-	dup, err := NewSchemaFromStatements(s.ToStatements())
+	// we export to queries, then import back.
+	// The reason we don't just clone this object's fields, or even export/import to Statements,
+	// is that we want this schema to be immutable an unaffected by the apply() on the duplicate.
+	// statements/slices/maps will have shared pointers and changes will propagate back to this schema.
+	dup, err := NewSchemaFromQueries(s.ToQueries())
 	if err != nil {
 		return nil, err
 	}

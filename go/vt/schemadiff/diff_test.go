@@ -297,6 +297,17 @@ func TestDiffSchemas(t *testing.T) {
 			to:   "create table t(id int primary key)",
 		},
 		{
+			name: "change of table column",
+			from: "create table t(id int primary key, v varchar(10))",
+			to:   "create table t(id int primary key, v varchar(20))",
+			diffs: []string{
+				"alter table t modify column v varchar(20)",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t` MODIFY COLUMN `v` varchar(20)",
+			},
+		},
+		{
 			name: "change of table columns, added",
 			from: "create table t(id int primary key)",
 			to:   "create table t(id int primary key, i int)",
@@ -329,7 +340,7 @@ func TestDiffSchemas(t *testing.T) {
 			},
 		},
 		{
-			name: "create table (2)",
+			name: "create table 2",
 			from: ";;; ; ;    ;;;",
 			to:   "create table t(id int primary key)",
 			diffs: []string{
@@ -501,10 +512,15 @@ func TestDiffSchemas(t *testing.T) {
 					// Validate "apply()" on "from" converges with "to"
 					schema1, err := NewSchemaFromSQL(ts.from)
 					assert.NoError(t, err)
+					schema1SQL := schema1.ToSQL()
+
 					schema2, err := NewSchemaFromSQL(ts.to)
 					assert.NoError(t, err)
 					applied, err := schema1.Apply(diffs)
 					require.NoError(t, err)
+
+					// validate schema1 unaffected by Apply
+					assert.Equal(t, schema1SQL, schema1.ToSQL())
 
 					appliedDiff, err := schema2.Diff(applied, hints)
 					require.NoError(t, err)
