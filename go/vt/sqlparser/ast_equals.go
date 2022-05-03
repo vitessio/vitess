@@ -386,6 +386,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfExtractedSubquery(a, b)
+	case *FirstOrLastValueExpr:
+		b, ok := inB.(*FirstOrLastValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFirstOrLastValueExpr(a, b)
 	case *Flush:
 		b, ok := inB.(*Flush)
 		if !ok {
@@ -716,6 +722,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfNotExpr(a, b)
+	case *NullTreatmentClause:
+		b, ok := inB.(*NullTreatmentClause)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNullTreatmentClause(a, b)
 	case *NullVal:
 		b, ok := inB.(*NullVal)
 		if !ok {
@@ -1935,6 +1947,20 @@ func EqualsRefOfExtractedSubquery(a, b *ExtractedSubquery) bool {
 		EqualsExpr(a.alternative, b.alternative)
 }
 
+// EqualsRefOfFirstOrLastValueExpr does deep equals between the two objects.
+func EqualsRefOfFirstOrLastValueExpr(a, b *FirstOrLastValueExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsExpr(a.Expr, b.Expr) &&
+		EqualsRefOfNullTreatmentClause(a.NullTreatmentClause, b.NullTreatmentClause) &&
+		EqualsRefOfOverClause(a.OverClause, b.OverClause)
+}
+
 // EqualsRefOfFlush does deep equals between the two objects.
 func EqualsRefOfFlush(a, b *Flush) bool {
 	if a == b {
@@ -2590,6 +2616,17 @@ func EqualsRefOfNotExpr(a, b *NotExpr) bool {
 		return false
 	}
 	return EqualsExpr(a.Expr, b.Expr)
+}
+
+// EqualsRefOfNullTreatmentClause does deep equals between the two objects.
+func EqualsRefOfNullTreatmentClause(a, b *NullTreatmentClause) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type
 }
 
 // EqualsRefOfNullVal does deep equals between the two objects.
@@ -3734,6 +3771,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfExtractFuncExpr(a, b)
+	case *FirstOrLastValueExpr:
+		b, ok := inB.(*FirstOrLastValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFirstOrLastValueExpr(a, b)
 	case *FuncExpr:
 		b, ok := inB.(*FuncExpr)
 		if !ok {
@@ -4235,6 +4278,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfExtractedSubquery(a, b)
+	case *FirstOrLastValueExpr:
+		b, ok := inB.(*FirstOrLastValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFirstOrLastValueExpr(a, b)
 	case *FuncExpr:
 		b, ok := inB.(*FuncExpr)
 		if !ok {
@@ -4637,6 +4686,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfExtractedSubquery(a, b)
+	case *FirstOrLastValueExpr:
+		b, ok := inB.(*FirstOrLastValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFirstOrLastValueExpr(a, b)
 	case *FuncExpr:
 		b, ok := inB.(*FuncExpr)
 		if !ok {

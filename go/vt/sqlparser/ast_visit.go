@@ -142,6 +142,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfExtractFuncExpr(in, f)
 	case *ExtractedSubquery:
 		return VisitRefOfExtractedSubquery(in, f)
+	case *FirstOrLastValueExpr:
+		return VisitRefOfFirstOrLastValueExpr(in, f)
 	case *Flush:
 		return VisitRefOfFlush(in, f)
 	case *Force:
@@ -252,6 +254,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfNextval(in, f)
 	case *NotExpr:
 		return VisitRefOfNotExpr(in, f)
+	case *NullTreatmentClause:
+		return VisitRefOfNullTreatmentClause(in, f)
 	case *NullVal:
 		return VisitRefOfNullVal(in, f)
 	case Offset:
@@ -1263,6 +1267,24 @@ func VisitRefOfExtractedSubquery(in *ExtractedSubquery, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfFirstOrLastValueExpr(in *FirstOrLastValueExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfNullTreatmentClause(in.NullTreatmentClause, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfFlush(in *Flush, f Visit) error {
 	if in == nil {
 		return nil
@@ -2019,6 +2041,15 @@ func VisitRefOfNotExpr(in *NotExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfNullTreatmentClause(in *NullTreatmentClause, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
 	return nil
@@ -3205,6 +3236,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfCurTimeFuncExpr(in, f)
 	case *ExtractFuncExpr:
 		return VisitRefOfExtractFuncExpr(in, f)
+	case *FirstOrLastValueExpr:
+		return VisitRefOfFirstOrLastValueExpr(in, f)
 	case *FuncExpr:
 		return VisitRefOfFuncExpr(in, f)
 	case *GroupConcatExpr:
@@ -3407,6 +3440,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfExtractFuncExpr(in, f)
 	case *ExtractedSubquery:
 		return VisitRefOfExtractedSubquery(in, f)
+	case *FirstOrLastValueExpr:
+		return VisitRefOfFirstOrLastValueExpr(in, f)
 	case *FuncExpr:
 		return VisitRefOfFuncExpr(in, f)
 	case *GroupConcatExpr:
@@ -3551,6 +3586,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfExtractFuncExpr(in, f)
 	case *ExtractedSubquery:
 		return VisitRefOfExtractedSubquery(in, f)
+	case *FirstOrLastValueExpr:
+		return VisitRefOfFirstOrLastValueExpr(in, f)
 	case *FuncExpr:
 		return VisitRefOfFuncExpr(in, f)
 	case *GroupConcatExpr:

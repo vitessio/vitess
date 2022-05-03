@@ -1368,6 +1368,7 @@ func (node *WindowSpecification) Format(buf *TrackedBuffer) {
 	}
 }
 
+// Format formats the node
 func (node *FrameClause) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, " %s", node.Unit.ToString())
 	if node.IsBetween {
@@ -1377,6 +1378,12 @@ func (node *FrameClause) Format(buf *TrackedBuffer) {
 	}
 }
 
+// Format formats the node
+func (node *NullTreatmentClause) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, " %s", node.Type.ToString())
+}
+
+// Format formats the node
 func (node *FramePoint) Format(buf *TrackedBuffer) {
 	if node.Expr != nil {
 		buf.astPrintf(node, " %v", node.Expr)
@@ -1387,6 +1394,17 @@ func (node *FramePoint) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *ArgumentLessWindowExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%s()", node.Type.ToString())
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
+}
+
+// Format formats the node
+func (node *FirstOrLastValueExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v)", node.Type.ToString(), node.Expr)
+	if node.NullTreatmentClause != nil {
+		buf.astPrintf(node, "%v", node.NullTreatmentClause)
+	}
 	if node.OverClause != nil {
 		buf.astPrintf(node, " %v", node.OverClause)
 	}

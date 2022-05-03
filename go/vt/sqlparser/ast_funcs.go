@@ -1389,6 +1389,30 @@ func (ty ArgumentLessWindowExprType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty NullTreatmentType) ToString() string {
+	switch ty {
+	case RespectNullsType:
+		return RespectNullsStr
+	case IgnoreNullsType:
+		return IgnoreNullsStr
+	default:
+		return "Unknown NullTreatmentType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty FirstOrLastValueExprType) ToString() string {
+	switch ty {
+	case FirstValueExprType:
+		return FirstValueExprStr
+	case LastValueExprType:
+		return LastValueExprStr
+	default:
+		return "Unknown FirstOrLastValueExprType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty JSONAttributeType) ToString() string {
 	switch ty {
 	case DepthAttributeType:

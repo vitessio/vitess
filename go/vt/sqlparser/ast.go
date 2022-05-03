@@ -2019,6 +2019,12 @@ type FrameUnitType int8
 
 type FramePointType int8
 
+type NullTreatmentClause struct {
+	Type NullTreatmentType
+}
+
+type NullTreatmentType int8
+
 // *********** Expressions
 type (
 	// Expr represents an expression.
@@ -2502,7 +2508,19 @@ type (
 		OverClause *OverClause
 	}
 
+	// ArgumentLessWindowExprType is an enum to get types of ArgumentLessWindowExpr.
 	ArgumentLessWindowExprType int8
+
+	// FirstOrLastValueExpr stands for the following window_functions: FIRST_VALUE, LAST_VALUE
+	FirstOrLastValueExpr struct {
+		Type                FirstOrLastValueExprType
+		Expr                Expr
+		NullTreatmentClause *NullTreatmentClause
+		OverClause          *OverClause
+	}
+
+	// FirstOrLastValueExprType is an enum to get types of FirstOrLastValueExpr.
+	FirstOrLastValueExprType int8
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2565,6 +2583,7 @@ func (*JSONRemoveExpr) iExpr()                     {}
 func (*JSONUnquoteExpr) iExpr()                    {}
 func (*MemberOfExpr) iExpr()                       {}
 func (*ArgumentLessWindowExpr) iExpr()             {}
+func (*FirstOrLastValueExpr) iExpr()               {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -2601,6 +2620,7 @@ func (*JSONRemoveExpr) iCallable()                     {}
 func (*JSONUnquoteExpr) iCallable()                    {}
 func (*MemberOfExpr) iCallable()                       {}
 func (*ArgumentLessWindowExpr) iCallable()             {}
+func (*FirstOrLastValueExpr) iCallable()               {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

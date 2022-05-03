@@ -130,6 +130,9 @@ func bindVariable(yylex yyLexer, bvar string) {
   argumentLessWindowExprType ArgumentLessWindowExprType
   windowSpecification *WindowSpecification
   overClause *OverClause
+  nullTreatmentClause *NullTreatmentClause
+  nullTreatmentType NullTreatmentType
+  firstOrLastValueExprType FirstOrLastValueExprType
 
   whens         []*When
   columnDefinitions []*ColumnDefinition
@@ -393,6 +396,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <frameClause> frame_clause frame_clause_opt
 %type <windowSpecification> window_spec
 %type <overClause> over_clause
+%type <nullTreatmentType> null_treatment_type
+%type <nullTreatmentClause> null_treatment_clause null_treatment_clause_opt
+%type <firstOrLastValueExprType> first_or_last_value_expr_type
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
 %type <partitionOption> partitions_options_opt partitions_options_beginning
@@ -4941,6 +4947,38 @@ over_clause:
     $$ = &OverClause{WindowName: $2.String()}
   }
 
+null_treatment_clause_opt:
+  {
+    $$ = nil
+  }
+| null_treatment_clause
+
+null_treatment_clause:
+  null_treatment_type
+  {
+    $$ = &NullTreatmentClause{$1}
+  }
+
+null_treatment_type:
+  RESPECT NULLS
+  {
+    $$ = RespectNullsType
+  }
+| IGNORE NULLS
+  {
+    $$ = IgnoreNullsType
+  }
+
+first_or_last_value_expr_type:
+  FIRST_VALUE
+  {
+    $$ = FirstValueExprType
+  }
+| LAST_VALUE
+  {
+    $$ = LastValueExprType
+  }
+
 default_opt:
   /* empty */
   {
@@ -5301,6 +5339,10 @@ UTC_DATE func_paren_opt
 | argument_less_window_expr_type openb closeb over_clause
   {
     $$ = &ArgumentLessWindowExpr{ Type: $1, OverClause : $4 }
+  }
+| first_or_last_value_expr_type openb expression closeb null_treatment_clause_opt over_clause
+  {
+    $$ = &FirstOrLastValueExpr{ Type: $1, Expr : $3 , NullTreatmentClause:$5 ,OverClause:$6 }
   }
 
 json_path_param_list_opt:

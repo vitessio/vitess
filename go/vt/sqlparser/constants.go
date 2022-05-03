@@ -327,6 +327,14 @@ const (
 	RankExprStr        = "rank"
 	RowNumberExprStr   = "row_number"
 
+	// NullTreatmentType strings
+	RespectNullsStr = "respect nulls"
+	IgnoreNullsStr  = "ignore nulls"
+
+	// FirstOrLastValueExprType strings
+	FirstValueExprStr = "first_value"
+	LastValueExprStr  = "last_value"
+
 	// TrimFuncType strings
 	NormalTrimStr = "trim"
 	LTrimStr      = "ltrim"
@@ -471,6 +479,18 @@ const (
 	PercentRankExprType
 	RankExprType
 	RowNumberExprType
+)
+
+// Constants for Enum Type - NullTreatmentType
+const (
+	RespectNullsType NullTreatmentType = iota
+	IgnoreNullsType
+)
+
+// Constants for Enum Type - FirstOrLastValueExprType
+const (
+	FirstValueExprType FirstOrLastValueExprType = iota
+	LastValueExprType
 )
 
 // Constants for Enum Type - JSONAttributeType

@@ -1810,6 +1810,7 @@ func (node *WindowSpecification) formatFast(buf *TrackedBuffer) {
 	}
 }
 
+// formatFast formats the node
 func (node *FrameClause) formatFast(buf *TrackedBuffer) {
 	buf.WriteByte(' ')
 	buf.WriteString(node.Unit.ToString())
@@ -1823,6 +1824,13 @@ func (node *FrameClause) formatFast(buf *TrackedBuffer) {
 	}
 }
 
+// formatFast formats the node
+func (node *NullTreatmentClause) formatFast(buf *TrackedBuffer) {
+	buf.WriteByte(' ')
+	buf.WriteString(node.Type.ToString())
+}
+
+// formatFast formats the node
 func (node *FramePoint) formatFast(buf *TrackedBuffer) {
 	if node.Expr != nil {
 		buf.WriteByte(' ')
@@ -1836,6 +1844,21 @@ func (node *FramePoint) formatFast(buf *TrackedBuffer) {
 func (node *ArgumentLessWindowExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.Type.ToString())
 	buf.WriteString("()")
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
+}
+
+// formatFast formats the node
+func (node *FirstOrLastValueExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Type.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteByte(')')
+	if node.NullTreatmentClause != nil {
+		node.NullTreatmentClause.formatFast(buf)
+	}
 	if node.OverClause != nil {
 		buf.WriteByte(' ')
 		node.OverClause.formatFast(buf)
