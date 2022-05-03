@@ -223,7 +223,7 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 	statsTabletTypeCount.Add(s, 1)
 
 	err := ts.updateLocked(ctx)
-	// no need to short circuit. apply all steps and return error in the end.
+	// No need to short circuit. Apply all steps and return error in the end.
 	ts.publishStateLocked(ctx)
 	ts.tm.notifyShardSync()
 	return err
@@ -270,7 +270,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, false, reason); err != nil {
 			errStr := fmt.Sprintf("SetServingType(serving=false) failed: %v", err)
 			log.Errorf(errStr)
-			// no need to short circuit. apply all steps and return error in the end.
+			// No need to short circuit. Apply all steps and return error in the end.
 			returnErr = vterrors.Wrapf(err, errStr)
 		}
 	}
@@ -278,7 +278,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 	if err := ts.applyDenyList(ctx); err != nil {
 		errStr := fmt.Sprintf("Cannot update denied tables rule: %v", err)
 		log.Errorf(errStr)
-		// no need to short circuit. apply all steps and return error in the end.
+		// No need to short circuit. Apply all steps and return error in the end.
 		returnErr = vterrors.Wrapf(err, errStr)
 	}
 
