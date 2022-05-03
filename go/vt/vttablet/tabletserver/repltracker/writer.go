@@ -228,7 +228,7 @@ func (w *heartbeatWriter) RequestHeartbeats() {
 	}
 	// In this function we're going to create a timer to activate heartbeats by-demand. Creating a timer has a cost.
 	// Now, this function can be spammed by clients (the lag throttler). We therefore only allow this function to
-	// actually once per X seconds (1/4 of onDemandDuration as a reasonable oversampling value):
+	// actually operate once per X seconds (1/4 of onDemandDuration as a reasonable oversampling value):
 	if atomic.CompareAndSwapInt64(&w.requestHeartbeatsReentranceFlag, 0, 1) {
 		defer time.AfterFunc(w.onDemandDuration/4, func() { atomic.StoreInt64(&w.requestHeartbeatsReentranceFlag, 0) })
 	} else {
