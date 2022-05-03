@@ -204,6 +204,9 @@ func Init() {
 	if heartbeatInterval > time.Second {
 		heartbeatInterval = time.Second
 	}
+	if heartbeatByDemandDuration < 0 {
+		heartbeatByDemandDuration = 0
+	}
 	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set(heartbeatInterval)
 	currentConfig.ReplicationTracker.HeartbeatByDemandSeconds.Set(heartbeatByDemandDuration)
 
