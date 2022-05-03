@@ -23,12 +23,7 @@ limitations under the License.
 //
 // Some potential improvements we can add, if desired:
 //
-// 1. Background refresh. We would take a config flag that governs the refresh
-//	  interval and backoff (for when background refresh happens around the same
-//	  time as grpc-core calls to ResolveNow) and spin up a goroutine. We would
-//	  then have to spin this down when Close is called.
-//
-// 2. Stats!
+// 1. Stats!
 package resolver
 
 import (
