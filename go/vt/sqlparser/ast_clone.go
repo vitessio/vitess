@@ -55,6 +55,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAndExpr(in)
 	case Argument:
 		return in
+	case *ArgumentLessWindowExpr:
+		return CloneRefOfArgumentLessWindowExpr(in)
 	case *AutoIncSpec:
 		return CloneRefOfAutoIncSpec(in)
 	case *Begin:
@@ -147,6 +149,10 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfForce(in)
 	case *ForeignKeyDefinition:
 		return CloneRefOfForeignKeyDefinition(in)
+	case *FrameClause:
+		return CloneRefOfFrameClause(in)
+	case *FramePoint:
+		return CloneRefOfFramePoint(in)
 	case *FuncExpr:
 		return CloneRefOfFuncExpr(in)
 	case GroupBy:
@@ -267,6 +273,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfOtherAdmin(in)
 	case *OtherRead:
 		return CloneRefOfOtherRead(in)
+	case *OverClause:
+		return CloneRefOfOverClause(in)
 	case *ParenTableExpr:
 		return CloneRefOfParenTableExpr(in)
 	case *ParsedComments:
@@ -399,6 +407,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfWhen(in)
 	case *Where:
 		return CloneRefOfWhere(in)
+	case *WindowSpecification:
+		return CloneRefOfWindowSpecification(in)
 	case *With:
 		return CloneRefOfWith(in)
 	case *XorExpr:
@@ -554,6 +564,16 @@ func CloneRefOfAndExpr(n *AndExpr) *AndExpr {
 	out := *n
 	out.Left = CloneExpr(n.Left)
 	out.Right = CloneExpr(n.Right)
+	return &out
+}
+
+// CloneRefOfArgumentLessWindowExpr creates a deep clone of the input.
+func CloneRefOfArgumentLessWindowExpr(n *ArgumentLessWindowExpr) *ArgumentLessWindowExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -1042,6 +1062,27 @@ func CloneRefOfForeignKeyDefinition(n *ForeignKeyDefinition) *ForeignKeyDefiniti
 	out.Source = CloneColumns(n.Source)
 	out.IndexName = CloneColIdent(n.IndexName)
 	out.ReferenceDefinition = CloneRefOfReferenceDefinition(n.ReferenceDefinition)
+	return &out
+}
+
+// CloneRefOfFrameClause creates a deep clone of the input.
+func CloneRefOfFrameClause(n *FrameClause) *FrameClause {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Start = CloneRefOfFramePoint(n.Start)
+	out.End = CloneRefOfFramePoint(n.End)
+	return &out
+}
+
+// CloneRefOfFramePoint creates a deep clone of the input.
+func CloneRefOfFramePoint(n *FramePoint) *FramePoint {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
 	return &out
 }
 
@@ -1651,6 +1692,16 @@ func CloneRefOfOtherRead(n *OtherRead) *OtherRead {
 		return nil
 	}
 	out := *n
+	return &out
+}
+
+// CloneRefOfOverClause creates a deep clone of the input.
+func CloneRefOfOverClause(n *OverClause) *OverClause {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.WindowSpec = CloneRefOfWindowSpecification(n.WindowSpec)
 	return &out
 }
 
@@ -2359,6 +2410,18 @@ func CloneRefOfWhere(n *Where) *Where {
 	return &out
 }
 
+// CloneRefOfWindowSpecification creates a deep clone of the input.
+func CloneRefOfWindowSpecification(n *WindowSpecification) *WindowSpecification {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.PartitionClause = CloneExprs(n.PartitionClause)
+	out.OrderClause = CloneOrderBy(n.OrderClause)
+	out.FrameClause = CloneRefOfFrameClause(n.FrameClause)
+	return &out
+}
+
 // CloneRefOfWith creates a deep clone of the input.
 func CloneRefOfWith(n *With) *With {
 	if n == nil {
@@ -2436,6 +2499,8 @@ func CloneCallable(in Callable) Callable {
 		return nil
 	}
 	switch in := in.(type) {
+	case *ArgumentLessWindowExpr:
+		return CloneRefOfArgumentLessWindowExpr(in)
 	case *ConvertExpr:
 		return CloneRefOfConvertExpr(in)
 	case *ConvertUsingExpr:
@@ -2630,6 +2695,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfAndExpr(in)
 	case Argument:
 		return in
+	case *ArgumentLessWindowExpr:
+		return CloneRefOfArgumentLessWindowExpr(in)
 	case *BetweenExpr:
 		return CloneRefOfBetweenExpr(in)
 	case *BinaryExpr:
@@ -2776,6 +2843,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfAndExpr(in)
 	case Argument:
 		return in
+	case *ArgumentLessWindowExpr:
+		return CloneRefOfArgumentLessWindowExpr(in)
 	case *BetweenExpr:
 		return CloneRefOfBetweenExpr(in)
 	case *BinaryExpr:

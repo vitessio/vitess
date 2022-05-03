@@ -2372,8 +2372,8 @@ var (
 		input:  "DROP /* comment */ PREPARE stmt1",
 		output: "drop /* comment */ prepare stmt1",
 	}, {
-		input:  "create table unused_reserved_keywords (dense_rank bigint, lead VARCHAR(255), percent_rank decimal(3, 0), row TINYINT, rows CHAR(10), constraint PK_project PRIMARY KEY (dense_rank))",
-		output: "create table unused_reserved_keywords (\n\t`dense_rank` bigint,\n\t`lead` VARCHAR(255),\n\t`percent_rank` decimal(3,0),\n\t`row` TINYINT,\n\t`rows` CHAR(10),\n\tconstraint PK_project PRIMARY KEY (`dense_rank`)\n)",
+		input:  "create table unused_reserved_keywords (lead VARCHAR(255))",
+		output: "create table unused_reserved_keywords (\n\t`lead` VARCHAR(255)\n)",
 	}, {
 		input:  `SELECT JSON_PRETTY('{"a":"10","b":"15","x":"25"}')`,
 		output: `select json_pretty('{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
@@ -2885,6 +2885,21 @@ var (
 	}, {
 		input:  "SELECT JSON_UNQUOTE(@j)",
 		output: "select json_unquote(@j) from dual",
+	}, {
+		input:  "SELECT val, CUME_DIST() OVER w, ROW_NUMBER() OVER w, DENSE_RANK() OVER w, PERCENT_RANK() OVER w, RANK() OVER w AS 'cd' FROM numbers",
+		output: "select val, cume_dist() over w, row_number() over w, dense_rank() over w, percent_rank() over w, rank() over w as cd from numbers",
+	}, {
+		input:  "SELECT year, country, product, profit, CUME_DIST() OVER() AS total_profit FROM sales",
+		output: "select `year`, country, product, profit, cume_dist() over () as total_profit from sales",
+	}, {
+		input:  "SELECT val, CUME_DIST() OVER (ORDER BY val) AS 'cd' FROM numbers",
+		output: "select val, cume_dist() over ( order by val asc) as cd from numbers",
+	}, {
+		input:  "SELECT val, CUME_DIST() OVER (PARTITION BY z ORDER BY val, subject DESC ROWS CURRENT ROW) AS 'cd' FROM numbers",
+		output: "select val, cume_dist() over ( partition by z order by val asc, subject desc rows current row) as cd from numbers",
+	}, {
+		input:  "SELECT val, CUME_DIST() OVER (val PARTITION BY z, subject ORDER BY val, subject DESC ROWS CURRENT ROW) AS 'cd' FROM numbers",
+		output: "select val, cume_dist() over ( val partition by z, subject order by val asc, subject desc rows current row) as cd from numbers",
 	}}
 )
 

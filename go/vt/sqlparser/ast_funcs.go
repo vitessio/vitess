@@ -1341,6 +1341,54 @@ func (ty TrimType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty FrameUnitType) ToString() string {
+	switch ty {
+	case FrameRowsType:
+		return FrameRowsStr
+	case FrameRangeType:
+		return FrameRangeStr
+	default:
+		return "Unknown FrameUnitType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty FramePointType) ToString() string {
+	switch ty {
+	case CurrentRowType:
+		return CurrentRowStr
+	case UnboundedPrecedingType:
+		return UnboundedPrecedingStr
+	case UnboundedFollowingType:
+		return UnboundedFollowingStr
+	case ExprPrecedingType:
+		return ExprPrecedingStr
+	case ExprFollowingType:
+		return ExprFollowingStr
+	default:
+		return "Unknown FramePointType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty ArgumentLessWindowExprType) ToString() string {
+	switch ty {
+	case CumeDistExprType:
+		return CumeDistExprStr
+	case DenseRankExprType:
+		return DenseRankExprStr
+	case PercentRankExprType:
+		return PercentRankExprStr
+	case RankExprType:
+		return RankExprStr
+	case RowNumberExprType:
+		return RowNumberExprStr
+	default:
+		return "Unknown ArgumentLessWindowExprType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty JSONAttributeType) ToString() string {
 	switch ty {
 	case DepthAttributeType:

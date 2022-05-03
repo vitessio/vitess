@@ -1341,6 +1341,57 @@ func (node *JSONStorageSizeExpr) Format(buf *TrackedBuffer) {
 
 }
 
+// Format formats the node
+func (node *OverClause) Format(buf *TrackedBuffer) {
+	buf.WriteString("over")
+	if node.WindowName != "" {
+		buf.astPrintf(node, " %s", node.WindowName)
+	}
+	if node.WindowSpec != nil {
+		buf.astPrintf(node, " (%v)", node.WindowSpec)
+	}
+}
+
+// Format formats the node
+func (node *WindowSpecification) Format(buf *TrackedBuffer) {
+	if node.Name != "" {
+		buf.astPrintf(node, " %s", node.Name)
+	}
+	if node.PartitionClause != nil {
+		buf.astPrintf(node, " partition by %v", node.PartitionClause)
+	}
+	if node.OrderClause != nil {
+		buf.astPrintf(node, "%v", node.OrderClause)
+	}
+	if node.FrameClause != nil {
+		buf.astPrintf(node, "%v", node.FrameClause)
+	}
+}
+
+func (node *FrameClause) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, " %s", node.Unit.ToString())
+	if node.IsBetween {
+		buf.astPrintf(node, " between%v and%v", node.Start, node.End)
+	} else {
+		buf.astPrintf(node, "%v", node.Start)
+	}
+}
+
+func (node *FramePoint) Format(buf *TrackedBuffer) {
+	if node.Expr != nil {
+		buf.astPrintf(node, " %v", node.Expr)
+	}
+	buf.astPrintf(node, " %s", node.Type.ToString())
+}
+
+// Format formats the node
+func (node *ArgumentLessWindowExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s()", node.Type.ToString())
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
+}
+
 // Format formats the node.
 func (node *SubstrExpr) Format(buf *TrackedBuffer) {
 	if node.To == nil {

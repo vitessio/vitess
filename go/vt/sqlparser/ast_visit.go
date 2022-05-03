@@ -54,6 +54,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAndExpr(in, f)
 	case Argument:
 		return VisitArgument(in, f)
+	case *ArgumentLessWindowExpr:
+		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *AutoIncSpec:
 		return VisitRefOfAutoIncSpec(in, f)
 	case *Begin:
@@ -146,6 +148,10 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfForce(in, f)
 	case *ForeignKeyDefinition:
 		return VisitRefOfForeignKeyDefinition(in, f)
+	case *FrameClause:
+		return VisitRefOfFrameClause(in, f)
+	case *FramePoint:
+		return VisitRefOfFramePoint(in, f)
 	case *FuncExpr:
 		return VisitRefOfFuncExpr(in, f)
 	case GroupBy:
@@ -266,6 +272,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfOtherAdmin(in, f)
 	case *OtherRead:
 		return VisitRefOfOtherRead(in, f)
+	case *OverClause:
+		return VisitRefOfOverClause(in, f)
 	case *ParenTableExpr:
 		return VisitRefOfParenTableExpr(in, f)
 	case *ParsedComments:
@@ -398,6 +406,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfWhen(in, f)
 	case *Where:
 		return VisitRefOfWhere(in, f)
+	case *WindowSpecification:
+		return VisitRefOfWindowSpecification(in, f)
 	case *With:
 		return VisitRefOfWith(in, f)
 	case *XorExpr:
@@ -616,6 +626,18 @@ func VisitRefOfAndExpr(in *AndExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Right, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfArgumentLessWindowExpr(in *ArgumentLessWindowExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil
@@ -1276,6 +1298,33 @@ func VisitRefOfForeignKeyDefinition(in *ForeignKeyDefinition, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfReferenceDefinition(in.ReferenceDefinition, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfFrameClause(in *FrameClause, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfFramePoint(in.Start, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfFramePoint(in.End, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfFramePoint(in *FramePoint, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
 	}
 	return nil
@@ -2076,6 +2125,18 @@ func VisitRefOfOtherRead(in *OtherRead, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfOverClause(in *OverClause, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfWindowSpecification(in.WindowSpec, f); err != nil {
 		return err
 	}
 	return nil
@@ -3034,6 +3095,24 @@ func VisitRefOfWhere(in *Where, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfWindowSpecification(in *WindowSpecification, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.PartitionClause, f); err != nil {
+		return err
+	}
+	if err := VisitOrderBy(in.OrderClause, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfFrameClause(in.FrameClause, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfWith(in *With, f Visit) error {
 	if in == nil {
 		return nil
@@ -3116,6 +3195,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return nil
 	}
 	switch in := in.(type) {
+	case *ArgumentLessWindowExpr:
+		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *ConvertExpr:
 		return VisitRefOfConvertExpr(in, f)
 	case *ConvertUsingExpr:
@@ -3296,6 +3377,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfAndExpr(in, f)
 	case Argument:
 		return VisitArgument(in, f)
+	case *ArgumentLessWindowExpr:
+		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *BetweenExpr:
 		return VisitRefOfBetweenExpr(in, f)
 	case *BinaryExpr:
@@ -3438,6 +3521,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfAndExpr(in, f)
 	case Argument:
 		return VisitArgument(in, f)
+	case *ArgumentLessWindowExpr:
+		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *BetweenExpr:
 		return VisitRefOfBetweenExpr(in, f)
 	case *BinaryExpr:

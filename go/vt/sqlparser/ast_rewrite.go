@@ -54,6 +54,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfAndExpr(parent, node, replacer)
 	case Argument:
 		return a.rewriteArgument(parent, node, replacer)
+	case *ArgumentLessWindowExpr:
+		return a.rewriteRefOfArgumentLessWindowExpr(parent, node, replacer)
 	case *AutoIncSpec:
 		return a.rewriteRefOfAutoIncSpec(parent, node, replacer)
 	case *Begin:
@@ -146,6 +148,10 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfForce(parent, node, replacer)
 	case *ForeignKeyDefinition:
 		return a.rewriteRefOfForeignKeyDefinition(parent, node, replacer)
+	case *FrameClause:
+		return a.rewriteRefOfFrameClause(parent, node, replacer)
+	case *FramePoint:
+		return a.rewriteRefOfFramePoint(parent, node, replacer)
 	case *FuncExpr:
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case GroupBy:
@@ -266,6 +272,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfOtherAdmin(parent, node, replacer)
 	case *OtherRead:
 		return a.rewriteRefOfOtherRead(parent, node, replacer)
+	case *OverClause:
+		return a.rewriteRefOfOverClause(parent, node, replacer)
 	case *ParenTableExpr:
 		return a.rewriteRefOfParenTableExpr(parent, node, replacer)
 	case *ParsedComments:
@@ -398,6 +406,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfWhen(parent, node, replacer)
 	case *Where:
 		return a.rewriteRefOfWhere(parent, node, replacer)
+	case *WindowSpecification:
+		return a.rewriteRefOfWindowSpecification(parent, node, replacer)
 	case *With:
 		return a.rewriteRefOfWith(parent, node, replacer)
 	case *XorExpr:
@@ -846,6 +856,33 @@ func (a *application) rewriteRefOfAndExpr(parent SQLNode, node *AndExpr, replace
 	}
 	if !a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*AndExpr).Right = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfArgumentLessWindowExpr(parent SQLNode, node *ArgumentLessWindowExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*ArgumentLessWindowExpr).OverClause = newNode.(*OverClause)
 	}) {
 		return false
 	}
@@ -2289,6 +2326,65 @@ func (a *application) rewriteRefOfForeignKeyDefinition(parent SQLNode, node *For
 	}
 	if !a.rewriteRefOfReferenceDefinition(node, node.ReferenceDefinition, func(newNode, parent SQLNode) {
 		parent.(*ForeignKeyDefinition).ReferenceDefinition = newNode.(*ReferenceDefinition)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfFrameClause(parent SQLNode, node *FrameClause, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteRefOfFramePoint(node, node.Start, func(newNode, parent SQLNode) {
+		parent.(*FrameClause).Start = newNode.(*FramePoint)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfFramePoint(node, node.End, func(newNode, parent SQLNode) {
+		parent.(*FrameClause).End = newNode.(*FramePoint)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfFramePoint(parent SQLNode, node *FramePoint, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*FramePoint).Expr = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -4081,6 +4177,33 @@ func (a *application) rewriteRefOfOtherRead(parent SQLNode, node *OtherRead, rep
 			a.cur.parent = parent
 			a.cur.node = node
 		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfOverClause(parent SQLNode, node *OverClause, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteRefOfWindowSpecification(node, node.WindowSpec, func(newNode, parent SQLNode) {
+		parent.(*OverClause).WindowSpec = newNode.(*WindowSpecification)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -6235,6 +6358,43 @@ func (a *application) rewriteRefOfWhere(parent SQLNode, node *Where, replacer re
 	}
 	return true
 }
+func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *WindowSpecification, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExprs(node, node.PartitionClause, func(newNode, parent SQLNode) {
+		parent.(*WindowSpecification).PartitionClause = newNode.(Exprs)
+	}) {
+		return false
+	}
+	if !a.rewriteOrderBy(node, node.OrderClause, func(newNode, parent SQLNode) {
+		parent.(*WindowSpecification).OrderClause = newNode.(OrderBy)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfFrameClause(node, node.FrameClause, func(newNode, parent SQLNode) {
+		parent.(*WindowSpecification).FrameClause = newNode.(*FrameClause)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfWith(parent SQLNode, node *With, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6351,6 +6511,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return true
 	}
 	switch node := node.(type) {
+	case *ArgumentLessWindowExpr:
+		return a.rewriteRefOfArgumentLessWindowExpr(parent, node, replacer)
 	case *ConvertExpr:
 		return a.rewriteRefOfConvertExpr(parent, node, replacer)
 	case *ConvertUsingExpr:
@@ -6531,6 +6693,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfAndExpr(parent, node, replacer)
 	case Argument:
 		return a.rewriteArgument(parent, node, replacer)
+	case *ArgumentLessWindowExpr:
+		return a.rewriteRefOfArgumentLessWindowExpr(parent, node, replacer)
 	case *BetweenExpr:
 		return a.rewriteRefOfBetweenExpr(parent, node, replacer)
 	case *BinaryExpr:
@@ -6673,6 +6837,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfAndExpr(parent, node, replacer)
 	case Argument:
 		return a.rewriteArgument(parent, node, replacer)
+	case *ArgumentLessWindowExpr:
+		return a.rewriteRefOfArgumentLessWindowExpr(parent, node, replacer)
 	case *BetweenExpr:
 		return a.rewriteRefOfBetweenExpr(parent, node, replacer)
 	case *BinaryExpr:

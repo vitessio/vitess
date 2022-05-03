@@ -309,6 +309,24 @@ const (
 	LeadingTrimStr  = "leading"
 	TrailingTrimStr = "trailing"
 
+	// FrameUnitType strings
+	FrameRowsStr  = "rows"
+	FrameRangeStr = "range"
+
+	// FramePointType strings
+	CurrentRowStr         = "current row"
+	UnboundedPrecedingStr = "unbounded preceding"
+	UnboundedFollowingStr = "unbounded following"
+	ExprPrecedingStr      = "preceding"
+	ExprFollowingStr      = "following"
+
+	// ArgumentLessWindowExprType strings
+	CumeDistExprStr    = "cume_dist"
+	DenseRankExprStr   = "dense_rank"
+	PercentRankExprStr = "percent_rank"
+	RankExprStr        = "rank"
+	RowNumberExprStr   = "row_number"
+
 	// TrimFuncType strings
 	NormalTrimStr = "trim"
 	LTrimStr      = "ltrim"
@@ -429,6 +447,30 @@ const (
 	NormalTrimType TrimFuncType = iota
 	LTrimType
 	RTrimType
+)
+
+// Constants for Enum Type - FrameUnitType
+const (
+	FrameRowsType FrameUnitType = iota
+	FrameRangeType
+)
+
+// Constants for Enum Type - FramePointType
+const (
+	CurrentRowType FramePointType = iota
+	UnboundedPrecedingType
+	UnboundedFollowingType
+	ExprPrecedingType
+	ExprFollowingType
+)
+
+// Constants for Enum Type - ArgumentLessWindowExprType
+const (
+	CumeDistExprType ArgumentLessWindowExprType = iota
+	DenseRankExprType
+	PercentRankExprType
+	RankExprType
+	RowNumberExprType
 )
 
 // Constants for Enum Type - JSONAttributeType

@@ -1778,6 +1778,70 @@ func (node *JSONStorageSizeExpr) formatFast(buf *TrackedBuffer) {
 
 }
 
+// formatFast formats the node
+func (node *OverClause) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("over")
+	if node.WindowName != "" {
+		buf.WriteByte(' ')
+		buf.WriteString(node.WindowName)
+	}
+	if node.WindowSpec != nil {
+		buf.WriteString(" (")
+		node.WindowSpec.formatFast(buf)
+		buf.WriteByte(')')
+	}
+}
+
+// formatFast formats the node
+func (node *WindowSpecification) formatFast(buf *TrackedBuffer) {
+	if node.Name != "" {
+		buf.WriteByte(' ')
+		buf.WriteString(node.Name)
+	}
+	if node.PartitionClause != nil {
+		buf.WriteString(" partition by ")
+		node.PartitionClause.formatFast(buf)
+	}
+	if node.OrderClause != nil {
+		node.OrderClause.formatFast(buf)
+	}
+	if node.FrameClause != nil {
+		node.FrameClause.formatFast(buf)
+	}
+}
+
+func (node *FrameClause) formatFast(buf *TrackedBuffer) {
+	buf.WriteByte(' ')
+	buf.WriteString(node.Unit.ToString())
+	if node.IsBetween {
+		buf.WriteString(" between")
+		node.Start.formatFast(buf)
+		buf.WriteString(" and")
+		node.End.formatFast(buf)
+	} else {
+		node.Start.formatFast(buf)
+	}
+}
+
+func (node *FramePoint) formatFast(buf *TrackedBuffer) {
+	if node.Expr != nil {
+		buf.WriteByte(' ')
+		node.Expr.formatFast(buf)
+	}
+	buf.WriteByte(' ')
+	buf.WriteString(node.Type.ToString())
+}
+
+// formatFast formats the node
+func (node *ArgumentLessWindowExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Type.ToString())
+	buf.WriteString("()")
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
+}
+
 // formatFast formats the node.
 func (node *SubstrExpr) formatFast(buf *TrackedBuffer) {
 	if node.To == nil {

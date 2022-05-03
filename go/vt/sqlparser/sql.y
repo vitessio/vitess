@@ -123,6 +123,13 @@ func bindVariable(yylex yyLexer, bvar string) {
   revertMigration *RevertMigration
   alterMigration  *AlterMigration
   trimType        TrimType
+  frameClause     *FrameClause
+  framePoint 	  *FramePoint
+  frameUnitType   FrameUnitType
+  framePointType  FramePointType
+  argumentLessWindowExprType ArgumentLessWindowExprType
+  windowSpecification *WindowSpecification
+  overClause *OverClause
 
   whens         []*When
   columnDefinitions []*ColumnDefinition
@@ -338,6 +345,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 // Flush tokens
 %token <str> NO_WRITE_TO_BINLOG LOGS ERROR GENERAL HOSTS OPTIMIZER_COSTS USER_RESOURCES SLOW CHANNEL RELAY EXPORT
 
+// Window Functions Token
+%token <str> CURRENT ROW ROWS
+
 // TableOptions tokens
 %token <str> AVG_ROW_LENGTH CONNECTION CHECKSUM DELAY_KEY_WRITE ENCRYPTION ENGINE INSERT_METHOD MAX_ROWS MIN_ROWS PACK_KEYS PASSWORD
 %token <str> FIXED DYNAMIC COMPRESSED REDUNDANT COMPACT ROW_FORMAT STATS_AUTO_RECALC STATS_PERSISTENT STATS_SAMPLE_PAGES STORAGE MEMORY DISK
@@ -376,6 +386,13 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> wild_opt check_option_opt cascade_or_local_opt restrict_or_cascade_opt
 %type <explainType> explain_format_opt
 %type <trimType> trim_type
+%type <frameUnitType> frame_units
+%type <framePointType> frame_point_type
+%type <argumentLessWindowExprType> argument_less_window_expr_type
+%type <framePoint> frame_point
+%type <frameClause> frame_clause frame_clause_opt
+%type <windowSpecification> window_spec
+%type <overClause> over_clause
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
 %type <partitionOption> partitions_options_opt partitions_options_beginning
@@ -413,7 +430,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
 %type <isExprOperator> is_suffix
 %type <colTuple> col_tuple
-%type <exprs> expression_list expression_list_opt
+%type <exprs> expression_list expression_list_opt window_partition_clause_opt
 %type <values> tuple_list
 %type <valTuple> row_tuple tuple_or_empty
 %type <subquery> subquery
@@ -4815,6 +4832,115 @@ trim_type:
     $$ = TrailingTrimType
   }
 
+frame_units:
+  ROWS
+  {
+    $$ = FrameRowsType
+  }
+| RANGE
+  {
+    $$ = FrameRangeType
+  }
+
+frame_point_type:
+  CURRENT ROW
+  {
+    $$ = CurrentRowType
+  }
+| UNBOUNDED PRECEDING
+  {
+    $$ = UnboundedPrecedingType
+  }
+| UNBOUNDED FOLLOWING
+  {
+    $$ = UnboundedFollowingType
+  }
+
+argument_less_window_expr_type:
+  CUME_DIST
+  {
+    $$ = CumeDistExprType
+  }
+| DENSE_RANK
+  {
+    $$ = DenseRankExprType
+  }
+| PERCENT_RANK
+  {
+    $$ = PercentRankExprType
+  }
+| RANK
+  {
+    $$ = RankExprType
+  }
+| ROW_NUMBER
+  {
+    $$ = RowNumberExprType
+  }
+
+frame_point:
+  frame_point_type
+  {
+    $$ = &FramePoint{Type:$1}
+  }
+| expression PRECEDING
+  {
+    $$ = &FramePoint{Type:ExprPrecedingType, Expr:$1}
+  }
+| expression FOLLOWING
+  {
+    $$ = &FramePoint{Type:ExprFollowingType, Expr:$1}
+  }
+
+frame_clause_opt:
+  {
+    $$ = nil
+  }
+| frame_clause
+  {
+    $$ = $1
+  }
+
+frame_clause:
+  frame_units frame_point
+  {
+    $$ = &FrameClause{ Unit: $1, Start: $2 }
+  }
+| frame_units BETWEEN frame_point AND frame_point
+  {
+    $$ = &FrameClause{ Unit: $1, Start: $3, End: $5, IsBetween: true }
+  }
+
+window_partition_clause_opt:
+  {
+    $$= nil
+  }
+| PARTITION BY expression_list
+  {
+    $$ = $3
+  }
+
+window_spec:
+sql_id window_partition_clause_opt order_by_opt frame_clause_opt
+  {
+    $$ = &WindowSpecification{ Name: $1.String(), PartitionClause: $2, OrderClause: $3, FrameClause: $4}
+  }
+|
+window_partition_clause_opt order_by_opt frame_clause_opt
+  {
+    $$ = &WindowSpecification{ PartitionClause: $1, OrderClause: $2, FrameClause: $3}
+  }
+
+over_clause:
+  OVER openb window_spec closeb
+  {
+    $$ = &OverClause{ WindowSpec: $3 }
+  }
+| OVER sql_id
+  {
+    $$ = &OverClause{WindowName: $2.String()}
+  }
+
 default_opt:
   /* empty */
   {
@@ -5171,6 +5297,10 @@ UTC_DATE func_paren_opt
 | JSON_UNQUOTE openb expression closeb
   {
     $$ = &JSONUnquoteExpr{JSONValue:$3}
+  }
+| argument_less_window_expr_type openb closeb over_clause
+  {
+    $$ = &ArgumentLessWindowExpr{ Type: $1, OverClause : $4 }
   }
 
 json_path_param_list_opt:
@@ -6005,6 +6135,10 @@ row_tuple:
   {
     $$ = ValTuple($2)
   }
+| ROW openb expression_list closeb
+  {
+    $$ = ValTuple($3)
+  }
 tuple_expression:
  row_tuple
   {
@@ -6312,6 +6446,8 @@ reserved_keyword:
 | REPLACE
 | RIGHT
 | ROW_NUMBER
+| ROW
+| ROWS
 | SCHEMA
 | SCHEMAS
 | SELECT
@@ -6396,6 +6532,7 @@ non_reserved_keyword:
 | CONNECTION
 | COPY
 | CSV
+| CURRENT
 | DATA
 | DATE
 | DATETIME

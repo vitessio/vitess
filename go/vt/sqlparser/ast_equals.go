@@ -122,6 +122,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return a == b
+	case *ArgumentLessWindowExpr:
+		b, ok := inB.(*ArgumentLessWindowExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfArgumentLessWindowExpr(a, b)
 	case *AutoIncSpec:
 		b, ok := inB.(*AutoIncSpec)
 		if !ok {
@@ -398,6 +404,18 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfForeignKeyDefinition(a, b)
+	case *FrameClause:
+		b, ok := inB.(*FrameClause)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFrameClause(a, b)
+	case *FramePoint:
+		b, ok := inB.(*FramePoint)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFramePoint(a, b)
 	case *FuncExpr:
 		b, ok := inB.(*FuncExpr)
 		if !ok {
@@ -758,6 +776,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfOtherRead(a, b)
+	case *OverClause:
+		b, ok := inB.(*OverClause)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfOverClause(a, b)
 	case *ParenTableExpr:
 		b, ok := inB.(*ParenTableExpr)
 		if !ok {
@@ -1154,6 +1178,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfWhere(a, b)
+	case *WindowSpecification:
+		b, ok := inB.(*WindowSpecification)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfWindowSpecification(a, b)
 	case *With:
 		b, ok := inB.(*With)
 		if !ok {
@@ -1344,6 +1374,18 @@ func EqualsRefOfAndExpr(a, b *AndExpr) bool {
 	}
 	return EqualsExpr(a.Left, b.Left) &&
 		EqualsExpr(a.Right, b.Right)
+}
+
+// EqualsRefOfArgumentLessWindowExpr does deep equals between the two objects.
+func EqualsRefOfArgumentLessWindowExpr(a, b *ArgumentLessWindowExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsRefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // EqualsRefOfAutoIncSpec does deep equals between the two objects.
@@ -1930,6 +1972,32 @@ func EqualsRefOfForeignKeyDefinition(a, b *ForeignKeyDefinition) bool {
 	return EqualsColumns(a.Source, b.Source) &&
 		EqualsColIdent(a.IndexName, b.IndexName) &&
 		EqualsRefOfReferenceDefinition(a.ReferenceDefinition, b.ReferenceDefinition)
+}
+
+// EqualsRefOfFrameClause does deep equals between the two objects.
+func EqualsRefOfFrameClause(a, b *FrameClause) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.IsBetween == b.IsBetween &&
+		a.Unit == b.Unit &&
+		EqualsRefOfFramePoint(a.Start, b.Start) &&
+		EqualsRefOfFramePoint(a.End, b.End)
+}
+
+// EqualsRefOfFramePoint does deep equals between the two objects.
+func EqualsRefOfFramePoint(a, b *FramePoint) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsExpr(a.Expr, b.Expr)
 }
 
 // EqualsRefOfFuncExpr does deep equals between the two objects.
@@ -2627,6 +2695,18 @@ func EqualsRefOfOtherRead(a, b *OtherRead) bool {
 		return false
 	}
 	return true
+}
+
+// EqualsRefOfOverClause does deep equals between the two objects.
+func EqualsRefOfOverClause(a, b *OverClause) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.WindowName == b.WindowName &&
+		EqualsRefOfWindowSpecification(a.WindowSpec, b.WindowSpec)
 }
 
 // EqualsRefOfParenTableExpr does deep equals between the two objects.
@@ -3448,6 +3528,20 @@ func EqualsRefOfWhere(a, b *Where) bool {
 		EqualsExpr(a.Expr, b.Expr)
 }
 
+// EqualsRefOfWindowSpecification does deep equals between the two objects.
+func EqualsRefOfWindowSpecification(a, b *WindowSpecification) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		EqualsExprs(a.PartitionClause, b.PartitionClause) &&
+		EqualsOrderBy(a.OrderClause, b.OrderClause) &&
+		EqualsRefOfFrameClause(a.FrameClause, b.FrameClause)
+}
+
 // EqualsRefOfWith does deep equals between the two objects.
 func EqualsRefOfWith(a, b *With) bool {
 	if a == b {
@@ -3610,6 +3704,12 @@ func EqualsCallable(inA, inB Callable) bool {
 		return false
 	}
 	switch a := inA.(type) {
+	case *ArgumentLessWindowExpr:
+		b, ok := inB.(*ArgumentLessWindowExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfArgumentLessWindowExpr(a, b)
 	case *ConvertExpr:
 		b, ok := inB.(*ConvertExpr)
 		if !ok {
@@ -4045,6 +4145,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return a == b
+	case *ArgumentLessWindowExpr:
+		b, ok := inB.(*ArgumentLessWindowExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfArgumentLessWindowExpr(a, b)
 	case *BetweenExpr:
 		b, ok := inB.(*BetweenExpr)
 		if !ok {
@@ -4441,6 +4547,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return a == b
+	case *ArgumentLessWindowExpr:
+		b, ok := inB.(*ArgumentLessWindowExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfArgumentLessWindowExpr(a, b)
 	case *BetweenExpr:
 		b, ok := inB.(*BetweenExpr)
 		if !ok {

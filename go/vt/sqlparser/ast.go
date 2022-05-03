@@ -1991,6 +1991,34 @@ type TrimFuncType int8
 // TrimType is an enum to get types of Trim
 type TrimType int8
 
+type WindowSpecification struct {
+	Name            string
+	PartitionClause Exprs
+	OrderClause     OrderBy
+	FrameClause     *FrameClause
+}
+
+type FrameClause struct {
+	Unit      FrameUnitType
+	IsBetween bool
+	Start     *FramePoint
+	End       *FramePoint
+}
+
+type FramePoint struct {
+	Type FramePointType
+	Expr Expr
+}
+
+type OverClause struct {
+	WindowName string
+	WindowSpec *WindowSpecification
+}
+
+type FrameUnitType int8
+
+type FramePointType int8
+
 // *********** Expressions
 type (
 	// Expr represents an expression.
@@ -2467,6 +2495,14 @@ type (
 	JSONUnquoteExpr struct {
 		JSONValue Expr
 	}
+
+	// ArgumentLessWindowExpr stands for the following window_functions: CUME_DIST, DENSE_RANK, PERCENT_RANK, RANK, ROW_NUMBER
+	ArgumentLessWindowExpr struct {
+		Type       ArgumentLessWindowExprType
+		OverClause *OverClause
+	}
+
+	ArgumentLessWindowExprType int8
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2528,6 +2564,7 @@ func (*JSONValueMergeExpr) iExpr()                 {}
 func (*JSONRemoveExpr) iExpr()                     {}
 func (*JSONUnquoteExpr) iExpr()                    {}
 func (*MemberOfExpr) iExpr()                       {}
+func (*ArgumentLessWindowExpr) iExpr()             {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -2563,6 +2600,7 @@ func (*JSONValueMergeExpr) iCallable()                 {}
 func (*JSONRemoveExpr) iCallable()                     {}
 func (*JSONUnquoteExpr) iCallable()                    {}
 func (*MemberOfExpr) iCallable()                       {}
+func (*ArgumentLessWindowExpr) iCallable()             {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

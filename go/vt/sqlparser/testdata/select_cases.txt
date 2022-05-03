@@ -2054,7 +2054,7 @@ INPUT
 select row('a','b','c') = row('a','b','c');
 END
 OUTPUT
-select row('a', 'b', 'c') = row('a', 'b', 'c') from dual
+select ('a', 'b', 'c') = ('a', 'b', 'c') from dual
 END
 INPUT
 select ST_Disjoint(ST_GeomFromText('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), ST_GeomFromText('POLYGON((10 10, 10 15, 15 15, 15 10, 10 10))'));
@@ -3919,8 +3919,8 @@ END
 INPUT
 select row_number() over (), value,description,COUNT(bug_id) from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA" group by value having COUNT(bug_id) IN (0,2);
 END
-ERROR
-syntax error at position 27
+OUTPUT
+select row_number() over (), value, description, COUNT(bug_id) from t2 left join t1 on t2.program = t1.product and t2.value = t1.component where program = 'AAAAA' group by value having COUNT(bug_id) in (0, 2)
 END
 INPUT
 select from t1 where lower(a)='aaa';
@@ -4772,7 +4772,7 @@ INPUT
 select row('A' COLLATE latin1_general_ci,'b','c') = row('a' COLLATE latin1_bin,'b','c');
 END
 OUTPUT
-select row('A' collate latin1_general_ci, 'b', 'c') = row('a' collate latin1_bin, 'b', 'c') from dual
+select ('A' collate latin1_general_ci, 'b', 'c') = ('a' collate latin1_bin, 'b', 'c') from dual
 END
 INPUT
 select group_concat(t1.id) FROM t1,t2;
@@ -7484,7 +7484,7 @@ INPUT
 select row('A' COLLATE latin1_bin,'b','c') = row('a','b','c');
 END
 OUTPUT
-select row('A' collate latin1_bin, 'b', 'c') = row('a', 'b', 'c') from dual
+select ('A' collate latin1_bin, 'b', 'c') = ('a', 'b', 'c') from dual
 END
 INPUT
 select 1 << 32,1 << 63, 1 << 64, 4 >> 2, 4 >> 63, 1<< 63 >> 60;
@@ -9812,7 +9812,7 @@ INPUT
 select row('A','b','c') = row('a','b','c');
 END
 OUTPUT
-select row('A', 'b', 'c') = row('a', 'b', 'c') from dual
+select ('A', 'b', 'c') = ('a', 'b', 'c') from dual
 END
 INPUT
 select count(bags.a) from t1 as Bags;
@@ -17216,7 +17216,7 @@ INPUT
 select row('A','b','c') = row('a' COLLATE latin1_bin,'b','c');
 END
 OUTPUT
-select row('A', 'b', 'c') = row('a' collate latin1_bin, 'b', 'c') from dual
+select ('A', 'b', 'c') = ('a' collate latin1_bin, 'b', 'c') from dual
 END
 INPUT
 select min(if(y -x > 5,y,NULL)), max(if(y - x > 5,y,NULL)) from t1;
