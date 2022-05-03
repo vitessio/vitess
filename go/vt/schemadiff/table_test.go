@@ -107,15 +107,15 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "modified column",
 			from:  "create table t1 (id int primary key, `i` int not null default 0)",
 			to:    "create table t2 (id int primary key, `i` bigint unsigned default null)",
-			diff:  "alter table t1 modify column i bigint unsigned default null",
-			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `i` bigint UNSIGNED DEFAULT NULL",
+			diff:  "alter table t1 modify column i bigint unsigned",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `i` bigint UNSIGNED",
 		},
 		{
 			name:  "added column, dropped column, modified column",
 			from:  "create table t1 (id int primary key, `i` int not null default 0, c char(3) default '')",
 			to:    "create table t2 (id int primary key, ts timestamp null, `i` bigint unsigned default null)",
-			diff:  "alter table t1 drop column c, modify column i bigint unsigned default null, add column ts timestamp null after id",
-			cdiff: "ALTER TABLE `t1` DROP COLUMN `c`, MODIFY COLUMN `i` bigint UNSIGNED DEFAULT NULL, ADD COLUMN `ts` timestamp NULL AFTER `id`",
+			diff:  "alter table t1 drop column c, modify column i bigint unsigned, add column ts timestamp after id",
+			cdiff: "ALTER TABLE `t1` DROP COLUMN `c`, MODIFY COLUMN `i` bigint UNSIGNED, ADD COLUMN `ts` timestamp AFTER `id`",
 		},
 		{
 			name:  "reorder column",
@@ -894,6 +894,101 @@ func TestValidate(t *testing.T) {
 				require.NoError(t, err)
 				assert.Empty(t, diff, "diff found: %v.\applied: %v\nto: %v", diff.CanonicalStatementString(), applied.Create().CanonicalStatementString(), to.Create().CanonicalStatementString())
 			}
+		})
+	}
+}
+
+func TestNormalize(t *testing.T) {
+	tt := []struct {
+		name string
+		from string
+		to   string
+	}{
+		{
+			name: "basic table",
+			from: "create table t (id int primary key, i int)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+		},
+		{
+			name: "removes default null",
+			from: "create table t (id int primary key, i int default null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+		},
+		{
+			name: "uses lowercase type",
+			from: "create table t (id INT primary key, i INT default null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+		},
+		{
+			name: "removes default signed",
+			from: "create table t (id int signed primary key, i int signed)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+		},
+		{
+			name: "removes int sizes",
+			from: "create table t (id int primary key, i int(11) default null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+		},
+		{
+			name: "removes int sizes case insensitive",
+			from: "create table t (id int primary key, i INT(11) default null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+		},
+		{
+			name: "removes matching charset",
+			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb4) charset utf8mb4",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb4",
+		},
+		{
+			name: "removes matching case insensitive charset",
+			from: "create table t (id int signed primary key, v varchar(255) charset UTF8MB4) charset utf8mb4",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb4",
+		},
+		{
+			name: "removes matching collation",
+			from: "create table t (id int signed primary key, v varchar(255) collate utf8mb4_0900_ai_ci) collate utf8mb4_0900_ai_ci",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) COLLATE utf8mb4_0900_ai_ci",
+		},
+		{
+			name: "removes matching collation case insensitive",
+			from: "create table t (id int signed primary key, v varchar(255) collate UTF8MB4_0900_AI_CI) collate utf8mb4_0900_ai_ci",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) COLLATE utf8mb4_0900_ai_ci",
+		},
+		{
+			name: "removes matching charset & collation",
+			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb4 collate utf8mb4_0900_ai_ci) charset utf8mb4 collate utf8mb4_0900_ai_ci",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci",
+		},
+		{
+			name: "maps utf8 to utf8mb3",
+			from: "create table t (id int signed primary key, v varchar(255) charset utf8 collate utf8_unicode_ci) charset utf8 collate utf8_unicode_ci",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb3,\n  COLLATE utf8_unicode_ci",
+		},
+		{
+			name: "lowercase table options for charset and collation",
+			from: "create table t (id int signed primary key, v varchar(255) charset utf8 collate utf8_unicode_ci) charset UTF8 collate UTF8_UNICODE_CI",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb3,\n  COLLATE utf8_unicode_ci",
+		},
+		{
+			name: "correct case table options for engine",
+			from: "create table t (id int signed primary key) engine innodb",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY\n) ENGINE InnoDB",
+		},
+		{
+			name: "correct case for engine in partitions",
+			from: "create table a (id int not null primary key) engine InnoDB, charset utf8mb4, collate utf8mb4_0900_ai_ci partition by range (`id`) (partition `p10` values less than(10) engine innodb)",
+			to:   "CREATE TABLE `a` (\n\t`id` int NOT NULL PRIMARY KEY\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci PARTITION BY RANGE (`id`) (PARTITION `p10` VALUES LESS THAN (10) ENGINE InnoDB)",
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.name, func(t *testing.T) {
+			stmt, err := sqlparser.Parse(ts.from)
+			require.NoError(t, err)
+			fromCreateTable, ok := stmt.(*sqlparser.CreateTable)
+			require.True(t, ok)
+
+			from := NewCreateTableEntity(fromCreateTable)
+			assert.Equal(t, ts.to, sqlparser.CanonicalString(from))
 		})
 	}
 }
