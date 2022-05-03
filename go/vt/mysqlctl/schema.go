@@ -350,7 +350,6 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(ctx context.Context, dbName, table st
 	return cs[dbName], nil
 }
 
-// getPrimaryKeyColumns returns the PRIMARY KEY columns of table.
 func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, tables ...string) (map[string][]string, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
@@ -552,11 +551,14 @@ func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName
 	defer conn.Recycle()
 
 	// sql uses column name aliases to guarantee lower case sensitivity.
-	sql := `SELECT COLUMN_NAME AS column_name FROM INFORMATION_SCHEMA.STATISTICS AS indexes INNER JOIN
-				(SELECT DISTINCT INDEX_NAME, COUNT(COLUMN_NAME) AS col_count FROM INFORMATION_SCHEMA.STATISTICS
-				WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s' AND NON_UNIQUE = 0 AND NULLABLE != 'YES'
-				GROUP BY INDEX_NAME ORDER BY col_count ASC LIMIT 1) uindexes
-			WHERE indexes.TABLE_SCHEMA = '%s' AND indexes.TABLE_NAME = '%s' AND indexes.INDEX_NAME = uindexes.INDEX_NAME`
+	sql := `
+            SELECT COLUMN_NAME AS column_name FROM INFORMATION_SCHEMA.STATISTICS AS indexes INNER JOIN
+                (
+                    SELECT DISTINCT INDEX_NAME, COUNT(COLUMN_NAME) AS col_count FROM INFORMATION_SCHEMA.STATISTICS
+                    WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s' AND NON_UNIQUE = 0 AND NULLABLE != 'YES'
+                    GROUP BY INDEX_NAME ORDER BY col_count ASC LIMIT 1
+                ) pkes
+            WHERE indexes.TABLE_SCHEMA = '%s' AND indexes.TABLE_NAME = '%s' AND indexes.INDEX_NAME = pkes.INDEX_NAME`
 	sql = fmt.Sprintf(sql, dbName, table, dbName, table)
 	qr, err := conn.ExecuteFetch(sql, 1000, true)
 	if err != nil {
