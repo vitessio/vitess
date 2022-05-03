@@ -8,12 +8,6 @@ concurrency:
 
 env:
   LAUNCHABLE_ORGANIZATION: "vitess"
-  # This is used if we need to pin the xtrabackup version used in tests.
-  # Doing so here because 2.4.25 crashes in our 5.7 tests. See:
-  #   https://jira.percona.com/browse/PXB-2756
-  # If this is NOT set then the latest version available will be used IF
-  # needed (see the InstallXtraBackup templating variable).
-  XTRABACKUP_VERSION: "2.4.24-1"
   LAUNCHABLE_WORKSPACE: "vitess-app"
   GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
 
