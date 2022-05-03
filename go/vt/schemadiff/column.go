@@ -22,17 +22,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-var charsetTypes = map[string]bool{
-	"CHAR":       true,
-	"VARCHAR":    true,
-	"TEXT":       true,
-	"TINYTEXT":   true,
-	"MEDIUMTEXT": true,
-	"LONGTEXT":   true,
-	"ENUM":       true,
-	"SET":        true,
-}
-
 func getColName(colIdent *sqlparser.ColIdent) *sqlparser.ColName {
 	return &sqlparser.ColName{Name: *colIdent}
 }

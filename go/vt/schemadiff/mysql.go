@@ -24,3 +24,14 @@ var engineCasing = map[string]string{
 var charsetAliases = map[string]string{
 	"utf8": "utf8mb3",
 }
+
+var charsetTypes = map[string]bool{
+	"CHAR":       true,
+	"VARCHAR":    true,
+	"TEXT":       true,
+	"TINYTEXT":   true,
+	"MEDIUMTEXT": true,
+	"LONGTEXT":   true,
+	"ENUM":       true,
+	"SET":        true,
+}
