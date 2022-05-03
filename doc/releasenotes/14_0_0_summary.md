@@ -108,7 +108,7 @@ API endpoint `/throttler/throttle-app` now accepts a `ratio` query argument, a f
 
 The throttler now checks in with the heartbeat writer to request heartbeats, any time it (the throttler) is asked for a check.
 
-When `--heartbeat_on_demand_duration` is not set, there is now change in behavior.
+When `--heartbeat_on_demand_duration` is not set, there is no change in behavior.
 
 When `--heartbeat_on_demand_duration` is set to a positive value, then the throttler ensures that the heartbeat writer generated heartbeats for at least the following duration. This also means at the first throttler check, it's possible that heartbeats are idle, and so the first check will fail. As heartbeats start running, followup checks will get a more accurate lag evaluation and will respond accordingly. In a sense, it's a "cold engine" scenario, where the engine takes time to start up, and then runs smoothly.
 
