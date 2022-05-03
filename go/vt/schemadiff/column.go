@@ -65,5 +65,5 @@ func (c *ColumnDefinitionEntity) ColumnDiff(other *ColumnDefinitionEntity, hints
 
 // IsTextual returns true when this column is of textual type, and is capable of having a character set property
 func (c *ColumnDefinitionEntity) IsTextual() bool {
-	return charsetTypes[strings.ToUpper(c.columnDefinition.Type.Type)]
+	return charsetTypes[strings.ToLower(c.columnDefinition.Type.Type)]
 }

@@ -25,13 +25,21 @@ var charsetAliases = map[string]string{
 	"utf8": "utf8mb3",
 }
 
+var integralTypes = map[string]bool{
+	"tinyint":   true,
+	"smallint":  true,
+	"mediumint": true,
+	"int":       true,
+	"bigint":    true,
+}
+
 var charsetTypes = map[string]bool{
-	"CHAR":       true,
-	"VARCHAR":    true,
-	"TEXT":       true,
-	"TINYTEXT":   true,
-	"MEDIUMTEXT": true,
-	"LONGTEXT":   true,
-	"ENUM":       true,
-	"SET":        true,
+	"char":       true,
+	"varchar":    true,
+	"text":       true,
+	"tinytext":   true,
+	"mediumtext": true,
+	"longtext":   true,
+	"enum":       true,
+	"set":        true,
 }
