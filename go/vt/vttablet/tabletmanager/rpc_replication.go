@@ -919,10 +919,14 @@ func (tm *TabletManager) isPrimarySideSemiSyncEnabled() bool {
 }
 
 func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
-	if semiSync == SemiSyncActionNone {
-		// Semi-sync handling is not required.
+	if !*enableSemiSync {
+		// Semi-sync handling is not enabled.
 		return nil
 	}
+	//if semiSync == SemiSyncActionNone {
+	//	// Semi-sync handling is not required.
+	//	return nil
+	//}
 
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		// Primary is special. It is always handled at the
@@ -948,7 +952,8 @@ func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletT
 		return nil
 	}
 
-	shouldAck := semiSync == SemiSyncActionSet
+	//shouldAck := semiSync == SemiSyncActionSet
+	shouldAck := isPrimaryEligible(tabletType)
 	acking, err := tm.MysqlDaemon.SemiSyncReplicationStatus()
 	if err != nil {
 		return vterrors.Wrap(err, "failed to get SemiSyncReplicationStatus")
