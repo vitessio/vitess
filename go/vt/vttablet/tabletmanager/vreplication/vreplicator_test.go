@@ -17,9 +17,14 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 )
 
 func TestRecalculatePKColsInfoByColumnNames(t *testing.T) {
@@ -65,6 +70,52 @@ func TestRecalculatePKColsInfoByColumnNames(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			pkColInfos := recalculatePKColsInfoByColumnNames(tc.colNames, tc.colInfos)
 			assert.Equal(t, tc.expectPKColInfos, pkColInfos)
+		})
+	}
+}
+
+func TestPrimaryKeyEquivalentColumns(t *testing.T) {
+	ctx := context.Background()
+	testEnv, err := testenv.Init()
+	defer testEnv.Close()
+	require.NoError(t, err)
+	tests := []struct {
+		name    string
+		table   string
+		ddl     string
+		want    []string
+		wantErr bool
+	}{
+		{
+			name:  "0PKE",
+			table: "zeropke_t",
+			ddl:   `CREATE TABLE zeropke_t (id INT NULL, col1 VARCHAR(25), UNIQUE KEY (id))`,
+			want:  []string{},
+		},
+		{
+			name:  "1PKE",
+			table: "onepke_t",
+			ddl:   `CREATE TABLE onepke_t (id INT NOT NULL, col1 VARCHAR(25), UNIQUE KEY (id))`,
+			want:  []string{"id"},
+		},
+		{
+			name:  "2PKE",
+			table: "twopke_t",
+			ddl:   `CREATE TABLE twopke_t (id INT NOT NULL, col1 VARCHAR(25), col2 VARCHAR(25) NOT NULL, id2 INT NOT NULL, UNIQUE KEY (id), UNIQUE KEY (col2, id2))`,
+			want:  []string{"id", "col2", "id2"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.NoError(t, testEnv.Mysqld.ExecuteSuperQuery(ctx, tt.ddl))
+			got, err := testEnv.Mysqld.GetPrimaryKeyEquivalentColumns(ctx, testEnv.Dbcfgs.DBName, tt.table)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Mysqld.GetPrimaryKeyEquivalentColumns() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Mysqld.GetPrimaryKeyEquivalentColumns() = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }

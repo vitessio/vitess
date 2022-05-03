@@ -351,22 +351,6 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(ctx context.Context, dbName, table st
 }
 
 // getPrimaryKeyColumns returns the PRIMARY KEY columns of table.
-// If the table has no defined PRIMARY KEY then it will return the
-// columns for a viable PRIMARY KEY equivalent (PKE), which is
-// often a NON-NULL UNIQUE KEY. For the latter, we use all columns
-// that make up the total set of PKE indexes. This means that if
-// e.g. you have a single column PKE index and a second PKE
-// index on two columns, this function will return all three:
-//   CREATE TABLE t1 (
-//     id1 INT NOT NULL,
-//     id2 INT NOT NULL,
-//     id3 INT NOT NULL,
-//     col1 VARCHAR(100),
-//     UNIQUE INDEX (id1),
-//     UNIQUE INDEX (id2, id3)
-//   );
-// Will result in the id1,id2,id3 columns being treated as the
-// PK (equivalent) columns.
 func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, tables ...string) (map[string][]string, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
@@ -389,23 +373,6 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
 	qr, err := conn.ExecuteFetch(sql, len(tables)*100, true)
 	if err != nil {
 		return nil, err
-	}
-
-	// We have no defined PRIMARY KEY, let's see if there is a viable equivalent set of columns that can
-	// provide the core uniqueness guarantee.
-	if qr == nil || len(qr.Rows) == 0 {
-		// sql uses column name aliases to guarantee lower case sensitivity.
-		sql = `SELECT table_name as table_name, ordinal_position as ordinal_position, COLUMN_NAME as column_name
-				FROM INFORMATION_SCHEMA.COLUMNS
-				WHERE TABLE_SCHEMA = '%s'
-				AND TABLE_NAME IN %s
-				AND IS_NULLABLE = 'NO' AND COLUMN_KEY = 'UNI'
-				ORDER BY table_name, ordinal_position;`
-		sql = fmt.Sprintf(sql, dbName, tableList)
-		qr, err = conn.ExecuteFetch(sql, len(tables)*100, true)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	named := qr.Named()
@@ -593,9 +560,9 @@ func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName
 	return cs[dbName], nil
 }
 
-// getPrimaryKeyEquivalentColumns can be used if the table has no
-// defined PRIMARY KEY. It will return the columns for a viable
-// PRIMARY KEY equivalent (PKE), which is often a NON-NULL
+// getPrimaryKeyEquivalentColumns can be used if the tables have
+// no defined PRIMARY KEY. It will return the columns for a
+// viable PRIMARY KEY equivalent (PKE), which is often a NON-NULL
 // UNIQUE KEY. For the latter, we use all columns that make up
 // the total set of PKE indexes. This means that if e.g. you
 // have a single column PKE index and a second PKE index on
