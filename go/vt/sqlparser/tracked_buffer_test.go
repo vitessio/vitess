@@ -89,8 +89,16 @@ func TestCanonicalOutput(t *testing.T) {
 			"CREATE TABLE `insert` (\n\t`update` int,\n\tPRIMARY KEY (`delete`)\n)",
 		},
 		{
-			"alter table a engine=innodb",
-			"ALTER TABLE `a` ENGINE INNODB",
+			"alter table a engine=InnoDB",
+			"ALTER TABLE `a` ENGINE InnoDB",
+		},
+		{
+			"create table a (v varchar(32)) engine=InnoDB",
+			"CREATE TABLE `a` (\n\t`v` varchar(32)\n) ENGINE InnoDB",
+		},
+		{
+			"create table a (id int not null primary key) engine InnoDB, charset utf8mb4, collate utf8mb4_0900_ai_ci partition by range (`id`) (partition `p10` values less than(10) engine InnoDB)",
+			"CREATE TABLE `a` (\n\t`id` int NOT NULL PRIMARY KEY\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci PARTITION BY RANGE (`id`) (PARTITION `p10` VALUES LESS THAN (10) ENGINE InnoDB)",
 		},
 		{
 			"alter table a comment='a b c'",

@@ -473,11 +473,10 @@ func (node *PartitionValueRange) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *PartitionEngine) Format(buf *TrackedBuffer) {
 	if node.Storage {
-		buf.WriteString("storage ")
+		buf.astPrintf(node, "%s", "storage ")
 	}
-	buf.WriteString("engine ")
-
-	buf.astPrintf(node, "%s", node.Name)
+	buf.astPrintf(node, "%s", "engine ")
+	buf.astPrintf(node, "%#s", node.Name)
 }
 
 // Format formats the node.
