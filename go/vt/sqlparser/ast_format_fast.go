@@ -765,8 +765,13 @@ func (ts *TableSpec) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(opt.Name)
 		if opt.String != "" {
-			buf.WriteByte(' ')
-			buf.WriteString(opt.String)
+			if opt.CaseSensitive {
+				buf.WriteByte(' ')
+				buf.WriteString(opt.String)
+			} else {
+				buf.WriteByte(' ')
+				buf.WriteString(opt.String)
+			}
 		} else if opt.Value != nil {
 			buf.WriteByte(' ')
 			opt.Value.formatFast(buf)
