@@ -281,6 +281,17 @@ func TestOneWithSecondUserAsDefault(t *testing.T) {
 
 	testFile(t, "onecase.txt", "", vschema)
 }
+func TestOneWithUserAsDefault(t *testing.T) {
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json", true),
+		keyspace: &vindexes.Keyspace{
+			Name:    "user",
+			Sharded: true,
+		},
+	}
+
+	testFile(t, "onecase.txt", "", vschema)
+}
 
 func TestRubyOnRailsQueries(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
@@ -409,6 +420,21 @@ func TestWithDefaultKeyspaceFromFileSharded(t *testing.T) {
 
 	testOutputTempDir := makeTestOutput(t)
 	testFile(t, "select_cases_with_default.txt", testOutputTempDir, vschema)
+}
+
+func TestWithUserDefaultKeyspaceFromFileSharded(t *testing.T) {
+	// We are testing this separately so we can set a default keyspace
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json", true),
+		keyspace: &vindexes.Keyspace{
+			Name:    "user",
+			Sharded: true,
+		},
+		tabletType: topodatapb.TabletType_PRIMARY,
+	}
+
+	testOutputTempDir := makeTestOutput(t)
+	testFile(t, "select_cases_with_user_as_default.txt", testOutputTempDir, vschema)
 }
 
 func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {

@@ -389,7 +389,13 @@ func (rb *route) MergeSubquery(pb *primitiveBuilder, inner *route) bool {
 			default:
 				return false
 			}
+		} else {
+			if rb.eroute.Opcode == engine.Reference {
+				rb.eroute.RoutingParameters = inner.eroute.RoutingParameters
+				rb.condition = inner.condition
+			}
 		}
+
 		rb.substitutions = append(rb.substitutions, inner.substitutions...)
 		inner.Redirect = rb
 		return true
@@ -466,7 +472,7 @@ func (rb *route) SubqueryCanMerge(pb *primitiveBuilder, inner *route) bool {
 
 	// if either side is a reference table, we can just merge it and use the opcode of the other side
 	if rb.eroute.Opcode == engine.Reference || inner.eroute.Opcode == engine.Reference {
-		return true
+		return rb.isSingleShard() && inner.isSingleShard()
 	}
 
 	switch rb.eroute.Opcode {
