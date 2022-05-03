@@ -27,6 +27,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/backoff"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
@@ -56,7 +57,9 @@ func TestParse(t *testing.T) {
 			Credentials:     nil,
 			CredentialsPath: "",
 			ResolverOptions: &resolver.Options{
-				DiscoveryTimeout: 100 * time.Millisecond,
+				DiscoveryTimeout:     100 * time.Millisecond,
+				MinDiscoveryInterval: time.Second * 30,
+				BackoffConfig:        backoff.DefaultConfig,
 			},
 		}
 		assert.Equal(t, expected, cfg)
@@ -95,7 +98,9 @@ func TestParse(t *testing.T) {
 				Credentials:     creds,
 				CredentialsPath: credsfile.Name(),
 				ResolverOptions: &resolver.Options{
-					DiscoveryTimeout: 100 * time.Millisecond,
+					DiscoveryTimeout:     100 * time.Millisecond,
+					MinDiscoveryInterval: time.Second * 30,
+					BackoffConfig:        backoff.DefaultConfig,
 				},
 			}
 
