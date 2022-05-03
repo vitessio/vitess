@@ -2495,6 +2495,69 @@ var (
 		}, {
 			input:  "CREATE VIEW myview AS SELECT concat(a.first_name, _utf8mb4 ' ', a.last_name) AS name, if(a.active, _utf8mb4 'active', _utf8mb4 '') AS notes FROM a",
 			output: "create view myview as select concat(a.first_name, _utf8mb4 ' ', a.last_name) as name, if(a.active, _utf8mb4 'active', _utf8mb4 '') as notes from a",
+		}, {
+			input:  "select 1 into @aaa",
+			output: "select 1 from dual into @aaa",
+		}, {
+			input:  "select now() into @late where now() > '2019-04-04 13:25:44'",
+			output: "select now() from dual where now() > '2019-04-04 13:25:44' into @late",
+		}, {
+			input:  "select now() where now() > '2019-04-04 13:25:44' into @late",
+			output: "select now() from dual where now() > '2019-04-04 13:25:44' into @late",
+		}, {
+			input:  "SELECT * FROM (VALUES ROW(2,4,8)) AS t INTO @x,@y,@z",
+			output: "select * from (values row(2, 4, 8)) as t into @x, @y, @z",
+		}, {
+			input:  "SELECT * FROM (VALUES ROW(2,4,8)) AS t(a,b,c) INTO @x,@y,@z",
+			output: "select * from (values row(2, 4, 8)) as t (a, b, c) into @x, @y, @z",
+		}, {
+			input:  "SELECT id FROM mytable ORDER BY id DESC LIMIT 1 INTO @myvar",
+			output: "select id from mytable order by id desc limit 1 into @myvar",
+		}, {
+			input:  "SELECT id INTO @myvar FROM mytable GROUP BY id LIMIT 1",
+			output: "select id from mytable group by id limit 1 into @myvar",
+		}, {
+			input:  "SELECT m.id, t.category FROM mytable m JOIN testtable t on m.id = t.id LIMIT 1 INTO @myId, @myCategory",
+			output: "select m.id, t.category from mytable as m join testtable as t on m.id = t.id limit 1 into @myId, @myCategory",
+		}, {
+			input:  "SELECT id FROM mytable UNION select id FROM testtable LIMIT 1 INTO @myId",
+			output: "select id from mytable union select id from testtable limit 1 into @myId",
+		}, {
+			input:  "SELECT id FROM mytable UNION select id FROM testtable UNION select id FROM othertable LIMIT 1 INTO @myId",
+			output: "select id from mytable union select id from testtable union select id from othertable limit 1 into @myId",
+		}, {
+			input:  "SELECT 1 INTO OUTFILE 'x.txt'",
+			output: "select 1 from dual into outfile 'x.txt'",
+		}, {
+			input:  "SELECT * FROM (VALUES ROW(2,4,8),ROW(1,2,3)) AS t(a,b,c) INTO OUTFILE 'myfile.txt'",
+			output: "select * from (values row(2, 4, 8), row(1, 2, 3)) as t (a, b, c) into outfile 'myfile.txt'",
+		}, {
+			input:  "SELECT id INTO OUTFILE 'myfile.txt' FROM mytable ORDER BY id DESC",
+			output: "select id from mytable order by id desc into outfile 'myfile.txt'",
+		}, {
+			input:  "SELECT * FROM (VALUES ROW(2,4,8)) AS t INTO DUMPFILE 'even.dump'",
+			output: "select * from (values row(2, 4, 8)) as t into dumpfile 'even.dump'",
+		}, {
+			input:  "SELECT id INTO DUMPFILE 'dump.txt' FROM mytable ORDER BY id DESC LIMIT 15",
+			output: "select id from mytable order by id desc limit 15 into dumpfile 'dump.txt'",
+		}, {
+			input:  "CREATE PROCEDURE proc (IN p_store_id INT, OUT current INT) SELECT COUNT(*) INTO current FROM inventory WHERE store_id = p_store_id",
+			output: "create procedure proc (in p_store_id INT, out current INT) select COUNT(*) from inventory where store_id = p_store_id into `current`",
+		}, {
+			input:  "CREATE PROCEDURE proc (IN p_store_id INT, OUT current INT) SELECT COUNT(*) FROM inventory WHERE store_id = p_store_id INTO current",
+			output: "create procedure proc (in p_store_id INT, out current INT) select COUNT(*) from inventory where store_id = p_store_id into `current`",
+		}, {
+			input:  "CREATE PROCEDURE proc (IN p_store_id INT, OUT code INT, OUT amount INT) SELECT id, quantity INTO code, amount FROM inventory WHERE store_id = p_store_id",
+			output: "create procedure proc (in p_store_id INT, out code INT, out amount INT) select id, quantity from inventory where store_id = p_store_id into code, amount",
+		}, {
+			input:  "CREATE PROCEDURE proc (IN p_store_id INT, INOUT amount INT) SELECT COUNT(*) FROM inventory WHERE store_id = p_store_id AND quantity = amount INTO amount",
+			output: "create procedure proc (in p_store_id INT, inout amount INT) select COUNT(*) from inventory where store_id = p_store_id and quantity = amount into amount",
+		}, {
+			input:  "CREATE PROCEDURE new_proc(IN t VARCHAR(100)) SELECT id, name FROM mytable WHERE id < 100 AND name = t INTO OUTFILE 'logs.txt'",
+			output: "create procedure new_proc (in t VARCHAR(100)) select id, name from mytable where id < 100 and name = t into outfile 'logs.txt'",
+		}, {
+			input:  "CREATE PROCEDURE proc (IN p_store_id INT) SELECT * FROM inventory WHERE store_id = p_store_id INTO DUMPFILE 'dumpfile.txt'",
+			output: "create procedure proc (in p_store_id INT) select * from inventory where store_id = p_store_id into dumpfile 'dumpfile.txt'",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
@@ -2572,6 +2635,20 @@ end`,
 			input: `create procedure p1 () begin
 declare x, y, z varchar(200) character set uft8mb4 default 'hi';
 end`,
+		}, {
+			input: `create procedure proc1 (IN p_store_id INT, OUT p_film_count INT) READS SQL DATA BEGIN
+SELECT COUNT(*) FROM inventory WHERE store_id = p_store_id;
+SET p_film_count = 44;
+END`,
+			output: "create procedure proc1 (in p_store_id INT, out p_film_count INT) reads sql data begin\nselect COUNT(*) from inventory where store_id = p_store_id;\nset p_film_count = 44;\nend",
+		}, {
+			input: `CREATE DEFINER=root@localhost PROCEDURE film_not_in_stock(IN p_film_id INT, IN p_store_id INT, OUT p_film_count INT)
+    READS SQL DATA
+BEGIN
+     SELECT inventory_id FROM inventory WHERE film_id = p_film_id AND store_id = p_store_id;
+     SELECT COUNT(*) FROM inventory WHERE film_id = p_film_id AND store_id = p_store_id INTO p_film_count;
+END`,
+			output: "create definer = `root`@`localhost` procedure film_not_in_stock (in p_film_id INT, in p_store_id INT, out p_film_count INT) reads sql data begin\nselect inventory_id from inventory where film_id = p_film_id and store_id = p_store_id;\nselect COUNT(*) from inventory where film_id = p_film_id and store_id = p_store_id into p_film_count;\nend",
 		},
 	}
 )
@@ -4830,6 +4907,24 @@ var (
 	}, {
 		input:  "insert into t values (1234.1a)",
 		output: "syntax error at position 29 near '1234.1'",
+	}, {
+		input:  "SELECT id, name INTO @idVar FROM mytable INTO @nameVar",
+		output: "Multiple INTO clauses in one query block at position 55 near '@nameVar'",
+	}, {
+		input:  "select 1 from dual into @myvar union select 2 from dual",
+		output: "syntax error at position 37 near 'union'",
+	}, {
+		input:  "select id from mytable union select id from testtable union select id into @myvar from othertable",
+		output: "INTO clause is not allowed at position 98 near 'othertable'",
+	}, {
+		input:  "create view invalidView as select id from mytable into @myview",
+		output: "INTO clause is not allowed at position 63 near '@myview'",
+	}, {
+		input:  "select * from t1 where exists (select a from t2 union select b from t3 into @myvar)",
+		output: "INTO clause is not allowed at position 84 near '@myvar'",
+	}, {
+		input:  "insert into a select * into @a from b",
+		output: "INTO clause is not allowed at position 38 near 'b'",
 	},
 	}
 )

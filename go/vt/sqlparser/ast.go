@@ -420,6 +420,8 @@ type SelectStatement interface {
 	SetLimit(*Limit)
 	SetLock(string)
 	SetOrderBy(OrderBy)
+	SetInto(*Into) error
+	HasIntoDefined() bool
 	WalkableSQLNode
 }
 
@@ -445,6 +447,7 @@ type Select struct {
 	OrderBy       OrderBy
 	Limit         *Limit
 	Lock          string
+	Into          *Into
 }
 
 // Select.Distinct
@@ -478,6 +481,21 @@ func (node *Select) SetLock(lock string) {
 	node.Lock = lock
 }
 
+func (node *Select) SetInto(into *Into) error {
+	if into == nil {
+		return nil
+	}
+	if node.Into != nil {
+		return fmt.Errorf("Multiple INTO clauses in one query block")
+	}
+	node.Into = into
+	return nil
+}
+
+func (node *Select) HasIntoDefined() bool {
+	return node.Into != nil
+}
+
 // SetLimit sets the limit clause
 func (node *Select) SetLimit(limit *Limit) {
 	node.Limit = limit
@@ -489,12 +507,12 @@ func (node *Select) Format(buf *TrackedBuffer) {
 	if node.CalcFoundRows {
 		calcFoundRows = "sql_calc_found_rows "
 	}
-	buf.Myprintf("%vselect %v%s%s%s%s%v from %v%v%v%v%v%v%v%s",
+	buf.Myprintf("%vselect %v%s%s%s%s%v from %v%v%v%v%v%v%v%s%v",
 		node.With,
 		node.Comments, node.Cache, calcFoundRows, node.Distinct, node.Hints, node.SelectExprs,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.Window, node.OrderBy,
-		node.Limit, node.Lock)
+		node.Limit, node.Lock, node.Into)
 }
 
 func (node *Select) walkSubtree(visit Visit) error {
@@ -511,6 +529,7 @@ func (node *Select) walkSubtree(visit Visit) error {
 		node.Having,
 		node.OrderBy,
 		node.Limit,
+		node.Into,
 	)
 }
 
@@ -581,6 +600,14 @@ func (node *ParenSelect) SetLimit(limit *Limit) {
 	panic("unreachable")
 }
 
+func (node *ParenSelect) SetInto(into *Into) error {
+	panic("unreachable")
+}
+
+func (node *ParenSelect) HasIntoDefined() bool {
+	return node.Select.HasIntoDefined()
+}
+
 // Format formats the node.
 func (node *ParenSelect) Format(buf *TrackedBuffer) {
 	buf.Myprintf("(%v)", node.Select)
@@ -624,6 +651,7 @@ type Union struct {
 	OrderBy     OrderBy
 	Limit       *Limit
 	Lock        string
+	Into        *Into
 }
 
 // Union.Type
@@ -651,10 +679,29 @@ func (node *Union) SetLock(lock string) {
 	node.Lock = lock
 }
 
+func (node *Union) SetInto(into *Into) error {
+	if into == nil {
+		if r, ok := node.Right.(*Select); ok {
+			node.Into = r.Into
+			r.Into = nil
+		}
+		return nil
+	}
+	if node.Into != nil {
+		return fmt.Errorf("Multiple INTO clauses in one query block")
+	}
+	node.Into = into
+	return nil
+}
+
+func (node *Union) HasIntoDefined() bool {
+	return node.Into != nil
+}
+
 // Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %s %v%v%v%s", node.Left, node.Type, node.Right,
-		node.OrderBy, node.Limit, node.Lock)
+	buf.Myprintf("%v %s %v%v%v%s%v", node.Left, node.Type, node.Right,
+		node.OrderBy, node.Limit, node.Lock, node.Into)
 }
 
 func (node *Union) walkSubtree(visit Visit) error {
@@ -3181,6 +3228,30 @@ func (node Partitions) walkSubtree(visit Visit) error {
 	return nil
 }
 
+// Variables represents an into variable list.
+type Variables []ColIdent
+
+// Format formats the node.
+func (node Variables) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	prefix := ""
+	for _, n := range node {
+		buf.Myprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+func (node Variables) walkSubtree(visit Visit) error {
+	for _, n := range node {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // TableExprs represents a list of table expressions.
 type TableExprs []TableExpr
 
@@ -3320,6 +3391,39 @@ func (w *With) walkSubtree(visit Visit) error {
 		}
 	}
 	return nil
+}
+
+type Into struct {
+	Variables Variables
+	Outfile   string
+	Dumpfile  string
+}
+
+func (i *Into) Format(buf *TrackedBuffer) {
+	if i == nil {
+		return
+	}
+
+	buf.Myprintf(" into ")
+	if i.Variables != nil {
+		buf.Myprintf("%v", i.Variables)
+	}
+	if i.Outfile != "" {
+		buf.Myprintf("outfile '%s'", i.Outfile)
+	}
+	if i.Dumpfile != "" {
+		buf.Myprintf("dumpfile '%s'", i.Dumpfile)
+	}
+}
+
+func (i *Into) walkSubtree(visit Visit) error {
+	if i == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		i.Variables,
+	)
 }
 
 type CommonTableExpr struct {

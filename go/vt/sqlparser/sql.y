@@ -79,6 +79,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
   columns       Columns
   statements    Statements
   partitions    Partitions
+  variables	Variables
+  into		*Into
   colName       *ColName
   tableExprs    TableExprs
   tableExpr     TableExpr
@@ -188,8 +190,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token LEX_ERROR
 %left <bytes> UNION
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL
-%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
-%token <bytes> OUTFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
+%token <bytes> ALL DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
+%token <bytes> OUTFILE DUMPFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
 %right <bytes> UNIQUE KEY
 %token <bytes> SYSTEM_TIME
 %token <bytes> VALUES LAST_INSERT_ID SQL_CALC_FOUND_ROWS
@@ -200,6 +202,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <empty> '(' ',' ')' '@'
 %token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
 %token <bytes> NULL TRUE FALSE OFF
+%right <bytes> INTO
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
 // Some of these operators don't conflict in our situation. Nevertheless,
@@ -324,7 +327,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> NVAR PASSWORD_LOCK
 
 %type <statement> command
-%type <selStmt>  create_query_expression select_statement base_select base_select_no_cte union_lhs union_rhs
+%type <selStmt>  create_query_expression select_statement base_select base_select_no_cte union_lhs union_rhs select_statement_with_no_trailing_into
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
@@ -357,7 +360,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <selectExprs> select_expression_list argument_expression_list argument_expression_list_opt
 %type <selectExpr> select_expression argument_expression
 %type <expr> expression naked_like group_by
-%type <tableExprs> table_references cte_list
+%type <tableExprs> table_references cte_list from_opt
 %type <with> with_clause
 %type <tableExpr> table_reference table_function table_factor join_table common_table_expression
 %type <simpleTableExpr> values_statement subquery_or_values
@@ -408,6 +411,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> lock_opt
 %type <columns> ins_column_list ins_column_list_opt column_list column_list_opt
 %type <partitions> opt_partition_clause partition_list
+%type <variables> variable_list
+%type <into> into_opt
 %type <assignExprs> on_dup_opt assignment_list
 %type <setVarExprs> set_list transaction_chars
 %type <bytes> charset_or_character_set
@@ -566,16 +571,30 @@ load_statement:
   }
 
 select_statement:
-  base_select order_by_opt limit_opt lock_opt
+  base_select order_by_opt limit_opt lock_opt into_opt
   {
     $1.SetOrderBy($2)
     $1.SetLimit($3)
     $1.SetLock($4)
+    if err := $1.SetInto($5); err != nil {
+    	yylex.Error(err.Error())
+    	return 1
+    }
     $$ = $1
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
     $$ = &Select{Comments: Comments($2), Cache: $3, SelectExprs: SelectExprs{Nextval{Expr: $5}}, From: TableExprs{&AliasedTableExpr{Expr: $7}}}
+  }
+
+select_statement_with_no_trailing_into:
+  select_statement
+  {
+    if $1.HasIntoDefined() {
+      yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
+      return 1
+    }
+    $$ = $1
   }
 
 stream_statement:
@@ -603,19 +622,52 @@ base_select:
   }
 
 base_select_no_cte:
-  SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list where_expression_opt group_by_opt having_opt window_opt
+  SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list into_opt from_opt where_expression_opt group_by_opt having_opt window_opt
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10), Window: $11}
+    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: $9, Where: NewWhere(WhereStr, $10), GroupBy: GroupBy($11), Having: NewWhere(HavingStr, $12), Window: $13, Into: $8}
     if $5 == 1 {
       $$.(*Select).CalcFoundRows = true
     }
   }
-| SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt window_opt
+
+from_opt:
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: $9, Where: NewWhere(WhereStr, $10), GroupBy: GroupBy($11), Having: NewWhere(HavingStr, $12), Window: $13}
-    if $5 == 1 {
-      $$.(*Select).CalcFoundRows = true
-    }
+    $$ = TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}
+  }
+| FROM table_references
+  {
+    $$ = $2
+  }
+
+// They may appear either before from-clause or at the end of a query. This causes shift/reduce conflict when INTO
+// token is used and has two cases it can be interpreted as depending on whether the query is table-less or other
+// clauses (WHERE, GROUP BY, HAVING, WINDOW) are present.
+into_opt:
+%prec INTO
+  {
+    $$ = nil
+  }
+| INTO variable_list
+  {
+    $$ = &Into{Variables: $2}
+  }
+| INTO OUTFILE STRING
+  {
+    $$ = &Into{Outfile: string($3)}
+  }
+| INTO DUMPFILE STRING
+  {
+    $$ = &Into{Dumpfile: string($3)}
+  }
+
+variable_list:
+  sql_id
+  {
+    $$ = Variables{$1}
+  }
+| variable_list ',' sql_id
+  {
+    $$ = append($$, $3)
   }
 
 with_clause:
@@ -647,9 +699,13 @@ common_table_expression:
 union_lhs:
   base_select
   {
+    if $1.HasIntoDefined() {
+      yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
+      return 1
+    }
     $$ = $1
   }
-| openb select_statement closeb
+| openb select_statement_with_no_trailing_into closeb
   {
     $$ = &ParenSelect{Select: $2}
   }
@@ -657,9 +713,13 @@ union_lhs:
 union_rhs:
   base_select_no_cte
   {
+    if $1.HasIntoDefined() {
+      yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
+      return 1
+    }
     $$ = $1
   }
-| openb select_statement closeb
+| openb select_statement_with_no_trailing_into closeb
   {
     $$ = &ParenSelect{Select: $2}
   }
@@ -866,13 +926,13 @@ create_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $7, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $4, Using: $5, Type: $2, Columns: $9, Options: $11}}
   }
-| CREATE view_opts VIEW table_name AS lexer_position special_comment_mode select_statement lexer_position
+| CREATE view_opts VIEW table_name AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position
   {
     $2.ViewName = $4.ToViewName()
     $2.ViewExpr = $8
     $$ = &DDL{Action: CreateStr, ViewSpec: $2, SpecialCommentMode: $7, SubStatementPositionStart: $6, SubStatementPositionEnd: $9 - 1}
   }
-| CREATE OR REPLACE view_opts VIEW table_name AS lexer_position special_comment_mode select_statement lexer_position
+| CREATE OR REPLACE view_opts VIEW table_name AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position
   {
     $4.ViewName = $6.ToViewName()
     $4.ViewExpr = $10
@@ -1403,6 +1463,10 @@ with_admin_opt:
 create_query_expression:
   base_select_no_cte order_by_opt limit_opt lock_opt
   {
+    if $1.HasIntoDefined() {
+      yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
+      return 1
+    }
     $1.SetOrderBy($2)
     $1.SetLimit($3)
     $1.SetLock($4)
@@ -1429,21 +1493,21 @@ proc_param_list:
   }
 
 proc_param:
-  ID column_type
+  sql_id column_type
   {
-    $$ = ProcedureParam{Direction: ProcedureParamDirection_In, Name: string($1), Type: $2}
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_In, Name: $1.String(), Type: $2}
   }
-| IN ID column_type
+| IN sql_id column_type
   {
-    $$ = ProcedureParam{Direction: ProcedureParamDirection_In, Name: string($2), Type: $3}
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_In, Name: $2.String(), Type: $3}
   }
-| INOUT ID column_type
+| INOUT sql_id column_type
   {
-    $$ = ProcedureParam{Direction: ProcedureParamDirection_Inout, Name: string($2), Type: $3}
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_Inout, Name: $2.String(), Type: $3}
   }
-| OUT ID column_type
+| OUT sql_id column_type
   {
-    $$ = ProcedureParam{Direction: ProcedureParamDirection_Out, Name: string($2), Type: $3}
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_Out, Name: $2.String(), Type: $3}
   }
 
 characteristic_list_opt:
@@ -1837,7 +1901,7 @@ declare_statement:
   {
     $$ = &Declare{Condition: &DeclareCondition{Name: string($2), MysqlErrorCode: NewIntVal($5)}}
   }
-| DECLARE ID CURSOR FOR select_statement
+| DECLARE ID CURSOR FOR select_statement_with_no_trailing_into
   {
     $$ = &Declare{Cursor: &DeclareCursor{Name: string($2), SelectStmt: $5}}
   }
@@ -3827,7 +3891,7 @@ explain_statement:
   {
     $$ = &Explain{ExplainFormat: $2, Statement: $3}
   }
-| explain_verb ANALYZE select_statement
+| explain_verb ANALYZE select_statement_with_no_trailing_into
   {
     $$ = &Explain{Analyze: true, ExplainFormat: TreeStr, Statement: $3}
   }
@@ -4693,7 +4757,7 @@ col_tuple:
   }
 
 subquery:
-  openb select_statement closeb
+  openb select_statement_with_no_trailing_into closeb
   {
     $$ = &Subquery{Select: $2}
   }
@@ -5723,11 +5787,11 @@ insert_data:
   {
     $$ = &Insert{Columns: []ColIdent{}, Rows: $4}
   }
-| select_statement
+| select_statement_with_no_trailing_into
   {
     $$ = &Insert{Rows: $1}
   }
-| openb select_statement closeb
+| openb select_statement_with_no_trailing_into closeb
   {
     // Drop the redundant parenthesis.
     $$ = &Insert{Rows: $2}
@@ -5736,11 +5800,11 @@ insert_data:
   {
     $$ = &Insert{Columns: $2, Rows: $5}
   }
-| openb ins_column_list closeb select_statement
+| openb ins_column_list closeb select_statement_with_no_trailing_into
   {
     $$ = &Insert{Columns: $2, Rows: $4}
   }
-| openb ins_column_list closeb openb select_statement closeb
+| openb ins_column_list closeb openb select_statement_with_no_trailing_into closeb
   {
     // Drop the redundant parenthesis.
     $$ = &Insert{Columns: $2, Rows: $5}
@@ -6439,6 +6503,7 @@ non_reserved_keyword:
 | DESCRIPTION
 | DISABLE
 | DOUBLE
+| DUMPFILE
 | DUPLICATE
 | EACH
 | ENABLE
