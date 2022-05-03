@@ -172,6 +172,11 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 	time.Sleep(throttlerInitWait)
 	// By this time metrics will have been collected. We expect no lag, and something like:
 	// {"StatusCode":200,"Value":0.282278,"Threshold":1,"Message":""}
+	//
+	// But, because we run with -heartbeat_on_demand_duration=5s, the heartbeat is "cold" right now.
+	// Let's warm it up.
+	_, _ = throttleCheck(primaryTablet)
+	time.Sleep(time.Second)
 	{
 		resp, err := throttleCheck(primaryTablet)
 		assert.NoError(t, err)
