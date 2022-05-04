@@ -6080,3 +6080,20 @@ func compliantName(in string) string {
 	}
 	return buf.String()
 }
+
+type Analyze struct {
+	Table TableName
+}
+
+func (*Analyze) iStatement() {}
+
+func (node *Analyze) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(visit, node.Table)
+}
+
+func (node *Analyze) Format(buf *TrackedBuffer) {
+	buf.Myprintf("analyze table %v", node.Table)
+}
