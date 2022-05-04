@@ -25,10 +25,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 	"vitess.io/vitess/go/vt/vttest"
@@ -186,15 +186,15 @@ func TestUpdateUnownedLookupVindexValidValue(t *testing.T) {
 	}
 	t.Cleanup(func() { conn.Close() })
 
-	exec(t, conn, "insert into t1(id, sharding_key) values(1,1), (2,1), (3,2), (4,2)")
-	t.Cleanup(func() { exec(t, conn, "delete from t1") })
+	utils.Exec(t, conn, "insert into t1(id, sharding_key) values(1,1), (2,1), (3,2), (4,2)")
+	t.Cleanup(func() { utils.Exec(t, conn, "delete from t1") })
 
-	exec(t, conn, "insert into t2(id, sharding_key, t1_id) values (1,1,1), (2,1,2), (3,2,3), (4,2,4)")
-	t.Cleanup(func() { exec(t, conn, "delete from t2") })
+	utils.Exec(t, conn, "insert into t2(id, sharding_key, t1_id) values (1,1,1), (2,1,2), (3,2,3), (4,2,4)")
+	t.Cleanup(func() { utils.Exec(t, conn, "delete from t2") })
 
-	exec(t, conn, "UPDATE t2 SET t1_id = 1 WHERE id = 2")
+	utils.Exec(t, conn, "UPDATE t2 SET t1_id = 1 WHERE id = 2")
 
-	qr := exec(t, conn, "select id, sharding_key, t1_id from t2 WHERE id = 2")
+	qr := utils.Exec(t, conn, "select id, sharding_key, t1_id from t2 WHERE id = 2")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(2) INT64(1) INT64(1)]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
@@ -209,16 +209,16 @@ func TestUpdateUnownedLookupVindexInvalidValue(t *testing.T) {
 	}
 	t.Cleanup(func() { conn.Close() })
 
-	exec(t, conn, "insert into t1(id, sharding_key) values(1,1), (2,1), (3,2), (4,2)")
-	t.Cleanup(func() { exec(t, conn, "delete from t1") })
+	utils.Exec(t, conn, "insert into t1(id, sharding_key) values(1,1), (2,1), (3,2), (4,2)")
+	t.Cleanup(func() { utils.Exec(t, conn, "delete from t1") })
 
-	exec(t, conn, "insert into t2(id, sharding_key, t1_id) values (1,1,1), (2,1,2), (3,2,3), (4,2,4)")
-	t.Cleanup(func() { exec(t, conn, "delete from t2") })
+	utils.Exec(t, conn, "insert into t2(id, sharding_key, t1_id) values (1,1,1), (2,1,2), (3,2,3), (4,2,4)")
+	t.Cleanup(func() { utils.Exec(t, conn, "delete from t2") })
 
 	_, err = conn.ExecuteFetch("UPDATE t2 SET t1_id = 5 WHERE id = 2", 1000, true)
 	require.EqualError(t, err, `values [INT64(5)] for column [t1_id] does not map to keyspace ids (errno 1105) (sqlstate HY000) during query: UPDATE t2 SET t1_id = 5 WHERE id = 2`)
 
-	qr := exec(t, conn, "select id, sharding_key, t1_id from t2 WHERE id = 2")
+	qr := utils.Exec(t, conn, "select id, sharding_key, t1_id from t2 WHERE id = 2")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(2) INT64(1) INT64(2)]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
@@ -232,25 +232,16 @@ func TestUpdateUnownedLookupVindexToNull(t *testing.T) {
 	}
 	t.Cleanup(func() { conn.Close() })
 
-	exec(t, conn, "insert into t1(id, sharding_key) values(1,1), (2,1), (3,2), (4,2)")
-	t.Cleanup(func() { exec(t, conn, "delete from t1") })
+	utils.Exec(t, conn, "insert into t1(id, sharding_key) values(1,1), (2,1), (3,2), (4,2)")
+	t.Cleanup(func() { utils.Exec(t, conn, "delete from t1") })
 
-	exec(t, conn, "insert into t2(id, sharding_key, t1_id) values (1,1,1), (2,1,2), (3,2,3), (4,2,4)")
-	t.Cleanup(func() { exec(t, conn, "delete from t2") })
+	utils.Exec(t, conn, "insert into t2(id, sharding_key, t1_id) values (1,1,1), (2,1,2), (3,2,3), (4,2,4)")
+	t.Cleanup(func() { utils.Exec(t, conn, "delete from t2") })
 
-	exec(t, conn, "UPDATE t2 SET t1_id = NULL WHERE id = 2")
+	utils.Exec(t, conn, "UPDATE t2 SET t1_id = NULL WHERE id = 2")
 
-	qr := exec(t, conn, "select id, sharding_key, t1_id from t2 WHERE id = 2")
+	qr := utils.Exec(t, conn, "select id, sharding_key, t1_id from t2 WHERE id = 2")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(2) INT64(1) NULL]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
-}
-
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return qr
 }
