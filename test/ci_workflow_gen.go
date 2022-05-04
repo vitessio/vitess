@@ -92,7 +92,7 @@ var (
 		"vtgate_topo_etcd",
 		"vtgate_transaction",
 		"vtgate_unsharded",
-		"vtgate_vindex",
+		"vtgate_vindex_heavy",
 		"vtgate_vschema",
 		"vtgate_queries",
 		"vtgate_schema_tracker",
