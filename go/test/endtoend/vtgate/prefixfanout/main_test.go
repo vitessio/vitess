@@ -144,6 +144,15 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		// Wait for the vtgate to be healthy
+		if healthy := clusterInstance.VtgateProcess.WaitForStatus(); !healthy {
+			return 1
+		}
+		// Wait for the cluster to be running and healthy
+		if err := clusterInstance.WaitForTabletsToHealthyInVtgate(); err != nil {
+			return 1
+		}
+
 		return m.Run()
 	}()
 	os.Exit(exitCode)
