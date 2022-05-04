@@ -963,8 +963,6 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, isTransaction boo
 	// where long-running stream queries which can be stateful (or transactional) weren't getting cleaned up during unserveCommon>handleShutdownGracePeriod
 	// in state_manager.go. This change will ensure that long-running streaming stateful queries get gracefully shutdown during ServingTypeChange
 	// once their grace period is over.
-	qre.tsv.olapql.Add(qd)
-	defer qre.tsv.olapql.Remove(qd)
 	if isTransaction {
 		qre.tsv.statefulql.Add(qd)
 		defer qre.tsv.statefulql.Remove(qd)
