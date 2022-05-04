@@ -52,7 +52,7 @@ var (
 		"ers_prs_newfeatures_heavy",
 		"15",
 		"shardedrecovery_stress_verticalsplit_heavy",
-		"17",
+		"vtgate_general_heavy",
 		"19",
 		"20",
 		"21",
