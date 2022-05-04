@@ -331,6 +331,10 @@ const (
 	RespectNullsStr = "respect nulls"
 	IgnoreNullsStr  = "ignore nulls"
 
+	// FromFirstLastType strings
+	FromFirstStr = "respect nulls"
+	FromLastStr  = "ignore nulls"
+
 	// FirstOrLastValueExprType strings
 	FirstValueExprStr = "first_value"
 	LastValueExprStr  = "last_value"
@@ -485,6 +489,12 @@ const (
 const (
 	RespectNullsType NullTreatmentType = iota
 	IgnoreNullsType
+)
+
+// Constants for Enum Type - FromFirstLastType
+const (
+	FromFirstType FromFirstLastType = iota
+	FromLastType
 )
 
 // Constants for Enum Type - FirstOrLastValueExprType

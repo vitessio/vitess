@@ -1831,6 +1831,12 @@ func (node *NullTreatmentClause) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node
+func (node *FromFirstLastClause) formatFast(buf *TrackedBuffer) {
+	buf.WriteByte(' ')
+	buf.WriteString(node.Type.ToString())
+}
+
+// formatFast formats the node
 func (node *FramePoint) formatFast(buf *TrackedBuffer) {
 	if node.Expr != nil {
 		buf.WriteByte(' ')
@@ -1876,6 +1882,31 @@ func (node *NtileExpr) formatFast(buf *TrackedBuffer) {
 		node.VarValue.formatFast(buf)
 	}
 	buf.WriteString(")")
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
+}
+
+// formatFast formats the node
+func (node *NTHValueExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("nth_value(")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteByte(',')
+	if node.IntValue != nil {
+		buf.WriteString(fmt.Sprintf("%d", *node.IntValue))
+	} else if node.IsNull {
+		buf.WriteString("null")
+	} else {
+		node.VarValue.formatFast(buf)
+	}
+	buf.WriteString(")")
+	if node.FromFirstLastClause != nil {
+		node.FromFirstLastClause.formatFast(buf)
+	}
+	if node.NullTreatmentClause != nil {
+		node.NullTreatmentClause.formatFast(buf)
+	}
 	if node.OverClause != nil {
 		buf.WriteByte(' ')
 		node.OverClause.formatFast(buf)

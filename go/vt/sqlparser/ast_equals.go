@@ -422,6 +422,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfFramePoint(a, b)
+	case *FromFirstLastClause:
+		b, ok := inB.(*FromFirstLastClause)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFromFirstLastClause(a, b)
 	case *FuncExpr:
 		b, ok := inB.(*FuncExpr)
 		if !ok {
@@ -710,6 +716,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfModifyColumn(a, b)
+	case *NTHValueExpr:
+		b, ok := inB.(*NTHValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNTHValueExpr(a, b)
 	case *Nextval:
 		b, ok := inB.(*Nextval)
 		if !ok {
@@ -2032,6 +2044,17 @@ func EqualsRefOfFramePoint(a, b *FramePoint) bool {
 		EqualsExpr(a.Expr, b.Expr)
 }
 
+// EqualsRefOfFromFirstLastClause does deep equals between the two objects.
+func EqualsRefOfFromFirstLastClause(a, b *FromFirstLastClause) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type
+}
+
 // EqualsRefOfFuncExpr does deep equals between the two objects.
 func EqualsRefOfFuncExpr(a, b *FuncExpr) bool {
 	if a == b {
@@ -2600,6 +2623,23 @@ func EqualsRefOfModifyColumn(a, b *ModifyColumn) bool {
 	return a.First == b.First &&
 		EqualsRefOfColumnDefinition(a.NewColDefinition, b.NewColDefinition) &&
 		EqualsRefOfColName(a.After, b.After)
+}
+
+// EqualsRefOfNTHValueExpr does deep equals between the two objects.
+func EqualsRefOfNTHValueExpr(a, b *NTHValueExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.IsNull == b.IsNull &&
+		EqualsExpr(a.Expr, b.Expr) &&
+		EqualsRefOfInt(a.IntValue, b.IntValue) &&
+		EqualsColIdent(a.VarValue, b.VarValue) &&
+		EqualsRefOfOverClause(a.OverClause, b.OverClause) &&
+		EqualsRefOfFromFirstLastClause(a.FromFirstLastClause, b.FromFirstLastClause) &&
+		EqualsRefOfNullTreatmentClause(a.NullTreatmentClause, b.NullTreatmentClause)
 }
 
 // EqualsRefOfNextval does deep equals between the two objects.
@@ -3941,6 +3981,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfMemberOfExpr(a, b)
+	case *NTHValueExpr:
+		b, ok := inB.(*NTHValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNTHValueExpr(a, b)
 	case *NtileExpr:
 		b, ok := inB.(*NtileExpr)
 		if !ok {
@@ -4484,6 +4530,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfMemberOfExpr(a, b)
+	case *NTHValueExpr:
+		b, ok := inB.(*NTHValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNTHValueExpr(a, b)
 	case *NotExpr:
 		b, ok := inB.(*NotExpr)
 		if !ok {
@@ -4898,6 +4950,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfMemberOfExpr(a, b)
+	case *NTHValueExpr:
+		b, ok := inB.(*NTHValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNTHValueExpr(a, b)
 	case *NotExpr:
 		b, ok := inB.(*NotExpr)
 		if !ok {

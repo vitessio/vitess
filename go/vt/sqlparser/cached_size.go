@@ -1158,6 +1158,16 @@ func (cached *FramePoint) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *FromFirstLastClause) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	return size
+}
 func (cached *FuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2074,6 +2084,34 @@ func (cached *ModifyColumn) CachedSize(alloc bool) int64 {
 	size += cached.NewColDefinition.CachedSize(true)
 	// field After *vitess.io/vitess/go/vt/sqlparser.ColName
 	size += cached.After.CachedSize(true)
+	return size
+}
+func (cached *NTHValueExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(96)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field IntValue *int
+	size += hack.RuntimeAllocSize(int64(8))
+	// field VarValue vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.VarValue.CachedSize(false)
+	// field OverClause *vitess.io/vitess/go/vt/sqlparser.OverClause
+	size += cached.OverClause.CachedSize(true)
+	// field FromFirstLastClause *vitess.io/vitess/go/vt/sqlparser.FromFirstLastClause
+	if cached.FromFirstLastClause != nil {
+		size += hack.RuntimeAllocSize(int64(1))
+	}
+	// field NullTreatmentClause *vitess.io/vitess/go/vt/sqlparser.NullTreatmentClause
+	if cached.NullTreatmentClause != nil {
+		size += hack.RuntimeAllocSize(int64(1))
+	}
 	return size
 }
 func (cached *Nextval) CachedSize(alloc bool) int64 {

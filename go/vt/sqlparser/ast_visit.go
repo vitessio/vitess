@@ -154,6 +154,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfFrameClause(in, f)
 	case *FramePoint:
 		return VisitRefOfFramePoint(in, f)
+	case *FromFirstLastClause:
+		return VisitRefOfFromFirstLastClause(in, f)
 	case *FuncExpr:
 		return VisitRefOfFuncExpr(in, f)
 	case GroupBy:
@@ -250,6 +252,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfMemberOfExpr(in, f)
 	case *ModifyColumn:
 		return VisitRefOfModifyColumn(in, f)
+	case *NTHValueExpr:
+		return VisitRefOfNTHValueExpr(in, f)
 	case *Nextval:
 		return VisitRefOfNextval(in, f)
 	case *NotExpr:
@@ -1353,6 +1357,15 @@ func VisitRefOfFramePoint(in *FramePoint, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfFromFirstLastClause(in *FromFirstLastClause, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
 func VisitRefOfFuncExpr(in *FuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2019,6 +2032,30 @@ func VisitRefOfModifyColumn(in *ModifyColumn, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfColName(in.After, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfNTHValueExpr(in *NTHValueExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitColIdent(in.VarValue, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfFromFirstLastClause(in.FromFirstLastClause, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfNullTreatmentClause(in.NullTreatmentClause, f); err != nil {
 		return err
 	}
 	return nil
@@ -3303,6 +3340,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
+	case *NTHValueExpr:
+		return VisitRefOfNTHValueExpr(in, f)
 	case *NtileExpr:
 		return VisitRefOfNtileExpr(in, f)
 	case *SubstrExpr:
@@ -3519,6 +3558,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
+	case *NTHValueExpr:
+		return VisitRefOfNTHValueExpr(in, f)
 	case *NotExpr:
 		return VisitRefOfNotExpr(in, f)
 	case *NtileExpr:
@@ -3667,6 +3708,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
+	case *NTHValueExpr:
+		return VisitRefOfNTHValueExpr(in, f)
 	case *NotExpr:
 		return VisitRefOfNotExpr(in, f)
 	case *NtileExpr:

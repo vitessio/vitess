@@ -1401,6 +1401,18 @@ func (ty NullTreatmentType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty FromFirstLastType) ToString() string {
+	switch ty {
+	case FromFirstType:
+		return FromFirstStr
+	case FromLastType:
+		return FromLastStr
+	default:
+		return "Unknown FromFirstLastType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty FirstOrLastValueExprType) ToString() string {
 	switch ty {
 	case FirstValueExprType:

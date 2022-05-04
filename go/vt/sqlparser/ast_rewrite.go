@@ -154,6 +154,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfFrameClause(parent, node, replacer)
 	case *FramePoint:
 		return a.rewriteRefOfFramePoint(parent, node, replacer)
+	case *FromFirstLastClause:
+		return a.rewriteRefOfFromFirstLastClause(parent, node, replacer)
 	case *FuncExpr:
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case GroupBy:
@@ -250,6 +252,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
 	case *ModifyColumn:
 		return a.rewriteRefOfModifyColumn(parent, node, replacer)
+	case *NTHValueExpr:
+		return a.rewriteRefOfNTHValueExpr(parent, node, replacer)
 	case *Nextval:
 		return a.rewriteRefOfNextval(parent, node, replacer)
 	case *NotExpr:
@@ -2441,6 +2445,30 @@ func (a *application) rewriteRefOfFramePoint(parent SQLNode, node *FramePoint, r
 	}
 	return true
 }
+func (a *application) rewriteRefOfFromFirstLastClause(parent SQLNode, node *FromFirstLastClause, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3900,6 +3928,53 @@ func (a *application) rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColum
 	}
 	if !a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
 		parent.(*ModifyColumn).After = newNode.(*ColName)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfNTHValueExpr(parent SQLNode, node *NTHValueExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*NTHValueExpr).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteColIdent(node, node.VarValue, func(newNode, parent SQLNode) {
+		parent.(*NTHValueExpr).VarValue = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*NTHValueExpr).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfFromFirstLastClause(node, node.FromFirstLastClause, func(newNode, parent SQLNode) {
+		parent.(*NTHValueExpr).FromFirstLastClause = newNode.(*FromFirstLastClause)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfNullTreatmentClause(node, node.NullTreatmentClause, func(newNode, parent SQLNode) {
+		parent.(*NTHValueExpr).NullTreatmentClause = newNode.(*NullTreatmentClause)
 	}) {
 		return false
 	}
@@ -6670,6 +6745,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *MemberOfExpr:
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
+	case *NTHValueExpr:
+		return a.rewriteRefOfNTHValueExpr(parent, node, replacer)
 	case *NtileExpr:
 		return a.rewriteRefOfNtileExpr(parent, node, replacer)
 	case *SubstrExpr:
@@ -6886,6 +6963,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *MemberOfExpr:
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
+	case *NTHValueExpr:
+		return a.rewriteRefOfNTHValueExpr(parent, node, replacer)
 	case *NotExpr:
 		return a.rewriteRefOfNotExpr(parent, node, replacer)
 	case *NtileExpr:
@@ -7034,6 +7113,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *MemberOfExpr:
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
+	case *NTHValueExpr:
+		return a.rewriteRefOfNTHValueExpr(parent, node, replacer)
 	case *NotExpr:
 		return a.rewriteRefOfNotExpr(parent, node, replacer)
 	case *NtileExpr:

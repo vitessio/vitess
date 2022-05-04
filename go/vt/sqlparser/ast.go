@@ -2040,6 +2040,18 @@ type NullTreatmentClause struct {
 // NullTreatmentType is an enum to get types for NullTreatmentClause
 type NullTreatmentType int8
 
+// FromFirstLastClause refers to from_first_last
+// According to SQL Docs:  from_first_last is part of the SQL standard, but the MySQL implementation permits only FROM FIRST (which is also the default).
+// This means that calculations begin at the first row of the window.
+// FROM LAST is parsed, but produces an error.
+// To obtain the same effect as FROM LAST (begin calculations at the last row of the window), use ORDER BY to sort in reverse order.
+type FromFirstLastClause struct {
+	Type FromFirstLastType
+}
+
+// FromFirstLastType is an enum to get types for FromFirstLastClause
+type FromFirstLastType int8
+
 // *********** Expressions
 type (
 	// Expr represents an expression.
@@ -2537,11 +2549,23 @@ type (
 	// FirstOrLastValueExprType is an enum to get types of FirstOrLastValueExpr.
 	FirstOrLastValueExprType int8
 
+	// NtileExpr stands for the NTILE()
 	NtileExpr struct {
 		IntValue   *int
 		VarValue   ColIdent
 		IsNull     bool
 		OverClause *OverClause
+	}
+
+	// NTHValueExpr stands for the NTH_VALUE()
+	NTHValueExpr struct {
+		Expr                Expr
+		IntValue            *int
+		VarValue            ColIdent
+		IsNull              bool
+		OverClause          *OverClause
+		FromFirstLastClause *FromFirstLastClause
+		NullTreatmentClause *NullTreatmentClause
 	}
 )
 
@@ -2607,6 +2631,7 @@ func (*MemberOfExpr) iExpr()                       {}
 func (*ArgumentLessWindowExpr) iExpr()             {}
 func (*FirstOrLastValueExpr) iExpr()               {}
 func (*NtileExpr) iExpr()                          {}
+func (*NTHValueExpr) iExpr()                       {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -2645,6 +2670,7 @@ func (*MemberOfExpr) iCallable()                       {}
 func (*ArgumentLessWindowExpr) iCallable()             {}
 func (*FirstOrLastValueExpr) iCallable()               {}
 func (*NtileExpr) iCallable()                          {}
+func (*NTHValueExpr) iCallable()                       {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

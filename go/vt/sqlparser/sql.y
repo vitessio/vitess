@@ -133,6 +133,8 @@ func bindVariable(yylex yyLexer, bvar string) {
   nullTreatmentClause *NullTreatmentClause
   nullTreatmentType NullTreatmentType
   firstOrLastValueExprType FirstOrLastValueExprType
+  fromFirstLastType FromFirstLastType
+  fromFirstLastClause *FromFirstLastClause
 
   whens         []*When
   columnDefinitions []*ColumnDefinition
@@ -398,6 +400,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <overClause> over_clause
 %type <nullTreatmentType> null_treatment_type
 %type <nullTreatmentClause> null_treatment_clause null_treatment_clause_opt
+%type <fromFirstLastType> from_first_last_type
+%type <fromFirstLastClause> from_first_last_clause from_first_last_clause_opt
 %type <firstOrLastValueExprType> first_or_last_value_expr_type
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
@@ -4979,6 +4983,28 @@ first_or_last_value_expr_type:
     $$ = LastValueExprType
   }
 
+from_first_last_type:
+  FROM FIRST
+  {
+    $$ = FromFirstType
+  }
+| FROM LAST
+  {
+    $$ = FromLastType
+  }
+
+from_first_last_clause_opt:
+  {
+    $$ = nil
+  }
+| from_first_last_clause
+
+from_first_last_clause:
+  from_first_last_type
+  {
+    $$ = &FromFirstLastClause{$1}
+  }
+
 default_opt:
   /* empty */
   {
@@ -5357,6 +5383,20 @@ UTC_DATE func_paren_opt
 | NTILE openb null_as_literal closeb over_clause
   {
     $$ =  &NtileExpr{ IsNull: true, OverClause: $5}
+  }
+| NTH_VALUE openb expression ',' INTEGRAL closeb from_first_last_clause_opt null_treatment_clause_opt over_clause
+  {
+    val := convertStringToInt($5)
+    $$ =  &NTHValueExpr{ Expr: $3, IntValue: &val, FromFirstLastClause:$7, NullTreatmentClause:$8, OverClause: $9}
+  }
+//  we are currently using id_or_var. This will require a reiteration later.
+| NTH_VALUE openb expression ',' id_or_var closeb from_first_last_clause_opt null_treatment_clause_opt over_clause
+  {
+    $$ =  &NTHValueExpr{ Expr: $3, VarValue: $5, FromFirstLastClause:$7, NullTreatmentClause:$8, OverClause: $9}
+  }
+| NTH_VALUE openb expression ',' null_as_literal closeb from_first_last_clause_opt null_treatment_clause_opt over_clause
+  {
+    $$ =  &NTHValueExpr{ Expr: $3, IsNull: true, FromFirstLastClause:$7, NullTreatmentClause:$8, OverClause: $9}
   }
 
 json_path_param_list_opt:

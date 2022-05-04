@@ -420,7 +420,7 @@ var keywords = []keyword{
 	{"not", NOT},
 	{"now", NOW},
 	{"no_write_to_binlog", NO_WRITE_TO_BINLOG},
-	{"nth_value", UNUSED},
+	{"nth_value", NTH_VALUE},
 	{"ntile", NTILE},
 	{"null", NULL},
 	{"nulls", NULLS},

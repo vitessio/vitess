@@ -155,6 +155,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfFrameClause(in)
 	case *FramePoint:
 		return CloneRefOfFramePoint(in)
+	case *FromFirstLastClause:
+		return CloneRefOfFromFirstLastClause(in)
 	case *FuncExpr:
 		return CloneRefOfFuncExpr(in)
 	case GroupBy:
@@ -251,6 +253,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfMemberOfExpr(in)
 	case *ModifyColumn:
 		return CloneRefOfModifyColumn(in)
+	case *NTHValueExpr:
+		return CloneRefOfNTHValueExpr(in)
 	case *Nextval:
 		return CloneRefOfNextval(in)
 	case *NotExpr:
@@ -1104,6 +1108,15 @@ func CloneRefOfFramePoint(n *FramePoint) *FramePoint {
 	return &out
 }
 
+// CloneRefOfFromFirstLastClause creates a deep clone of the input.
+func CloneRefOfFromFirstLastClause(n *FromFirstLastClause) *FromFirstLastClause {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
 // CloneRefOfFuncExpr creates a deep clone of the input.
 func CloneRefOfFuncExpr(n *FuncExpr) *FuncExpr {
 	if n == nil {
@@ -1598,6 +1611,21 @@ func CloneRefOfModifyColumn(n *ModifyColumn) *ModifyColumn {
 	out := *n
 	out.NewColDefinition = CloneRefOfColumnDefinition(n.NewColDefinition)
 	out.After = CloneRefOfColName(n.After)
+	return &out
+}
+
+// CloneRefOfNTHValueExpr creates a deep clone of the input.
+func CloneRefOfNTHValueExpr(n *NTHValueExpr) *NTHValueExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.IntValue = CloneRefOfInt(n.IntValue)
+	out.VarValue = CloneColIdent(n.VarValue)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
+	out.FromFirstLastClause = CloneRefOfFromFirstLastClause(n.FromFirstLastClause)
+	out.NullTreatmentClause = CloneRefOfNullTreatmentClause(n.NullTreatmentClause)
 	return &out
 }
 
@@ -2598,6 +2626,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfMatchExpr(in)
 	case *MemberOfExpr:
 		return CloneRefOfMemberOfExpr(in)
+	case *NTHValueExpr:
+		return CloneRefOfNTHValueExpr(in)
 	case *NtileExpr:
 		return CloneRefOfNtileExpr(in)
 	case *SubstrExpr:
@@ -2828,6 +2858,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfMatchExpr(in)
 	case *MemberOfExpr:
 		return CloneRefOfMemberOfExpr(in)
+	case *NTHValueExpr:
+		return CloneRefOfNTHValueExpr(in)
 	case *NotExpr:
 		return CloneRefOfNotExpr(in)
 	case *NtileExpr:
@@ -2980,6 +3012,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfMatchExpr(in)
 	case *MemberOfExpr:
 		return CloneRefOfMemberOfExpr(in)
+	case *NTHValueExpr:
+		return CloneRefOfNTHValueExpr(in)
 	case *NotExpr:
 		return CloneRefOfNotExpr(in)
 	case *NtileExpr:

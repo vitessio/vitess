@@ -1384,6 +1384,11 @@ func (node *NullTreatmentClause) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node
+func (node *FromFirstLastClause) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, " %s", node.Type.ToString())
+}
+
+// Format formats the node
 func (node *FramePoint) Format(buf *TrackedBuffer) {
 	if node.Expr != nil {
 		buf.astPrintf(node, " %v", node.Expr)
@@ -1421,6 +1426,28 @@ func (node *NtileExpr) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "%v", node.VarValue)
 	}
 	buf.WriteString(")")
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
+}
+
+// Format formats the node
+func (node *NTHValueExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "nth_value(%v,", node.Expr)
+	if node.IntValue != nil {
+		buf.astPrintf(node, "%d", *node.IntValue)
+	} else if node.IsNull {
+		buf.WriteString("null")
+	} else {
+		buf.astPrintf(node, "%v", node.VarValue)
+	}
+	buf.WriteString(")")
+	if node.FromFirstLastClause != nil {
+		buf.astPrintf(node, "%v", node.FromFirstLastClause)
+	}
+	if node.NullTreatmentClause != nil {
+		buf.astPrintf(node, "%v", node.NullTreatmentClause)
+	}
 	if node.OverClause != nil {
 		buf.astPrintf(node, " %v", node.OverClause)
 	}

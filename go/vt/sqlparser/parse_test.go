@@ -2915,6 +2915,15 @@ var (
 	}, {
 		input:  "SELECT NTILE(val) OVER W, NTILE(@val) OVER w FROM numbers",
 		output: "select ntile(val) over W, ntile(@val) over w from numbers",
+	}, {
+		input:  "SELECT NTH_VALUE(@z,1) OVER w, NTH_VALUE('val',0) OVER w FROM numbers",
+		output: "select nth_value(@z,1) over w, nth_value('val',0) over w from numbers",
+	}, {
+		input:  "SELECT NTH_VALUE(val,NULL) FROM FIRST OVER w FROM numbers",
+		output: "select nth_value(val,null) respect nulls over w from numbers",
+	}, {
+		input:  "SELECT NTH_VALUE(val,NULL) RESPECT NULLS OVER w FROM numbers",
+		output: "select nth_value(val,null) respect nulls over w from numbers",
 	}}
 )
 
@@ -3108,6 +3117,12 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "SELECT NTILE(-10) OVER w FROM numbers",
 		err:   "syntax error at position 15",
+	}, {
+		input: "SELECT NTH_VALUE(val,) OVER w FROM numbers",
+		err:   "syntax error at position 23",
+	}, {
+		input: "SELECT NTH_VALUE(TRIM('abc'),-10) OVER w FROM numbers",
+		err:   "syntax error at position 31",
 	}}
 
 	for _, tcase := range invalidSQL {
