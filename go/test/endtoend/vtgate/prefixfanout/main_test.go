@@ -119,6 +119,8 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		clusterInstance.VtTabletExtraArgs = []string{"--health_check_interval=2s"}
+
 		// Start keyspace
 		sKeyspace := &cluster.Keyspace{
 			Name:      sKs,
@@ -138,6 +140,8 @@ func TestMain(m *testing.M) {
 			}, []string{"-c2", "c2-c20a80", "c20a80-d0", "d0-"}, 0, false); err != nil {
 			return 1
 		}
+
+		clusterInstance.VtGateExtraArgs = []string{"--health_check_interval=2s"}
 
 		// Start vtgate
 		// This waits for the vtgate process to be healthy
