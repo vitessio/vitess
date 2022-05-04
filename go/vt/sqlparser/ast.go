@@ -421,7 +421,7 @@ type SelectStatement interface {
 	SetLock(string)
 	SetOrderBy(OrderBy)
 	SetInto(*Into) error
-	HasIntoDefined() bool
+	GetInto() *Into
 	WalkableSQLNode
 }
 
@@ -492,8 +492,8 @@ func (node *Select) SetInto(into *Into) error {
 	return nil
 }
 
-func (node *Select) HasIntoDefined() bool {
-	return node.Into != nil
+func (node *Select) GetInto() *Into {
+	return node.Into
 }
 
 // SetLimit sets the limit clause
@@ -604,8 +604,8 @@ func (node *ParenSelect) SetInto(into *Into) error {
 	panic("unreachable")
 }
 
-func (node *ParenSelect) HasIntoDefined() bool {
-	return node.Select.HasIntoDefined()
+func (node *ParenSelect) GetInto() *Into {
+	return node.Select.GetInto()
 }
 
 // Format formats the node.
@@ -694,8 +694,8 @@ func (node *Union) SetInto(into *Into) error {
 	return nil
 }
 
-func (node *Union) HasIntoDefined() bool {
-	return node.Into != nil
+func (node *Union) GetInto() *Into {
+	return node.Into
 }
 
 // Format formats the node.
