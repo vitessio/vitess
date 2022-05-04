@@ -552,14 +552,19 @@ func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName
 
 	// We use column name aliases to guarantee lower case for our named results.
 	sql := `
-            SELECT COLUMN_NAME AS column_name FROM information_schema.STATISTICS AS indexes INNER JOIN
+            SELECT COLUMN_NAME AS column_name FROM information_schema.STATISTICS AS index_cols INNER JOIN
+            (
+                SELECT INDEX_NAME, COUNT(COLUMN_NAME) AS col_count FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s' AND INDEX_NAME NOT IN
                 (
-                    SELECT DISTINCT INDEX_NAME, COUNT(COLUMN_NAME) AS col_count FROM information_schema.STATISTICS
-                    WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s' AND NON_UNIQUE = 0 AND NULLABLE != 'YES'
-                    GROUP BY INDEX_NAME ORDER BY col_count ASC LIMIT 1
-                ) AS pkes
-            WHERE indexes.TABLE_SCHEMA = '%s' AND indexes.TABLE_NAME = '%s' AND indexes.INDEX_NAME = pkes.INDEX_NAME`
-	sql = fmt.Sprintf(sql, dbName, table, dbName, table)
+                    SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS
+                    WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s' AND (NON_UNIQUE = 1 OR NULLABLE = 'YES')
+                )
+                GROUP BY INDEX_NAME ORDER BY col_count ASC LIMIT 1
+            ) AS pke
+            WHERE index_cols.TABLE_SCHEMA = '%s' AND index_cols.TABLE_NAME = '%s'
+            AND index_cols.INDEX_NAME = pke.INDEX_NAME AND NON_UNIQUE = 0 AND NULLABLE != 'YES'`
+	sql = fmt.Sprintf(sql, dbName, table, dbName, table, dbName, table)
 	qr, err := conn.ExecuteFetch(sql, 1000, true)
 	if err != nil {
 		return nil, err
