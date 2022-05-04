@@ -2628,10 +2628,6 @@ type OnDup UpdateExprs
 // ColIdent is a case insensitive SQL identifier. It will be escaped with
 // backquotes if necessary.
 type ColIdent struct {
-	// This artifact prevents this struct from being compared
-	// with itself. It consumes no space as long as it's not the
-	// last field in the struct.
-	_            [0]struct{ _ []byte }
 	val, lowered string
 	at           AtCount
 }
