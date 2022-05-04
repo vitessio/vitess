@@ -111,9 +111,9 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 			want:  []string{"id"},
 		},
 		{
-			name:  "2MULTICOLPKE",
+			name:  "3MULTICOLPKE",
 			table: "threemcpke_t",
-			ddl:   `CREATE TABLE threemcpke_t (col1 VARCHAR(25), col2 VARCHAR(25) NOT NULL, col3 VARCHAR(25) NOT NULL, col4 VARCHAR(25), UNIQUE KEY (col1, col2), UNIQUE KEY (col1, col2, col3))`,
+			ddl:   `CREATE TABLE threemcpke_t (col1 VARCHAR(25) NOT NULL, col2 VARCHAR(25) NOT NULL, col3 VARCHAR(25) NOT NULL, col4 VARCHAR(25), UNIQUE KEY (col4, col2, col1), UNIQUE KEY (col1, col2), UNIQUE KEY (col1, col2, col3))`,
 			want:  []string{"col1", "col2"},
 		},
 	}
