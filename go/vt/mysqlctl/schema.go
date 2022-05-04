@@ -534,7 +534,7 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 }
 
 // getPrimaryKeyEquivalentColumns can be used if the table has
-// no defined PRIMARY KEY. It will return the columns for a
+// no defined PRIMARY KEY. It will return the columns in a
 // viable PRIMARY KEY equivalent (PKE) -- a NON-NULL UNIQUE
 // KEY -- in the specified table. When multiple PKE indexes
 // are available it will use the one with the fewest columns
@@ -550,14 +550,14 @@ func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName
 	}
 	defer conn.Recycle()
 
-	// sql uses column name aliases to guarantee lower case sensitivity.
+	// We use column name aliases to guarantee lower case for our named results.
 	sql := `
-            SELECT COLUMN_NAME AS column_name FROM INFORMATION_SCHEMA.STATISTICS AS indexes INNER JOIN
+            SELECT COLUMN_NAME AS column_name FROM information_schema.STATISTICS AS indexes INNER JOIN
                 (
-                    SELECT DISTINCT INDEX_NAME, COUNT(COLUMN_NAME) AS col_count FROM INFORMATION_SCHEMA.STATISTICS
+                    SELECT DISTINCT INDEX_NAME, COUNT(COLUMN_NAME) AS col_count FROM information_schema.STATISTICS
                     WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s' AND NON_UNIQUE = 0 AND NULLABLE != 'YES'
                     GROUP BY INDEX_NAME ORDER BY col_count ASC LIMIT 1
-                ) pkes
+                ) AS pkes
             WHERE indexes.TABLE_SCHEMA = '%s' AND indexes.TABLE_NAME = '%s' AND indexes.INDEX_NAME = pkes.INDEX_NAME`
 	sql = fmt.Sprintf(sql, dbName, table, dbName, table)
 	qr, err := conn.ExecuteFetch(sql, 1000, true)
