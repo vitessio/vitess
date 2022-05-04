@@ -24,9 +24,9 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-
 	golcs "github.com/yudai/golcs"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -163,8 +163,186 @@ func NewCreateTableEntity(c *sqlparser.CreateTable) *CreateTableEntity {
 
 // normalize normalizes table definition:
 // - setting names to all keys
-func (c *CreateTableEntity) normalize() {
-	// let's verify all keys have names
+// - table option case (upper/lower/special)
+// The function returns this receiver as courtesy
+func (c *CreateTableEntity) normalize() *CreateTableEntity {
+	c.normalizeUnnamedKeys()
+	c.normalizeTableOptions()
+	c.normalizeColumnOptions()
+	c.normalizePartitionOptions()
+	return c
+}
+
+func (c *CreateTableEntity) normalizeTableOptions() {
+	for _, opt := range c.CreateTable.TableSpec.Options {
+		switch strings.ToUpper(opt.Name) {
+		case "CHARSET", "COLLATE":
+			opt.String = strings.ToLower(opt.String)
+			if charset, ok := charsetAliases[opt.String]; ok {
+				opt.String = charset
+			}
+		case "ENGINE":
+			opt.String = strings.ToUpper(opt.String)
+			if engineName, ok := engineCasing[opt.String]; ok {
+				opt.String = engineName
+			}
+		case "ROW_FORMAT":
+			opt.String = strings.ToUpper(opt.String)
+		}
+	}
+}
+
+// Right now we assume MySQL 8.0 for the collation normalization handling.
+const mysqlCollationVersion = "8.0.0"
+
+var collationEnv = collations.NewEnvironment(mysqlCollationVersion)
+
+func defaultCharset() string {
+	collation := collationEnv.LookupByID(collations.ID(collationEnv.DefaultConnectionCharset()))
+	if collation == nil {
+		return ""
+	}
+	return collation.Charset().Name()
+}
+
+func defaultCharsetCollation(charset string) string {
+	// The collation tables are based on utf8, not the utf8mb3 alias.
+	// We already normalize to utf8mb3 to be explicit, so we have to
+	// map it back here to find the default collation for utf8mb3.
+	if charset == "utf8mb3" {
+		charset = "utf8"
+	}
+	collation := collationEnv.DefaultCollationForCharset(charset)
+	if collation == nil {
+		return ""
+	}
+	return collation.Name()
+}
+
+func (c *CreateTableEntity) normalizeColumnOptions() {
+	tableCharset := defaultCharset()
+	tableCollation := ""
+	for _, option := range c.CreateTable.TableSpec.Options {
+		switch strings.ToUpper(option.Name) {
+		case "CHARSET":
+			tableCharset = option.String
+		case "COLLATE":
+			tableCollation = option.String
+		}
+	}
+	defaultCollation := defaultCharsetCollation(tableCharset)
+	if tableCollation == "" {
+		tableCollation = defaultCollation
+	}
+
+	for _, col := range c.CreateTable.TableSpec.Columns {
+		if col.Type.Options == nil {
+			col.Type.Options = &sqlparser.ColumnTypeOptions{}
+		}
+
+		// Map known lowercase fields to always be lowercase
+		col.Type.Type = strings.ToLower(col.Type.Type)
+		col.Type.Charset = strings.ToLower(col.Type.Charset)
+		col.Type.Options.Collate = strings.ToLower(col.Type.Options.Collate)
+
+		// See https://dev.mysql.com/doc/refman/8.0/en/create-table.html
+		// If neither NULL nor NOT NULL is specified, the column is treated as though NULL had been specified.
+		// That documentation though is not 100% true. There's an exception, and that is
+		// the `explicit_defaults_for_timestamp` flag. When that is disabled (the default on 5.7),
+		// a timestamp defaults to `NOT NULL`.
+		//
+		// We opt here to instead remove that difference and always then add `NULL` and treat
+		// `explicit_defaults_for_timestamp` as always enabled in the context of DDL for diffing.
+		if col.Type.Type == "timestamp" {
+			if col.Type.Options.Null == nil || *col.Type.Options.Null {
+				timestampNull := true
+				col.Type.Options.Null = &timestampNull
+			}
+		} else {
+			if col.Type.Options.Null != nil && *col.Type.Options.Null {
+				col.Type.Options.Null = nil
+			}
+		}
+		if col.Type.Options.Null == nil || *col.Type.Options.Null {
+			// If `DEFAULT NULL` is specified and the column allows NULL,
+			// we drop that in the normalized form since that is equivalent to the default value.
+			// See also https://dev.mysql.com/doc/refman/8.0/en/data-type-defaults.html
+			if _, ok := col.Type.Options.Default.(*sqlparser.NullVal); ok {
+				col.Type.Options.Default = nil
+			}
+		}
+
+		// Map any charset aliases to the real charset. This applies mainly right
+		// now to utf8 being an alias for utf8mb3.
+		if charset, ok := charsetAliases[col.Type.Charset]; ok {
+			col.Type.Charset = charset
+		}
+
+		// Remove any lengths for integral types since it is deprecated there and
+		// doesn't mean anything anymore.
+		if _, ok := integralTypes[col.Type.Type]; ok {
+			col.Type.Length = nil
+		}
+
+		if _, ok := charsetTypes[col.Type.Type]; ok {
+			// If the charset is explicitly configured and it mismatches, we don't normalize
+			// anything for charsets or collations and move on.
+			if col.Type.Charset != "" && col.Type.Charset != tableCharset {
+				continue
+			}
+
+			// Alright, first check if both charset and collation are the same as
+			// the table level options, in that case we can remove both since that's equivalent.
+			if col.Type.Charset == tableCharset && col.Type.Options.Collate == tableCollation {
+				col.Type.Charset = ""
+				col.Type.Options.Collate = ""
+			}
+			// If we have no charset or collation defined, we inherit the table defaults
+			// and don't need to do anything here and can continue to the next column.
+			// It doesn't matter if that's because it's not defined, or if it was because
+			// it was explicitly set to the same values.
+			if col.Type.Charset == "" && col.Type.Options.Collate == "" {
+				continue
+			}
+
+			// We have a matching charset as the default, but it is explicitly set. In that
+			// case we still want to clear it, but set the default collation for the given charset
+			// if no collation is defined yet. We set then the collation to the default collation.
+			if col.Type.Charset != "" {
+				col.Type.Charset = ""
+				if col.Type.Options.Collate == "" {
+					col.Type.Options.Collate = defaultCollation
+				}
+			}
+
+			// We now have one case left, which is when we have set a collation but it's the same
+			// as the table level. In that case, we can clear it since that is equivalent.
+			if col.Type.Options.Collate == tableCollation {
+				col.Type.Options.Collate = ""
+			}
+		}
+	}
+}
+
+func (c *CreateTableEntity) normalizePartitionOptions() {
+	if c.CreateTable.TableSpec.PartitionOption == nil {
+		return
+	}
+
+	for _, def := range c.CreateTable.TableSpec.PartitionOption.Definitions {
+		if def.Options == nil || def.Options.Engine == nil {
+			continue
+		}
+
+		def.Options.Engine.Name = strings.ToUpper(def.Options.Engine.Name)
+		if engineName, ok := engineCasing[def.Options.Engine.Name]; ok {
+			def.Options.Engine.Name = engineName
+		}
+	}
+}
+
+func (c *CreateTableEntity) normalizeUnnamedKeys() {
+	// let's ensure all keys have names
 	keyNameExists := map[string]bool{}
 	// first, we iterate and take note for all keys that do aleady have names
 	for _, key := range c.CreateTable.TableSpec.Indexes {

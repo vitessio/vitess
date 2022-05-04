@@ -22,17 +22,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-var charsetTypes = map[string]bool{
-	"CHAR":       true,
-	"VARCHAR":    true,
-	"TEXT":       true,
-	"TINYTEXT":   true,
-	"MEDIUMTEXT": true,
-	"LONGTEXT":   true,
-	"ENUM":       true,
-	"SET":        true,
-}
-
 func getColName(colIdent *sqlparser.ColIdent) *sqlparser.ColName {
 	return &sqlparser.ColName{Name: *colIdent}
 }
@@ -76,5 +65,5 @@ func (c *ColumnDefinitionEntity) ColumnDiff(other *ColumnDefinitionEntity, hints
 
 // IsTextual returns true when this column is of textual type, and is capable of having a character set property
 func (c *ColumnDefinitionEntity) IsTextual() bool {
-	return charsetTypes[strings.ToUpper(c.columnDefinition.Type.Type)]
+	return charsetTypes[strings.ToLower(c.columnDefinition.Type.Type)]
 }
