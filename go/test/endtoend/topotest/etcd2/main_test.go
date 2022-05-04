@@ -97,26 +97,6 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func TestTopoDownServingQuery(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
-	defer conn.Close()
-
-	defer utils.Exec(t, conn, `delete from t1`)
-
-	execMulti(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc'); ;; insert into t1(c1, c2, c3, c4) values (301,101,301,'abcd');;`)
-	utils.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
-	clusterInstance.TopoProcess.TearDown(clusterInstance.Cell, clusterInstance.OriginalVTDATAROOT, clusterInstance.CurrentVTDATAROOT, true, *clusterInstance.TopoFlavorString())
-	time.Sleep(3 * time.Second)
-	utils.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
-}
-
 // TestLockKeyspaceAndShardMutualExclusivity checks that LockShard and LockKeyspace are not mutually exclusive locks in etcd.
 // Both can be locked simultaneously. Locking one does not prevent us from acquiring the lock on the other
 func TestLockKeyspaceAndShardMutualExclusivity(t *testing.T) {
@@ -136,6 +116,26 @@ func TestLockKeyspaceAndShardMutualExclusivity(t *testing.T) {
 	require.NoError(t, errShard)
 	require.NoError(t, ctxKeyspace.Err())
 	require.NoError(t, ctxShard.Err())
+}
+
+func TestTopoDownServingQuery(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	defer utils.Exec(t, conn, `delete from t1`)
+
+	execMulti(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc'); ;; insert into t1(c1, c2, c3, c4) values (301,101,301,'abcd');;`)
+	utils.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
+	clusterInstance.TopoProcess.TearDown(clusterInstance.Cell, clusterInstance.OriginalVTDATAROOT, clusterInstance.CurrentVTDATAROOT, true, *clusterInstance.TopoFlavorString())
+	time.Sleep(3 * time.Second)
+	utils.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
 }
 
 func execMulti(t *testing.T, conn *mysql.Conn, query string) []*sqltypes.Result {
