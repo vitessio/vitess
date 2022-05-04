@@ -17,10 +17,13 @@ limitations under the License.
 package engine
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -40,9 +43,16 @@ type Lock struct {
 
 	FieldQuery string
 
+	LockFunctions []*LockFunc
+
 	noInputs
 
 	noTxNeeded
+}
+
+type LockFunc struct {
+	Typ *sqlparser.LockingFunc
+	Pos int
 }
 
 // RouteType is part of the Primitive interface
@@ -100,6 +110,11 @@ func (l *Lock) description() PrimitiveDescription {
 		"Query":      l.Query,
 		"FieldQuery": l.FieldQuery,
 	}
+	var lf []string
+	for _, f := range l.LockFunctions {
+		lf = append(lf, fmt.Sprintf("%d:%s", f.Pos, sqlparser.String(f.Typ)))
+	}
+	other["lock_func"] = lf
 	return PrimitiveDescription{
 		OperatorType:      "Lock",
 		Keyspace:          l.Keyspace,

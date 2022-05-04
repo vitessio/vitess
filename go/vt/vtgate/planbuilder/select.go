@@ -338,6 +338,7 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 
 	exprs := make([]evalengine.Expr, len(sel.SelectExprs))
 	cols := make([]string, len(sel.SelectExprs))
+	var lockFunctions []*engine.LockFunc
 	for i, e := range sel.SelectExprs {
 		expr, ok := e.(*sqlparser.AliasedExpr)
 		if !ok {
@@ -345,8 +346,9 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 		}
 		var err error
 		if sqlparser.IsLockingFunc(expr.Expr) {
-			// if we are using any locking functions, we bail out here and send the whole query to a single destination
-			return buildLockingPrimitive(sel, vschema)
+			// if we are using any locking functions, we will send the whole query to a single destination
+			lockFunctions = append(lockFunctions, &engine.LockFunc{Typ: expr.Expr.(*sqlparser.LockingFunc), Pos: i})
+			continue
 		}
 		exprs[i], err = evalengine.Translate(expr.Expr, evalengine.LookupDefaultCollation(vschema.ConnCollation()))
 		if err != nil {
@@ -357,6 +359,9 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 			cols[i] = sqlparser.String(expr.Expr)
 		}
 	}
+	if len(lockFunctions) > 0 {
+		return buildLockingPrimitive(sel, vschema, lockFunctions)
+	}
 	return &engine.Projection{
 		Exprs: exprs,
 		Cols:  cols,
@@ -364,7 +369,7 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 	}, nil
 }
 
-func buildLockingPrimitive(sel *sqlparser.Select, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildLockingPrimitive(sel *sqlparser.Select, vschema plancontext.VSchema, lockFunctions []*engine.LockFunc) (engine.Primitive, error) {
 	ks, err := vschema.FirstSortedKeyspace()
 	if err != nil {
 		return nil, err
@@ -375,6 +380,7 @@ func buildLockingPrimitive(sel *sqlparser.Select, vschema plancontext.VSchema) (
 		TargetDestination: key.DestinationKeyspaceID{0},
 		Query:             sqlparser.String(sel),
 		FieldQuery:        buf.String(),
+		LockFunctions:     lockFunctions,
 	}, nil
 }
 
