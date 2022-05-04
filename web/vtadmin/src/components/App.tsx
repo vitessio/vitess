@@ -107,7 +107,7 @@ export const App = () => {
                             <Workflow />
                         </Route>
 
-                        <Route path="/debug">
+                        <Route path="/settings">
                             <Debug />
                         </Route>
 
