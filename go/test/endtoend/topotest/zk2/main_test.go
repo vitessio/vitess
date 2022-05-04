@@ -23,15 +23,17 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
-	"vitess.io/vitess/go/vt/log"
+	// This imports toposervers to register their implementations of TopoServer.
+	_ "vitess.io/vitess/go/vt/topo/zk2topo"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 var (
@@ -94,6 +96,27 @@ func TestMain(m *testing.M) {
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+// TestLockKeyspaceAndShardMutualExclusivity checks that LockShard and LockKeyspace are mutually exclusive locks in zk2.
+// Both can be locked simultaneously. Locking one does not prevent us from acquiring the lock on the other
+func TestLockKeyspaceAndShardMutualExclusivity(t *testing.T) {
+	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
+	require.NoError(t, err)
+	ctxKeyspace, cancelKeyspace := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelKeyspace()
+	ctxKeyspace, unlockKeypsace, errKeyspace := ts.LockKeyspace(ctxKeyspace, KeyspaceName, "Locking keyspace for TestLockKeyspaceAndShardMutualExclusivity")
+	defer unlockKeypsace(&errKeyspace)
+
+	ctxShard, cancelShard := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelShard()
+	ctxShard, unlockShard, errShard := ts.LockShard(ctxShard, KeyspaceName, "0", "Locking keyspace for TestLockKeyspaceAndShardMutualExclusivity")
+	defer unlockShard(&errShard)
+
+	require.NoError(t, errKeyspace)
+	require.NoError(t, errShard)
+	require.NoError(t, ctxKeyspace.Err())
+	require.NoError(t, ctxShard.Err())
 }
 
 func TestTopoDownServingQuery(t *testing.T) {
