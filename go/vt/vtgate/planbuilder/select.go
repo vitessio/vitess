@@ -354,6 +354,9 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 		if err != nil {
 			return nil, nil
 		}
+		if len(lockFunctions) > 0 {
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: lock function and other expression in same select query")
+		}
 		cols[i] = expr.As.String()
 		if cols[i] == "" {
 			cols[i] = sqlparser.String(expr.Expr)

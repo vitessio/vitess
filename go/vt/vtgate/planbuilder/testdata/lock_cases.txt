@@ -93,3 +93,25 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# multiple lock functions
+"select get_lock('xyz', 10), is_free_lock('abc') from dual"
+{
+  "QueryType": "SELECT",
+  "Original": "select get_lock('xyz', 10), is_free_lock('abc') from dual",
+  "Instructions": {
+    "OperatorType": "Lock",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "KeyspaceID(00)",
+    "FieldQuery": "select get_lock('xyz', 10), is_free_lock('abc') from dual where 1 != 1",
+    "Query": "select get_lock('xyz', 10), is_free_lock('abc') from dual",
+    "lock_func": [
+      "0:get_lock('xyz', 10)",
+      "1:is_free_lock('abc')"
+    ]
+  }
+}
+Gen4 plan same as above
