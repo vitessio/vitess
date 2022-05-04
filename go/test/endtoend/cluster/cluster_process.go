@@ -690,9 +690,9 @@ func (cluster *LocalProcessCluster) RestartVtgate() (err error) {
 //   - For replica and rdonly tablets, which are optional, we wait for as many as we
 //     should have based on how the cluster was defined.
 func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error) {
-	var rdonlyTabletCount, replicaTabletCount int
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
+			rdonlyTabletCount, replicaTabletCount := 0, 0
 			for _, tablet := range shard.Vttablets {
 				switch strings.ToLower(tablet.Type) {
 				case "replica":
