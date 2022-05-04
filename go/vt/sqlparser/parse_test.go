@@ -2906,6 +2906,15 @@ var (
 	}, {
 		input:  "SELECT val, LAST_VALUE(val) IGNORE NULLS OVER w FROM numbers",
 		output: "select val, last_value(val) ignore nulls over w from numbers",
+	}, {
+		input:  "SELECT NTILE(1) OVER w, NTILE(0) OVER w  FROM numbers",
+		output: "select ntile(1) over w, ntile(0) over w from numbers",
+	}, {
+		input:  "SELECT NTILE(NULL) OVER w FROM numbers",
+		output: "select ntile(null) over w from numbers",
+	}, {
+		input:  "SELECT NTILE(val) OVER W, NTILE(@val) OVER w FROM numbers",
+		output: "select ntile(val) over W, ntile(@val) over w from numbers",
 	}}
 )
 
@@ -3093,6 +3102,12 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "SELECT JSON_REMOVE('[\"a\", [\"b\", \"c\"], \"d\"]')",
 		err:   "syntax error at position 45",
+	}, {
+		input: "SELECT NTILE('val') OVER w FROM numbers",
+		err:   "syntax error at position 19 near 'val'",
+	}, {
+		input: "SELECT NTILE(-10) OVER w FROM numbers",
+		err:   "syntax error at position 15",
 	}}
 
 	for _, tcase := range invalidSQL {

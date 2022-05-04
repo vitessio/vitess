@@ -254,6 +254,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfNextval(parent, node, replacer)
 	case *NotExpr:
 		return a.rewriteRefOfNotExpr(parent, node, replacer)
+	case *NtileExpr:
+		return a.rewriteRefOfNtileExpr(parent, node, replacer)
 	case *NullTreatmentClause:
 		return a.rewriteRefOfNullTreatmentClause(parent, node, replacer)
 	case *NullVal:
@@ -3965,6 +3967,38 @@ func (a *application) rewriteRefOfNotExpr(parent SQLNode, node *NotExpr, replace
 	}
 	return true
 }
+func (a *application) rewriteRefOfNtileExpr(parent SQLNode, node *NtileExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColIdent(node, node.VarValue, func(newNode, parent SQLNode) {
+		parent.(*NtileExpr).VarValue = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*NtileExpr).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfNullTreatmentClause(parent SQLNode, node *NullTreatmentClause, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6636,6 +6670,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *MemberOfExpr:
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
+	case *NtileExpr:
+		return a.rewriteRefOfNtileExpr(parent, node, replacer)
 	case *SubstrExpr:
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *TimestampFuncExpr:
@@ -6852,6 +6888,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
 	case *NotExpr:
 		return a.rewriteRefOfNotExpr(parent, node, replacer)
+	case *NtileExpr:
+		return a.rewriteRefOfNtileExpr(parent, node, replacer)
 	case *NullVal:
 		return a.rewriteRefOfNullVal(parent, node, replacer)
 	case Offset:
@@ -6998,6 +7036,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
 	case *NotExpr:
 		return a.rewriteRefOfNotExpr(parent, node, replacer)
+	case *NtileExpr:
+		return a.rewriteRefOfNtileExpr(parent, node, replacer)
 	case *NullVal:
 		return a.rewriteRefOfNullVal(parent, node, replacer)
 	case Offset:

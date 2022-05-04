@@ -1410,6 +1410,22 @@ func (node *FirstOrLastValueExpr) Format(buf *TrackedBuffer) {
 	}
 }
 
+// Format formats the node
+func (node *NtileExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "ntile(")
+	if node.IntValue != nil {
+		buf.astPrintf(node, "%d", *node.IntValue)
+	} else if node.IsNull {
+		buf.WriteString("null")
+	} else {
+		buf.astPrintf(node, "%v", node.VarValue)
+	}
+	buf.WriteString(")")
+	if node.OverClause != nil {
+		buf.astPrintf(node, " %v", node.OverClause)
+	}
+}
+
 // Format formats the node.
 func (node *SubstrExpr) Format(buf *TrackedBuffer) {
 	if node.To == nil {

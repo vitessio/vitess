@@ -2104,6 +2104,22 @@ func (cached *NotExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *NtileExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field IntValue *int
+	size += hack.RuntimeAllocSize(int64(8))
+	// field VarValue vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.VarValue.CachedSize(false)
+	// field OverClause *vitess.io/vitess/go/vt/sqlparser.OverClause
+	size += cached.OverClause.CachedSize(true)
+	return size
+}
 func (cached *NullTreatmentClause) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

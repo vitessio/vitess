@@ -5344,6 +5344,20 @@ UTC_DATE func_paren_opt
   {
     $$ = &FirstOrLastValueExpr{ Type: $1, Expr : $3 , NullTreatmentClause:$5 ,OverClause:$6 }
   }
+| NTILE openb INTEGRAL closeb over_clause
+  {
+    val := convertStringToInt($3)
+    $$ =  &NtileExpr{ IntValue: &val, OverClause: $5}
+  }
+//  we are currently using id_or_var. This will require a reiteration later.
+| NTILE openb id_or_var closeb over_clause
+  {
+    $$ =  &NtileExpr{ VarValue: $3, OverClause: $5}
+  }
+| NTILE openb null_as_literal closeb over_clause
+  {
+    $$ =  &NtileExpr{ IsNull: true, OverClause: $5}
+  }
 
 json_path_param_list_opt:
   {

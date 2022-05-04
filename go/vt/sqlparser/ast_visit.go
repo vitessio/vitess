@@ -254,6 +254,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfNextval(in, f)
 	case *NotExpr:
 		return VisitRefOfNotExpr(in, f)
+	case *NtileExpr:
+		return VisitRefOfNtileExpr(in, f)
 	case *NullTreatmentClause:
 		return VisitRefOfNullTreatmentClause(in, f)
 	case *NullVal:
@@ -2045,6 +2047,21 @@ func VisitRefOfNotExpr(in *NotExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfNtileExpr(in *NtileExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.VarValue, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfNullTreatmentClause(in *NullTreatmentClause, f Visit) error {
 	if in == nil {
 		return nil
@@ -3286,6 +3303,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
+	case *NtileExpr:
+		return VisitRefOfNtileExpr(in, f)
 	case *SubstrExpr:
 		return VisitRefOfSubstrExpr(in, f)
 	case *TimestampFuncExpr:
@@ -3502,6 +3521,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfMemberOfExpr(in, f)
 	case *NotExpr:
 		return VisitRefOfNotExpr(in, f)
+	case *NtileExpr:
+		return VisitRefOfNtileExpr(in, f)
 	case *NullVal:
 		return VisitRefOfNullVal(in, f)
 	case Offset:
@@ -3648,6 +3669,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfMemberOfExpr(in, f)
 	case *NotExpr:
 		return VisitRefOfNotExpr(in, f)
+	case *NtileExpr:
+		return VisitRefOfNtileExpr(in, f)
 	case *NullVal:
 		return VisitRefOfNullVal(in, f)
 	case Offset:

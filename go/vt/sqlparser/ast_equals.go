@@ -722,6 +722,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfNotExpr(a, b)
+	case *NtileExpr:
+		b, ok := inB.(*NtileExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNtileExpr(a, b)
 	case *NullTreatmentClause:
 		b, ok := inB.(*NullTreatmentClause)
 		if !ok {
@@ -2618,6 +2624,20 @@ func EqualsRefOfNotExpr(a, b *NotExpr) bool {
 	return EqualsExpr(a.Expr, b.Expr)
 }
 
+// EqualsRefOfNtileExpr does deep equals between the two objects.
+func EqualsRefOfNtileExpr(a, b *NtileExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.IsNull == b.IsNull &&
+		EqualsRefOfInt(a.IntValue, b.IntValue) &&
+		EqualsColIdent(a.VarValue, b.VarValue) &&
+		EqualsRefOfOverClause(a.OverClause, b.OverClause)
+}
+
 // EqualsRefOfNullTreatmentClause does deep equals between the two objects.
 func EqualsRefOfNullTreatmentClause(a, b *NullTreatmentClause) bool {
 	if a == b {
@@ -3921,6 +3941,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfMemberOfExpr(a, b)
+	case *NtileExpr:
+		b, ok := inB.(*NtileExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNtileExpr(a, b)
 	case *SubstrExpr:
 		b, ok := inB.(*SubstrExpr)
 		if !ok {
@@ -4464,6 +4490,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfNotExpr(a, b)
+	case *NtileExpr:
+		b, ok := inB.(*NtileExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNtileExpr(a, b)
 	case *NullVal:
 		b, ok := inB.(*NullVal)
 		if !ok {
@@ -4872,6 +4904,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfNotExpr(a, b)
+	case *NtileExpr:
+		b, ok := inB.(*NtileExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNtileExpr(a, b)
 	case *NullVal:
 		b, ok := inB.(*NullVal)
 		if !ok {
@@ -5640,6 +5678,17 @@ func EqualsTableAndLockTypes(a, b TableAndLockTypes) bool {
 	return true
 }
 
+// EqualsRefOfInt does deep equals between the two objects.
+func EqualsRefOfInt(a, b *int) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
 // EqualsComments does deep equals between the two objects.
 func EqualsComments(a, b Comments) bool {
 	if len(a) != len(b) {
@@ -5651,17 +5700,6 @@ func EqualsComments(a, b Comments) bool {
 		}
 	}
 	return true
-}
-
-// EqualsRefOfInt does deep equals between the two objects.
-func EqualsRefOfInt(a, b *int) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return *a == *b
 }
 
 // EqualsSliceOfRefOfPartitionDefinition does deep equals between the two objects.

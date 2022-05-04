@@ -255,6 +255,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfNextval(in)
 	case *NotExpr:
 		return CloneRefOfNotExpr(in)
+	case *NtileExpr:
+		return CloneRefOfNtileExpr(in)
 	case *NullTreatmentClause:
 		return CloneRefOfNullTreatmentClause(in)
 	case *NullVal:
@@ -1619,6 +1621,18 @@ func CloneRefOfNotExpr(n *NotExpr) *NotExpr {
 	return &out
 }
 
+// CloneRefOfNtileExpr creates a deep clone of the input.
+func CloneRefOfNtileExpr(n *NtileExpr) *NtileExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.IntValue = CloneRefOfInt(n.IntValue)
+	out.VarValue = CloneColIdent(n.VarValue)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
+	return &out
+}
+
 // CloneRefOfNullTreatmentClause creates a deep clone of the input.
 func CloneRefOfNullTreatmentClause(n *NullTreatmentClause) *NullTreatmentClause {
 	if n == nil {
@@ -2584,6 +2598,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfMatchExpr(in)
 	case *MemberOfExpr:
 		return CloneRefOfMemberOfExpr(in)
+	case *NtileExpr:
+		return CloneRefOfNtileExpr(in)
 	case *SubstrExpr:
 		return CloneRefOfSubstrExpr(in)
 	case *TimestampFuncExpr:
@@ -2814,6 +2830,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfMemberOfExpr(in)
 	case *NotExpr:
 		return CloneRefOfNotExpr(in)
+	case *NtileExpr:
+		return CloneRefOfNtileExpr(in)
 	case *NullVal:
 		return CloneRefOfNullVal(in)
 	case Offset:
@@ -2964,6 +2982,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfMemberOfExpr(in)
 	case *NotExpr:
 		return CloneRefOfNotExpr(in)
+	case *NtileExpr:
+		return CloneRefOfNtileExpr(in)
 	case *NullVal:
 		return CloneRefOfNullVal(in)
 	case Offset:
@@ -3399,6 +3419,15 @@ func CloneTableAndLockTypes(n TableAndLockTypes) TableAndLockTypes {
 	return res
 }
 
+// CloneRefOfInt creates a deep clone of the input.
+func CloneRefOfInt(n *int) *int {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
 // CloneComments creates a deep clone of the input.
 func CloneComments(n Comments) Comments {
 	if n == nil {
@@ -3409,15 +3438,6 @@ func CloneComments(n Comments) Comments {
 		res = append(res, x)
 	}
 	return res
-}
-
-// CloneRefOfInt creates a deep clone of the input.
-func CloneRefOfInt(n *int) *int {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
 }
 
 // CloneSliceOfRefOfPartitionDefinition creates a deep clone of the input.

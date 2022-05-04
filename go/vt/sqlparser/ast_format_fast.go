@@ -1865,6 +1865,23 @@ func (node *FirstOrLastValueExpr) formatFast(buf *TrackedBuffer) {
 	}
 }
 
+// formatFast formats the node
+func (node *NtileExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("ntile(")
+	if node.IntValue != nil {
+		buf.WriteString(fmt.Sprintf("%d", *node.IntValue))
+	} else if node.IsNull {
+		buf.WriteString("null")
+	} else {
+		node.VarValue.formatFast(buf)
+	}
+	buf.WriteString(")")
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
+}
+
 // formatFast formats the node.
 func (node *SubstrExpr) formatFast(buf *TrackedBuffer) {
 	if node.To == nil {
