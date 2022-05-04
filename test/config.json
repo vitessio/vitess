@@ -152,7 +152,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackup"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "20",
+			"Shard": "xb_backup",
 			"RetryMax": 2,
 			"Tags": []
 		},
@@ -161,7 +161,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackupstream"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "20",
+			"Shard": "xb_backup",
 			"RetryMax": 1,
 			"Tags": []
 		},

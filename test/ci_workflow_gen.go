@@ -54,7 +54,7 @@ var (
 		"shardedrecovery_stress_verticalsplit_heavy",
 		"vtgate_general_heavy",
 		"19",
-		"20",
+		"xb_backup",
 		"21",
 		"22",
 		"worker_vault_heavy",
@@ -116,7 +116,7 @@ var (
 	}
 	clusterDockerList           = []string{}
 	clustersRequiringXtraBackup = []string{
-		"20",
+		"xb_backup",
 		"xb_recovery",
 	}
 	clustersRequiringMakeTools = []string{
