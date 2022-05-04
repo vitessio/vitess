@@ -4,7 +4,9 @@ VTAdmin an open-sourced web UI and API that allows users to manage their Vitess 
 VTAdmin currently lives at `vtadmin.planetscale.com`, but must be accessed via a button on a branch's page in the admin portal, i.e. `https://admin.planetscale.com/admin/organizations/frances/databases/broccoli-biscuits/branches/main`. This is because nececessary cookies and url parameters must be set from a branch's page before redirecting to vtadmin.
 
 - **Internal Slack Channel**: planetscale/#project-vtadmin 
-- **Open Source Slack Channel**: vitess/#vtadmin
+- **Open Source Slack Channels**
+    - **Public**: vitess/#feat-vtadmin
+    - **Private**: vitess/#vtadmin
 - **Internal Project**: https://app.shortcut.com/planetscale/epic/2332/vtadmin-planetscale?cf_workflow=500000050&ct_workflow=all
 - **Open Source Project**: https://github.com/vitessio/vitess/projects/12
 
