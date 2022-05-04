@@ -117,7 +117,7 @@ func TestTopoDownServingQuery(t *testing.T) {
 	utils.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
 }
 
-// TestLockKeyspaceAndShardMutualExclusivity checks that LockShard and LockKeyspace are mutually exclusive locks in etcd.
+// TestLockKeyspaceAndShardMutualExclusivity checks that LockShard and LockKeyspace are not mutually exclusive locks in etcd.
 // Both can be locked simultaneously. Locking one does not prevent us from acquiring the lock on the other
 func TestLockKeyspaceAndShardMutualExclusivity(t *testing.T) {
 	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)

@@ -143,7 +143,7 @@ func TestTopoRestart(t *testing.T) {
 	}
 }
 
-// TestLockKeyspaceAndShardMutualExclusivity checks that LockShard and LockKeyspace are mutually exclusive locks in consul.
+// TestLockKeyspaceAndShardMutualExclusivity checks that LockShard and LockKeyspace are not mutually exclusive locks in consul.
 // Both can be locked simultaneously. Locking one does not prevent us from acquiring the lock on the other
 func TestLockKeyspaceAndShardMutualExclusivity(t *testing.T) {
 	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)

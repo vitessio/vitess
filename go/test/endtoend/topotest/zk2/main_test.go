@@ -98,7 +98,7 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-// TestLockKeyspaceAndShardMutualExclusivity checks that LockShard and LockKeyspace are mutually exclusive locks in zk2.
+// TestLockKeyspaceAndShardMutualExclusivity checks that LockShard and LockKeyspace are not mutually exclusive locks in zk2.
 // Both can be locked simultaneously. Locking one does not prevent us from acquiring the lock on the other
 func TestLockKeyspaceAndShardMutualExclusivity(t *testing.T) {
 	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
