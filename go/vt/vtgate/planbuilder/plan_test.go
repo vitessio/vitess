@@ -281,6 +281,7 @@ func TestOneWithSecondUserAsDefault(t *testing.T) {
 
 	testFile(t, "onecase.txt", "", vschema)
 }
+
 func TestOneWithUserAsDefault(t *testing.T) {
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json", true),

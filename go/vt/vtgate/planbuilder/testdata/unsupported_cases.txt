@@ -551,7 +551,25 @@ Gen4 error: expr cannot be converted, not supported: count(id)
     "Vindex": "name_user_map"
   }
 }
-Gen4 error: expr cannot be converted, not supported: count(id)
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from user having count(id) = 10 and name = 'a'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select 1 from `user` where 1 != 1",
+    "Query": "select 1 from `user` where `name` = 'a' having count(id) = 10",
+    "Table": "`user`",
+    "Values": [
+      "VARCHAR(\"a\")"
+    ],
+    "Vindex": "name_user_map"
+  }
+}
 
 # subquery of information_schema with itself and star expression in outer select
 "select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)"

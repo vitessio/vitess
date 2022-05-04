@@ -415,11 +415,7 @@ func (rb *route) MergeUnion(right *route, isDistinct bool) bool {
 }
 
 func (rb *route) isSingleShard() bool {
-	switch rb.eroute.Opcode {
-	case engine.Unsharded, engine.DBA, engine.Next, engine.EqualUnique, engine.Reference:
-		return true
-	}
-	return false
+	return rb.eroute.Opcode.IsSingleShard()
 }
 
 // JoinCanMerge, SubqueryCanMerge and unionCanMerge have subtly different behaviors.
@@ -470,7 +466,8 @@ func (rb *route) SubqueryCanMerge(pb *primitiveBuilder, inner *route) bool {
 		return false
 	}
 
-	// if either side is a reference table, we can just merge it and use the opcode of the other side
+	// if either side is a reference table, and we know the other side will only run once,
+	// we can just merge them and use the opcode of the other side
 	if rb.eroute.Opcode == engine.Reference || inner.eroute.Opcode == engine.Reference {
 		return rb.isSingleShard() && inner.isSingleShard()
 	}

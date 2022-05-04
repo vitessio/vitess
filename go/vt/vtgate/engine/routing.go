@@ -121,7 +121,7 @@ type RoutingParameters struct {
 
 func (code Opcode) IsSingleShard() bool {
 	switch code {
-	case Unsharded, DBA, Next, EqualUnique, Reference:
+	case Unsharded, DBA, Next, EqualUnique, Equal, Reference:
 		return true
 	}
 	return false
