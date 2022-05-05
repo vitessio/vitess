@@ -73,6 +73,14 @@ func TestCanonicalOutput(t *testing.T) {
 			"CREATE TABLE `a` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
+			"create table `a`(`id` int unsigned, primary key(`id`))",
+			"CREATE TABLE `a` (\n\t`id` int unsigned,\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
+			"create table `a`(`id` int zerofill, primary key(`id`))",
+			"CREATE TABLE `a` (\n\t`id` int zerofill,\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
 			"create table `a`(`id` int primary key)",
 			"CREATE TABLE `a` (\n\t`id` int PRIMARY KEY\n)",
 		},
@@ -110,7 +118,7 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"alter table t2 modify column id bigint unsigned primary key",
-			"ALTER TABLE `t2` MODIFY COLUMN `id` bigint UNSIGNED PRIMARY KEY",
+			"ALTER TABLE `t2` MODIFY COLUMN `id` bigint unsigned PRIMARY KEY",
 		},
 		{
 			"alter table t1 modify column a int first, modify column b int after a",
