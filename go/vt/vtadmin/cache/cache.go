@@ -98,8 +98,10 @@ type Config struct {
 //		})
 //
 type Cache[Key Keyer, Value any] struct {
-	cache     *cache.Cache
-	fillcache *cache.Cache
+	cache *cache.Cache
+
+	m        sync.Mutex
+	lastFill map[string]time.Time
 
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -126,7 +128,7 @@ func New[Key Keyer, Value any](fillFunc func(ctx context.Context, req Key) (Valu
 
 	c := &Cache[Key, Value]{
 		cache:     cache.New(cfg.DefaultExpiration, cfg.CleanupInterval),
-		fillcache: cache.New(cfg.BackfillRequestDuplicateInterval, time.Minute),
+		lastFill:  map[string]time.Time{},
 		backfills: make(chan *backfillRequest[Key], cfg.BackfillQueueSize),
 		fillFunc:  fillFunc,
 		cfg:       cfg,
@@ -147,8 +149,11 @@ func (c *Cache[Key, Value]) Add(key Key, val Value, d time.Duration) error {
 }
 
 func (c *Cache[Key, Value]) add(key string, val Value, d time.Duration) error {
+	c.m.Lock()
+	defer c.m.Unlock()
+
 	// Record the time we last cached this key, to check against
-	c.fillcache.Set(key, struct{}{}, cache.DefaultExpiration)
+	c.lastFill[key] = time.Now().UTC()
 	// Then cache the actual value.
 	return c.cache.Add(key, val, d)
 }
@@ -220,14 +225,18 @@ func (c *Cache[Key, Value]) backfill() {
 		}
 
 		key := req.k.Key()
-		if _, exp, ok := c.fillcache.GetWithExpiration(key); ok {
-			if !exp.IsZero() && exp.After(time.Now()) {
+
+		c.m.Lock()
+		if t, ok := c.lastFill[key]; ok {
+			if !t.IsZero() && t.Add(c.cfg.BackfillRequestDuplicateInterval).After(time.Now()) {
 				// We recently added a value for this key to the cache, either via
 				// another backfill request, or directly via a call to Add.
-				log.Infof("filled cache for %s less than %s ago (at %s)", key, time.Duration(0) /* TODO: config */, exp.UTC())
+				log.Infof("filled cache for %s less than %s ago (at %s)", key, c.cfg.BackfillRequestDuplicateInterval, t.UTC())
+				c.m.Unlock()
 				continue
 			}
 		}
+		c.m.Unlock()
 
 		val, err := c.fillFunc(c.ctx, req.k)
 		if err != nil {
