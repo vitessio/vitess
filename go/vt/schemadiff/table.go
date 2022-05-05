@@ -282,6 +282,12 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 		// doesn't mean anything anymore.
 		if _, ok := integralTypes[col.Type.Type]; ok {
 			col.Type.Length = nil
+			// Remove zerofill for integral types but keep the behavior that this marks the value
+			// as unsigned
+			if col.Type.Zerofill {
+				col.Type.Zerofill = false
+				col.Type.Unsigned = true
+			}
 		}
 
 		if _, ok := charsetTypes[col.Type.Type]; ok {
