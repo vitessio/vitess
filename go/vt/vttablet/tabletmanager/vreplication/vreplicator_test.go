@@ -119,7 +119,7 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 			table: "twomcpke_t",
 			ddl: `CREATE TABLE twomcpke_t (col1 VARCHAR(25) NOT NULL, col2 VARCHAR(25) NOT NULL,
 					col3 VARCHAR(25) NOT NULL, col4 VARCHAR(25), UNIQUE KEY (col4), UNIQUE KEY c4_c2_c1 (col4, col2, col1),
-					UNIQUE KEY c1_c2 (col1, col2), UNIQUE KEY c1_c2_c3 (col1, col2, col3))`,
+					UNIQUE KEY c1_c2_c3 (col1, col2, col3), UNIQUE KEY c1_c2 (col1, col2))`,
 			want: []string{"col1", "col2"},
 		},
 	}
