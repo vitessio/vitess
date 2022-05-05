@@ -37,7 +37,7 @@ import (
 var (
 	// CreateKeyspace makes a CreateKeyspace gRPC call to a vtctld.
 	CreateKeyspace = &cobra.Command{
-		Use:   "CreateKeyspace <keyspace> [--force|-f] [--sharding-column-name NAME --sharding-column-type TYPE] [--base-keyspace KEYSPACE --snapshot-timestamp TIME] [--served-from DB_TYPE:KEYSPACE ...]  [-durability_policy=policy_name]",
+		Use:   "CreateKeyspace <keyspace> [--force|-f] [--sharding-column-name NAME --sharding-column-type TYPE] [--base-keyspace KEYSPACE --snapshot-timestamp TIME] [--served-from DB_TYPE:KEYSPACE ...]  [--durability_policy=policy_name]",
 		Short: "Creates the specified keyspace in the topology.",
 		Long: `Creates the specified keyspace in the topology.
 	
@@ -95,6 +95,14 @@ Otherwise, the keyspace must be empty (have no shards), or returns an error.`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
 		RunE:                  commandSetKeyspaceServedFrom,
+	}
+	// SetKeyspaceDurabilityPolicy makes a SetKeyspaceDurabilityPolicy gRPC call to a vtcltd.
+	SetKeyspaceDurabilityPolicy = &cobra.Command{
+		Use:                   "SetKeyspaceDurabilityPolicy [--durability_policy=policy_name] <keyspace name>",
+		Short:                 "Changes the durability_policy used by the keyspace specified.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandSetKeyspaceDurabilityPolicy,
 	}
 	// SetKeyspaceShardingInfo makes a SetKeyspaceShardingInfo gRPC call to a vtcltd.
 	SetKeyspaceShardingInfo = &cobra.Command{
@@ -350,6 +358,31 @@ func commandSetKeyspaceServedFrom(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+var setKeyspaceDurabilityPolicyOptions = struct {
+	DurabilityPolicy string
+}{}
+
+func commandSetKeyspaceDurabilityPolicy(cmd *cobra.Command, args []string) error {
+	keyspace := cmd.Flags().Arg(0)
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.SetKeyspaceDurabilityPolicy(commandCtx, &vtctldatapb.SetKeyspaceDurabilityPolicyRequest{
+		Keyspace:         keyspace,
+		DurabilityPolicy: setKeyspaceDurabilityPolicyOptions.DurabilityPolicy,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
 var setKeyspaceShardingInfoOptions = struct {
 	Force bool
 }{}
@@ -487,6 +520,9 @@ func init() {
 	SetKeyspaceServedFrom.Flags().BoolVarP(&setKeyspaceServedFromOptions.Remove, "remove", "r", false, "If set, remove the ServedFrom record.")
 	SetKeyspaceServedFrom.Flags().StringVar(&setKeyspaceServedFromOptions.SourceKeyspace, "source", "", "Specifies the source keyspace name.")
 	Root.AddCommand(SetKeyspaceServedFrom)
+
+	SetKeyspaceDurabilityPolicy.Flags().StringVar(&setKeyspaceDurabilityPolicyOptions.DurabilityPolicy, "durability_policy", "none", "type of durability to enforce for this keyspace. Default is none. Other values include 'semi_sync' and others as dictated by registered plugins")
+	Root.AddCommand(SetKeyspaceDurabilityPolicy)
 
 	SetKeyspaceShardingInfo.Flags().BoolVarP(&setKeyspaceShardingInfoOptions.Force, "force", "f", false, "Updates fields even if they are already set. Use caution before passing force to this command.")
 	Root.AddCommand(SetKeyspaceShardingInfo)

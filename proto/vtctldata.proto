@@ -951,6 +951,17 @@ message SetKeyspaceShardingInfoResponse {
   topodata.Keyspace keyspace = 1;
 }
 
+message SetKeyspaceDurabilityPolicyRequest {
+  string keyspace = 1;
+  string durability_policy = 2;
+}
+
+message SetKeyspaceDurabilityPolicyResponse {
+  // Keyspace is the updated keyspace record.
+  topodata.Keyspace keyspace = 1;
+}
+
+
 message SetShardIsPrimaryServingRequest {
   string keyspace = 1;
   string shard = 2;
