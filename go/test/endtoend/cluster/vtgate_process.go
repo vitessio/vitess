@@ -178,7 +178,7 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 // WaitForStatusOfTabletInShard function waits till status of a tablet in shard is 1
 // endPointsCount: how many endpoints to wait for
 func (vtgate *VtgateProcess) WaitForStatusOfTabletInShard(name string, endPointsCount int) error {
-	log.Infof("Waiting for healthy status of %d %s tablets in shard %s",
+	log.Infof("Waiting for healthy status of %d %s tablets in cell %s",
 		endPointsCount, name, vtgate.Cell)
 	timeout := time.Now().Add(30 * time.Second)
 	for time.Now().Before(timeout) {
