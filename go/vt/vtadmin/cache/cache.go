@@ -178,13 +178,10 @@ func (c *Cache[Key, Value]) EnqueueBackfill(k Key) bool {
 		requestedAt: time.Now().UTC(),
 	}
 
-	ctx, cancel := context.WithTimeout(c.ctx, c.cfg.BackfillEnqueueWaitTime)
-	defer cancel()
-
 	select {
 	case c.backfills <- req:
 		return true
-	case <-ctx.Done():
+	case <-time.After(c.cfg.BackfillEnqueueWaitTime):
 		return false
 	}
 }
