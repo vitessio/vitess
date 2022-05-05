@@ -54,7 +54,7 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	s.org = a
 	a.tables.org = a
 	a.binder = newBinder(s, a, a.tables, a.typer)
-	a.rewriter = &earlyRewriter{scoper: s}
+	a.rewriter = &earlyRewriter{scoper: s, binder: a.binder}
 
 	return a
 }
@@ -302,9 +302,6 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NEXT used on a non-sequence table")
 		}
 	case *sqlparser.JoinTableExpr:
-		if node.Condition != nil && node.Condition.Using != nil {
-			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries")}
-		}
 		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString())
 		}

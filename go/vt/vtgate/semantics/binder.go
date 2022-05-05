@@ -29,26 +29,28 @@ import (
 // While doing this, it will also find the types for columns and
 // store these in the typer:s expression map
 type binder struct {
-	recursive   ExprDependencies
-	direct      ExprDependencies
-	scoper      *scoper
-	tc          *tableCollector
-	org         originable
-	typer       *typer
-	subqueryMap map[sqlparser.Statement][]*sqlparser.ExtractedSubquery
-	subqueryRef map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery
+	recursive    ExprDependencies
+	direct       ExprDependencies
+	scoper       *scoper
+	tc           *tableCollector
+	org          originable
+	typer        *typer
+	subqueryMap  map[sqlparser.Statement][]*sqlparser.ExtractedSubquery
+	subqueryRef  map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery
+	colidentDeps map[string]TableSet
 }
 
 func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer) *binder {
 	return &binder{
-		recursive:   map[sqlparser.Expr]TableSet{},
-		direct:      map[sqlparser.Expr]TableSet{},
-		scoper:      scoper,
-		org:         org,
-		tc:          tc,
-		typer:       typer,
-		subqueryMap: map[sqlparser.Statement][]*sqlparser.ExtractedSubquery{},
-		subqueryRef: map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery{},
+		recursive:    map[sqlparser.Expr]TableSet{},
+		direct:       map[sqlparser.Expr]TableSet{},
+		scoper:       scoper,
+		org:          org,
+		tc:           tc,
+		typer:        typer,
+		subqueryMap:  map[sqlparser.Statement][]*sqlparser.ExtractedSubquery{},
+		subqueryRef:  map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery{},
+		colidentDeps: map[string]TableSet{},
 	}
 }
 
@@ -65,9 +67,19 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		b.subqueryRef[node] = sq
 
 		b.setSubQueryDependencies(node, currScope)
-
+	case *sqlparser.JoinCondition:
+		for _, ident := range node.Using {
+			name := sqlparser.NewColName(ident.String())
+			s := b.scoper.currentScope()
+			deps, err := b.resolveColumn(name, s, true)
+			if err != nil {
+				return err
+			}
+			b.colidentDeps[ident.Lowered()] = deps.direct
+		}
 	case *sqlparser.ColName:
-		deps, err := b.resolveColumn(node, b.scoper.currentScope())
+		currentScope := b.scoper.currentScope()
+		deps, err := b.resolveColumn(node, currentScope, false)
 		if err != nil {
 			return err
 		}
@@ -154,10 +166,10 @@ func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *sc
 	return sq, nil
 }
 
-func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope) (deps dependency, err error) {
+func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allowMulti bool) (deps dependency, err error) {
 	var thisDeps dependencies
 	for current != nil {
-		thisDeps, err = b.resolveColumnInScope(current, colName)
+		thisDeps, err = b.resolveColumnInScope(current, colName, allowMulti)
 		if err != nil {
 			err = makeAmbiguousError(colName, err)
 			return dependency{}, err
@@ -172,7 +184,7 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope) (deps
 	return dependency{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(colName))
 }
 
-func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName) (dependencies, error) {
+func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, allowMulti bool) (dependencies, error) {
 	var deps dependencies = &nothing{}
 	for _, table := range current.tables {
 		if !expr.Qualifier.IsEmpty() && !table.matches(expr.Qualifier) {
@@ -182,7 +194,7 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName) (
 		if err != nil {
 			return nil, err
 		}
-		deps, err = thisDeps.merge(deps)
+		deps, err = thisDeps.merge(deps, allowMulti)
 		if err != nil {
 			return nil, err
 		}

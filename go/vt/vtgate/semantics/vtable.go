@@ -45,7 +45,7 @@ func (v *vTableInfo) dependencies(colName string, org originable) (dependencies,
 		directDeps, recursiveDeps, qt := org.depsForExpr(v.cols[i])
 
 		newDeps := createCertain(directDeps, recursiveDeps, qt)
-		deps, err = deps.merge(newDeps)
+		deps, err = deps.merge(newDeps, false)
 		if err != nil {
 			return nil, err
 		}
@@ -97,7 +97,7 @@ func (v *vTableInfo) hasStar() bool {
 }
 
 // GetTables implements the TableInfo interface
-func (v *vTableInfo) getTableSet(org originable) TableSet {
+func (v *vTableInfo) getTableSet(_ originable) TableSet {
 	return v.tables
 }
 

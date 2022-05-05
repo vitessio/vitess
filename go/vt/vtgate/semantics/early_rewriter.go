@@ -25,9 +25,25 @@ import (
 )
 
 type earlyRewriter struct {
+	binder  *binder
 	scoper  *scoper
 	clause  string
 	warning string
+}
+
+func (b *binder) prepareUsingMap() (result map[TableSet]map[string]TableSet) {
+	result = map[TableSet]map[string]TableSet{}
+	for colName, tss := range b.colidentDeps {
+		for _, ts := range tss.Constituents() {
+			m := result[ts]
+			if m == nil {
+				m = map[string]TableSet{}
+			}
+			m[colName] = tss
+			result[ts] = m
+		}
+	}
+	return
 }
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
@@ -37,7 +53,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		if !isSel {
 			return nil
 		}
-		tables := r.scoper.currentScope().tables
+		currentScope := r.scoper.currentScope()
 		var selExprs sqlparser.SelectExprs
 		changed := false
 		for _, selectExpr := range node {
@@ -46,7 +62,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 				selExprs = append(selExprs, selectExpr)
 				continue
 			}
-			starExpanded, colNames, err := expandTableColumns(tables, starExpr)
+			starExpanded, colNames, err := expandTableColumns(starExpr, currentScope.tables, r.binder.prepareUsingMap(), r.scoper.org)
 			if err != nil {
 				return err
 			}
@@ -149,7 +165,7 @@ func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
 	}, nil).(sqlparser.Expr)
 }
 
-func expandTableColumns(tables []TableInfo, starExpr *sqlparser.StarExpr) (bool, sqlparser.SelectExprs, error) {
+func expandTableColumns(starExpr *sqlparser.StarExpr, tables []TableInfo, joinUsing map[TableSet]map[string]TableSet, org originable) (bool, sqlparser.SelectExprs, error) {
 	unknownTbl := true
 	var colNames sqlparser.SelectExprs
 	starExpanded := true
@@ -169,7 +185,21 @@ func expandTableColumns(tables []TableInfo, starExpr *sqlparser.StarExpr) (bool,
 
 		withAlias := len(tables) > 1
 		withQualifier := withAlias || !tbl.getExpr().As.IsEmpty()
+		currTable := tbl.getTableSet(org)
+		usingCols := joinUsing[currTable]
+		if usingCols == nil {
+			usingCols = map[string]TableSet{}
+		}
 		for _, col := range tbl.getColumns() {
+			ts, found := usingCols[col.Name]
+			if found {
+				constituents := ts.Constituents()
+				if !constituents[0].Equals(currTable) {
+					// we only expand columns for the first table that uses this column in an using join
+					continue
+				}
+			}
+
 			var colName *sqlparser.ColName
 			var alias sqlparser.ColIdent
 			if withQualifier {

@@ -40,10 +40,11 @@ type (
 	}
 
 	scope struct {
-		parent  *scope
-		stmt    sqlparser.Statement
-		tables  []TableInfo
-		isUnion bool
+		parent    *scope
+		stmt      sqlparser.Statement
+		tables    []TableInfo
+		isUnion   bool
+		joinUsing map[string]TableSet
 	}
 )
 

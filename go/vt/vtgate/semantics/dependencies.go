@@ -28,7 +28,7 @@ type (
 	dependencies interface {
 		empty() bool
 		get() (dependency, error)
-		merge(dependencies) (dependencies, error)
+		merge(other dependencies, allowMulti bool) (dependencies, error)
 	}
 	dependency struct {
 		direct    TableSet
@@ -84,7 +84,7 @@ func (u *uncertain) get() (dependency, error) {
 	return u.dependency, nil
 }
 
-func (u *uncertain) merge(d dependencies) (dependencies, error) {
+func (u *uncertain) merge(d dependencies, _ bool) (dependencies, error) {
 	switch d := d.(type) {
 	case *nothing:
 		return u, nil
@@ -108,17 +108,21 @@ func (c *certain) get() (dependency, error) {
 	return c.dependency, nil
 }
 
-func (c *certain) merge(d dependencies) (dependencies, error) {
+func (c *certain) merge(d dependencies, allowMulti bool) (dependencies, error) {
 	switch d := d.(type) {
-	case *nothing, *uncertain:
-		return c, nil
 	case *certain:
 		if d.recursive == c.recursive {
 			return c, nil
 		}
+		if !allowMulti {
+			return nil, ambigousErr
+		}
+		c.direct.MergeInPlace(d.direct)
+		c.recursive.MergeInPlace(d.recursive)
+		return c, nil
 	}
 
-	return nil, ambigousErr
+	return c, nil
 }
 
 func (n *nothing) empty() bool {
@@ -129,6 +133,6 @@ func (n *nothing) get() (dependency, error) {
 	return dependency{}, nil
 }
 
-func (n *nothing) merge(d dependencies) (dependencies, error) {
+func (n *nothing) merge(d dependencies, _ bool) (dependencies, error) {
 	return d, nil
 }

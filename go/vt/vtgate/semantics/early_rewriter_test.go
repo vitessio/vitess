@@ -63,6 +63,28 @@ func TestExpandStar(t *testing.T) {
 				}},
 				ColumnListAuthoritative: false,
 			},
+			"t4": {
+				Name: sqlparser.NewTableIdent("t4"),
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewColIdent("c1"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewColIdent("c4"),
+					Type: sqltypes.VarChar,
+				}},
+				ColumnListAuthoritative: true,
+			},
+			"t5": {
+				Name: sqlparser.NewTableIdent("t5"),
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewColIdent("a"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewColIdent("b"),
+					Type: sqltypes.VarChar,
+				}},
+				ColumnListAuthoritative: true,
+			},
 		},
 	}
 	cDB := "db"
@@ -106,6 +128,21 @@ func TestExpandStar(t *testing.T) {
 	}, {
 		sql:    "select foo.* from t1, t2",
 		expErr: "Unknown table 'foo'",
+	}, {
+		sql:    "select * from t1 join t2 on t1.a = t2.c1",
+		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2 from t1 join t2 on t1.a = t2.c1",
+	}, {
+		sql:    "select * from t2 join t4 using (c1)",
+		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4 from t2 join t4 using (c1)",
+	}, {
+		sql:    "select * from t2 join t4 using (c1), t2b join t4b using (c1)",
+		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4 from t2 join t4 using (c1)",
+	}, {
+		sql:    "select * from t2 join t4 using (c1) join t2 as X using (c1)",
+		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4 from t2 join t4 using (c1)",
+	}, {
+		sql:    "select * from t2 join t4 using (c1), t2 as t2b join t4 as t4b using (c1)",
+		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4, t2b.c1 as c1, t2b.c2 as c2, t4b.c4 as c4",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
