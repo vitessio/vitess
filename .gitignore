@@ -29,6 +29,7 @@ tags
 
 # C build dirs
 **/build
+!go/vt/vtadmin/web/build
 
 # generated protobuf files
 /go/vt/.proto.tmp
