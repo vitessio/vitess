@@ -108,14 +108,14 @@ func TestCreateTableDiff(t *testing.T) {
 			from:  "create table t1 (id int primary key, `i` int not null default 0)",
 			to:    "create table t2 (id int primary key, `i` bigint unsigned default null)",
 			diff:  "alter table t1 modify column i bigint unsigned",
-			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `i` bigint UNSIGNED",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `i` bigint unsigned",
 		},
 		{
 			name:  "added column, dropped column, modified column",
 			from:  "create table t1 (id int primary key, `i` int not null default 0, c char(3) default '')",
 			to:    "create table t2 (id int primary key, ts timestamp null, `i` bigint unsigned default null)",
 			diff:  "alter table t1 drop column c, modify column i bigint unsigned, add column ts timestamp null after id",
-			cdiff: "ALTER TABLE `t1` DROP COLUMN `c`, MODIFY COLUMN `i` bigint UNSIGNED, ADD COLUMN `ts` timestamp NULL AFTER `id`",
+			cdiff: "ALTER TABLE `t1` DROP COLUMN `c`, MODIFY COLUMN `i` bigint unsigned, ADD COLUMN `ts` timestamp NULL AFTER `id`",
 		},
 		// columns, reordering
 		{
@@ -660,6 +660,13 @@ func TestCreateTableDiff(t *testing.T) {
 			cdiff: "ALTER TABLE `t` MODIFY COLUMN `t1` varchar(128) NOT NULL, MODIFY COLUMN `t2` varchar(128) NOT NULL, MODIFY COLUMN `t3` tinytext, CHARSET utf8mb4",
 		},
 		{
+			name:  "normalized unsigned attribute",
+			from:  "create table t1 (id int primary key)",
+			to:    "create table t1 (id int unsigned primary key)",
+			diff:  "alter table t1 modify column id int unsigned primary key",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `id` int unsigned PRIMARY KEY",
+		},
+		{
 			name:  "normalized ENGINE InnoDB value",
 			from:  "create table t1 (id int primary key) character set=utf8",
 			to:    "create table t1 (id int primary key) engine=innodb, character set=utf8",
@@ -926,6 +933,12 @@ func TestNormalize(t *testing.T) {
 			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
 		},
 		{
+			name: "keeps not exist",
+			from: "create table if not exists t (id int primary key, i int)",
+			to:   "CREATE TABLE IF NOT EXISTS `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+		},
+
+		{
 			name: "timestamp null",
 			from: "create table t (id int primary key, t timestamp null)",
 			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`t` timestamp NULL\n)",
@@ -949,6 +962,11 @@ func TestNormalize(t *testing.T) {
 			name: "removes int sizes",
 			from: "create table t (id int primary key, i int(11) default null)",
 			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+		},
+		{
+			name: "removes zerofill and maps to unsigned",
+			from: "create table t (id int primary key, i int zerofill default null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int unsigned\n)",
 		},
 		{
 			name: "removes int sizes case insensitive",
