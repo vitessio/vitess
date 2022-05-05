@@ -142,12 +142,12 @@ func TestDurabilityPolicyField(t *testing.T) {
 	out, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("CreateKeyspace", "--", "--durability_policy=semi_sync", "ks_durability")
 	require.NoError(t, err, out)
 
-	var keyspace topodata.Keyspace
-	out, err = clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetKeyspace", "ks_durability")
+	checkDurabilityPolicy(t, "semi_sync")
+
+	out, err = clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", "--", "--durability_policy=none", "ks_durability")
 	require.NoError(t, err, out)
-	err = json.Unmarshal([]byte(out), &keyspace)
-	require.NoError(t, err)
-	require.Equal(t, keyspace.DurabilityPolicy, "semi_sync")
+
+	checkDurabilityPolicy(t, "none")
 
 	out, err = clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("DeleteKeyspace", "ks_durability")
 	require.NoError(t, err, out)
@@ -155,14 +155,24 @@ func TestDurabilityPolicyField(t *testing.T) {
 	out, err = clusterForKSTest.VtctlProcess.ExecuteCommandWithOutput("CreateKeyspace", "--", "--durability_policy=semi_sync", "ks_durability")
 	require.NoError(t, err, out)
 
-	out, err = clusterForKSTest.VtctlProcess.ExecuteCommandWithOutput("GetKeyspace", "ks_durability")
+	checkDurabilityPolicy(t, "semi_sync")
+
+	out, err = clusterForKSTest.VtctlProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", "--", "--durability_policy=none", "ks_durability")
 	require.NoError(t, err, out)
-	err = json.Unmarshal([]byte(out), &keyspace)
-	require.NoError(t, err)
-	require.Equal(t, keyspace.DurabilityPolicy, "semi_sync")
+
+	checkDurabilityPolicy(t, "none")
 
 	out, err = clusterForKSTest.VtctlProcess.ExecuteCommandWithOutput("DeleteKeyspace", "ks_durability")
 	require.NoError(t, err, out)
+}
+
+func checkDurabilityPolicy(t *testing.T, durabilityPolicy string) {
+	var keyspace topodata.Keyspace
+	out, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetKeyspace", "ks_durability")
+	require.NoError(t, err, out)
+	err = json.Unmarshal([]byte(out), &keyspace)
+	require.NoError(t, err)
+	require.Equal(t, keyspace.DurabilityPolicy, durabilityPolicy)
 }
 
 func TestGetSrvKeyspaceNames(t *testing.T) {
