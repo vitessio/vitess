@@ -87,7 +87,7 @@ func NewSchemaFromStatements(statements []sqlparser.Statement) (*Schema, error) 
 func NewSchemaFromQueries(queries []string) (*Schema, error) {
 	statements := []sqlparser.Statement{}
 	for _, q := range queries {
-		stmt, err := sqlparser.Parse(q)
+		stmt, err := sqlparser.ParseStrictDDL(q)
 		if err != nil {
 			return nil, err
 		}
@@ -102,7 +102,7 @@ func NewSchemaFromSQL(sql string) (*Schema, error) {
 	statements := []sqlparser.Statement{}
 	tokenizer := sqlparser.NewStringTokenizer(sql)
 	for {
-		stmt, err := sqlparser.ParseNext(tokenizer)
+		stmt, err := sqlparser.ParseNextStrictDDL(tokenizer)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				break
