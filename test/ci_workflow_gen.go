@@ -52,9 +52,9 @@ var (
 		"ers_prs_newfeatures_heavy",
 		"15",
 		"shardedrecovery_stress_verticalsplit_heavy",
-		"17",
+		"vtgate_general_heavy",
 		"19",
-		"20",
+		"xb_backup",
 		"21",
 		"22",
 		"worker_vault_heavy",
@@ -92,7 +92,7 @@ var (
 		"vtgate_topo_etcd",
 		"vtgate_transaction",
 		"vtgate_unsharded",
-		"vtgate_vindex",
+		"vtgate_vindex_heavy",
 		"vtgate_vschema",
 		"vtgate_queries",
 		"vtgate_schema_tracker",
@@ -116,7 +116,7 @@ var (
 	}
 	clusterDockerList           = []string{}
 	clustersRequiringXtraBackup = []string{
-		"20",
+		"xb_backup",
 		"xb_recovery",
 	}
 	clustersRequiringMakeTools = []string{
