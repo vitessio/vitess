@@ -853,6 +853,7 @@ func TestInsertSharded(t *testing.T) {
 	}}
 	assertQueries(t, sbclookup, wantQueries)
 
+	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0)
 	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(name, user_id) values(:name_0, :user_id_0)", 1)
 	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into user(id, v, name) values (1, 2, 'myname')", 1)
 
@@ -878,6 +879,7 @@ func TestInsertSharded(t *testing.T) {
 		},
 	}}
 	assertQueries(t, sbclookup, wantQueries)
+	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 2)
 	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(name, user_id) values(:name_0, :user_id_0)", 1)
 	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into user(id, v, name) values (3, 2, 'myname2')", 1)
 
@@ -893,6 +895,7 @@ func TestInsertSharded(t *testing.T) {
 		},
 	}}
 	assertQueries(t, sbc1, wantQueries)
+	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 3)
 	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_lastname_keyspace_id_map(name, lastname, keyspace_id) values(:name_0, :lastname_0, :keyspace_id_0)", 1)
 	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into user2(id, name, lastname) values (2, 'myname', 'mylastname')", 1)
 
@@ -925,6 +928,7 @@ func TestInsertSharded(t *testing.T) {
 	}}
 	assertQueries(t, sbclookup, wantQueries)
 
+	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 3)
 	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
 	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into `user`(id, v, `name`) values (:vtg1, :vtg2, _binary :vtg3)", 1)
 }
@@ -1334,6 +1338,9 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 func TestInsertAutoincUnsharded(t *testing.T) {
 	router, _, _, sbclookup := createExecutorEnv()
 
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
 	// Fake a mysql auto-inc response.
 	query := "insert into simple(val) values ('val')"
 	wantResult := &sqltypes.Result{
@@ -1353,6 +1360,8 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 	}}
 	assertQueries(t, sbclookup, wantQueries)
 	assert.Equal(t, result, wantResult)
+
+	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into simple(val) values ('val')", 1)
 }
 
 func TestInsertLookupOwned(t *testing.T) {
@@ -2145,8 +2154,8 @@ func TestTestPartialVindexInsertQueryFailure(t *testing.T) {
 	wantQ[1].Sql = "insert into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_1, :keyspace_id_1)"
 	assertQueriesWithSavepoint(t, sbc2, wantQ)
 
-	testQueryLogWithSavepoint(t, logChan, "TestExecute", "BEGIN", "begin", 0, true)
-	testQueryLogWithSavepoint(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0, true)
-	testQueryLogWithSavepoint(t, logChan, "VindexCreate", "SAVEPOINT_ROLLBACK", "rollback to x", 0, true)
-	testQueryLogWithSavepoint(t, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 1), (2, 3)", 0, true)
+	testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0)
+	testQueryLog(t, logChan, "VindexCreate", "SAVEPOINT_ROLLBACK", "rollback to x", 0)
+	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 1), (2, 3)", 0)
 }
