@@ -257,7 +257,7 @@ func (ii *Insights) logToKafka(logger *streamlog.StreamLogger) error {
 		Addr:        kafka.TCP(ii.Brokers...),
 		Balancer:    &kafka.Murmur2Balancer{},
 		Transport:   transport,
-		Compression: kafka.Lz4,
+		Compression: kafka.Snappy,
 		// Setting acks=1, so that we lose fewer messages when partition leadership changes (which happens when a broker restarts, for example).
 		// If we find ourselves unable to produce messages quickly enough, we can set this to kafka.None
 		RequiredAcks: kafka.RequireOne,
