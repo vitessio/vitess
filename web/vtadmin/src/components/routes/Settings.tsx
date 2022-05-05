@@ -11,10 +11,10 @@ import { TabContainer } from '../tabs/TabContainer';
 import { TextInput } from '../TextInput';
 import Toggle from '../toggle/Toggle';
 import { Tooltip } from '../tooltip/Tooltip';
-import style from './Debug.module.scss';
+import style from './Settings.module.scss';
 
 /* eslint-disable jsx-a11y/anchor-is-valid */
-export const Debug = () => {
+export const Settings = () => {
     useDocumentTitle('Debug');
     const [theme, setTheme] = useTheme();
     const [formData, setFormData] = React.useState<{ [key: string]: any }>({});

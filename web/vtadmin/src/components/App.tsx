@@ -18,7 +18,7 @@ import { BrowserRouter as Router, Redirect, Route, Switch } from 'react-router-d
 
 import style from './App.module.scss';
 import { Tablets } from './routes/Tablets';
-import { Debug } from './routes/Debug';
+import { Settings } from './routes/Settings';
 import { NavRail } from './NavRail';
 import { Error404 } from './routes/Error404';
 import { Clusters } from './routes/Clusters';
@@ -108,7 +108,7 @@ export const App = () => {
                         </Route>
 
                         <Route path="/settings">
-                            <Debug />
+                            <Settings />
                         </Route>
 
                         <Redirect exact from="/" to="/tablets" />
