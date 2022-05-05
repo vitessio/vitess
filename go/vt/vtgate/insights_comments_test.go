@@ -21,23 +21,23 @@ func TestCommentSplitting(t *testing.T) {
 		},
 		{
 			"hello world /* unterminated comment",
-			"hello world",
-			[]string{"unterminated comment"},
+			"hello world /* unterminated comment",
+			nil,
 		},
 		{
 			"before/* comment */after",
-			"before after",
-			[]string{"comment"},
+			"before/* comment */after",
+			nil,
 		},
 		{
 			"/* now */ hello /* three */ world /* comments */",
-			"hello world",
-			[]string{"now", "three", "comments"},
+			"hello /* three */ world",
+			[]string{"now", "comments"},
 		},
 		{
 			"/*/*/*/*///***/*/***///**/",
-			"* * /",
-			[]string{"/", "///**", "*", ""},
+			"*/*///***/*/***//",
+			[]string{"/", ""},
 		},
 		{
 			" no\tcomments\t",
@@ -86,11 +86,11 @@ func TestCommentTags(t *testing.T) {
 }
 
 func TestCommentTagsUgly(t *testing.T) {
-	sql := ` /*one='1' , two='2' */ SELECT /* th%2dree= ' 3 '*/* FROM hello/*	four='4\'s a great n\umber'*//* five ='5\\cinco' ,, six='%foo'  */`
+	sql := ` /*one='1' , two='2' */ SELECT * FROM hello/*th%2dree= ' 3 ',    four='4\'s a great n\umber', five ='5\\cinco' ,, six='%foo'  */`
 
 	q, comments := splitComments(sql)
 	assert.Equal(t, "SELECT * FROM hello", q)
-	assert.Equal(t, []string{"one='1' , two='2'", "th%2dree= ' 3 '", `four='4\'s a great n\umber'`, `five ='5\\cinco' ,, six='%foo'`}, comments)
+	assert.Equal(t, []string{"one='1' , two='2'", `th%2dree= ' 3 ',    four='4\'s a great n\umber', five ='5\\cinco' ,, six='%foo'`}, comments)
 
 	tags := parseCommentTags(comments)
 	assert.Equal(t, []*pbvtgate.Query_Tag{

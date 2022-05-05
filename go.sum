@@ -640,8 +640,8 @@ github.com/planetscale/common-libs v0.0.2 h1:Ui4pL0YHp3M4L0aID+Ejg7Qg6NDtkSg5J/v
 github.com/planetscale/common-libs v0.0.2/go.mod h1:IqMEVH7+Xq57Zx+OVeZ2GpRd0+gN3kBM6MHjo/BndlU=
 github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a h1:y0OpQ4+5tKxeh9+H+2cVgASl9yMZYV9CILinKOiKafA=
 github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a/go.mod h1:GJFUzQuXIoB2Kjn1ZfDhJr/42D5nWOqRcIQVgCxTuIE=
-github.com/planetscale/psevents v0.0.0-20220415134050-eec288c0df27 h1:DzPMAb5HjEQ//L9vWQepPHcPsAdNAidME6IkYU50GN4=
-github.com/planetscale/psevents v0.0.0-20220415134050-eec288c0df27/go.mod h1:2yqEdV/4PFyzfv/d4aA/0SNKfQ3e1zKZodDyNHZXLeA=
+github.com/planetscale/psevents v0.0.0-20220505072709-238f3799dfa0 h1:tjHp0j4bQKxDqdlipy/kF3YC+IshHjYUQtX+jMq5xHA=
+github.com/planetscale/psevents v0.0.0-20220505072709-238f3799dfa0/go.mod h1:2yqEdV/4PFyzfv/d4aA/0SNKfQ3e1zKZodDyNHZXLeA=
 github.com/planetscale/vtprotobuf v0.3.0 h1:oMrOdDFHS1ADc0dHtC2EApxiM5xd0cQkZeibm0WgXiQ=
 github.com/planetscale/vtprotobuf v0.3.0/go.mod h1:wm1N3qk9G/4+VM1WhpkLbvY/d8+0PbwYYpP5P5VhTks=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
@@ -767,8 +767,6 @@ github.com/tinylib/msgp v1.1.1/go.mod h1:+d+yLhGm8mzTaHzB+wgMYrodPfmZrzkirds8fDW
 github.com/tmc/grpc-websocket-proxy v0.0.0-20170815181823-89b8d40f7ca8/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/tv42/httpunix v0.0.0-20150427012821-b75d8614f926/go.mod h1:9ESjWnEqriFuLhtthL60Sar/7RFoluCcXsuvEwTV5KM=
-github.com/twmb/murmur3 v1.1.6 h1:mqrRot1BRxm+Yct+vavLMou2/iJt0tNVTTC0QoIjaZg=
-github.com/twmb/murmur3 v1.1.6/go.mod h1:Qq/R7NUyOfr65zD+6Q5IHKsJLwP7exErjN6lyyq3OSQ=
 github.com/uber-go/atomic v1.4.0 h1:yOuPqEq4ovnhEjpHmfFwsqBXDYbQeT6Nb0bwD6XnD5o=
 github.com/uber-go/atomic v1.4.0/go.mod h1:/Ct5t2lcmbJ4OSe/waGBoaVvVqtO0bmtfVNex1PFV8g=
 github.com/uber/jaeger-client-go v2.16.0+incompatible h1:Q2Pp6v3QYiocMxomCaJuwQGFt7E53bPYqEgug/AoBtY=

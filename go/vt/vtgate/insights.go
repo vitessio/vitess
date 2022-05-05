@@ -20,15 +20,18 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
+	math2 "math"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/twmb/murmur3"
+	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/vt/sqlparser"
+
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"github.com/pkg/errors"
 
@@ -37,7 +40,6 @@ import (
 	pbvtgate "github.com/planetscale/psevents/go/vtgate/v1"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl/scram"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -136,7 +138,7 @@ var (
 
 	// insightsPatternLimit is the maximum number of query patterns to track between flushes.  The first N patterns are tracked, and anything beyond
 	// that is silently dropped until the next flush time.
-	insightsPatternLimit = flag.Uint("insights_pattern_limit", 10000, "Maximum number of unique patterns to track in a flush interval")
+	insightsPatternLimit = flag.Uint("insights_pattern_limit", 1000, "Maximum number of unique patterns to track in a flush interval")
 
 	// databaseBranchPublicID is api-bb's name for the database branch this cluster hosts
 	databaseBranchPublicID = flag.String("database_branch_public_id", "", "The public ID of the database branch this cluster hosts, used for Insights")
@@ -194,7 +196,7 @@ func (ii *Insights) Drain() bool {
 		return true
 	}
 
-	ii.LogChan <- nil
+	close(ii.LogChan)
 	ii.Workers.Wait()
 	return ii.LogChan == nil
 }
@@ -279,17 +281,21 @@ func (ii *Insights) logToKafka(logger *streamlog.StreamLogger) error {
 	ii.Workers.Add(1)
 	ii.Timer = time.NewTicker(ii.Interval)
 	go func() {
+		defer func() {
+			logger.Unsubscribe(ii.LogChan)
+			ii.LogChan = nil
+			ii.Timer.Stop()
+			ii.Workers.Done()
+		}()
 		for {
 			select {
-			case record := <-ii.LogChan:
-				if record == nil {
-					logger.Unsubscribe(ii.LogChan)
-					ii.LogChan = nil
-					ii.Timer.Stop()
-					ii.Workers.Done()
+			case record, ok := <-ii.LogChan:
+				if !ok {
+					// eof means someone called Drain to kill this worker
 					return
 				}
-				if _, ok := record.(*mockTimer); ok {
+				if record == nil {
+					// unit tests send a nil record to emulate a 15s heartbeat
 					ii.sendAggregates()
 				} else {
 					ii.handleMessage(record)
@@ -317,12 +323,13 @@ func (ii *Insights) handleMessage(record interface{}) {
 		// comments with /**/ markers are present in the normalized ls.SQL, and we need to split them off.
 		// comments with -- markers get stripped when newExecute calls getPlan around plan_execute.go:63.
 		sql, comments = splitComments(ls.SQL)
-		sql = compactSets(sql)
+		sql, ls.Error = normalizeSQL(sql)
 	} else {
 		sql = "<error>"
-		if ls.StmtType == "" {
-			ls.StmtType = "ERROR"
-		}
+	}
+
+	if ls.Error != nil && ls.StmtType == "" {
+		ls.StmtType = "ERROR"
 	}
 
 	ii.addToAggregates(ls, sql)
@@ -346,8 +353,8 @@ func (ii *Insights) handleMessage(record interface{}) {
 }
 
 func (ii *Insights) makeKafkaKey(sql string) string {
-	h := murmur3.Sum32([]byte(sql))
-	return ii.DatabaseBranchPublicID + "/" + strconv.FormatUint(uint64(h), 16)
+	h := hack.RuntimeStrhash(sql, 0x1122334455667788) & math2.MaxUint32
+	return ii.DatabaseBranchPublicID + "/" + strconv.FormatUint(h, 16)
 }
 
 func (ii *Insights) reserveAndSend(buf []byte, topic, key string) bool {
@@ -509,14 +516,14 @@ func (ii *Insights) makeQueryMessage(ls *LogStats, sql string, tags []*pbvtgate.
 	}
 
 	var out []byte
+	var err error
 	if ii.KafkaText {
-		out = []byte(obj.String())
+		out, err = prototext.Marshal(&obj)
 	} else {
-		var err error
-		out, err = proto.Marshal(&obj)
-		if err != nil {
-			return nil, err
-		}
+		out, err = obj.MarshalVT()
+	}
+	if err != nil {
+		return nil, err
 	}
 	return ii.makeEnvelope(out, queryTopic)
 }
@@ -551,14 +558,14 @@ func (ii *Insights) makeQueryPatternMessage(sql, keyspace string, pa *QueryPatte
 	}
 
 	var out []byte
+	var err error
 	if ii.KafkaText {
-		out = []byte(obj.String())
+		out, err = prototext.Marshal(&obj)
 	} else {
-		var err error
-		out, err = proto.Marshal(&obj)
-		if err != nil {
-			return nil, err
-		}
+		out, err = obj.MarshalVT()
+	}
+	if err != nil {
+		return nil, err
 	}
 	return ii.makeEnvelope(out, queryStatsBundleTopic)
 }
@@ -572,25 +579,37 @@ func (ii *Insights) makeEnvelope(contents []byte, topic string) ([]byte, error) 
 	}
 
 	if ii.KafkaText {
-		return []byte(envelope.String()), nil
+		return prototext.Marshal(&envelope)
 	}
-	return proto.Marshal(&envelope)
+	return envelope.MarshalVT()
 }
 
-// a list like ":v1, :v2, :v3"
-const simpleListRegexp = `:[a-z]+\d+(?:,\s*:[a-z]+\d+)*`
-
-// a nested list like "(:v1, :v2), (:v3, :v4), (:v5, :v6)"
-const nestedListRegexp = `\(` + simpleListRegexp + `\)(?:,\s*\(` + simpleListRegexp + `\))*`
-
-// a string like "in (...)" containing either of the list types above
-var reSetCompactor = regexp.MustCompile(`(?i)\bin \((?:` + simpleListRegexp + `|` + nestedListRegexp + `)\)`)
-
-func compactSets(sql string) string {
-	if reSetCompactor.MatchString(sql) {
-		return reSetCompactor.ReplaceAllLiteralString(sql, "in (<elements>)")
+func normalizeSQL(sql string) (string, error) {
+	stmt, err := sqlparser.Parse(sql)
+	if err != nil {
+		// should never happen since the SQL was already processed
+		return "<error>", err
 	}
-	return sql
+
+	buf := sqlparser.NewTrackedBuffer(func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
+		switch node := node.(type) {
+		case *sqlparser.ComparisonExpr:
+			if node.Operator == sqlparser.InOp {
+				buf.Myprintf("%l in (<elements>)", node.Left)
+			} else {
+				node.Format(buf)
+			}
+		case sqlparser.Values:
+			buf.WriteString("values <values>")
+		case *sqlparser.Savepoint:
+			buf.WriteString("savepoint <id>")
+		case *sqlparser.Release:
+			buf.WriteString("release savepoint <id>")
+		default:
+			node.Format(buf)
+		}
+	})
+	return buf.WriteNode(stmt).String(), nil
 }
 
 func stringOrNil(s string) *wrapperspb.StringValue {
@@ -607,9 +626,7 @@ func durationOrNil(d time.Duration) *durationpb.Duration {
 	return durationpb.New(d)
 }
 
-type mockTimer struct{}
-
 func (ii *Insights) MockTimer() {
-	// Send a *mockTimer to the LogChan to force a flush.  Only for use in unit tests.
-	ii.LogChan <- &mockTimer{}
+	// Send a nil to the LogChan to force a flush.  Only for use in unit tests.
+	ii.LogChan <- nil
 }

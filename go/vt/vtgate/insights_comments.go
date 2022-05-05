@@ -4,6 +4,8 @@ import (
 	"net/url"
 	"strings"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	pbvtgate "github.com/planetscale/psevents/go/vtgate/v1"
 )
 
@@ -11,32 +13,19 @@ import (
 // a block of non-comments SQL and an array of 0 or more comment sections.  The
 // returned comment strings do not include the /**/ markers.
 func splitComments(sql string) (string, []string) {
-	sb := strings.Builder{}
+	s, mc := sqlparser.SplitMarginComments(sql)
 	var comments []string
-	var tok []string
-	for tok = strings.SplitN(sql, "/*", 2); len(tok) == 2; tok = strings.SplitN(sql, "/*", 2) {
-		tok[0] = strings.TrimSpace(tok[0])
-		if sb.Len() > 0 && len(tok[0]) > 0 {
-			sb.WriteByte(' ')
-		}
-		sb.WriteString(tok[0])
 
-		tok = strings.SplitN(tok[1], "*/", 2)
-		comments = append(comments, strings.TrimSpace(tok[0]))
-		if len(tok) == 2 {
-			sql = tok[1]
-		} else {
-			sql = ""
-		}
+	if mc.Leading != "" {
+		comments = append(comments,
+			strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(mc.Leading), "/*"), "*/")))
+	}
+	if mc.Trailing != "" {
+		comments = append(comments,
+			strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(mc.Trailing), "/*"), "*/")))
 	}
 
-	tok[0] = strings.TrimSpace(tok[0])
-	if sb.Len() > 0 && len(tok[0]) > 0 {
-		sb.WriteByte(' ')
-	}
-	sb.WriteString(tok[0])
-
-	return sb.String(), comments
+	return s, comments
 }
 
 // parseCommentTags parses sqlcommenter-style key-value pairs out of an array of comments,

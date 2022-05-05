@@ -356,24 +356,3 @@ func TestCachingSha2Password(t *testing.T) {
 		t.Errorf("Logged in user is not sha2user")
 	}
 }
-
-func TestClientInfo(t *testing.T) {
-	const infoPrepared = "Statement prepared"
-
-	ctx := context.Background()
-	params := connParams
-	params.EnableQueryInfo = true
-	conn, err := mysql.Connect(ctx, &params)
-	require.NoError(t, err)
-
-	defer conn.Close()
-
-	// This is the simplest query that would return some textual data in the 'info' field
-	result, err := conn.ExecuteFetch(`PREPARE stmt1 FROM 'SELECT 1 = 1'`, -1, true)
-	if err != nil {
-		t.Fatalf("select failed: %v", err)
-	}
-	if result.Info != infoPrepared {
-		t.Fatalf("expected result.Info=%q, got=%q", infoPrepared, result.Info)
-	}
-}
