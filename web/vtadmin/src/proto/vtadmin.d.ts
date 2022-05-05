@@ -9566,6 +9566,9 @@ export namespace topodata {
 
         /** Keyspace snapshot_time */
         snapshot_time?: (vttime.ITime|null);
+
+        /** Keyspace durability_policy */
+        durability_policy?: (string|null);
     }
 
     /** Represents a Keyspace. */
@@ -9594,6 +9597,9 @@ export namespace topodata {
 
         /** Keyspace snapshot_time. */
         public snapshot_time?: (vttime.ITime|null);
+
+        /** Keyspace durability_policy. */
+        public durability_policy: string;
 
         /**
          * Creates a new Keyspace instance using the specified properties.
