@@ -137,7 +137,8 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-// TestDurabilityPolicyField
+// TestDurabilityPolicyField tests that the DurabilityPolicy field of a keyspace can be set during creation, read and updated later
+// from vtctld server and the vtctl binary
 func TestDurabilityPolicyField(t *testing.T) {
 	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterForKSTest.VtctldProcess.GrpcPort, clusterForKSTest.TmpDirectory)
 
