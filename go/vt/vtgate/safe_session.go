@@ -45,6 +45,7 @@ type SafeSession struct {
 	// executed. If there was a subsequent failure, if we have a savepoint we rollback to that.
 	// Otherwise, the transaction is rolled back.
 	rollbackOnPartialExec string
+	savepointName         string
 
 	// this is a signal that found_rows has already been handles by the primitives,
 	// and doesn't have to be updated by the executor
@@ -88,8 +89,12 @@ type savepointState int
 
 const (
 	savepointStateNotSet = savepointState(iota)
-	savepointNeeded
+	// savepointNotNeeded - savepoint is not required
 	savepointNotNeeded
+	// savepointNeeded - savepoint may be required
+	savepointNeeded
+	// savepointRollback - rollback happened on the savepoint
+	savepointRollback
 )
 
 // NewSafeSession returns a new SafeSession based on the Session
@@ -206,12 +211,20 @@ func (session *SafeSession) SetSavepointState(spNeed bool) {
 	}
 }
 
-// InsertSavepoints returns true if we should insert savepoints.
-func (session *SafeSession) InsertSavepoints() bool {
+// CanAddSavepoint returns true if we should insert savepoint and there is no existing savepoint.
+func (session *SafeSession) CanAddSavepoint() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
-	return session.savepointState == savepointNeeded
+	return session.savepointState == savepointNeeded && session.savepointName == ""
+}
+
+// SavepointRollbackNotSet returns true if rollback to savepoint can be done.
+func (session *SafeSession) SavepointRollbackNotSet() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	return session.savepointState == savepointNeeded && session.rollbackOnPartialExec == "" && session.savepointName != ""
 }
 
 // SetCommitOrder sets the commit order.

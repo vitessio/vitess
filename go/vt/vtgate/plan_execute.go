@@ -238,6 +238,7 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *SafeSes
 	safeSession.rollbackOnPartialExec = ""
 	if rQuery != txRollback {
 		_, _, err := e.execute(ctx, safeSession, rQuery, bindVars, logStats)
+		safeSession.savepointState = savepointRollback
 		if err == nil {
 			return vterrors.New(vtrpcpb.Code_ABORTED, "reverted partial DML execution failure")
 		}
