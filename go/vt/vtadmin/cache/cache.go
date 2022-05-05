@@ -208,11 +208,6 @@ func (c *Cache[Key, Value]) backfill() {
 		case <-c.ctx.Done():
 			return
 		case req = <-c.backfills:
-			select {
-			case <-c.ctx.Done():
-				return
-			default:
-			}
 		}
 
 		if req.requestedAt.Add(c.cfg.BackfillRequestTTL).Before(time.Now()) {
