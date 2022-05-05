@@ -580,6 +580,7 @@ func main() {
 	log.Printf("Total time: %v", round(time.Since(startTime)))
 
 	if failed > 0 || skipped > 0 {
+		log.Printf("PRINTING AGAIN: %d PASSED, %d FLAKY, %d FAILED, %d SKIPPED", passed, flaky, failed, skipped)
 		os.Exit(1)
 	}
 }
