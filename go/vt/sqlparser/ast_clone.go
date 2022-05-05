@@ -235,6 +235,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfJtOnResponse(in)
 	case *KeyState:
 		return CloneRefOfKeyState(in)
+	case *LagLeadExpr:
+		return CloneRefOfLagLeadExpr(in)
 	case *Limit:
 		return CloneRefOfLimit(in)
 	case ListArg:
@@ -1533,6 +1535,21 @@ func CloneRefOfKeyState(n *KeyState) *KeyState {
 	return &out
 }
 
+// CloneRefOfLagLeadExpr creates a deep clone of the input.
+func CloneRefOfLagLeadExpr(n *LagLeadExpr) *LagLeadExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.IntValue = CloneRefOfInt(n.IntValue)
+	out.VarValue = CloneColIdent(n.VarValue)
+	out.Default = CloneExpr(n.Default)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
+	out.NullTreatmentClause = CloneRefOfNullTreatmentClause(n.NullTreatmentClause)
+	return &out
+}
+
 // CloneRefOfLimit creates a deep clone of the input.
 func CloneRefOfLimit(n *Limit) *Limit {
 	if n == nil {
@@ -2622,6 +2639,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfJSONValueMergeExpr(in)
 	case *JSONValueModifierExpr:
 		return CloneRefOfJSONValueModifierExpr(in)
+	case *LagLeadExpr:
+		return CloneRefOfLagLeadExpr(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
 	case *MemberOfExpr:
@@ -2850,6 +2869,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfJSONValueMergeExpr(in)
 	case *JSONValueModifierExpr:
 		return CloneRefOfJSONValueModifierExpr(in)
+	case *LagLeadExpr:
+		return CloneRefOfLagLeadExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -3004,6 +3025,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfJSONValueMergeExpr(in)
 	case *JSONValueModifierExpr:
 		return CloneRefOfJSONValueModifierExpr(in)
+	case *LagLeadExpr:
+		return CloneRefOfLagLeadExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -3441,6 +3464,15 @@ func CloneRefOfJtNestedPathColDef(n *JtNestedPathColDef) *JtNestedPathColDef {
 	return &out
 }
 
+// CloneRefOfInt creates a deep clone of the input.
+func CloneRefOfInt(n *int) *int {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
 // CloneTableAndLockTypes creates a deep clone of the input.
 func CloneTableAndLockTypes(n TableAndLockTypes) TableAndLockTypes {
 	if n == nil {
@@ -3451,15 +3483,6 @@ func CloneTableAndLockTypes(n TableAndLockTypes) TableAndLockTypes {
 		res = append(res, CloneRefOfTableAndLockType(x))
 	}
 	return res
-}
-
-// CloneRefOfInt creates a deep clone of the input.
-func CloneRefOfInt(n *int) *int {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
 }
 
 // CloneComments creates a deep clone of the input.

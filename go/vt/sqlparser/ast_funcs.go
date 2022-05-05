@@ -1425,6 +1425,18 @@ func (ty FirstOrLastValueExprType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty LagLeadExprType) ToString() string {
+	switch ty {
+	case LagExprType:
+		return LagExprStr
+	case LeadExprType:
+		return LeadExprStr
+	default:
+		return "Unknown LagLeadExprType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty JSONAttributeType) ToString() string {
 	switch ty {
 	case DepthAttributeType:

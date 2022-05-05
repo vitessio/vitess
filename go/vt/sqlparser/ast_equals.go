@@ -662,6 +662,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfKeyState(a, b)
+	case *LagLeadExpr:
+		b, ok := inB.(*LagLeadExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLagLeadExpr(a, b)
 	case *Limit:
 		b, ok := inB.(*Limit)
 		if !ok {
@@ -2530,6 +2536,24 @@ func EqualsRefOfKeyState(a, b *KeyState) bool {
 	return a.Enable == b.Enable
 }
 
+// EqualsRefOfLagLeadExpr does deep equals between the two objects.
+func EqualsRefOfLagLeadExpr(a, b *LagLeadExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.IsNull == b.IsNull &&
+		a.Type == b.Type &&
+		EqualsExpr(a.Expr, b.Expr) &&
+		EqualsRefOfInt(a.IntValue, b.IntValue) &&
+		EqualsColIdent(a.VarValue, b.VarValue) &&
+		EqualsExpr(a.Default, b.Default) &&
+		EqualsRefOfOverClause(a.OverClause, b.OverClause) &&
+		EqualsRefOfNullTreatmentClause(a.NullTreatmentClause, b.NullTreatmentClause)
+}
+
 // EqualsRefOfLimit does deep equals between the two objects.
 func EqualsRefOfLimit(a, b *Limit) bool {
 	if a == b {
@@ -3969,6 +3993,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfJSONValueModifierExpr(a, b)
+	case *LagLeadExpr:
+		b, ok := inB.(*LagLeadExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLagLeadExpr(a, b)
 	case *MatchExpr:
 		b, ok := inB.(*MatchExpr)
 		if !ok {
@@ -4506,6 +4536,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfJSONValueModifierExpr(a, b)
+	case *LagLeadExpr:
+		b, ok := inB.(*LagLeadExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLagLeadExpr(a, b)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {
@@ -4926,6 +4962,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfJSONValueModifierExpr(a, b)
+	case *LagLeadExpr:
+		b, ok := inB.(*LagLeadExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLagLeadExpr(a, b)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {
@@ -5723,6 +5765,17 @@ func EqualsRefOfJtNestedPathColDef(a, b *JtNestedPathColDef) bool {
 		EqualsSliceOfRefOfJtColumnDefinition(a.Columns, b.Columns)
 }
 
+// EqualsRefOfInt does deep equals between the two objects.
+func EqualsRefOfInt(a, b *int) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
 // EqualsTableAndLockTypes does deep equals between the two objects.
 func EqualsTableAndLockTypes(a, b TableAndLockTypes) bool {
 	if len(a) != len(b) {
@@ -5734,17 +5787,6 @@ func EqualsTableAndLockTypes(a, b TableAndLockTypes) bool {
 		}
 	}
 	return true
-}
-
-// EqualsRefOfInt does deep equals between the two objects.
-func EqualsRefOfInt(a, b *int) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return *a == *b
 }
 
 // EqualsComments does deep equals between the two objects.

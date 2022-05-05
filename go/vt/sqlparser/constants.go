@@ -339,6 +339,10 @@ const (
 	FirstValueExprStr = "first_value"
 	LastValueExprStr  = "last_value"
 
+	// FirstOrLastValueExprType strings
+	LagExprStr  = "lag"
+	LeadExprStr = "lead"
+
 	// TrimFuncType strings
 	NormalTrimStr = "trim"
 	LTrimStr      = "ltrim"
@@ -501,6 +505,12 @@ const (
 const (
 	FirstValueExprType FirstOrLastValueExprType = iota
 	LastValueExprType
+)
+
+// Constants for Enum Type - FirstOrLastValueExprType
+const (
+	LagExprType LagLeadExprType = iota
+	LeadExprType
 )
 
 // Constants for Enum Type - JSONAttributeType

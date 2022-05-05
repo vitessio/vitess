@@ -135,6 +135,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   firstOrLastValueExprType FirstOrLastValueExprType
   fromFirstLastType FromFirstLastType
   fromFirstLastClause *FromFirstLastClause
+  lagLeadExprType LagLeadExprType
 
   whens         []*When
   columnDefinitions []*ColumnDefinition
@@ -403,6 +404,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <fromFirstLastType> from_first_last_type
 %type <fromFirstLastClause> from_first_last_clause from_first_last_clause_opt
 %type <firstOrLastValueExprType> first_or_last_value_expr_type
+%type <lagLeadExprType> lag_lead_expr_type
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
 %type <partitionOption> partitions_options_opt partitions_options_beginning
@@ -448,7 +450,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <colName> column_name after_opt
 %type <whens> when_expression_list
 %type <when> when_expression
-%type <expr> expression_opt else_expression_opt
+%type <expr> expression_opt else_expression_opt default_with_comma_opt
 %type <exprs> group_by_opt
 %type <expr> having_opt
 %type <orderBy> order_by_opt order_list order_by_clause
@@ -5005,6 +5007,17 @@ from_first_last_clause:
     $$ = &FromFirstLastClause{$1}
   }
 
+lag_lead_expr_type:
+  LAG
+  {
+    $$ = LagExprType
+  }
+| LEAD
+  {
+    $$ = LeadExprType
+  }
+
+
 default_opt:
   /* empty */
   {
@@ -5397,6 +5410,33 @@ UTC_DATE func_paren_opt
 | NTH_VALUE openb expression ',' null_as_literal closeb from_first_last_clause_opt null_treatment_clause_opt over_clause
   {
     $$ =  &NTHValueExpr{ Expr: $3, IsNull: true, FromFirstLastClause:$7, NullTreatmentClause:$8, OverClause: $9}
+  }
+| lag_lead_expr_type openb expression closeb null_treatment_clause_opt over_clause
+  {
+    $$ = &LagLeadExpr{ Type:$1 , Expr: $3, NullTreatmentClause:$5, OverClause: $6 }
+  }
+| lag_lead_expr_type openb expression ',' INTEGRAL default_with_comma_opt closeb null_treatment_clause_opt over_clause
+  {
+    val := convertStringToInt($5)
+    $$ = &LagLeadExpr{ Type:$1 , Expr: $3, IntValue: &val, Default: $6, NullTreatmentClause:$8, OverClause: $9 }
+  }
+//  we are currently using id_or_var. This will require a reiteration later.
+| lag_lead_expr_type openb expression ',' id_or_var default_with_comma_opt closeb null_treatment_clause_opt over_clause
+  {
+    $$ =  &LagLeadExpr{ Type:$1 , Expr: $3, VarValue: $5, Default: $6, NullTreatmentClause:$8, OverClause: $9}
+  }
+| lag_lead_expr_type openb expression ',' null_as_literal default_with_comma_opt closeb null_treatment_clause_opt over_clause
+  {
+    $$ =  &LagLeadExpr{ Type:$1 , Expr: $3, IsNull: true, Default: $6, NullTreatmentClause:$8, OverClause: $9}
+  }
+
+default_with_comma_opt:
+  {
+    $$ = nil
+  }
+| ',' expression
+  {
+    $$ = $2
   }
 
 json_path_param_list_opt:

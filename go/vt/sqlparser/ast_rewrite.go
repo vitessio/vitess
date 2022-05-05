@@ -234,6 +234,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfJtOnResponse(parent, node, replacer)
 	case *KeyState:
 		return a.rewriteRefOfKeyState(parent, node, replacer)
+	case *LagLeadExpr:
+		return a.rewriteRefOfLagLeadExpr(parent, node, replacer)
 	case *Limit:
 		return a.rewriteRefOfLimit(parent, node, replacer)
 	case ListArg:
@@ -3717,6 +3719,53 @@ func (a *application) rewriteRefOfKeyState(parent SQLNode, node *KeyState, repla
 	}
 	return true
 }
+func (a *application) rewriteRefOfLagLeadExpr(parent SQLNode, node *LagLeadExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*LagLeadExpr).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteColIdent(node, node.VarValue, func(newNode, parent SQLNode) {
+		parent.(*LagLeadExpr).VarValue = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Default, func(newNode, parent SQLNode) {
+		parent.(*LagLeadExpr).Default = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*LagLeadExpr).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfNullTreatmentClause(node, node.NullTreatmentClause, func(newNode, parent SQLNode) {
+		parent.(*LagLeadExpr).NullTreatmentClause = newNode.(*NullTreatmentClause)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfLimit(parent SQLNode, node *Limit, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6741,6 +6790,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfJSONValueMergeExpr(parent, node, replacer)
 	case *JSONValueModifierExpr:
 		return a.rewriteRefOfJSONValueModifierExpr(parent, node, replacer)
+	case *LagLeadExpr:
+		return a.rewriteRefOfLagLeadExpr(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *MemberOfExpr:
@@ -6955,6 +7006,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfJSONValueMergeExpr(parent, node, replacer)
 	case *JSONValueModifierExpr:
 		return a.rewriteRefOfJSONValueModifierExpr(parent, node, replacer)
+	case *LagLeadExpr:
+		return a.rewriteRefOfLagLeadExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
@@ -7105,6 +7158,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfJSONValueMergeExpr(parent, node, replacer)
 	case *JSONValueModifierExpr:
 		return a.rewriteRefOfJSONValueModifierExpr(parent, node, replacer)
+	case *LagLeadExpr:
+		return a.rewriteRefOfLagLeadExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:

@@ -2372,9 +2372,6 @@ var (
 		input:  "DROP /* comment */ PREPARE stmt1",
 		output: "drop /* comment */ prepare stmt1",
 	}, {
-		input:  "create table unused_reserved_keywords (lead VARCHAR(255))",
-		output: "create table unused_reserved_keywords (\n\t`lead` VARCHAR(255)\n)",
-	}, {
 		input:  `SELECT JSON_PRETTY('{"a":"10","b":"15","x":"25"}')`,
 		output: `select json_pretty('{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
 	}, {
@@ -2924,6 +2921,12 @@ var (
 	}, {
 		input:  "SELECT NTH_VALUE(val,NULL) RESPECT NULLS OVER w FROM numbers",
 		output: "select nth_value(val,null) respect nulls over w from numbers",
+	}, {
+		input:  "SELECT LAG(val) OVER w, LEAD(TRIM('abc')) OVER w FROM numbers",
+		output: "select lag(val) over w, lead(trim('abc')) over w from numbers",
+	}, {
+		input:  "SELECT LAG(val, 10) OVER w, LEAD('val', null) OVER w, LEAD(val, 1, ASCII(1)) OVER w FROM numbers",
+		output: "select lag(val, 10) over w, lead('val', null) over w, lead(val, 1, ASCII(1)) over w from numbers",
 	}}
 )
 
@@ -3123,6 +3126,12 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "SELECT NTH_VALUE(TRIM('abc'),-10) OVER w FROM numbers",
 		err:   "syntax error at position 31",
+	}, {
+		input: "SELECT LAG(val, ) OVER w",
+		err:   "syntax error at position 18",
+	}, {
+		input: "SELECT LAG(val, 10,  ) OVER w",
+		err:   "syntax error at position 23",
 	}}
 
 	for _, tcase := range invalidSQL {

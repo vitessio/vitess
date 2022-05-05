@@ -2567,6 +2567,21 @@ type (
 		FromFirstLastClause *FromFirstLastClause
 		NullTreatmentClause *NullTreatmentClause
 	}
+
+	// LagLeadExpr stand for the following: LAG, LEAD
+	LagLeadExpr struct {
+		Type                LagLeadExprType
+		Expr                Expr
+		IntValue            *int
+		VarValue            ColIdent
+		IsNull              bool
+		Default             Expr
+		OverClause          *OverClause
+		NullTreatmentClause *NullTreatmentClause
+	}
+
+	// LagLeadExprType is an enum to get types of LagLeadExpr.
+	LagLeadExprType int8
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2632,6 +2647,7 @@ func (*ArgumentLessWindowExpr) iExpr()             {}
 func (*FirstOrLastValueExpr) iExpr()               {}
 func (*NtileExpr) iExpr()                          {}
 func (*NTHValueExpr) iExpr()                       {}
+func (*LagLeadExpr) iExpr()                        {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -2671,6 +2687,7 @@ func (*ArgumentLessWindowExpr) iCallable()             {}
 func (*FirstOrLastValueExpr) iCallable()               {}
 func (*NtileExpr) iCallable()                          {}
 func (*NTHValueExpr) iCallable()                       {}
+func (*LagLeadExpr) iCallable()                        {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

@@ -1913,6 +1913,34 @@ func (node *NTHValueExpr) formatFast(buf *TrackedBuffer) {
 	}
 }
 
+// formatFast formats the node
+func (node *LagLeadExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Type.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Expr, true)
+	if node.IntValue != nil {
+		buf.WriteString(", ")
+		buf.WriteString(fmt.Sprintf("%d", *node.IntValue))
+	} else if node.IsNull {
+		buf.WriteString(", null")
+	} else if !node.VarValue.IsEmpty() {
+		buf.WriteString(", ")
+		node.VarValue.formatFast(buf)
+	}
+	if node.Default != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Default, true)
+	}
+	buf.WriteString(")")
+	if node.NullTreatmentClause != nil {
+		node.NullTreatmentClause.formatFast(buf)
+	}
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.formatFast(buf)
+	}
+}
+
 // formatFast formats the node.
 func (node *SubstrExpr) formatFast(buf *TrackedBuffer) {
 	if node.To == nil {

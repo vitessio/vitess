@@ -1974,6 +1974,34 @@ func (cached *KeyState) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *LagLeadExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(112)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field IntValue *int
+	size += hack.RuntimeAllocSize(int64(8))
+	// field VarValue vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.VarValue.CachedSize(false)
+	// field Default vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Default.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field OverClause *vitess.io/vitess/go/vt/sqlparser.OverClause
+	size += cached.OverClause.CachedSize(true)
+	// field NullTreatmentClause *vitess.io/vitess/go/vt/sqlparser.NullTreatmentClause
+	if cached.NullTreatmentClause != nil {
+		size += hack.RuntimeAllocSize(int64(1))
+	}
+	return size
+}
 func (cached *Limit) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -234,6 +234,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfJtOnResponse(in, f)
 	case *KeyState:
 		return VisitRefOfKeyState(in, f)
+	case *LagLeadExpr:
+		return VisitRefOfLagLeadExpr(in, f)
 	case *Limit:
 		return VisitRefOfLimit(in, f)
 	case ListArg:
@@ -1940,6 +1942,30 @@ func VisitRefOfKeyState(in *KeyState, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfLagLeadExpr(in *LagLeadExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitColIdent(in.VarValue, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Default, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfNullTreatmentClause(in.NullTreatmentClause, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfLimit(in *Limit, f Visit) error {
 	if in == nil {
 		return nil
@@ -3336,6 +3362,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfJSONValueMergeExpr(in, f)
 	case *JSONValueModifierExpr:
 		return VisitRefOfJSONValueModifierExpr(in, f)
+	case *LagLeadExpr:
+		return VisitRefOfLagLeadExpr(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
@@ -3550,6 +3578,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfJSONValueMergeExpr(in, f)
 	case *JSONValueModifierExpr:
 		return VisitRefOfJSONValueModifierExpr(in, f)
+	case *LagLeadExpr:
+		return VisitRefOfLagLeadExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:
@@ -3700,6 +3730,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfJSONValueMergeExpr(in, f)
 	case *JSONValueModifierExpr:
 		return VisitRefOfJSONValueModifierExpr(in, f)
+	case *LagLeadExpr:
+		return VisitRefOfLagLeadExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:
