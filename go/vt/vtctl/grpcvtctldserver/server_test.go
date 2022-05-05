@@ -1495,6 +1495,28 @@ func TestCreateKeyspace(t *testing.T) {
 			vschemaShouldExist: false,
 			expectedVSchema:    nil,
 			shouldErr:          false,
+		}, {
+			name: "keyspace with durability policy specified",
+			topo: nil,
+			req: &vtctldatapb.CreateKeyspaceRequest{
+				Name:             "testkeyspace",
+				Type:             topodatapb.KeyspaceType_NORMAL,
+				DurabilityPolicy: "semi_sync",
+			},
+			expected: &vtctldatapb.CreateKeyspaceResponse{
+				Keyspace: &vtctldatapb.Keyspace{
+					Name: "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{
+						KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+						DurabilityPolicy: "semi_sync",
+					},
+				},
+			},
+			vschemaShouldExist: true,
+			expectedVSchema: &vschemapb.Keyspace{
+				Sharded: false,
+			},
+			shouldErr: false,
 		},
 	}
 
