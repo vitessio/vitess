@@ -31176,6 +31176,9 @@ export namespace vtctldata {
 
         /** CreateKeyspaceRequest snapshot_time */
         snapshot_time?: (vttime.ITime|null);
+
+        /** CreateKeyspaceRequest durability_policy */
+        durability_policy?: (string|null);
     }
 
     /** Represents a CreateKeyspaceRequest. */
@@ -31213,6 +31216,9 @@ export namespace vtctldata {
 
         /** CreateKeyspaceRequest snapshot_time. */
         public snapshot_time?: (vttime.ITime|null);
+
+        /** CreateKeyspaceRequest durability_policy. */
+        public durability_policy: string;
 
         /**
          * Creates a new CreateKeyspaceRequest instance using the specified properties.

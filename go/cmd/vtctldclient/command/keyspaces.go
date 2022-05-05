@@ -37,7 +37,7 @@ import (
 var (
 	// CreateKeyspace makes a CreateKeyspace gRPC call to a vtctld.
 	CreateKeyspace = &cobra.Command{
-		Use:   "CreateKeyspace <keyspace> [--force|-f] [--sharding-column-name NAME --sharding-column-type TYPE] [--base-keyspace KEYSPACE --snapshot-timestamp TIME] [--served-from DB_TYPE:KEYSPACE ...]",
+		Use:   "CreateKeyspace <keyspace> [--force|-f] [--sharding-column-name NAME --sharding-column-type TYPE] [--base-keyspace KEYSPACE --snapshot-timestamp TIME] [--served-from DB_TYPE:KEYSPACE ...]  [-durability_policy=policy_name]",
 		Short: "Creates the specified keyspace in the topology.",
 		Long: `Creates the specified keyspace in the topology.
 	
@@ -131,6 +131,7 @@ var createKeyspaceOptions = struct {
 	KeyspaceType      cli.KeyspaceTypeFlag
 	BaseKeyspace      string
 	SnapshotTimestamp string
+	DurabilityPolicy  string
 }{
 	KeyspaceType: cli.KeyspaceTypeFlag(topodatapb.KeyspaceType_NORMAL),
 }
@@ -177,6 +178,7 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 		Type:               topodatapb.KeyspaceType(createKeyspaceOptions.KeyspaceType),
 		BaseKeyspace:       createKeyspaceOptions.BaseKeyspace,
 		SnapshotTime:       snapshotTime,
+		DurabilityPolicy:   createKeyspaceOptions.DurabilityPolicy,
 	}
 
 	for n, v := range createKeyspaceOptions.ServedFromsMap.StringMapValue {
@@ -466,6 +468,7 @@ func init() {
 	CreateKeyspace.Flags().Var(&createKeyspaceOptions.KeyspaceType, "type", "The type of the keyspace")
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.BaseKeyspace, "base-keyspace", "", "The base keyspace for a snapshot keyspace.")
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.SnapshotTimestamp, "snapshot-timestamp", "", "The snapshot time for a snapshot keyspace, as a timestamp in RFC3339 format.")
+	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.DurabilityPolicy, "durability_policy", "none", "type of durability to enforce for this keyspace. Default is none. Other values include 'semi_sync' and others as dictated by registered plugins")
 	Root.AddCommand(CreateKeyspace)
 
 	DeleteKeyspace.Flags().BoolVarP(&deleteKeyspaceOptions.Recursive, "recursive", "r", false, "Recursively delete all shards in the keyspace, and all tablets in those shards.")
