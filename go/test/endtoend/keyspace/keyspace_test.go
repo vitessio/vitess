@@ -139,27 +139,25 @@ func TestMain(m *testing.M) {
 
 // TestDurabilityPolicyField
 func TestDurabilityPolicyField(t *testing.T) {
-	out, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("CreateKeyspace", "--", "--durability_policy=semi_sync", "ks_durability")
-	require.NoError(t, err, out)
+	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterForKSTest.VtctldProcess.GrpcPort, clusterForKSTest.TmpDirectory)
 
+	out, err := vtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", "ks_durability", "--durability_policy=semi_sync")
+	require.NoError(t, err, out)
 	checkDurabilityPolicy(t, "semi_sync")
 
-	out, err = clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", "--", "--durability_policy=none", "ks_durability")
+	out, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", "ks_durability", "--durability_policy=none")
 	require.NoError(t, err, out)
-
 	checkDurabilityPolicy(t, "none")
 
-	out, err = clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("DeleteKeyspace", "ks_durability")
+	out, err = vtctldClientProcess.ExecuteCommandWithOutput("DeleteKeyspace", "ks_durability")
 	require.NoError(t, err, out)
 
 	out, err = clusterForKSTest.VtctlProcess.ExecuteCommandWithOutput("CreateKeyspace", "--", "--durability_policy=semi_sync", "ks_durability")
 	require.NoError(t, err, out)
-
 	checkDurabilityPolicy(t, "semi_sync")
 
 	out, err = clusterForKSTest.VtctlProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", "--", "--durability_policy=none", "ks_durability")
 	require.NoError(t, err, out)
-
 	checkDurabilityPolicy(t, "none")
 
 	out, err = clusterForKSTest.VtctlProcess.ExecuteCommandWithOutput("DeleteKeyspace", "ks_durability")
