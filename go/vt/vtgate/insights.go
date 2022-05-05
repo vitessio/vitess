@@ -109,6 +109,11 @@ type Insights struct {
 	LogChan         chan interface{}
 	Workers         sync.WaitGroup
 
+	// log state: we limit some log messages to once per 15s because they're caused by behavior the
+	// client controls
+	LogPatternsExceeded uint
+	LogBufferExceeded   uint
+
 	// hooks
 	Sender func([]byte, string, string) error
 }
@@ -362,7 +367,7 @@ func (ii *Insights) reserveAndSend(buf []byte, topic, key string) bool {
 
 	if atomic.LoadUint64(&ii.InFlightCounter)+reserve >= uint64(ii.MaxInFlight) {
 		// log or increment a dropped message counter
-		log.Warningf("Dropped Kafka message: %v in flight, need %v, max is %v", ii.InFlightCounter, reserve, ii.MaxInFlight)
+		ii.LogBufferExceeded++
 		return false
 	}
 
@@ -412,7 +417,7 @@ func (ii *Insights) addToAggregates(ls *LogStats, sql string) bool {
 	pa, ok := ii.Aggregations[key]
 	if !ok {
 		if uint(len(ii.Aggregations)) >= ii.MaxPatterns {
-			log.Infof("Too many patterns: reached limit of %d", len(ii.Aggregations), ii.MaxPatterns)
+			ii.LogPatternsExceeded++
 			return false
 		}
 		// ls.StmtType and ls.Table depend only on the contents of sql, so we don't separately make them
@@ -450,7 +455,15 @@ func (ii *Insights) sendAggregates() {
 	// no locks needed if all callers are on the same thread
 
 	if len(ii.Aggregations) > 0 {
-		log.Infof("Sending aggregates for %d query patterns", len(ii.Aggregations))
+		log.Infof("Sending aggregates for %v query patterns", len(ii.Aggregations))
+	}
+	if ii.LogPatternsExceeded > 0 {
+		log.Infof("Too many patterns: reached limit of %v.  %v statements not aggregated.", ii.MaxPatterns, ii.LogPatternsExceeded)
+		ii.LogPatternsExceeded = 0
+	}
+	if ii.LogBufferExceeded > 0 {
+		log.Infof("Dropped %v Kafka message(s): InFlightCounter=%v, MaxInFlight=%v", ii.LogBufferExceeded, ii.InFlightCounter, ii.MaxInFlight)
+		ii.LogBufferExceeded = 0
 	}
 
 	for k, pa := range ii.Aggregations {

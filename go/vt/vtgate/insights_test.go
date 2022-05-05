@@ -171,7 +171,7 @@ func TestInsightsRowsReadThreshold(t *testing.T) {
 }
 
 func TestInsightsKafkaBufferSize(t *testing.T) {
-	insightsTestHelper(t, false,
+	insightsTestHelper(t, true,
 		setupOptions{bufSize: 5},
 		[]insightsQuery{
 			{sql: "select * from foo1", responseTime: 5 * time.Second},
