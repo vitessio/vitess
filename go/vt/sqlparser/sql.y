@@ -590,7 +590,7 @@ select_statement:
 select_statement_with_no_trailing_into:
   select_statement
   {
-    if $1.HasIntoDefined() {
+    if $1.GetInto() != nil {
       yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
       return 1
     }
@@ -699,7 +699,7 @@ common_table_expression:
 union_lhs:
   base_select
   {
-    if $1.HasIntoDefined() {
+    if $1.GetInto() != nil {
       yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
       return 1
     }
@@ -713,7 +713,7 @@ union_lhs:
 union_rhs:
   base_select_no_cte
   {
-    if $1.HasIntoDefined() {
+    if $1.GetInto() != nil {
       yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
       return 1
     }
@@ -1463,7 +1463,7 @@ with_admin_opt:
 create_query_expression:
   base_select_no_cte order_by_opt limit_opt lock_opt
   {
-    if $1.HasIntoDefined() {
+    if $1.GetInto() != nil {
       yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
       return 1
     }
