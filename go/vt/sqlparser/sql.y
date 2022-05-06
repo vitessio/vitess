@@ -3580,9 +3580,9 @@ truncate_statement:
   }
 
 analyze_statement:
-  ANALYZE TABLE table_name
+  ANALYZE TABLE table_name_list
   {
-    $$ = &Analyze{Table: $3}
+    $$ = &Analyze{Tables: $3}
   }
 
 show_statement:

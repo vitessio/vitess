@@ -6082,7 +6082,7 @@ func compliantName(in string) string {
 }
 
 type Analyze struct {
-	Table TableName
+	Tables TableNames
 }
 
 func (*Analyze) iStatement() {}
@@ -6091,9 +6091,9 @@ func (node *Analyze) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
-	return Walk(visit, node.Table)
+	return Walk(visit, node.Tables)
 }
 
 func (node *Analyze) Format(buf *TrackedBuffer) {
-	buf.Myprintf("analyze table %v", node.Table)
+	buf.Myprintf("analyze table %v", node.Tables)
 }
