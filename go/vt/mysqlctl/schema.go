@@ -563,7 +563,8 @@ func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName
                 GROUP BY INDEX_NAME ORDER BY col_count ASC LIMIT 1
             ) AS pke
             WHERE index_cols.TABLE_SCHEMA = '%s' AND index_cols.TABLE_NAME = '%s'
-            AND index_cols.INDEX_NAME = pke.INDEX_NAME AND NON_UNIQUE = 0 AND NULLABLE != 'YES'`
+              AND index_cols.INDEX_NAME = pke.INDEX_NAME AND NON_UNIQUE = 0 AND NULLABLE != 'YES'
+            ORDER BY SEQ_IN_INDEX ASC`
 	sql = fmt.Sprintf(sql, dbName, table, dbName, table, dbName, table)
 	qr, err := conn.ExecuteFetch(sql, 1000, true)
 	if err != nil {
