@@ -1362,6 +1362,9 @@ var (
 			input:  "analyze table a",
 			output: "analyze table a",
 		}, {
+			input:  "analyze table a, b, c",
+			output: "analyze table a, b, c",
+		}, {
 			input:  "show character set",
 			output: "show charset",
 		}, {
