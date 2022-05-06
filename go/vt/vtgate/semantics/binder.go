@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -85,7 +87,39 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		currentScope := b.scoper.currentScope()
 		deps, err := b.resolveColumn(node, currentScope, false)
 		if err != nil {
-			return err
+			if deps.direct.NumberOfTables() == 0 || !strings.HasSuffix(err.Error(), "is ambiguous") {
+				return err
+			}
+			tbls := deps.direct.Constituents()
+			colName := node.Name.Lowered()
+			for _, tbl := range tbls {
+				m := b.usingJoinInfo[tbl]
+				if _, found := m[colName]; !found {
+					return err
+				}
+			}
+
+			newTbl := deps.recursive.Constituents()[0]
+			infoFor, err := b.tc.tableInfoFor(newTbl)
+			if err != nil {
+				return err
+			}
+			alias := infoFor.getExpr().As
+			if alias.IsEmpty() {
+				name, err := infoFor.Name()
+				if err != nil {
+					return err
+				}
+				node.Qualifier = name
+			} else {
+				node.Qualifier = sqlparser.TableName{
+					Name: sqlparser.NewTableIdent(alias.String()),
+				}
+			}
+			deps, err = b.resolveColumn(node, currentScope, false)
+			if err != nil {
+				return err
+			}
 		}
 		b.recursive[node] = deps.recursive
 		b.direct[node] = deps.direct
@@ -170,18 +204,25 @@ func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *sc
 	return sq, nil
 }
 
-func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allowMulti bool) (deps dependency, err error) {
+func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allowMulti bool) (dependency, error) {
 	var thisDeps dependencies
 	for current != nil {
+		var err error
 		thisDeps, err = b.resolveColumnInScope(current, colName, allowMulti)
 		if err != nil {
 			err = makeAmbiguousError(colName, err)
-			return dependency{}, err
+			if thisDeps == nil {
+				return dependency{}, err
+			}
 		}
 		if !thisDeps.empty() {
-			deps, err = thisDeps.get()
-			err = makeAmbiguousError(colName, err)
+			deps, thisErr := thisDeps.get()
+			if thisErr != nil {
+				err = makeAmbiguousError(colName, thisErr)
+			}
 			return deps, err
+		} else if err != nil {
+			return dependency{}, err
 		}
 		current = current.parent
 	}
@@ -198,10 +239,7 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, a
 		if err != nil {
 			return nil, err
 		}
-		deps, err = thisDeps.merge(deps, allowMulti)
-		if err != nil {
-			return nil, err
-		}
+		deps = thisDeps.merge(deps, allowMulti)
 	}
 	if deps, isUncertain := deps.(*uncertain); isUncertain && deps.fail {
 		// if we have a failure from uncertain, we matched the column to multiple non-authoritative tables

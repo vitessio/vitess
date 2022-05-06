@@ -158,6 +158,83 @@ func TestExpandStar(t *testing.T) {
 	}
 }
 
+func TestRewriteJoinUsingColumns(t *testing.T) {
+	schemaInfo := &FakeSI{
+		Tables: map[string]*vindexes.Table{
+			"t1": {
+				Name: sqlparser.NewTableIdent("t1"),
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewColIdent("a"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewColIdent("b"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewColIdent("c"),
+					Type: sqltypes.VarChar,
+				}},
+				ColumnListAuthoritative: true,
+			},
+			"t2": {
+				Name: sqlparser.NewTableIdent("t2"),
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewColIdent("a"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewColIdent("b"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewColIdent("c"),
+					Type: sqltypes.VarChar,
+				}},
+				ColumnListAuthoritative: true,
+			},
+			"t3": {
+				Name: sqlparser.NewTableIdent("t3"),
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewColIdent("a"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewColIdent("b"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewColIdent("c"),
+					Type: sqltypes.VarChar,
+				}},
+				ColumnListAuthoritative: true,
+			},
+		},
+	}
+	cDB := "db"
+	tcases := []struct {
+		sql    string
+		expSQL string
+		expErr string
+	}{{
+		sql:    "select 1 from t1 join t2 using (a) where a = 42",
+		expSQL: "select 1 from t1 join t2 on t1.a = t2.a where t1.a = 42",
+	}, {
+		sql:    "select 1 from t1 join t2 using (a), t3 where a = 42",
+		expErr: "Column 'a' in field list is ambiguous",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := sqlparser.Parse(tcase.sql)
+			require.NoError(t, err)
+			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
+			require.True(t, isSelectStatement, "analyzer expects a select statement")
+			_, err = Analyze(selectStatement, cDB, schemaInfo)
+			if tcase.expErr == "" {
+				require.NoError(t, err)
+				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
+			} else {
+				require.EqualError(t, err, tcase.expErr)
+			}
+		})
+	}
+
+}
+
 func TestOrderByGroupByLiteral(t *testing.T) {
 	schemaInfo := &FakeSI{
 		Tables: map[string]*vindexes.Table{},
