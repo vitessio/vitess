@@ -790,13 +790,9 @@ func (c *Cluster) GetCellInfos(ctx context.Context, req *vtadminpb.GetCellInfosR
 	}
 
 	namesOnly := req.NamesOnly
-	if namesOnly {
-		switch len(req.Cells) {
-		case 0:
-		default:
-			log.Warning("Cluster.GetCellInfos: req.Cells and req.NamesOnly set, ignoring NamesOnly")
-			namesOnly = false
-		}
+	if namesOnly && len(req.Cells) > 0 {
+		log.Warning("Cluster.GetCellInfos: req.Cells and req.NamesOnly set, ignoring NamesOnly")
+		namesOnly = false
 	}
 
 	span.Annotate("names_only", namesOnly)
