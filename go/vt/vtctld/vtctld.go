@@ -24,6 +24,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/vtctl"
 
 	rice "github.com/GeertJohan/go.rice"
 
@@ -151,17 +153,19 @@ func InitVtctld(ts *topo.Server) error {
 	// Serve the static files for the vtctld2 web app
 	http.HandleFunc(appPrefix, webAppHandler)
 
-	var realtimeStats *realtimeStats
+	var healthCheck *discovery.HealthCheckImpl
 	if *enableRealtimeStats {
-		var err error
-		realtimeStats, err = newRealtimeStats(ts)
+		ctx := context.Background()
+		cells, err := ts.GetKnownCells(ctx)
 		if err != nil {
-			log.Errorf("Failed to instantiate RealtimeStats at startup: %v", err)
+			log.Errorf("Failed to get the list of known cells, failed to instantiate the healthcheck at startup: %v", err)
+		} else {
+			healthCheck = discovery.NewHealthCheck(ctx, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout, ts, *localCell, strings.Join(cells, ","))
 		}
 	}
 
 	// Serve the REST API for the vtctld web app.
-	initAPI(context.Background(), ts, actionRepo, realtimeStats)
+	initAPI(context.Background(), ts, actionRepo, healthCheck)
 
 	// Init redirects for explorers
 	initExplorer(ts)
@@ -200,7 +204,7 @@ func webAppHandler(w http.ResponseWriter, r *http.Request) {
 	fileToServe, err := riceBox.Open(rest)
 	if err != nil {
 		if !strings.ContainsAny(rest, "/.") {
-			//This is a virtual route so pass index.html
+			// This is a virtual route so pass index.html
 			fileToServe, err = riceBox.Open("index.html")
 		}
 		if err != nil {

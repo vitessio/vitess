@@ -200,7 +200,7 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 	thc.setServingState(serving, reason)
 
 	// notify downstream for primary change
-	hc.updateHealth(thc.SimpleCopy(), prevTarget, trivialUpdate, thc.Serving)
+	hc.UpdateHealth(thc.SimpleCopy(), prevTarget, trivialUpdate, thc.Serving)
 	return nil
 }
 
@@ -301,7 +301,7 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 			}
 			// trivialUpdate = false because this is an error
 			// up = false because we did not get a healthy response
-			hc.updateHealth(thc.SimpleCopy(), thc.Target, false, false)
+			hc.UpdateHealth(thc.SimpleCopy(), thc.Target, false, false)
 		}
 		// If there was a timeout send an error. We do this after stream has returned.
 		// This will ensure that this update prevails over any previous message that
@@ -312,7 +312,7 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 			hcErrorCounters.Add([]string{thc.Target.Keyspace, thc.Target.Shard, topoproto.TabletTypeLString(thc.Target.TabletType)}, 1)
 			// trivialUpdate = false because this is an error
 			// up = false because we did not get a healthy response within the timeout
-			hc.updateHealth(thc.SimpleCopy(), thc.Target, false, false)
+			hc.UpdateHealth(thc.SimpleCopy(), thc.Target, false, false)
 		}
 
 		// Streaming RPC failed e.g. because vttablet was restarted or took too long.

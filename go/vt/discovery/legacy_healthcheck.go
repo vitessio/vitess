@@ -224,7 +224,7 @@ func (e LegacyTabletStats) NamedStatusURL() string {
 func (e LegacyTabletStats) getTabletDebugURL() string {
 	var buffer bytes.Buffer
 
-	//Error logged
+	// Error logged
 	if err := tabletURLTemplate.Execute(&buffer, e); err != nil {
 		log.Errorf("tabletURLTemplate.Execute(&buffer, e) failed: %v", err)
 	}
@@ -321,7 +321,7 @@ type LegacyHealthCheck interface {
 // LegacyHealthCheckImpl performs health checking and notifies downstream components about any changes.
 // It contains a map of legacyTabletHealth objects, each of which stores the health information for
 // a tablet. A checkConn goroutine is spawned for each legacyTabletHealth, which is responsible for
-// keeping that legacyTabletHealth up-to-date. This is done through callbacks to updateHealth.
+// keeping that legacyTabletHealth up-to-date. This is done through callbacks to UpdateHealth.
 // If checkConn terminates for any reason, it updates legacyTabletHealth.Up as false. If a legacyTabletHealth
 // gets removed from the map, its cancelFunc gets called, which ensures that the associated
 // checkConn goroutine eventually terminates.

@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"vitess.io/vitess/go/vt/discovery"
 
 	"context"
 
@@ -57,8 +58,7 @@ var (
 // This file implements a REST-style API for the vtctld web interface.
 
 const (
-	apiPrefix = "/api/"
-
+	apiPrefix       = "/api/"
 	jsonContentType = "application/json; charset=utf-8"
 )
 
@@ -88,7 +88,7 @@ type TabletWithStatsAndURL struct {
 	URL                  string                  `json:"url,omitempty"`
 }
 
-func newTabletWithStatsAndURL(t *topodatapb.Tablet, realtimeStats *realtimeStats) *TabletWithStatsAndURL {
+func newTabletWithStatsAndURL(t *topodatapb.Tablet, healthcheck *discovery.HealthCheckImpl) *TabletWithStatsAndURL {
 	tablet := &TabletWithStatsAndURL{
 		Alias:                t.Alias,
 		Hostname:             t.Hostname,
@@ -110,15 +110,14 @@ func newTabletWithStatsAndURL(t *topodatapb.Tablet, realtimeStats *realtimeStats
 		tablet.URL = "http://" + netutil.JoinHostPort(t.Hostname, t.PortMap["vt"])
 	}
 
-	if realtimeStats != nil {
-		if stats, err := realtimeStats.tabletStats(tablet.Alias); err == nil {
+	if healthcheck != nil {
+		if health, err := healthcheck.GetTabletHealth(healthcheck.KeyFromTablet(t), tablet.Alias); err == nil {
 			tablet.Stats = &TabletStats{
-				Realtime: stats.Stats,
-				Serving:  stats.Serving,
-				Up:       stats.Up,
+				Realtime: health.Stats,
+				Serving:  health.Serving,
 			}
-			if stats.LastError != nil {
-				tablet.Stats.LastError = stats.LastError.Error()
+			if health.LastError != nil {
+				tablet.Stats.LastError = health.LastError.Error()
 			}
 		}
 	}
@@ -192,7 +191,7 @@ func unmarshalRequest(r *http.Request, v any) error {
 	return json.Unmarshal(data, v)
 }
 
-func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, realtimeStats *realtimeStats) {
+func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, healthcheck *discovery.HealthCheckImpl) {
 	tabletHealthCache := newTabletHealthCache(ts)
 	tmClient := tmclient.NewTabletManagerClient()
 
@@ -292,7 +291,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 				if err != nil {
 					return nil, err
 				}
-				tablet := newTabletWithStatsAndURL(t.Tablet, realtimeStats)
+				tablet := newTabletWithStatsAndURL(t.Tablet, healthcheck)
 				tablets = append(tablets, tablet)
 			}
 		}
@@ -501,11 +500,11 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 				metric = "health"
 			}
 
-			if realtimeStats == nil {
-				return nil, fmt.Errorf("realtimeStats not initialized")
+			if healthcheck == nil {
+				return nil, fmt.Errorf("healthcheck not initialized")
 			}
 
-			heatmap, err := realtimeStats.heatmapData(keyspace, cell, tabletType, metric)
+			heatmap, err := heatmapData(healthcheck, keyspace, cell, tabletType, metric)
 			if err != nil {
 				return nil, fmt.Errorf("couldn't get heatmap data: %v", err)
 			}
@@ -524,8 +523,8 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 			return nil, fmt.Errorf("invalid tablet_health path: %q  expected path: /tablet_health/<cell>/<uid>", tabletPath)
 		}
 
-		if realtimeStats == nil {
-			return nil, fmt.Errorf("realtimeStats not initialized")
+		if healthcheck == nil {
+			return nil, fmt.Errorf("healthcheck not initialized")
 		}
 
 		cell := parts[0]
@@ -539,7 +538,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 			Cell: cell,
 			Uid:  uid,
 		}
-		tabletStat, err := realtimeStats.tabletStats(&tabletAlias)
+		tabletStat, err := healthcheck.GetTabletHealth2(&tabletAlias)
 		if err != nil {
 			return nil, fmt.Errorf("could not get tabletStats: %v", err)
 		}
@@ -565,11 +564,11 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 				cell = "all"
 			}
 
-			if realtimeStats == nil {
+			if healthcheck == nil {
 				return nil, fmt.Errorf("realtimeStats not initialized")
 			}
 
-			return realtimeStats.topologyInfo(keyspace, cell), nil
+			return getTopologyInfo(healthcheck, keyspace, cell), nil
 		}
 		return nil, fmt.Errorf("invalid target path: %q  expected path: ?keyspace=<keyspace>&cell=<cell>", targetPath)
 	})

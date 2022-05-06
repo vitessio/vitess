@@ -25,6 +25,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"vitess.io/vitess/go/vt/discovery"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtctl"
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -32,6 +35,36 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
+
+// tabletStats will create a discovery.LegacyTabletStats object.
+func tabletStats(keyspace, cell, shard string, tabletType topodatapb.TabletType, uid uint32) (*topodatapb.Tablet, *discovery.TabletHealth) {
+	target := &querypb.Target{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: tabletType,
+	}
+	tablet := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: cell, Uid: uid},
+		Keyspace: keyspace,
+		Shard:    shard,
+		Type:     tabletType,
+		PortMap:  map[string]int32{"vt": int32(uid), "grpc": int32(uid + 1)},
+	}
+	realtimeStats := &querypb.RealtimeStats{
+		HealthError: "",
+		// uid is used for ReplicationLagSeconds to give it a unique value.
+		ReplicationLagSeconds: uid,
+	}
+	stats := &discovery.TabletHealth{
+		Tablet: tablet,
+		Target: target,
+		// Up:        true,
+		Serving:   true,
+		Stats:     realtimeStats,
+		LastError: nil,
+	}
+	return tablet, stats
+}
 
 func compactJSON(in []byte) string {
 	buf := &bytes.Buffer{}
@@ -113,23 +146,32 @@ func TestAPI(t *testing.T) {
 			return "TestTabletAction Result", nil
 		})
 
-	realtimeStats := newRealtimeStatsForTesting()
-	initAPI(ctx, ts, actionRepo, realtimeStats)
+	healthcheck := discovery.NewHealthCheck(ctx, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout, ts, *localCell, strings.Join(cells, ","))
+	initAPI(ctx, ts, actionRepo, healthcheck)
 
-	ts1 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 100)
-	ts2 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_RDONLY, 200)
-	ts3 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_REPLICA, 300)
-	ts4 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_RDONLY, 400)
+	t1, ts1 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 100)
+	t2, ts2 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_RDONLY, 200)
+	t3, ts3 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_REPLICA, 300)
+	t4, ts4 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_RDONLY, 400)
 
-	ts5 := tabletStats("ks2", "cell1", "0", topodatapb.TabletType_REPLICA, 500)
-	ts6 := tabletStats("ks2", "cell2", "0", topodatapb.TabletType_REPLICA, 600)
+	t5, ts5 := tabletStats("ks2", "cell1", "0", topodatapb.TabletType_REPLICA, 500)
+	t6, ts6 := tabletStats("ks2", "cell2", "0", topodatapb.TabletType_REPLICA, 600)
 
-	realtimeStats.StatsUpdate(ts1)
-	realtimeStats.StatsUpdate(ts2)
-	realtimeStats.StatsUpdate(ts3)
-	realtimeStats.StatsUpdate(ts4)
-	realtimeStats.StatsUpdate(ts5)
-	realtimeStats.StatsUpdate(ts6)
+	healthcheck.AddFakeTablet(t1)
+	healthcheck.AddFakeTablet(t2)
+	healthcheck.AddFakeTablet(t3)
+	healthcheck.AddFakeTablet(t4)
+
+	healthcheck.AddFakeTablet(t5)
+	healthcheck.AddFakeTablet(t6)
+
+	healthcheck.UpdateHealth(ts1, ts1.Target, false, true)
+	healthcheck.UpdateHealth(ts2, ts2.Target, false, true)
+	healthcheck.UpdateHealth(ts3, ts3.Target, false, true)
+	healthcheck.UpdateHealth(ts4, ts4.Target, false, true)
+
+	healthcheck.UpdateHealth(ts5, ts5.Target, false, true)
+	healthcheck.UpdateHealth(ts6, ts6.Target, false, true)
 
 	// all-tablets response for keyspace/ks1/tablets/ endpoints
 	keyspaceKs1AllTablets := `[
@@ -258,9 +300,9 @@ func TestAPI(t *testing.T) {
 				"sharding_column_name": "shardcol",
 				"sharding_column_type": 0,
 				"served_froms": [],
-                                "keyspace_type":0,
-                                "base_keyspace":"",
-                                "snapshot_time":null
+		                        "keyspace_type":0,
+		                        "base_keyspace":"",
+		                        "snapshot_time":null
 			}`, http.StatusOK},
 		{"GET", "keyspaces/nonexistent", "", "404 page not found", http.StatusNotFound},
 		{"POST", "keyspaces/ks1?action=TestKeyspaceAction", "", `{

@@ -242,6 +242,110 @@ type HealthCheckImpl struct {
 	subscribers map[chan *TabletHealth]struct{}
 }
 
+func (hc *HealthCheckImpl) GetTabletHealthWithCellFitler(ks, shard, cell string, tabletType topodata.TabletType) []*TabletHealth {
+	tabletTypeStr := topoproto.TabletTypeLString(tabletType)
+	m := hc.cacheStatusMap()
+	key := fmt.Sprintf("%v.%v.%v.%v", cell, ks, shard, tabletTypeStr)
+	if _, ok := m[key]; !ok {
+		return nil
+	}
+	return m[key].TabletsStats
+}
+
+func (hc *HealthCheckImpl) GetKeyspaces() []string {
+	kss := []string{}
+	for tabletType, _ := range hc.healthData {
+		tabletInfos := strings.Split(string(tabletType), ".")
+		if len(tabletInfos) == 0 {
+			continue
+		}
+		newKs := tabletInfos[0]
+		found := false
+		for _, ks := range kss {
+			if ks == newKs {
+				found = true
+				break
+			}
+		}
+		if !found {
+			kss = append(kss, newKs)
+		}
+	}
+	return kss
+}
+
+func (hc *HealthCheckImpl) GetShardInKeyspace(ks string) []string {
+	shards := []string{}
+	for tabletType, _ := range hc.healthData {
+		tabletInfos := strings.Split(string(tabletType), ".")
+		if len(tabletInfos) < 2 {
+			continue
+		}
+		if tabletInfos[0] != ks {
+			continue
+		}
+		newShard := tabletInfos[1]
+		found := false
+		for _, shard := range shards {
+			if shard == newShard {
+				found = true
+				break
+			}
+		}
+		if !found {
+			shards = append(shards, newShard)
+		}
+	}
+	return shards
+}
+
+func (hc *HealthCheckImpl) GetTabletTypesForKeyspaceShardAndCell(ks, shard, cell string) []topodata.TabletType {
+	tabletTypes := []topodata.TabletType{}
+	for tabletType, _ := range hc.healthData {
+		tabletInfos := strings.Split(string(tabletType), ".")
+		if len(tabletInfos) < 3 {
+			continue
+		}
+		if tabletInfos[0] != ks || tabletInfos[1] != shard {
+			continue
+		}
+		cells := hc.GetCellsForKeyspaceAndShard(ks, shard)
+		found := false
+		for _, curCell := range cells {
+			if curCell == cell {
+				found = true
+				break
+			}
+		}
+		if !found {
+			continue
+		}
+		tabletType, _ := topoproto.ParseTabletType(tabletInfos[2])
+		found = false
+		for _, tt := range tabletTypes {
+			if tt == tabletType {
+				found = true
+				break
+			}
+		}
+		if !found {
+			tabletTypes = append(tabletTypes, tabletType)
+		}
+	}
+	return tabletTypes
+}
+
+func (hc *HealthCheckImpl) GetCellsForKeyspaceAndShard(ks, shard string) []string {
+	cells := []string{}
+	tablet := &topodata.Tablet{Keyspace: ks, Shard: shard}
+	for _, watcher := range hc.topoWatchers {
+		if watcher.tabletFilter.IsIncluded(tablet) {
+			cells = append(cells, watcher.cell)
+		}
+	}
+	return cells
+}
+
 // NewHealthCheck creates a new HealthCheck object.
 // Parameters:
 // retryDelay.
@@ -311,6 +415,44 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 	return hc
 }
 
+// AddFakeTablet adds the tablet, and does not start health check.
+func (hc *HealthCheckImpl) AddFakeTablet(tablet *topodata.Tablet) {
+	log.Infof("Adding tablet to healthcheck: %v", tablet)
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	if hc.healthByAlias == nil {
+		// already closed.
+		return
+	}
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	target := &query.Target{
+		Keyspace:   tablet.Keyspace,
+		Shard:      tablet.Shard,
+		TabletType: tablet.Type,
+	}
+	thc := &tabletHealthCheck{
+		ctx:        ctx,
+		cancelFunc: cancelFunc,
+		Tablet:     tablet,
+		Target:     target,
+	}
+
+	// add to our datastore
+	key := hc.KeyFromTarget(target)
+	tabletAlias := topoproto.TabletAliasString(tablet.Alias)
+	if _, ok := hc.healthByAlias[tabletAliasString(tabletAlias)]; ok {
+		// We should not add a tablet that we already have
+		log.Errorf("Program bug: tried to add existing tablet: %v to healthcheck", tabletAlias)
+		return
+	}
+	hc.healthByAlias[tabletAliasString(tabletAlias)] = thc
+	res := thc.SimpleCopy()
+	if _, ok := hc.healthData[key]; !ok {
+		hc.healthData[key] = make(map[tabletAliasString]*TabletHealth)
+	}
+	hc.healthData[key][tabletAliasString(tabletAlias)] = res
+}
+
 // AddTablet adds the tablet, and starts health check.
 // It does not block on making connection.
 // name is an optional tag for the tablet, e.g. an alternative address.
@@ -341,7 +483,7 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 	}
 
 	// add to our datastore
-	key := hc.keyFromTarget(target)
+	key := hc.KeyFromTarget(target)
 	tabletAlias := topoproto.TabletAliasString(tablet.Alias)
 	if _, ok := hc.healthByAlias[tabletAliasString(tabletAlias)]; ok {
 		// We should not add a tablet that we already have
@@ -377,7 +519,7 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
-	key := hc.keyFromTablet(tablet)
+	key := hc.KeyFromTablet(tablet)
 	tabletAlias := tabletAliasString(topoproto.TabletAliasString(tablet.Alias))
 	// delete from authoritative map
 	th, ok := hc.healthByAlias[tabletAlias]
@@ -403,7 +545,7 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	}
 }
 
-func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Target, trivialUpdate bool, up bool) {
+func (hc *HealthCheckImpl) UpdateHealth(th *TabletHealth, prevTarget *query.Target, trivialUpdate bool, up bool) {
 	// hc.healthByAlias is authoritative, it should be updated
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
@@ -417,14 +559,14 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 		return
 	}
 
-	targetKey := hc.keyFromTarget(th.Target)
+	targetKey := hc.KeyFromTarget(th.Target)
 	targetChanged := prevTarget.TabletType != th.Target.TabletType || prevTarget.Keyspace != th.Target.Keyspace || prevTarget.Shard != th.Target.Shard
 	if targetChanged {
 		// Error counter has to be set here in case we get a new tablet type for the first time in a stream response
 		hcErrorCounters.Add([]string{th.Target.Keyspace, th.Target.Shard, topoproto.TabletTypeLString(th.Target.TabletType)}, 0)
 		// keyspace and shard are not expected to change, but just in case ...
 		// move this tabletHealthCheck to the correct map
-		oldTargetKey := hc.keyFromTarget(prevTarget)
+		oldTargetKey := hc.KeyFromTarget(prevTarget)
 		delete(hc.healthData[oldTargetKey], tabletAlias)
 		_, ok := hc.healthData[targetKey]
 		if !ok {
@@ -476,7 +618,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 			hc.recomputeHealthy(targetKey)
 		}
 		if targetChanged && prevTarget.TabletType != topodata.TabletType_PRIMARY && hc.isIncluded(th.Target.TabletType, th.Tablet.Alias) { // also recompute old target's healthy list
-			oldTargetKey := hc.keyFromTarget(prevTarget)
+			oldTargetKey := hc.KeyFromTarget(prevTarget)
 			hc.recomputeHealthy(oldTargetKey)
 		}
 	}
@@ -602,7 +744,7 @@ func (hc *HealthCheckImpl) GetHealthyTabletStats(target *query.Target) []*Tablet
 	if target.Shard == "" {
 		target.Shard = "0"
 	}
-	return append(result, hc.healthy[hc.keyFromTarget(target)]...)
+	return append(result, hc.healthy[hc.KeyFromTarget(target)]...)
 }
 
 // getTabletStats returns all tablets for the given target.
@@ -613,7 +755,7 @@ func (hc *HealthCheckImpl) getTabletStats(target *query.Target) []*TabletHealth 
 	var result []*TabletHealth
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
-	ths := hc.healthData[hc.keyFromTarget(target)]
+	ths := hc.healthData[hc.KeyFromTarget(target)]
 	for _, th := range ths {
 		result = append(result, th)
 	}
@@ -708,13 +850,35 @@ func (hc *HealthCheckImpl) waitForTablets(ctx context.Context, targets []*query.
 	}
 }
 
+func (hc *HealthCheckImpl) GetTabletHealth2(alias *topodata.TabletAlias) (*TabletHealth, error) {
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+
+	if hd, ok := hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(alias))]; ok {
+		return hd.SimpleCopy(), nil
+	}
+	return nil, fmt.Errorf("could not find tablet: %s", alias.String())
+}
+
+func (hc *HealthCheckImpl) GetTabletHealth(kst keyspaceShardTabletType, alias *topodata.TabletAlias) (*TabletHealth, error) {
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+
+	if hd, ok := hc.healthData[kst]; ok {
+		if th, ok := hd[tabletAliasString(topoproto.TabletAliasString(alias))]; ok {
+			return th, nil
+		}
+	}
+	return nil, fmt.Errorf("could not find tablet: %s", alias.String())
+}
+
 // TabletConnection returns the Connection to a given tablet.
 func (hc *HealthCheckImpl) TabletConnection(alias *topodata.TabletAlias, target *query.Target) (queryservice.QueryService, error) {
 	hc.mu.Lock()
 	thc := hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(alias))]
 	hc.mu.Unlock()
 	if thc == nil || thc.Conn == nil {
-		//TODO: test that throws this error
+		// TODO: test that throws this error
 		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet: %v is either down or nonexistent", alias)
 	}
 	return thc.Connection(), nil
@@ -722,11 +886,11 @@ func (hc *HealthCheckImpl) TabletConnection(alias *topodata.TabletAlias, target 
 
 // Target includes cell which we ignore here
 // because tabletStatsCache is intended to be per-cell
-func (hc *HealthCheckImpl) keyFromTarget(target *query.Target) keyspaceShardTabletType {
+func (hc *HealthCheckImpl) KeyFromTarget(target *query.Target) keyspaceShardTabletType {
 	return keyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType)))
 }
 
-func (hc *HealthCheckImpl) keyFromTablet(tablet *topodata.Tablet) keyspaceShardTabletType {
+func (hc *HealthCheckImpl) KeyFromTablet(tablet *topodata.Tablet) keyspaceShardTabletType {
 	return keyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", tablet.Keyspace, tablet.Shard, topoproto.TabletTypeLString(tablet.Type)))
 }
 
@@ -811,7 +975,7 @@ func (hc *HealthCheckImpl) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	status := hc.CacheStatus()
 	b, err := json.MarshalIndent(status, "", " ")
 	if err != nil {
-		//Error logged
+		// Error logged
 		if _, err := w.Write([]byte(err.Error())); err != nil {
 			log.Errorf("write to buffer error failed: %v", err)
 		}
@@ -822,7 +986,7 @@ func (hc *HealthCheckImpl) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	buf := bytes.NewBuffer(nil)
 	json.HTMLEscape(buf, b)
 
-	//Error logged
+	// Error logged
 	if _, err := w.Write(buf.Bytes()); err != nil {
 		log.Errorf("write to buffer bytes failed: %v", err)
 	}
