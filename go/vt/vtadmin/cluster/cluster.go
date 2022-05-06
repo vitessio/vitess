@@ -852,6 +852,26 @@ func (c *Cluster) GetCellInfos(ctx context.Context, req *vtadminpb.GetCellInfosR
 	return infos, nil
 }
 
+// GetCellsAliases returns all CellsAliases in the cluster.
+func (c *Cluster) GetCellsAliases(ctx context.Context) (*vtadminpb.ClusterCellsAliases, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetCellsAliases")
+	defer span.Finish()
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	resp, err := c.Vtctld.GetCellsAliases(ctx, &vtctldatapb.GetCellsAliasesRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.ClusterCellsAliases{
+		Cluster: c.ToProto(),
+		Aliases: resp.Aliases,
+	}, nil
+}
+
 // GetGates returns the list of all VTGates in the cluster.
 func (c *Cluster) GetGates(ctx context.Context) ([]*vtadminpb.VTGate, error) {
 	// (TODO|@ajm188) Support tags in the vtadmin RPC request and pass them
