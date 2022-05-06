@@ -573,6 +573,16 @@ func (api *API) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsRequest
 	}, nil
 }
 
+// GetCellInfos is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetCellInfos(ctx context.Context, req *vtadminpb.GetCellInfosRequest) (*vtadminpb.GetCellInfosResponse, error) {
+	panic("unimplemented!")
+}
+
+// GetCellsAliases is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetCellsAliases(ctx context.Context, req *vtadminpb.GetCellsAliasesRequest) (*vtadminpb.GetCellsAliasesResponse, error) {
+	panic("unimplemented!")
+}
+
 // GetClusters is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetClusters(ctx context.Context, req *vtadminpb.GetClustersRequest) (*vtadminpb.GetClustersResponse, error) {
 	span, _ := trace.NewSpan(ctx, "API.GetClusters")
