@@ -29,28 +29,32 @@ import (
 // While doing this, it will also find the types for columns and
 // store these in the typer:s expression map
 type binder struct {
-	recursive    ExprDependencies
-	direct       ExprDependencies
-	scoper       *scoper
-	tc           *tableCollector
-	org          originable
-	typer        *typer
-	subqueryMap  map[sqlparser.Statement][]*sqlparser.ExtractedSubquery
-	subqueryRef  map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery
-	colidentDeps map[string]TableSet
+	recursive   ExprDependencies
+	direct      ExprDependencies
+	scoper      *scoper
+	tc          *tableCollector
+	org         originable
+	typer       *typer
+	subqueryMap map[sqlparser.Statement][]*sqlparser.ExtractedSubquery
+	subqueryRef map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery
+
+	// every table will have an entry in the outer map. it will point to a map with all the columns
+	// that this map is joined with using USING.
+	// This information is used to expand `*` correctly, and is not available post-analysis
+	usingJoinInfo map[TableSet]map[string]TableSet
 }
 
 func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer) *binder {
 	return &binder{
-		recursive:    map[sqlparser.Expr]TableSet{},
-		direct:       map[sqlparser.Expr]TableSet{},
-		scoper:       scoper,
-		org:          org,
-		tc:           tc,
-		typer:        typer,
-		subqueryMap:  map[sqlparser.Statement][]*sqlparser.ExtractedSubquery{},
-		subqueryRef:  map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery{},
-		colidentDeps: map[string]TableSet{},
+		recursive:     map[sqlparser.Expr]TableSet{},
+		direct:        map[sqlparser.Expr]TableSet{},
+		scoper:        scoper,
+		org:           org,
+		tc:            tc,
+		typer:         typer,
+		subqueryMap:   map[sqlparser.Statement][]*sqlparser.ExtractedSubquery{},
+		subqueryRef:   map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery{},
+		usingJoinInfo: map[TableSet]map[string]TableSet{},
 	}
 }
 
@@ -75,7 +79,7 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 			if err != nil {
 				return err
 			}
-			b.colidentDeps[ident.Lowered()] = deps.direct
+			s.joinUsing[ident.Lowered()] = deps.direct
 		}
 	case *sqlparser.ColName:
 		currentScope := b.scoper.currentScope()

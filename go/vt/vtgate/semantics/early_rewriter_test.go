@@ -135,14 +135,11 @@ func TestExpandStar(t *testing.T) {
 		sql:    "select * from t2 join t4 using (c1)",
 		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4 from t2 join t4 using (c1)",
 	}, {
-		sql:    "select * from t2 join t4 using (c1), t2b join t4b using (c1)",
-		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4 from t2 join t4 using (c1)",
-	}, {
 		sql:    "select * from t2 join t4 using (c1) join t2 as X using (c1)",
-		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4 from t2 join t4 using (c1)",
+		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4, X.c2 as c2 from t2 join t4 using (c1) join t2 as X using (c1)",
 	}, {
 		sql:    "select * from t2 join t4 using (c1), t2 as t2b join t4 as t4b using (c1)",
-		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4, t2b.c1 as c1, t2b.c2 as c2, t4b.c4 as c4",
+		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4, t2b.c1 as c1, t2b.c2 as c2, t4b.c4 as c4 from t2 join t4 using (c1), t2 as t2b join t4 as t4b using (c1)",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {

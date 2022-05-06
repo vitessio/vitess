@@ -53,9 +53,11 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	}
 	s.org = a
 	a.tables.org = a
-	a.binder = newBinder(s, a, a.tables, a.typer)
-	a.rewriter = &earlyRewriter{scoper: s, binder: a.binder}
 
+	b := newBinder(s, a, a.tables, a.typer)
+	a.binder = b
+	a.rewriter = &earlyRewriter{scoper: s, binder: b}
+	s.binder = b
 	return a
 }
 

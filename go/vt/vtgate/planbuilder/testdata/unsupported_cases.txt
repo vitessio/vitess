@@ -522,11 +522,6 @@ Gen4 error: can't push predicates on concatenate
 "expr cannot be translated, not supported: (select 1 from `user` where id = 1)"
 Gen4 plan same as above
 
-# join with USING construct
-"select user.id from user join user_extra using(id)"
-"unsupported: join with USING(column_list) clause for complex queries"
-Gen4 plan same as above
-
 # lateral derived tables
 "select * from user, lateral (select * from user_extra where user_id = user.id) t"
 "unsupported: lateral derived tables"

@@ -31,21 +31,6 @@ type earlyRewriter struct {
 	warning string
 }
 
-func (b *binder) prepareUsingMap() (result map[TableSet]map[string]TableSet) {
-	result = map[TableSet]map[string]TableSet{}
-	for colName, tss := range b.colidentDeps {
-		for _, ts := range tss.Constituents() {
-			m := result[ts]
-			if m == nil {
-				m = map[string]TableSet{}
-			}
-			m[colName] = tss
-			result[ts] = m
-		}
-	}
-	return
-}
-
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case sqlparser.SelectExprs:
@@ -62,7 +47,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 				selExprs = append(selExprs, selectExpr)
 				continue
 			}
-			starExpanded, colNames, err := expandTableColumns(starExpr, currentScope.tables, r.binder.prepareUsingMap(), r.scoper.org)
+			starExpanded, colNames, err := expandTableColumns(starExpr, currentScope.tables, r.binder.usingJoinInfo, r.scoper.org)
 			if err != nil {
 				return err
 			}
