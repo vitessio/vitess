@@ -3578,10 +3578,11 @@ truncate_statement:
   {
     $$ = &DDL{Action: TruncateStr, Table: $2}
   }
+
 analyze_statement:
-  ANALYZE TABLE table_name
+  ANALYZE TABLE table_name_list
   {
-    $$ = &DDL{Action: AlterStr, Table: $3}
+    $$ = &Analyze{Tables: $3}
   }
 
 show_statement:

@@ -1360,7 +1360,10 @@ var (
 			output: "alter table a drop index b",
 		}, {
 			input:  "analyze table a",
-			output: "alter table a",
+			output: "analyze table a",
+		}, {
+			input:  "analyze table a, b, c",
+			output: "analyze table a, b, c",
 		}, {
 			input:  "show character set",
 			output: "show charset",
