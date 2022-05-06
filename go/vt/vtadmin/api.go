@@ -575,7 +575,47 @@ func (api *API) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsRequest
 
 // GetCellInfos is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetCellInfos(ctx context.Context, req *vtadminpb.GetCellInfosRequest) (*vtadminpb.GetCellInfosResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "API.GetCellInfos")
+	defer span.Finish()
+
+	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+
+	var (
+		m         sync.Mutex
+		wg        sync.WaitGroup
+		rec       concurrency.AllErrorRecorder
+		cellInfos []*vtadminpb.ClusterCellInfo
+	)
+
+	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.CellInfoResource, rbac.GetAction) {
+			continue
+		}
+
+		wg.Add(1)
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			clusterCellInfos, err := c.GetCellInfos(ctx, req)
+			if err != nil {
+				rec.RecordError(fmt.Errorf("failed to GetCellInfos for cluster %s: %w", c.ID, err))
+				return
+			}
+
+			m.Lock()
+			defer m.Unlock()
+			cellInfos = append(cellInfos, clusterCellInfos...)
+		}(c)
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return &vtadminpb.GetCellInfosResponse{
+		CellInfos: cellInfos,
+	}, nil
 }
 
 // GetCellsAliases is part of the vtadminpb.VTAdminServer interface.

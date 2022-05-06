@@ -79,6 +79,7 @@ const (
 
 	/* generic topo resources */
 
+	CellInfoResource Resource = "CellInfo"
 	KeyspaceResource Resource = "Keyspace"
 	ShardResource    Resource = "Shard"
 	TabletResource   Resource = "Tablet"

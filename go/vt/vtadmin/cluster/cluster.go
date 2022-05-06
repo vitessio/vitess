@@ -762,6 +762,96 @@ func (c *Cluster) getShardSets(ctx context.Context, keyspaces []string, keyspace
 	return shardsByKeyspace, nil
 }
 
+// GetCellInfos returns a list of ClusterCellInfo objects for cells in the
+// given cluster.
+//
+// If req.Cells is set, cells are restricted only to cells with those names.
+// Note: specifying a cell name that does not exist in the cluster fails the
+// overall request.
+//
+// If req.NamesOnly is set, each ClusterCellInfo will only contain the Cluster
+// and Name fields. req.Cells takes precedence over this option.
+func (c *Cluster) GetCellInfos(ctx context.Context, req *vtadminpb.GetCellInfosRequest) ([]*vtadminpb.ClusterCellInfo, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetCellInfos")
+	defer span.Finish()
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	names := req.Cells
+	if len(names) == 0 {
+		resp, err := c.Vtctld.GetCellInfoNames(ctx, &vtctldatapb.GetCellInfoNamesRequest{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to GetCellInfoNames: %w", err)
+		}
+
+		names = resp.Names
+	}
+
+	namesOnly := req.NamesOnly
+	if namesOnly {
+		switch len(req.Cells) {
+		case 0:
+		default:
+			log.Warning("Cluster.GetCellInfos: req.Cells and req.NamesOnly set, ignoring NamesOnly")
+			namesOnly = false
+		}
+	}
+
+	span.Annotate("names_only", namesOnly)
+	span.Annotate("cells", req.Cells) // deliberately not the cellnames we (maybe) fetched above
+
+	cpb := c.ToProto()
+	infos := make([]*vtadminpb.ClusterCellInfo, 0, len(names))
+	if namesOnly {
+		for _, name := range names {
+			infos = append(infos, &vtadminpb.ClusterCellInfo{
+				Cluster: cpb,
+				Name:    name,
+			})
+		}
+
+		return infos, nil
+	}
+
+	var (
+		m   sync.Mutex
+		wg  sync.WaitGroup
+		rec concurrency.AllErrorRecorder
+	)
+
+	for _, name := range names {
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+
+			resp, err := c.Vtctld.GetCellInfo(ctx, &vtctldatapb.GetCellInfoRequest{
+				Cell: name,
+			})
+			if err != nil {
+				rec.RecordError(fmt.Errorf("GetCellInfo(%s) failed: %w", name, err))
+				return
+			}
+
+			m.Lock()
+			defer m.Unlock()
+			infos = append(infos, &vtadminpb.ClusterCellInfo{
+				Cluster:  cpb,
+				Name:     name,
+				CellInfo: resp.CellInfo,
+			})
+		}(name)
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return infos, nil
+}
+
 // GetGates returns the list of all VTGates in the cluster.
 func (c *Cluster) GetGates(ctx context.Context) ([]*vtadminpb.VTGate, error) {
 	// (TODO|@ajm188) Support tags in the vtadmin RPC request and pass them
