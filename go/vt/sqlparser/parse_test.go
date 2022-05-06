@@ -4035,6 +4035,10 @@ func TestCreateTable(t *testing.T) {
 		input  string
 		output string
 	}{{
+		// Test the signed keyword – as the default for numeric types, it is a no-op
+		input:  "create table t (pk int signed primary key)",
+		output: "create table t (\n\tpk int primary key\n)",
+	}, {
 		// test key_block_size
 		input: "create table t (\n" +
 			"	id int auto_increment,\n" +

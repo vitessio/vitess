@@ -448,7 +448,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <charsetCollate> charset_default_opt collate_default_opt encryption_default_opt
 %type <charsetCollates> creation_option creation_option_opt
 %type <boolVal> stored_opt
-%type <boolVal> unsigned_opt zero_fill_opt
+%type <boolVal> signed_or_unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolVal> auto_increment local_opt optionally_opt
 %type <colKeyOpt> column_key
@@ -2343,7 +2343,7 @@ column_type_options:
   }
 
 column_type:
-  numeric_type unsigned_opt zero_fill_opt
+  numeric_type signed_or_unsigned_opt zero_fill_opt
   {
     $$ = $1
     $$.Unsigned = $2
@@ -2665,9 +2665,13 @@ decimal_length_opt:
     }
   }
 
-unsigned_opt:
+signed_or_unsigned_opt:
   {
     $$ = BoolVal(false)
+  }
+| SIGNED
+  {
+   $$ = BoolVal(false)
   }
 | UNSIGNED
   {
