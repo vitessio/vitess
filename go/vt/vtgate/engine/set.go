@@ -398,12 +398,13 @@ func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value, error) {
 
 	changed := false
 	newValArr := strings.Split(newVal, ",")
+	unsupportedMode := ""
 	for _, nVal := range newValArr {
 		nVal = strings.ToUpper(nVal)
 		for _, mode := range unsupportedSQLModes {
 			if mode == nVal {
-				// we are setting an unsupported sql_mode
-				return false, sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "setting the %s sql_mode is unsupported", nVal)
+				unsupportedMode = nVal
+				break
 			}
 		}
 		notSeen, exists := origMap[nVal]
@@ -419,6 +420,9 @@ func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value, error) {
 	}
 	if !changed && uniqOrigVal != origValSeen {
 		changed = true
+	}
+	if changed && unsupportedMode != "" {
+		return false, sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "setting the %s sql_mode is unsupported", unsupportedMode)
 	}
 
 	return changed, qr.Rows[0][1], nil
