@@ -107,8 +107,8 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 		},
 		{
 			name:  "3MULTICOL1PKE",
-			table: "threemcpke_t",
-			ddl: `CREATE TABLE threemcpke_t (col1 VARCHAR(25) NOT NULL, col2 VARCHAR(25) NOT NULL,
+			table: "onemcpke_t",
+			ddl: `CREATE TABLE onemcpke_t (col1 VARCHAR(25) NOT NULL, col2 VARCHAR(25) NOT NULL,
 					col3 VARCHAR(25) NOT NULL, col4 VARCHAR(25), UNIQUE KEY c4_c2_c1 (col4, col2, col1),
 					UNIQUE KEY c1_c2 (col1, col2), UNIQUE KEY c1_c2_c4 (col1, col2, col4),
 					KEY nc1_nc2 (col1, col2))`,
