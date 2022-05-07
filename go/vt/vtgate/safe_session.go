@@ -93,6 +93,10 @@ const (
 	savepointNotNeeded
 	// savepointNeeded - savepoint may be required
 	savepointNeeded
+	// savepointSet - savepoint is set on the session
+	savepointSet
+	// savepointRollbackSet - rollback to savepoint is set on the session
+	savepointRollbackSet
 	// savepointRollback - rollback happened on the savepoint
 	savepointRollback
 )
@@ -216,15 +220,45 @@ func (session *SafeSession) CanAddSavepoint() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
-	return session.savepointState == savepointNeeded && session.savepointName == ""
+	return session.savepointState == savepointNeeded
 }
 
-// SavepointRollbackNotSet returns true if rollback to savepoint can be done.
-func (session *SafeSession) SavepointRollbackNotSet() bool {
+// SetSavepoint stores the savepoint name to session.
+func (session *SafeSession) SetSavepoint(name string) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
-	return session.savepointState == savepointNeeded && session.rollbackOnPartialExec == "" && session.savepointName != ""
+	session.savepointName = name
+	session.savepointState = savepointSet
+}
+
+// SetRollbackCommand stores the rollback command to session and executed if required.
+func (session *SafeSession) SetRollbackCommand() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.savepointState == savepointSet {
+		session.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", session.savepointName)
+	} else {
+		session.rollbackOnPartialExec = txRollback
+	}
+	session.savepointState = savepointRollbackSet
+}
+
+// SavepointRollback updates the state that transaction was rolledback to the savepoint stored in the session.
+func (session *SafeSession) SavepointRollback() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	session.savepointState = savepointRollback
+}
+
+// IsRollbackSet returns true if rollback to savepoint can be done.
+func (session *SafeSession) IsRollbackSet() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	return session.savepointState == savepointRollbackSet
 }
 
 // SetCommitOrder sets the commit order.

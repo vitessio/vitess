@@ -2159,3 +2159,43 @@ func TestTestPartialVindexInsertQueryFailure(t *testing.T) {
 	testQueryLog(t, logChan, "VindexCreate", "SAVEPOINT_ROLLBACK", "rollback to x", 0)
 	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 1), (2, 3)", 0)
 }
+
+func TestTestPartialVindexInsertQueryFailureAutoCommit(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	session := NewAutocommitSession(&vtgatepb.Session{})
+	require.True(t, session.GetAutocommit())
+	require.False(t, session.InTransaction())
+
+	// fail the second lookup insert query i.e t1_lkp_idx(3, ksid)
+	sbc2.MustFailExecute[sqlparser.StmtInsert] = 1
+	wantQ := []*querypb.BoundQuery{{
+		Sql: "insert into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_0, :keyspace_id_0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"unq_col_0":     sqltypes.Int64BindVariable(1),
+			"keyspace_id_0": sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6")),
+			"unq_col_1":     sqltypes.Int64BindVariable(3),
+			"keyspace_id_1": sqltypes.BytesBindVariable([]byte("\x06\xe7\xea\"Βp\x8f")),
+			"_unq_col_0":    sqltypes.Int64BindVariable(1),
+			"_unq_col_1":    sqltypes.Int64BindVariable(3),
+		},
+	}}
+
+	_, err := executorExecSession(executor, "insert into t1(id, unq_col) values (1, 1), (2, 3)", nil, session.Session)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "transaction rolled back to reverse changes of partial DML execution")
+	assert.True(t, session.GetAutocommit())
+	assert.False(t, session.InTransaction())
+
+	assertQueriesWithSavepoint(t, sbc1, wantQ)
+
+	// only parameter in expected query changes
+	wantQ[0].Sql = "insert into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_1, :keyspace_id_1)"
+	assertQueriesWithSavepoint(t, sbc2, wantQ)
+
+	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into t1_lkp_idx(unq_col, keyspace_id) values(:unq_col_0, :keyspace_id_0), (:unq_col_1, :keyspace_id_1)", 2)
+	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 1), (2, 3)", 0)
+}

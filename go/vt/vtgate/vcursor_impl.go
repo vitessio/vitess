@@ -483,7 +483,7 @@ func (vc *vcursorImpl) markSavepoint(needsRollbackOnParialExec bool, bindVars ma
 	if err != nil {
 		return err
 	}
-	vc.safeSession.savepointName = uID
+	vc.safeSession.SetSavepoint(uID)
 	return nil
 }
 
@@ -584,13 +584,8 @@ func (vc *vcursorImpl) AutocommitApproval() bool {
 // there does not exist any old savepoint for which rollback is already set
 // and rollback on error is allowed.
 func (vc *vcursorImpl) setRollbackOnPartialExecIfRequired(atleastOneSuccess bool, rollbackOnError bool) {
-	if atleastOneSuccess && rollbackOnError && vc.safeSession.SavepointRollbackNotSet() {
-		uID := vc.safeSession.savepointName
-		if uID == "" {
-			vc.safeSession.rollbackOnPartialExec = txRollback
-		} else {
-			vc.safeSession.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", uID)
-		}
+	if atleastOneSuccess && rollbackOnError && !vc.safeSession.IsRollbackSet() {
+		vc.safeSession.SetRollbackCommand()
 	}
 }
 
