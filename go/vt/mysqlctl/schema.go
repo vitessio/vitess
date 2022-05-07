@@ -533,7 +533,7 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 	return &tabletmanagerdatapb.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
 }
 
-// getPrimaryKeyEquivalentColumns can be used if the table has
+// GetPrimaryKeyEquivalentColumns can be used if the table has
 // no defined PRIMARY KEY. It will return the columns in a
 // viable PRIMARY KEY equivalent (PKE) -- a NON-NULL UNIQUE
 // KEY -- in the specified table. When multiple PKE indexes

@@ -23,10 +23,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -510,4 +512,21 @@ func (vse *Engine) getMySQLEndpoint(ctx context.Context, db dbconfigs.Connector)
 	host := res.Rows[0][0].ToString()
 	port, _ := res.Rows[0][1].ToInt64()
 	return fmt.Sprintf("%s:%d", host, port), nil
+}
+
+func (vse *Engine) mapPKEquivalentCols(ctx context.Context, table *binlogdatapb.MinimalTable) ([]int, error) {
+	mysqld := mysqlctl.NewMysqld(vse.env.Config().DB)
+	pkeColNames, err := mysqld.GetPrimaryKeyEquivalentColumns(ctx, vse.keyspace, table.Name)
+	if err != nil {
+		return nil, err
+	}
+	pkeCols := make([]int, len(pkeColNames))
+	for n, field := range table.Fields {
+		for i, pkeColName := range pkeColNames {
+			if strings.EqualFold(field.Name, pkeColName) {
+				pkeCols[i] = n
+			}
+		}
+	}
+	return pkeCols, nil
 }

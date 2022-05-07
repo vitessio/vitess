@@ -196,6 +196,13 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 	}
 	var pkColumns = make([]int, 0)
 	if len(st.PKColumns) == 0 {
+		// Let's try and use a PK equivalent if one exists
+		pkColumns, err := rs.vse.mapPKEquivalentCols(rs.ctx, st)
+		if err == nil && len(pkColumns) != 0 {
+			return pkColumns, nil
+		}
+
+		// We have to fall back to using all of the columns
 		pkColumns = make([]int, len(st.Fields))
 		for i := range st.Fields {
 			pkColumns[i] = i
