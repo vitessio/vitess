@@ -113,7 +113,10 @@ func New(cfg Config) (*Cluster, error) {
 	}
 
 	cluster.DB = vtsql.New(vtsqlCfg)
-	cluster.Vtctld = vtctldclient.New(vtctldCfg)
+	cluster.Vtctld, err = vtctldclient.New(vtctldCfg)
+	if err != nil {
+		return nil, fmt.Errorf("error creating vtctldclient: %w", err)
+	}
 
 	if cfg.TabletFQDNTmplStr != "" {
 		cluster.TabletFQDNTmpl, err = template.New(cluster.ID + "-tablet-fqdn").Parse(cfg.TabletFQDNTmplStr)

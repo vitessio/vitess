@@ -80,7 +80,7 @@ type ClientProxy struct {
 //
 // It does not open a connection to a vtctld; users must call Dial before first
 // use.
-func New(cfg *Config) *ClientProxy {
+func New(cfg *Config) (*ClientProxy, error) {
 	return &ClientProxy{
 		cfg:      cfg,
 		cluster:  cfg.Cluster,
@@ -88,7 +88,7 @@ func New(cfg *Config) *ClientProxy {
 		DialFunc: grpcvtctldclient.NewWithDialOpts,
 		resolver: cfg.ResolverOptions.NewBuilder(cfg.Cluster.Id),
 		closed:   true,
-	}
+	}, nil
 }
 
 // Dial is part of the Proxy interface.

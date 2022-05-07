@@ -80,7 +80,7 @@ func TestDial(t *testing.T) {
 		Hostname: listener.Addr().String(),
 	})
 
-	proxy := New(&Config{
+	proxy, err := New(&Config{
 		Cluster: &vtadminpb.Cluster{
 			Id:   "test",
 			Name: "testcluster",
@@ -90,6 +90,8 @@ func TestDial(t *testing.T) {
 			DiscoveryTimeout: 50 * time.Millisecond,
 		},
 	})
+	require.NoError(t, err)
+
 	defer proxy.Close() // prevents grpc-core from logging a bunch of "connection errors" after deferred listener.Close() above.
 
 	err = proxy.Dial(context.Background())
@@ -158,7 +160,7 @@ func TestRedial(t *testing.T) {
 	})
 
 	reResolveFired := make(chan struct{})
-	proxy := New(&Config{
+	proxy, err := New(&Config{
 		Cluster: &vtadminpb.Cluster{
 			Id:   "test",
 			Name: "testcluster",
@@ -168,6 +170,7 @@ func TestRedial(t *testing.T) {
 			DiscoveryTimeout: 50 * time.Millisecond,
 		},
 	})
+	require.NoError(t, err)
 
 	// wrap the resolver builder to test that re-resolve has fired as expected.
 	proxy.resolver = &testResolverBuilder{Builder: proxy.resolver, fired: reResolveFired}
