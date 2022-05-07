@@ -136,7 +136,7 @@ update user set nickname='alice' where id in (1,4)
 ----------------------------------------------------------------------
 commit
 
-2 ks_sharded/c0-: commit
-3 ks_sharded/-40: commit
+2 ks_sharded/-40: commit
+3 ks_sharded/c0-: commit
 
 ----------------------------------------------------------------------
