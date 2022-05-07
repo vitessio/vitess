@@ -521,11 +521,17 @@ func (vse *Engine) mapPKEquivalentCols(ctx context.Context, table *binlogdatapb.
 		return nil, err
 	}
 	pkeCols := make([]int, len(pkeColNames))
+	matches := 0
 	for n, field := range table.Fields {
 		for i, pkeColName := range pkeColNames {
 			if strings.EqualFold(field.Name, pkeColName) {
 				pkeCols[i] = n
+				matches++
+				break
 			}
+		}
+		if matches == len(pkeColNames) {
+			break
 		}
 	}
 	return pkeCols, nil
