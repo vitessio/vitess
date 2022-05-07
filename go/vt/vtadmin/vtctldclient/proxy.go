@@ -65,7 +65,7 @@ type ClientProxy struct {
 	// DialFunc is called to open a new vtctdclient connection. In production,
 	// this should always be grpcvtctldclient.NewWithDialOpts, but it is
 	// exported for testing purposes.
-	DialFunc func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)
+	dialFunc func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)
 	resolver grpcresolver.Builder
 
 	m        sync.Mutex
@@ -81,11 +81,15 @@ type ClientProxy struct {
 // It does not open a connection to a vtctld; users must call Dial before first
 // use.
 func New(cfg *Config) (*ClientProxy, error) {
+	dialFunc := cfg.dialFunc
+	if dialFunc == nil {
+		dialFunc = grpcvtctldclient.NewWithDialOpts
+	}
 	return &ClientProxy{
 		cfg:      cfg,
 		cluster:  cfg.Cluster,
 		creds:    cfg.Credentials,
-		DialFunc: grpcvtctldclient.NewWithDialOpts,
+		dialFunc: dialFunc,
 		resolver: cfg.ResolverOptions.NewBuilder(cfg.Cluster.Id),
 		closed:   true,
 	}, nil
@@ -132,8 +136,8 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 
 	opts = append(opts, grpc.WithResolvers(vtctld.resolver))
 
-	// TODO: update DialFunc to take ctx as first arg.
-	client, err := vtctld.DialFunc(resolver.DialAddr(vtctld.resolver, "vtctld"), grpcclient.FailFast(false), opts...)
+	// TODO: update dialFunc to take ctx as first arg.
+	client, err := vtctld.dialFunc(resolver.DialAddr(vtctld.resolver, "vtctld"), grpcclient.FailFast(false), opts...)
 	if err != nil {
 		return err
 	}

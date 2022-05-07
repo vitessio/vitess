@@ -98,7 +98,9 @@ func BuildCluster(t testing.TB, cfg TestClusterConfig) *cluster.Cluster {
 		ID:            cfg.Cluster.Id,
 		Name:          cfg.Cluster.Name,
 		DiscoveryImpl: discoveryTestImplName,
-	}
+	}.WithVtctldTestConfigOptions(vtadminvtctldclient.WithDialFunc(func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
+		return cfg.VtctldClient, nil
+	}))
 
 	m.Lock()
 	testdisco = disco
@@ -121,11 +123,6 @@ func BuildCluster(t testing.TB, cfg TestClusterConfig) *cluster.Cluster {
 	db := c.DB.(*vtsql.VTGateProxy)
 	db.DialFunc = func(_ vitessdriver.Configuration) (*sql.DB, error) {
 		return sql.OpenDB(&fakevtsql.Connector{Tablets: tablets, ShouldErr: cfg.DBConfig.ShouldErr}), nil
-	}
-
-	vtctld := c.Vtctld.(*vtadminvtctldclient.ClientProxy)
-	vtctld.DialFunc = func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
-		return cfg.VtctldClient, nil
 	}
 
 	return c

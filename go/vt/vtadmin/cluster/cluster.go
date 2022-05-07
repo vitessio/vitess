@@ -112,6 +112,10 @@ func New(cfg Config) (*Cluster, error) {
 		return nil, fmt.Errorf("error creating vtctldclient proxy config: %w", err)
 	}
 
+	for _, opt := range cfg.vtctldConfigOpts {
+		vtctldCfg = opt(vtctldCfg)
+	}
+
 	cluster.DB = vtsql.New(vtsqlCfg)
 	cluster.Vtctld, err = vtctldclient.New(vtctldCfg)
 	if err != nil {
