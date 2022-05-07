@@ -25,7 +25,7 @@ import (
 
 // StartLocalZk is a helper method to create a local ZK process.  Used
 // in tests, mostly. It will log.Fatal out if there is an error.  Each
-// call should use different serverID / ports, so tests don't
+// call should use different serverId / ports, so tests don't
 // interfere with eachother. Use the testfiles package to achieve this.
 func StartLocalZk(id, port int) (*Zkd, string) {
 	// Build the config parameters.
