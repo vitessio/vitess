@@ -39,7 +39,7 @@ import (
 
 const (
 	// startWaitTime is the number of seconds to wait at Start.
-	startWaitTime = 20
+	startWaitTime = 30
 	// shutdownWaitTime is the number of seconds to wait at Shutdown.
 	shutdownWaitTime = 20
 )
@@ -93,25 +93,29 @@ func (zkd *Zkd) Start() error {
 	}
 
 	// give it some time to succeed - usually by the time the socket emerges
-	// we are in good shape
-	for i := 0; i < startWaitTime; i++ {
+	// we are in good shape, but not always. So let's continue to retry until
+	// we get an imok response from the socket or we timeout.
+	timeout := time.Now().Add(startWaitTime * time.Second)
+	for time.Now().Before(timeout) {
 		zkAddr := fmt.Sprintf(":%v", zkd.config.ClientPort)
 		conn, connErr := net.Dial("tcp", zkAddr)
 		if connErr != nil {
 			err = connErr
-			time.Sleep(time.Second)
-			continue
 		} else {
 			err = nil
 			conn.Write([]byte("ruok"))
 			reply := make([]byte, 4)
 			conn.Read(reply)
-			if string(reply) != "imok" {
-				err = fmt.Errorf("local zk unhealthy: %v %v", zkAddr, reply)
+			if string(reply) == "imok" {
+				break
 			}
-			conn.Close()
-			break
+			err = fmt.Errorf("local zk unhealthy: %v %v", zkAddr, reply)
 		}
+		time.Sleep(time.Second)
+		continue
+	}
+	if err != nil {
+		return err
 	}
 	zkd.done = make(chan struct{})
 	go func(done chan<- struct{}) {
@@ -190,11 +194,25 @@ func (zkd *Zkd) Init() error {
 		return err
 	}
 
-	zkAddr := fmt.Sprintf("localhost:%v", zkd.config.ClientPort)
-	zk, session, err := zookeeper.Connect([]string{zkAddr}, startWaitTime*time.Second)
+	var (
+		zk      *zookeeper.Conn
+		session <-chan zookeeper.Event
+		zkAddr  = fmt.Sprintf("localhost:%v", zkd.config.ClientPort)
+	)
+
+	// Let's retry a few times to deal with ephemeral network failures
+	timeout := time.Now().Add((startWaitTime / 10) * time.Second)
+	for time.Now().Before(timeout) {
+		zk, session, err = zookeeper.Connect([]string{zkAddr}, startWaitTime*time.Second)
+		if err == nil {
+			break
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
 	if err != nil {
 		return err
 	}
+
 	event := <-session
 	if event.State != zookeeper.StateConnecting {
 		return event.Err
