@@ -214,6 +214,9 @@ func (w *heartbeatWriter) recordError(err error) {
 
 // enableWrites actives or deactives heartbeat writes
 func (w *heartbeatWriter) enableWrites(enable bool) {
+	if w.ticks == nil {
+		return
+	}
 	if enable {
 		w.ticks.Start(w.writeHeartbeat)
 	} else {
