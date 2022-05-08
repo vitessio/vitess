@@ -535,11 +535,12 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 // no defined PRIMARY KEY. It will return the columns in a
 // viable PRIMARY KEY equivalent (PKE) -- a NON-NULL UNIQUE
 // KEY -- in the specified table. When multiple PKE indexes
-// are available it will use the one with the fewest columns
-// in it.
+// are available it will choose the most efficient one based
+// on the column data types and the number of columns in the
+// index.
 // If this function is used on a table that DOES have a
 // defined PRIMARY KEY then it may return the columns for
-// that index if it has the fewest columns in it among the
+// that index if it is the most efficient one amongst the
 // available PKE indexes on the table.
 func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
@@ -575,8 +576,6 @@ func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName
                                                 WHEN 'varchar' THEN 18
                                                 WHEN 'tinyblob' THEN 19
                                                 WHEN 'tinytext' THEN 20
-                                                WHEN 'mediumblob' THEN 21
-                                                WHEN 'mediumtext' THEN 22
                                                 ELSE 1000
                                               END
                                             ) AS type_cost, COUNT(stats.COLUMN_NAME) AS col_count FROM information_schema.STATISTICS AS stats INNER JOIN
