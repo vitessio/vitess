@@ -1629,13 +1629,16 @@ type PartitionDefinitionOptions struct {
 	SubPartitionDefinitions SubPartitionDefinitions
 }
 
+// Subpartition Definition Corresponds to the subpartition_definition option of partition_definition
 type SubPartitionDefinition struct {
 	Name    ColIdent
 	Options *SubPartitionDefinitionOptions
 }
 
+// This is a list of SubPartitionDefinition
 type SubPartitionDefinitions []*SubPartitionDefinition
 
+// Different options/attributes that can be provided to a subpartition_definition.
 type SubPartitionDefinitionOptions struct {
 	Comment        *Literal
 	Engine         *PartitionEngine
