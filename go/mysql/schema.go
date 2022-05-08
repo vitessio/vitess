@@ -34,7 +34,8 @@ const (
 	// BaseShowPrimary is the base query for fetching primary key info.
 	BaseShowPrimary = `
 		SELECT TABLE_NAME as table_name, COLUMN_NAME as column_name
-		FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND LOWER(INDEX_NAME) = 'primary'
+		FROM information_schema.STATISTICS
+		WHERE TABLE_SCHEMA = DATABASE() AND LOWER(INDEX_NAME) = 'primary'
 		ORDER BY table_name, SEQ_IN_INDEX`
 	// ShowRowsRead is the query used to find the number of rows read.
 	ShowRowsRead = "show status like 'Innodb_rows_read'"

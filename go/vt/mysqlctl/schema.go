@@ -363,9 +363,10 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
 	}
 	// sql uses column name aliases to guarantee lower case sensitivity.
 	sql := `
-            SELECT TABLE_NAME as table_name, SEQ_IN_INDEX as seq_in_index, COLUMN_NAME as column_name
-            FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME IN %s AND LOWER(INDEX_NAME) = 'primary'
-            ORDER BY table_name, seq_in_index`
+            SELECT TABLE_NAME as table_name, COLUMN_NAME as column_name
+            FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME IN %s AND LOWER(INDEX_NAME) = 'primary'
+            ORDER BY table_name, SEQ_IN_INDEX`
 	sql = fmt.Sprintf(sql, dbName, tableList)
 	qr, err := conn.ExecuteFetch(sql, len(tables)*100, true)
 	if err != nil {
@@ -541,8 +542,8 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 //   https://dev.mysql.com/doc/refman/en/storage-requirements.html
 // If this function is used on a table that DOES have a
 // defined PRIMARY KEY then it may return the columns for
-// that index if it is the most efficient one amongst the
-// available PKE indexes on the table.
+// that index if it is likely the most efficient one amongst
+// the  available PKE indexes on the table.
 func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
