@@ -184,6 +184,9 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 		throttler.check = NewThrottlerCheck(throttler)
 		throttler.initConfig()
 		throttler.check.SelfChecks(context.Background())
+	} else {
+		// Create an empty cache, just so that it isn't nil
+		throttler.throttledApps = cache.New(cache.NoExpiration, 0)
 	}
 	return throttler
 }
