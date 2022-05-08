@@ -166,16 +166,19 @@ func validateTableDoesNotExist(t *testing.T, tableExpr string) {
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)
+	var foundTableName string
+	var exists bool
+	var err error
 	for {
 		select {
 		case <-ticker.C:
-			exists, _, err := tableExists(tableExpr)
+			exists, foundTableName, err = tableExists(tableExpr)
 			require.NoError(t, err)
 			if !exists {
 				return
 			}
 		case <-ctx.Done():
-			assert.NoError(t, ctx.Err(), "validateTableDoesNotExist timed out, table %v still exists", tableExpr)
+			assert.NoError(t, ctx.Err(), "validateTableDoesNotExist timed out, table %v still exists (%v)", tableExpr, foundTableName)
 			return
 		}
 	}
