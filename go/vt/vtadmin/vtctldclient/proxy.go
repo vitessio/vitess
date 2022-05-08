@@ -85,14 +85,21 @@ func New(cfg *Config) (*ClientProxy, error) {
 	if dialFunc == nil {
 		dialFunc = grpcvtctldclient.NewWithDialOpts
 	}
-	return &ClientProxy{
+
+	proxy := ClientProxy{
 		cfg:      cfg,
 		cluster:  cfg.Cluster,
 		creds:    cfg.Credentials,
 		dialFunc: dialFunc,
 		resolver: cfg.ResolverOptions.NewBuilder(cfg.Cluster.Id),
 		closed:   true,
-	}, nil
+	}
+
+	if err := proxy.Dial(context.TODO() /* TODO: thread ctx from startup => cluster.New => here */); err != nil {
+		return nil, err
+	}
+
+	return &proxy, nil
 }
 
 // Dial is part of the Proxy interface.
