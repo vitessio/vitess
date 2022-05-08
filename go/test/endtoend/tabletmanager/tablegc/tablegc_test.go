@@ -347,12 +347,6 @@ func TestPurge(t *testing.T) {
 	}
 
 	time.Sleep(15 * time.Second) // purgeReentranceInterval
-	{
-		// We're now both beyond table's timestamp as well as a tableGC interval
-		exists, _, err := tableExists(tableName)
-		require.NoError(t, err)
-		require.False(t, exists)
-	}
 	validateAnyState(t, 0, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
 }
 
