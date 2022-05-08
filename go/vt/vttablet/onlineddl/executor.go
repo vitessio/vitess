@@ -238,6 +238,10 @@ func (e *Executor) TabletAliasString() string {
 	return topoproto.TabletAliasString(e.tabletAlias)
 }
 
+func (e *Executor) PrepareForQueryExecutor(ctx context.Context) error {
+	return e.initSchema(ctx)
+}
+
 func (e *Executor) initSchema(ctx context.Context) error {
 	e.initMutex.Lock()
 	defer e.initMutex.Unlock()
