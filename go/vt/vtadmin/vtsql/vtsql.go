@@ -92,14 +92,14 @@ var ErrConnClosed = errors.New("use of closed connection")
 //
 // It does not open a connection to a vtgate; users must call Dial before first
 // use.
-func New(cfg *Config) *VTGateProxy {
+func New(ctx context.Context, cfg *Config) (*VTGateProxy, error) {
 	return &VTGateProxy{
 		cluster:  cfg.Cluster,
 		creds:    cfg.Credentials,
 		cfg:      cfg,
 		DialFunc: vitessdriver.OpenWithConfiguration,
 		resolver: cfg.ResolverOptions.NewBuilder(cfg.Cluster.Id),
-	}
+	}, nil
 }
 
 // getQueryContext returns a new context with the correct effective and immediate

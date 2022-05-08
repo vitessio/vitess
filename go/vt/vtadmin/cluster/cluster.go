@@ -116,7 +116,11 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 		vtctldCfg = opt(vtctldCfg)
 	}
 
-	cluster.DB = vtsql.New(vtsqlCfg)
+	cluster.DB, err = vtsql.New(ctx, vtsqlCfg)
+	if err != nil {
+		return nil, fmt.Errorf("error creating vtsql proxy: %w", err)
+	}
+
 	cluster.Vtctld, err = vtctldclient.New(ctx, vtctldCfg)
 	if err != nil {
 		return nil, fmt.Errorf("error creating vtctldclient: %w", err)
