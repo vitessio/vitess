@@ -91,8 +91,8 @@ func TestMain(m *testing.M) {
 			"--enable_replication_reporter",
 			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
-			"--gc_check_interval", "5s",
-			"--gc_purge_check_interval", "5s",
+			"--gc_check_interval", "2s",
+			"--gc_purge_check_interval", "2s",
 			"--table_gc_lifecycle", "hold,purge,evac,drop",
 		}
 		// We do not need semiSync for this test case.
