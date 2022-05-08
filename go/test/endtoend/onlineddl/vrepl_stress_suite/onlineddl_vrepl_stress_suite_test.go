@@ -523,8 +523,7 @@ func TestSchemaChange(t *testing.T) {
 				if testcase.expectFailure {
 					expectStatus = schema.OnlineDDLStatusFailed
 				}
-				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, waitForStatusTimeout, expectStatus)
-				assert.Equal(t, expectStatus, status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, expectStatus)
 				cancel() // will cause runMultipleConnections() to terminate
 				wg.Wait()
 				if !testcase.expectFailure {
