@@ -558,18 +558,18 @@ func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName
                                               CASE LOWER(cols.DATA_TYPE)
                                                 WHEN 'enum' THEN 0
                                                 WHEN 'tinyint' THEN 1
-                                                WHEN 'smallint' THEN 2
-                                                WHEN 'mediumint' THEN 3
-                                                WHEN 'int' THEN 4
-                                                WHEN 'set' THEN 5
-                                                WHEN 'bigint' THEN 6
-                                                WHEN 'float' THEN 7
-                                                WHEN 'double' THEN 8
-                                                WHEN 'decimal' THEN 9
-                                                WHEN 'year' THEN 10
-                                                WHEN 'date' THEN 11
-                                                WHEN 'time' THEN 12
-                                                WHEN 'timestamp' THEN 13
+                                                WHEN 'year' THEN 2
+                                                WHEN 'smallint' THEN 3
+                                                WHEN 'date' THEN 4
+                                                WHEN 'mediumint' THEN 5
+                                                WHEN 'time' THEN 6
+                                                WHEN 'int' THEN 7
+                                                WHEN 'set' THEN 8
+                                                WHEN 'timestamp' THEN 9
+                                                WHEN 'bigint' THEN 10
+                                                WHEN 'float' THEN 11
+                                                WHEN 'double' THEN 12
+                                                WHEN 'decimal' THEN 13
                                                 WHEN 'datetime' THEN 14
                                                 WHEN 'binary' THEN 15
                                                 WHEN 'char' THEN 16
