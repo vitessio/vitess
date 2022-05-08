@@ -181,12 +181,46 @@ func validateTableDoesNotExist(t *testing.T, tableExpr string) {
 	}
 }
 
+func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableGCState) (exists bool, dropFunc func()) {
+	for _, state := range states {
+		searchExpr := ""
+		switch state {
+		case schema.HoldTableGCState:
+			searchExpr = `\_vt\_HOLD\_%`
+		case schema.PurgeTableGCState:
+			searchExpr = `\_vt\_PURGE\_%`
+		case schema.EvacTableGCState:
+			searchExpr = `\_vt\_EVAC\_%`
+		case schema.DropTableGCState:
+			searchExpr = `\_vt\_DROP\_%`
+		case schema.TableDroppedGCState:
+			validateTableDoesNotExist(t, `\_vt\_%`)
+			return
+		default:
+			t.Log("Unknown state")
+			t.Fail()
+		}
+		exists, tableName, err := tableExists(searchExpr)
+		require.NoError(t, err)
+
+		if exists {
+			if expectNumRows >= 0 {
+				checkTableRows(t, tableName, expectNumRows)
+			}
+			return exists, func() {
+				dropTable(t, tableName)
+			}
+		}
+	}
+	return false, nil
+}
+
 // dropTable drops a table
-func dropTable(tableName string) (err error) {
+func dropTable(t *testing.T, tableName string) {
 	query := `drop table if exists %a`
 	parsed := sqlparser.BuildParsedQuery(query, tableName)
-	_, err = primaryTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
-	return err
+	_, err := primaryTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
+	require.NoError(t, err)
 }
 
 func TestPopulateTable(t *testing.T) {
@@ -229,13 +263,9 @@ func TestHold(t *testing.T) {
 		// We're now both beyond table's timestamp as well as a tableGC interval
 		validateTableDoesNotExist(t, tableName)
 	}
-	{
-		// Table should be renamed as _vt_PURGE_...
-		exists, purgeTableName, err := tableExists(`\_vt\_PURGE\_%`)
-		assert.NoError(t, err)
-		assert.True(t, exists)
-		err = dropTable(purgeTableName)
-		assert.NoError(t, err)
+	_, dropFunc := validateAnyState(t, -1, schema.PurgeTableGCState, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
+	if dropFunc != nil {
+		dropFunc()
 	}
 }
 
@@ -269,7 +299,10 @@ func TestEvac(t *testing.T) {
 	validateTableDoesNotExist(t, tableName)
 	time.Sleep(5 * time.Second)
 	// Table should be renamed as _vt_DROP_... and then dropped!
-	validateTableDoesNotExist(t, `\_vt\_DROP\_%`)
+	_, dropFunc := validateAnyState(t, 0, schema.DropTableGCState, schema.TableDroppedGCState)
+	if dropFunc != nil {
+		dropFunc()
+	}
 }
 
 func TestDrop(t *testing.T) {
@@ -323,14 +356,9 @@ func TestPurge(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, exists)
 	}
-	{
-		// Table should be renamed as _vt_EVAC_...
-		exists, evacTableName, err := tableExists(`\_vt\_EVAC\_%`)
-		require.NoError(t, err)
-		require.True(t, exists)
-		checkTableRows(t, evacTableName, 0)
-		err = dropTable(evacTableName)
-		require.NoError(t, err)
+	_, dropFunc := validateAnyState(t, 0, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
+	if dropFunc != nil {
+		dropFunc()
 	}
 }
 
@@ -383,26 +411,8 @@ func TestPurgeView(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, exists)
 	}
-	{
-		// View should be renamed as _vt_EVAC_ or _vt_DROP: views only spend a fraction of a second in "EVAC"
-		// because evacuation is irrelevant to views. They are immediately renamed to DROP.
-		// Because there might be a race condition, we allow both cases
-		evacTableExists, evacTableName, err := tableExists(`\_vt\_EVAC\_%`)
-		require.NoError(t, err)
-
-		dropTableExists, dropTableName, err := tableExists(`\_vt\_DROP\_%`)
-		require.NoError(t, err)
-
-		require.True(t, evacTableExists || dropTableExists)
-		switch {
-		case evacTableExists:
-			checkTableRows(t, evacTableName, 1024) // the renamed view still points to t1's data
-			err = dropTable(evacTableName)
-			require.NoError(t, err)
-		case dropTableExists:
-			checkTableRows(t, dropTableName, 1024) // the renamed view still points to t1's data
-			err = dropTable(dropTableName)
-			require.NoError(t, err)
-		}
+	_, dropFunc := validateAnyState(t, 1024, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
+	if dropFunc != nil {
+		dropFunc()
 	}
 }
