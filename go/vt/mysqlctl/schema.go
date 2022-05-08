@@ -362,12 +362,10 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
 		return nil, err
 	}
 	// sql uses column name aliases to guarantee lower case sensitivity.
-	sql := `SELECT table_name as table_name, ordinal_position as ordinal_position, COLUMN_NAME as column_name
-		FROM INFORMATION_SCHEMA.COLUMNS
-		WHERE TABLE_SCHEMA = '%s'
-		AND TABLE_NAME IN %s
-		AND COLUMN_KEY = 'PRI'
-		ORDER BY table_name, ordinal_position;`
+	sql := `
+            SELECT TABLE_NAME as table_name, SEQ_IN_INDEX as seq_in_index, COLUMN_NAME as column_name
+            FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME IN %s AND LOWER(INDEX_NAME) = 'primary'
+            ORDER BY table_name, seq_in_index`
 	sql = fmt.Sprintf(sql, dbName, tableList)
 	qr, err := conn.ExecuteFetch(sql, len(tables)*100, true)
 	if err != nil {
@@ -554,16 +552,43 @@ func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName
 	sql := `
             SELECT COLUMN_NAME AS column_name FROM information_schema.STATISTICS AS index_cols INNER JOIN
             (
-                SELECT INDEX_NAME, COUNT(COLUMN_NAME) AS col_count FROM information_schema.STATISTICS
-                WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s' AND INDEX_NAME NOT IN
+                SELECT stats.INDEX_NAME, SUM(
+                                              CASE LOWER(cols.DATA_TYPE)
+                                                WHEN 'enum' THEN 0
+                                                WHEN 'tinyint' THEN 1
+                                                WHEN 'smallint' THEN 2
+                                                WHEN 'mediumint' THEN 3
+                                                WHEN 'int' THEN 4
+                                                WHEN 'set' THEN 5
+                                                WHEN 'bigint' THEN 6
+                                                WHEN 'float' THEN 7
+                                                WHEN 'double' THEN 8
+                                                WHEN 'decimal' THEN 9
+                                                WHEN 'year' THEN 10
+                                                WHEN 'date' THEN 11
+                                                WHEN 'time' THEN 12
+                                                WHEN 'timestamp' THEN 13
+                                                WHEN 'datetime' THEN 14
+                                                WHEN 'binary' THEN 15
+                                                WHEN 'char' THEN 16
+                                                WHEN 'varbinary' THEN 17
+                                                WHEN 'varchar' THEN 18
+                                                WHEN 'tinyblob' THEN 19
+                                                WHEN 'tinytext' THEN 20
+                                                WHEN 'mediumblob' THEN 21
+                                                WHEN 'mediumtext' THEN 22
+                                                ELSE 1000
+                                              END
+                                            ) AS type_cost, COUNT(stats.COLUMN_NAME) AS col_count FROM information_schema.STATISTICS AS stats INNER JOIN
+                  information_schema.COLUMNS AS cols ON stats.TABLE_SCHEMA = cols.TABLE_SCHEMA AND stats.TABLE_NAME = cols.TABLE_NAME AND stats.COLUMN_NAME = cols.COLUMN_NAME
+                WHERE stats.TABLE_SCHEMA = '%s' AND stats.TABLE_NAME = '%s' AND stats.INDEX_NAME NOT IN
                 (
                     SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS
                     WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s' AND (NON_UNIQUE = 1 OR NULLABLE = 'YES')
                 )
-                GROUP BY INDEX_NAME ORDER BY col_count ASC LIMIT 1
-            ) AS pke
-            WHERE index_cols.TABLE_SCHEMA = '%s' AND index_cols.TABLE_NAME = '%s'
-              AND index_cols.INDEX_NAME = pke.INDEX_NAME AND NON_UNIQUE = 0 AND NULLABLE != 'YES'
+                GROUP BY INDEX_NAME ORDER BY type_cost ASC, col_count ASC LIMIT 1
+            ) AS pke ON index_cols.INDEX_NAME = pke.INDEX_NAME
+            WHERE index_cols.TABLE_SCHEMA = '%s' AND index_cols.TABLE_NAME = '%s' AND NON_UNIQUE = 0 AND NULLABLE != 'YES'
             ORDER BY SEQ_IN_INDEX ASC`
 	sql = fmt.Sprintf(sql, dbName, table, dbName, table, dbName, table)
 	qr, err := conn.ExecuteFetch(sql, 1000, true)
