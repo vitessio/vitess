@@ -440,6 +440,46 @@ func TestCreateTableDiff(t *testing.T) {
 			rotation: RangeRotationIgnore,
 		},
 		{
+			name:     "change partitioning range: statements, drop",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition p3 values less than (30))",
+			rotation: RangeRotationStatements,
+			diff:     "alter table t1 drop partition p1",
+			cdiff:    "ALTER TABLE `t1` DROP PARTITION `p1`",
+		},
+		{
+			name:     "change partitioning range: statements, add",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			rotation: RangeRotationStatements,
+			diff:     "alter table t1 add partition (partition p3 values less than (30))",
+			cdiff:    "ALTER TABLE `t1` ADD PARTITION (PARTITION `p3` VALUES LESS THAN (30))",
+		},
+		{
+			name:     "change partitioning range: statements, too many drops",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p3 values less than (30))",
+			rotation: RangeRotationStatements,
+			isError:  true,
+			errorMsg: ErrTooManyPartitionChanges.Error(),
+		},
+		{
+			name:     "change partitioning range: statements, too many adds",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			rotation: RangeRotationStatements,
+			isError:  true,
+			errorMsg: ErrTooManyPartitionChanges.Error(),
+		},
+		{
+			name:     "change partitioning range: statements, too many",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition p3 values less than (30), partition p4 values less than (40))",
+			rotation: RangeRotationStatements,
+			isError:  true,
+			errorMsg: ErrTooManyPartitionChanges.Error(),
+		},
+		{
 			name:     "change partitioning range: ignore rotate, not a rotation",
 			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
 			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (25), partition p3 values less than (30), partition p4 values less than (40))",
@@ -874,6 +914,12 @@ func TestValidate(t *testing.T) {
 			alter: "alter table t modify column t timestamp null",
 			to:    "create table t (id int primary key, t timestamp null)",
 		},
+		{
+			name:  "add range partition",
+			from:  "create table t (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20))",
+			alter: "alter table t add partition (partition p3 values less than (30))",
+			to:    "create table t (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+		},
 	}
 	hints := DiffHints{}
 	for _, ts := range tt {
@@ -1065,4 +1111,13 @@ func TestNormalize(t *testing.T) {
 			assert.Equal(t, ts.to, sqlparser.CanonicalString(from))
 		})
 	}
+}
+
+func TestRotatePartitions(t *testing.T) {
+	// query := "alter table t drop partition p10, add partition p20 values less than(20)"
+	// query := "alter table t drop partition p10"
+	query := "alter table t add partition (partition p20 values less than(20))"
+	stmt, err := sqlparser.ParseStrictDDL(query)
+	require.NoError(t, err)
+	t.Logf("stmt: %v", sqlparser.CanonicalString(stmt))
 }

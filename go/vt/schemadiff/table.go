@@ -682,34 +682,37 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 func (c *CreateTableEntity) isRangePartitionsRotation(
 	t1Partitions *sqlparser.PartitionOption,
 	t2Partitions *sqlparser.PartitionOption,
-) (bool, []sqlparser.AlterOption) {
+	hints *DiffHints,
+) (bool, *sqlparser.PartitionSpec, error) {
 	// Validate that both tables have range partitioning
 	if t1Partitions.Type != t2Partitions.Type {
-		return false, nil
+		return false, nil, nil
 	}
 	if t1Partitions.Type != sqlparser.RangeType {
-		return false, nil
+		return false, nil, nil
 	}
 	definitions1 := t1Partitions.Definitions
 	definitions2 := t2Partitions.Definitions
 	// there has to be a non-empty shared list, therefore both definitions must be non-empty:
 	if len(definitions1) == 0 {
-		return false, nil
+		return false, nil, nil
 	}
 	if len(definitions2) == 0 {
-		return false, nil
+		return false, nil, nil
 	}
+	droppedPartitions1 := []*sqlparser.PartitionDefinition{}
 	// It's OK for prefix of t1 partitions to be nonexistent in t2 (as they may have been rotated away in t2)
 	for len(definitions1) > 0 && sqlparser.String(definitions1[0]) != sqlparser.String(definitions2[0]) {
+		droppedPartitions1 = append(droppedPartitions1, definitions1[0])
 		definitions1 = definitions1[1:]
 	}
 	if len(definitions1) == 0 {
 		// We've exhaused definition1 trying to find a shared partition with definitions2. Nothing found.
 		// so there is no shared sequence between the two tables.
-		return false, nil
+		return false, nil, nil
 	}
 	if len(definitions1) > len(definitions2) {
-		return false, nil
+		return false, nil, nil
 	}
 	// To save computation, and ecause we've already shown that sqlparser.String(definitions1[0]) == sqlparser.String(definitions2[0]),
 	// we can skip one element
@@ -719,12 +722,34 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	// It's ok if we end up with leftover elements in definition2
 	for len(definitions1) > 0 {
 		if sqlparser.String(definitions1[0]) != sqlparser.String(definitions2[0]) {
-			return false, nil
+			return false, nil, nil
 		}
 		definitions1 = definitions1[1:]
 		definitions2 = definitions2[1:]
 	}
-	return true, nil
+	var partitionSpec *sqlparser.PartitionSpec
+	if hints.RangeRotationStrategy == RangeRotationStatements {
+		// In RangeRotationStatements strategy we only support:
+		// - dropping a single partition (although mysql allows multiple partitions)
+		// - or, adding a single partition
+		addedPartitions2 := definitions2
+		if len(droppedPartitions1)+len(addedPartitions2) > 1 {
+			return true, nil, ErrTooManyPartitionChanges
+		}
+		if len(droppedPartitions1) > 0 {
+			partitionSpec = &sqlparser.PartitionSpec{
+				Action: sqlparser.DropAction,
+				Names:  []sqlparser.ColIdent{droppedPartitions1[0].Name},
+			}
+		} else if len(addedPartitions2) > 0 {
+			partitionSpec = &sqlparser.PartitionSpec{
+				Action:      sqlparser.AddAction,
+				Names:       []sqlparser.ColIdent{addedPartitions2[0].Name},
+				Definitions: []*sqlparser.PartitionDefinition{addedPartitions2[0]},
+			}
+		}
+	}
+	return true, partitionSpec, nil
 }
 
 func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
@@ -760,12 +785,17 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 		// Having said that, we _do_ analyze the scenario of a RANGE partitioning rotation of partitions:
 		// where zero or more partitions may have been dropped from the earlier range, and zero or more
 		// partitions have been added with a later range:
-		if isRotation, _ := c.isRangePartitionsRotation(t1Partitions, t2Partitions); isRotation {
+		isRotation, partitionSpec, err := c.isRangePartitionsRotation(t1Partitions, t2Partitions, hints)
+		if err != nil {
+			return err
+		}
+		if isRotation {
 			switch hints.RangeRotationStrategy {
 			case RangeRotationIgnore:
 				return nil
 			case RangeRotationStatements:
-				return ErrRangeRotattionStatementsStrategyUnsupported
+				alterTable.PartitionSpec = partitionSpec
+				return nil
 			case RangeRotationFullSpec:
 				// proceed to return a full rebuild
 			}
@@ -1091,6 +1121,36 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 		case spec.Action == sqlparser.RemoveAction && spec.IsAll:
 			// Remove partitioning
 			c.TableSpec.PartitionOption = nil
+		case spec.Action == sqlparser.DropAction && len(spec.Names) == 1:
+			// Remove partitioning
+			partitionName := spec.Names[0].String()
+			if c.TableSpec.PartitionOption == nil {
+				return errors.Wrap(ErrApplyPartitionNotFound, partitionName)
+			}
+			for i, p := range c.TableSpec.PartitionOption.Definitions {
+				if p.Name.String() == partitionName {
+					c.TableSpec.PartitionOption.Definitions = append(
+						c.TableSpec.PartitionOption.Definitions[0:i],
+						c.TableSpec.PartitionOption.Definitions[i+1:]...,
+					)
+					break
+				}
+			}
+		case spec.Action == sqlparser.AddAction && len(spec.Names) == 1:
+			// Add a partition
+			partitionName := spec.Names[0].String()
+			if c.TableSpec.PartitionOption == nil {
+				return errors.Wrap(ErrApplyPartitionNotFound, partitionName)
+			}
+			for _, p := range c.TableSpec.PartitionOption.Definitions {
+				if p.Name.String() == partitionName {
+					return errors.Wrap(ErrApplyDuplicatePartition, partitionName)
+				}
+			}
+			c.TableSpec.PartitionOption.Definitions = append(
+				c.TableSpec.PartitionOption.Definitions,
+				spec.Definitions[0],
+			)
 		default:
 			return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.String(spec))
 		}
