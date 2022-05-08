@@ -744,7 +744,6 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 		} else if len(addedPartitions2) > 0 {
 			partitionSpec = &sqlparser.PartitionSpec{
 				Action:      sqlparser.AddAction,
-				Names:       []sqlparser.ColIdent{addedPartitions2[0].Name},
 				Definitions: []*sqlparser.PartitionDefinition{addedPartitions2[0]},
 			}
 		}
@@ -1116,6 +1115,7 @@ func sortAlterOptions(diff *AlterTableEntityDiff) {
 // supported modifications are only those created by schemadiff's Diff() function.
 func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 	sortAlterOptions(diff)
+	// Apply partitioning changes:
 	if spec := diff.alterTable.PartitionSpec; spec != nil {
 		switch {
 		case spec.Action == sqlparser.RemoveAction && spec.IsAll:
@@ -1127,20 +1127,28 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			if c.TableSpec.PartitionOption == nil {
 				return errors.Wrap(ErrApplyPartitionNotFound, partitionName)
 			}
+			partitionFound := false
 			for i, p := range c.TableSpec.PartitionOption.Definitions {
 				if p.Name.String() == partitionName {
 					c.TableSpec.PartitionOption.Definitions = append(
 						c.TableSpec.PartitionOption.Definitions[0:i],
 						c.TableSpec.PartitionOption.Definitions[i+1:]...,
 					)
+					partitionFound = true
 					break
 				}
 			}
-		case spec.Action == sqlparser.AddAction && len(spec.Names) == 1:
-			// Add a partition
-			partitionName := spec.Names[0].String()
-			if c.TableSpec.PartitionOption == nil {
+			if !partitionFound {
 				return errors.Wrap(ErrApplyPartitionNotFound, partitionName)
+			}
+		case spec.Action == sqlparser.AddAction && len(spec.Definitions) == 1:
+			// Add a partition
+			partitionName := spec.Definitions[0].Name.String()
+			if c.TableSpec.PartitionOption == nil {
+				return ErrApplyNoPartitions
+			}
+			if len(c.TableSpec.PartitionOption.Definitions) == 0 {
+				return ErrApplyNoPartitions
 			}
 			for _, p := range c.TableSpec.PartitionOption.Definitions {
 				if p.Name.String() == partitionName {

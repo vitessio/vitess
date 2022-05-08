@@ -920,6 +920,30 @@ func TestValidate(t *testing.T) {
 			alter: "alter table t add partition (partition p3 values less than (30))",
 			to:    "create table t (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
 		},
+		{
+			name:      "add range partition, duplicate",
+			from:      "create table t (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20))",
+			alter:     "alter table t add partition (partition p2 values less than (30))",
+			expectErr: ErrApplyDuplicatePartition,
+		},
+		{
+			name:      "add range partition, no partitioning",
+			from:      "create table t (id int primary key)",
+			alter:     "alter table t add partition (partition p2 values less than (30))",
+			expectErr: ErrApplyNoPartitions,
+		},
+		{
+			name:  "drop range partition",
+			from:  "create table t (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20))",
+			alter: "alter table t drop partition p1",
+			to:    "create table t (id int primary key) partition by range (id) (partition p2 values less than (20))",
+		},
+		{
+			name:      "drop range partition, not found",
+			from:      "create table t (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20))",
+			alter:     "alter table t drop partition p7",
+			expectErr: ErrApplyPartitionNotFound,
+		},
 	}
 	hints := DiffHints{}
 	for _, ts := range tt {
@@ -939,7 +963,7 @@ func TestValidate(t *testing.T) {
 			applied, err := from.Apply(a)
 			if ts.expectErr != nil {
 				assert.Error(t, err)
-				assert.True(t, errors.Is(err, ts.expectErr))
+				assert.True(t, errors.Is(err, ts.expectErr), "error mismatch. expected: %v, got: %v", ts.expectErr, err)
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, applied)
