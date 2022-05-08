@@ -16,6 +16,7 @@ limitations under the License.
 package tablegc
 
 import (
+	"context"
 	"flag"
 	"os"
 	"testing"
@@ -160,7 +161,27 @@ func tableExists(tableExpr string) (exists bool, tableName string, err error) {
 	return true, row.AsString("Name", ""), nil
 }
 
-// tableExists sees that a given table exists in MySQL
+func validateTableDoesNotExist(t *testing.T, tableExpr string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			exists, _, err := tableExists(tableExpr)
+			require.NoError(t, err)
+			if !exists {
+				return
+			}
+		case <-ctx.Done():
+			assert.NoError(t, ctx.Err(), "validateTableDoesNotExist timed out, table %v still exists", tableExpr)
+			return
+		}
+	}
+}
+
+// dropTable drops a table
 func dropTable(tableName string) (err error) {
 	query := `drop table if exists %a`
 	parsed := sqlparser.BuildParsedQuery(query, tableName)
@@ -175,11 +196,7 @@ func TestPopulateTable(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, exists)
 	}
-	{
-		exists, _, err := tableExists("no_such_table")
-		assert.NoError(t, err)
-		assert.False(t, exists)
-	}
+	validateTableDoesNotExist(t, "no_such_table")
 }
 
 func TestHold(t *testing.T) {
@@ -190,11 +207,7 @@ func TestHold(t *testing.T) {
 	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	assert.NoError(t, err)
 
-	{
-		exists, _, err := tableExists("t1")
-		assert.NoError(t, err)
-		assert.False(t, exists)
-	}
+	validateTableDoesNotExist(t, "t1")
 	{
 		exists, _, err := tableExists(tableName)
 		assert.NoError(t, err)
@@ -214,9 +227,7 @@ func TestHold(t *testing.T) {
 	time.Sleep(10 * time.Second)
 	{
 		// We're now both beyond table's timestamp as well as a tableGC interval
-		exists, _, err := tableExists(tableName)
-		assert.NoError(t, err)
-		assert.False(t, exists)
+		validateTableDoesNotExist(t, tableName)
 	}
 	{
 		// Table should be renamed as _vt_PURGE_...
@@ -236,11 +247,7 @@ func TestEvac(t *testing.T) {
 	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	assert.NoError(t, err)
 
-	{
-		exists, _, err := tableExists("t1")
-		assert.NoError(t, err)
-		assert.False(t, exists)
-	}
+	validateTableDoesNotExist(t, "t1")
 	{
 		exists, _, err := tableExists(tableName)
 		assert.NoError(t, err)
@@ -258,19 +265,11 @@ func TestEvac(t *testing.T) {
 	}
 
 	time.Sleep(10 * time.Second)
-	{
-		// We're now both beyond table's timestamp as well as a tableGC interval
-		exists, _, err := tableExists(tableName)
-		assert.NoError(t, err)
-		assert.False(t, exists)
-	}
+	// We're now both beyond table's timestamp as well as a tableGC interval
+	validateTableDoesNotExist(t, tableName)
 	time.Sleep(5 * time.Second)
-	{
-		// Table should be renamed as _vt_DROP_... and then dropped!
-		exists, _, err := tableExists(`\_vt\_DROP\_%`)
-		assert.NoError(t, err)
-		assert.False(t, exists)
-	}
+	// Table should be renamed as _vt_DROP_... and then dropped!
+	validateTableDoesNotExist(t, `\_vt\_DROP\_%`)
 }
 
 func TestDrop(t *testing.T) {
@@ -281,19 +280,11 @@ func TestDrop(t *testing.T) {
 	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	assert.NoError(t, err)
 
-	{
-		exists, _, err := tableExists("t1")
-		assert.NoError(t, err)
-		assert.False(t, exists)
-	}
+	validateTableDoesNotExist(t, "t1")
 
 	time.Sleep(20 * time.Second) // 10s for timestamp to pass, then 10s for checkTables and drop of table
-	{
-		// We're now both beyond table's timestamp as well as a tableGC interval
-		exists, _, err := tableExists(tableName)
-		assert.NoError(t, err)
-		assert.False(t, exists)
-	}
+	// We're now both beyond table's timestamp as well as a tableGC interval
+	validateTableDoesNotExist(t, tableName)
 }
 
 func TestPurge(t *testing.T) {
