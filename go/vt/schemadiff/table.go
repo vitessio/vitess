@@ -18,13 +18,15 @@ package schemadiff
 
 import (
 	"fmt"
+	"math"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
-
 	golcs "github.com/yudai/golcs"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -161,8 +163,192 @@ func NewCreateTableEntity(c *sqlparser.CreateTable) *CreateTableEntity {
 
 // normalize normalizes table definition:
 // - setting names to all keys
-func (c *CreateTableEntity) normalize() {
-	// let's verify all keys have names
+// - table option case (upper/lower/special)
+// The function returns this receiver as courtesy
+func (c *CreateTableEntity) normalize() *CreateTableEntity {
+	c.normalizeUnnamedKeys()
+	c.normalizeTableOptions()
+	c.normalizeColumnOptions()
+	c.normalizePartitionOptions()
+	return c
+}
+
+func (c *CreateTableEntity) normalizeTableOptions() {
+	for _, opt := range c.CreateTable.TableSpec.Options {
+		switch strings.ToUpper(opt.Name) {
+		case "CHARSET", "COLLATE":
+			opt.String = strings.ToLower(opt.String)
+			if charset, ok := charsetAliases[opt.String]; ok {
+				opt.String = charset
+			}
+		case "ENGINE":
+			opt.String = strings.ToUpper(opt.String)
+			if engineName, ok := engineCasing[opt.String]; ok {
+				opt.String = engineName
+			}
+		case "ROW_FORMAT":
+			opt.String = strings.ToUpper(opt.String)
+		}
+	}
+}
+
+// Right now we assume MySQL 8.0 for the collation normalization handling.
+const mysqlCollationVersion = "8.0.0"
+
+var collationEnv = collations.NewEnvironment(mysqlCollationVersion)
+
+func defaultCharset() string {
+	collation := collationEnv.LookupByID(collations.ID(collationEnv.DefaultConnectionCharset()))
+	if collation == nil {
+		return ""
+	}
+	return collation.Charset().Name()
+}
+
+func defaultCharsetCollation(charset string) string {
+	// The collation tables are based on utf8, not the utf8mb3 alias.
+	// We already normalize to utf8mb3 to be explicit, so we have to
+	// map it back here to find the default collation for utf8mb3.
+	if charset == "utf8mb3" {
+		charset = "utf8"
+	}
+	collation := collationEnv.DefaultCollationForCharset(charset)
+	if collation == nil {
+		return ""
+	}
+	return collation.Name()
+}
+
+func (c *CreateTableEntity) normalizeColumnOptions() {
+	tableCharset := defaultCharset()
+	tableCollation := ""
+	for _, option := range c.CreateTable.TableSpec.Options {
+		switch strings.ToUpper(option.Name) {
+		case "CHARSET":
+			tableCharset = option.String
+		case "COLLATE":
+			tableCollation = option.String
+		}
+	}
+	defaultCollation := defaultCharsetCollation(tableCharset)
+	if tableCollation == "" {
+		tableCollation = defaultCollation
+	}
+
+	for _, col := range c.CreateTable.TableSpec.Columns {
+		if col.Type.Options == nil {
+			col.Type.Options = &sqlparser.ColumnTypeOptions{}
+		}
+
+		// Map known lowercase fields to always be lowercase
+		col.Type.Type = strings.ToLower(col.Type.Type)
+		col.Type.Charset = strings.ToLower(col.Type.Charset)
+		col.Type.Options.Collate = strings.ToLower(col.Type.Options.Collate)
+
+		// See https://dev.mysql.com/doc/refman/8.0/en/create-table.html
+		// If neither NULL nor NOT NULL is specified, the column is treated as though NULL had been specified.
+		// That documentation though is not 100% true. There's an exception, and that is
+		// the `explicit_defaults_for_timestamp` flag. When that is disabled (the default on 5.7),
+		// a timestamp defaults to `NOT NULL`.
+		//
+		// We opt here to instead remove that difference and always then add `NULL` and treat
+		// `explicit_defaults_for_timestamp` as always enabled in the context of DDL for diffing.
+		if col.Type.Type == "timestamp" {
+			if col.Type.Options.Null == nil || *col.Type.Options.Null {
+				timestampNull := true
+				col.Type.Options.Null = &timestampNull
+			}
+		} else {
+			if col.Type.Options.Null != nil && *col.Type.Options.Null {
+				col.Type.Options.Null = nil
+			}
+		}
+		if col.Type.Options.Null == nil || *col.Type.Options.Null {
+			// If `DEFAULT NULL` is specified and the column allows NULL,
+			// we drop that in the normalized form since that is equivalent to the default value.
+			// See also https://dev.mysql.com/doc/refman/8.0/en/data-type-defaults.html
+			if _, ok := col.Type.Options.Default.(*sqlparser.NullVal); ok {
+				col.Type.Options.Default = nil
+			}
+		}
+
+		// Map any charset aliases to the real charset. This applies mainly right
+		// now to utf8 being an alias for utf8mb3.
+		if charset, ok := charsetAliases[col.Type.Charset]; ok {
+			col.Type.Charset = charset
+		}
+
+		// Remove any lengths for integral types since it is deprecated there and
+		// doesn't mean anything anymore.
+		if _, ok := integralTypes[col.Type.Type]; ok {
+			col.Type.Length = nil
+			// Remove zerofill for integral types but keep the behavior that this marks the value
+			// as unsigned
+			if col.Type.Zerofill {
+				col.Type.Zerofill = false
+				col.Type.Unsigned = true
+			}
+		}
+
+		if _, ok := charsetTypes[col.Type.Type]; ok {
+			// If the charset is explicitly configured and it mismatches, we don't normalize
+			// anything for charsets or collations and move on.
+			if col.Type.Charset != "" && col.Type.Charset != tableCharset {
+				continue
+			}
+
+			// Alright, first check if both charset and collation are the same as
+			// the table level options, in that case we can remove both since that's equivalent.
+			if col.Type.Charset == tableCharset && col.Type.Options.Collate == tableCollation {
+				col.Type.Charset = ""
+				col.Type.Options.Collate = ""
+			}
+			// If we have no charset or collation defined, we inherit the table defaults
+			// and don't need to do anything here and can continue to the next column.
+			// It doesn't matter if that's because it's not defined, or if it was because
+			// it was explicitly set to the same values.
+			if col.Type.Charset == "" && col.Type.Options.Collate == "" {
+				continue
+			}
+
+			// We have a matching charset as the default, but it is explicitly set. In that
+			// case we still want to clear it, but set the default collation for the given charset
+			// if no collation is defined yet. We set then the collation to the default collation.
+			if col.Type.Charset != "" {
+				col.Type.Charset = ""
+				if col.Type.Options.Collate == "" {
+					col.Type.Options.Collate = defaultCollation
+				}
+			}
+
+			// We now have one case left, which is when we have set a collation but it's the same
+			// as the table level. In that case, we can clear it since that is equivalent.
+			if col.Type.Options.Collate == tableCollation {
+				col.Type.Options.Collate = ""
+			}
+		}
+	}
+}
+
+func (c *CreateTableEntity) normalizePartitionOptions() {
+	if c.CreateTable.TableSpec.PartitionOption == nil {
+		return
+	}
+
+	for _, def := range c.CreateTable.TableSpec.PartitionOption.Definitions {
+		if def.Options == nil || def.Options.Engine == nil {
+			continue
+		}
+
+		def.Options.Engine.Name = strings.ToUpper(def.Options.Engine.Name)
+		if engineName, ok := engineCasing[def.Options.Engine.Name]; ok {
+			def.Options.Engine.Name = engineName
+		}
+	}
+}
+
+func (c *CreateTableEntity) normalizeUnnamedKeys() {
+	// let's ensure all keys have names
 	keyNameExists := map[string]bool{}
 	// first, we iterate and take note for all keys that do aleady have names
 	for _, key := range c.CreateTable.TableSpec.Indexes {
@@ -869,9 +1055,37 @@ func (c *CreateTableEntity) Drop() EntityDiff {
 	return &DropTableEntityDiff{from: c, dropTable: dropTable}
 }
 
+func sortAlterOptions(diff *AlterTableEntityDiff) {
+	optionOrder := func(opt sqlparser.AlterOption) int {
+		switch opt.(type) {
+		case *sqlparser.DropKey:
+			return 1
+		case *sqlparser.DropColumn:
+			return 2
+		case *sqlparser.ModifyColumn:
+			return 3
+		case *sqlparser.AddColumns:
+			return 4
+		case *sqlparser.AddIndexDefinition:
+			return 5
+		case *sqlparser.AddConstraintDefinition:
+			return 6
+		case sqlparser.TableOptions, *sqlparser.TableOptions:
+			return 7
+		default:
+			return math.MaxInt
+		}
+	}
+	opts := diff.alterTable.AlterOptions
+	sort.SliceStable(opts, func(i, j int) bool {
+		return optionOrder(opts[i]) < optionOrder(opts[j])
+	})
+}
+
 // apply attempts to apply an ALTER TABLE diff onto this entity's table definition.
 // supported modifications are only those created by schemadiff's Diff() function.
 func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
+	sortAlterOptions(diff)
 	if spec := diff.alterTable.PartitionSpec; spec != nil {
 		switch {
 		case spec.Action == sqlparser.RemoveAction && spec.IsAll:
@@ -930,6 +1144,11 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 		return nil
 	}
 
+	columnExists := map[string]bool{}
+	for _, col := range c.CreateTable.TableSpec.Columns {
+		columnExists[col.Name.String()] = true
+	}
+
 	// apply a single AlterOption; only supported types are those generated by Diff()
 	applyAlterOption := func(opt sqlparser.AlterOption) error {
 		switch opt := opt.(type) {
@@ -962,9 +1181,16 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			}
 		case *sqlparser.AddIndexDefinition:
 			// validate no existing key by same name
+			keyName := opt.IndexDefinition.Info.Name.String()
 			for _, index := range c.TableSpec.Indexes {
-				if index.Info.Name.String() == opt.IndexDefinition.Info.Name.String() {
-					return errors.Wrap(ErrApplyDuplicateKey, opt.IndexDefinition.Info.Name.String())
+				if index.Info.Name.String() == keyName {
+					return errors.Wrap(ErrApplyDuplicateKey, keyName)
+				}
+			}
+			for _, col := range opt.IndexDefinition.Columns {
+				colName := col.Column.String()
+				if !columnExists[colName] {
+					return errors.Wrapf(ErrInvalidColumnInKey, "key: %v, column: %v", keyName, colName)
 				}
 			}
 			c.TableSpec.Indexes = append(c.TableSpec.Indexes, opt.IndexDefinition)
@@ -979,8 +1205,9 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 		case *sqlparser.DropColumn:
 			// we expect the column to exist
 			found := false
+			colName := opt.Name.Name.String()
 			for i, col := range c.TableSpec.Columns {
-				if col.Name.String() == opt.Name.Name.String() {
+				if col.Name.String() == colName {
 					found = true
 					c.TableSpec.Columns = append(c.TableSpec.Columns[0:i], c.TableSpec.Columns[i+1:]...)
 					break
@@ -989,6 +1216,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			if !found {
 				return errors.Wrap(ErrApplyColumnNotFound, opt.Name.Name.String())
 			}
+			delete(columnExists, colName)
 		case *sqlparser.AddColumns:
 			if len(opt.Columns) != 1 {
 				// our Diff only ever generates a single column per AlterOption
@@ -996,8 +1224,9 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			}
 			// validate no column by same name
 			addedCol := opt.Columns[0]
+			colName := addedCol.Name.String()
 			for _, col := range c.TableSpec.Columns {
-				if col.Name.String() == addedCol.Name.String() {
+				if col.Name.String() == colName {
 					return errors.Wrap(ErrApplyDuplicateColumn, addedCol.Name.String())
 				}
 			}
@@ -1006,6 +1235,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			if err := reorderColumn(len(c.TableSpec.Columns)-1, opt.First, opt.After); err != nil {
 				return err
 			}
+			columnExists[colName] = true
 		case *sqlparser.ModifyColumn:
 			// we expect the column to exist
 			found := false
@@ -1053,6 +1283,12 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			return err
 		}
 	}
+	if err := c.postApplyNormalize(); err != nil {
+		return err
+	}
+	if err := c.validate(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1089,4 +1325,52 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 		return nil, err
 	}
 	return dup, nil
+}
+
+// postApplyNormalize runs at the end of apply() and to reorganize/edit things that
+// a MySQL will do implicitly:
+// - edit or remove keys if referenced columns are dropped
+func (c *CreateTableEntity) postApplyNormalize() error {
+	// reduce or remove keys based on existing column list
+	// (a column may have been removed)postApplyNormalize
+	columnExists := map[string]bool{}
+	for _, col := range c.CreateTable.TableSpec.Columns {
+		columnExists[col.Name.String()] = true
+	}
+	nonEmptyIndexes := []*sqlparser.IndexDefinition{}
+	for _, key := range c.CreateTable.TableSpec.Indexes {
+		existingColumns := []*sqlparser.IndexColumn{}
+		for _, col := range key.Columns {
+			colName := col.Column.String()
+			if columnExists[colName] {
+				existingColumns = append(existingColumns, col)
+			}
+		}
+		if len(existingColumns) > 0 {
+			key.Columns = existingColumns
+			nonEmptyIndexes = append(nonEmptyIndexes, key)
+		}
+	}
+	c.CreateTable.TableSpec.Indexes = nonEmptyIndexes
+
+	return nil
+}
+
+// validate checks that the table structure is valid:
+// - all columns referenced by keys exist
+func (c *CreateTableEntity) validate() error {
+	// validate all columns referenced by indexes do in fact exist
+	columnExists := map[string]bool{}
+	for _, col := range c.CreateTable.TableSpec.Columns {
+		columnExists[col.Name.String()] = true
+	}
+	for _, key := range c.CreateTable.TableSpec.Indexes {
+		for _, col := range key.Columns {
+			colName := col.Column.String()
+			if !columnExists[colName] {
+				return errors.Wrapf(ErrInvalidColumnInKey, "key: %v, column: %v", key.Info.Name.String(), colName)
+			}
+		}
+	}
+	return nil
 }
