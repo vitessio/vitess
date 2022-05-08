@@ -122,6 +122,35 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 					UNIQUE KEY c1_c2_c3 (col1, col2, col3), UNIQUE KEY c1_c2 (col1, col2))`,
 			want: []string{"col1", "col2"},
 		},
+		{
+			name:  "1INTPKE1CHARPKE",
+			table: "oneintpke1charpke_t",
+			ddl: `CREATE TABLE oneintpke1charpke_t (col1 VARCHAR(25) NOT NULL, col2 VARCHAR(25) NOT NULL,
+					col3 VARCHAR(25) NOT NULL, id1 INT NOT NULL, id2 INT NOT NULL, 
+					UNIQUE KEY c1_c2 (col1, col2), UNIQUE KEY id1_id2 (id1, id2))`,
+			want: []string{"id1", "id2"},
+		},
+		{
+			name:  "INTINTVSVCHAR",
+			table: "twointvsvcharpke_t",
+			ddl: `CREATE TABLE twointvsvcharpke_t (col1 VARCHAR(25) NOT NULL, id1 INT NOT NULL, id2 INT NOT NULL, 
+					UNIQUE KEY c1 (col1), UNIQUE KEY id1_id2 (id1, id2))`,
+			want: []string{"id1", "id2"},
+		},
+		{
+			name:  "TINYINTVSBIGINT",
+			table: "tinyintvsbigint_t",
+			ddl: `CREATE TABLE tinyintvsbigint_t (tid1 TINYINT NOT NULL, id1 INT NOT NULL, 
+					UNIQUE KEY tid1 (tid1), UNIQUE KEY id1 (id1))`,
+			want: []string{"tid1"},
+		},
+		{
+			name:  "VCHARINTVSINT2VARCHAR",
+			table: "vcharintvsinttwovchar_t",
+			ddl: `CREATE TABLE vcharintvsinttwovchar_t (id1 INT NOT NULL, col1 VARCHAR(25) NOT NULL, col2 VARCHAR(25) NOT NULL,
+					UNIQUE KEY col1_id1 (col1, id1), UNIQUE KEY id1_col1_col2 (id1, col1, col2))`,
+			want: []string{"col1", "id1"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
