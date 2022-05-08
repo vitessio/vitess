@@ -516,11 +516,10 @@ func (node *PartitionValueRange) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *PartitionEngine) Format(buf *TrackedBuffer) {
 	if node.Storage {
-		buf.WriteString("storage ")
+		buf.astPrintf(node, "%s", "storage ")
 	}
-	buf.WriteString("engine ")
-
-	buf.astPrintf(node, "%s", node.Name)
+	buf.astPrintf(node, "%s", "engine ")
+	buf.astPrintf(node, "%#s", node.Name)
 }
 
 // Format formats the node.
@@ -613,7 +612,11 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 		}
 		buf.astPrintf(ts, " %s", opt.Name)
 		if opt.String != "" {
-			buf.astPrintf(ts, " %s", opt.String)
+			if opt.CaseSensitive {
+				buf.astPrintf(ts, " %#s", opt.String)
+			} else {
+				buf.astPrintf(ts, " %s", opt.String)
+			}
 		} else if opt.Value != nil {
 			buf.astPrintf(ts, " %v", opt.Value)
 		} else {
@@ -653,10 +656,10 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 
 	if ct.Unsigned {
-		buf.astPrintf(ct, " %s", keywordStrings[UNSIGNED])
+		buf.astPrintf(ct, " %#s", keywordStrings[UNSIGNED])
 	}
 	if ct.Zerofill {
-		buf.astPrintf(ct, " %s", keywordStrings[ZEROFILL])
+		buf.astPrintf(ct, " %#s", keywordStrings[ZEROFILL])
 	}
 	if ct.Charset != "" {
 		buf.astPrintf(ct, " %s %s %#s", keywordStrings[CHARACTER], keywordStrings[SET], ct.Charset)

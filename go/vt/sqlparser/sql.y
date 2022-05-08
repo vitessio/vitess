@@ -2251,6 +2251,10 @@ reference_definition:
   {
     $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnDelete: $6, OnUpdate: $7}
   }
+| REFERENCES table_name '(' column_list ')' fk_on_update fk_on_delete
+  {
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnUpdate: $6, OnDelete: $7}
+  }
 
 reference_definition_opt:
   {
@@ -2411,7 +2415,7 @@ table_option:
   }
 | ENGINE equal_opt table_alias
   {
-    $$ = &TableOption{Name:string($1), String:$3.String()}
+    $$ = &TableOption{Name:string($1), String:$3.String(), CaseSensitive: true}
   }
 | INSERT_METHOD equal_opt insert_method_options
   {
@@ -3282,7 +3286,7 @@ subpartition_definition_list:
 subpartition_definition:
   SUBPARTITION sql_id subpartition_definition_attribute_list_opt
   {
-    $$ = &SubPartitionDefinition{Name:$2, Options:$3}
+    $$ = &SubPartitionDefinition{Name:$2, Options: $3}
   }
 
 subpartition_definition_attribute_list_opt:

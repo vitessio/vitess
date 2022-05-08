@@ -1,9 +1,9 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (20)
+name: Cluster (xb_backup)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (20)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (xb_backup)')
   cancel-in-progress: true
 
 env:
@@ -11,9 +11,15 @@ env:
   LAUNCHABLE_WORKSPACE: "vitess-app"
   GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
 
+  # This is used if we need to pin the xtrabackup version used in tests.
+  # Doing so here because 2.4.25 crashes in our 5.7 tests. See:
+  #   https://jira.percona.com/browse/PXB-2756
+  # If this is NOT set then the latest version available will be used.
+  XTRABACKUP_VERSION: "2.4.24-1"
+
 jobs:
   build:
-    name: Run endtoend tests on Cluster (20)
+    name: Run endtoend tests on Cluster (xb_backup)
     runs-on: ubuntu-18.04
 
     steps:
@@ -36,6 +42,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
+            - '.github/workflows/**'
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'
@@ -69,11 +76,17 @@ jobs:
         # install JUnit report formatter
         go install github.com/jstemmer/go-junit-report@latest
 
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+        wget "https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb"
         sudo apt-get install -y gnupg2
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo dpkg -i "percona-release_latest.$(lsb_release -sc)_all.deb"
         sudo apt-get update
-        sudo apt-get install percona-xtrabackup-24
+        if [[ -n $XTRABACKUP_VERSION ]]; then
+          debfile="percona-xtrabackup-24_$XTRABACKUP_VERSION.$(lsb_release -sc)_amd64.deb"
+          wget "https://repo.percona.com/pxb-24/apt/pool/main/p/percona-xtrabackup-24/$debfile"
+          sudo apt install -y "./$debfile"
+        else
+          sudo apt-get install -y percona-xtrabackup-24
+        fi
 
     - name: Setup launchable dependencies
       if: steps.changes.outputs.end_to_end == 'true'
@@ -99,7 +112,7 @@ jobs:
         set -x
 
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard 20 | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- go run test.go -docker=false -follow -shard xb_backup | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable
       if: steps.changes.outputs.end_to_end == 'true' && always()

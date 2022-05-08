@@ -2953,7 +2953,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select user_id from user_privacy_consents where user_id = 1) for update",
+    "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select 1 from user_privacy_consents where user_id = 1 limit 1) for update",
     "TableName": "user_privacy_consents"
   }
 }

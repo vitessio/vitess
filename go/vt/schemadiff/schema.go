@@ -17,6 +17,7 @@ limitations under the License.
 package schemadiff
 
 import (
+	"bytes"
 	"io"
 	"sort"
 	"strings"
@@ -86,7 +87,7 @@ func NewSchemaFromStatements(statements []sqlparser.Statement) (*Schema, error) 
 func NewSchemaFromQueries(queries []string) (*Schema, error) {
 	statements := []sqlparser.Statement{}
 	for _, q := range queries {
-		stmt, err := sqlparser.Parse(q)
+		stmt, err := sqlparser.ParseStrictDDL(q)
 		if err != nil {
 			return nil, err
 		}
@@ -101,7 +102,7 @@ func NewSchemaFromSQL(sql string) (*Schema, error) {
 	statements := []sqlparser.Statement{}
 	tokenizer := sqlparser.NewStringTokenizer(sql)
 	for {
-		stmt, err := sqlparser.ParseNext(tokenizer)
+		stmt, err := sqlparser.ParseNextStrictDDL(tokenizer)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				break
@@ -134,6 +135,8 @@ func getViewDependentTableNames(createView *sqlparser.CreateView) (names []strin
 // normalize is called as part of Schema creation process. The user may only get a hold of normalized schema.
 // It validates some cross-entity constraints, and orders entity based on dependencies (e.g. tables, views that read from tables, 2nd level views, etc.)
 func (s *Schema) normalize() error {
+	s.named = map[string]Entity{}
+	s.sorted = []Entity{}
 	// Verify no two entities share same name
 	for _, t := range s.tables {
 		name := t.Name()
@@ -281,4 +284,161 @@ func (s *Schema) Diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err 
 		}
 	}
 	return diffs, err
+}
+
+// Entity returns an entity by name, or nil if nonexistent
+func (s *Schema) Entity(name string) Entity {
+	return s.named[name]
+}
+
+// ToStatements returns an ordered list of statements which can be applied to create the schema
+func (s *Schema) ToStatements() []sqlparser.Statement {
+	stmts := []sqlparser.Statement{}
+	for _, e := range s.Entities() {
+		stmts = append(stmts, e.Create().Statement())
+	}
+	return stmts
+}
+
+// ToQueries returns an ordered list of queries which can be applied to create the schema
+func (s *Schema) ToQueries() []string {
+	queries := []string{}
+	for _, e := range s.Entities() {
+		queries = append(queries, e.Create().CanonicalStatementString())
+	}
+	return queries
+}
+
+// ToSQL returns a SQL blob with ordered sequence of queries which can be applied to create the schema
+func (s *Schema) ToSQL() string {
+	var buf bytes.Buffer
+	for _, query := range s.ToQueries() {
+		buf.WriteString(query)
+		buf.WriteString(";\n")
+	}
+	return buf.String()
+}
+
+// apply attempts to apply given list of diffs to this object.
+// These diffs are CREATE/DROP/ALTER TABLE/VIEW.
+func (s *Schema) apply(diffs []EntityDiff) error {
+	for _, diff := range diffs {
+		switch diff := diff.(type) {
+		case *CreateTableEntityDiff:
+			// We expect the table to not exist
+			name := diff.createTable.Table.Name.String()
+			if _, ok := s.named[name]; ok {
+				return ErrApplyDuplicateTableOrView
+			}
+			s.tables = append(s.tables, &CreateTableEntity{CreateTable: *diff.createTable})
+			_, s.named[name] = diff.Entities()
+		case *CreateViewEntityDiff:
+			// We expect the view to not exist
+			name := diff.createView.ViewName.Name.String()
+			if _, ok := s.named[name]; ok {
+				return ErrApplyDuplicateTableOrView
+			}
+			s.views = append(s.views, &CreateViewEntity{CreateView: *diff.createView})
+			_, s.named[name] = diff.Entities()
+		case *DropTableEntityDiff:
+			// We expect the table to exist
+			found := false
+			for i, t := range s.tables {
+				if name := t.Table.Name.String(); name == diff.from.Table.Name.String() {
+					s.tables = append(s.tables[0:i], s.tables[i+1:]...)
+					delete(s.named, name)
+					found = true
+					break
+				}
+			}
+			if !found {
+				return ErrApplyTableNotFound
+			}
+		case *DropViewEntityDiff:
+			// We expect the view to exist
+			found := false
+			for i, v := range s.views {
+				if name := v.ViewName.Name.String(); name == diff.from.ViewName.Name.String() {
+					s.views = append(s.views[0:i], s.views[i+1:]...)
+					delete(s.named, name)
+					found = true
+					break
+				}
+			}
+			if !found {
+				return ErrApplyViewNotFound
+			}
+		case *AlterTableEntityDiff:
+			// We expect the table to exist
+			found := false
+			for i, t := range s.tables {
+				if name := t.Table.Name.String(); name == diff.from.Table.Name.String() {
+					to, err := t.Apply(diff)
+					if err != nil {
+						return err
+					}
+					toCreateTableEntity, ok := to.(*CreateTableEntity)
+					if !ok {
+						return ErrEntityTypeMismatch
+					}
+					s.tables[i] = toCreateTableEntity
+					s.named[name] = toCreateTableEntity
+					found = true
+					break
+				}
+			}
+			if !found {
+				return ErrApplyTableNotFound
+			}
+		case *AlterViewEntityDiff:
+			// We expect the view to exist
+			found := false
+			for i, v := range s.views {
+				if name := v.ViewName.Name.String(); name == diff.from.ViewName.Name.String() {
+					to, err := v.Apply(diff)
+					if err != nil {
+						return err
+					}
+					toCreateViewEntity, ok := to.(*CreateViewEntity)
+					if !ok {
+						return ErrEntityTypeMismatch
+					}
+					s.views[i] = toCreateViewEntity
+					s.named[name] = toCreateViewEntity
+					found = true
+					break
+				}
+			}
+			if !found {
+				return ErrApplyViewNotFound
+			}
+		default:
+			return ErrUnsupportedApplyOperation
+		}
+	}
+	if err := s.normalize(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Apply attempts to apply given list of diffs to the schema described by this object.
+// These diffs are CREATE/DROP/ALTER TABLE/VIEW.
+// The operation does not modify this object. Instead, if successful, a new (modified) Schema is returned.
+func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
+	// we export to queries, then import back.
+	// The reason we don't just clone this object's fields, or even export/import to Statements,
+	// is that we want this schema to be immutable an unaffected by the apply() on the duplicate.
+	// statements/slices/maps will have shared pointers and changes will propagate back to this schema.
+	dup, err := NewSchemaFromQueries(s.ToQueries())
+	if err != nil {
+		return nil, err
+	}
+	for k, v := range s.named {
+		dup.named[k] = v
+	}
+	if err := dup.apply(diffs); err != nil {
+		return nil, err
+	}
+	return dup, nil
 }
