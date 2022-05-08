@@ -47,8 +47,9 @@ var (
 	ErrApplyDuplicateColumn      = errors.New("duplicate column")
 	ErrApplyDuplicateConstraint  = errors.New("duplicate constraint")
 
-	ErrInvalidColumnInKey       = errors.New("invalid column referenced by key")
-	ErrInvalidColumnInPartition = errors.New("invalid column referenced by partition")
+	ErrInvalidColumnInKey               = errors.New("invalid column referenced by key")
+	ErrInvalidColumnInPartition         = errors.New("invalid column referenced by partition")
+	ErrMissingParitionColumnInUniqueKey = errors.New("unique key must include all columns in a parititioning function")
 )
 
 // Entity stands for a database object we can diff:

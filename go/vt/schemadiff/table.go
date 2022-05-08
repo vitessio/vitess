@@ -1373,6 +1373,7 @@ func (c *CreateTableEntity) validate() error {
 		}
 	}
 	// validate columns referenced by partitions do in fact exist
+	// also, validate that all unique keys include partitioned columns
 	if partition := c.CreateTable.TableSpec.PartitionOption; partition != nil {
 		partitionColNames := []string{}
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
@@ -1386,9 +1387,28 @@ func (c *CreateTableEntity) validate() error {
 			return err
 		}
 
-		for _, colName := range partitionColNames {
-			if !columnExists[colName] {
-				return errors.Wrapf(ErrInvalidColumnInPartition, "column: %v", colName)
+		for _, partitionColName := range partitionColNames {
+			// Validate columns exists in table:
+			if !columnExists[partitionColName] {
+				return errors.Wrapf(ErrInvalidColumnInPartition, "column: %v", partitionColName)
+			}
+
+			// Validate all unique keys include this column:
+			for _, key := range c.CreateTable.TableSpec.Indexes {
+				if !key.Info.Unique {
+					continue
+				}
+				colFound := false
+				for _, col := range key.Columns {
+					colName := col.Column.String()
+					if colName == partitionColName {
+						colFound = true
+						break
+					}
+				}
+				if !colFound {
+					return errors.Wrapf(ErrMissingParitionColumnInUniqueKey, "column: %v not found in key: %v", partitionColName, key.Info.Name.String())
+				}
 			}
 		}
 	}

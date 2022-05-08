@@ -870,9 +870,27 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name:      "drop column used by partitions",
-			from:      "create table t (id int primary key, i int, unique key i_idx(i)) partition by hash (i) partitions 4",
+			from:      "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (i) partitions 4",
 			alter:     "alter table t drop column i",
 			expectErr: ErrInvalidColumnInPartition,
+		},
+		{
+			name:      "drop column used by partitions, function",
+			from:      "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (abs(i)) partitions 4",
+			alter:     "alter table t drop column i",
+			expectErr: ErrInvalidColumnInPartition,
+		},
+		{
+			name:  "unique key covers all partitioned columns",
+			from:  "create table t (id int, i int, primary key (id, i)) partition by hash (i) partitions 4",
+			alter: "alter table t add unique key i_idx(i)",
+			to:    "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (i) partitions 4",
+		},
+		{
+			name:      "unique key does not all partitioned columns",
+			from:      "create table t (id int, i int, primary key (id, i)) partition by hash (i) partitions 4",
+			alter:     "alter table t add unique key id_idx(id)",
+			expectErr: ErrMissingParitionColumnInUniqueKey,
 		},
 		{
 			name:  "nullable timestamp",
