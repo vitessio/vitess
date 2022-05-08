@@ -535,9 +535,10 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 // no defined PRIMARY KEY. It will return the columns in a
 // viable PRIMARY KEY equivalent (PKE) -- a NON-NULL UNIQUE
 // KEY -- in the specified table. When multiple PKE indexes
-// are available it will choose the most efficient one based
-// on the column data types and the number of columns in the
-// index.
+// are available it will attempt to choose the most efficient
+// one based on the column data types and the number of columns
+// in the index. See here for the data type on disk sizes:
+//   https://dev.mysql.com/doc/refman/en/storage-requirements.html
 // If this function is used on a table that DOES have a
 // defined PRIMARY KEY then it may return the columns for
 // that index if it is the most efficient one amongst the
