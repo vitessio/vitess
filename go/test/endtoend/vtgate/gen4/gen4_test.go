@@ -66,12 +66,44 @@ func TestCorrelatedExistsSubquery(t *testing.T) {
 		_, _ = utils.ExecAllowError(t, conn, `delete from t2`)
 	}()
 	// insert some data.
-	utils.Exec(t, conn, `insert into t1(id, col) values (100, 123),(10, 12), (1, 13), (4, 13),(1000, 1234)`)
+	utils.Exec(t, conn, `insert into t1(id, col) values (100, 123), (10, 12), (1, 13), (4, 13), (1000, 1234)`)
 	utils.Exec(t, conn, `insert into t2(id, tcol1, tcol2) values (100, 13, 1),(9, 7, 15),(1, 123, 123),(1004, 134, 123)`)
 
-	utils.AssertMatches(t, conn, `select id from t1 where exists(select 1 from t2 where t1.col = t2.tcol2)`, `[[INT64(100)]]`)
-	utils.AssertMatches(t, conn, `select id from t1 where exists(select 1 from t2 where t1.col = t2.tcol1) order by id`, `[[INT64(1)] [INT64(4)] [INT64(100)]]`)
-	utils.AssertMatches(t, conn, `select id from t1 where id in (select id from t2) order by id`, `[[INT64(1)] [INT64(100)]]`)
+	utils.AssertMatches(t, conn, `select id from t1 where exists(select 1 from t2 where t1.col = t2.tcol2)`,
+		`[[INT64(100)]]`)
+	utils.AssertMatches(t, conn, `select id from t1 where exists(select 1 from t2 where t1.col = t2.tcol1) order by id`,
+		`[[INT64(1)] [INT64(4)] [INT64(100)]]`)
+	utils.AssertMatches(t, conn, `select id from t1 where id in (select id from t2) order by id`,
+		`[[INT64(1)] [INT64(100)]]`)
+
+	utils.AssertMatches(t, conn, `
+select id 
+from t1 
+where exists(
+	select t2.id, count(*) 
+	from t2 
+	where t1.col = t2.tcol2
+    having count(*) > 0
+)`,
+		`[[INT64(100)]]`)
+	utils.AssertMatches(t, conn, `
+select id 
+from t1 
+where exists(
+	select t2.id, count(*) 
+	from t2 
+	where t1.col = t2.tcol1
+) order by id`,
+		`[[INT64(1)] [INT64(4)] [INT64(100)]]`)
+	utils.AssertMatchesNoOrder(t, conn, `
+select id 
+from t1 
+where exists(
+	select count(*) 
+	from t2 
+	where t1.col = t2.tcol1
+) order by id`,
+		`[[INT64(1)] [INT64(4)] [INT64(100)] [INT64(1000)] [INT64(10)]]`)
 }
 
 func TestGroupBy(t *testing.T) {
