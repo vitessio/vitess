@@ -47,7 +47,8 @@ var (
 	ErrApplyDuplicateColumn      = errors.New("duplicate column")
 	ErrApplyDuplicateConstraint  = errors.New("duplicate constraint")
 
-	ErrInvalidColumnInKey = errors.New("invalid column referenced by key")
+	ErrInvalidColumnInKey       = errors.New("invalid column referenced by key")
+	ErrInvalidColumnInPartition = errors.New("invalid column referenced by partition")
 )
 
 // Entity stands for a database object we can diff:

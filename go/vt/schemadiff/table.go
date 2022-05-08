@@ -1175,16 +1175,29 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 // validate checks that the table structure is valid:
 // - all columns referenced by keys exist
 func (c *CreateTableEntity) validate() error {
-	// validate all columns referenced by indexes do in fact exist
 	columnExists := map[string]bool{}
 	for _, col := range c.CreateTable.TableSpec.Columns {
 		columnExists[col.Name.String()] = true
 	}
+	// validate all columns referenced by indexes do in fact exist
 	for _, key := range c.CreateTable.TableSpec.Indexes {
 		for _, col := range key.Columns {
 			colName := col.Column.String()
 			if !columnExists[colName] {
 				return errors.Wrapf(ErrInvalidColumnInKey, "key: %v, column: %v", key.Info.Name.String(), colName)
+			}
+		}
+	}
+	// validate columns referenced by partitions do in fact exist
+	if partition := c.CreateTable.TableSpec.PartitionOption; partition != nil {
+		fmt.Println("here!")
+		fmt.Println(sqlparser.CanonicalString(partition))
+		fmt.Println(sqlparser.CanonicalString(partition.Expr))
+		for _, col := range partition.ColList {
+			colName := col.String()
+			fmt.Println(colName)
+			if !columnExists[colName] {
+				return errors.Wrapf(ErrInvalidColumnInPartition, "column: %v", colName)
 			}
 		}
 	}

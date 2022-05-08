@@ -818,6 +818,12 @@ func TestValidate(t *testing.T) {
 			alter:     "alter table t add key i12_idx(i1, i2), add key i32_idx(i3, i2), add key i21_idx(i2, i1)",
 			expectErr: ErrInvalidColumnInKey,
 		},
+		{
+			name:      "drop column used by partitions",
+			from:      "create table t (id int primary key, i int, unique key i_idx(i)) partition by hash (i) partitions 4",
+			alter:     "alter table t drop column i",
+			expectErr: ErrInvalidColumnInPartition,
+		},
 	}
 	hints := DiffHints{}
 	for _, ts := range tt {
