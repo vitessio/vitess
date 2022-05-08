@@ -182,6 +182,7 @@ func validateTableDoesNotExist(t *testing.T, tableExpr string) {
 }
 
 func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableGCState) (exists bool, dropFunc func()) {
+	stateMatched := false
 	for _, state := range states {
 		searchExpr := ""
 		switch state {
@@ -195,6 +196,7 @@ func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableG
 			searchExpr = `\_vt\_DROP\_%`
 		case schema.TableDroppedGCState:
 			validateTableDoesNotExist(t, `\_vt\_%`)
+			// No need for further validations
 			return
 		default:
 			t.Log("Unknown state")
@@ -202,6 +204,7 @@ func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableG
 		}
 		exists, tableName, err := tableExists(searchExpr)
 		require.NoError(t, err)
+		stateMatched = true
 
 		if exists {
 			if expectNumRows >= 0 {
@@ -212,6 +215,7 @@ func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableG
 			}
 		}
 	}
+	assert.True(t, stateMatched, "could not match any of the states: %v", states)
 	return false, nil
 }
 
