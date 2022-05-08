@@ -980,6 +980,24 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfSubPartition(a, b)
+	case *SubPartitionDefinition:
+		b, ok := inB.(*SubPartitionDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubPartitionDefinition(a, b)
+	case *SubPartitionDefinitionOptions:
+		b, ok := inB.(*SubPartitionDefinitionOptions)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubPartitionDefinitionOptions(a, b)
+	case SubPartitionDefinitions:
+		b, ok := inB.(SubPartitionDefinitions)
+		if !ok {
+			return false
+		}
+		return EqualsSubPartitionDefinitions(a, b)
 	case *Subquery:
 		b, ok := inB.(*Subquery)
 		if !ok {
@@ -2678,7 +2696,8 @@ func EqualsRefOfPartitionDefinitionOptions(a, b *PartitionDefinitionOptions) boo
 		EqualsRefOfLiteral(a.DataDirectory, b.DataDirectory) &&
 		EqualsRefOfLiteral(a.IndexDirectory, b.IndexDirectory) &&
 		EqualsRefOfInt(a.MaxRows, b.MaxRows) &&
-		EqualsRefOfInt(a.MinRows, b.MinRows)
+		EqualsRefOfInt(a.MinRows, b.MinRows) &&
+		EqualsSubPartitionDefinitions(a.SubPartitionDefinitions, b.SubPartitionDefinitions)
 }
 
 // EqualsRefOfPartitionEngine does deep equals between the two objects.
@@ -3094,6 +3113,48 @@ func EqualsRefOfSubPartition(a, b *SubPartition) bool {
 		a.Type == b.Type &&
 		EqualsColumns(a.ColList, b.ColList) &&
 		EqualsExpr(a.Expr, b.Expr)
+}
+
+// EqualsRefOfSubPartitionDefinition does deep equals between the two objects.
+func EqualsRefOfSubPartitionDefinition(a, b *SubPartitionDefinition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsRefOfSubPartitionDefinitionOptions(a.Options, b.Options)
+}
+
+// EqualsRefOfSubPartitionDefinitionOptions does deep equals between the two objects.
+func EqualsRefOfSubPartitionDefinitionOptions(a, b *SubPartitionDefinitionOptions) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.TableSpace == b.TableSpace &&
+		EqualsRefOfLiteral(a.Comment, b.Comment) &&
+		EqualsRefOfPartitionEngine(a.Engine, b.Engine) &&
+		EqualsRefOfLiteral(a.DataDirectory, b.DataDirectory) &&
+		EqualsRefOfLiteral(a.IndexDirectory, b.IndexDirectory) &&
+		EqualsRefOfInt(a.MaxRows, b.MaxRows) &&
+		EqualsRefOfInt(a.MinRows, b.MinRows)
+}
+
+// EqualsSubPartitionDefinitions does deep equals between the two objects.
+func EqualsSubPartitionDefinitions(a, b SubPartitionDefinitions) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfSubPartitionDefinition(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // EqualsRefOfSubquery does deep equals between the two objects.

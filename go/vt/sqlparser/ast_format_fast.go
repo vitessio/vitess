@@ -631,6 +631,59 @@ func (node *PartitionDefinitionOptions) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(" tablespace ")
 		buf.WriteString(node.TableSpace)
 	}
+	if node.SubPartitionDefinitions != nil {
+		buf.WriteByte(' ')
+		node.SubPartitionDefinitions.formatFast(buf)
+	}
+}
+
+// formatFast formats the node
+func (node SubPartitionDefinitions) formatFast(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.WriteString(prefix)
+		n.formatFast(buf)
+		prefix = ", "
+	}
+}
+
+// formatFast formats the node
+func (node *SubPartitionDefinition) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("subpartition ")
+	node.Name.formatFast(buf)
+	node.Options.formatFast(buf)
+}
+
+// formatFast formats the node
+func (node *SubPartitionDefinitionOptions) formatFast(buf *TrackedBuffer) {
+	if node.Engine != nil {
+		buf.WriteByte(' ')
+		node.Engine.formatFast(buf)
+	}
+	if node.Comment != nil {
+		buf.WriteString(" comment ")
+		node.Comment.formatFast(buf)
+	}
+	if node.DataDirectory != nil {
+		buf.WriteString(" data directory ")
+		node.DataDirectory.formatFast(buf)
+	}
+	if node.IndexDirectory != nil {
+		buf.WriteString(" index directory ")
+		node.IndexDirectory.formatFast(buf)
+	}
+	if node.MaxRows != nil {
+		buf.WriteString(" max_rows ")
+		buf.WriteString(fmt.Sprintf("%d", *node.MaxRows))
+	}
+	if node.MinRows != nil {
+		buf.WriteString(" min_rows ")
+		buf.WriteString(fmt.Sprintf("%d", *node.MinRows))
+	}
+	if node.TableSpace != "" {
+		buf.WriteString(" tablespace ")
+		buf.WriteString(node.TableSpace)
+	}
 }
 
 // formatFast formats the node

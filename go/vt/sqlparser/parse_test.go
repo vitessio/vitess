@@ -2885,6 +2885,9 @@ var (
 	}, {
 		input:  "SELECT JSON_UNQUOTE(@j)",
 		output: "select json_unquote(@j) from dual",
+	}, {
+		input:  "CREATE TABLE ts (id INT, purchased DATE) PARTITION BY RANGE( YEAR(purchased) ) SUBPARTITION BY HASH( TO_DAYS(purchased) ) ( PARTITION p0 VALUES LESS THAN (1990) (SUBPARTITION s0,SUBPARTITION s1),PARTITION p1 VALUES LESS THAN (2000),PARTITION p2 VALUES LESS THAN MAXVALUE (SUBPARTITION s2,SUBPARTITION s3));",
+		output: "create table ts (\n\tid INT,\n\tpurchased DATE\n) partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased)) (partition p0 values less than (1990) subpartition s0, subpartition s1, partition p1 values less than (2000), partition p2 values less than maxvalue subpartition s2, subpartition `s3`)",
 	}}
 )
 

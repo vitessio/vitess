@@ -1618,7 +1618,25 @@ type PartitionDefinition struct {
 }
 
 type PartitionDefinitionOptions struct {
-	ValueRange     *PartitionValueRange
+	ValueRange              *PartitionValueRange
+	Comment                 *Literal
+	Engine                  *PartitionEngine
+	DataDirectory           *Literal
+	IndexDirectory          *Literal
+	MaxRows                 *int
+	MinRows                 *int
+	TableSpace              string
+	SubPartitionDefinitions SubPartitionDefinitions
+}
+
+type SubPartitionDefinition struct {
+	Name    ColIdent
+	Options *SubPartitionDefinitionOptions
+}
+
+type SubPartitionDefinitions []*SubPartitionDefinition
+
+type SubPartitionDefinitionOptions struct {
 	Comment        *Literal
 	Engine         *PartitionEngine
 	DataDirectory  *Literal
