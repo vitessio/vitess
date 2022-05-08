@@ -72,7 +72,7 @@ type VTGateProxy struct {
 	// DialFunc is called to open a new database connection. In production this
 	// should always be vitessdriver.OpenWithConfiguration, but it is exported
 	// for testing purposes.
-	DialFunc func(cfg vitessdriver.Configuration) (*sql.DB, error)
+	dialFunc func(cfg vitessdriver.Configuration) (*sql.DB, error)
 	resolver grpcresolver.Builder
 
 	m        sync.Mutex
@@ -93,11 +93,16 @@ var ErrConnClosed = errors.New("use of closed connection")
 // It does not open a connection to a vtgate; users must call Dial before first
 // use.
 func New(ctx context.Context, cfg *Config) (*VTGateProxy, error) {
+	dialFunc := cfg.dialFunc
+	if dialFunc == nil {
+		dialFunc = vitessdriver.OpenWithConfiguration
+	}
+
 	return &VTGateProxy{
 		cluster:  cfg.Cluster,
 		creds:    cfg.Credentials,
 		cfg:      cfg,
-		DialFunc: vitessdriver.OpenWithConfiguration,
+		dialFunc: dialFunc,
 		resolver: cfg.ResolverOptions.NewBuilder(cfg.Cluster.Id),
 	}, nil
 }
@@ -154,7 +159,7 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 		}, conf.GRPCDialOptions...)
 	}
 
-	db, err := vtgate.DialFunc(conf)
+	db, err := vtgate.dialFunc(conf)
 	if err != nil {
 		return fmt.Errorf("error dialing vtgate: %w", err)
 	}

@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient"
+	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 )
 
 var (
@@ -65,6 +66,7 @@ type Config struct {
 	WorkflowReadPoolConfig *RPCPoolConfig
 
 	vtctldConfigOpts []vtctldclient.ConfigOption
+	vtsqlConfigOpts  []vtsql.ConfigOption
 }
 
 // Cluster returns a new cluster instance from the given config.
@@ -367,5 +369,15 @@ func (cfg *RPCPoolConfig) parseFlag(name string, val string) (err error) {
 // vtadmin/testutil package.
 func (cfg Config) WithVtctldTestConfigOptions(opts ...vtctldclient.ConfigOption) Config {
 	cfg.vtctldConfigOpts = append(cfg.vtctldConfigOpts, opts...)
+	return cfg
+}
+
+// WithVtSQLTestConfigOptions returns a new Config with the given vtsql
+// ConfigOptions appended to any existing ConfigOptions in the current Config.
+//
+// It should be used in tests only, and is exported to for use in the
+// vtadmin/testutil package.
+func (cfg Config) WithVtSQLTestConfigOptions(opts ...vtsql.ConfigOption) Config {
+	cfg.vtsqlConfigOpts = append(cfg.vtsqlConfigOpts, opts...)
 	return cfg
 }

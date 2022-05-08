@@ -105,6 +105,10 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 		return nil, fmt.Errorf("error creating vtsql connection config: %w", err)
 	}
 
+	for _, opt := range cfg.vtsqlConfigOpts {
+		vtsqlCfg = opt(vtsqlCfg)
+	}
+
 	vtctldargs := buildPFlagSlice(cfg.VtctldFlags)
 
 	vtctldCfg, err := vtctldclient.Parse(protocluster, disco, vtctldargs)

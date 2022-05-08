@@ -2604,7 +2604,10 @@ func TestGetTablets(t *testing.T) {
 	disco := fakediscovery.New()
 	disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: "gate"})
 
-	db, err := vtsql.New(context.Background(), &vtsql.Config{
+	dialerWrapper := vtsql.WithDialFunc(func(c vitessdriver.Configuration) (*sql.DB, error) {
+		return nil, assert.AnError
+	})
+	db, err := vtsql.New(context.Background(), dialerWrapper(&vtsql.Config{
 		Cluster: &vtadminpb.Cluster{
 			Id:   "c1",
 			Name: "one",
@@ -2612,11 +2615,8 @@ func TestGetTablets(t *testing.T) {
 		ResolverOptions: &resolver.Options{
 			Discovery: disco,
 		},
-	})
+	}))
 	require.NoError(t, err)
-	db.DialFunc = func(cfg vitessdriver.Configuration) (*sql.DB, error) {
-		return nil, assert.AnError
-	}
 
 	c := &cluster.Cluster{DB: db}
 	_, err = c.GetTablets(context.Background())
