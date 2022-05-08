@@ -1374,12 +1374,19 @@ func (c *CreateTableEntity) validate() error {
 	}
 	// validate columns referenced by partitions do in fact exist
 	if partition := c.CreateTable.TableSpec.PartitionOption; partition != nil {
-		fmt.Println("here!")
-		fmt.Println(sqlparser.CanonicalString(partition))
-		fmt.Println(sqlparser.CanonicalString(partition.Expr))
-		for _, col := range partition.ColList {
-			colName := col.String()
-			fmt.Println(colName)
+		partitionColNames := []string{}
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node := node.(type) {
+			case *sqlparser.ColName:
+				partitionColNames = append(partitionColNames, node.Name.String())
+			}
+			return true, nil
+		}, partition.Expr)
+		if err != nil {
+			return err
+		}
+
+		for _, colName := range partitionColNames {
 			if !columnExists[colName] {
 				return errors.Wrapf(ErrInvalidColumnInPartition, "column: %v", colName)
 			}
