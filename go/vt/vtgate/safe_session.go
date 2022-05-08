@@ -237,6 +237,11 @@ func (session *SafeSession) SetRollbackCommand() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
+	// if the rollback already happened on the savepoint. There is nothing to set or execute on later.
+	if session.savepointState == savepointRollback {
+		return
+	}
+
 	if session.savepointState == savepointSet {
 		session.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", session.savepointName)
 	} else {

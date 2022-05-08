@@ -2107,7 +2107,7 @@ func TestStreamingDML(t *testing.T) {
 	}
 }
 
-func TestTestPartialVindexInsertQueryFailure(t *testing.T) {
+func TestPartialVindexInsertQueryFailure(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 
 	logChan := QueryLogger.Subscribe("Test")
@@ -2160,7 +2160,7 @@ func TestTestPartialVindexInsertQueryFailure(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 1), (2, 3)", 0)
 }
 
-func TestTestPartialVindexInsertQueryFailureAutoCommit(t *testing.T) {
+func TestPartialVindexInsertQueryFailureAutoCommit(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 
 	logChan := QueryLogger.Subscribe("Test")
