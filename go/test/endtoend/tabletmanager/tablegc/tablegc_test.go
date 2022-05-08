@@ -181,7 +181,7 @@ func validateTableDoesNotExist(t *testing.T, tableExpr string) {
 	}
 }
 
-func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableGCState) (exists bool, dropFunc func()) {
+func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableGCState) {
 	stateMatched := false
 	for _, state := range states {
 		searchExpr := ""
@@ -210,13 +210,12 @@ func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableG
 			if expectNumRows >= 0 {
 				checkTableRows(t, tableName, expectNumRows)
 			}
-			return exists, func() {
-				dropTable(t, tableName)
-			}
+			// Now that the table is validated, we can drop it
+			dropTable(t, tableName)
+			return
 		}
 	}
 	assert.True(t, stateMatched, "could not match any of the states: %v", states)
-	return false, nil
 }
 
 // dropTable drops a table
@@ -267,10 +266,7 @@ func TestHold(t *testing.T) {
 		// We're now both beyond table's timestamp as well as a tableGC interval
 		validateTableDoesNotExist(t, tableName)
 	}
-	_, dropFunc := validateAnyState(t, -1, schema.PurgeTableGCState, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
-	if dropFunc != nil {
-		dropFunc()
-	}
+	validateAnyState(t, -1, schema.PurgeTableGCState, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
 }
 
 func TestEvac(t *testing.T) {
@@ -303,10 +299,7 @@ func TestEvac(t *testing.T) {
 	validateTableDoesNotExist(t, tableName)
 	time.Sleep(5 * time.Second)
 	// Table should be renamed as _vt_DROP_... and then dropped!
-	_, dropFunc := validateAnyState(t, 0, schema.DropTableGCState, schema.TableDroppedGCState)
-	if dropFunc != nil {
-		dropFunc()
-	}
+	validateAnyState(t, 0, schema.DropTableGCState, schema.TableDroppedGCState)
 }
 
 func TestDrop(t *testing.T) {
@@ -360,10 +353,7 @@ func TestPurge(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, exists)
 	}
-	_, dropFunc := validateAnyState(t, 0, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
-	if dropFunc != nil {
-		dropFunc()
-	}
+	validateAnyState(t, 0, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
 }
 
 func TestPurgeView(t *testing.T) {
@@ -415,8 +405,5 @@ func TestPurgeView(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, exists)
 	}
-	_, dropFunc := validateAnyState(t, 1024, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
-	if dropFunc != nil {
-		dropFunc()
-	}
+	validateAnyState(t, 1024, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
 }
