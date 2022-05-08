@@ -80,7 +80,7 @@ func TestDial(t *testing.T) {
 		Hostname: listener.Addr().String(),
 	})
 
-	proxy, err := New(&Config{
+	proxy, err := New(context.Background(), &Config{
 		Cluster: &vtadminpb.Cluster{
 			Id:   "test",
 			Name: "testcluster",
@@ -155,7 +155,7 @@ func TestRedial(t *testing.T) {
 		Hostname: listener2.Addr().String(),
 	})
 
-	proxy, err := New(&Config{
+	proxy, err := New(context.Background(), &Config{
 		Cluster: &vtadminpb.Cluster{
 			Id:   "test",
 			Name: "testcluster",

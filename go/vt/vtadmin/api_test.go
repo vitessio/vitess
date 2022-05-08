@@ -4856,7 +4856,7 @@ func TestServeHTTP(t *testing.T) {
 				"discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}",
 			},
 		},
-	}.Cluster()
+	}.Cluster(context.Background())
 
 	tests := []struct {
 		name                  string

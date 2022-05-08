@@ -17,6 +17,7 @@ limitations under the License.
 package cluster
 
 import (
+	"context"
 	"encoding/json"
 	stderrors "errors"
 	"fmt"
@@ -67,8 +68,8 @@ type Config struct {
 }
 
 // Cluster returns a new cluster instance from the given config.
-func (cfg Config) Cluster() (*Cluster, error) {
-	return New(cfg)
+func (cfg Config) Cluster(ctx context.Context) (*Cluster, error) {
+	return New(ctx, cfg)
 }
 
 // String is part of the flag.Value interface.

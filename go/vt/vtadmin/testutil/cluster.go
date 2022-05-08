@@ -17,6 +17,7 @@ limitations under the License.
 package testutil
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"sync"
@@ -104,7 +105,10 @@ func BuildCluster(t testing.TB, cfg TestClusterConfig) *cluster.Cluster {
 
 	m.Lock()
 	testdisco = disco
-	c, err := cluster.New(clusterConf)
+	c, err := cluster.New(
+		context.Background(), // consider updating this function to allow callers to provide a context.
+		clusterConf,
+	)
 	m.Unlock()
 
 	require.NoError(t, err, "failed to create cluster from configs %+v %+v", clusterConf, cfg)

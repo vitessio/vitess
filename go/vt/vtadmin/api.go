@@ -233,7 +233,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if clusterCookie, err := r.Cookie("cluster"); err == nil {
 		urlDecoded, err := url.QueryUnescape(clusterCookie.Value)
 		if err == nil {
-			c, id, err := dynamic.ClusterFromString(urlDecoded)
+			c, id, err := dynamic.ClusterFromString(r.Context(), urlDecoded)
 			if id != "" {
 				if err != nil {
 					log.Warningf("failed to extract valid cluster from cookie; attempting to use existing cluster with id=%s; error: %s", id, err)

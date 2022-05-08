@@ -80,7 +80,7 @@ type ClientProxy struct {
 //
 // It does not open a connection to a vtctld; users must call Dial before first
 // use.
-func New(cfg *Config) (*ClientProxy, error) {
+func New(ctx context.Context, cfg *Config) (*ClientProxy, error) {
 	dialFunc := cfg.dialFunc
 	if dialFunc == nil {
 		dialFunc = grpcvtctldclient.NewWithDialOpts
@@ -95,7 +95,7 @@ func New(cfg *Config) (*ClientProxy, error) {
 		closed:   true,
 	}
 
-	if err := proxy.Dial(context.TODO() /* TODO: thread ctx from startup => cluster.New => here */); err != nil {
+	if err := proxy.Dial(ctx); err != nil {
 		return nil, err
 	}
 

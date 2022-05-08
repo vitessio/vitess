@@ -80,7 +80,7 @@ type Cluster struct {
 }
 
 // New creates a new Cluster from a Config.
-func New(cfg Config) (*Cluster, error) {
+func New(ctx context.Context, cfg Config) (*Cluster, error) {
 	cluster := &Cluster{
 		ID:   cfg.ID,
 		Name: cfg.Name,
@@ -117,7 +117,7 @@ func New(cfg Config) (*Cluster, error) {
 	}
 
 	cluster.DB = vtsql.New(vtsqlCfg)
-	cluster.Vtctld, err = vtctldclient.New(vtctldCfg)
+	cluster.Vtctld, err = vtctldclient.New(ctx, vtctldCfg)
 	if err != nil {
 		return nil, fmt.Errorf("error creating vtctldclient: %w", err)
 	}
