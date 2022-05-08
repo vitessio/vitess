@@ -185,8 +185,8 @@ func validateTableDoesNotExist(t *testing.T, tableExpr string) {
 }
 
 func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableGCState) {
-	stateMatched := false
 	for _, state := range states {
+		expectTableToExist := true
 		searchExpr := ""
 		switch state {
 		case schema.HoldTableGCState:
@@ -198,16 +198,14 @@ func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableG
 		case schema.DropTableGCState:
 			searchExpr = `\_vt\_DROP\_%`
 		case schema.TableDroppedGCState:
-			validateTableDoesNotExist(t, `\_vt\_%`)
-			// No need for further validations
-			return
+			searchExpr = `\_vt\_%`
+			expectTableToExist = false
 		default:
 			t.Log("Unknown state")
 			t.Fail()
 		}
 		exists, tableName, err := tableExists(searchExpr)
 		require.NoError(t, err)
-		stateMatched = true
 
 		if exists {
 			if expectNumRows >= 0 {
@@ -215,10 +213,13 @@ func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableG
 			}
 			// Now that the table is validated, we can drop it
 			dropTable(t, tableName)
+		}
+		if exists == expectTableToExist {
+			// condition met
 			return
 		}
 	}
-	assert.True(t, stateMatched, "could not match any of the states: %v", states)
+	assert.Fail(t, "could not match any of the states: %v", states)
 }
 
 // dropTable drops a table
