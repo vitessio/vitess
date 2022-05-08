@@ -1136,12 +1136,3 @@ func TestNormalize(t *testing.T) {
 		})
 	}
 }
-
-func TestRotatePartitions(t *testing.T) {
-	// query := "alter table t drop partition p10, add partition p20 values less than(20)"
-	// query := "alter table t drop partition p10"
-	query := "alter table t add partition (partition p20 values less than(20))"
-	stmt, err := sqlparser.ParseStrictDDL(query)
-	require.NoError(t, err)
-	t.Logf("stmt: %v", sqlparser.CanonicalString(stmt))
-}
