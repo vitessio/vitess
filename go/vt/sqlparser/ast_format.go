@@ -613,10 +613,10 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 
 	if ct.Unsigned {
-		buf.astPrintf(ct, " %s", keywordStrings[UNSIGNED])
+		buf.astPrintf(ct, " %#s", keywordStrings[UNSIGNED])
 	}
 	if ct.Zerofill {
-		buf.astPrintf(ct, " %s", keywordStrings[ZEROFILL])
+		buf.astPrintf(ct, " %#s", keywordStrings[ZEROFILL])
 	}
 	if ct.Charset != "" {
 		buf.astPrintf(ct, " %s %s %#s", keywordStrings[CHARACTER], keywordStrings[SET], ct.Charset)

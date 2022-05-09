@@ -73,14 +73,6 @@ export const NavRail = () => {
                     </li>
                 </ul>
             </div>
-
-            <div className={style.footerContainer}>
-                <ul className={style.navList}>
-                    <li>
-                        <NavRailLink icon={Icons.bug} text="Debug" to="/debug" />
-                    </li>
-                </ul>
-            </div>
         </div>
     );
 };

@@ -2249,6 +2249,10 @@ reference_definition:
   {
     $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnDelete: $6, OnUpdate: $7}
   }
+| REFERENCES table_name '(' column_list ')' fk_on_update fk_on_delete
+  {
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnUpdate: $6, OnDelete: $7}
+  }
 
 reference_definition_opt:
   {
