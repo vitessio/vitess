@@ -165,8 +165,6 @@ func TestCreateKeyspace(t *testing.T) {
 			t.Parallel()
 
 			cluster := testutil.BuildCluster(t, tt.cfg)
-			err := cluster.Vtctld.Dial(ctx)
-			require.NoError(t, err, "could not dial test vtctld")
 
 			resp, err := cluster.CreateKeyspace(ctx, tt.req)
 			if tt.shouldErr {
@@ -263,10 +261,7 @@ func TestCreateShard(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.tc.Cluster.Vtctld.Dial(ctx)
-			require.NoError(t, err, "could not dial in-process vtctld")
-
-			_, err = tt.tc.Cluster.CreateShard(ctx, tt.req)
+			_, err := tt.tc.Cluster.CreateShard(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
 			} else {
@@ -356,8 +351,6 @@ func TestDeleteKeyspace(t *testing.T) {
 			t.Parallel()
 
 			cluster := testutil.BuildCluster(t, tt.cfg)
-			err := cluster.Vtctld.Dial(ctx)
-			require.NoError(t, err, "could not dial test vtctld")
 
 			resp, err := cluster.DeleteKeyspace(ctx, tt.req)
 			if tt.shouldErr {
@@ -487,9 +480,6 @@ func TestDeleteShards(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.tc.Cluster.Vtctld.Dial(ctx)
-			require.NoError(t, err, "could not dial in-process vtctld")
-
 			if tt.setup != nil {
 				func() {
 					t.Helper()
@@ -497,7 +487,7 @@ func TestDeleteShards(t *testing.T) {
 				}()
 			}
 
-			_, err = tt.tc.Cluster.DeleteShards(ctx, tt.req)
+			_, err := tt.tc.Cluster.DeleteShards(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
 			} else {
@@ -1369,9 +1359,6 @@ func TestGetSchema(t *testing.T) {
 				DBConfig:     testutil.Dbcfg{},
 			})
 
-			err := c.Vtctld.Dial(ctx)
-			require.NoError(t, err, "could not dial test vtctld")
-
 			schema, err := c.GetSchema(ctx, "testkeyspace", cluster.GetSchemaOptions{
 				BaseRequest: tt.req,
 			})
@@ -1422,9 +1409,6 @@ func TestGetSchema(t *testing.T) {
 			},
 			VtctldClient: vtctld,
 		})
-
-		err := c.Vtctld.Dial(ctx)
-		require.NoError(t, err, "could not dial test vtctld")
 
 		_, _ = c.GetSchema(ctx, "testkeyspace", cluster.GetSchemaOptions{
 			BaseRequest: req,
@@ -2599,8 +2583,6 @@ func TestGetShardReplicationPositions(t *testing.T) {
 			t.Parallel()
 
 			c := testutil.BuildCluster(t, tt.cfg)
-			err := c.Vtctld.Dial(ctx)
-			require.NoError(t, err, "failed to dial test vtctld")
 
 			resp, err := c.GetShardReplicationPositions(ctx, tt.req)
 			if tt.shouldErr {
@@ -2716,8 +2698,6 @@ func TestGetVSchema(t *testing.T) {
 			t.Parallel()
 
 			cluster := testutil.BuildCluster(t, tt.cfg)
-			err := cluster.Vtctld.Dial(ctx)
-			require.NoError(t, err, "could not dial test vtctld")
 
 			vschema, err := cluster.GetVSchema(ctx, tt.keyspace)
 			if tt.shouldErr {

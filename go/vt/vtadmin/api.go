@@ -233,7 +233,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if clusterCookie, err := r.Cookie("cluster"); err == nil {
 		urlDecoded, err := url.QueryUnescape(clusterCookie.Value)
 		if err == nil {
-			c, id, err := dynamic.ClusterFromString(urlDecoded)
+			c, id, err := dynamic.ClusterFromString(r.Context(), urlDecoded)
 			if id != "" {
 				if err != nil {
 					log.Warningf("failed to extract valid cluster from cookie; attempting to use existing cluster with id=%s; error: %s", id, err)
@@ -389,10 +389,6 @@ func (api *API) CreateKeyspace(ctx context.Context, req *vtadminpb.CreateKeyspac
 		return nil, err
 	}
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
 	ks, err := c.CreateKeyspace(ctx, req.Options)
 	if err != nil {
 		return nil, err
@@ -419,10 +415,6 @@ func (api *API) CreateShard(ctx context.Context, req *vtadminpb.CreateShardReque
 		return nil, err
 	}
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
 	return c.CreateShard(ctx, req.Options)
 }
 
@@ -442,10 +434,6 @@ func (api *API) DeleteKeyspace(ctx context.Context, req *vtadminpb.DeleteKeyspac
 		return nil, err
 	}
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
 	return c.DeleteKeyspace(ctx, req.Options)
 }
 
@@ -462,10 +450,6 @@ func (api *API) DeleteShards(ctx context.Context, req *vtadminpb.DeleteShardsReq
 
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
 		return nil, err
 	}
 
@@ -958,10 +942,6 @@ func (api *API) DeleteTablet(ctx context.Context, req *vtadminpb.DeleteTabletReq
 
 	cluster.AnnotateSpan(c, span)
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
 	_, err = c.Vtctld.DeleteTablets(ctx, &vtctldatapb.DeleteTabletsRequest{
 		TabletAliases: []*topodatapb.TabletAlias{
 			tablet.Tablet.Alias,
@@ -991,10 +971,6 @@ func (api *API) ReparentTablet(ctx context.Context, req *vtadminpb.ReparentTable
 
 	cluster.AnnotateSpan(c, span)
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
 	r, err := c.Vtctld.ReparentTablet(ctx, &vtctldatapb.ReparentTabletRequest{
 		Tablet: tablet.Tablet.Alias,
 	})
@@ -1022,10 +998,6 @@ func (api *API) RunHealthCheck(ctx context.Context, req *vtadminpb.RunHealthChec
 	}
 
 	cluster.AnnotateSpan(c, span)
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
 
 	_, err = c.Vtctld.RunHealthCheck(ctx, &vtctldatapb.RunHealthCheckRequest{
 		TabletAlias: tablet.Tablet.Alias,
@@ -1055,10 +1027,6 @@ func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest
 
 	cluster.AnnotateSpan(c, span)
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
 	_, err = c.Vtctld.PingTablet(ctx, &vtctldatapb.PingTabletRequest{
 		TabletAlias: tablet.Tablet.Alias,
 	})
@@ -1086,10 +1054,6 @@ func (api *API) SetReadOnly(ctx context.Context, req *vtadminpb.SetReadOnlyReque
 	}
 
 	cluster.AnnotateSpan(c, span)
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
 
 	_, err = c.Vtctld.SetWritable(ctx, &vtctldatapb.SetWritableRequest{
 		TabletAlias: tablet.Tablet.Alias,
@@ -1120,10 +1084,6 @@ func (api *API) SetReadWrite(ctx context.Context, req *vtadminpb.SetReadWriteReq
 
 	cluster.AnnotateSpan(c, span)
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
 	_, err = c.Vtctld.SetWritable(ctx, &vtctldatapb.SetWritableRequest{
 		TabletAlias: tablet.Tablet.Alias,
 		Writable:    true,
@@ -1153,10 +1113,6 @@ func (api *API) StartReplication(ctx context.Context, req *vtadminpb.StartReplic
 
 	cluster.AnnotateSpan(c, span)
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
 	_, err = c.Vtctld.StartReplication(ctx, &vtctldatapb.StartReplicationRequest{
 		TabletAlias: tablet.Tablet.Alias,
 	})
@@ -1184,10 +1140,6 @@ func (api *API) StopReplication(ctx context.Context, req *vtadminpb.StopReplicat
 	}
 
 	cluster.AnnotateSpan(c, span)
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
 
 	_, err = c.Vtctld.StopReplication(ctx, &vtctldatapb.StopReplicationRequest{
 		TabletAlias: tablet.Tablet.Alias,
@@ -1263,10 +1215,6 @@ func (api *API) GetVSchema(ctx context.Context, req *vtadminpb.GetVSchemaRequest
 		return nil, nil
 	}
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
 	return c.GetVSchema(ctx, req.Keyspace)
 }
 
@@ -1306,11 +1254,6 @@ func (api *API) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasReque
 			defer span.Finish()
 
 			cluster.AnnotateSpan(c, span)
-
-			if err := c.Vtctld.Dial(ctx); err != nil {
-				rec.RecordError(fmt.Errorf("Vtctld.Dial(cluster = %s): %w", c.ID, err))
-				return
-			}
 
 			getKeyspacesSpan, getKeyspacesCtx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
 			cluster.AnnotateSpan(c, getKeyspacesSpan)
@@ -1510,10 +1453,6 @@ func (api *API) RefreshState(ctx context.Context, req *vtadminpb.RefreshStateReq
 
 	cluster.AnnotateSpan(c, span)
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
 	_, err = c.Vtctld.RefreshState(ctx, &vtctldatapb.RefreshStateRequest{
 		TabletAlias: tablet.Tablet.Alias,
 	})
@@ -1565,10 +1504,6 @@ func (api *API) ValidateSchemaKeyspace(ctx context.Context, req *vtadminpb.Valid
 		return nil, nil
 	}
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
 	res, err := c.Vtctld.ValidateSchemaKeyspace(ctx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
 		Keyspace: req.Keyspace,
 	})
@@ -1592,10 +1527,6 @@ func (api *API) ValidateVersionKeyspace(ctx context.Context, req *vtadminpb.Vali
 
 	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.PutAction) {
 		return nil, nil
-	}
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
 	}
 
 	res, err := c.Vtctld.ValidateVersionKeyspace(ctx, &vtctldatapb.ValidateVersionKeyspaceRequest{
@@ -1646,10 +1577,6 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	}
 
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
 
 	var (
 		wg sync.WaitGroup
@@ -1723,9 +1650,7 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	go func(c *cluster.Cluster) {
 		defer wg.Done()
 
-		shards, err := c.FindAllShardsInKeyspace(ctx, req.Keyspace, cluster.FindAllShardsInKeyspaceOptions{
-			SkipDial: true,
-		})
+		shards, err := c.FindAllShardsInKeyspace(ctx, req.Keyspace, cluster.FindAllShardsInKeyspaceOptions{})
 		if err != nil {
 			er.RecordError(err)
 			return
