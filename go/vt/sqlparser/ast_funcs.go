@@ -63,8 +63,10 @@ func Append(buf *strings.Builder, node SQLNode) {
 	node.formatFast(tbuf)
 }
 
-// IndexColumn describes a column in an index definition with optional length
+// IndexColumn describes a column or expression in an index definition with optional length (for column)
 type IndexColumn struct {
+	// Only one of Column or Expression can be specified
+	// Length is an optional field which is only applicable when Column is used
 	Column     ColIdent
 	Length     *Literal
 	Expression Expr
