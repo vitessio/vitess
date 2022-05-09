@@ -2087,6 +2087,14 @@ index_option:
   {
     $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($2)}
   }
+| VISIBLE
+  {
+    $$ = &IndexOption{Name: string($1) }
+  }
+| INVISIBLE
+  {
+    $$ = &IndexOption{Name: string($1) }
+  }
 | WITH PARSER id_or_var
   {
     $$ = &IndexOption{Name: string($1) + " " + string($2), String: $3.String()}
