@@ -503,12 +503,10 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		// - reordered keys -- we treat that as non-diff
 		return nil, nil
 	}
-	if len(partitionSpecs) == 1 {
-		alterTable.PartitionSpec = partitionSpecs[0]
-	}
-	if len(partitionSpecs) <= 1 {
+	if len(partitionSpecs) == 0 {
 		return &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}, nil
 	}
+	// partitionSpecs has multiple entries
 	if len(alterTable.AlterOptions) > 0 ||
 		alterTable.PartitionOption != nil ||
 		alterTable.PartitionSpec != nil {
@@ -840,6 +838,10 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 			case RangeRotationIgnore:
 				return nil, nil
 			case RangeRotationStatements:
+				if len(partitionSpecs) == 1 {
+					alterTable.PartitionSpec = partitionSpecs[0]
+					partitionSpecs = nil
+				}
 				return partitionSpecs, nil
 			case RangeRotationFullSpec:
 				// proceed to return a full rebuild
