@@ -48,6 +48,8 @@ func (cached *Result) CachedSize(alloc bool) int64 {
 	}
 	// field SessionStateChanges string
 	size += hack.RuntimeAllocSize(int64(len(cached.SessionStateChanges)))
+	// field Info string
+	size += hack.RuntimeAllocSize(int64(len(cached.Info)))
 	return size
 }
 func (cached *Value) CachedSize(alloc bool) int64 {
