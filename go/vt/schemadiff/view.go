@@ -45,6 +45,14 @@ func (d *AlterViewEntityDiff) Statement() sqlparser.Statement {
 	return d.alterView
 }
 
+// AlterView returns the underlying sqlparser.AlterView that was generated for the diff.
+func (d *AlterViewEntityDiff) AlterView() *sqlparser.AlterView {
+	if d == nil {
+		return nil
+	}
+	return d.alterView
+}
+
 // StatementString implements EntityDiff
 func (d *AlterViewEntityDiff) StatementString() (s string) {
 	if stmt := d.Statement(); stmt != nil {
@@ -78,6 +86,14 @@ func (d *CreateViewEntityDiff) Entities() (from Entity, to Entity) {
 
 // Statement implements EntityDiff
 func (d *CreateViewEntityDiff) Statement() sqlparser.Statement {
+	if d == nil {
+		return nil
+	}
+	return d.createView
+}
+
+// CreateView returns the underlying sqlparser.CreateView that was generated for the diff.
+func (d *CreateViewEntityDiff) CreateView() *sqlparser.CreateView {
 	if d == nil {
 		return nil
 	}
@@ -118,6 +134,14 @@ func (d *DropViewEntityDiff) Entities() (from Entity, to Entity) {
 
 // Statement implements EntityDiff
 func (d *DropViewEntityDiff) Statement() sqlparser.Statement {
+	if d == nil {
+		return nil
+	}
+	return d.dropView
+}
+
+// DropView returns the underlying sqlparser.DropView that was generated for the diff.
+func (d *DropViewEntityDiff) DropView() *sqlparser.DropView {
 	if d == nil {
 		return nil
 	}
