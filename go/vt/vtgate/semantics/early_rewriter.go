@@ -208,6 +208,7 @@ func rewriteJoinUsing(
 			}
 			return nil
 		}
+		current = current.parent
 	}
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "did not find WHERE clause")
 }

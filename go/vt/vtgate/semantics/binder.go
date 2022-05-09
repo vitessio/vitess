@@ -136,7 +136,11 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 }
 
 func (b *binder) rewriteJoinUsingColName(deps dependency, node *sqlparser.ColName, currentScope *scope) (dependency, error) {
-	newTbl := deps.recursive.Constituents()[0]
+	constituents := deps.recursive.Constituents()
+	if len(constituents) < 1 {
+		return dependency{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not expected - we should not a colname that depends on nothing")
+	}
+	newTbl := constituents[0]
 	infoFor, err := b.tc.tableInfoFor(newTbl)
 	if err != nil {
 		return dependency{}, err
