@@ -64,9 +64,17 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 
 	// Only returns rows for REPLICA and RDONLY tablets -- so should be 2 of them
 	qr := utils.Exec(t, conn, "show vitess_replication_status like '%'")
-	expectNumRows := 2
-	numRows := len(qr.Rows)
-	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
+	assert.Equal(t, 2, len(qr.Rows), "wrong number of results from show vitess_replication_status")
+
+	_ = utils.Exec(t, conn, "use @replica")
+	qr = utils.Exec(t, conn, "select max_repl_lag()")
+	assert.Equal(t, 1, len(qr.Rows), "expected single row from `select max_repl_lag()`")
+
+	_ = utils.Exec(t, conn, "use @rdonly")
+	assert.Equal(t, 1, len(qr.Rows), "expected single row from `select max_repl_lag()`")
+
+	_ = utils.Exec(t, conn, "use @primary")
+	utils.AssertMatches(t, conn, `select max_repl_lag()`, `[[0]]`)
 }
 
 func verifyVtgateVariables(t *testing.T, url string) {

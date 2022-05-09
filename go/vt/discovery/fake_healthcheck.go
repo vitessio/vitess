@@ -361,6 +361,15 @@ func (fhc *FakeHealthCheck) GetAllTablets() map[string]*topodatapb.Tablet {
 	return res
 }
 
+// Healths returns the TabletHealth elements, allowing setting values manually
+func (fhc *FakeHealthCheck) Healths() []*TabletHealth {
+	var result []*TabletHealth
+	for _, item := range fhc.items {
+		result = append(result, item.ts)
+	}
+	return result
+}
+
 func simpleCopy(th *TabletHealth) *TabletHealth {
 	return &TabletHealth{
 		Conn:                 th.Conn,

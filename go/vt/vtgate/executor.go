@@ -397,6 +397,8 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[sqlparser.FoundRowsName] = sqltypes.Int64BindVariable(int64(session.FoundRows))
 		case sqlparser.RowCountName:
 			bindVars[sqlparser.RowCountName] = sqltypes.Int64BindVariable(session.RowCount)
+		case sqlparser.MaxReplLag:
+			bindVars[sqlparser.MaxReplLag] = sqltypes.ValueBindVariable(e.getMaxReplicationLag(session))
 		}
 	}
 
@@ -898,6 +900,83 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 		Fields: buildVarCharFields("Keyspace", "Shard", "TabletType", "Alias", "Hostname", "ReplicationSource", "ReplicationHealth", "ReplicationLag", "ThrottlerStatus"),
 		Rows:   rows,
 	}, nil
+}
+
+func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats, ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
+	if destKeyspace == "" {
+		return nil, errNoKeyspace
+	}
+	if dest == nil {
+		// shardExec will re-resolve this a bit later.
+		rss, err := e.resolver.resolver.ResolveDestination(ctx, destKeyspace, destTabletType, key.DestinationAnyShard{})
+		if err != nil {
+			return nil, err
+		}
+		if len(rss) != 1 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "keyspace %s has no shards", destKeyspace)
+		}
+		destKeyspace, dest = rss[0].Target.Keyspace, key.DestinationShard(rss[0].Target.Shard)
+	}
+
+	switch dest.(type) {
+	case key.DestinationKeyspaceID:
+		rss, err := e.resolver.resolver.ResolveDestination(ctx, destKeyspace, destTabletType, dest)
+		if err != nil {
+			return nil, err
+		}
+		if len(rss) != 1 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %s, got: %v", sql, dest)
+		}
+		destKeyspace, dest = rss[0].Target.Keyspace, key.DestinationShard(rss[0].Target.Shard)
+	case key.DestinationShard:
+	// noop
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Destination can only be a single shard for statement: %s, got: %v", sql, dest)
+	}
+
+	execStart := time.Now()
+	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats, ignoreMaxMemoryRows)
+
+	e.updateQueryCounts("Other", "", "", int64(logStats.ShardQueries))
+
+	logStats.ExecuteTime = time.Since(execStart)
+	return result, err
+}
+
+func (e *Executor) getMaxReplicationLag(session *SafeSession) sqltypes.Value {
+	status := e.scatterConn.GetHealthCheckCacheStatus()
+	replLag := 0
+	targetString := session.GetTargetString()
+	ks, tabletType, _, err := e.ParseDestinationTarget(targetString)
+	if err != nil {
+		return sqltypes.NULL
+	}
+	last := strings.LastIndexAny(targetString, "@")
+	if last == -1 {
+		tabletType = topodatapb.TabletType_UNKNOWN
+	}
+
+	for _, s := range status {
+		for _, ts := range s.TabletsStats {
+			// no stats available, ignore.
+			if ts.Stats == nil {
+				continue
+			}
+			// if keyspace is specified, only check replication status for that keyspace tablets
+			if ks != "" && ts.Tablet.Keyspace != ks {
+				continue
+			}
+			// if tablet type is specified, only check replication status for those tablets
+			if tabletType != topodatapb.TabletType_UNKNOWN && ts.Tablet.Type != tabletType {
+				continue
+			}
+			lagSeconds := int(ts.Stats.ReplicationLagSeconds)
+			if lagSeconds > replLag {
+				replLag = lagSeconds
+			}
+		}
+	}
+	return sqltypes.NewInt64(int64(replLag))
 }
 
 // MessageStream is part of the vtgate service API. This is a V2 level API that's sent

@@ -753,6 +753,57 @@ func TestSelectLastInsertId(t *testing.T) {
 	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
+func TestReplLag(t *testing.T) {
+	// Special setup: Don't use createExecutorEnv.
+	*GatewayImplementation = tabletGatewayImplementation
+	cell := "maxrepl"
+	hc := discovery.NewFakeHealthCheck(nil)
+	ks1 := "TestReplLag1"
+	ks2 := "TestReplLag2"
+	_ = createSandbox(ks1)
+	_ = createSandbox(ks2)
+	defer func() {
+		delete(ksToSandbox, ks1)
+		delete(ksToSandbox, ks2)
+	}()
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-"}
+	port := int32(1)
+	for _, shard := range shards {
+		_ = hc.AddTestTablet(cell, shard, port, ks1, shard, topodatapb.TabletType_REPLICA, true, 1, nil)
+		port++
+		_ = hc.AddTestTablet(cell, shard, port, ks2, shard, topodatapb.TabletType_REPLICA, true, 1, nil)
+	}
+	executor := createExecutor(serv, cell, resolver)
+	executor.normalize = true
+	for _, healthCache := range executor.scatterConn.GetHealthCheckCacheStatus() {
+		for _, ts := range healthCache.TabletsStats {
+			if ts.Target.Keyspace == ks1 {
+				ts.Stats.ReplicationLagSeconds = uint32(10)
+			}
+			if ts.Target.Keyspace == ks2 {
+				ts.Stats.ReplicationLagSeconds = uint32(20)
+			}
+		}
+	}
+
+	session := NewAutocommitSession(&vtgatepb.Session{})
+	qr, err := executor.Execute(context.Background(), "TestExecute", session, "select max_repl_lag()", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "[[INT64(20)]]", fmt.Sprintf("%v", qr.Rows))
+
+	session.SetTargetString(ks1)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "select max_repl_lag()", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "[[INT64(10)]]", fmt.Sprintf("%v", qr.Rows))
+
+	session.TargetString = ks1 + "@rdonly"
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "select max_repl_lag()", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "[[INT64(0)]]", fmt.Sprintf("%v", qr.Rows))
+}
+
 func TestSelectSystemVariables(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 	primarySession.ReadAfterWrite = &vtgatepb.ReadAfterWrite{
