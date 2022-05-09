@@ -775,10 +775,6 @@ func (c *Cluster) GetCellInfos(ctx context.Context, req *vtadminpb.GetCellInfosR
 	span, ctx := trace.NewSpan(ctx, "Cluster.GetCellInfos")
 	defer span.Finish()
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
 	names := req.Cells
 	if len(names) == 0 {
 		resp, err := c.Vtctld.GetCellInfoNames(ctx, &vtctldatapb.GetCellInfoNamesRequest{})
@@ -852,10 +848,6 @@ func (c *Cluster) GetCellInfos(ctx context.Context, req *vtadminpb.GetCellInfosR
 func (c *Cluster) GetCellsAliases(ctx context.Context) (*vtadminpb.ClusterCellsAliases, error) {
 	span, ctx := trace.NewSpan(ctx, "Cluster.GetCellsAliases")
 	defer span.Finish()
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
 
 	resp, err := c.Vtctld.GetCellsAliases(ctx, &vtctldatapb.GetCellsAliasesRequest{})
 	if err != nil {
