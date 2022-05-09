@@ -72,6 +72,7 @@ var (
 	tableTransitionExpiration = 10 * time.Second
 	gcCheckInterval           = 2 * time.Second
 	gcPurgeCheckInterval      = 2 * time.Second
+	waitForTransitionTimeout  = 30 * time.Second
 )
 
 func TestMain(m *testing.M) {
@@ -166,7 +167,7 @@ func tableExists(tableExpr string) (exists bool, tableName string, err error) {
 }
 
 func validateTableDoesNotExist(t *testing.T, tableExpr string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), waitForTransitionTimeout)
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)
@@ -354,7 +355,7 @@ func TestPurge(t *testing.T) {
 		checkTableRows(t, tableName, 1024)
 	}
 
-	time.Sleep(2 * gcPurgeCheckInterval) // wwait for table to be purged
+	time.Sleep(5 * gcPurgeCheckInterval) // wwait for table to be purged
 	time.Sleep(2 * gcCheckInterval)      // wait for GC state transition
 	validateAnyState(t, 0, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
 }
