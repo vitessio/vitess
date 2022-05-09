@@ -310,6 +310,8 @@ func (api *API) Handler() http.Handler {
 	httpAPI := vtadminhttp.NewAPI(api, api.options.HTTPOpts)
 
 	router.HandleFunc("/backups", httpAPI.Adapt(vtadminhttp.GetBackups)).Name("API.GetBackups")
+	router.HandleFunc("/cells", httpAPI.Adapt(vtadminhttp.GetCellInfos)).Name("API.GetCellInfos")
+	router.HandleFunc("/cells_aliases", httpAPI.Adapt(vtadminhttp.GetCellsAliases)).Name("API.GetCellsAliases")
 	router.HandleFunc("/clusters", httpAPI.Adapt(vtadminhttp.GetClusters)).Name("API.GetClusters")
 	router.HandleFunc("/gates", httpAPI.Adapt(vtadminhttp.GetGates)).Name("API.GetGates")
 	router.HandleFunc("/keyspace/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateKeyspace)).Name("API.CreateKeyspace").Methods("POST")
@@ -570,6 +572,96 @@ func (api *API) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsRequest
 
 	return &vtadminpb.GetBackupsResponse{
 		Backups: backups,
+	}, nil
+}
+
+// GetCellInfos is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetCellInfos(ctx context.Context, req *vtadminpb.GetCellInfosRequest) (*vtadminpb.GetCellInfosResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetCellInfos")
+	defer span.Finish()
+
+	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+
+	var (
+		m         sync.Mutex
+		wg        sync.WaitGroup
+		rec       concurrency.AllErrorRecorder
+		cellInfos []*vtadminpb.ClusterCellInfo
+	)
+
+	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.CellInfoResource, rbac.GetAction) {
+			continue
+		}
+
+		wg.Add(1)
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			clusterCellInfos, err := c.GetCellInfos(ctx, req)
+			if err != nil {
+				rec.RecordError(fmt.Errorf("failed to GetCellInfos for cluster %s: %w", c.ID, err))
+				return
+			}
+
+			m.Lock()
+			defer m.Unlock()
+			cellInfos = append(cellInfos, clusterCellInfos...)
+		}(c)
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return &vtadminpb.GetCellInfosResponse{
+		CellInfos: cellInfos,
+	}, nil
+}
+
+// GetCellsAliases is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetCellsAliases(ctx context.Context, req *vtadminpb.GetCellsAliasesRequest) (*vtadminpb.GetCellsAliasesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetCellsAliases")
+	defer span.Finish()
+
+	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+
+	var (
+		m       sync.Mutex
+		wg      sync.WaitGroup
+		rec     concurrency.AllErrorRecorder
+		aliases []*vtadminpb.ClusterCellsAliases
+	)
+
+	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.CellsAliasResource, rbac.GetAction) {
+			continue
+		}
+
+		wg.Add(1)
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			clusterAliases, err := c.GetCellsAliases(ctx)
+			if err != nil {
+				rec.RecordError(fmt.Errorf("failed to GetCellsAliases for cluster %s: %w", c.ID, err))
+				return
+			}
+
+			m.Lock()
+			defer m.Unlock()
+			aliases = append(aliases, clusterAliases)
+		}(c)
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return &vtadminpb.GetCellsAliasesResponse{
+		Aliases: aliases,
 	}, nil
 }
 
