@@ -74,14 +74,21 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 
 		b.setSubQueryDependencies(node, currScope)
 	case *sqlparser.JoinCondition:
+		currScope := b.scoper.currentScope()
 		for _, ident := range node.Using {
 			name := sqlparser.NewColName(ident.String())
-			s := b.scoper.currentScope()
-			deps, err := b.resolveColumn(name, s, true)
+			deps, err := b.resolveColumn(name, currScope, true)
 			if err != nil {
 				return err
 			}
-			s.joinUsing[ident.Lowered()] = deps.direct
+			currScope.joinUsing[ident.Lowered()] = deps.direct
+		}
+		if len(node.Using) > 0 {
+			err := rewriteJoinUsing(currScope, node.Using, b.org)
+			if err != nil {
+				return err
+			}
+			node.Using = nil
 		}
 	case *sqlparser.ColName:
 		currentScope := b.scoper.currentScope()

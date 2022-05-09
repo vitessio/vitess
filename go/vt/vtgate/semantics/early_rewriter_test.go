@@ -133,13 +133,13 @@ func TestExpandStar(t *testing.T) {
 		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2 from t1 join t2 on t1.a = t2.c1",
 	}, {
 		sql:    "select * from t2 join t4 using (c1)",
-		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4 from t2 join t4 using (c1)",
+		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4 from t2 join t4 where t2.c1 = t4.c1",
 	}, {
 		sql:    "select * from t2 join t4 using (c1) join t2 as X using (c1)",
-		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4, X.c2 as c2 from t2 join t4 using (c1) join t2 as X using (c1)",
+		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4, X.c2 as c2 from t2 join t4 join t2 as X where t2.c1 = t4.c1 and t2.c1 = X.c1 and t4.c1 = X.c1",
 	}, {
 		sql:    "select * from t2 join t4 using (c1), t2 as t2b join t4 as t4b using (c1)",
-		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4, t2b.c1 as c1, t2b.c2 as c2, t4b.c4 as c4 from t2 join t4 using (c1), t2 as t2b join t4 as t4b using (c1)",
+		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4, t2b.c1 as c1, t2b.c2 as c2, t4b.c4 as c4 from t2 join t4, t2 as t2b join t4 as t4b where t2b.c1 = t4b.c1 and t2.c1 = t4.c1",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
@@ -212,7 +212,7 @@ func TestRewriteJoinUsingColumns(t *testing.T) {
 		expErr string
 	}{{
 		sql:    "select 1 from t1 join t2 using (a) where a = 42",
-		expSQL: "select 1 from t1 join t2 using (a) where t1.a = 42",
+		expSQL: "select 1 from t1 join t2 where t1.a = t2.a and t1.a = 42",
 	}, {
 		sql:    "select 1 from t1 join t2 using (a), t3 where a = 42",
 		expErr: "Column 'a' in field list is ambiguous",

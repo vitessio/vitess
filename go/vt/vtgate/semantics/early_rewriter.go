@@ -150,6 +150,68 @@ func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
 	}, nil).(sqlparser.Expr)
 }
 
+func rewriteJoinUsing(
+	current *scope,
+	using sqlparser.Columns,
+	org originable,
+) error {
+	joinUsing := current.prepareUsingMap()
+	predicates := make([]sqlparser.Expr, 0, len(using))
+	for _, column := range using {
+		var foundTables []sqlparser.TableName
+		for _, tbl := range current.tables {
+			if !tbl.authoritative() {
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't handle JOIN USING without authoritative tables")
+			}
+
+			currTable := tbl.getTableSet(org)
+			usingCols := joinUsing[currTable]
+			if usingCols == nil {
+				usingCols = map[string]TableSet{}
+			}
+			for _, col := range tbl.getColumns() {
+				_, found := usingCols[col.Name]
+				if found {
+					tblName, err := tbl.Name()
+					if err != nil {
+						return err
+					}
+
+					foundTables = append(foundTables, tblName)
+					break // no need to look at other columns in this table
+				}
+			}
+		}
+		for i, lft := range foundTables {
+			for j := i + 1; j < len(foundTables); j++ {
+				rgt := foundTables[j]
+				predicates = append(predicates, &sqlparser.ComparisonExpr{
+					Operator: sqlparser.EqualOp,
+					Left:     sqlparser.NewColNameWithQualifier(column.String(), lft),
+					Right:    sqlparser.NewColNameWithQualifier(column.String(), rgt),
+				})
+			}
+		}
+	}
+
+	// now, we go up the scope until we find a SELECT with a where clause we can add this predicate to
+	for current != nil {
+		sel, found := current.stmt.(*sqlparser.Select)
+		if found {
+			if sel.Where == nil {
+				sel.Where = &sqlparser.Where{
+					Type: sqlparser.WhereClause,
+					Expr: sqlparser.AndExpressions(predicates...),
+				}
+			} else {
+				sel.Where.Expr = sqlparser.AndExpressions(append(predicates, sel.Where.Expr)...)
+			}
+			return nil
+		}
+	}
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "did not find WHERE clause")
+}
+
 func expandTableColumns(
 	starExpr *sqlparser.StarExpr,
 	tables []TableInfo,
