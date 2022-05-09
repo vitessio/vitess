@@ -1361,7 +1361,11 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 func (c *CreateTableEntity) validate() error {
 	columnExists := map[string]bool{}
 	for _, col := range c.CreateTable.TableSpec.Columns {
-		columnExists[col.Name.String()] = true
+		colName := col.Name.String()
+		if columnExists[colName] {
+			return errors.Wrapf(ErrApplyDuplicateColumn, "column: %v", colName)
+		}
+		columnExists[colName] = true
 	}
 	// validate all columns referenced by indexes do in fact exist
 	for _, key := range c.CreateTable.TableSpec.Indexes {
@@ -1372,9 +1376,18 @@ func (c *CreateTableEntity) validate() error {
 			}
 		}
 	}
-	// validate columns referenced by partitions do in fact exist
-	// also, validate that all unique keys include partitioned columns
 	if partition := c.CreateTable.TableSpec.PartitionOption; partition != nil {
+		// validate no two partitions have same name
+		partitionExists := map[string]bool{}
+		for _, p := range partition.Definitions {
+			partitionName := p.Name.String()
+			if partitionExists[partitionName] {
+				return errors.Wrapf(ErrApplyDuplicatePartition, "partition: %v", partitionName)
+			}
+			partitionExists[partitionName] = true
+		}
+		// validate columns referenced by partitions do in fact exist
+		// also, validate that all unique keys include partitioned columns
 		partitionColNames := []string{}
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {

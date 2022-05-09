@@ -46,6 +46,7 @@ var (
 	ErrApplyDuplicateKey         = errors.New("duplicate key")
 	ErrApplyDuplicateColumn      = errors.New("duplicate column")
 	ErrApplyDuplicateConstraint  = errors.New("duplicate constraint")
+	ErrApplyDuplicatePartition   = errors.New("duplicate partition")
 
 	ErrInvalidColumnInKey               = errors.New("invalid column referenced by key")
 	ErrInvalidColumnInPartition         = errors.New("invalid column referenced by partition")

@@ -803,6 +803,12 @@ func TestValidate(t *testing.T) {
 			to:    "create table t (id int primary key, i int)",
 		},
 		{
+			name:      "duplicate existing column",
+			from:      "create table t (id int primary key, id varchar(10))",
+			alter:     "alter table t add column i int",
+			expectErr: ErrApplyDuplicateColumn,
+		},
+		{
 			name:  "add key",
 			from:  "create table t (id int primary key, i int)",
 			alter: "alter table t add key i_idx(i)",
@@ -898,6 +904,12 @@ func TestValidate(t *testing.T) {
 			alter: "alter table t modify column t timestamp null",
 			to:    "create table t (id int primary key, t timestamp null)",
 		},
+		{
+			name:      "duplicate existing partition name",
+			from:      "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p2 values less than (30))",
+			alter:     "alter table t add column i int",
+			expectErr: ErrApplyDuplicatePartition,
+		},
 	}
 	hints := DiffHints{}
 	for _, ts := range tt {
@@ -917,7 +929,7 @@ func TestValidate(t *testing.T) {
 			applied, err := from.Apply(a)
 			if ts.expectErr != nil {
 				assert.Error(t, err)
-				assert.True(t, errors.Is(err, ts.expectErr))
+				assert.True(t, errors.Is(err, ts.expectErr), "expected err: %v, got: %v", ts.expectErr, err)
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, applied)
