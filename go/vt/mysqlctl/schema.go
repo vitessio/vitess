@@ -538,12 +538,12 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 // KEY -- in the specified table. When multiple PKE indexes
 // are available it will attempt to choose the most efficient
 // one based on the column data types and the number of columns
-// in the index. See here for the data type on disk sizes:
+// in the index. See here for the data type storage sizes:
 //   https://dev.mysql.com/doc/refman/en/storage-requirements.html
 // If this function is used on a table that DOES have a
 // defined PRIMARY KEY then it may return the columns for
 // that index if it is likely the most efficient one amongst
-// the  available PKE indexes on the table.
+// the available PKE indexes on the table.
 func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
@@ -572,12 +572,12 @@ func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName
                                                 WHEN 'double' THEN 12
                                                 WHEN 'decimal' THEN 13
                                                 WHEN 'datetime' THEN 14
-                                                WHEN 'binary' THEN 15
-                                                WHEN 'char' THEN 16
-                                                WHEN 'varbinary' THEN 17
-                                                WHEN 'varchar' THEN 18
-                                                WHEN 'tinyblob' THEN 19
-                                                WHEN 'tinytext' THEN 20
+                                                WHEN 'binary' THEN 30
+                                                WHEN 'char' THEN 31
+                                                WHEN 'varbinary' THEN 60
+                                                WHEN 'varchar' THEN 61
+                                                WHEN 'tinyblob' THEN 80
+                                                WHEN 'tinytext' THEN 81
                                                 ELSE 1000
                                               END
                                             ) AS type_cost, COUNT(stats.COLUMN_NAME) AS col_count FROM information_schema.STATISTICS AS stats INNER JOIN

@@ -151,6 +151,13 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 					UNIQUE KEY col1_id1 (col1, id1), UNIQUE KEY id1_col1_col2 (id1, col1, col2))`,
 			want: []string{"col1", "id1"},
 		},
+		{
+			name:  "VCHARVSINT3",
+			table: "vcharvsintthree_t",
+			ddl: `CREATE TABLE vcharvsintthree_t (id1 INT NOT NULL, id2 INT NOT NULL, id3 INT NOT NULL, col1 VARCHAR(50) NOT NULL,
+					UNIQUE KEY col1 (col1), UNIQUE KEY id1_id2_id3 (id1, id2, id3))`,
+			want: []string{"id1", "id2", "id3"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
