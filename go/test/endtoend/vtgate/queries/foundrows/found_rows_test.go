@@ -93,6 +93,6 @@ func getTableT2Map(res *interface{}) map[string]interface{} {
 }
 
 func convertToMap(input interface{}) map[string]interface{} {
-	output, _ := input.(map[string]interface{})
+	output := input.(map[string]interface{})
 	return output
 }
