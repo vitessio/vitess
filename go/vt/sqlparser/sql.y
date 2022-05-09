@@ -2199,7 +2199,11 @@ index_column_list:
 index_column:
   sql_id length_opt asc_desc_opt
   {
-      $$ = &IndexColumn{Column: $1, Length: $2, Direction: $3}
+    $$ = &IndexColumn{Column: $1, Length: $2, Direction: $3}
+  }
+| openb expression closeb asc_desc_opt
+  {
+    $$ = &IndexColumn{Expression: $2, Direction: $4}
   }
 
 constraint_definition:

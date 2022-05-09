@@ -65,9 +65,10 @@ func Append(buf *strings.Builder, node SQLNode) {
 
 // IndexColumn describes a column in an index definition with optional length
 type IndexColumn struct {
-	Column    ColIdent
-	Length    *Literal
-	Direction OrderDirection
+	Column     ColIdent
+	Length     *Literal
+	Expression Expr
+	Direction  OrderDirection
 }
 
 // LengthScaleOption is used for types that have an optional length
