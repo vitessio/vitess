@@ -3889,6 +3889,17 @@ func TestCreateTable(t *testing.T) {
 	key by_email (email(10), username)
 )`,
 		},
+		// key conditionals
+		{
+			input: `create table t (
+	id int auto_increment,
+	username varchar(64),
+	nickname varchar(64),
+	email varchar(64),
+	primary key (id),
+	key email_idx(email, (if(username = '', nickname, username)))
+)`,
+		},
 		// foreign keys
 		{
 			input: `create table t (
