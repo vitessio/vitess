@@ -37,6 +37,7 @@ var (
 	ErrDuplicateName                               = errors.New("duplicate name")
 	ErrViewDependencyUnresolved                    = errors.New("views have unresolved/loop dependencies")
 	ErrTooManyPartitionChanges                     = errors.New("too many partition changes")
+	ErrMixedPartitionAndNonPartitionChanges        = errors.New("mixed partition and non-partition changes")
 
 	ErrUnsupportedApplyOperation = errors.New("unsupported Apply operation")
 	ErrApplyTableNotFound        = errors.New("table not found")
@@ -81,6 +82,8 @@ type EntityDiff interface {
 	StatementString() string
 	// CanonicalStatementString "stringifies" the this diff's Statement() to a canonical string. It returns an empty string if the diff is empty
 	CanonicalStatementString() string
+	// SubsequentDiff returns a followup diff to this one, if exists
+	SubsequentDiff() EntityDiff
 }
 
 const (

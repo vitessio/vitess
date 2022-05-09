@@ -15,6 +15,15 @@ func DDLActionStr(diff EntityDiff) (string, error) {
 	return "", ErrUnexpectedDiffAction
 }
 
+// AllSubsequent returns a list of diffs starting the given diff and followed by all subsequent diffs, if any
+func AllSubsequent(diff EntityDiff) (diffs []EntityDiff) {
+	for diff != nil && !diff.IsEmpty() {
+		diffs = append(diffs, diff)
+		diff = diff.SubsequentDiff()
+	}
+	return diffs
+}
+
 // DiffCreateTablesQueries compares two `CREATE TABLE ...` queries (in string form) and returns the diff from table1 to table2.
 // Either or both of the queries can be empty. Based on this, the diff could be
 // nil, CreateTable, DropTable or AlterTable

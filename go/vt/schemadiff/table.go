@@ -35,6 +35,8 @@ type AlterTableEntityDiff struct {
 	from       *CreateTableEntity
 	to         *CreateTableEntity
 	alterTable *sqlparser.AlterTable
+
+	subsequentDiff *AlterTableEntityDiff
 }
 
 // IsEmpty implements EntityDiff
@@ -69,6 +71,20 @@ func (d *AlterTableEntityDiff) CanonicalStatementString() (s string) {
 		s = sqlparser.CanonicalString(stmt)
 	}
 	return s
+}
+
+// SubsequentDiff implements EntityDiff
+func (d *AlterTableEntityDiff) SubsequentDiff() EntityDiff {
+	return d.subsequentDiff
+}
+
+// addSubsequentDiff adds a subsequent diff to the tail of the diff sequence
+func (d *AlterTableEntityDiff) addSubsequentDiff(diff *AlterTableEntityDiff) {
+	if d.subsequentDiff == nil {
+		d.subsequentDiff = diff
+	} else {
+		d.subsequentDiff.addSubsequentDiff(diff)
+	}
 }
 
 //
@@ -110,6 +126,11 @@ func (d *CreateTableEntityDiff) CanonicalStatementString() (s string) {
 	return s
 }
 
+// SubsequentDiff implements EntityDiff
+func (d *CreateTableEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
+}
+
 //
 type DropTableEntityDiff struct {
 	from      *CreateTableEntity
@@ -148,6 +169,11 @@ func (d *DropTableEntityDiff) CanonicalStatementString() (s string) {
 		s = sqlparser.CanonicalString(stmt)
 	}
 	return s
+}
+
+// SubsequentDiff implements EntityDiff
+func (d *DropTableEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
 }
 
 // CreateTableEntity stands for a TABLE construct. It contains the table's CREATE statement.
@@ -424,6 +450,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		Table: otherStmt.Table,
 	}
 	diffedTableCharset := ""
+	var partitionSpecs []*sqlparser.PartitionSpec
 	{
 		t1Options := c.CreateTable.TableSpec.Options
 		t2Options := other.CreateTable.TableSpec.Options
@@ -455,7 +482,9 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		// ordered keys for both tables:
 		t1Partitions := c.CreateTable.TableSpec.PartitionOption
 		t2Partitions := other.CreateTable.TableSpec.PartitionOption
-		if err := c.diffPartitions(alterTable, t1Partitions, t2Partitions, hints); err != nil {
+		var err error
+		partitionSpecs, err = c.diffPartitions(alterTable, t1Partitions, t2Partitions, hints)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -468,13 +497,37 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 			return nil, err
 		}
 	}
-	if len(alterTable.AlterOptions) == 0 && alterTable.PartitionSpec == nil && alterTable.PartitionOption == nil {
+	if len(alterTable.AlterOptions) == 0 && alterTable.PartitionOption == nil && alterTable.PartitionSpec == nil && len(partitionSpecs) == 0 {
 		// it's possible that the table definitions are different, and still there's no
 		// "real" difference. Reasons could be:
 		// - reordered keys -- we treat that as non-diff
 		return nil, nil
 	}
-	return &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}, nil
+	if len(partitionSpecs) == 1 {
+		alterTable.PartitionSpec = partitionSpecs[0]
+	}
+	if len(partitionSpecs) <= 1 {
+		return &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}, nil
+	}
+	if len(alterTable.AlterOptions) > 0 ||
+		alterTable.PartitionOption != nil ||
+		alterTable.PartitionSpec != nil {
+		return nil, ErrMixedPartitionAndNonPartitionChanges
+	}
+	var parentAlterTableEntityDiff *AlterTableEntityDiff
+	for _, partitionSpec := range partitionSpecs {
+		alterTable := &sqlparser.AlterTable{
+			Table:         otherStmt.Table,
+			PartitionSpec: partitionSpec,
+		}
+		diff := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+		if parentAlterTableEntityDiff == nil {
+			parentAlterTableEntityDiff = diff
+		} else {
+			parentAlterTableEntityDiff.addSubsequentDiff(diff)
+		}
+	}
+	return parentAlterTableEntityDiff, nil
 }
 
 func (c *CreateTableEntity) diffTableCharset(
@@ -682,8 +735,7 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 func (c *CreateTableEntity) isRangePartitionsRotation(
 	t1Partitions *sqlparser.PartitionOption,
 	t2Partitions *sqlparser.PartitionOption,
-	hints *DiffHints,
-) (bool, *sqlparser.PartitionSpec, error) {
+) (bool, []*sqlparser.PartitionSpec, error) {
 	// Validate that both tables have range partitioning
 	if t1Partitions.Type != t2Partitions.Type {
 		return false, nil, nil
@@ -727,38 +779,33 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 		definitions1 = definitions1[1:]
 		definitions2 = definitions2[1:]
 	}
-	var partitionSpec *sqlparser.PartitionSpec
-	if hints.RangeRotationStrategy == RangeRotationStatements {
-		// In RangeRotationStatements strategy we only support:
-		// - dropping a single partition (although mysql allows multiple partitions)
-		// - or, adding a single partition
-		addedPartitions2 := definitions2
-		if len(droppedPartitions1)+len(addedPartitions2) > 1 {
-			return true, nil, ErrTooManyPartitionChanges
+	partitionSpecs := []*sqlparser.PartitionSpec{}
+	addedPartitions2 := definitions2
+	for _, p := range droppedPartitions1 {
+		partitionSpec := &sqlparser.PartitionSpec{
+			Action: sqlparser.DropAction,
+			Names:  []sqlparser.ColIdent{p.Name},
 		}
-		if len(droppedPartitions1) > 0 {
-			partitionSpec = &sqlparser.PartitionSpec{
-				Action: sqlparser.DropAction,
-				Names:  []sqlparser.ColIdent{droppedPartitions1[0].Name},
-			}
-		} else if len(addedPartitions2) > 0 {
-			partitionSpec = &sqlparser.PartitionSpec{
-				Action:      sqlparser.AddAction,
-				Definitions: []*sqlparser.PartitionDefinition{addedPartitions2[0]},
-			}
-		}
+		partitionSpecs = append(partitionSpecs, partitionSpec)
 	}
-	return true, partitionSpec, nil
+	for _, p := range addedPartitions2 {
+		partitionSpec := &sqlparser.PartitionSpec{
+			Action:      sqlparser.AddAction,
+			Definitions: []*sqlparser.PartitionDefinition{p},
+		}
+		partitionSpecs = append(partitionSpecs, partitionSpec)
+	}
+	return true, partitionSpecs, nil
 }
 
 func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 	t1Partitions *sqlparser.PartitionOption,
 	t2Partitions *sqlparser.PartitionOption,
 	hints *DiffHints,
-) error {
+) (partitionSpecs []*sqlparser.PartitionSpec, err error) {
 	switch {
 	case t1Partitions == nil && t2Partitions == nil:
-		return nil
+		return nil, nil
 	case t1Partitions == nil:
 		// add partitioning
 		alterTable.PartitionOption = t2Partitions
@@ -771,7 +818,7 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 		alterTable.PartitionSpec = partitionSpec
 	case sqlparser.String(t1Partitions) == sqlparser.String(t2Partitions):
 		// identical partitioning
-		return nil
+		return nil, nil
 	default:
 		// partitioning was changed
 		// For most cases, we produce a complete re-partitioing schema: we don't try and figure out the minimal
@@ -784,24 +831,23 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 		// Having said that, we _do_ analyze the scenario of a RANGE partitioning rotation of partitions:
 		// where zero or more partitions may have been dropped from the earlier range, and zero or more
 		// partitions have been added with a later range:
-		isRotation, partitionSpec, err := c.isRangePartitionsRotation(t1Partitions, t2Partitions, hints)
+		isRotation, partitionSpecs, err := c.isRangePartitionsRotation(t1Partitions, t2Partitions)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if isRotation {
 			switch hints.RangeRotationStrategy {
 			case RangeRotationIgnore:
-				return nil
+				return nil, nil
 			case RangeRotationStatements:
-				alterTable.PartitionSpec = partitionSpec
-				return nil
+				return partitionSpecs, nil
 			case RangeRotationFullSpec:
 				// proceed to return a full rebuild
 			}
 		}
 		alterTable.PartitionOption = t2Partitions
 	}
-	return nil
+	return nil, nil
 }
 
 func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
@@ -1363,10 +1409,6 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 // Apply attempts to apply given ALTER TABLE diff onto the table defined by this entity.
 // This entity is unmodified. If successful, a new CREATE TABLE entity is returned.
 func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
-	alterDiff, ok := diff.(*AlterTableEntityDiff)
-	if !ok {
-		return nil, ErrEntityTypeMismatch
-	}
 	dupCreateTable := &sqlparser.CreateTable{
 		Temp:        c.Temp,
 		Table:       c.Table,
@@ -1389,8 +1431,18 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 		dupCreateTable.Comments = &d
 	}
 	dup := &CreateTableEntity{CreateTable: *dupCreateTable}
-	if err := dup.apply(alterDiff); err != nil {
-		return nil, err
+	for diff != nil && !diff.IsEmpty() {
+		alterDiff, ok := diff.(*AlterTableEntityDiff)
+		if !ok {
+			return nil, ErrEntityTypeMismatch
+		}
+		if err := dup.apply(alterDiff); err != nil {
+			return nil, err
+		}
+		diff = diff.SubsequentDiff()
+		if diff == nil {
+			break
+		}
 	}
 	return dup, nil
 }

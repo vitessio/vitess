@@ -61,6 +61,11 @@ func (d *AlterViewEntityDiff) CanonicalStatementString() (s string) {
 	return s
 }
 
+// SubsequentDiff implements EntityDiff
+func (d *AlterViewEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
+}
+
 //
 type CreateViewEntityDiff struct {
 	createView *sqlparser.CreateView
@@ -98,6 +103,11 @@ func (d *CreateViewEntityDiff) CanonicalStatementString() (s string) {
 		s = sqlparser.CanonicalString(stmt)
 	}
 	return s
+}
+
+// SubsequentDiff implements EntityDiff
+func (d *CreateViewEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
 }
 
 //
@@ -138,6 +148,11 @@ func (d *DropViewEntityDiff) StatementString() (s string) {
 		s = sqlparser.String(stmt)
 	}
 	return s
+}
+
+// SubsequentDiff implements EntityDiff
+func (d *DropViewEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
 }
 
 // CreateViewEntity stands for a VIEW construct. It contains the view's CREATE statement.
