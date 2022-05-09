@@ -203,18 +203,12 @@ func (vtgate *VTGateProxy) Close() error {
 	vtgate.m.Lock()
 	defer vtgate.m.Unlock()
 
-	return vtgate.closeLocked()
-}
-
-func (vtgate *VTGateProxy) closeLocked() error {
 	if vtgate.conn == nil {
 		return nil
 	}
 
-	err := vtgate.conn.Close()
-	vtgate.conn = nil
-
-	return err
+	defer func() { vtgate.conn = nil }()
+	return vtgate.conn.Close()
 }
 
 // Debug implements debug.Debuggable for VTGateProxy.
