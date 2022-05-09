@@ -891,10 +891,6 @@ func (c *Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 }
 
 func (c *Cluster) getTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
-	if err := c.DB.Dial(ctx, ""); err != nil {
-		return nil, err
-	}
-
 	rows, err := c.DB.ShowTablets(ctx)
 	if err != nil {
 		return nil, err

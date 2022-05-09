@@ -98,13 +98,19 @@ func New(ctx context.Context, cfg *Config) (*VTGateProxy, error) {
 		dialFunc = vitessdriver.OpenWithConfiguration
 	}
 
-	return &VTGateProxy{
+	proxy := VTGateProxy{
 		cluster:  cfg.Cluster,
 		creds:    cfg.Credentials,
 		cfg:      cfg,
 		dialFunc: dialFunc,
 		resolver: cfg.ResolverOptions.NewBuilder(cfg.Cluster.Id),
-	}, nil
+	}
+
+	if err := proxy.Dial(ctx, ""); err != nil {
+		return nil, err
+	}
+
+	return &proxy, nil
 }
 
 // getQueryContext returns a new context with the correct effective and immediate
