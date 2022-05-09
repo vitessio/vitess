@@ -105,6 +105,10 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 		return nil, fmt.Errorf("error creating vtsql connection config: %w", err)
 	}
 
+	for _, opt := range cfg.vtsqlConfigOpts {
+		vtsqlCfg = opt(vtsqlCfg)
+	}
+
 	vtctldargs := buildPFlagSlice(cfg.VtctldFlags)
 
 	vtctldCfg, err := vtctldclient.Parse(protocluster, disco, vtctldargs)
@@ -116,7 +120,11 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 		vtctldCfg = opt(vtctldCfg)
 	}
 
-	cluster.DB = vtsql.New(vtsqlCfg)
+	cluster.DB, err = vtsql.New(ctx, vtsqlCfg)
+	if err != nil {
+		return nil, fmt.Errorf("error creating vtsql proxy: %w", err)
+	}
+
 	cluster.Vtctld, err = vtctldclient.New(ctx, vtctldCfg)
 	if err != nil {
 		return nil, fmt.Errorf("error creating vtctldclient: %w", err)
@@ -981,10 +989,6 @@ func (c *Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 }
 
 func (c *Cluster) getTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
-	if err := c.DB.Dial(ctx, ""); err != nil {
-		return nil, err
-	}
-
 	rows, err := c.DB.ShowTablets(ctx)
 	if err != nil {
 		return nil, err
