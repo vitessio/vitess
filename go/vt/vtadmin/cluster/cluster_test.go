@@ -18,7 +18,6 @@ package cluster_test
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -33,14 +32,10 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
-	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
-	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
-	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -2594,33 +2589,6 @@ func TestGetShardReplicationPositions(t *testing.T) {
 			assert.Equal(t, tt.expected, resp)
 		})
 	}
-}
-
-// This test only validates the error handling on dialing database connections.
-// Other cases are covered by one or both of TestFindTablets and TestFindTablet.
-func TestGetTablets(t *testing.T) {
-	t.Parallel()
-
-	disco := fakediscovery.New()
-	disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: "gate"})
-
-	dialerWrapper := vtsql.WithDialFunc(func(c vitessdriver.Configuration) (*sql.DB, error) {
-		return nil, assert.AnError
-	})
-	db, err := vtsql.New(context.Background(), dialerWrapper(&vtsql.Config{
-		Cluster: &vtadminpb.Cluster{
-			Id:   "c1",
-			Name: "one",
-		},
-		ResolverOptions: &resolver.Options{
-			Discovery: disco,
-		},
-	}))
-	require.NoError(t, err)
-
-	c := &cluster.Cluster{DB: db}
-	_, err = c.GetTablets(context.Background())
-	assert.Error(t, err)
 }
 
 func TestGetVSchema(t *testing.T) {
