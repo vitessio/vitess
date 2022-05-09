@@ -95,24 +95,6 @@ func BuildCluster(t testing.TB, cfg TestClusterConfig) *cluster.Cluster {
 	disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: fmt.Sprintf("%s-%s-gate", cfg.Cluster.Name, cfg.Cluster.Id)})
 	disco.AddTaggedVtctlds(nil, &vtadminpb.Vtctld{Hostname: "doesn't matter"})
 
-	clusterConf := cluster.Config{
-		ID:            cfg.Cluster.Id,
-		Name:          cfg.Cluster.Name,
-		DiscoveryImpl: discoveryTestImplName,
-	}.WithVtctldTestConfigOptions(vtadminvtctldclient.WithDialFunc(func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
-		return cfg.VtctldClient, nil
-	}))
-
-	m.Lock()
-	testdisco = disco
-	c, err := cluster.New(
-		context.Background(), // consider updating this function to allow callers to provide a context.
-		clusterConf,
-	)
-	m.Unlock()
-
-	require.NoError(t, err, "failed to create cluster from configs %+v %+v", clusterConf, cfg)
-
 	tablets := make([]*vtadminpb.Tablet, len(cfg.Tablets))
 	for i, t := range cfg.Tablets {
 		tablet := &vtadminpb.Tablet{
@@ -124,10 +106,25 @@ func BuildCluster(t testing.TB, cfg TestClusterConfig) *cluster.Cluster {
 		tablets[i] = tablet
 	}
 
-	db := c.DB.(*vtsql.VTGateProxy)
-	db.DialFunc = func(_ vitessdriver.Configuration) (*sql.DB, error) {
+	clusterConf := cluster.Config{
+		ID:            cfg.Cluster.Id,
+		Name:          cfg.Cluster.Name,
+		DiscoveryImpl: discoveryTestImplName,
+	}.WithVtctldTestConfigOptions(vtadminvtctldclient.WithDialFunc(func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
+		return cfg.VtctldClient, nil
+	})).WithVtSQLTestConfigOptions(vtsql.WithDialFunc(func(c vitessdriver.Configuration) (*sql.DB, error) {
 		return sql.OpenDB(&fakevtsql.Connector{Tablets: tablets, ShouldErr: cfg.DBConfig.ShouldErr}), nil
-	}
+	}))
+
+	m.Lock()
+	testdisco = disco
+	c, err := cluster.New(
+		context.Background(), // consider updating this function to allow callers to provide a context.
+		clusterConf,
+	)
+	m.Unlock()
+
+	require.NoError(t, err, "failed to create cluster from configs %+v %+v", clusterConf, cfg)
 
 	return c
 }
