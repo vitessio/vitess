@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/debug"
@@ -151,6 +152,8 @@ func (vtgate *VTGateProxy) dial(ctx context.Context, target string, opts ...grpc
 	if err != nil {
 		return fmt.Errorf("error dialing vtgate: %w", err)
 	}
+
+	log.Infof("Established gRPC connection to vtgate\n")
 
 	vtgate.m.Lock()
 	defer vtgate.m.Unlock()
