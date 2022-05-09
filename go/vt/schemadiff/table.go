@@ -360,8 +360,22 @@ func (c *CreateTableEntity) normalizeUnnamedKeys() {
 	for _, key := range c.CreateTable.TableSpec.Indexes {
 		if name := key.Info.Name.String(); name == "" {
 			// we know there must be at least one column covered by this key
-			colName := key.Columns[0].Column.String()
-			// like MySQL, we first try to call our index by the name of the first column:
+			var colName string
+			if len(key.Columns) > 0 {
+				expressionFound := false
+				for _, col := range key.Columns {
+					if col.Expression != nil {
+						expressionFound = true
+					}
+				}
+				if expressionFound {
+					// that's the name MySQL picks for an unnamed key when there's at least one functional index expression
+					colName = "functional_index"
+				} else {
+					// like MySQL, we first try to call our index by the name of the first column:
+					colName = key.Columns[0].Column.String()
+				}
+			}
 			suggestedKeyName := colName
 			// now let's see if that name is taken; if it is, enumerate new news until we find a free name
 			for enumerate := 2; keyNameExists[suggestedKeyName]; enumerate++ {
@@ -1338,22 +1352,66 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 		columnExists[col.Name.String()] = true
 	}
 	nonEmptyIndexes := []*sqlparser.IndexDefinition{}
-	for _, key := range c.CreateTable.TableSpec.Indexes {
-		existingColumns := []*sqlparser.IndexColumn{}
-		for _, col := range key.Columns {
-			colName := col.Column.String()
-			if columnExists[colName] {
-				existingColumns = append(existingColumns, col)
+
+	keyHasNonExistentColumns := func(keyCol *sqlparser.IndexColumn) bool {
+		if keyCol.Expression != nil {
+			colNames := getNodeColumns(keyCol.Expression)
+			for colName := range colNames {
+				if !columnExists[colName] {
+					// expression uses a non-existent column
+					return true
+				}
 			}
 		}
-		if len(existingColumns) > 0 {
-			key.Columns = existingColumns
+		if keyCol.Column.String() != "" {
+			if !columnExists[keyCol.Column.String()] {
+				return true
+			}
+		}
+		return false
+	}
+	for _, key := range c.CreateTable.TableSpec.Indexes {
+		existingKeyColumns := []*sqlparser.IndexColumn{}
+		for _, keyCol := range key.Columns {
+			if !keyHasNonExistentColumns(keyCol) {
+				existingKeyColumns = append(existingKeyColumns, keyCol)
+			}
+		}
+		if len(existingKeyColumns) > 0 {
+			key.Columns = existingKeyColumns
 			nonEmptyIndexes = append(nonEmptyIndexes, key)
 		}
 	}
 	c.CreateTable.TableSpec.Indexes = nonEmptyIndexes
 
 	return nil
+}
+
+func getNodeColumns(node sqlparser.SQLNode) (colNames map[string]bool) {
+	colNames = map[string]bool{}
+	if node != nil {
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node := node.(type) {
+			case *sqlparser.ColName:
+				colNames[node.Name.String()] = true
+			}
+			return true, nil
+		}, node)
+	}
+	return colNames
+}
+
+func getKeyColumnNames(key *sqlparser.IndexDefinition) (colNames map[string]bool) {
+	colNames = map[string]bool{}
+	for _, col := range key.Columns {
+		if colName := col.Column.String(); colName != "" {
+			colNames[colName] = true
+		}
+		for name := range getNodeColumns(col.Expression) {
+			colNames[name] = true
+		}
+	}
+	return colNames
 }
 
 // validate checks that the table structure is valid:
@@ -1365,8 +1423,7 @@ func (c *CreateTableEntity) validate() error {
 		columnExists[col.Name.String()] = true
 	}
 	for _, key := range c.CreateTable.TableSpec.Indexes {
-		for _, col := range key.Columns {
-			colName := col.Column.String()
+		for colName := range getKeyColumnNames(key) {
 			if !columnExists[colName] {
 				return errors.Wrapf(ErrInvalidColumnInKey, "key: %v, column: %v", key.Info.Name.String(), colName)
 			}
