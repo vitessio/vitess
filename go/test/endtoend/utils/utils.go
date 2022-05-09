@@ -159,3 +159,41 @@ func AssertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected st
 
 	}
 }
+
+// WaitForAuthoritative waits for a table to become authoritative
+func WaitForAuthoritative(t *testing.T, cluster *cluster.LocalProcessCluster, ks, tbl string) error {
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("schema tracking didn't mark table t2 as authoritative until timeout")
+		default:
+			time.Sleep(1 * time.Second)
+			res, err := cluster.VtgateProcess.ReadVSchema()
+			require.NoError(t, err, res)
+			t2Map := getTableT2Map(res, ks, tbl)
+			authoritative, fieldPresent := t2Map["column_list_authoritative"]
+			if !fieldPresent {
+				continue
+			}
+			authoritativeBool, isBool := authoritative.(bool)
+			if !isBool || !authoritativeBool {
+				continue
+			}
+			return nil
+		}
+	}
+}
+
+func getTableT2Map(res *interface{}, ks, tbl string) map[string]interface{} {
+	step1 := convertToMap(*res)["keyspaces"]
+	step2 := convertToMap(step1)[ks]
+	step3 := convertToMap(step2)["tables"]
+	tblMap := convertToMap(step3)[tbl]
+	return convertToMap(tblMap)
+}
+
+func convertToMap(input interface{}) map[string]interface{} {
+	output := input.(map[string]interface{})
+	return output
+}

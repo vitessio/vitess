@@ -452,3 +452,21 @@ func TestOuterJoin(t *testing.T) {
 			` [INT64(100) INT64(123) FLOAT64(145)]`+
 			` [INT64(1000) NULL NULL]]`)
 }
+
+func TestUsingJoin(t *testing.T) {
+	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance, shardedKs, "t1"))
+	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance, shardedKs, "t2"))
+	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance, shardedKs, "t3"))
+
+	conn, closer := start(t)
+	defer closer()
+
+	// insert some data.
+	utils.Exec(t, conn, `insert into t1(id, col) values          (1, 1), (2, 2), (3, 3), (5, 5)`)
+	utils.Exec(t, conn, `insert into t2(id, tcol1, tcol2) values (1, 12, 12),(3, 3, 13),(4, 123, 123),(5, 134, 123)`)
+	utils.Exec(t, conn, `insert into t3(id, tcol1, tcol2) values (1, 12, 12),(4, 123, 123),(5, 134, 123)`)
+
+	// Gen4 only supported query.
+	utils.AssertMatchesNoOrder(t, conn, `select t1.id from t1 join t2 using(id)`, `[[INT64(1)] [INT64(3)] [INT64(5)]]`)
+	utils.AssertMatchesNoOrder(t, conn, `select t2.id from t2 join t3 using (id, tcol1, tcol2)`, `[[INT64(1)] [INT64(4)] [INT64(5)]]`)
+}
