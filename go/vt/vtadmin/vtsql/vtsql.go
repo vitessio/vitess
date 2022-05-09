@@ -29,7 +29,6 @@ import (
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/debug"
@@ -44,21 +43,15 @@ type DB interface {
 	// ShowTablets executes `SHOW vitess_tablets` and returns the result.
 	ShowTablets(ctx context.Context) (*sql.Rows, error)
 
-	// Dial opens a gRPC database connection to a vtgate in the cluster. If the
-	// DB already has a valid connection, this is a no-op.
-	//
-	// target is a Vitess query target, e.g. "", "<keyspace>", "<keyspace>@replica".
-	Dial(ctx context.Context, target string, opts ...grpc.DialOption) error
-
 	// Ping behaves like (*sql.DB).Ping.
 	Ping() error
 	// PingContext behaves like (*sql.DB).PingContext.
 	PingContext(ctx context.Context) error
 
-	// Close closes the currently-held database connection. This is a no-op if
+	// Close closes the underlying database connection. This is a no-op if
 	// the DB has no current valid connection. It is safe to call repeatedly.
-	// Users may call Dial on a previously-closed DB to create a new connection,
-	// but that connection may not be to the same particular vtgate.
+	//
+	// Once closed, a DB is not safe for reuse.
 	Close() error
 }
 
@@ -106,7 +99,7 @@ func New(ctx context.Context, cfg *Config) (*VTGateProxy, error) {
 		resolver: cfg.ResolverOptions.NewBuilder(cfg.Cluster.Id),
 	}
 
-	if err := proxy.Dial(ctx, ""); err != nil {
+	if err := proxy.dial(ctx, ""); err != nil {
 		return nil, err
 	}
 
@@ -134,23 +127,12 @@ func (vtgate *VTGateProxy) getQueryContext(ctx context.Context) context.Context 
 
 // Dial is part of the DB interface. The proxy's DiscoveryTags can be set to
 // narrow the set of possible gates it will connect to.
-func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc.DialOption) error {
+func (vtgate *VTGateProxy) dial(ctx context.Context, target string, opts ...grpc.DialOption) error {
 	span, _ := trace.NewSpan(ctx, "VTGateProxy.Dial")
 	defer span.Finish()
 
 	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
-
-	vtgate.m.Lock()
-	defer vtgate.m.Unlock()
-
-	if vtgate.conn != nil {
-		log.Info("Have valid connection to vtgate, reusing it.")
-		span.Annotate("is_noop", true)
-
-		return nil
-	}
-
-	span.Annotate("is_noop", false)
+	span.Annotate("is_using_credentials", vtgate.creds != nil)
 
 	conf := vitessdriver.Configuration{
 		Protocol:        fmt.Sprintf("grpc_%s", vtgate.cluster.Id),
@@ -169,6 +151,9 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 	if err != nil {
 		return fmt.Errorf("error dialing vtgate: %w", err)
 	}
+
+	vtgate.m.Lock()
+	defer vtgate.m.Unlock()
 
 	vtgate.conn = db
 	vtgate.dialedAt = time.Now()
