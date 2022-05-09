@@ -27,7 +27,7 @@ jobs:
           # node-version should match package.json
           node-version: '16.13.0'
 
-      - name: Build front-end
+      - name: Build front-end and validate embedded files
         run: tools/check_vtadmin_web_embed.sh
 
     # Cancel pending and in-progress runs of this workflow if a newer ref is pushed to CI.
