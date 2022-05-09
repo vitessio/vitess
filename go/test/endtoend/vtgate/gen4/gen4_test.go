@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -31,15 +32,31 @@ import (
 	"vitess.io/vitess/go/mysql"
 )
 
-func TestOrderBy(t *testing.T) {
+func start(t *testing.T) (*mysql.Conn, func()) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
-	defer conn.Close()
+	deleteAll := func() {
+		_, _ = utils.ExecAllowError(t, conn, "set workload = oltp")
 
-	defer func() {
-		_, _ = utils.ExecAllowError(t, conn, `delete from t1`)
-	}()
+		tables := []string{"t1", "t2", "t3", "user_region", "region_tbl", "multicol_tbl", "t1_id2_idx", "t2_id4_idx", "u_a", "u_b"}
+		for _, table := range tables {
+			_, _ = utils.ExecAllowError(t, conn, "delete from "+table)
+		}
+	}
+
+	deleteAll()
+
+	return conn, func() {
+		deleteAll()
+		conn.Close()
+		cluster.PanicHandler(t)
+	}
+}
+
+func TestOrderBy(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
 
 	// insert some data.
 	utils.Exec(t, conn, `insert into t1(id, col) values (100, 123),(10, 12),(1, 13),(1000, 1234)`)
@@ -51,20 +68,14 @@ func TestOrderBy(t *testing.T) {
 	utils.AssertMatches(t, conn, `select col from t1 order by 1`, `[[INT64(12)] [INT64(13)] [INT64(123)] [INT64(1234)]]`)
 
 	// unsupported in v3 and Gen4.
-	_, err = utils.ExecAllowError(t, conn, `select t1.* from t1 order by id`)
+	_, err := utils.ExecAllowError(t, conn, `select t1.* from t1 order by id`)
 	require.Error(t, err)
 }
 
 func TestCorrelatedExistsSubquery(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
+	conn, closer := start(t)
+	defer closer()
 
-	defer func() {
-		_, _ = utils.ExecAllowError(t, conn, `delete from t1`)
-		_, _ = utils.ExecAllowError(t, conn, `delete from t2`)
-	}()
 	// insert some data.
 	utils.Exec(t, conn, `insert into t1(id, col) values (100, 123), (10, 12), (1, 13), (4, 13), (1000, 1234)`)
 	utils.Exec(t, conn, `insert into t2(id, tcol1, tcol2) values (100, 13, 1),(9, 7, 15),(1, 123, 123),(1004, 134, 123)`)
@@ -107,15 +118,8 @@ where exists(
 }
 
 func TestGroupBy(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	defer func() {
-		_, _ = utils.ExecAllowError(t, conn, `delete from t1`)
-		_, _ = utils.ExecAllowError(t, conn, `delete from t2`)
-	}()
+	conn, closer := start(t)
+	defer closer()
 
 	// insert some data.
 	utils.Exec(t, conn, `insert into t1(id, col) values (1, 123),(2, 12),(3, 13),(4, 1234)`)
@@ -141,15 +145,8 @@ func TestGroupBy(t *testing.T) {
 }
 
 func TestJoinBindVars(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	defer func() {
-		_, _ = utils.ExecAllowError(t, conn, `delete from t2`)
-		_, _ = utils.ExecAllowError(t, conn, `delete from t3`)
-	}()
+	conn, closer := start(t)
+	defer closer()
 
 	utils.Exec(t, conn, `insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'B')`)
 	utils.Exec(t, conn, `insert into t3(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'B')`)
@@ -158,12 +155,8 @@ func TestJoinBindVars(t *testing.T) {
 }
 
 func TestDistinctAggregationFunc(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	defer utils.ExecAllowError(t, conn, `delete from t2`)
+	conn, closer := start(t)
+	defer closer()
 
 	// insert some data.
 	utils.Exec(t, conn, `insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'A')`)
@@ -197,12 +190,8 @@ func TestDistinctAggregationFunc(t *testing.T) {
 }
 
 func TestDistinct(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	defer utils.ExecAllowError(t, conn, `delete from t2`)
+	conn, closer := start(t)
+	defer closer()
 
 	// insert some data.
 	utils.Exec(t, conn, `insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'A')`)
@@ -213,16 +202,8 @@ func TestDistinct(t *testing.T) {
 }
 
 func TestSubQueries(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	defer func() {
-		_, _ = utils.ExecAllowError(t, conn, `delete from t2`)
-		_, _ = utils.ExecAllowError(t, conn, `delete from t3`)
-		_, _ = utils.ExecAllowError(t, conn, `delete from u_a`)
-	}()
+	conn, closer := start(t)
+	defer closer()
 
 	utils.Exec(t, conn, `insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'B')`)
 	utils.Exec(t, conn, `insert into t3(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'B')`)
@@ -242,17 +223,15 @@ func TestSubQueries(t *testing.T) {
 	}
 
 	// fail as projection subquery is not scalar
-	_, err = utils.ExecAllowError(t, conn, `select (select id from t2) from t2 order by id`)
+	_, err := utils.ExecAllowError(t, conn, `select (select id from t2) from t2 order by id`)
 	assert.EqualError(t, err, "subquery returned more than one row (errno 1105) (sqlstate HY000) during query: select (select id from t2) from t2 order by id")
 
 	utils.AssertMatches(t, conn, `select (select id from t2 order by id limit 1) from t2 order by id limit 2`, `[[INT64(1)] [INT64(1)]]`)
 }
 
 func TestPlannerWarning(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
+	conn, closer := start(t)
+	defer closer()
 
 	// straight_join query
 	_ = utils.Exec(t, conn, `select 1 from t1 straight_join t2 on t1.id = t2.id`)
@@ -271,14 +250,8 @@ func TestPlannerWarning(t *testing.T) {
 }
 
 func TestHashJoin(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	defer func() {
-		_, _ = utils.ExecAllowError(t, conn, `delete from t1`)
-	}()
+	conn, closer := start(t)
+	defer closer()
 
 	utils.Exec(t, conn, `insert into t1(id, col) values (1, 1),(2, 3),(3, 4),(4, 7)`)
 
@@ -290,12 +263,8 @@ func TestHashJoin(t *testing.T) {
 }
 
 func TestMultiColumnVindex(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	defer utils.ExecAllowError(t, conn, `delete from user_region`)
+	conn, closer := start(t)
+	defer closer()
 	utils.Exec(t, conn, `insert into user_region(id, cola, colb) values (1, 1, 2),(2, 30, 40),(3, 500, 600),(4, 30, 40),(5, 10000, 30000),(6, 422333, 40),(7, 30, 60)`)
 
 	for _, workload := range []string{"olap", "oltp"} {
@@ -311,10 +280,8 @@ func TestMultiColumnVindex(t *testing.T) {
 }
 
 func TestFanoutVindex(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
+	conn, closer := start(t)
+	defer closer()
 
 	tcases := []struct {
 		regionID int
@@ -336,7 +303,6 @@ func TestFanoutVindex(t *testing.T) {
 		exp:      `[[INT64(33) INT64(20) VARCHAR("shard-20c0-")]]`,
 	}}
 
-	defer utils.ExecAllowError(t, conn, `delete from region_tbl`)
 	uid := 1
 	// insert data in all shards to know where the query fan-out
 	for _, s := range shardedKsShards {
@@ -347,7 +313,7 @@ func TestFanoutVindex(t *testing.T) {
 		}
 	}
 
-	newConn, err := mysql.Connect(ctx, &vtParams)
+	newConn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer newConn.Close()
 
@@ -363,10 +329,8 @@ func TestFanoutVindex(t *testing.T) {
 }
 
 func TestSubShardVindex(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
+	conn, closer := start(t)
+	defer closer()
 
 	tcases := []struct {
 		regionID int
@@ -404,11 +368,10 @@ func TestSubShardVindex(t *testing.T) {
 		}
 	}
 
-	newConn, err := mysql.Connect(ctx, &vtParams)
+	newConn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer newConn.Close()
 
-	defer utils.ExecAllowError(t, newConn, `delete from multicol_tbl`)
 	for _, workload := range []string{"olap", "oltp"} {
 		utils.Exec(t, newConn, fmt.Sprintf(`set workload = %s`, workload))
 		for _, tcase := range tcases {
@@ -421,10 +384,8 @@ func TestSubShardVindex(t *testing.T) {
 }
 
 func TestSubShardVindexDML(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
+	conn, closer := start(t)
+	defer closer()
 
 	tcases := []struct {
 		regionID       int
@@ -456,11 +417,10 @@ func TestSubShardVindexDML(t *testing.T) {
 		}
 	}
 
-	newConn, err := mysql.Connect(ctx, &vtParams)
+	newConn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer newConn.Close()
 
-	defer utils.ExecAllowError(t, newConn, `delete from multicol_tbl`)
 	for _, tcase := range tcases {
 		t.Run(strconv.Itoa(tcase.regionID), func(t *testing.T) {
 			qr := utils.Exec(t, newConn, fmt.Sprintf("update multicol_tbl set msg = 'bar' where cola = %d", tcase.regionID))
@@ -477,17 +437,8 @@ func TestSubShardVindexDML(t *testing.T) {
 }
 
 func TestOuterJoin(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	_, _ = utils.ExecAllowError(t, conn, `delete from t1`)
-	_, _ = utils.ExecAllowError(t, conn, `delete from t2`)
-	defer func() {
-		_, _ = utils.ExecAllowError(t, conn, `delete from t1`)
-		_, _ = utils.ExecAllowError(t, conn, `delete from t2`)
-	}()
+	conn, closer := start(t)
+	defer closer()
 
 	// insert some data.
 	utils.Exec(t, conn, `insert into t1(id, col) values (100, 123), (10, 123), (1, 13), (1000, 1234)`)
