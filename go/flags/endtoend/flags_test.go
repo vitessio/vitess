@@ -913,6 +913,8 @@ var (
 	If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.
   --heartbeat_interval duration
 	How frequently to read and write replication heartbeat. (default 1s)
+  --heartbeat_on_demand_duration duration
+	If non-zero, heartbeats are only written upon consumer request, and only run for up to given duration following the request. Frequent requests can keep the heartbeat running consistently; when requests are infrequent heartbeat may completely stop between requests
   --hot_row_protection_concurrent_transactions int
 	Number of concurrent transactions let through to the txpool/MySQL for the same hot row. Should be > 1 to have enough 'ready' transactions in MySQL and benefit from a pipelining effect. (default 5)
   --hot_row_protection_max_global_queue_size int
