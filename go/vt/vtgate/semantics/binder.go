@@ -90,33 +90,14 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 			if deps.direct.NumberOfTables() == 0 || !strings.HasSuffix(err.Error(), "is ambiguous") {
 				return err
 			}
-			tbls := deps.direct.Constituents()
-			colName := node.Name.Lowered()
-			for _, tbl := range tbls {
-				m := b.usingJoinInfo[tbl]
-				if _, found := m[colName]; !found {
-					return err
-				}
-			}
-
-			newTbl := deps.recursive.Constituents()[0]
-			infoFor, err := b.tc.tableInfoFor(newTbl)
-			if err != nil {
+			if !b.canRewriteUsingJoin(deps, node) {
 				return err
 			}
-			alias := infoFor.getExpr().As
-			if alias.IsEmpty() {
-				name, err := infoFor.Name()
-				if err != nil {
-					return err
-				}
-				node.Qualifier = name
-			} else {
-				node.Qualifier = sqlparser.TableName{
-					Name: sqlparser.NewTableIdent(alias.String()),
-				}
-			}
-			deps, err = b.resolveColumn(node, currentScope, false)
+
+			// if we got here it means we are dealing with a ColName that is involved in a JOIN USING.
+			// we do the rewriting of these ColName structs here because it would be difficult to copy all the
+			// needed state over to the earlyRewriter
+			deps, err = b.rewriteJoinUsingColName(deps, node, currentScope)
 			if err != nil {
 				return err
 			}
@@ -146,6 +127,44 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		b.direct[node] = ts
 	}
 	return nil
+}
+
+func (b *binder) rewriteJoinUsingColName(deps dependency, node *sqlparser.ColName, currentScope *scope) (dependency, error) {
+	newTbl := deps.recursive.Constituents()[0]
+	infoFor, err := b.tc.tableInfoFor(newTbl)
+	if err != nil {
+		return dependency{}, err
+	}
+	alias := infoFor.getExpr().As
+	if alias.IsEmpty() {
+		name, err := infoFor.Name()
+		if err != nil {
+			return dependency{}, err
+		}
+		node.Qualifier = name
+	} else {
+		node.Qualifier = sqlparser.TableName{
+			Name: sqlparser.NewTableIdent(alias.String()),
+		}
+	}
+	deps, err = b.resolveColumn(node, currentScope, false)
+	if err != nil {
+		return dependency{}, err
+	}
+	return deps, nil
+}
+
+// canRewriteUsingJoin will return true when this ColName is safe to rewrite since it can only belong to a USING JOIN
+func (b *binder) canRewriteUsingJoin(deps dependency, node *sqlparser.ColName) bool {
+	tbls := deps.direct.Constituents()
+	colName := node.Name.Lowered()
+	for _, tbl := range tbls {
+		m := b.usingJoinInfo[tbl]
+		if _, found := m[colName]; !found {
+			return false
+		}
+	}
+	return true
 }
 
 // setSubQueryDependencies sets the correct dependencies for the subquery

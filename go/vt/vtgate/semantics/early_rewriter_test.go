@@ -212,9 +212,12 @@ func TestRewriteJoinUsingColumns(t *testing.T) {
 		expErr string
 	}{{
 		sql:    "select 1 from t1 join t2 using (a) where a = 42",
-		expSQL: "select 1 from t1 join t2 on t1.a = t2.a where t1.a = 42",
+		expSQL: "select 1 from t1 join t2 using (a) where t1.a = 42",
 	}, {
 		sql:    "select 1 from t1 join t2 using (a), t3 where a = 42",
+		expErr: "Column 'a' in field list is ambiguous",
+	}, {
+		sql:    "select 1 from t1 join t2 using (a), t1 as b join t3 on (a) where a = 42",
 		expErr: "Column 'a' in field list is ambiguous",
 	}}
 	for _, tcase := range tcases {

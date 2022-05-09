@@ -150,7 +150,12 @@ func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
 	}, nil).(sqlparser.Expr)
 }
 
-func expandTableColumns(starExpr *sqlparser.StarExpr, tables []TableInfo, joinUsing map[TableSet]map[string]TableSet, org originable) (bool, sqlparser.SelectExprs, error) {
+func expandTableColumns(
+	starExpr *sqlparser.StarExpr,
+	tables []TableInfo,
+	joinUsing map[TableSet]map[string]TableSet,
+	org originable,
+) (bool, sqlparser.SelectExprs, error) {
 	unknownTbl := true
 	var colNames sqlparser.SelectExprs
 	starExpanded := true
