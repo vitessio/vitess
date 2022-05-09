@@ -36,16 +36,16 @@ func TestOrderBy(t *testing.T) {
 	defer closer()
 
 	// insert some data.
-	mcmp.Exec(`insert into t1(id, col) values (100, 123),(10, 12),(1, 13),(1000, 1234)`)
+	utils.Exec(t, mcmp.VtConn, `insert into t1(id, col) values (100, 123),(10, 12),(1, 13),(1000, 1234)`)
 
 	// Gen4 only supported query.
-	mcmp.AssertMatches(`select col from t1 order by id`, `[[INT64(13)] [INT64(12)] [INT64(123)] [INT64(1234)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, `select col from t1 order by id`, `[[INT64(13)] [INT64(12)] [INT64(123)] [INT64(1234)]]`)
 
 	// Gen4 unsupported query. v3 supported.
-	mcmp.AssertMatches(`select col from t1 order by 1`, `[[INT64(12)] [INT64(13)] [INT64(123)] [INT64(1234)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, `select col from t1 order by 1`, `[[INT64(12)] [INT64(13)] [INT64(123)] [INT64(1234)]]`)
 
 	// unsupported in v3 and Gen4.
-	_, err := mcmp.ExecAndIgnore(`select t1.* from t1 order by id`)
+	_, err := utils.ExecAllowError(t, mcmp.VtConn, `select t1.* from t1 order by id`)
 	require.Error(t, err)
 }
 
@@ -54,17 +54,17 @@ func TestCorrelatedExistsSubquery(t *testing.T) {
 	defer closer()
 
 	// insert some data.
-	mcmp.Exec(`insert into t1(id, col) values (100, 123), (10, 12), (1, 13), (4, 13), (1000, 1234)`)
-	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (100, 13, 1),(9, 7, 15),(1, 123, 123),(1004, 134, 123)`)
+	utils.Exec(t, mcmp.VtConn, `insert into t1(id, col) values (100, 123), (10, 12), (1, 13), (4, 13), (1000, 1234)`)
+	utils.Exec(t, mcmp.VtConn, `insert into t2(id, tcol1, tcol2) values (100, 13, 1),(9, 7, 15),(1, 123, 123),(1004, 134, 123)`)
 
-	mcmp.AssertMatches(`select id from t1 where exists(select 1 from t2 where t1.col = t2.tcol2)`,
+	utils.AssertMatches(t, mcmp.VtConn, `select id from t1 where exists(select 1 from t2 where t1.col = t2.tcol2)`,
 		`[[INT64(100)]]`)
-	mcmp.AssertMatches(`select id from t1 where exists(select 1 from t2 where t1.col = t2.tcol1) order by id`,
+	utils.AssertMatches(t, mcmp.VtConn, `select id from t1 where exists(select 1 from t2 where t1.col = t2.tcol1) order by id`,
 		`[[INT64(1)] [INT64(4)] [INT64(100)]]`)
-	mcmp.AssertMatches(`select id from t1 where id in (select id from t2) order by id`,
+	utils.AssertMatches(t, mcmp.VtConn, `select id from t1 where id in (select id from t2) order by id`,
 		`[[INT64(1)] [INT64(100)]]`)
 
-	mcmp.AssertMatches(`
+	utils.AssertMatches(t, mcmp.VtConn, `
 select id 
 from t1 
 where exists(
@@ -74,7 +74,7 @@ where exists(
     having count(*) > 0
 )`,
 		`[[INT64(100)]]`)
-	mcmp.AssertMatches(`
+	utils.AssertMatches(t, mcmp.VtConn, `
 select id 
 from t1 
 where exists(
@@ -83,7 +83,7 @@ where exists(
 	where t1.col = t2.tcol1
 ) order by id`,
 		`[[INT64(1)] [INT64(4)] [INT64(100)]]`)
-	mcmp.AssertMatchesNoOrder(`
+	utils.AssertMatchesNoOrder(t, mcmp.VtConn, `
 select id 
 from t1 
 where exists(
@@ -99,20 +99,20 @@ func TestGroupBy(t *testing.T) {
 	defer closer()
 
 	// insert some data.
-	mcmp.Exec(`insert into t1(id, col) values (1, 123),(2, 12),(3, 13),(4, 1234)`)
-	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'B')`)
+	utils.Exec(t, mcmp.VtConn, `insert into t1(id, col) values (1, 123),(2, 12),(3, 13),(4, 1234)`)
+	utils.Exec(t, mcmp.VtConn, `insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'B')`)
 
 	// Gen4 only supported query.
-	mcmp.AssertMatches(`select tcol2, tcol1, count(id) from t2 group by tcol2, tcol1`,
+	utils.AssertMatches(t, mcmp.VtConn, `select tcol2, tcol1, count(id) from t2 group by tcol2, tcol1`,
 		`[[VARCHAR("A") VARCHAR("A") INT64(2)] [VARCHAR("A") VARCHAR("B") INT64(1)] [VARCHAR("A") VARCHAR("C") INT64(1)] [VARCHAR("B") VARCHAR("C") INT64(1)] [VARCHAR("C") VARCHAR("A") INT64(1)] [VARCHAR("C") VARCHAR("B") INT64(2)]]`)
 
-	mcmp.AssertMatches(`select tcol1, tcol1 from t2 order by tcol1`,
+	utils.AssertMatches(t, mcmp.VtConn, `select tcol1, tcol1 from t2 order by tcol1`,
 		`[[VARCHAR("A") VARCHAR("A")] [VARCHAR("A") VARCHAR("A")] [VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("B")] [VARCHAR("B") VARCHAR("B")] [VARCHAR("B") VARCHAR("B")] [VARCHAR("C") VARCHAR("C")] [VARCHAR("C") VARCHAR("C")]]`)
 
-	mcmp.AssertMatches(`select tcol1, tcol1 from t1 join t2 on t1.id = t2.id order by tcol1`,
+	utils.AssertMatches(t, mcmp.VtConn, `select tcol1, tcol1 from t1 join t2 on t1.id = t2.id order by tcol1`,
 		`[[VARCHAR("A") VARCHAR("A")] [VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("B")] [VARCHAR("C") VARCHAR("C")]]`)
 
-	mcmp.AssertMatches(`select count(*) k, tcol1, tcol2, "abc" b from t2 group by tcol1, tcol2, b order by k, tcol2, tcol1`,
+	utils.AssertMatches(t, mcmp.VtConn, `select count(*) k, tcol1, tcol2, "abc" b from t2 group by tcol1, tcol2, b order by k, tcol2, tcol1`,
 		`[[INT64(1) VARCHAR("B") VARCHAR("A") VARCHAR("abc")] `+
 			`[INT64(1) VARCHAR("C") VARCHAR("A") VARCHAR("abc")] `+
 			`[INT64(1) VARCHAR("C") VARCHAR("B") VARCHAR("abc")] `+
@@ -125,10 +125,10 @@ func TestJoinBindVars(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'B')`)
-	mcmp.Exec(`insert into t3(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'B')`)
+	utils.Exec(t, mcmp.VtConn, `insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'B')`)
+	utils.Exec(t, mcmp.VtConn, `insert into t3(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'B')`)
 
-	mcmp.AssertMatches(`select t2.tcol1 from t2 join t3 on t2.tcol2 = t3.tcol2 where t2.tcol1 = 'A'`, `[[VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")]]`)
+	utils.AssertMatches(t, mcmp.VtConn, `select t2.tcol1 from t2 join t3 on t2.tcol2 = t3.tcol2 where t2.tcol1 = 'A'`, `[[VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")]]`)
 }
 
 func TestDistinctAggregationFunc(t *testing.T) {
@@ -136,33 +136,33 @@ func TestDistinctAggregationFunc(t *testing.T) {
 	defer closer()
 
 	// insert some data.
-	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'A')`)
+	utils.Exec(t, mcmp.VtConn, `insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'A')`)
 
 	// count on primary vindex
-	mcmp.AssertMatches(`select tcol1, count(distinct id) from t2 group by tcol1`,
+	utils.AssertMatches(t, mcmp.VtConn, `select tcol1, count(distinct id) from t2 group by tcol1`,
 		`[[VARCHAR("A") INT64(3)] [VARCHAR("B") INT64(3)] [VARCHAR("C") INT64(2)]]`)
 
 	// count on any column
-	mcmp.AssertMatches(`select tcol1, count(distinct tcol2) from t2 group by tcol1`,
+	utils.AssertMatches(t, mcmp.VtConn, `select tcol1, count(distinct tcol2) from t2 group by tcol1`,
 		`[[VARCHAR("A") INT64(2)] [VARCHAR("B") INT64(2)] [VARCHAR("C") INT64(1)]]`)
 
 	// sum of columns
-	mcmp.AssertMatches(`select sum(id), sum(tcol1) from t2`,
+	utils.AssertMatches(t, mcmp.VtConn, `select sum(id), sum(tcol1) from t2`,
 		`[[DECIMAL(36) FLOAT64(0)]]`)
 
 	// sum on primary vindex
-	mcmp.AssertMatches(`select tcol1, sum(distinct id) from t2 group by tcol1`,
+	utils.AssertMatches(t, mcmp.VtConn, `select tcol1, sum(distinct id) from t2 group by tcol1`,
 		`[[VARCHAR("A") DECIMAL(9)] [VARCHAR("B") DECIMAL(15)] [VARCHAR("C") DECIMAL(12)]]`)
 
 	// sum on any column
-	mcmp.AssertMatches(`select tcol1, sum(distinct tcol2) from t2 group by tcol1`,
+	utils.AssertMatches(t, mcmp.VtConn, `select tcol1, sum(distinct tcol2) from t2 group by tcol1`,
 		`[[VARCHAR("A") DECIMAL(0)] [VARCHAR("B") DECIMAL(0)] [VARCHAR("C") DECIMAL(0)]]`)
 
 	// insert more data to get values on sum
-	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (9, 'AA', null),(10, 'AA', '4'),(11, 'AA', '4'),(12, null, '5'),(13, null, '6'),(14, 'BB', '10'),(15, 'BB', '20'),(16, 'BB', 'X')`)
+	utils.Exec(t, mcmp.VtConn, `insert into t2(id, tcol1, tcol2) values (9, 'AA', null),(10, 'AA', '4'),(11, 'AA', '4'),(12, null, '5'),(13, null, '6'),(14, 'BB', '10'),(15, 'BB', '20'),(16, 'BB', 'X')`)
 
 	// multi distinct
-	mcmp.AssertMatches(`select tcol1, count(distinct tcol2), sum(distinct tcol2) from t2 group by tcol1`,
+	utils.AssertMatches(t, mcmp.VtConn, `select tcol1, count(distinct tcol2), sum(distinct tcol2) from t2 group by tcol1`,
 		`[[NULL INT64(2) DECIMAL(11)] [VARCHAR("A") INT64(2) DECIMAL(0)] [VARCHAR("AA") INT64(1) DECIMAL(4)] [VARCHAR("B") INT64(2) DECIMAL(0)] [VARCHAR("BB") INT64(3) DECIMAL(30)] [VARCHAR("C") INT64(1) DECIMAL(0)]]`)
 }
 
@@ -171,10 +171,10 @@ func TestDistinct(t *testing.T) {
 	defer closer()
 
 	// insert some data.
-	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'A')`)
+	utils.Exec(t, mcmp.VtConn, `insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'A')`)
 
 	// multi distinct
-	mcmp.AssertMatches(`select distinct tcol1, tcol2 from t2`,
+	utils.AssertMatches(t, mcmp.VtConn, `select distinct tcol1, tcol2 from t2`,
 		`[[VARCHAR("A") VARCHAR("A")] [VARCHAR("A") VARCHAR("C")] [VARCHAR("B") VARCHAR("A")] [VARCHAR("B") VARCHAR("C")] [VARCHAR("C") VARCHAR("A")]]`)
 }
 
@@ -182,28 +182,28 @@ func TestSubQueries(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'B')`)
-	mcmp.Exec(`insert into t3(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'B')`)
+	utils.Exec(t, mcmp.VtConn, `insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'B')`)
+	utils.Exec(t, mcmp.VtConn, `insert into t3(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'B')`)
 
-	mcmp.AssertMatches(`select t2.tcol1, t2.tcol2 from t2 where t2.id IN (select id from t3) order by t2.id`, `[[VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("C")] [VARCHAR("A") VARCHAR("C")] [VARCHAR("C") VARCHAR("A")] [VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("C")] [VARCHAR("B") VARCHAR("A")] [VARCHAR("C") VARCHAR("B")]]`)
-	mcmp.AssertMatches(`select t2.tcol1, t2.tcol2 from t2 where t2.id IN (select t3.id from t3 join t2 on t2.id = t3.id) order by t2.id`, `[[VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("C")] [VARCHAR("A") VARCHAR("C")] [VARCHAR("C") VARCHAR("A")] [VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("C")] [VARCHAR("B") VARCHAR("A")] [VARCHAR("C") VARCHAR("B")]]`)
+	utils.AssertMatches(t, mcmp.VtConn, `select t2.tcol1, t2.tcol2 from t2 where t2.id IN (select id from t3) order by t2.id`, `[[VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("C")] [VARCHAR("A") VARCHAR("C")] [VARCHAR("C") VARCHAR("A")] [VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("C")] [VARCHAR("B") VARCHAR("A")] [VARCHAR("C") VARCHAR("B")]]`)
+	utils.AssertMatches(t, mcmp.VtConn, `select t2.tcol1, t2.tcol2 from t2 where t2.id IN (select t3.id from t3 join t2 on t2.id = t3.id) order by t2.id`, `[[VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("C")] [VARCHAR("A") VARCHAR("C")] [VARCHAR("C") VARCHAR("A")] [VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("C")] [VARCHAR("B") VARCHAR("A")] [VARCHAR("C") VARCHAR("B")]]`)
 
-	mcmp.AssertMatches(`select u_a.a from u_a left join t2 on t2.id IN (select id from t2)`, `[]`)
+	utils.AssertMatches(t, mcmp.VtConn, `select u_a.a from u_a left join t2 on t2.id IN (select id from t2)`, `[]`)
 	// inserting some data in u_a
-	mcmp.Exec(`insert into u_a(id, a) values (1, 1)`)
+	utils.Exec(t, mcmp.VtConn, `insert into u_a(id, a) values (1, 1)`)
 
 	// execute same query again.
-	qr := mcmp.Exec(`select u_a.a from u_a left join t2 on t2.id IN (select id from t2)`)
+	qr := utils.Exec(t, mcmp.VtConn, `select u_a.a from u_a left join t2 on t2.id IN (select id from t2)`)
 	assert.EqualValues(t, 8, len(qr.Rows))
 	for index, row := range qr.Rows {
 		assert.EqualValues(t, `[INT64(1)]`, fmt.Sprintf("%v", row), "does not match for row: %d", index+1)
 	}
 
 	// fail as projection subquery is not scalar
-	_, err := mcmp.ExecAndIgnore(`select (select id from t2) from t2 order by id`)
+	_, err := utils.ExecAllowError(t, mcmp.VtConn, `select (select id from t2) from t2 order by id`)
 	assert.EqualError(t, err, "subquery returned more than one row (errno 1105) (sqlstate HY000) during query: select (select id from t2) from t2 order by id")
 
-	mcmp.AssertMatches(`select (select id from t2 order by id limit 1) from t2 order by id limit 2`, `[[INT64(1)] [INT64(1)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, `select (select id from t2 order by id limit 1) from t2 order by id limit 2`, `[[INT64(1)] [INT64(1)]]`)
 }
 
 func TestPlannerWarning(t *testing.T) {
@@ -211,32 +211,32 @@ func TestPlannerWarning(t *testing.T) {
 	defer closer()
 
 	// straight_join query
-	_ = mcmp.Exec(`select 1 from t1 straight_join t2 on t1.id = t2.id`)
-	mcmp.AssertMatches(`show warnings`, `[[VARCHAR("Warning") UINT16(1235) VARCHAR("straight join is converted to normal join")]]`)
+	_ = utils.Exec(t, mcmp.VtConn, `select 1 from t1 straight_join t2 on t1.id = t2.id`)
+	utils.AssertMatches(t, mcmp.VtConn, `show warnings`, `[[VARCHAR("Warning") UINT16(1235) VARCHAR("straight join is converted to normal join")]]`)
 
 	// execute same query again.
-	_ = mcmp.Exec(`select 1 from t1 straight_join t2 on t1.id = t2.id`)
-	mcmp.AssertMatches(`show warnings`, `[[VARCHAR("Warning") UINT16(1235) VARCHAR("straight join is converted to normal join")]]`)
+	_ = utils.Exec(t, mcmp.VtConn, `select 1 from t1 straight_join t2 on t1.id = t2.id`)
+	utils.AssertMatches(t, mcmp.VtConn, `show warnings`, `[[VARCHAR("Warning") UINT16(1235) VARCHAR("straight join is converted to normal join")]]`)
 
 	// random query to reset the warning.
-	_ = mcmp.Exec(`select 1 from t1`)
+	_ = utils.Exec(t, mcmp.VtConn, `select 1 from t1`)
 
 	// execute same query again.
-	_ = mcmp.Exec(`select 1 from t1 straight_join t2 on t1.id = t2.id`)
-	mcmp.AssertMatches(`show warnings`, `[[VARCHAR("Warning") UINT16(1235) VARCHAR("straight join is converted to normal join")]]`)
+	_ = utils.Exec(t, mcmp.VtConn, `select 1 from t1 straight_join t2 on t1.id = t2.id`)
+	utils.AssertMatches(t, mcmp.VtConn, `show warnings`, `[[VARCHAR("Warning") UINT16(1235) VARCHAR("straight join is converted to normal join")]]`)
 }
 
 func TestHashJoin(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	mcmp.Exec(`insert into t1(id, col) values (1, 1),(2, 3),(3, 4),(4, 7)`)
+	utils.Exec(t, mcmp.VtConn, `insert into t1(id, col) values (1, 1),(2, 3),(3, 4),(4, 7)`)
 
-	mcmp.AssertMatches(`select /*vt+ ALLOW_HASH_JOIN */ t1.id from t1 x join t1 where x.col = t1.col and x.id <= 3 and t1.id >= 3`, `[[INT64(3)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, `select /*vt+ ALLOW_HASH_JOIN */ t1.id from t1 x join t1 where x.col = t1.col and x.id <= 3 and t1.id >= 3`, `[[INT64(3)]]`)
 
-	mcmp.Exec(`set workload = olap`)
-	defer mcmp.Exec(`set workload = oltp`)
-	mcmp.AssertMatches(`select /*vt+ ALLOW_HASH_JOIN */ t1.id from t1 x join t1 where x.col = t1.col and x.id <= 3 and t1.id >= 3`, `[[INT64(3)]]`)
+	utils.Exec(t, mcmp.VtConn, `set workload = olap`)
+	defer utils.Exec(t, mcmp.VtConn, `set workload = oltp`)
+	utils.AssertMatches(t, mcmp.VtConn, `select /*vt+ ALLOW_HASH_JOIN */ t1.id from t1 x join t1 where x.col = t1.col and x.id <= 3 and t1.id >= 3`, `[[INT64(3)]]`)
 }
 
 func TestMultiColumnVindex(t *testing.T) {
@@ -246,12 +246,12 @@ func TestMultiColumnVindex(t *testing.T) {
 
 	for _, workload := range []string{"olap", "oltp"} {
 		t.Run(workload, func(t *testing.T) {
-			mcmp.Exec(fmt.Sprintf(`set workload = %s`, workload))
-			mcmp.AssertMatches(`select id from user_region where cola = 1 and colb = 2`, `[[INT64(1)]]`)
-			mcmp.AssertMatches(`select id from user_region where cola in (30,422333) and colb = 40 order by id`, `[[INT64(2)] [INT64(4)] [INT64(6)]]`)
-			mcmp.AssertMatches(`select id from user_region where cola in (30,422333) and colb in (40,60) order by id`, `[[INT64(2)] [INT64(4)] [INT64(6)] [INT64(7)]]`)
-			mcmp.AssertMatches(`select id from user_region where cola in (30,422333) and colb in (40,60) and cola = 422333`, `[[INT64(6)]]`)
-			mcmp.AssertMatches(`select id from user_region where cola in (30,422333) and colb in (40,60) and cola = 30 and colb = 60`, `[[INT64(7)]]`)
+			utils.Exec(t, mcmp.VtConn, fmt.Sprintf(`set workload = %s`, workload))
+			utils.AssertMatches(t, mcmp.VtConn, `select id from user_region where cola = 1 and colb = 2`, `[[INT64(1)]]`)
+			utils.AssertMatches(t, mcmp.VtConn, `select id from user_region where cola in (30,422333) and colb = 40 order by id`, `[[INT64(2)] [INT64(4)] [INT64(6)]]`)
+			utils.AssertMatches(t, mcmp.VtConn, `select id from user_region where cola in (30,422333) and colb in (40,60) order by id`, `[[INT64(2)] [INT64(4)] [INT64(6)] [INT64(7)]]`)
+			utils.AssertMatches(t, mcmp.VtConn, `select id from user_region where cola in (30,422333) and colb in (40,60) and cola = 422333`, `[[INT64(6)]]`)
+			utils.AssertMatches(t, mcmp.VtConn, `select id from user_region where cola in (30,422333) and colb in (40,60) and cola = 30 and colb = 60`, `[[INT64(7)]]`)
 		})
 	}
 }
@@ -280,12 +280,13 @@ func TestFanoutVindex(t *testing.T) {
 		exp:      `[[INT64(33) INT64(20) VARCHAR("shard-20c0-")]]`,
 	}}
 
+	defer utils.ExecAllowError(t, mcmp.VtConn, `delete from region_tbl`)
 	uid := 1
 	// insert data in all shards to know where the query fan-out
 	for _, s := range shardedKsShards {
-		mcmp.Exec(fmt.Sprintf("use `%s:%s`", shardedKs, s))
+		utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%s:%s`", shardedKs, s))
 		for _, tcase := range tcases {
-			mcmp.Exec(fmt.Sprintf("insert into region_tbl(rg,uid,msg) values(%d,%d,'shard-%s')", tcase.regionID, uid, s))
+			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("insert into region_tbl(rg,uid,msg) values(%d,%d,'shard-%s')", tcase.regionID, uid, s))
 			uid++
 		}
 	}
@@ -338,9 +339,9 @@ func TestSubShardVindex(t *testing.T) {
 	uid := 1
 	// insert data in all shards to know where the query fan-out
 	for _, s := range shardedKsShards {
-		mcmp.Exec(fmt.Sprintf("use `%s:%s`", shardedKs, s))
+		utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%s:%s`", shardedKs, s))
 		for _, tcase := range tcases {
-			mcmp.Exec(fmt.Sprintf("insert into multicol_tbl(cola,colb,colc,msg) values(%d,_binary '%d','%d','shard-%s')", tcase.regionID, uid, uid, s))
+			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("insert into multicol_tbl(cola,colb,colc,msg) values(%d,_binary '%d','%d','shard-%s')", tcase.regionID, uid, uid, s))
 			uid++
 		}
 	}
@@ -349,6 +350,7 @@ func TestSubShardVindex(t *testing.T) {
 	require.NoError(t, err)
 	defer newConn.Close()
 
+	defer utils.ExecAllowError(t, newConn, `delete from multicol_tbl`)
 	for _, workload := range []string{"olap", "oltp"} {
 		utils.Exec(t, newConn, fmt.Sprintf(`set workload = %s`, workload))
 		for _, tcase := range tcases {
@@ -387,9 +389,9 @@ func TestSubShardVindexDML(t *testing.T) {
 	uid := 1
 	// insert data in all shards to know where the query fan-out
 	for _, s := range shardedKsShards {
-		mcmp.Exec(fmt.Sprintf("use `%s:%s`", shardedKs, s))
+		utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%s:%s`", shardedKs, s))
 		for _, tcase := range tcases {
-			mcmp.Exec(fmt.Sprintf("insert into multicol_tbl(cola,colb,colc,msg) values(%d,_binary '%d','%d','shard-%s')", tcase.regionID, uid, uid, s))
+			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("insert into multicol_tbl(cola,colb,colc,msg) values(%d,_binary '%d','%d','shard-%s')", tcase.regionID, uid, uid, s))
 			uid++
 		}
 	}
@@ -398,6 +400,7 @@ func TestSubShardVindexDML(t *testing.T) {
 	require.NoError(t, err)
 	defer newConn.Close()
 
+	defer utils.ExecAllowError(t, newConn, `delete from multicol_tbl`)
 	for _, tcase := range tcases {
 		t.Run(strconv.Itoa(tcase.regionID), func(t *testing.T) {
 			qr := utils.Exec(t, newConn, fmt.Sprintf("update multicol_tbl set msg = 'bar' where cola = %d", tcase.regionID))
@@ -418,12 +421,12 @@ func TestOuterJoin(t *testing.T) {
 	defer closer()
 
 	// insert some data.
-	mcmp.Exec(`insert into t1(id, col) values (100, 123), (10, 123), (1, 13), (1000, 1234)`)
-	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (12, 13, 1),(123, 7, 15),(1, 123, 123),(1004, 134, 123)`)
+	utils.Exec(t, mcmp.VtConn, `insert into t1(id, col) values (100, 123), (10, 123), (1, 13), (1000, 1234)`)
+	utils.Exec(t, mcmp.VtConn, `insert into t2(id, tcol1, tcol2) values (12, 13, 1),(123, 7, 15),(1, 123, 123),(1004, 134, 123)`)
 
 	// Gen4 only supported query.
-	mcmp.AssertMatchesNoOrder(`select t1.id, t2.tcol1+t2.tcol2 from t1 left join t2 on t1.col = t2.id`, `[[INT64(10) FLOAT64(22)] [INT64(1) NULL] [INT64(100) FLOAT64(22)] [INT64(1000) NULL]]`)
-	mcmp.AssertMatchesNoOrder(`select t1.id, t2.id, t2.tcol1+t1.col+t2.tcol2 from t1 left join t2 on t1.col = t2.id`,
+	utils.AssertMatchesNoOrder(t, mcmp.VtConn, `select t1.id, t2.tcol1+t2.tcol2 from t1 left join t2 on t1.col = t2.id`, `[[INT64(10) FLOAT64(22)] [INT64(1) NULL] [INT64(100) FLOAT64(22)] [INT64(1000) NULL]]`)
+	utils.AssertMatchesNoOrder(t, mcmp.VtConn, `select t1.id, t2.id, t2.tcol1+t1.col+t2.tcol2 from t1 left join t2 on t1.col = t2.id`,
 		`[[INT64(10) INT64(123) FLOAT64(145)]`+
 			` [INT64(1) NULL NULL]`+
 			` [INT64(100) INT64(123) FLOAT64(145)]`+
