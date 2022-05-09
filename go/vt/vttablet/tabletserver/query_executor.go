@@ -877,6 +877,12 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 	if !ok {
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting ALTER VITESS_MIGRATION plan")
 	}
+
+	// Make sure schema exists
+	if err := qre.tsv.onlineDDLExecutor.PrepareForQueryExecutor(qre.ctx); err != nil {
+		return nil, err
+	}
+
 	switch alterMigration.Type {
 	case sqlparser.RetryMigrationType:
 		return qre.tsv.onlineDDLExecutor.RetryMigration(qre.ctx, alterMigration.UUID)
