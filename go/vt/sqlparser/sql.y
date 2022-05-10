@@ -172,6 +172,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   referenceDefinition *ReferenceDefinition
 
   columnStorage ColumnStorage
+  columnFormat ColumnFormat
 
   boolean bool
   boolVal BoolVal
@@ -324,7 +325,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 // MySQL reserved words that are unused by this grammar will map to this token.
 %token <str> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD
 %token <str> NTH_VALUE NTILE OF OVER PERCENT_RANK RANK RECURSIVE ROW_NUMBER SYSTEM WINDOW
-%token <str> ACTIVE ADMIN AUTOEXTEND_SIZE BUCKETS CLONE COMPONENT DEFINITION ENFORCED ENGINE_ATTRIBUTE EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
+%token <str> ACTIVE ADMIN AUTOEXTEND_SIZE BUCKETS CLONE COLUMN_FORMAT COMPONENT DEFINITION ENFORCED ENGINE_ATTRIBUTE EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <str> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
 %token <str> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD OPTIONAL ORDINALITY ORGANIZATION OTHERS PARTIAL PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
 %token <str> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_ENGINE_ATTRIBUTE SECONDARY_LOAD SECONDARY_UNLOAD SIMPLE SKIP SRID
@@ -507,6 +508,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <lockType> lock_type
 %type <empty> session_or_local_opt
 %type <columnStorage> column_storage
+%type <columnFormat> column_format
 %type <colKeyOpt> keys
 %type <referenceDefinition> reference_definition reference_definition_opt
 %type <str> underscore_charsets
@@ -1317,7 +1319,7 @@ generated_always_opt:
 // was specific (as stated in the MySQL guide) and did not accept arbitrary order options. For example NOT NULL DEFAULT 1 and not DEFAULT 1 NOT NULL
 column_attribute_list_opt:
   {
-    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil, As: nil}
+    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil, As: nil, Invisible: nil, Format: UnspecifiedFormat, EngineAttribute: nil, SecondaryEngineAttribute: nil }
   }
 | column_attribute_list_opt NULL
   {
@@ -1363,13 +1365,51 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt COLLATE STRING
   {
-  	$1.Collate = encodeSQLString($3)
+    $1.Collate = encodeSQLString($3)
   }
 | column_attribute_list_opt COLLATE id_or_var
   {
-	$1.Collate = string($3.String())
-	$$ = $1
+    $1.Collate = string($3.String())
+    $$ = $1
   }
+| column_attribute_list_opt COLUMN_FORMAT column_format
+  {
+    $1.Format = $3
+  }
+| column_attribute_list_opt VISIBLE
+  {
+    val := false
+    $1.Invisible = &val
+    $$ = $1
+  }
+| column_attribute_list_opt INVISIBLE
+  {
+    val := true
+    $1.Invisible = &val
+    $$ = $1
+  }
+| column_attribute_list_opt ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $1.EngineAttribute = NewStrLiteral($4)
+  }
+| column_attribute_list_opt SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $1.SecondaryEngineAttribute = NewStrLiteral($4)
+  }
+
+column_format:
+  FIXED
+{
+  $$ = FixedFormat
+}
+| DYNAMIC
+{
+  $$ = DynamicFormat
+}
+| DEFAULT
+{
+  $$ = DefaultFormat
+}
 
 column_storage:
   VIRTUAL
@@ -1410,6 +1450,18 @@ generated_column_attribute_list_opt:
 | generated_column_attribute_list_opt keys
   {
     $1.KeyOpt = $2
+    $$ = $1
+  }
+| generated_column_attribute_list_opt VISIBLE
+  {
+    val := false
+    $1.Invisible = &val
+    $$ = $1
+  }
+| generated_column_attribute_list_opt INVISIBLE
+  {
+    val := true
+    $1.Invisible = &val
     $$ = $1
   }
 
@@ -6496,6 +6548,7 @@ non_reserved_keyword:
 | COALESCE
 | CODE
 | COLLATION
+| COLUMN_FORMAT
 | COLUMNS
 | COMMENT_KEYWORD
 | COMMIT

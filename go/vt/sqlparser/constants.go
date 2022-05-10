@@ -707,6 +707,14 @@ const (
 	StoredStorage
 )
 
+// ColumnFormat constants
+const (
+	UnspecifiedFormat ColumnFormat = iota
+	FixedFormat
+	DynamicFormat
+	DefaultFormat
+)
+
 // IntervalTypes constants
 const (
 	IntervalYear IntervalTypes = iota

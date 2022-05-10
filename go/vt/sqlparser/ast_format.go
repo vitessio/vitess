@@ -665,6 +665,22 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		if ct.Options.Comment != nil {
 			buf.astPrintf(ct, " %s %v", keywordStrings[COMMENT_KEYWORD], ct.Options.Comment)
 		}
+		if ct.Options.Invisible != nil {
+			if *ct.Options.Invisible {
+				buf.astPrintf(ct, " %s", keywordStrings[INVISIBLE])
+			} else {
+				buf.astPrintf(ct, " %s", keywordStrings[VISIBLE])
+			}
+		}
+		if ct.Options.Format != UnspecifiedFormat {
+			buf.astPrintf(ct, " %s %s", keywordStrings[COLUMN_FORMAT], ct.Options.Format.ToString())
+		}
+		if ct.Options.EngineAttribute != nil {
+			buf.astPrintf(ct, " %s %v", keywordStrings[ENGINE_ATTRIBUTE], ct.Options.EngineAttribute)
+		}
+		if ct.Options.SecondaryEngineAttribute != nil {
+			buf.astPrintf(ct, " %s %v", keywordStrings[SECONDARY_ENGINE_ATTRIBUTE], ct.Options.SecondaryEngineAttribute)
+		}
 		if ct.Options.KeyOpt == colKeyPrimary {
 			buf.astPrintf(ct, " %s %s", keywordStrings[PRIMARY], keywordStrings[KEY])
 		}

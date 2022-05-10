@@ -172,6 +172,18 @@ func TestCanonicalOutput(t *testing.T) {
 			"create table identifiers (id binary(16) not null default (uuid_to_bin(uuid(),true)))",
 			"CREATE TABLE `identifiers` (\n\t`id` binary(16) NOT NULL DEFAULT (uuid_to_bin(uuid(), true))\n)",
 		},
+		{
+			"create table t (\n\tid int auto_increment,\n\tusername varchar column_format dynamic\n)",
+			"CREATE TABLE `t` (\n\t`id` int AUTO_INCREMENT,\n\t`username` varchar COLUMN_FORMAT DYNAMIC\n)",
+		},
+		{
+			"create table t (\n\tid int auto_increment,\n\tusername varchar visible\n)",
+			"CREATE TABLE `t` (\n\t`id` int AUTO_INCREMENT,\n\t`username` varchar VISIBLE\n)",
+		},
+		{
+			"create table t (\n\tid int auto_increment,\n\tusername varchar engine_attribute '{}' secondary_engine_attribute '{}'\n)",
+			"CREATE TABLE `t` (\n\t`id` int AUTO_INCREMENT,\n\t`username` varchar ENGINE_ATTRIBUTE '{}' SECONDARY_ENGINE_ATTRIBUTE '{}'\n)",
+		},
 	}
 
 	for _, tc := range testcases {
