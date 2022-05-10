@@ -1597,9 +1597,8 @@ var (
 		input:  "create fulltext index a on b (col1) key_block_size=12 with parser a comment 'string' algorithm inplace lock none",
 		output: "alter table b add fulltext index a (col1) key_block_size 12 with parser a comment 'string', algorithm = inplace, lock none",
 	}, {
-		input:      "create index a on b ((col1 + col2), (col1*col2))",
-		output:     "alter table b add index a ()",
-		partialDDL: true,
+		input:  "create index a on b ((col1 + col2), (col1*col2))",
+		output: "alter table b add index a ((col1 + col2), (col1 * col2))",
 	}, {
 		input:  "create fulltext index b using btree on A (col1 desc, col2) algorithm = inplace lock = none",
 		output: "alter table A add fulltext index b (col1 desc, col2) using btree, algorithm = inplace, lock none",
@@ -4539,6 +4538,35 @@ PARTITIONS 6`,
 			output: `create table t2 (
 	val INT
 ) partition by list (val) (partition mypart values in (1, 3, 5) tablespace innodb_system, partition MyPart values in (2, 4, 6) tablespace innodb_system)`,
+		},
+		{
+			// index with an expression
+			input: `create table t (
+	id int auto_increment,
+	username varchar(64),
+	nickname varchar(64),
+	email varchar(64),
+	primary key (id),
+	key email_idx (email, (if(username = '', nickname, username)))
+)`,
+		},
+		{
+			input: `create table entries (
+	uid varchar(53) character set utf8mb4 collate utf8mb4_bin not null,
+	namespace varchar(254) character set utf8mb4 collate utf8mb4_bin not null,
+	place varchar(254) character set utf8mb4 collate utf8mb4_bin not null,
+	creationTimestamp timestamp null default current_timestamp(),
+	updatedTimestamp timestamp null default current_timestamp() on update current_timestamp(),
+	labels json default null,
+	spec json default null,
+	salaryInfo json default null,
+	PRIMARY KEY (namespace, uid),
+	UNIQUE KEY namespaced_name (namespace, place),
+	UNIQUE KEY unique_uid (uid),
+	KEY entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt')))
+) ENGINE InnoDB,
+  CHARSET utf8mb4,
+  COLLATE utf8mb4_bin`,
 		},
 	}
 	for _, test := range createTableQueries {
