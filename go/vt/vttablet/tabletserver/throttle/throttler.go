@@ -70,7 +70,7 @@ var (
 
 	replicationLagQuery = `select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from _vt.heartbeat`
 
-	ErrThrottlerNotEnabled = errors.New("throttler not enabled")
+	ErrThrottlerNotready = errors.New("throttler not enabled/ready")
 )
 
 // ThrottleCheckType allows a client to indicate what type of check it wants to issue. See available types below.
@@ -194,9 +194,15 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, heartbeatWriter heartbeat.
 	return throttler
 }
 
-// IsEnabled
-func (throttler *Throttler) IsEnabled() bool {
-	return throttler.isEnabled
+// CheckIsReady checks if this throttler is ready to serve. If not, it returns an error
+func (throttler *Throttler) CheckIsReady() error {
+	if !throttler.isEnabled {
+		return ErrThrottlerNotready
+	}
+	if !throttler.IsOpen() {
+		return ErrThrottlerNotready
+	}
+	return nil
 }
 
 // initThrottleTabletTypes reads the user supplied throttle_tablet_types and sets these
