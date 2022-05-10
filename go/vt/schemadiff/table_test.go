@@ -857,6 +857,18 @@ func TestValidate(t *testing.T) {
 			to:    "create table t (id int primary key, i int, key some_key(id, i), key i_idx(i))",
 		},
 		{
+			name:  "drop column, affect keys with expression",
+			from:  "create table t (id int primary key, i int, key id_idx((IF(id, 0, 1))), key i_idx((IF(i,0,1))))",
+			alter: "alter table t drop column i",
+			to:    "create table t (id int primary key, key id_idx((IF(id, 0, 1))))",
+		},
+		{
+			name:  "drop column, affect keys with expression and multi expressions",
+			from:  "create table t (id int primary key, i int, key id_idx((IF(id, 0, 1))), key i_idx((IF(i,0,1)), (IF(id,2,3))))",
+			alter: "alter table t drop column i",
+			to:    "create table t (id int primary key, key id_idx((IF(id, 0, 1))), key i_idx((IF(id,2,3))))",
+		},
+		{
 			name:  "add multiple keys, multi columns, ok",
 			from:  "create table t (id int primary key, i1 int, i2 int, i3 int)",
 			alter: "alter table t add key i12_idx(i1, i2), add key i32_idx(i3, i2), add key i21_idx(i2, i1)",
@@ -869,6 +881,12 @@ func TestValidate(t *testing.T) {
 			expectErr: ErrInvalidColumnInKey,
 		},
 		{
+			name:      "add multiple keys, multi columns, missing column",
+			from:      "create table t (id int primary key, i1 int, i2 int, i4 int)",
+			alter:     "alter table t add key i12_idx(i1, i2), add key i32_idx((IF(i3 IS NULL, i2, i3)), i2), add key i21_idx(i2, i1)",
+			expectErr: ErrInvalidColumnInKey,
+		},
+		{
 			name:  "nullable timestamp",
 			from:  "create table t (id int primary key, t datetime)",
 			alter: "alter table t modify column t timestamp null",
@@ -878,12 +896,12 @@ func TestValidate(t *testing.T) {
 	hints := DiffHints{}
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			stmt, err := sqlparser.Parse(ts.from)
+			stmt, err := sqlparser.ParseStrictDDL(ts.from)
 			require.NoError(t, err)
 			fromCreateTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			stmt, err = sqlparser.Parse(ts.alter)
+			stmt, err = sqlparser.ParseStrictDDL(ts.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
