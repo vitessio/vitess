@@ -260,6 +260,7 @@ func (throttler *Throttler) Open() error {
 		// since we just resume now, speed up the tickers by forcng an immediate tick
 		go t.TickNow()
 	}
+	go throttler.heartbeatWriter.RequestHeartbeats()
 
 	return nil
 }
