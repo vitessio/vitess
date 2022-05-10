@@ -77,6 +77,7 @@ type heartbeatWriter struct {
 	onDemandDuration                time.Duration
 	concurrentHeartbeatRequests     int64
 	requestHeartbeatsReentranceFlag int64
+	onDemandMu                      sync.Mutex
 }
 
 // newHeartbeatWriter creates a new heartbeatWriter.
@@ -239,18 +240,25 @@ func (w *heartbeatWriter) RequestHeartbeats() {
 		return
 	}
 
+	w.onDemandMu.Lock()
+	defer w.onDemandMu.Unlock()
+
 	// Now for the actual logic. A client requests heartbeats. If it were only this client, we would
 	// activate heartbeats for the duration of onDemandDuration, and then turn heartbeats off.
 	// However, there may be multiple clients interested in heartbeats, or maybe the same single client
 	// requesting heartbeats again and again. So we keep track of how many _concurrent_ requests we have.
 	// We enable heartbeats as soon as we have a single concurrent request; we turn heartbeats off once
 	// we have zero concurrent requests
-	if numClients := atomic.AddInt64(&w.concurrentHeartbeatRequests, 1); numClients == 1 {
+	w.concurrentHeartbeatRequests++
+	if w.concurrentHeartbeatRequests == 1 {
 		// means we previously had 0 clients interested in heartbeats.
 		w.enableWrites(true)
 	}
 	time.AfterFunc(w.onDemandDuration, func() {
-		if numClients := atomic.AddInt64(&w.concurrentHeartbeatRequests, -1); numClients == 0 {
+		w.onDemandMu.Lock()
+		defer w.onDemandMu.Unlock()
+		w.concurrentHeartbeatRequests--
+		if w.concurrentHeartbeatRequests == 0 {
 			// means there are currently no more clients interested in heartbeats
 			w.enableWrites(false)
 		}
