@@ -1597,9 +1597,8 @@ var (
 		input:  "create fulltext index a on b (col1) key_block_size=12 with parser a comment 'string' algorithm inplace lock none",
 		output: "alter table b add fulltext index a (col1) key_block_size 12 with parser a comment 'string', algorithm = inplace, lock none",
 	}, {
-		input:      "create index a on b ((col1 + col2), (col1*col2))",
-		output:     "alter table b add index a ()",
-		partialDDL: true,
+		input:  "create index a on b ((col1 + col2), (col1*col2))",
+		output: "alter table b add index a ((col1 + col2), (col1 * col2))",
 	}, {
 		input:  "create fulltext index b using btree on A (col1 desc, col2) algorithm = inplace lock = none",
 		output: "alter table A add fulltext index b (col1 desc, col2) using btree, algorithm = inplace, lock none",
@@ -2657,6 +2656,27 @@ var (
 	}, {
 		input:  `SELECT JSON_VALUE(@j, @k)`,
 		output: `select json_value(@j, @k) from dual`,
+	}, {
+		input:  `select json_value(@j, @k RETURNING FLOAT) from dual`,
+		output: `select json_value(@j, @k returning FLOAT) from dual`,
+	}, {
+		input:  `select json_value(@j, @k RETURNING DECIMAL(4,2)) from dual`,
+		output: `select json_value(@j, @k returning DECIMAL(4, 2)) from dual`,
+	}, {
+		input:  `SELECT JSON_VALUE('{"fname": "Joe", "lname": "Palmer"}', '$.fname' returning char(49) Charset utf8mb4 error on error)`,
+		output: `select json_value('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname' returning char(49) character set utf8mb4 error on error) from dual`,
+	}, {
+		input:  `SELECT JSON_VALUE('{"item": "shoes", "price": "49.95"}', '$.price' NULL ON EMPTY) `,
+		output: `select json_value('{\"item\": \"shoes\", \"price\": \"49.95\"}', '$.price' null on empty) from dual`,
+	}, {
+		input:  `SELECT JSON_VALUE('{"item": "shoes", "price": "49.95"}', '$.price' NULL ON ERROR) `,
+		output: `select json_value('{\"item\": \"shoes\", \"price\": \"49.95\"}', '$.price' null on error) from dual`,
+	}, {
+		input:  `SELECT JSON_VALUE('{"item": "shoes", "price": "49.95"}', '$.price' NULL ON EMPTY ERROR ON ERROR) `,
+		output: `select json_value('{\"item\": \"shoes\", \"price\": \"49.95\"}', '$.price' null on empty error on error) from dual`,
+	}, {
+		input:  `select json_value(@j, @k RETURNING FLOAT NULL ON EMPTY ERROR ON ERROR) from dual`,
+		output: `select json_value(@j, @k returning FLOAT null on empty error on error) from dual`,
 	}, {
 		input:  `SELECT 17 MEMBER OF ('[23, "abc", 17, "ab", 10]')`,
 		output: `select 17 member of ('[23, \"abc\", 17, \"ab\", 10]') from dual`,
@@ -3825,6 +3845,25 @@ func TestCreateTable(t *testing.T) {
 	key by_full_name (full_name)
 )`,
 		},
+		// test defining index visibility
+		{
+			input: `create table t (
+	id int auto_increment,
+	username varchar,
+	unique key by_username (username) visible,
+	unique key by_username2 (username) invisible,
+	unique index by_username3 (username)
+)`,
+		},
+		// test adding engine attributes
+		{
+			input: `create table t (
+	id int auto_increment,
+	username varchar,
+	unique key by_username (username) engine_attribute '{}' secondary_engine_attribute '{}',
+	unique index by_username3 (username)
+)`,
+		},
 		// test that indexes support USING <id>
 		{
 			input: `create table t (
@@ -3902,6 +3941,9 @@ func TestCreateTable(t *testing.T) {
 	newCol int references simple (a) on delete cascade on update set default,
 	newCol int references simple (a) on delete set default on update set null,
 	newCol int references simple (a) on delete set null on update restrict,
+	newCol int references simple (a) on update set default on delete cascade,
+	newCol int references simple (a) on update set null on delete set default,
+	newCol int references simple (a) on update restrict on delete set null,
 	newCol int references simple (a) on update no action,
 	newCol int references simple (a) on update cascade,
 	primary key (id, username),
@@ -3909,6 +3951,39 @@ func TestCreateTable(t *testing.T) {
 	constraint second_ibfk_1 foreign key (k, j) references simple (a, b),
 	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete restrict,
 	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete no action,
+	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete cascade on update set default,
+	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete set default on update set null,
+	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete set null on update restrict,
+	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on update set default on delete cascade ,
+	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on update set null on delete set default,
+	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on update restrict on delete set null,
+	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on update no action,
+	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on update cascade
+)`,
+			output: `create table t (
+	id int auto_increment,
+	username varchar,
+	k int,
+	Z int,
+	newCol int references simple (a),
+	newCol int references simple (a) on delete restrict,
+	newCol int references simple (a) on delete no action,
+	newCol int references simple (a) on delete cascade on update set default,
+	newCol int references simple (a) on delete set default on update set null,
+	newCol int references simple (a) on delete set null on update restrict,
+	newCol int references simple (a) on delete cascade on update set default,
+	newCol int references simple (a) on delete set default on update set null,
+	newCol int references simple (a) on delete set null on update restrict,
+	newCol int references simple (a) on update no action,
+	newCol int references simple (a) on update cascade,
+	primary key (id, username),
+	key by_email (email(10), username),
+	constraint second_ibfk_1 foreign key (k, j) references simple (a, b),
+	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete restrict,
+	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete no action,
+	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete cascade on update set default,
+	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete set default on update set null,
+	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete set null on update restrict,
 	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete cascade on update set default,
 	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete set default on update set null,
 	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete set null on update restrict,
@@ -3932,6 +4007,7 @@ func TestCreateTable(t *testing.T) {
 	id int auto_increment
 ) engine InnoDB,
   auto_increment 123,
+  autoextend_size 16,
   avg_row_length 1,
   charset utf8mb4,
   charset latin1,
@@ -3944,6 +4020,7 @@ func TestCreateTable(t *testing.T) {
   data directory 'absolute path to directory',
   delay_key_write 1,
   encryption 'n',
+  engine_attribute '{}',
   index directory 'absolute path to directory',
   insert_method no,
   key_block_size 1024,
@@ -3952,6 +4029,7 @@ func TestCreateTable(t *testing.T) {
   pack_keys 0,
   password 'sekret',
   row_format default,
+  secondary_engine_attribute '{}',
   stats_auto_recalc default,
   stats_persistent 0,
   stats_sample_pages 1,
@@ -4399,10 +4477,180 @@ PARTITIONS 6`,
 ) partition by list (val) (partition mypart values in (1, 3, 5), partition MyPart values in (2, 4, 6))`,
 		},
 		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE = FOOBAR,
+	PARTITION MyPart VALUES IN (2,4,6)
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR, partition MyPart values in (2, 4, 6))`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) ENGINE = FOOBAR,
+	PARTITION MyPart VALUES IN (2,4,6)
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) engine FOOBAR, partition MyPart values in (2, 4, 6))`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE FOOBAR,
+	PARTITION MyPart VALUES IN (2,4,6)
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR, partition MyPart values in (2, 4, 6))`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE FOOBAR COMMENT = 'test',
+	PARTITION MyPart VALUES IN (2,4,6) comment 'test2'
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR comment 'test', partition MyPart values in (2, 4, 6) comment 'test2')`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) STORAGE ENGINE FOOBAR DATA DIRECTORY = 'test',
+	PARTITION MyPart VALUES IN (2,4,6) DATA DIRECTORY 'test2'
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR data directory 'test', partition MyPart values in (2, 4, 6) data directory 'test2')`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) INDEX DIRECTORY = 'test',
+	PARTITION MyPart VALUES IN (2,4,6) INDEX DIRECTORY 'test2'
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) index directory 'test', partition MyPart values in (2, 4, 6) index directory 'test2')`,
+		},
+		{
 			input: `create table t1 (id int primary key) partition by list (id) (partition p1 values in(11,21), partition p2 values in (12,22))`,
 			output: `create table t1 (
 	id int primary key
 ) partition by list (id) (partition p1 values in (11, 21), partition p2 values in (12, 22))`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) COMMENT = 'before' STORAGE ENGINE FOOBAR DATA DIRECTORY = 'test',
+	PARTITION MyPart VALUES IN (2,4,6) DATA DIRECTORY 'test2'
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR comment 'before' data directory 'test', partition MyPart values in (2, 4, 6) data directory 'test2')`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) MAX_ROWS = 4,
+	PARTITION MyPart VALUES IN (2,4,6) MAX_ROWS 10
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) max_rows 4, partition MyPart values in (2, 4, 6) max_rows 10)`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) MIN_ROWS = 4,
+	PARTITION MyPart VALUES IN (2,4,6) MIN_ROWS 10
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) min_rows 4, partition MyPart values in (2, 4, 6) min_rows 10)`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5) TABLESPACE = innodb_system,
+	PARTITION MyPart VALUES IN (2,4,6) TABLESPACE innodb_system
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5) tablespace innodb_system, partition MyPart values in (2, 4, 6) tablespace innodb_system)`,
+		},
+		{
+			// index with an expression
+			input: `create table t (
+	id int auto_increment,
+	username varchar(64),
+	nickname varchar(64),
+	email varchar(64),
+	primary key (id),
+	key email_idx (email, (if(username = '', nickname, username)))
+)`,
+		},
+		{
+			input: `create table entries (
+	uid varchar(53) character set utf8mb4 collate utf8mb4_bin not null,
+	namespace varchar(254) character set utf8mb4 collate utf8mb4_bin not null,
+	place varchar(254) character set utf8mb4 collate utf8mb4_bin not null,
+	creationTimestamp timestamp null default current_timestamp(),
+	updatedTimestamp timestamp null default current_timestamp() on update current_timestamp(),
+	labels json default null,
+	spec json default null,
+	salaryInfo json default null,
+	PRIMARY KEY (namespace, uid),
+	UNIQUE KEY namespaced_name (namespace, place),
+	UNIQUE KEY unique_uid (uid),
+	KEY entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt')))
+) ENGINE InnoDB,
+  CHARSET utf8mb4,
+  COLLATE utf8mb4_bin`,
+		},
+		{
+			input: `CREATE TABLE t1(
+    j JSON,
+    INDEX i1 ( (JSON_VALUE(j, '$.id' RETURNING UNSIGNED)) )
+)`,
+			output: `create table t1 (
+	j JSON,
+	INDEX i1 ((json_value(j, '$.id' returning UNSIGNED)))
+)`,
+		}, {
+			input: `CREATE TABLE entries (
+	uid varchar(53) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+	namespace varchar(254) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+	employee varchar(254) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+	creationTimestamp timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+	updatedTimestamp timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	labels json DEFAULT NULL,
+	spec json DEFAULT NULL,
+	salaryInfo json DEFAULT NULL,
+	PRIMARY KEY (namespace,uid),
+	UNIQUE KEY namespaced_employee (namespace,employee),
+	UNIQUE KEY unique_uid (uid),
+	KEY entries_spec_updatedAt ((json_value(spec, _utf8mb4'$.updatedAt' returning datetime)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin`,
+			output: `create table entries (
+	uid varchar(53) character set utf8mb4 collate utf8mb4_bin not null,
+	namespace varchar(254) character set utf8mb4 collate utf8mb4_bin not null,
+	employee varchar(254) character set utf8mb4 collate utf8mb4_bin not null,
+	creationTimestamp timestamp null default current_timestamp(),
+	updatedTimestamp timestamp null default current_timestamp() on update current_timestamp(),
+	labels json default null,
+	spec json default null,
+	salaryInfo json default null,
+	PRIMARY KEY (namespace, uid),
+	UNIQUE KEY namespaced_employee (namespace, employee),
+	UNIQUE KEY unique_uid (uid),
+	KEY entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt' returning datetime)))
+) ENGINE InnoDB,
+  CHARSET utf8mb4,
+  COLLATE utf8mb4_bin`,
 		},
 	}
 	for _, test := range createTableQueries {
@@ -4713,6 +4961,42 @@ func TestParseLobstersQueries(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to parse %q: %v", query, err)
 		}
+	}
+}
+
+func TestParseVersionedComments(t *testing.T) {
+	testcases := []struct {
+		input        string
+		mysqlVersion string
+		output       string
+	}{
+		{
+			input:        `CREATE TABLE table1 (id int) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*!50900 PARTITION BY RANGE (id) (PARTITION x VALUES LESS THAN (5) ENGINE = InnoDB, PARTITION t VALUES LESS THAN (20) ENGINE = InnoDB) */`,
+			mysqlVersion: "50401",
+			output: `create table table1 (
+	id int
+) ENGINE InnoDB,
+  CHARSET utf8mb4`,
+		}, {
+			input:        `CREATE TABLE table1 (id int) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*!50900 PARTITION BY RANGE (id) (PARTITION x VALUES LESS THAN (5) ENGINE = InnoDB, PARTITION t VALUES LESS THAN (20) ENGINE = InnoDB) */`,
+			mysqlVersion: "80001",
+			output: `create table table1 (
+	id int
+) ENGINE InnoDB,
+  CHARSET utf8mb4 partition by range (id) (partition x values less than (5) engine InnoDB, partition t values less than (20) engine InnoDB)`,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.input+":"+testcase.mysqlVersion, func(t *testing.T) {
+			oldMySQLVersion := MySQLVersion
+			defer func() { MySQLVersion = oldMySQLVersion }()
+			MySQLVersion = testcase.mysqlVersion
+			tree, err := Parse(testcase.input)
+			require.NoError(t, err, testcase.input)
+			out := String(tree)
+			require.Equal(t, testcase.output, out)
+		})
 	}
 }
 

@@ -73,6 +73,14 @@ func TestCanonicalOutput(t *testing.T) {
 			"CREATE TABLE `a` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
+			"create table `a`(`id` int unsigned, primary key(`id`))",
+			"CREATE TABLE `a` (\n\t`id` int unsigned,\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
+			"create table `a`(`id` int zerofill, primary key(`id`))",
+			"CREATE TABLE `a` (\n\t`id` int zerofill,\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
 			"create table `a`(`id` int primary key)",
 			"CREATE TABLE `a` (\n\t`id` int PRIMARY KEY\n)",
 		},
@@ -89,8 +97,16 @@ func TestCanonicalOutput(t *testing.T) {
 			"CREATE TABLE `insert` (\n\t`update` int,\n\tPRIMARY KEY (`delete`)\n)",
 		},
 		{
-			"alter table a engine=innodb",
-			"ALTER TABLE `a` ENGINE INNODB",
+			"alter table a engine=InnoDB",
+			"ALTER TABLE `a` ENGINE InnoDB",
+		},
+		{
+			"create table a (v varchar(32)) engine=InnoDB",
+			"CREATE TABLE `a` (\n\t`v` varchar(32)\n) ENGINE InnoDB",
+		},
+		{
+			"create table a (id int not null primary key) engine InnoDB, charset utf8mb4, collate utf8mb4_0900_ai_ci partition by range (`id`) (partition `p10` values less than(10) engine InnoDB)",
+			"CREATE TABLE `a` (\n\t`id` int NOT NULL PRIMARY KEY\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci PARTITION BY RANGE (`id`) (PARTITION `p10` VALUES LESS THAN (10) ENGINE InnoDB)",
 		},
 		{
 			"alter table a comment='a b c'",
@@ -102,7 +118,7 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"alter table t2 modify column id bigint unsigned primary key",
-			"ALTER TABLE `t2` MODIFY COLUMN `id` bigint UNSIGNED PRIMARY KEY",
+			"ALTER TABLE `t2` MODIFY COLUMN `id` bigint unsigned PRIMARY KEY",
 		},
 		{
 			"alter table t1 modify column a int first, modify column b int after a",
@@ -137,12 +153,20 @@ func TestCanonicalOutput(t *testing.T) {
 			"ALTER TABLE `t1` ROW_FORMAT COMPRESSED, CHARSET utf8",
 		},
 		{
+			"create table a (id int primary key) row_format=compressed, character set=utf8mb4 collate=utf8mb4_0900_ai_ci",
+			"CREATE TABLE `a` (\n\t`id` int PRIMARY KEY\n) ROW_FORMAT COMPRESSED,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci",
+		},
+		{
 			"create table a (e enum('red','green','blue','orange','yellow'))",
 			"CREATE TABLE `a` (\n\t`e` enum('red', 'green', 'blue', 'orange', 'yellow')\n)",
 		},
 		{
 			"create table a (e set('red','green','blue','orange','yellow'))",
 			"CREATE TABLE `a` (\n\t`e` set('red', 'green', 'blue', 'orange', 'yellow')\n)",
+		},
+		{
+			"create table entries (uid varchar(53) not null, namespace varchar(254) not null, spec json default null, primary key (namespace, uid), key entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt'))))",
+			"CREATE TABLE `entries` (\n\t`uid` varchar(53) NOT NULL,\n\t`namespace` varchar(254) NOT NULL,\n\t`spec` json DEFAULT NULL,\n\tPRIMARY KEY (`namespace`, `uid`),\n\tKEY `entries_spec_updatedAt` ((JSON_VALUE(`spec`, _utf8mb4 '$.updatedAt')))\n)",
 		},
 	}
 

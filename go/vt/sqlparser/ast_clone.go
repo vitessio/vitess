@@ -273,6 +273,10 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfParsedComments(in)
 	case *PartitionDefinition:
 		return CloneRefOfPartitionDefinition(in)
+	case *PartitionDefinitionOptions:
+		return CloneRefOfPartitionDefinitionOptions(in)
+	case *PartitionEngine:
+		return CloneRefOfPartitionEngine(in)
 	case *PartitionOption:
 		return CloneRefOfPartitionOption(in)
 	case *PartitionSpec:
@@ -1378,6 +1382,9 @@ func CloneRefOfJSONValueExpr(n *JSONValueExpr) *JSONValueExpr {
 	out := *n
 	out.JSONDoc = CloneExpr(n.JSONDoc)
 	out.Path = CloneJSONPathParam(n.Path)
+	out.ReturningType = CloneRefOfConvertType(n.ReturningType)
+	out.EmptyOnResponse = CloneRefOfJtOnResponse(n.EmptyOnResponse)
+	out.ErrorOnResponse = CloneRefOfJtOnResponse(n.ErrorOnResponse)
 	return &out
 }
 
@@ -1677,7 +1684,32 @@ func CloneRefOfPartitionDefinition(n *PartitionDefinition) *PartitionDefinition 
 	}
 	out := *n
 	out.Name = CloneColIdent(n.Name)
+	out.Options = CloneRefOfPartitionDefinitionOptions(n.Options)
+	return &out
+}
+
+// CloneRefOfPartitionDefinitionOptions creates a deep clone of the input.
+func CloneRefOfPartitionDefinitionOptions(n *PartitionDefinitionOptions) *PartitionDefinitionOptions {
+	if n == nil {
+		return nil
+	}
+	out := *n
 	out.ValueRange = CloneRefOfPartitionValueRange(n.ValueRange)
+	out.Comment = CloneRefOfLiteral(n.Comment)
+	out.Engine = CloneRefOfPartitionEngine(n.Engine)
+	out.DataDirectory = CloneRefOfLiteral(n.DataDirectory)
+	out.IndexDirectory = CloneRefOfLiteral(n.IndexDirectory)
+	out.MaxRows = CloneRefOfInt(n.MaxRows)
+	out.MinRows = CloneRefOfInt(n.MinRows)
+	return &out
+}
+
+// CloneRefOfPartitionEngine creates a deep clone of the input.
+func CloneRefOfPartitionEngine(n *PartitionEngine) *PartitionEngine {
+	if n == nil {
+		return nil
+	}
+	out := *n
 	return &out
 }
 
@@ -3282,6 +3314,15 @@ func CloneComments(n Comments) Comments {
 	return res
 }
 
+// CloneRefOfInt creates a deep clone of the input.
+func CloneRefOfInt(n *int) *int {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
 // CloneSliceOfRefOfPartitionDefinition creates a deep clone of the input.
 func CloneSliceOfRefOfPartitionDefinition(n []*PartitionDefinition) []*PartitionDefinition {
 	if n == nil {
@@ -3451,6 +3492,7 @@ func CloneRefOfIndexColumn(n *IndexColumn) *IndexColumn {
 	out := *n
 	out.Column = CloneColIdent(n.Column)
 	out.Length = CloneRefOfLiteral(n.Length)
+	out.Expression = CloneExpr(n.Expression)
 	return &out
 }
 

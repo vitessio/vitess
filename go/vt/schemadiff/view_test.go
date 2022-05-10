@@ -27,12 +27,14 @@ import (
 
 func TestCreateViewDiff(t *testing.T) {
 	tt := []struct {
-		name    string
-		from    string
-		to      string
-		diff    string
-		cdiff   string
-		isError bool
+		name     string
+		from     string
+		to       string
+		fromName string
+		toName   string
+		diff     string
+		cdiff    string
+		isError  bool
 	}{
 		{
 			name: "identical",
@@ -60,11 +62,13 @@ func TestCreateViewDiff(t *testing.T) {
 			to:   "create view v1 (`col1`, col2, col3) as select a, b, `c` from t",
 		},
 		{
-			name:  "change of column list, qualifiers",
-			from:  "create view v1 (col1, `col2`, `col3`) as select `a`, `b`, c from t",
-			to:    "create view v1 (`col1`, col2, colother) as select a, b, `c` from t",
-			diff:  "alter view v1(col1, col2, colother) as select a, b, c from t",
-			cdiff: "ALTER VIEW `v1`(`col1`, `col2`, `colother`) AS SELECT `a`, `b`, `c` FROM `t`",
+			name:     "change of column list, qualifiers",
+			from:     "create view v1 (col1, `col2`, `col3`) as select `a`, `b`, c from t",
+			to:       "create view v1 (`col1`, col2, colother) as select a, b, `c` from t",
+			diff:     "alter view v1(col1, col2, colother) as select a, b, c from t",
+			cdiff:    "ALTER VIEW `v1`(`col1`, `col2`, `colother`) AS SELECT `a`, `b`, `c` FROM `t`",
+			fromName: "v1",
+			toName:   "v1",
 		},
 		{
 			name:  "change of column list, must have qualifiers",
@@ -100,8 +104,10 @@ func TestCreateViewDiff(t *testing.T) {
 			to: `create view v2 as
 				select a, b
 				from t`,
-			diff:  "alter view v1 as select a, b from t",
-			cdiff: "ALTER VIEW `v1` AS SELECT `a`, `b` FROM `t`",
+			diff:     "alter view v1 as select a, b from t",
+			cdiff:    "ALTER VIEW `v1` AS SELECT `a`, `b` FROM `t`",
+			fromName: "v1",
+			toName:   "v2",
 		},
 		{
 			name:  "algorithm, case change",
@@ -142,12 +148,12 @@ func TestCreateViewDiff(t *testing.T) {
 	hints := &DiffHints{}
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			fromStmt, err := sqlparser.Parse(ts.from)
+			fromStmt, err := sqlparser.ParseStrictDDL(ts.from)
 			assert.NoError(t, err)
 			fromCreateView, ok := fromStmt.(*sqlparser.CreateView)
 			assert.True(t, ok)
 
-			toStmt, err := sqlparser.Parse(ts.to)
+			toStmt, err := sqlparser.ParseStrictDDL(ts.to)
 			assert.NoError(t, err)
 			toCreateView, ok := toStmt.(*sqlparser.CreateView)
 			assert.True(t, ok)
@@ -171,6 +177,22 @@ func TestCreateViewDiff(t *testing.T) {
 					// validate we can parse back the statement
 					_, err := sqlparser.Parse(diff)
 					assert.NoError(t, err)
+
+					eFrom, eTo := alter.Entities()
+					if ts.fromName != "" {
+						assert.Equal(t, ts.fromName, eFrom.Name())
+					}
+					if ts.toName != "" {
+						assert.Equal(t, ts.toName, eTo.Name())
+					}
+					{ // Validate "apply()" on "from" converges with "to"
+						applied, err := c.Apply(alter)
+						assert.NoError(t, err)
+						require.NotNil(t, applied)
+						appliedDiff, err := eTo.Diff(applied, hints)
+						require.NoError(t, err)
+						assert.True(t, appliedDiff.IsEmpty(), "expected empty diff, found changes: %v", appliedDiff.CanonicalStatementString())
+					}
 				}
 				{
 					cdiff := alter.CanonicalStatementString()

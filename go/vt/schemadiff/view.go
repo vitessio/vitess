@@ -16,10 +16,14 @@ limitations under the License.
 
 package schemadiff
 
-import "vitess.io/vitess/go/vt/sqlparser"
+import (
+	"vitess.io/vitess/go/vt/sqlparser"
+)
 
 //
 type AlterViewEntityDiff struct {
+	from      *CreateViewEntity
+	to        *CreateViewEntity
 	alterView *sqlparser.AlterView
 }
 
@@ -28,8 +32,21 @@ func (d *AlterViewEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// IsEmpty implements EntityDiff
+func (d *AlterViewEntityDiff) Entities() (from Entity, to Entity) {
+	return d.from, d.to
+}
+
 // Statement implements EntityDiff
 func (d *AlterViewEntityDiff) Statement() sqlparser.Statement {
+	if d == nil {
+		return nil
+	}
+	return d.alterView
+}
+
+// AlterView returns the underlying sqlparser.AlterView that was generated for the diff.
+func (d *AlterViewEntityDiff) AlterView() *sqlparser.AlterView {
 	if d == nil {
 		return nil
 	}
@@ -52,6 +69,11 @@ func (d *AlterViewEntityDiff) CanonicalStatementString() (s string) {
 	return s
 }
 
+// SubsequentDiff implements EntityDiff
+func (d *AlterViewEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
+}
+
 //
 type CreateViewEntityDiff struct {
 	createView *sqlparser.CreateView
@@ -62,8 +84,21 @@ func (d *CreateViewEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// IsEmpty implements EntityDiff
+func (d *CreateViewEntityDiff) Entities() (from Entity, to Entity) {
+	return nil, &CreateViewEntity{CreateView: *d.createView}
+}
+
 // Statement implements EntityDiff
 func (d *CreateViewEntityDiff) Statement() sqlparser.Statement {
+	if d == nil {
+		return nil
+	}
+	return d.createView
+}
+
+// CreateView returns the underlying sqlparser.CreateView that was generated for the diff.
+func (d *CreateViewEntityDiff) CreateView() *sqlparser.CreateView {
 	if d == nil {
 		return nil
 	}
@@ -86,8 +121,14 @@ func (d *CreateViewEntityDiff) CanonicalStatementString() (s string) {
 	return s
 }
 
+// SubsequentDiff implements EntityDiff
+func (d *CreateViewEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
+}
+
 //
 type DropViewEntityDiff struct {
+	from     *CreateViewEntity
 	dropView *sqlparser.DropView
 }
 
@@ -96,8 +137,21 @@ func (d *DropViewEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// IsEmpty implements EntityDiff
+func (d *DropViewEntityDiff) Entities() (from Entity, to Entity) {
+	return d.from, nil
+}
+
 // Statement implements EntityDiff
 func (d *DropViewEntityDiff) Statement() sqlparser.Statement {
+	if d == nil {
+		return nil
+	}
+	return d.dropView
+}
+
+// DropView returns the underlying sqlparser.DropView that was generated for the diff.
+func (d *DropViewEntityDiff) DropView() *sqlparser.DropView {
 	if d == nil {
 		return nil
 	}
@@ -118,6 +172,11 @@ func (d *DropViewEntityDiff) StatementString() (s string) {
 		s = sqlparser.String(stmt)
 	}
 	return s
+}
+
+// SubsequentDiff implements EntityDiff
+func (d *DropViewEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
 }
 
 // CreateViewEntity stands for a VIEW construct. It contains the view's CREATE statement.
@@ -173,7 +232,7 @@ func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, hints *DiffHints) (
 		Select:      otherStmt.Select,
 		CheckOption: otherStmt.CheckOption,
 	}
-	return &AlterViewEntityDiff{alterView: alterView}, nil
+	return &AlterViewEntityDiff{alterView: alterView, from: c, to: other}, nil
 }
 
 // Create implements Entity interface
@@ -186,5 +245,27 @@ func (c *CreateViewEntity) Drop() EntityDiff {
 	dropView := &sqlparser.DropView{
 		FromTables: []sqlparser.TableName{c.ViewName},
 	}
-	return &DropViewEntityDiff{dropView: dropView}
+	return &DropViewEntityDiff{from: c, dropView: dropView}
+}
+
+// apply attempts to apply an ALTER VIEW diff onto this entity's view definition.
+// supported modifications are only those created by schemadiff's Diff() function.
+func (c *CreateViewEntity) apply(diff *AlterViewEntityDiff) error {
+	c.CreateView = diff.to.CreateView
+	return nil
+}
+
+// Apply attempts to apply given ALTER VIEW diff onto the view defined by this entity.
+// This entity is unmodified. If successful, a new CREATE VIEW entity is returned.
+func (c *CreateViewEntity) Apply(diff EntityDiff) (Entity, error) {
+	alterDiff, ok := diff.(*AlterViewEntityDiff)
+	if !ok {
+		return nil, ErrEntityTypeMismatch
+	}
+	dupCreateView := &sqlparser.CreateView{}
+	dup := &CreateViewEntity{CreateView: *dupCreateView}
+	if err := dup.apply(alterDiff); err != nil {
+		return nil, err
+	}
+	return dup, nil
 }

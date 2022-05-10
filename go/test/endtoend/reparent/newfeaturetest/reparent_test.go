@@ -17,6 +17,7 @@ limitations under the License.
 package newfeaturetest
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -29,6 +30,11 @@ import (
 // ERS TESTS
 
 func TestRecoverWithMultipleFailures(t *testing.T) {
+	// This test is skipped until we have a way to specify the durability_policies again
+	// Since we removed the usage of durability_policies
+	// ERS will not have the information required to figure out that these multiple failures
+	// can be tolerated
+	t.Skip()
 	defer cluster.PanicHandler(t)
 	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
@@ -57,6 +63,11 @@ func TestRecoverWithMultipleFailures(t *testing.T) {
 // TestERSFailFast tests that ERS will fail fast if it cannot find any tablet which can be safely promoted instead of promoting
 // a tablet and hanging while inserting a row in the reparent journal on getting semi-sync ACKs
 func TestERSFailFast(t *testing.T) {
+	// This test is skipped until we have a way to specify the durability_policies again
+	// Since we removed the usage of durability_policies
+	// ERS will not have the information required to figure out that the promoted primary
+	// wont be able to make progress
+	t.Skip()
 	defer cluster.PanicHandler(t)
 	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
@@ -84,4 +95,38 @@ func TestERSFailFast(t *testing.T) {
 	case <-time.After(60 * time.Second):
 		require.Fail(t, "Emergency Reparent Shard did not fail in 60 seconds")
 	}
+}
+
+// TestReplicationStopped checks that ERS ignores the tablets that have sql thread stopped.
+// If there are more than 1, we also fail.
+func TestReplicationStopped(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE SQL_THREAD;`)
+	require.NoError(t, err)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[2].Alias, `STOP SLAVE;`)
+	require.NoError(t, err)
+	// Run an additional command in the current primary which will only be acked by tablets[3] and be in its relay log.
+	insertedVal := utils.ConfirmReplication(t, tablets[0], nil)
+	// Failover to tablets[3]
+	_, err = utils.Ers(clusterInstance, tablets[3], "60s", "30s")
+	require.Error(t, err, "ERS should fail with 2 replicas having replication stopped")
+
+	// Start replication back on tablet[1]
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `START SLAVE;`)
+	require.NoError(t, err)
+	// Failover to tablets[3] again. This time it should succeed
+	out, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
+	require.NoError(t, err, out)
+	// Verify that the tablet has the inserted value
+	err = utils.CheckInsertedValues(context.Background(), t, tablets[3], insertedVal)
+	require.NoError(t, err)
+	// Confirm that replication is setup correctly from tablets[3] to tablets[0]
+	utils.ConfirmReplication(t, tablets[3], tablets[:1])
+	// Confirm that tablets[2] which had replication stopped initially still has its replication stopped
+	utils.CheckReplicationStatus(context.Background(), t, tablets[2], false, false)
 }

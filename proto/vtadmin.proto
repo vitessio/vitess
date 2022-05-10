@@ -51,6 +51,13 @@ service VTAdmin {
     rpc FindSchema(FindSchemaRequest) returns (Schema) {};
     // GetBackups returns backups grouped by cluster.
     rpc GetBackups(GetBackupsRequest) returns (GetBackupsResponse) {};
+    // GetCellInfos returns the CellInfo objects for the specified clusters.
+    //
+    // Callers may optionally restrict the set of CellInfos, or restrict the
+    // response to include only cell names.
+    rpc GetCellInfos(GetCellInfosRequest) returns (GetCellInfosResponse) {};
+    // GetCellsAliases returns the CellsAliases data for the specified clusters.
+    rpc GetCellsAliases(GetCellsAliasesRequest) returns (GetCellsAliasesResponse) {};
     // GetClusters returns all configured clusters.
     rpc GetClusters(GetClustersRequest) returns (GetClustersResponse) {};
     // GetGates returns all gates across all the specified clusters.
@@ -125,6 +132,20 @@ message Cluster {
 message ClusterBackup {
     Cluster cluster = 1;
     mysqlctl.BackupInfo backup = 2;
+}
+
+message ClusterCellsAliases {
+    Cluster cluster = 1;
+    map<string, topodata.CellsAlias> aliases = 2;
+}
+
+message ClusterCellInfo {
+    Cluster cluster = 1;
+    string name = 2;
+    // CellInfo contains the data for the cell.
+    //
+    // It may be nil if the GetCellsInfosRequest specified NamesOnly.
+    topodata.CellInfo cell_info = 3;
 }
 
 message ClusterShardReplicationPosition {
@@ -292,6 +313,32 @@ message GetBackupsRequest {
 
 message GetBackupsResponse {
     repeated ClusterBackup backups = 1;
+}
+
+message GetCellInfosRequest {
+    repeated string cluster_ids = 1;
+    // Cells, if specified, limits the response to include only CellInfo objects
+    // with those names. If omitted, all CellInfo objects in each cluster are
+    // returned.
+    //
+    // Mutually-exclusive with NamesOnly. If both are set, this field takes
+    // precedence.
+    repeated string cells = 2;
+    // Return only the cell names in each cluster; the actual CellInfo objects
+    // will be empty.
+    bool names_only = 3;
+}
+
+message GetCellInfosResponse {
+    repeated ClusterCellInfo cell_infos = 1;
+}
+
+message GetCellsAliasesRequest {
+    repeated string cluster_ids = 1;
+}
+
+message GetCellsAliasesResponse {
+    repeated ClusterCellsAliases aliases = 1;
 }
 
 message GetClustersRequest {}

@@ -238,6 +238,13 @@ func (e *Executor) TabletAliasString() string {
 	return topoproto.TabletAliasString(e.tabletAlias)
 }
 
+// PrepareForQueryExecutor is called by QueryExecutor, possibly before the backing
+// _vt.schema_migrations table has had the chance to be created.
+// This function prepares the schema.
+func (e *Executor) PrepareForQueryExecutor(ctx context.Context) error {
+	return e.initSchema(ctx)
+}
+
 func (e *Executor) initSchema(ctx context.Context) error {
 	e.initMutex.Lock()
 	defer e.initMutex.Unlock()
@@ -3586,6 +3593,28 @@ func (e *Executor) CompleteMigration(ctx context.Context, uuid string) (result *
 	return e.execQuery(ctx, query)
 }
 
+func (e *Executor) submittedMigrationConflictsWithPendingMigrationInSingletonContext(
+	ctx context.Context, submittedMigration, pendingOnlineDDL *schema.OnlineDDL,
+) bool {
+	if pendingOnlineDDL.MigrationContext == submittedMigration.MigrationContext {
+		// same migration context. this is obviously allowed
+		return false
+	}
+	// Let's see if the pending migration is a revert:
+	if _, err := pendingOnlineDDL.GetRevertUUID(); err != nil {
+		// Not a revert. So the pending migration definitely conflicts with our migration.
+		return true
+	}
+
+	// The pending migration is a revert
+	if !pendingOnlineDDL.StrategySetting().IsSingletonContext() {
+		// Aha! So, our "conflict" is with a REVERT migration, which does _not_ have a -singleton-context
+		// flag. Because we want to allow REVERT migrations to run as concurrently as possible, we allow this scenario.
+		return false
+	}
+	return true
+}
+
 // SubmitMigration inserts a new migration request
 func (e *Executor) SubmitMigration(
 	ctx context.Context,
@@ -3667,9 +3696,10 @@ func (e *Executor) SubmitMigration(
 					if err != nil {
 						return err
 					}
-					if pendingOnlineDDL.MigrationContext != onlineDDL.MigrationContext {
-						return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
+					if e.submittedMigrationConflictsWithPendingMigrationInSingletonContext(ctx, onlineDDL, pendingOnlineDDL) {
+						return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton-context migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
 					}
+					// no conflict? continue looking for other pending migrations
 				}
 			}
 			// OK to go! We can submit the migration:

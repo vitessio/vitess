@@ -27,13 +27,15 @@ import (
 
 func TestDiffTables(t *testing.T) {
 	tt := []struct {
-		name    string
-		from    string
-		to      string
-		diff    string
-		cdiff   string
-		action  string
-		isError bool
+		name     string
+		from     string
+		to       string
+		diff     string
+		cdiff    string
+		fromName string
+		toName   string
+		action   string
+		isError  bool
 	}{
 		{
 			name: "identical",
@@ -41,12 +43,14 @@ func TestDiffTables(t *testing.T) {
 			to:   "create table t(id int primary key)",
 		},
 		{
-			name:   "change of columns",
-			from:   "create table t(id int primary key)",
-			to:     "create table t(id int primary key, i int)",
-			diff:   "alter table t add column i int",
-			cdiff:  "ALTER TABLE `t` ADD COLUMN `i` int",
-			action: "alter",
+			name:     "change of columns",
+			from:     "create table t(id int primary key)",
+			to:       "create table t(id int primary key, i int)",
+			diff:     "alter table t add column i int",
+			cdiff:    "ALTER TABLE `t` ADD COLUMN `i` int",
+			action:   "alter",
+			fromName: "t",
+			toName:   "t",
 		},
 		{
 			name:   "create",
@@ -54,13 +58,15 @@ func TestDiffTables(t *testing.T) {
 			diff:   "create table t (\n\tid int primary key\n)",
 			cdiff:  "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY\n)",
 			action: "create",
+			toName: "t",
 		},
 		{
-			name:   "drop",
-			from:   "create table t(id int primary key)",
-			diff:   "drop table t",
-			cdiff:  "DROP TABLE `t`",
-			action: "drop",
+			name:     "drop",
+			from:     "create table t(id int primary key)",
+			diff:     "drop table t",
+			cdiff:    "DROP TABLE `t`",
+			action:   "drop",
+			fromName: "t",
 		},
 		{
 			name: "none",
@@ -71,7 +77,7 @@ func TestDiffTables(t *testing.T) {
 		t.Run(ts.name, func(t *testing.T) {
 			var fromCreateTable *sqlparser.CreateTable
 			if ts.from != "" {
-				fromStmt, err := sqlparser.Parse(ts.from)
+				fromStmt, err := sqlparser.ParseStrictDDL(ts.from)
 				assert.NoError(t, err)
 				var ok bool
 				fromCreateTable, ok = fromStmt.(*sqlparser.CreateTable)
@@ -79,7 +85,7 @@ func TestDiffTables(t *testing.T) {
 			}
 			var toCreateTable *sqlparser.CreateTable
 			if ts.to != "" {
-				toStmt, err := sqlparser.Parse(ts.to)
+				toStmt, err := sqlparser.ParseStrictDDL(ts.to)
 				assert.NoError(t, err)
 				var ok bool
 				toCreateTable, ok = toStmt.(*sqlparser.CreateTable)
@@ -116,6 +122,14 @@ func TestDiffTables(t *testing.T) {
 					// validate we can parse back the statement
 					_, err = sqlparser.Parse(diff)
 					assert.NoError(t, err)
+
+					eFrom, eTo := d.Entities()
+					if ts.fromName != "" {
+						assert.Equal(t, ts.fromName, eFrom.Name())
+					}
+					if ts.toName != "" {
+						assert.Equal(t, ts.toName, eTo.Name())
+					}
 				}
 				{
 					canonicalDiff := d.CanonicalStatementString()
@@ -141,13 +155,15 @@ func TestDiffTables(t *testing.T) {
 
 func TestDiffViews(t *testing.T) {
 	tt := []struct {
-		name    string
-		from    string
-		to      string
-		diff    string
-		cdiff   string
-		action  string
-		isError bool
+		name     string
+		from     string
+		to       string
+		diff     string
+		cdiff    string
+		fromName string
+		toName   string
+		action   string
+		isError  bool
 	}{
 		{
 			name: "identical",
@@ -155,12 +171,14 @@ func TestDiffViews(t *testing.T) {
 			to:   "create view v1 as select a, b, c from t",
 		},
 		{
-			name:   "change of column list, qualifiers",
-			from:   "create view v1 (col1, `col2`, `col3`) as select `a`, `b`, c from t",
-			to:     "create view v1 (`col1`, col2, colother) as select a, b, `c` from t",
-			diff:   "alter view v1(col1, col2, colother) as select a, b, c from t",
-			cdiff:  "ALTER VIEW `v1`(`col1`, `col2`, `colother`) AS SELECT `a`, `b`, `c` FROM `t`",
-			action: "alter",
+			name:     "change of column list, qualifiers",
+			from:     "create view v1 (col1, `col2`, `col3`) as select `a`, `b`, c from t",
+			to:       "create view v1 (`col1`, col2, colother) as select a, b, `c` from t",
+			diff:     "alter view v1(col1, col2, colother) as select a, b, c from t",
+			cdiff:    "ALTER VIEW `v1`(`col1`, `col2`, `colother`) AS SELECT `a`, `b`, `c` FROM `t`",
+			action:   "alter",
+			fromName: "v1",
+			toName:   "v1",
 		},
 		{
 			name:   "create",
@@ -168,13 +186,15 @@ func TestDiffViews(t *testing.T) {
 			diff:   "create view v1 as select a, b, c from t",
 			cdiff:  "CREATE VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
 			action: "create",
+			toName: "v1",
 		},
 		{
-			name:   "drop",
-			from:   "create view v1 as select a, b, c from t",
-			diff:   "drop view v1",
-			cdiff:  "DROP VIEW `v1`",
-			action: "drop",
+			name:     "drop",
+			from:     "create view v1 as select a, b, c from t",
+			diff:     "drop view v1",
+			cdiff:    "DROP VIEW `v1`",
+			action:   "drop",
+			fromName: "v1",
 		},
 		{
 			name: "none",
@@ -185,7 +205,7 @@ func TestDiffViews(t *testing.T) {
 		t.Run(ts.name, func(t *testing.T) {
 			var fromCreateView *sqlparser.CreateView
 			if ts.from != "" {
-				fromStmt, err := sqlparser.Parse(ts.from)
+				fromStmt, err := sqlparser.ParseStrictDDL(ts.from)
 				assert.NoError(t, err)
 				var ok bool
 				fromCreateView, ok = fromStmt.(*sqlparser.CreateView)
@@ -193,7 +213,7 @@ func TestDiffViews(t *testing.T) {
 			}
 			var toCreateView *sqlparser.CreateView
 			if ts.to != "" {
-				toStmt, err := sqlparser.Parse(ts.to)
+				toStmt, err := sqlparser.ParseStrictDDL(ts.to)
 				assert.NoError(t, err)
 				var ok bool
 				toCreateView, ok = toStmt.(*sqlparser.CreateView)
@@ -231,6 +251,13 @@ func TestDiffViews(t *testing.T) {
 					_, err = sqlparser.Parse(diff)
 					assert.NoError(t, err)
 
+					eFrom, eTo := d.Entities()
+					if ts.fromName != "" {
+						assert.Equal(t, ts.fromName, eFrom.Name())
+					}
+					if ts.toName != "" {
+						assert.Equal(t, ts.toName, eTo.Name())
+					}
 				}
 				{
 					canonicalDiff := d.CanonicalStatementString()
@@ -270,7 +297,18 @@ func TestDiffSchemas(t *testing.T) {
 			to:   "create table t(id int primary key)",
 		},
 		{
-			name: "change of table columns",
+			name: "change of table column",
+			from: "create table t(id int primary key, v varchar(10))",
+			to:   "create table t(id int primary key, v varchar(20))",
+			diffs: []string{
+				"alter table t modify column v varchar(20)",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t` MODIFY COLUMN `v` varchar(20)",
+			},
+		},
+		{
+			name: "change of table columns, added",
 			from: "create table t(id int primary key)",
 			to:   "create table t(id int primary key, i int)",
 			diffs: []string{
@@ -278,6 +316,17 @@ func TestDiffSchemas(t *testing.T) {
 			},
 			cdiffs: []string{
 				"ALTER TABLE `t` ADD COLUMN `i` int",
+			},
+		},
+		{
+			name: "change of table columns, removed",
+			from: "create table t(id int primary key, i int)",
+			to:   "create table t(id int primary key)",
+			diffs: []string{
+				"alter table t drop column i",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t` DROP COLUMN `i`",
 			},
 		},
 		{
@@ -291,7 +340,7 @@ func TestDiffSchemas(t *testing.T) {
 			},
 		},
 		{
-			name: "create table (2)",
+			name: "create table 2",
 			from: ";;; ; ;    ;;;",
 			to:   "create table t(id int primary key)",
 			diffs: []string{
@@ -458,6 +507,88 @@ func TestDiffSchemas(t *testing.T) {
 					_, err := sqlparser.Parse(s)
 					assert.NoError(t, err)
 				}
+
+				{
+					// Validate "apply()" on "from" converges with "to"
+					schema1, err := NewSchemaFromSQL(ts.from)
+					assert.NoError(t, err)
+					schema1SQL := schema1.ToSQL()
+
+					schema2, err := NewSchemaFromSQL(ts.to)
+					assert.NoError(t, err)
+					applied, err := schema1.Apply(diffs)
+					require.NoError(t, err)
+
+					// validate schema1 unaffected by Apply
+					assert.Equal(t, schema1SQL, schema1.ToSQL())
+
+					appliedDiff, err := schema2.Diff(applied, hints)
+					require.NoError(t, err)
+					assert.Empty(t, appliedDiff)
+					assert.Equal(t, schema2.ToQueries(), applied.ToQueries())
+				}
+			}
+		})
+	}
+}
+
+func TestSchemaApplyError(t *testing.T) {
+	tt := []struct {
+		name string
+		from string
+		to   string
+	}{
+		{
+			name: "added table",
+			to:   "create table t2(id int primary key)",
+		},
+		{
+			name: "different tables",
+			from: "create table t1(id int primary key)",
+			to:   "create table t2(id int primary key)",
+		},
+		{
+			name: "added table 2",
+			from: "create table t1(id int primary key)",
+			to:   "create table t1(id int primary key); create table t2(id int primary key)",
+		},
+		{
+			name: "modified tables",
+			from: "create table t(id int primary key, i int)",
+			to:   "create table t(id int primary key)",
+		},
+		{
+			name: "added view",
+			from: "create table t(id int); create view v1 as select * from t",
+			to:   "create table t(id int); create view v1 as select * from t; create view v2 as select * from t",
+		},
+	}
+	hints := &DiffHints{}
+	for _, ts := range tt {
+		t.Run(ts.name, func(t *testing.T) {
+			// Validate "apply()" on "from" converges with "to"
+			schema1, err := NewSchemaFromSQL(ts.from)
+			assert.NoError(t, err)
+			schema2, err := NewSchemaFromSQL(ts.to)
+			assert.NoError(t, err)
+
+			{
+				diffs, err := schema1.Diff(schema2, hints)
+				assert.NoError(t, err)
+				assert.NotEmpty(t, diffs)
+				_, err = schema1.Apply(diffs)
+				require.NoError(t, err)
+				_, err = schema2.Apply(diffs)
+				require.Error(t, err, "expected error applying to schema2. diffs: %v", diffs)
+			}
+			{
+				diffs, err := schema2.Diff(schema1, hints)
+				assert.NoError(t, err)
+				assert.NotEmpty(t, diffs, "schema1: %v, schema2: %v", schema1.ToSQL(), schema2.ToSQL())
+				_, err = schema2.Apply(diffs)
+				require.NoError(t, err)
+				_, err = schema1.Apply(diffs)
+				require.Error(t, err, "applying diffs to schema1: %v", schema1.ToSQL())
 			}
 		})
 	}

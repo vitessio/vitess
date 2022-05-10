@@ -52,9 +52,9 @@ var (
 		"ers_prs_newfeatures_heavy",
 		"15",
 		"shardedrecovery_stress_verticalsplit_heavy",
-		"17",
+		"vtgate_general_heavy",
 		"19",
-		"20",
+		"xb_backup",
 		"21",
 		"22",
 		"worker_vault_heavy",
@@ -92,7 +92,7 @@ var (
 		"vtgate_topo_etcd",
 		"vtgate_transaction",
 		"vtgate_unsharded",
-		"vtgate_vindex",
+		"vtgate_vindex_heavy",
 		"vtgate_vschema",
 		"vtgate_queries",
 		"vtgate_schema_tracker",
@@ -114,11 +114,12 @@ var (
 		"12",
 		"18",
 	}
-	clusterDockerList = []string{}
-	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
-	// this by only installing them in the required clusters
-	clustersRequiringXtraBackup = append(clusterList, clusterSelfHostedList...)
-	clustersRequiringMakeTools  = []string{
+	clusterDockerList           = []string{}
+	clustersRequiringXtraBackup = []string{
+		"xb_backup",
+		"xb_recovery",
+	}
+	clustersRequiringMakeTools = []string{
 		"18",
 		"24",
 		"vtgate_topo_consul",

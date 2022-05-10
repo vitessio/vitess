@@ -594,9 +594,42 @@ func (node *PartitionSpec) formatFast(buf *TrackedBuffer) {
 func (node *PartitionDefinition) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("partition ")
 	node.Name.formatFast(buf)
+	node.Options.formatFast(buf)
+}
+
+// formatFast formats the node
+func (node *PartitionDefinitionOptions) formatFast(buf *TrackedBuffer) {
 	if node.ValueRange != nil {
 		buf.WriteByte(' ')
 		node.ValueRange.formatFast(buf)
+	}
+	if node.Engine != nil {
+		buf.WriteByte(' ')
+		node.Engine.formatFast(buf)
+	}
+	if node.Comment != nil {
+		buf.WriteString(" comment ")
+		node.Comment.formatFast(buf)
+	}
+	if node.DataDirectory != nil {
+		buf.WriteString(" data directory ")
+		node.DataDirectory.formatFast(buf)
+	}
+	if node.IndexDirectory != nil {
+		buf.WriteString(" index directory ")
+		node.IndexDirectory.formatFast(buf)
+	}
+	if node.MaxRows != nil {
+		buf.WriteString(" max_rows ")
+		buf.WriteString(fmt.Sprintf("%d", *node.MaxRows))
+	}
+	if node.MinRows != nil {
+		buf.WriteString(" min_rows ")
+		buf.WriteString(fmt.Sprintf("%d", *node.MinRows))
+	}
+	if node.TableSpace != "" {
+		buf.WriteString(" tablespace ")
+		buf.WriteString(node.TableSpace)
 	}
 }
 
@@ -610,6 +643,15 @@ func (node *PartitionValueRange) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		node.Range.formatFast(buf)
 	}
+}
+
+// formatFast formats the node
+func (node *PartitionEngine) formatFast(buf *TrackedBuffer) {
+	if node.Storage {
+		buf.WriteString("storage ")
+	}
+	buf.WriteString("engine ")
+	buf.WriteString(node.Name)
 }
 
 // formatFast formats the node.
@@ -722,8 +764,13 @@ func (ts *TableSpec) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(opt.Name)
 		if opt.String != "" {
-			buf.WriteByte(' ')
-			buf.WriteString(opt.String)
+			if opt.CaseSensitive {
+				buf.WriteByte(' ')
+				buf.WriteString(opt.String)
+			} else {
+				buf.WriteByte(' ')
+				buf.WriteString(opt.String)
+			}
 		} else if opt.Value != nil {
 			buf.WriteByte(' ')
 			opt.Value.formatFast(buf)
@@ -910,14 +957,18 @@ func (idx *IndexDefinition) formatFast(buf *TrackedBuffer) {
 	for i, col := range idx.Columns {
 		if i != 0 {
 			buf.WriteString(", ")
-			col.Column.formatFast(buf)
+		}
+		if col.Expression != nil {
+			buf.WriteByte('(')
+			col.Expression.formatFast(buf)
+			buf.WriteByte(')')
 		} else {
 			col.Column.formatFast(buf)
-		}
-		if col.Length != nil {
-			buf.WriteByte('(')
-			col.Length.formatFast(buf)
-			buf.WriteByte(')')
+			if col.Length != nil {
+				buf.WriteByte('(')
+				col.Length.formatFast(buf)
+				buf.WriteByte(')')
+			}
 		}
 		if col.Direction == DescOrder {
 			buf.WriteString(" desc")
@@ -931,7 +982,7 @@ func (idx *IndexDefinition) formatFast(buf *TrackedBuffer) {
 		if opt.String != "" {
 			buf.WriteByte(' ')
 			buf.WriteString(opt.String)
-		} else {
+		} else if opt.Value != nil {
 			buf.WriteByte(' ')
 			opt.Value.formatFast(buf)
 		}
@@ -2753,6 +2804,24 @@ func (node *JSONValueExpr) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.JSONDoc, true)
 	buf.WriteString(", ")
 	buf.printExpr(node, node.Path, true)
+
+	if node.ReturningType != nil {
+		buf.WriteString(" returning ")
+		node.ReturningType.formatFast(buf)
+	}
+
+	if node.EmptyOnResponse != nil {
+		buf.WriteByte(' ')
+		node.EmptyOnResponse.formatFast(buf)
+		buf.WriteString(" on empty")
+	}
+
+	if node.ErrorOnResponse != nil {
+		buf.WriteByte(' ')
+		node.ErrorOnResponse.formatFast(buf)
+		buf.WriteString(" on error")
+	}
+
 	buf.WriteByte(')')
 }
 
