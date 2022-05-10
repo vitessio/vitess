@@ -77,7 +77,7 @@ func TestDiffTables(t *testing.T) {
 		t.Run(ts.name, func(t *testing.T) {
 			var fromCreateTable *sqlparser.CreateTable
 			if ts.from != "" {
-				fromStmt, err := sqlparser.Parse(ts.from)
+				fromStmt, err := sqlparser.ParseStrictDDL(ts.from)
 				assert.NoError(t, err)
 				var ok bool
 				fromCreateTable, ok = fromStmt.(*sqlparser.CreateTable)
@@ -85,7 +85,7 @@ func TestDiffTables(t *testing.T) {
 			}
 			var toCreateTable *sqlparser.CreateTable
 			if ts.to != "" {
-				toStmt, err := sqlparser.Parse(ts.to)
+				toStmt, err := sqlparser.ParseStrictDDL(ts.to)
 				assert.NoError(t, err)
 				var ok bool
 				toCreateTable, ok = toStmt.(*sqlparser.CreateTable)
@@ -205,7 +205,7 @@ func TestDiffViews(t *testing.T) {
 		t.Run(ts.name, func(t *testing.T) {
 			var fromCreateView *sqlparser.CreateView
 			if ts.from != "" {
-				fromStmt, err := sqlparser.Parse(ts.from)
+				fromStmt, err := sqlparser.ParseStrictDDL(ts.from)
 				assert.NoError(t, err)
 				var ok bool
 				fromCreateView, ok = fromStmt.(*sqlparser.CreateView)
@@ -213,7 +213,7 @@ func TestDiffViews(t *testing.T) {
 			}
 			var toCreateView *sqlparser.CreateView
 			if ts.to != "" {
-				toStmt, err := sqlparser.Parse(ts.to)
+				toStmt, err := sqlparser.ParseStrictDDL(ts.to)
 				assert.NoError(t, err)
 				var ok bool
 				toCreateView, ok = toStmt.(*sqlparser.CreateView)

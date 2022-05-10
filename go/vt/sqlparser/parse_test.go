@@ -3863,6 +3863,16 @@ func TestCreateTable(t *testing.T) {
 	key by_full_name (full_name)
 )`,
 		},
+		// test defining index visibility
+		{
+			input: `create table t (
+	id int auto_increment,
+	username varchar,
+	unique key by_username (username) visible,
+	unique key by_username2 (username) invisible,
+	unique index by_username3 (username)
+)`,
+		},
 		// test that indexes support USING <id>
 		{
 			input: `create table t (
