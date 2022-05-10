@@ -43,10 +43,6 @@ func TestOrderBy(t *testing.T) {
 
 	// Gen4 unsupported query. v3 supported.
 	utils.AssertMatches(t, mcmp.VtConn, `select col from t1 order by 1`, `[[INT64(12)] [INT64(13)] [INT64(123)] [INT64(1234)]]`)
-
-	// unsupported in v3 and Gen4.
-	_, err := utils.ExecAllowError(t, mcmp.VtConn, `select t1.* from t1 order by id`)
-	require.Error(t, err)
 }
 
 func TestCorrelatedExistsSubquery(t *testing.T) {
