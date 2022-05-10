@@ -32,10 +32,12 @@ var (
 	ErrNotFullyParsed                              = errors.New("unable to fully parse statement")
 	ErrExpectedCreateTable                         = errors.New("expected a CREATE TABLE statement")
 	ErrExpectedCreateView                          = errors.New("expected a CREATE VIEW statement")
-	ErrUnsupportedEntity                           = errors.New("Unsupported entity type")
-	ErrUnsupportedStatement                        = errors.New("Unsupported statement")
-	ErrDuplicateName                               = errors.New("Duplicate name")
-	ErrViewDependencyUnresolved                    = errors.New("Views have unresolved/loop dependencies")
+	ErrUnsupportedEntity                           = errors.New("unsupported entity type")
+	ErrUnsupportedStatement                        = errors.New("unsupported statement")
+	ErrDuplicateName                               = errors.New("duplicate name")
+	ErrViewDependencyUnresolved                    = errors.New("views have unresolved/loop dependencies")
+	ErrTooManyPartitionChanges                     = errors.New("too many partition changes")
+	ErrMixedPartitionAndNonPartitionChanges        = errors.New("mixed partition and non-partition changes")
 
 	ErrUnsupportedApplyOperation = errors.New("unsupported Apply operation")
 	ErrApplyTableNotFound        = errors.New("table not found")
@@ -46,7 +48,9 @@ var (
 	ErrApplyDuplicateKey         = errors.New("duplicate key")
 	ErrApplyDuplicateColumn      = errors.New("duplicate column")
 	ErrApplyDuplicateConstraint  = errors.New("duplicate constraint")
+	ErrApplyPartitionNotFound    = errors.New("partition not found")
 	ErrApplyDuplicatePartition   = errors.New("duplicate partition")
+	ErrApplyNoPartitions         = errors.New("no partitions found")
 
 	ErrInvalidColumnInKey               = errors.New("invalid column referenced by key")
 	ErrInvalidColumnInPartition         = errors.New("invalid column referenced by partition")
@@ -80,6 +84,8 @@ type EntityDiff interface {
 	StatementString() string
 	// CanonicalStatementString "stringifies" the this diff's Statement() to a canonical string. It returns an empty string if the diff is empty
 	CanonicalStatementString() string
+	// SubsequentDiff returns a followup diff to this one, if exists
+	SubsequentDiff() EntityDiff
 }
 
 const (
