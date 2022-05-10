@@ -1170,7 +1170,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			// Remove partitioning
 			c.TableSpec.PartitionOption = nil
 		case spec.Action == sqlparser.DropAction && len(spec.Names) == 1:
-			// Remove partitioning
+			// Drop one partition
 			partitionName := spec.Names[0].String()
 			if c.TableSpec.PartitionOption == nil {
 				return errors.Wrap(ErrApplyPartitionNotFound, partitionName)
@@ -1190,7 +1190,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				return errors.Wrap(ErrApplyPartitionNotFound, partitionName)
 			}
 		case spec.Action == sqlparser.AddAction && len(spec.Definitions) == 1:
-			// Add a partition
+			// Add one partition
 			partitionName := spec.Definitions[0].Name.String()
 			if c.TableSpec.PartitionOption == nil {
 				return ErrApplyNoPartitions
