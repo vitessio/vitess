@@ -2657,6 +2657,27 @@ var (
 		input:  `SELECT JSON_VALUE(@j, @k)`,
 		output: `select json_value(@j, @k) from dual`,
 	}, {
+		input:  `select json_value(@j, @k RETURNING FLOAT) from dual`,
+		output: `select json_value(@j, @k returning FLOAT) from dual`,
+	}, {
+		input:  `select json_value(@j, @k RETURNING DECIMAL(4,2)) from dual`,
+		output: `select json_value(@j, @k returning DECIMAL(4, 2)) from dual`,
+	}, {
+		input:  `SELECT JSON_VALUE('{"fname": "Joe", "lname": "Palmer"}', '$.fname' returning char(49) Charset utf8mb4 error on error)`,
+		output: `select json_value('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname' returning char(49) character set utf8mb4 error on error) from dual`,
+	}, {
+		input:  `SELECT JSON_VALUE('{"item": "shoes", "price": "49.95"}', '$.price' NULL ON EMPTY) `,
+		output: `select json_value('{\"item\": \"shoes\", \"price\": \"49.95\"}', '$.price' null on empty) from dual`,
+	}, {
+		input:  `SELECT JSON_VALUE('{"item": "shoes", "price": "49.95"}', '$.price' NULL ON ERROR) `,
+		output: `select json_value('{\"item\": \"shoes\", \"price\": \"49.95\"}', '$.price' null on error) from dual`,
+	}, {
+		input:  `SELECT JSON_VALUE('{"item": "shoes", "price": "49.95"}', '$.price' NULL ON EMPTY ERROR ON ERROR) `,
+		output: `select json_value('{\"item\": \"shoes\", \"price\": \"49.95\"}', '$.price' null on empty error on error) from dual`,
+	}, {
+		input:  `select json_value(@j, @k RETURNING FLOAT NULL ON EMPTY ERROR ON ERROR) from dual`,
+		output: `select json_value(@j, @k returning FLOAT null on empty error on error) from dual`,
+	}, {
 		input:  `SELECT 17 MEMBER OF ('[23, "abc", 17, "ab", 10]')`,
 		output: `select 17 member of ('[23, \"abc\", 17, \"ab\", 10]') from dual`,
 	}, {
@@ -3824,6 +3845,16 @@ func TestCreateTable(t *testing.T) {
 	key by_full_name (full_name)
 )`,
 		},
+		// test defining index visibility
+		{
+			input: `create table t (
+	id int auto_increment,
+	username varchar,
+	unique key by_username (username) visible,
+	unique key by_username2 (username) invisible,
+	unique index by_username3 (username)
+)`,
+		},
 		// test that indexes support USING <id>
 		{
 			input: `create table t (
@@ -4564,6 +4595,47 @@ PARTITIONS 6`,
 	UNIQUE KEY namespaced_name (namespace, place),
 	UNIQUE KEY unique_uid (uid),
 	KEY entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt')))
+) ENGINE InnoDB,
+  CHARSET utf8mb4,
+  COLLATE utf8mb4_bin`,
+		},
+		{
+			input: `CREATE TABLE t1(
+    j JSON,
+    INDEX i1 ( (JSON_VALUE(j, '$.id' RETURNING UNSIGNED)) )
+)`,
+			output: `create table t1 (
+	j JSON,
+	INDEX i1 ((json_value(j, '$.id' returning UNSIGNED)))
+)`,
+		}, {
+			input: `CREATE TABLE entries (
+	uid varchar(53) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+	namespace varchar(254) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+	employee varchar(254) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+	creationTimestamp timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+	updatedTimestamp timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	labels json DEFAULT NULL,
+	spec json DEFAULT NULL,
+	salaryInfo json DEFAULT NULL,
+	PRIMARY KEY (namespace,uid),
+	UNIQUE KEY namespaced_employee (namespace,employee),
+	UNIQUE KEY unique_uid (uid),
+	KEY entries_spec_updatedAt ((json_value(spec, _utf8mb4'$.updatedAt' returning datetime)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin`,
+			output: `create table entries (
+	uid varchar(53) character set utf8mb4 collate utf8mb4_bin not null,
+	namespace varchar(254) character set utf8mb4 collate utf8mb4_bin not null,
+	employee varchar(254) character set utf8mb4 collate utf8mb4_bin not null,
+	creationTimestamp timestamp null default current_timestamp(),
+	updatedTimestamp timestamp null default current_timestamp() on update current_timestamp(),
+	labels json default null,
+	spec json default null,
+	salaryInfo json default null,
+	PRIMARY KEY (namespace, uid),
+	UNIQUE KEY namespaced_employee (namespace, employee),
+	UNIQUE KEY unique_uid (uid),
+	KEY entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt' returning datetime)))
 ) ENGINE InnoDB,
   CHARSET utf8mb4,
   COLLATE utf8mb4_bin`,
