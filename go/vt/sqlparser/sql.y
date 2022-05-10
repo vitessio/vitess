@@ -2798,6 +2798,12 @@ alter_statement:
   {
     $$ = &AlterView{ViewName: $7.ToViewName(), Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
+// The syntax here causes a shift / reduce issue, because ENCRYPTION is a non reserved keyword
+// and the database identifier is optional. When no identifier is given, the current database
+// is used. This means though that `alter database encryption` is ambiguous whether it means
+// the encryption keyword, or the encryption database name, resulting in the conflict.
+// The preference here is to shift, so it is treated as a database name. This matches the MySQL
+// behavior as well.
 | alter_database_prefix table_id_opt create_options
   {
     $1.FullyParsed = true
