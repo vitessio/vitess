@@ -1169,25 +1169,27 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 		case spec.Action == sqlparser.RemoveAction && spec.IsAll:
 			// Remove partitioning
 			c.TableSpec.PartitionOption = nil
-		case spec.Action == sqlparser.DropAction && len(spec.Names) == 1:
-			// Drop one partition
-			partitionName := spec.Names[0].String()
-			if c.TableSpec.PartitionOption == nil {
-				return errors.Wrap(ErrApplyPartitionNotFound, partitionName)
-			}
-			partitionFound := false
-			for i, p := range c.TableSpec.PartitionOption.Definitions {
-				if p.Name.String() == partitionName {
-					c.TableSpec.PartitionOption.Definitions = append(
-						c.TableSpec.PartitionOption.Definitions[0:i],
-						c.TableSpec.PartitionOption.Definitions[i+1:]...,
-					)
-					partitionFound = true
-					break
+		case spec.Action == sqlparser.DropAction && len(spec.Names) > 0:
+			for _, dropPartitionName := range spec.Names {
+				// Drop partitions
+				partitionName := dropPartitionName.String()
+				if c.TableSpec.PartitionOption == nil {
+					return errors.Wrap(ErrApplyPartitionNotFound, partitionName)
 				}
-			}
-			if !partitionFound {
-				return errors.Wrap(ErrApplyPartitionNotFound, partitionName)
+				partitionFound := false
+				for i, p := range c.TableSpec.PartitionOption.Definitions {
+					if p.Name.String() == partitionName {
+						c.TableSpec.PartitionOption.Definitions = append(
+							c.TableSpec.PartitionOption.Definitions[0:i],
+							c.TableSpec.PartitionOption.Definitions[i+1:]...,
+						)
+						partitionFound = true
+						break
+					}
+				}
+				if !partitionFound {
+					return errors.Wrap(ErrApplyPartitionNotFound, partitionName)
+				}
 			}
 		case spec.Action == sqlparser.AddAction && len(spec.Definitions) == 1:
 			// Add one partition
