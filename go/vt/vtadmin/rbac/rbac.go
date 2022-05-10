@@ -79,11 +79,13 @@ const (
 
 	/* generic topo resources */
 
-	KeyspaceResource Resource = "Keyspace"
-	ShardResource    Resource = "Shard"
-	TabletResource   Resource = "Tablet"
-	VTGateResource   Resource = "VTGate"
-	VtctldResource   Resource = "Vtctld"
+	CellInfoResource   Resource = "CellInfo"
+	CellsAliasResource Resource = "CellsAlias"
+	KeyspaceResource   Resource = "Keyspace"
+	ShardResource      Resource = "Shard"
+	TabletResource     Resource = "Tablet"
+	VTGateResource     Resource = "VTGate"
+	VtctldResource     Resource = "Vtctld"
 
 	/* vschema resources */
 
