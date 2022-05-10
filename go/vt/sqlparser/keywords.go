@@ -483,6 +483,7 @@ var keywords = []keyword{
 	{"resignal", UNUSED},
 	{"restrict", RESTRICT},
 	{"return", UNUSED},
+	{"returning", RETURNING},
 	{"retry", RETRY},
 	{"revert", REVERT},
 	{"revoke", UNUSED},

@@ -53,6 +53,24 @@ var expectSortedNames = []string{
 	"v6", // level 3
 }
 
+var expectSortedTableNames = []string{
+	"t1",
+	"t2",
+	"t3",
+	"t5",
+}
+
+var expectSortedViewNames = []string{
+	"v0", // level 1 ("dual" is an implicit table)
+	"v3", // level 1
+	"v9", // level 1 (no source table)
+	"v1", // level 2
+	"v2", // level 2
+	"v4", // level 2
+	"v5", // level 2
+	"v6", // level 3
+}
+
 var toSQL = "CREATE TABLE `t1` (\n\t`id` int\n);\nCREATE TABLE `t2` (\n\t`id` int\n);\nCREATE TABLE `t3` (\n\t`id` int\n);\nCREATE TABLE `t5` (\n\t`id` int\n);\nCREATE VIEW `v0` AS SELECT 1 FROM `dual`;\nCREATE VIEW `v3` AS SELECT * FROM `t3` AS `t3`;\nCREATE VIEW `v9` AS SELECT 1 FROM `dual`;\nCREATE VIEW `v1` AS SELECT * FROM `v3`;\nCREATE VIEW `v2` AS SELECT * FROM `v3`, `t2`;\nCREATE VIEW `v4` AS SELECT * FROM `t2` AS `something_else`, `v3`;\nCREATE VIEW `v5` AS SELECT * FROM `t1`, (SELECT * FROM `v3`) AS `some_alias`;\nCREATE VIEW `v6` AS SELECT * FROM `v4`;\n"
 
 func TestNewSchemaFromQueries(t *testing.T) {
@@ -61,6 +79,8 @@ func TestNewSchemaFromQueries(t *testing.T) {
 	assert.NotNil(t, schema)
 
 	assert.Equal(t, expectSortedNames, schema.EntityNames())
+	assert.Equal(t, expectSortedTableNames, schema.TableNames())
+	assert.Equal(t, expectSortedViewNames, schema.ViewNames())
 }
 
 func TestNewSchemaFromSQL(t *testing.T) {
@@ -69,6 +89,8 @@ func TestNewSchemaFromSQL(t *testing.T) {
 	assert.NotNil(t, schema)
 
 	assert.Equal(t, expectSortedNames, schema.EntityNames())
+	assert.Equal(t, expectSortedTableNames, schema.TableNames())
+	assert.Equal(t, expectSortedViewNames, schema.ViewNames())
 }
 
 func TestNewSchemaFromQueriesWithDuplicate(t *testing.T) {

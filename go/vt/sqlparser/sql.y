@@ -327,7 +327,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
 %token <str> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD OPTIONAL ORDINALITY ORGANIZATION OTHERS PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
 %token <str> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
-%token <str> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE
+%token <str> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE RETURNING
 
 // Explain tokens
 %token <str> FORMAT TREE VITESS TRADITIONAL
@@ -459,7 +459,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
 %type <scope> set_session_or_global
-%type <convertType> convert_type convert_type_weight_string
+%type <convertType> convert_type returning_type_opt convert_type_weight_string
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <literal> length_opt partition_comment partition_data_directory partition_index_directory
@@ -2199,7 +2199,11 @@ index_column_list:
 index_column:
   sql_id length_opt asc_desc_opt
   {
-      $$ = &IndexColumn{Column: $1, Length: $2, Direction: $3}
+    $$ = &IndexColumn{Column: $1, Length: $2, Direction: $3}
+  }
+| openb expression closeb asc_desc_opt
+  {
+    $$ = &IndexColumn{Expression: $2, Direction: $4}
   }
 
 constraint_definition:
@@ -5112,9 +5116,21 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONSearchExpr{JSONDoc: $3, OneOrAll: $5, SearchStr: $7, EscapeChar: $9, PathList:$10 }
   }
-| JSON_VALUE openb expression ',' json_path_param closeb
+| JSON_VALUE openb expression ',' json_path_param returning_type_opt closeb
   {
-    $$ = &JSONValueExpr{JSONDoc: $3, Path: $5}
+    $$ = &JSONValueExpr{JSONDoc: $3, Path: $5, ReturningType: $6}
+  }
+| JSON_VALUE openb expression ',' json_path_param returning_type_opt on_empty closeb
+  {
+    $$ = &JSONValueExpr{JSONDoc: $3, Path: $5, ReturningType: $6, EmptyOnResponse: $7}
+  }
+| JSON_VALUE openb expression ',' json_path_param returning_type_opt on_error closeb
+  {
+    $$ = &JSONValueExpr{JSONDoc: $3, Path: $5, ReturningType: $6, ErrorOnResponse: $7}
+  }
+| JSON_VALUE openb expression ',' json_path_param returning_type_opt on_empty on_error closeb
+  {
+    $$ = &JSONValueExpr{JSONDoc: $3, Path: $5, ReturningType: $6, EmptyOnResponse: $7, ErrorOnResponse: $8}
   }
 | JSON_DEPTH openb expression closeb
   {
@@ -5175,6 +5191,15 @@ UTC_DATE func_paren_opt
 | JSON_UNQUOTE openb expression closeb
   {
     $$ = &JSONUnquoteExpr{JSONValue:$3}
+  }
+
+returning_type_opt:
+  {
+    $$ = nil
+  }
+| RETURNING convert_type
+  {
+    $$ = $2
   }
 
 json_path_param_list_opt:
@@ -6592,6 +6617,7 @@ non_reserved_keyword:
 | RESTART
 | RETAIN
 | RETRY
+| RETURNING
 | REUSE
 | ROLE
 | ROLLBACK

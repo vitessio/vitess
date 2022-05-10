@@ -1157,12 +1157,16 @@ func (cached *IndexColumn) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(80)
 	}
 	// field Column vitess.io/vitess/go/vt/sqlparser.ColIdent
 	size += cached.Column.CachedSize(false)
 	// field Length *vitess.io/vitess/go/vt/sqlparser.Literal
 	size += cached.Length.CachedSize(true)
+	// field Expression vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expression.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *IndexDefinition) CachedSize(alloc bool) int64 {
@@ -1712,7 +1716,7 @@ func (cached *JSONValueExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(64)
 	}
 	// field JSONDoc vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.JSONDoc.(cachedObject); ok {
@@ -1722,6 +1726,12 @@ func (cached *JSONValueExpr) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Path.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field ReturningType *vitess.io/vitess/go/vt/sqlparser.ConvertType
+	size += cached.ReturningType.CachedSize(true)
+	// field EmptyOnResponse *vitess.io/vitess/go/vt/sqlparser.JtOnResponse
+	size += cached.EmptyOnResponse.CachedSize(true)
+	// field ErrorOnResponse *vitess.io/vitess/go/vt/sqlparser.JtOnResponse
+	size += cached.ErrorOnResponse.CachedSize(true)
 	return size
 }
 func (cached *JSONValueMergeExpr) CachedSize(alloc bool) int64 {
