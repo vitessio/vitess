@@ -400,6 +400,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 					if transitionedIntoLeader {
 						// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
 						go mysqlRefreshTicker.TickNow()
+						go throttler.heartbeatWriter.RequestHeartbeats()
 					}
 				}()
 			}
