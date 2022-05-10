@@ -51,7 +51,18 @@ var _ SessionActions = (*noopVCursor)(nil)
 
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
-	ctx context.Context
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+func newNoopVCursor(ctx context.Context) *noopVCursor {
+	n := &noopVCursor{}
+	n.ctx, n.cancel = context.WithCancel(ctx)
+	return n
+}
+
+func (t *noopVCursor) CancelContext() {
+	t.cancel()
 }
 
 func (t *noopVCursor) ExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
