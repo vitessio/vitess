@@ -143,23 +143,25 @@ func (c *Concatenate) getFields(res []*sqltypes.Result) ([]*querypb.Field, error
 
 func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
 	results := make([]*sqltypes.Result, len(c.Sources))
-	g, restoreCtx := vcursor.ErrorGroupCancellableContext()
-	defer restoreCtx()
+	var wg sync.WaitGroup
+	var outerErr error
 	for i, source := range c.Sources {
 		currIndex, currSource := i, source
 		vars := copyBindVars(bindVars)
-		g.Go(func() error {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			result, err := vcursor.ExecutePrimitive(currSource, vars, wantfields)
 			if err != nil {
-				return err
+				outerErr = err
+				vcursor.CancelContext()
 			}
 			results[currIndex] = result
-			return nil
-		})
+		}()
 	}
-
-	if err := g.Wait(); err != nil {
-		return nil, err
+	wg.Wait()
+	if outerErr != nil {
+		return nil, outerErr
 	}
 	return results, nil
 }
