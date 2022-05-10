@@ -5693,6 +5693,7 @@ func EqualsRefOfIndexColumn(a, b *IndexColumn) bool {
 	}
 	return EqualsColIdent(a.Column, b.Column) &&
 		EqualsRefOfLiteral(a.Length, b.Length) &&
+		EqualsExpr(a.Expression, b.Expression) &&
 		a.Direction == b.Direction
 }
 

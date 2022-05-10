@@ -957,14 +957,18 @@ func (idx *IndexDefinition) formatFast(buf *TrackedBuffer) {
 	for i, col := range idx.Columns {
 		if i != 0 {
 			buf.WriteString(", ")
-			col.Column.formatFast(buf)
+		}
+		if col.Expression != nil {
+			buf.WriteByte('(')
+			col.Expression.formatFast(buf)
+			buf.WriteByte(')')
 		} else {
 			col.Column.formatFast(buf)
-		}
-		if col.Length != nil {
-			buf.WriteByte('(')
-			col.Length.formatFast(buf)
-			buf.WriteByte(')')
+			if col.Length != nil {
+				buf.WriteByte('(')
+				col.Length.formatFast(buf)
+				buf.WriteByte(')')
+			}
 		}
 		if col.Direction == DescOrder {
 			buf.WriteString(" desc")
