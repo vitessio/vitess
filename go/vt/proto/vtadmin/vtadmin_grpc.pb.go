@@ -42,6 +42,13 @@ type VTAdminClient interface {
 	FindSchema(ctx context.Context, in *FindSchemaRequest, opts ...grpc.CallOption) (*Schema, error)
 	// GetBackups returns backups grouped by cluster.
 	GetBackups(ctx context.Context, in *GetBackupsRequest, opts ...grpc.CallOption) (*GetBackupsResponse, error)
+	// GetCellInfos returns the CellInfo objects for the specified clusters.
+	//
+	// Callers may optionally restrict the set of CellInfos, or restrict the
+	// response to include only cell names.
+	GetCellInfos(ctx context.Context, in *GetCellInfosRequest, opts ...grpc.CallOption) (*GetCellInfosResponse, error)
+	// GetCellsAliases returns the CellsAliases data for the specified clusters.
+	GetCellsAliases(ctx context.Context, in *GetCellsAliasesRequest, opts ...grpc.CallOption) (*GetCellsAliasesResponse, error)
 	// GetClusters returns all configured clusters.
 	GetClusters(ctx context.Context, in *GetClustersRequest, opts ...grpc.CallOption) (*GetClustersResponse, error)
 	// GetGates returns all gates across all the specified clusters.
@@ -170,6 +177,24 @@ func (c *vTAdminClient) FindSchema(ctx context.Context, in *FindSchemaRequest, o
 func (c *vTAdminClient) GetBackups(ctx context.Context, in *GetBackupsRequest, opts ...grpc.CallOption) (*GetBackupsResponse, error) {
 	out := new(GetBackupsResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetBackups", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) GetCellInfos(ctx context.Context, in *GetCellInfosRequest, opts ...grpc.CallOption) (*GetCellInfosResponse, error) {
+	out := new(GetCellInfosResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetCellInfos", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) GetCellsAliases(ctx context.Context, in *GetCellsAliasesRequest, opts ...grpc.CallOption) (*GetCellsAliasesResponse, error) {
+	out := new(GetCellsAliasesResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetCellsAliases", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -451,6 +476,13 @@ type VTAdminServer interface {
 	FindSchema(context.Context, *FindSchemaRequest) (*Schema, error)
 	// GetBackups returns backups grouped by cluster.
 	GetBackups(context.Context, *GetBackupsRequest) (*GetBackupsResponse, error)
+	// GetCellInfos returns the CellInfo objects for the specified clusters.
+	//
+	// Callers may optionally restrict the set of CellInfos, or restrict the
+	// response to include only cell names.
+	GetCellInfos(context.Context, *GetCellInfosRequest) (*GetCellInfosResponse, error)
+	// GetCellsAliases returns the CellsAliases data for the specified clusters.
+	GetCellsAliases(context.Context, *GetCellsAliasesRequest) (*GetCellsAliasesResponse, error)
 	// GetClusters returns all configured clusters.
 	GetClusters(context.Context, *GetClustersRequest) (*GetClustersResponse, error)
 	// GetGates returns all gates across all the specified clusters.
@@ -539,6 +571,12 @@ func (UnimplementedVTAdminServer) FindSchema(context.Context, *FindSchemaRequest
 }
 func (UnimplementedVTAdminServer) GetBackups(context.Context, *GetBackupsRequest) (*GetBackupsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBackups not implemented")
+}
+func (UnimplementedVTAdminServer) GetCellInfos(context.Context, *GetCellInfosRequest) (*GetCellInfosResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCellInfos not implemented")
+}
+func (UnimplementedVTAdminServer) GetCellsAliases(context.Context, *GetCellsAliasesRequest) (*GetCellsAliasesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCellsAliases not implemented")
 }
 func (UnimplementedVTAdminServer) GetClusters(context.Context, *GetClustersRequest) (*GetClustersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetClusters not implemented")
@@ -759,6 +797,42 @@ func _VTAdmin_GetBackups_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).GetBackups(ctx, req.(*GetBackupsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_GetCellInfos_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCellInfosRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetCellInfos(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetCellInfos",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetCellInfos(ctx, req.(*GetCellInfosRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_GetCellsAliases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCellsAliasesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetCellsAliases(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetCellsAliases",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetCellsAliases(ctx, req.(*GetCellsAliasesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1301,6 +1375,14 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetBackups",
 			Handler:    _VTAdmin_GetBackups_Handler,
+		},
+		{
+			MethodName: "GetCellInfos",
+			Handler:    _VTAdmin_GetCellInfos_Handler,
+		},
+		{
+			MethodName: "GetCellsAliases",
+			Handler:    _VTAdmin_GetCellsAliases_Handler,
 		},
 		{
 			MethodName: "GetClusters",
