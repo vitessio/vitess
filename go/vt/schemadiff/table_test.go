@@ -886,6 +886,12 @@ func TestValidate(t *testing.T) {
 			to:    "create table t (id int primary key, i int)",
 		},
 		{
+			name:      "duplicate existing column",
+			from:      "create table t (id int primary key, id varchar(10))",
+			alter:     "alter table t add column i int",
+			expectErr: ErrApplyDuplicateColumn,
+		},
+		{
 			name:  "add key",
 			from:  "create table t (id int primary key, i int)",
 			alter: "alter table t add key i_idx(i)",
@@ -964,6 +970,30 @@ func TestValidate(t *testing.T) {
 			expectErr: ErrInvalidColumnInKey,
 		},
 		{
+			name:      "drop column used by partitions",
+			from:      "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (i) partitions 4",
+			alter:     "alter table t drop column i",
+			expectErr: ErrInvalidColumnInPartition,
+		},
+		{
+			name:      "drop column used by partitions, function",
+			from:      "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (abs(i)) partitions 4",
+			alter:     "alter table t drop column i",
+			expectErr: ErrInvalidColumnInPartition,
+		},
+		{
+			name:  "unique key covers all partitioned columns",
+			from:  "create table t (id int, i int, primary key (id, i)) partition by hash (i) partitions 4",
+			alter: "alter table t add unique key i_idx(i)",
+			to:    "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (i) partitions 4",
+		},
+		{
+			name:      "unique key does not all partitioned columns",
+			from:      "create table t (id int, i int, primary key (id, i)) partition by hash (i) partitions 4",
+			alter:     "alter table t add unique key id_idx(id)",
+			expectErr: ErrMissingParitionColumnInUniqueKey,
+		},
+		{
 			name:      "add multiple keys, multi columns, missing column",
 			from:      "create table t (id int primary key, i1 int, i2 int, i4 int)",
 			alter:     "alter table t add key i12_idx(i1, i2), add key i32_idx((IF(i3 IS NULL, i2, i3)), i2), add key i21_idx(i2, i1)",
@@ -1004,6 +1034,12 @@ func TestValidate(t *testing.T) {
 			from:      "create table t (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20))",
 			alter:     "alter table t drop partition p7",
 			expectErr: ErrApplyPartitionNotFound,
+		},
+		{
+			name:      "duplicate existing partition name",
+			from:      "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p2 values less than (30))",
+			alter:     "alter table t add column i int",
+			expectErr: ErrApplyDuplicatePartition,
 		},
 	}
 	hints := DiffHints{}
