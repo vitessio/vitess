@@ -982,7 +982,7 @@ func (idx *IndexDefinition) formatFast(buf *TrackedBuffer) {
 		if opt.String != "" {
 			buf.WriteByte(' ')
 			buf.WriteString(opt.String)
-		} else {
+		} else if opt.Value != nil {
 			buf.WriteByte(' ')
 			opt.Value.formatFast(buf)
 		}
