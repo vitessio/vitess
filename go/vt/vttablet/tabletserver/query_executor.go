@@ -41,7 +41,6 @@ import (
 	p "vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -924,41 +923,38 @@ func (qre *QueryExecutor) execShowMigrationLogs() (*sqltypes.Result, error) {
 }
 
 func (qre *QueryExecutor) execShowThrottledApps() (*sqltypes.Result, error) {
-	if !qre.tsv.lagThrottler.IsEnabled() {
-		return nil, throttle.ErrThrottlerNotEnabled
+	if err := qre.tsv.lagThrottler.CheckIsReady(); err != nil {
+		return nil, err
 	}
-	if !qre.tsv.lagThrottler.IsOpen() {
-		return nil, throttle.ErrThrottlerNotEnabled
+	if _, ok := qre.plan.FullStmt.(*sqlparser.ShowThrottledApps); !ok {
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting SHOW VITESS_THROTTLED_APPS plan")
 	}
-	if _, ok := qre.plan.FullStmt.(*sqlparser.ShowThrottledApps); ok {
-		result := &sqltypes.Result{
-			Fields: []*querypb.Field{
-				{
-					Name: "app",
-					Type: sqltypes.VarChar,
-				},
-				{
-					Name: "expire_at",
-					Type: sqltypes.Timestamp,
-				},
-				{
-					Name: "ratio",
-					Type: sqltypes.Decimal,
-				},
+	result := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "app",
+				Type: sqltypes.VarChar,
 			},
-			Rows: [][]sqltypes.Value{},
-		}
-		for _, t := range qre.tsv.lagThrottler.ThrottledApps() {
-			result.Rows = append(result.Rows,
-				[]sqltypes.Value{
-					sqltypes.NewVarChar(t.AppName),
-					sqltypes.NewTimestamp(t.ExpireAt.Format(sqltypes.TimestampFormat)),
-					sqltypes.NewDecimal(fmt.Sprintf("%v", t.Ratio)),
-				})
-		}
-		return result, nil
+			{
+				Name: "expire_at",
+				Type: sqltypes.Timestamp,
+			},
+			{
+				Name: "ratio",
+				Type: sqltypes.Decimal,
+			},
+		},
+		Rows: [][]sqltypes.Value{},
 	}
-	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting SHOW VITESS_THROTTLED_APPS plan")
+	for _, t := range qre.tsv.lagThrottler.ThrottledApps() {
+		result.Rows = append(result.Rows,
+			[]sqltypes.Value{
+				sqltypes.NewVarChar(t.AppName),
+				sqltypes.NewTimestamp(t.ExpireAt.Format(sqltypes.TimestampFormat)),
+				sqltypes.NewDecimal(fmt.Sprintf("%v", t.Ratio)),
+			})
+	}
+	return result, nil
 }
 
 func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.DBConn) error {

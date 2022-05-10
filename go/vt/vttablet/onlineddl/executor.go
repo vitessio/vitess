@@ -1727,11 +1727,8 @@ func (e *Executor) ThrottleMigration(ctx context.Context, uuid string, expireStr
 	if err != nil {
 		return nil, err
 	}
-	if !e.lagThrottler.IsEnabled() {
-		return nil, throttle.ErrThrottlerNotEnabled
-	}
-	if !e.lagThrottler.IsOpen() {
-		return nil, throttle.ErrThrottlerNotEnabled
+	if err := e.lagThrottler.CheckIsReady(); err != nil {
+		return nil, err
 	}
 	_ = e.lagThrottler.ThrottleApp(uuid, time.Now().Add(duration), ratio)
 	return emptyResult, nil
@@ -1743,11 +1740,8 @@ func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString strin
 	if err != nil {
 		return nil, err
 	}
-	if !e.lagThrottler.IsEnabled() {
-		return nil, throttle.ErrThrottlerNotEnabled
-	}
-	if !e.lagThrottler.IsOpen() {
-		return nil, throttle.ErrThrottlerNotEnabled
+	if err := e.lagThrottler.CheckIsReady(); err != nil {
+		return nil, err
 	}
 	_ = e.lagThrottler.ThrottleApp(throttlerOnlineDDLApp, time.Now().Add(duration), ratio)
 	return emptyResult, nil
@@ -1755,11 +1749,8 @@ func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString strin
 
 // UnthrottleMigration
 func (e *Executor) UnthrottleMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
-	if !e.lagThrottler.IsEnabled() {
-		return nil, throttle.ErrThrottlerNotEnabled
-	}
-	if !e.lagThrottler.IsOpen() {
-		return nil, throttle.ErrThrottlerNotEnabled
+	if err := e.lagThrottler.CheckIsReady(); err != nil {
+		return nil, err
 	}
 	_ = e.lagThrottler.UnthrottleApp(uuid)
 	return emptyResult, nil
@@ -1767,11 +1758,8 @@ func (e *Executor) UnthrottleMigration(ctx context.Context, uuid string) (result
 
 // UnthrottleAllMigrations
 func (e *Executor) UnthrottleAllMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
-	if !e.lagThrottler.IsEnabled() {
-		return nil, throttle.ErrThrottlerNotEnabled
-	}
-	if !e.lagThrottler.IsOpen() {
-		return nil, throttle.ErrThrottlerNotEnabled
+	if err := e.lagThrottler.CheckIsReady(); err != nil {
+		return nil, err
 	}
 	_ = e.lagThrottler.UnthrottleApp(throttlerOnlineDDLApp)
 	return emptyResult, nil
@@ -2900,7 +2888,8 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	defer e.migrationMutex.Unlock()
 
 	var currentUserThrottleRatio float64
-	if e.lagThrottler.IsEnabled() {
+	if err := e.lagThrottler.CheckIsReady(); err == nil {
+		// No point in reviewing throttler info if it's not enabled&open
 		for _, app := range e.lagThrottler.ThrottledApps() {
 			if app.AppName == throttlerOnlineDDLApp {
 				currentUserThrottleRatio = app.Ratio
@@ -2949,7 +2938,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 
 		uuidsFoundRunning[uuid] = true
 
-		_ = e.updateMigrationUserThrotleRatio(ctx, uuid, currentUserThrottleRatio)
+		_ = e.updateMigrationUserThrottleRatio(ctx, uuid, currentUserThrottleRatio)
 		switch onlineDDL.StrategySetting().Strategy {
 		case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 			{
@@ -3599,7 +3588,7 @@ func (e *Executor) updateMigrationStowawayTable(ctx context.Context, uuid string
 	return err
 }
 
-func (e *Executor) updateMigrationUserThrotleRatio(ctx context.Context, uuid string, ratio float64) error {
+func (e *Executor) updateMigrationUserThrottleRatio(ctx context.Context, uuid string, ratio float64) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationUserThrottleRatio,
 		sqltypes.Float64BindVariable(ratio),
 		sqltypes.StringBindVariable(uuid),
