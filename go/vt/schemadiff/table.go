@@ -83,6 +83,9 @@ func (d *AlterTableEntityDiff) CanonicalStatementString() (s string) {
 
 // SubsequentDiff implements EntityDiff
 func (d *AlterTableEntityDiff) SubsequentDiff() EntityDiff {
+	if d == nil {
+		return nil
+	}
 	return d.subsequentDiff
 }
 
@@ -1473,18 +1476,17 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 		dupCreateTable.Comments = &d
 	}
 	dup := &CreateTableEntity{CreateTable: *dupCreateTable}
-	for diff != nil && !diff.IsEmpty() {
+	for diff != nil {
 		alterDiff, ok := diff.(*AlterTableEntityDiff)
 		if !ok {
 			return nil, ErrEntityTypeMismatch
 		}
-		if err := dup.apply(alterDiff); err != nil {
-			return nil, err
+		if !diff.IsEmpty() {
+			if err := dup.apply(alterDiff); err != nil {
+				return nil, err
+			}
 		}
 		diff = diff.SubsequentDiff()
-		if diff == nil {
-			break
-		}
 	}
 	return dup, nil
 }
