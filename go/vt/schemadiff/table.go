@@ -1441,15 +1441,68 @@ func getKeyColumnNames(key *sqlparser.IndexDefinition) (colNames map[string]bool
 // validate checks that the table structure is valid:
 // - all columns referenced by keys exist
 func (c *CreateTableEntity) validate() error {
-	// validate all columns referenced by indexes do in fact exist
 	columnExists := map[string]bool{}
 	for _, col := range c.CreateTable.TableSpec.Columns {
-		columnExists[col.Name.String()] = true
+		colName := col.Name.String()
+		if columnExists[colName] {
+			return errors.Wrapf(ErrApplyDuplicateColumn, "column: %v", colName)
+		}
+		columnExists[colName] = true
 	}
+	// validate all columns referenced by indexes do in fact exist
 	for _, key := range c.CreateTable.TableSpec.Indexes {
 		for colName := range getKeyColumnNames(key) {
 			if !columnExists[colName] {
 				return errors.Wrapf(ErrInvalidColumnInKey, "key: %v, column: %v", key.Info.Name.String(), colName)
+			}
+		}
+	}
+	if partition := c.CreateTable.TableSpec.PartitionOption; partition != nil {
+		// validate no two partitions have same name
+		partitionExists := map[string]bool{}
+		for _, p := range partition.Definitions {
+			partitionName := p.Name.String()
+			if partitionExists[partitionName] {
+				return errors.Wrapf(ErrApplyDuplicatePartition, "partition: %v", partitionName)
+			}
+			partitionExists[partitionName] = true
+		}
+		// validate columns referenced by partitions do in fact exist
+		// also, validate that all unique keys include partitioned columns
+		partitionColNames := []string{}
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node := node.(type) {
+			case *sqlparser.ColName:
+				partitionColNames = append(partitionColNames, node.Name.String())
+			}
+			return true, nil
+		}, partition.Expr)
+		if err != nil {
+			return err
+		}
+
+		for _, partitionColName := range partitionColNames {
+			// Validate columns exists in table:
+			if !columnExists[partitionColName] {
+				return errors.Wrapf(ErrInvalidColumnInPartition, "column: %v", partitionColName)
+			}
+
+			// Validate all unique keys include this column:
+			for _, key := range c.CreateTable.TableSpec.Indexes {
+				if !key.Info.Unique {
+					continue
+				}
+				colFound := false
+				for _, col := range key.Columns {
+					colName := col.Column.String()
+					if colName == partitionColName {
+						colFound = true
+						break
+					}
+				}
+				if !colFound {
+					return errors.Wrapf(ErrMissingParitionColumnInUniqueKey, "column: %v not found in key: %v", partitionColName, key.Info.Name.String())
+				}
 			}
 		}
 	}
