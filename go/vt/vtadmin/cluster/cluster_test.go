@@ -18,9 +18,9 @@ package cluster_test
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -33,14 +33,10 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
-	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
-	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
-	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -165,8 +161,6 @@ func TestCreateKeyspace(t *testing.T) {
 			t.Parallel()
 
 			cluster := testutil.BuildCluster(t, tt.cfg)
-			err := cluster.Vtctld.Dial(ctx)
-			require.NoError(t, err, "could not dial test vtctld")
 
 			resp, err := cluster.CreateKeyspace(ctx, tt.req)
 			if tt.shouldErr {
@@ -263,10 +257,7 @@ func TestCreateShard(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.tc.Cluster.Vtctld.Dial(ctx)
-			require.NoError(t, err, "could not dial in-process vtctld")
-
-			_, err = tt.tc.Cluster.CreateShard(ctx, tt.req)
+			_, err := tt.tc.Cluster.CreateShard(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
 			} else {
@@ -356,8 +347,6 @@ func TestDeleteKeyspace(t *testing.T) {
 			t.Parallel()
 
 			cluster := testutil.BuildCluster(t, tt.cfg)
-			err := cluster.Vtctld.Dial(ctx)
-			require.NoError(t, err, "could not dial test vtctld")
 
 			resp, err := cluster.DeleteKeyspace(ctx, tt.req)
 			if tt.shouldErr {
@@ -487,9 +476,6 @@ func TestDeleteShards(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.tc.Cluster.Vtctld.Dial(ctx)
-			require.NoError(t, err, "could not dial in-process vtctld")
-
 			if tt.setup != nil {
 				func() {
 					t.Helper()
@@ -497,7 +483,7 @@ func TestDeleteShards(t *testing.T) {
 				}()
 			}
 
-			_, err = tt.tc.Cluster.DeleteShards(ctx, tt.req)
+			_, err := tt.tc.Cluster.DeleteShards(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
 			} else {
@@ -1228,6 +1214,367 @@ func TestFindWorkflows(t *testing.T) {
 	}
 }
 
+func TestGetCellInfos(t *testing.T) {
+	t.Parallel()
+
+	cpb := &vtadminpb.Cluster{
+		Id:   "test",
+		Name: "test",
+	}
+
+	tests := []struct {
+		name      string
+		vtctld    *fakevtctldclient.VtctldClient
+		req       *vtadminpb.GetCellInfosRequest
+		expected  []*vtadminpb.ClusterCellInfo
+		shouldErr bool
+	}{
+		{
+			name: "all cells - ok",
+			vtctld: &fakevtctldclient.VtctldClient{
+				GetCellInfoNamesResults: &struct {
+					Response *vtctldatapb.GetCellInfoNamesResponse
+					Error    error
+				}{
+					Response: &vtctldatapb.GetCellInfoNamesResponse{
+						Names: []string{"c1", "c2"},
+					},
+				},
+				GetCellInfoResults: map[string]struct {
+					Response *vtctldatapb.GetCellInfoResponse
+					Error    error
+				}{
+					"c1": {
+						Response: &vtctldatapb.GetCellInfoResponse{
+							CellInfo: &topodatapb.CellInfo{
+								ServerAddress: "http://cell1",
+								Root:          "/vitess/cell1",
+							},
+						},
+					},
+					"c2": {
+						Response: &vtctldatapb.GetCellInfoResponse{
+							CellInfo: &topodatapb.CellInfo{
+								ServerAddress: "http://cell2",
+								Root:          "/vitess/cell2",
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetCellInfosRequest{},
+			expected: []*vtadminpb.ClusterCellInfo{
+				{
+					Cluster: cpb,
+					Name:    "c1",
+					CellInfo: &topodatapb.CellInfo{
+						ServerAddress: "http://cell1",
+						Root:          "/vitess/cell1",
+					},
+				},
+				{
+					Cluster: cpb,
+					Name:    "c2",
+					CellInfo: &topodatapb.CellInfo{
+						ServerAddress: "http://cell2",
+						Root:          "/vitess/cell2",
+					},
+				},
+			},
+		},
+		{
+			name: "all cells - names only",
+			vtctld: &fakevtctldclient.VtctldClient{
+				GetCellInfoNamesResults: &struct {
+					Response *vtctldatapb.GetCellInfoNamesResponse
+					Error    error
+				}{
+					Response: &vtctldatapb.GetCellInfoNamesResponse{
+						Names: []string{"c1", "c2"},
+					},
+				},
+				GetCellInfoResults: map[string]struct {
+					Response *vtctldatapb.GetCellInfoResponse
+					Error    error
+				}{
+					"c1": {
+						Response: &vtctldatapb.GetCellInfoResponse{
+							CellInfo: &topodatapb.CellInfo{
+								ServerAddress: "http://cell1",
+								Root:          "/vitess/cell1",
+							},
+						},
+					},
+					"c2": {
+						Response: &vtctldatapb.GetCellInfoResponse{
+							CellInfo: &topodatapb.CellInfo{
+								ServerAddress: "http://cell2",
+								Root:          "/vitess/cell2",
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetCellInfosRequest{
+				NamesOnly: true,
+			},
+			expected: []*vtadminpb.ClusterCellInfo{
+				{
+					Cluster: cpb,
+					Name:    "c1",
+				},
+				{
+					Cluster: cpb,
+					Name:    "c2",
+				},
+			},
+		},
+		{
+			name: "all cells - fail",
+			vtctld: &fakevtctldclient.VtctldClient{
+				GetCellInfoNamesResults: &struct {
+					Response *vtctldatapb.GetCellInfoNamesResponse
+					Error    error
+				}{
+					Error: fmt.Errorf("getcellinfonames failed"),
+				},
+			},
+			req:       &vtadminpb.GetCellInfosRequest{},
+			shouldErr: true,
+		},
+		{
+			name: "cells - ok",
+			vtctld: &fakevtctldclient.VtctldClient{
+				GetCellInfoNamesResults: &struct {
+					Response *vtctldatapb.GetCellInfoNamesResponse
+					Error    error
+				}{
+					Response: &vtctldatapb.GetCellInfoNamesResponse{
+						Names: []string{"c1", "c2"},
+					},
+				},
+				GetCellInfoResults: map[string]struct {
+					Response *vtctldatapb.GetCellInfoResponse
+					Error    error
+				}{
+					"c1": {
+						Response: &vtctldatapb.GetCellInfoResponse{
+							CellInfo: &topodatapb.CellInfo{
+								ServerAddress: "http://cell1",
+								Root:          "/vitess/cell1",
+							},
+						},
+					},
+					"c2": {
+						Response: &vtctldatapb.GetCellInfoResponse{
+							CellInfo: &topodatapb.CellInfo{
+								ServerAddress: "http://cell2",
+								Root:          "/vitess/cell2",
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetCellInfosRequest{
+				Cells: []string{"c1"},
+			},
+			expected: []*vtadminpb.ClusterCellInfo{
+				{
+					Cluster: cpb,
+					Name:    "c1",
+					CellInfo: &topodatapb.CellInfo{
+						ServerAddress: "http://cell1",
+						Root:          "/vitess/cell1",
+					},
+				},
+			},
+		},
+		{
+			name: "getcellinfo - fail",
+			vtctld: &fakevtctldclient.VtctldClient{
+				GetCellInfoNamesResults: &struct {
+					Response *vtctldatapb.GetCellInfoNamesResponse
+					Error    error
+				}{
+					Response: &vtctldatapb.GetCellInfoNamesResponse{
+						Names: []string{"c1", "c2"},
+					},
+				},
+				GetCellInfoResults: map[string]struct {
+					Response *vtctldatapb.GetCellInfoResponse
+					Error    error
+				}{
+					"c1": {
+						Error: fmt.Errorf("GetCellInfo(c1) fail"),
+					},
+					"c2": {
+						Response: &vtctldatapb.GetCellInfoResponse{
+							CellInfo: &topodatapb.CellInfo{
+								ServerAddress: "http://cell2",
+								Root:          "/vitess/cell2",
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetCellInfosRequest{
+				Cells: []string{"c1", "c2"},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "cells with names only still gives full info",
+			vtctld: &fakevtctldclient.VtctldClient{
+				GetCellInfoNamesResults: &struct {
+					Response *vtctldatapb.GetCellInfoNamesResponse
+					Error    error
+				}{
+					Response: &vtctldatapb.GetCellInfoNamesResponse{
+						Names: []string{"c1", "c2"},
+					},
+				},
+				GetCellInfoResults: map[string]struct {
+					Response *vtctldatapb.GetCellInfoResponse
+					Error    error
+				}{
+					"c1": {
+						Response: &vtctldatapb.GetCellInfoResponse{
+							CellInfo: &topodatapb.CellInfo{
+								ServerAddress: "http://cell1",
+								Root:          "/vitess/cell1",
+							},
+						},
+					},
+					"c2": {
+						Response: &vtctldatapb.GetCellInfoResponse{
+							CellInfo: &topodatapb.CellInfo{
+								ServerAddress: "http://cell2",
+								Root:          "/vitess/cell2",
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetCellInfosRequest{
+				Cells:     []string{"c1"},
+				NamesOnly: true,
+			},
+			expected: []*vtadminpb.ClusterCellInfo{
+				{
+					Cluster: cpb,
+					Name:    "c1",
+					CellInfo: &topodatapb.CellInfo{
+						ServerAddress: "http://cell1",
+						Root:          "/vitess/cell1",
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			c := testutil.BuildCluster(t, testutil.TestClusterConfig{
+				Cluster:      cpb,
+				VtctldClient: tt.vtctld,
+			})
+			cellInfos, err := c.GetCellInfos(context.Background(), tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+
+			sort.Slice(tt.expected, func(i, j int) bool {
+				return tt.expected[i].Name < tt.expected[j].Name
+			})
+			sort.Slice(cellInfos, func(i, j int) bool {
+				return cellInfos[i].Name < cellInfos[j].Name
+			})
+
+			utils.MustMatch(t, tt.expected, cellInfos)
+		})
+	}
+}
+
+func TestGetCellsAliases(t *testing.T) {
+	t.Parallel()
+
+	cpb := &vtadminpb.Cluster{
+		Id:   "test",
+		Name: "test",
+	}
+
+	tests := []struct {
+		name      string
+		vtctld    *fakevtctldclient.VtctldClient
+		expected  *vtadminpb.ClusterCellsAliases
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			vtctld: &fakevtctldclient.VtctldClient{
+				GetCellsAliasesResults: &struct {
+					Response *vtctldatapb.GetCellsAliasesResponse
+					Error    error
+				}{
+					Response: &vtctldatapb.GetCellsAliasesResponse{
+						Aliases: map[string]*topodatapb.CellsAlias{
+							"a1": {
+								Cells: []string{"c1", "c2"},
+							},
+						},
+					},
+				},
+			},
+			expected: &vtadminpb.ClusterCellsAliases{
+				Cluster: cpb,
+				Aliases: map[string]*topodatapb.CellsAlias{
+					"a1": {
+						Cells: []string{"c1", "c2"},
+					},
+				},
+			},
+		},
+		{
+			name: "error",
+			vtctld: &fakevtctldclient.VtctldClient{
+				GetCellsAliasesResults: &struct {
+					Response *vtctldatapb.GetCellsAliasesResponse
+					Error    error
+				}{
+					Error: fmt.Errorf("this should fail"),
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			c := testutil.BuildCluster(t, testutil.TestClusterConfig{
+				Cluster:      cpb,
+				VtctldClient: tt.vtctld,
+			})
+			cellsAliases, err := c.GetCellsAliases(context.Background())
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, cellsAliases)
+		})
+	}
+}
+
 func TestGetSchema(t *testing.T) {
 	t.Parallel()
 
@@ -1369,9 +1716,6 @@ func TestGetSchema(t *testing.T) {
 				DBConfig:     testutil.Dbcfg{},
 			})
 
-			err := c.Vtctld.Dial(ctx)
-			require.NoError(t, err, "could not dial test vtctld")
-
 			schema, err := c.GetSchema(ctx, "testkeyspace", cluster.GetSchemaOptions{
 				BaseRequest: tt.req,
 			})
@@ -1422,9 +1766,6 @@ func TestGetSchema(t *testing.T) {
 			},
 			VtctldClient: vtctld,
 		})
-
-		err := c.Vtctld.Dial(ctx)
-		require.NoError(t, err, "could not dial test vtctld")
 
 		_, _ = c.GetSchema(ctx, "testkeyspace", cluster.GetSchemaOptions{
 			BaseRequest: req,
@@ -2599,8 +2940,6 @@ func TestGetShardReplicationPositions(t *testing.T) {
 			t.Parallel()
 
 			c := testutil.BuildCluster(t, tt.cfg)
-			err := c.Vtctld.Dial(ctx)
-			require.NoError(t, err, "failed to dial test vtctld")
 
 			resp, err := c.GetShardReplicationPositions(ctx, tt.req)
 			if tt.shouldErr {
@@ -2612,32 +2951,6 @@ func TestGetShardReplicationPositions(t *testing.T) {
 			assert.Equal(t, tt.expected, resp)
 		})
 	}
-}
-
-// This test only validates the error handling on dialing database connections.
-// Other cases are covered by one or both of TestFindTablets and TestFindTablet.
-func TestGetTablets(t *testing.T) {
-	t.Parallel()
-
-	disco := fakediscovery.New()
-	disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: "gate"})
-
-	db := vtsql.New(&vtsql.Config{
-		Cluster: &vtadminpb.Cluster{
-			Id:   "c1",
-			Name: "one",
-		},
-		ResolverOptions: &resolver.Options{
-			Discovery: disco,
-		},
-	})
-	db.DialFunc = func(cfg vitessdriver.Configuration) (*sql.DB, error) {
-		return nil, assert.AnError
-	}
-
-	c := &cluster.Cluster{DB: db}
-	_, err := c.GetTablets(context.Background())
-	assert.Error(t, err)
 }
 
 func TestGetVSchema(t *testing.T) {
@@ -2716,8 +3029,6 @@ func TestGetVSchema(t *testing.T) {
 			t.Parallel()
 
 			cluster := testutil.BuildCluster(t, tt.cfg)
-			err := cluster.Vtctld.Dial(ctx)
-			require.NoError(t, err, "could not dial test vtctld")
 
 			vschema, err := cluster.GetVSchema(ctx, tt.keyspace)
 			if tt.shouldErr {

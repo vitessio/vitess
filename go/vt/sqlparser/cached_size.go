@@ -1161,12 +1161,16 @@ func (cached *IndexColumn) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(80)
 	}
 	// field Column vitess.io/vitess/go/vt/sqlparser.ColIdent
 	size += cached.Column.CachedSize(false)
 	// field Length *vitess.io/vitess/go/vt/sqlparser.Literal
 	size += cached.Length.CachedSize(true)
+	// field Expression vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expression.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *IndexDefinition) CachedSize(alloc bool) int64 {

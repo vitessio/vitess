@@ -171,7 +171,6 @@ func TestMain(m *testing.M) {
 			"--throttle_threshold", "1s",
 			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
-			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
@@ -509,7 +508,7 @@ func TestSchemaChange(t *testing.T) {
 					assert.Contains(t, body, throttlerAppName)
 				}
 
-				_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+				_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 30*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 			})
 

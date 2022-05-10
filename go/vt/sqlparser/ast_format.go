@@ -713,12 +713,15 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 	buf.astPrintf(idx, "%v (", idx.Info)
 	for i, col := range idx.Columns {
 		if i != 0 {
-			buf.astPrintf(idx, ", %v", col.Column)
+			buf.astPrintf(idx, ", ")
+		}
+		if col.Expression != nil {
+			buf.astPrintf(idx, "(%v)", col.Expression)
 		} else {
 			buf.astPrintf(idx, "%v", col.Column)
-		}
-		if col.Length != nil {
-			buf.astPrintf(idx, "(%v)", col.Length)
+			if col.Length != nil {
+				buf.astPrintf(idx, "(%v)", col.Length)
+			}
 		}
 		if col.Direction == DescOrder {
 			buf.astPrintf(idx, " desc")
