@@ -2661,6 +2661,12 @@ var (
 		input:  `select json_value(@j, @k RETURNING FLOAT) from dual`,
 		output: `select json_value(@j, @k returning FLOAT) from dual`,
 	}, {
+		input:  `select json_value(@j, @k RETURNING DECIMAL(4,2)) from dual`,
+		output: `select json_value(@j, @k returning DECIMAL(4, 2)) from dual`,
+	}, {
+		input:  `SELECT JSON_VALUE('{"fname": "Joe", "lname": "Palmer"}', '$.fname' returning char(49) Charset utf8mb4 error on error)`,
+		output: `select json_value('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname' returning char(49) character set utf8mb4 error on error) from dual`,
+	}, {
 		input:  `SELECT JSON_VALUE('{"item": "shoes", "price": "49.95"}', '$.price' NULL ON EMPTY) `,
 		output: `select json_value('{\"item\": \"shoes\", \"price\": \"49.95\"}', '$.price' null on empty) from dual`,
 	}, {
