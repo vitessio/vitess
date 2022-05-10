@@ -2404,8 +2404,11 @@ type (
 	// JSONValueExpr represents the function and arguments for JSON_VALUE()
 	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-value
 	JSONValueExpr struct {
-		JSONDoc Expr
-		Path    JSONPathParam
+		JSONDoc         Expr
+		Path            JSONPathParam
+		ReturningType   *ConvertType
+		EmptyOnResponse *JtOnResponse
+		ErrorOnResponse *JtOnResponse
 	}
 
 	// MemberOf represents the function and arguments for MEMBER OF()

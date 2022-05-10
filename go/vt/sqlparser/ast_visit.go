@@ -1762,6 +1762,15 @@ func VisitRefOfJSONValueExpr(in *JSONValueExpr, f Visit) error {
 	if err := VisitJSONPathParam(in.Path, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfConvertType(in.ReturningType, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfJtOnResponse(in.EmptyOnResponse, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfJtOnResponse(in.ErrorOnResponse, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfJSONValueMergeExpr(in *JSONValueMergeExpr, f Visit) error {

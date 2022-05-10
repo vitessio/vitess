@@ -3333,6 +3333,21 @@ func (a *application) rewriteRefOfJSONValueExpr(parent SQLNode, node *JSONValueE
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfConvertType(node, node.ReturningType, func(newNode, parent SQLNode) {
+		parent.(*JSONValueExpr).ReturningType = newNode.(*ConvertType)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfJtOnResponse(node, node.EmptyOnResponse, func(newNode, parent SQLNode) {
+		parent.(*JSONValueExpr).EmptyOnResponse = newNode.(*JtOnResponse)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfJtOnResponse(node, node.ErrorOnResponse, func(newNode, parent SQLNode) {
+		parent.(*JSONValueExpr).ErrorOnResponse = newNode.(*JtOnResponse)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent

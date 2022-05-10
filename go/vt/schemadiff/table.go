@@ -55,6 +55,14 @@ func (d *AlterTableEntityDiff) Statement() sqlparser.Statement {
 	return d.alterTable
 }
 
+// AlterTable returns the underlying sqlparser.AlterTable that was generated for the diff.
+func (d *AlterTableEntityDiff) AlterTable() *sqlparser.AlterTable {
+	if d == nil {
+		return nil
+	}
+	return d.alterTable
+}
+
 // StatementString implements EntityDiff
 func (d *AlterTableEntityDiff) StatementString() (s string) {
 	if stmt := d.Statement(); stmt != nil {
@@ -88,6 +96,14 @@ func (d *CreateTableEntityDiff) Entities() (from Entity, to Entity) {
 
 // Statement implements EntityDiff
 func (d *CreateTableEntityDiff) Statement() sqlparser.Statement {
+	if d == nil {
+		return nil
+	}
+	return d.createTable
+}
+
+// CreateTable returns the underlying sqlparser.CreateTable that was generated for the diff.
+func (d *CreateTableEntityDiff) CreateTable() *sqlparser.CreateTable {
 	if d == nil {
 		return nil
 	}
@@ -128,6 +144,14 @@ func (d *DropTableEntityDiff) Entities() (from Entity, to Entity) {
 
 // Statement implements EntityDiff
 func (d *DropTableEntityDiff) Statement() sqlparser.Statement {
+	if d == nil {
+		return nil
+	}
+	return d.dropTable
+}
+
+// DropTable returns the underlying sqlparser.DropTable that was generated for the diff.
+func (d *DropTableEntityDiff) DropTable() *sqlparser.DropTable {
 	if d == nil {
 		return nil
 	}

@@ -2163,7 +2163,21 @@ func (node *JSONSearchExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *JSONValueExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "json_value(%v, %v)", node.JSONDoc, node.Path)
+	buf.astPrintf(node, "json_value(%v, %v", node.JSONDoc, node.Path)
+
+	if node.ReturningType != nil {
+		buf.astPrintf(node, " returning %v", node.ReturningType)
+	}
+
+	if node.EmptyOnResponse != nil {
+		buf.astPrintf(node, " %v on empty", node.EmptyOnResponse)
+	}
+
+	if node.ErrorOnResponse != nil {
+		buf.astPrintf(node, " %v on error", node.ErrorOnResponse)
+	}
+
+	buf.WriteByte(')')
 }
 
 // Format formats the node

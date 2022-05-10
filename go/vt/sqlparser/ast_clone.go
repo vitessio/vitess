@@ -1385,6 +1385,9 @@ func CloneRefOfJSONValueExpr(n *JSONValueExpr) *JSONValueExpr {
 	out := *n
 	out.JSONDoc = CloneExpr(n.JSONDoc)
 	out.Path = CloneJSONPathParam(n.Path)
+	out.ReturningType = CloneRefOfConvertType(n.ReturningType)
+	out.EmptyOnResponse = CloneRefOfJtOnResponse(n.EmptyOnResponse)
+	out.ErrorOnResponse = CloneRefOfJtOnResponse(n.ErrorOnResponse)
 	return &out
 }
 

@@ -2324,7 +2324,10 @@ func EqualsRefOfJSONValueExpr(a, b *JSONValueExpr) bool {
 		return false
 	}
 	return EqualsExpr(a.JSONDoc, b.JSONDoc) &&
-		EqualsJSONPathParam(a.Path, b.Path)
+		EqualsJSONPathParam(a.Path, b.Path) &&
+		EqualsRefOfConvertType(a.ReturningType, b.ReturningType) &&
+		EqualsRefOfJtOnResponse(a.EmptyOnResponse, b.EmptyOnResponse) &&
+		EqualsRefOfJtOnResponse(a.ErrorOnResponse, b.ErrorOnResponse)
 }
 
 // EqualsRefOfJSONValueMergeExpr does deep equals between the two objects.
