@@ -142,10 +142,10 @@ func TestConcatenate_WithErrors(t *testing.T) {
 		}, nil,
 	)
 	ctx := context.Background()
-	_, err := concatenate.TryExecute(&noopVCursor{ctx: ctx}, nil, true)
+	_, err := concatenate.TryExecute(newNoopVCursor(ctx), nil, true)
 	require.EqualError(t, err, strFailed)
 
-	_, err = wrapStreamExecute(concatenate, &noopVCursor{ctx: ctx}, nil, true)
+	_, err = wrapStreamExecute(concatenate, newNoopVCursor(ctx), nil, true)
 	require.EqualError(t, err, strFailed)
 
 	concatenate = NewConcatenate(
@@ -155,8 +155,8 @@ func TestConcatenate_WithErrors(t *testing.T) {
 			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
 		}, nil)
 
-	_, err = concatenate.TryExecute(&noopVCursor{ctx: ctx}, nil, true)
+	_, err = concatenate.TryExecute(newNoopVCursor(ctx), nil, true)
 	require.EqualError(t, err, strFailed)
-	_, err = wrapStreamExecute(concatenate, &noopVCursor{ctx: ctx}, nil, true)
+	_, err = wrapStreamExecute(concatenate, newNoopVCursor(ctx), nil, true)
 	require.EqualError(t, err, strFailed)
 }
