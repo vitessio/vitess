@@ -88,6 +88,7 @@ type VSchemaOperator interface {
 // packages to call back into VTGate.
 type vcursorImpl struct {
 	ctx            context.Context
+	cancel         context.CancelFunc
 	safeSession    *SafeSession
 	keyspace       string
 	tabletType     topodatapb.TabletType
@@ -154,8 +155,11 @@ func newVCursorImpl(
 		connCollation = collations.Default()
 	}
 
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithCancel(ctx)
 	return &vcursorImpl{
 		ctx:             ctx,
+		cancel:          cancel,
 		safeSession:     safeSession,
 		keyspace:        keyspace,
 		tabletType:      tabletType,
@@ -180,6 +184,11 @@ func (vc *vcursorImpl) ConnCollation() collations.ID {
 // Context returns the current Context.
 func (vc *vcursorImpl) Context() context.Context {
 	return vc.ctx
+}
+
+// CancelContext implements the engine.VCursor interface
+func (vc *vcursorImpl) CancelContext() {
+	vc.cancel()
 }
 
 // MaxMemoryRows returns the maxMemoryRows flag value.
