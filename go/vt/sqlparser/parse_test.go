@@ -1597,9 +1597,8 @@ var (
 		input:  "create fulltext index a on b (col1) key_block_size=12 with parser a comment 'string' algorithm inplace lock none",
 		output: "alter table b add fulltext index a (col1) key_block_size 12 with parser a comment 'string', algorithm = inplace, lock none",
 	}, {
-		input:      "create index a on b ((col1 + col2), (col1*col2))",
-		output:     "alter table b add index a ()",
-		partialDDL: true,
+		input:  "create index a on b ((col1 + col2), (col1*col2))",
+		output: "alter table b add index a ((col1 + col2), (col1 * col2))",
 	}, {
 		input:  "create fulltext index b using btree on A (col1 desc, col2) algorithm = inplace lock = none",
 		output: "alter table A add fulltext index b (col1 desc, col2) using btree, algorithm = inplace, lock none",
