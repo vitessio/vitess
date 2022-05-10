@@ -164,6 +164,10 @@ func TestCanonicalOutput(t *testing.T) {
 			"create table a (e set('red','green','blue','orange','yellow'))",
 			"CREATE TABLE `a` (\n\t`e` set('red', 'green', 'blue', 'orange', 'yellow')\n)",
 		},
+		{
+			"create table entries (uid varchar(53) not null, namespace varchar(254) not null, spec json default null, primary key (namespace, uid), key entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt'))))",
+			"CREATE TABLE `entries` (\n\t`uid` varchar(53) NOT NULL,\n\t`namespace` varchar(254) NOT NULL,\n\t`spec` json DEFAULT NULL,\n\tPRIMARY KEY (`namespace`, `uid`),\n\tKEY `entries_spec_updatedAt` ((JSON_VALUE(`spec`, _utf8mb4 '$.updatedAt')))\n)",
+		},
 	}
 
 	for _, tc := range testcases {

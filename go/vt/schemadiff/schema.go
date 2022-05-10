@@ -241,6 +241,46 @@ func (s *Schema) EntityNames() []string {
 	return names
 }
 
+// Tables returns this schema's tables in good order (may be applied without error)
+func (s *Schema) Tables() []*CreateTableEntity {
+	var tables []*CreateTableEntity
+	for _, entity := range s.sorted {
+		if table, ok := entity.(*CreateTableEntity); ok {
+			tables = append(tables, table)
+		}
+	}
+	return tables
+}
+
+// TableNames is a convenience function that returns just the names of tables, in good order
+func (s *Schema) TableNames() []string {
+	names := []string{}
+	for _, e := range s.Tables() {
+		names = append(names, e.Name())
+	}
+	return names
+}
+
+// Tables returns this schema's views in good order (may be applied without error)
+func (s *Schema) Views() []*CreateViewEntity {
+	var views []*CreateViewEntity
+	for _, entity := range s.sorted {
+		if view, ok := entity.(*CreateViewEntity); ok {
+			views = append(views, view)
+		}
+	}
+	return views
+}
+
+// ViewNames is a convenience function that returns just the names of views, in good order
+func (s *Schema) ViewNames() []string {
+	names := []string{}
+	for _, e := range s.Views() {
+		names = append(names, e.Name())
+	}
+	return names
+}
+
 // Diff compares this schema with another schema, and sees what it takes to make this schema look
 // like the other. It returns a list of diffs.
 func (s *Schema) Diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err error) {
@@ -289,6 +329,22 @@ func (s *Schema) Diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err 
 // Entity returns an entity by name, or nil if nonexistent
 func (s *Schema) Entity(name string) Entity {
 	return s.named[name]
+}
+
+// Table returns a table by name, or nil if nonexistent
+func (s *Schema) Table(name string) *CreateTableEntity {
+	if table, ok := s.named[name].(*CreateTableEntity); ok {
+		return table
+	}
+	return nil
+}
+
+// View returns a view by name, or nil if nonexistent
+func (s *Schema) View(name string) *CreateViewEntity {
+	if view, ok := s.named[name].(*CreateViewEntity); ok {
+		return view
+	}
+	return nil
 }
 
 // ToStatements returns an ordered list of statements which can be applied to create the schema

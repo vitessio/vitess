@@ -714,7 +714,7 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 		buf.astPrintf(idx, " %s", opt.Name)
 		if opt.String != "" {
 			buf.astPrintf(idx, " %s", opt.String)
-		} else {
+		} else if opt.Value != nil {
 			buf.astPrintf(idx, " %v", opt.Value)
 		}
 	}
@@ -1236,7 +1236,7 @@ func (node *UnaryExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *IntroducerExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s %v", node.CharacterSet, node.Expr)
+	buf.astPrintf(node, "%#s %v", node.CharacterSet, node.Expr)
 }
 
 // Format formats the node.
@@ -2144,7 +2144,21 @@ func (node *JSONSearchExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *JSONValueExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "json_value(%v, %v)", node.JSONDoc, node.Path)
+	buf.astPrintf(node, "json_value(%v, %v", node.JSONDoc, node.Path)
+
+	if node.ReturningType != nil {
+		buf.astPrintf(node, " returning %v", node.ReturningType)
+	}
+
+	if node.EmptyOnResponse != nil {
+		buf.astPrintf(node, " %v on empty", node.EmptyOnResponse)
+	}
+
+	if node.ErrorOnResponse != nil {
+		buf.astPrintf(node, " %v on error", node.ErrorOnResponse)
+	}
+
+	buf.WriteByte(')')
 }
 
 // Format formats the node
