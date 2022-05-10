@@ -86,7 +86,7 @@ func clusterFromIncomingContextMetadata(ctx context.Context) (*cluster.Cluster, 
 		return nil, "", false, nil
 	}
 
-	c, id, err := ClusterFromString(clusterMetadata[0])
+	c, id, err := ClusterFromString(ctx, clusterMetadata[0])
 	return c, id, true, err
 }
 

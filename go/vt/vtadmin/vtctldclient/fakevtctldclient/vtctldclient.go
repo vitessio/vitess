@@ -41,6 +41,18 @@ type VtctldClient struct {
 		Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 		Error    error
 	}
+	GetCellInfoNamesResults *struct {
+		Response *vtctldatapb.GetCellInfoNamesResponse
+		Error    error
+	}
+	GetCellInfoResults map[string]struct {
+		Response *vtctldatapb.GetCellInfoResponse
+		Error    error
+	}
+	GetCellsAliasesResults *struct {
+		Response *vtctldatapb.GetCellsAliasesResponse
+		Error    error
+	}
 	GetKeyspaceResults map[string]struct {
 		Response *vtctldatapb.GetKeyspaceResponse
 		Error    error
@@ -127,6 +139,37 @@ func (fake *VtctldClient) GetKeyspace(ctx context.Context, req *vtctldatapb.GetK
 	}
 
 	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
+}
+
+// GetCellInfo is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) GetCellInfo(ctx context.Context, req *vtctldatapb.GetCellInfoRequest, opts ...grpc.CallOption) (*vtctldatapb.GetCellInfoResponse, error) {
+	if fake.GetCellInfoResults == nil {
+		return nil, fmt.Errorf("%w: GetCellInfoResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	if result, ok := fake.GetCellInfoResults[req.Cell]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: GetCellInfoResults no result set for %s", assert.AnError, req.Cell)
+}
+
+// GetCellInfoNames is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) GetCellInfoNames(ctx context.Context, req *vtctldatapb.GetCellInfoNamesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetCellInfoNamesResponse, error) {
+	if fake.GetCellInfoNamesResults == nil {
+		return nil, fmt.Errorf("%w: GetCellInfoNames not set of fake vtctldclient", assert.AnError)
+	}
+
+	return fake.GetCellInfoNamesResults.Response, fake.GetCellInfoNamesResults.Error
+}
+
+// GetCellsAliases is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) GetCellsAliases(ctx context.Context, req *vtctldatapb.GetCellsAliasesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetCellsAliasesResponse, error) {
+	if fake.GetCellsAliasesResults == nil {
+		return nil, fmt.Errorf("%w: GetCellsAliases not set of fake vtctldclient", assert.AnError)
+	}
+
+	return fake.GetCellsAliasesResults.Response, fake.GetCellsAliasesResults.Error
 }
 
 // GetKeyspaces is part of the vtctldclient.VtctldClient interface.

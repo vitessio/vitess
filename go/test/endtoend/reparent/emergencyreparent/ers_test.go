@@ -374,7 +374,6 @@ func TestERSForInitialization(t *testing.T) {
 	clusterInstance := cluster.NewCluster("zone1", "localhost")
 	defer clusterInstance.Teardown()
 	keyspace := &cluster.Keyspace{Name: utils.KeyspaceName}
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 	// Start topo server
 	err := clusterInstance.StartTopo()
 	require.NoError(t, err)

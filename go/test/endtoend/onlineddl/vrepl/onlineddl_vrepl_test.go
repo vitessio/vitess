@@ -495,7 +495,7 @@ func TestSchemaChange(t *testing.T) {
 					assert.Contains(t, body, throttlerAppName)
 				}
 
-				_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+				_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 30*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 			})
 

@@ -830,7 +830,7 @@ var (
   --enable_replication_reporter
 	Use polling to track replication lag.
   --enable_semi_sync
-	(DEPRECATED - Set the correct durability_policy instead) Enable semi-sync when configuring replication, on primary and replica tablets only (rdonly tablets will not ack).
+	Enable semi-sync when configuring replication, on primary and replica tablets only (rdonly tablets will not ack).
   --enable_transaction_limit
 	If true, limit on number of transactions open at the same time will be enforced for all users. User trying to open a new transaction after exhausting their limit will receive an error immediately, regardless of whether there are available slots or not.
   --enable_transaction_limit_dry_run
