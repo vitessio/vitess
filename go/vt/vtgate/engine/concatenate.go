@@ -169,24 +169,25 @@ func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.
 // TryStreamExecute performs a streaming exec.
 func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var seenFields []*querypb.Field
-	var wg sync.WaitGroup
-	var cbMu, fieldsMu sync.Mutex
+	var outerErr error
 
-	g, restoreCtx := vcursor.ErrorGroupCancellableContext()
-	defer restoreCtx()
 	var fieldsSent bool
-	wg.Add(1)
+	var cbMu, fieldsMu sync.Mutex
+	var wg, fieldSendWg sync.WaitGroup
+	fieldSendWg.Add(1)
 
 	for i, source := range c.Sources {
+		wg.Add(1)
 		currIndex, currSource := i, source
 
-		g.Go(func() error {
+		go func() {
+			defer wg.Done()
 			err := vcursor.StreamExecutePrimitive(currSource, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
 				// if we have fields to compare, make sure all the fields are all the same
 				if currIndex == 0 {
 					fieldsMu.Lock()
 					if !fieldsSent {
-						defer wg.Done()
+						defer fieldSendWg.Done()
 						defer fieldsMu.Unlock()
 						seenFields = resultChunk.Fields
 						fieldsSent = true
@@ -195,7 +196,7 @@ func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 					}
 					fieldsMu.Unlock()
 				}
-				wg.Wait()
+				fieldSendWg.Wait()
 				if resultChunk.Fields != nil {
 					err := c.compareFields(seenFields, resultChunk.Fields)
 					if err != nil {
@@ -217,19 +218,19 @@ func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 				fieldsMu.Lock()
 				if !fieldsSent {
 					fieldsSent = true
-					wg.Done()
+					fieldSendWg.Done()
 				}
 				fieldsMu.Unlock()
 			}
-
-			return err
-		})
+			if err != nil {
+				outerErr = err
+				vcursor.CancelContext()
+			}
+		}()
 
 	}
-	if err := g.Wait(); err != nil {
-		return err
-	}
-	return nil
+	wg.Wait()
+	return outerErr
 }
 
 // GetFields fetches the field info.
