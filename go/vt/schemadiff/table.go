@@ -35,6 +35,8 @@ type AlterTableEntityDiff struct {
 	from       *CreateTableEntity
 	to         *CreateTableEntity
 	alterTable *sqlparser.AlterTable
+
+	subsequentDiff *AlterTableEntityDiff
 }
 
 // IsEmpty implements EntityDiff
@@ -77,6 +79,23 @@ func (d *AlterTableEntityDiff) CanonicalStatementString() (s string) {
 		s = sqlparser.CanonicalString(stmt)
 	}
 	return s
+}
+
+// SubsequentDiff implements EntityDiff
+func (d *AlterTableEntityDiff) SubsequentDiff() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	return d.subsequentDiff
+}
+
+// addSubsequentDiff adds a subsequent diff to the tail of the diff sequence
+func (d *AlterTableEntityDiff) addSubsequentDiff(diff *AlterTableEntityDiff) {
+	if d.subsequentDiff == nil {
+		d.subsequentDiff = diff
+	} else {
+		d.subsequentDiff.addSubsequentDiff(diff)
+	}
 }
 
 //
@@ -126,6 +145,11 @@ func (d *CreateTableEntityDiff) CanonicalStatementString() (s string) {
 	return s
 }
 
+// SubsequentDiff implements EntityDiff
+func (d *CreateTableEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
+}
+
 //
 type DropTableEntityDiff struct {
 	from      *CreateTableEntity
@@ -172,6 +196,11 @@ func (d *DropTableEntityDiff) CanonicalStatementString() (s string) {
 		s = sqlparser.CanonicalString(stmt)
 	}
 	return s
+}
+
+// SubsequentDiff implements EntityDiff
+func (d *DropTableEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
 }
 
 // CreateTableEntity stands for a TABLE construct. It contains the table's CREATE statement.
@@ -462,6 +491,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		Table: otherStmt.Table,
 	}
 	diffedTableCharset := ""
+	var partitionSpecs []*sqlparser.PartitionSpec
 	{
 		t1Options := c.CreateTable.TableSpec.Options
 		t2Options := other.CreateTable.TableSpec.Options
@@ -493,7 +523,9 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		// ordered keys for both tables:
 		t1Partitions := c.CreateTable.TableSpec.PartitionOption
 		t2Partitions := other.CreateTable.TableSpec.PartitionOption
-		if err := c.diffPartitions(alterTable, t1Partitions, t2Partitions, hints); err != nil {
+		var err error
+		partitionSpecs, err = c.diffPartitions(alterTable, t1Partitions, t2Partitions, hints)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -506,13 +538,35 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 			return nil, err
 		}
 	}
-	if len(alterTable.AlterOptions) == 0 && alterTable.PartitionSpec == nil && alterTable.PartitionOption == nil {
+	if len(alterTable.AlterOptions) == 0 && alterTable.PartitionOption == nil && alterTable.PartitionSpec == nil && len(partitionSpecs) == 0 {
 		// it's possible that the table definitions are different, and still there's no
 		// "real" difference. Reasons could be:
 		// - reordered keys -- we treat that as non-diff
 		return nil, nil
 	}
-	return &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}, nil
+	if len(partitionSpecs) == 0 {
+		return &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}, nil
+	}
+	// partitionSpecs has multiple entries
+	if len(alterTable.AlterOptions) > 0 ||
+		alterTable.PartitionOption != nil ||
+		alterTable.PartitionSpec != nil {
+		return nil, ErrMixedPartitionAndNonPartitionChanges
+	}
+	var parentAlterTableEntityDiff *AlterTableEntityDiff
+	for _, partitionSpec := range partitionSpecs {
+		alterTable := &sqlparser.AlterTable{
+			Table:         otherStmt.Table,
+			PartitionSpec: partitionSpec,
+		}
+		diff := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+		if parentAlterTableEntityDiff == nil {
+			parentAlterTableEntityDiff = diff
+		} else {
+			parentAlterTableEntityDiff.addSubsequentDiff(diff)
+		}
+	}
+	return parentAlterTableEntityDiff, nil
 }
 
 func (c *CreateTableEntity) diffTableCharset(
@@ -720,34 +774,36 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 func (c *CreateTableEntity) isRangePartitionsRotation(
 	t1Partitions *sqlparser.PartitionOption,
 	t2Partitions *sqlparser.PartitionOption,
-) (bool, []sqlparser.AlterOption) {
+) (bool, []*sqlparser.PartitionSpec, error) {
 	// Validate that both tables have range partitioning
 	if t1Partitions.Type != t2Partitions.Type {
-		return false, nil
+		return false, nil, nil
 	}
 	if t1Partitions.Type != sqlparser.RangeType {
-		return false, nil
+		return false, nil, nil
 	}
 	definitions1 := t1Partitions.Definitions
 	definitions2 := t2Partitions.Definitions
 	// there has to be a non-empty shared list, therefore both definitions must be non-empty:
 	if len(definitions1) == 0 {
-		return false, nil
+		return false, nil, nil
 	}
 	if len(definitions2) == 0 {
-		return false, nil
+		return false, nil, nil
 	}
+	droppedPartitions1 := []*sqlparser.PartitionDefinition{}
 	// It's OK for prefix of t1 partitions to be nonexistent in t2 (as they may have been rotated away in t2)
 	for len(definitions1) > 0 && sqlparser.String(definitions1[0]) != sqlparser.String(definitions2[0]) {
+		droppedPartitions1 = append(droppedPartitions1, definitions1[0])
 		definitions1 = definitions1[1:]
 	}
 	if len(definitions1) == 0 {
 		// We've exhaused definition1 trying to find a shared partition with definitions2. Nothing found.
 		// so there is no shared sequence between the two tables.
-		return false, nil
+		return false, nil, nil
 	}
 	if len(definitions1) > len(definitions2) {
-		return false, nil
+		return false, nil, nil
 	}
 	// To save computation, and ecause we've already shown that sqlparser.String(definitions1[0]) == sqlparser.String(definitions2[0]),
 	// we can skip one element
@@ -757,22 +813,38 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	// It's ok if we end up with leftover elements in definition2
 	for len(definitions1) > 0 {
 		if sqlparser.String(definitions1[0]) != sqlparser.String(definitions2[0]) {
-			return false, nil
+			return false, nil, nil
 		}
 		definitions1 = definitions1[1:]
 		definitions2 = definitions2[1:]
 	}
-	return true, nil
+	partitionSpecs := []*sqlparser.PartitionSpec{}
+	addedPartitions2 := definitions2
+	for _, p := range droppedPartitions1 {
+		partitionSpec := &sqlparser.PartitionSpec{
+			Action: sqlparser.DropAction,
+			Names:  []sqlparser.ColIdent{p.Name},
+		}
+		partitionSpecs = append(partitionSpecs, partitionSpec)
+	}
+	for _, p := range addedPartitions2 {
+		partitionSpec := &sqlparser.PartitionSpec{
+			Action:      sqlparser.AddAction,
+			Definitions: []*sqlparser.PartitionDefinition{p},
+		}
+		partitionSpecs = append(partitionSpecs, partitionSpec)
+	}
+	return true, partitionSpecs, nil
 }
 
 func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 	t1Partitions *sqlparser.PartitionOption,
 	t2Partitions *sqlparser.PartitionOption,
 	hints *DiffHints,
-) error {
+) (partitionSpecs []*sqlparser.PartitionSpec, err error) {
 	switch {
 	case t1Partitions == nil && t2Partitions == nil:
-		return nil
+		return nil, nil
 	case t1Partitions == nil:
 		// add partitioning
 		alterTable.PartitionOption = t2Partitions
@@ -785,7 +857,7 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 		alterTable.PartitionSpec = partitionSpec
 	case sqlparser.String(t1Partitions) == sqlparser.String(t2Partitions):
 		// identical partitioning
-		return nil
+		return nil, nil
 	default:
 		// partitioning was changed
 		// For most cases, we produce a complete re-partitioing schema: we don't try and figure out the minimal
@@ -798,19 +870,27 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 		// Having said that, we _do_ analyze the scenario of a RANGE partitioning rotation of partitions:
 		// where zero or more partitions may have been dropped from the earlier range, and zero or more
 		// partitions have been added with a later range:
-		if isRotation, _ := c.isRangePartitionsRotation(t1Partitions, t2Partitions); isRotation {
+		isRotation, partitionSpecs, err := c.isRangePartitionsRotation(t1Partitions, t2Partitions)
+		if err != nil {
+			return nil, err
+		}
+		if isRotation {
 			switch hints.RangeRotationStrategy {
 			case RangeRotationIgnore:
-				return nil
+				return nil, nil
 			case RangeRotationStatements:
-				return ErrRangeRotattionStatementsStrategyUnsupported
+				if len(partitionSpecs) == 1 {
+					alterTable.PartitionSpec = partitionSpecs[0]
+					partitionSpecs = nil
+				}
+				return partitionSpecs, nil
 			case RangeRotationFullSpec:
 				// proceed to return a full rebuild
 			}
 		}
 		alterTable.PartitionOption = t2Partitions
 	}
-	return nil
+	return nil, nil
 }
 
 func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
@@ -1124,11 +1204,52 @@ func sortAlterOptions(diff *AlterTableEntityDiff) {
 // supported modifications are only those created by schemadiff's Diff() function.
 func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 	sortAlterOptions(diff)
+	// Apply partitioning changes:
 	if spec := diff.alterTable.PartitionSpec; spec != nil {
 		switch {
 		case spec.Action == sqlparser.RemoveAction && spec.IsAll:
 			// Remove partitioning
 			c.TableSpec.PartitionOption = nil
+		case spec.Action == sqlparser.DropAction && len(spec.Names) > 0:
+			for _, dropPartitionName := range spec.Names {
+				// Drop partitions
+				partitionName := dropPartitionName.String()
+				if c.TableSpec.PartitionOption == nil {
+					return errors.Wrap(ErrApplyPartitionNotFound, partitionName)
+				}
+				partitionFound := false
+				for i, p := range c.TableSpec.PartitionOption.Definitions {
+					if p.Name.String() == partitionName {
+						c.TableSpec.PartitionOption.Definitions = append(
+							c.TableSpec.PartitionOption.Definitions[0:i],
+							c.TableSpec.PartitionOption.Definitions[i+1:]...,
+						)
+						partitionFound = true
+						break
+					}
+				}
+				if !partitionFound {
+					return errors.Wrap(ErrApplyPartitionNotFound, partitionName)
+				}
+			}
+		case spec.Action == sqlparser.AddAction && len(spec.Definitions) == 1:
+			// Add one partition
+			partitionName := spec.Definitions[0].Name.String()
+			if c.TableSpec.PartitionOption == nil {
+				return ErrApplyNoPartitions
+			}
+			if len(c.TableSpec.PartitionOption.Definitions) == 0 {
+				return ErrApplyNoPartitions
+			}
+			for _, p := range c.TableSpec.PartitionOption.Definitions {
+				if p.Name.String() == partitionName {
+					return errors.Wrap(ErrApplyDuplicatePartition, partitionName)
+				}
+			}
+			c.TableSpec.PartitionOption.Definitions = append(
+				c.TableSpec.PartitionOption.Definitions,
+				spec.Definitions[0],
+			)
 		default:
 			return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.String(spec))
 		}
@@ -1333,10 +1454,6 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 // Apply attempts to apply given ALTER TABLE diff onto the table defined by this entity.
 // This entity is unmodified. If successful, a new CREATE TABLE entity is returned.
 func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
-	alterDiff, ok := diff.(*AlterTableEntityDiff)
-	if !ok {
-		return nil, ErrEntityTypeMismatch
-	}
 	dupCreateTable := &sqlparser.CreateTable{
 		Temp:        c.Temp,
 		Table:       c.Table,
@@ -1359,8 +1476,17 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 		dupCreateTable.Comments = &d
 	}
 	dup := &CreateTableEntity{CreateTable: *dupCreateTable}
-	if err := dup.apply(alterDiff); err != nil {
-		return nil, err
+	for diff != nil {
+		alterDiff, ok := diff.(*AlterTableEntityDiff)
+		if !ok {
+			return nil, ErrEntityTypeMismatch
+		}
+		if !diff.IsEmpty() {
+			if err := dup.apply(alterDiff); err != nil {
+				return nil, err
+			}
+		}
+		diff = diff.SubsequentDiff()
 	}
 	return dup, nil
 }
@@ -1441,15 +1567,68 @@ func getKeyColumnNames(key *sqlparser.IndexDefinition) (colNames map[string]bool
 // validate checks that the table structure is valid:
 // - all columns referenced by keys exist
 func (c *CreateTableEntity) validate() error {
-	// validate all columns referenced by indexes do in fact exist
 	columnExists := map[string]bool{}
 	for _, col := range c.CreateTable.TableSpec.Columns {
-		columnExists[col.Name.String()] = true
+		colName := col.Name.String()
+		if columnExists[colName] {
+			return errors.Wrapf(ErrApplyDuplicateColumn, "column: %v", colName)
+		}
+		columnExists[colName] = true
 	}
+	// validate all columns referenced by indexes do in fact exist
 	for _, key := range c.CreateTable.TableSpec.Indexes {
 		for colName := range getKeyColumnNames(key) {
 			if !columnExists[colName] {
 				return errors.Wrapf(ErrInvalidColumnInKey, "key: %v, column: %v", key.Info.Name.String(), colName)
+			}
+		}
+	}
+	if partition := c.CreateTable.TableSpec.PartitionOption; partition != nil {
+		// validate no two partitions have same name
+		partitionExists := map[string]bool{}
+		for _, p := range partition.Definitions {
+			partitionName := p.Name.String()
+			if partitionExists[partitionName] {
+				return errors.Wrapf(ErrApplyDuplicatePartition, "partition: %v", partitionName)
+			}
+			partitionExists[partitionName] = true
+		}
+		// validate columns referenced by partitions do in fact exist
+		// also, validate that all unique keys include partitioned columns
+		partitionColNames := []string{}
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node := node.(type) {
+			case *sqlparser.ColName:
+				partitionColNames = append(partitionColNames, node.Name.String())
+			}
+			return true, nil
+		}, partition.Expr)
+		if err != nil {
+			return err
+		}
+
+		for _, partitionColName := range partitionColNames {
+			// Validate columns exists in table:
+			if !columnExists[partitionColName] {
+				return errors.Wrapf(ErrInvalidColumnInPartition, "column: %v", partitionColName)
+			}
+
+			// Validate all unique keys include this column:
+			for _, key := range c.CreateTable.TableSpec.Indexes {
+				if !key.Info.Unique {
+					continue
+				}
+				colFound := false
+				for _, col := range key.Columns {
+					colName := col.Column.String()
+					if colName == partitionColName {
+						colFound = true
+						break
+					}
+				}
+				if !colFound {
+					return errors.Wrapf(ErrMissingParitionColumnInUniqueKey, "column: %v not found in key: %v", partitionColName, key.Info.Name.String())
+				}
 			}
 		}
 	}

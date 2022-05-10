@@ -323,10 +323,10 @@ func bindVariable(yylex yyLexer, bvar string) {
 // MySQL reserved words that are unused by this grammar will map to this token.
 %token <str> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD
 %token <str> NTH_VALUE NTILE OF OVER PERCENT_RANK RANK RECURSIVE ROW_NUMBER SYSTEM WINDOW
-%token <str> ACTIVE ADMIN BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
+%token <str> ACTIVE ADMIN AUTOEXTEND_SIZE BUCKETS CLONE COMPONENT DEFINITION ENFORCED ENGINE_ATTRIBUTE EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <str> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
 %token <str> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD OPTIONAL ORDINALITY ORGANIZATION OTHERS PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
-%token <str> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
+%token <str> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_ENGINE_ATTRIBUTE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
 %token <str> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE RETURNING
 
 // Explain tokens
@@ -2101,6 +2101,14 @@ index_option:
   {
     $$ = &IndexOption{Name: string($1) + " " + string($2), String: $3.String()}
   }
+| ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($3)}
+  }
+| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($3)}
+  }
 
 equal_opt:
   /* empty */
@@ -2377,6 +2385,10 @@ table_option:
   {
     $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
   }
+| AUTOEXTEND_SIZE equal_opt INTEGRAL
+  {
+    $$ = &TableOption{Name: string($1), Value: NewIntLiteral($3)}
+  }
 | AVG_ROW_LENGTH equal_opt INTEGRAL
   {
     $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
@@ -2425,6 +2437,10 @@ table_option:
   {
     $$ = &TableOption{Name:string($1), String:$3.String(), CaseSensitive: true}
   }
+| ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &TableOption{Name: string($1), Value: NewStrLiteral($3)}
+  }
 | INSERT_METHOD equal_opt insert_method_options
   {
     $$ = &TableOption{Name:string($1), String:string($3)}
@@ -2456,6 +2472,10 @@ table_option:
 | ROW_FORMAT equal_opt row_format_options
   {
     $$ = &TableOption{Name:string($1), String:string($3)}
+  }
+| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &TableOption{Name: string($1), Value: NewStrLiteral($3)}
   }
 | STATS_AUTO_RECALC equal_opt INTEGRAL
   {
@@ -6459,6 +6479,7 @@ non_reserved_keyword:
 | ALWAYS
 | ASCII
 | AUTO_INCREMENT
+| AUTOEXTEND_SIZE
 | AVG_ROW_LENGTH
 | BEGIN
 | BIGINT
@@ -6515,6 +6536,7 @@ non_reserved_keyword:
 | END
 | ENFORCED
 | ENGINE
+| ENGINE_ATTRIBUTE
 | ENGINES
 | ENUM
 | ERROR
@@ -6694,6 +6716,7 @@ non_reserved_keyword:
 | S3
 | SECONDARY
 | SECONDARY_ENGINE
+| SECONDARY_ENGINE_ATTRIBUTE
 | SECONDARY_LOAD
 | SECONDARY_UNLOAD
 | SECURITY
