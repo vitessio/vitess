@@ -694,12 +694,15 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 	buf.astPrintf(idx, "%v (", idx.Info)
 	for i, col := range idx.Columns {
 		if i != 0 {
-			buf.astPrintf(idx, ", %v", col.Column)
+			buf.astPrintf(idx, ", ")
+		}
+		if col.Expression != nil {
+			buf.astPrintf(idx, "(%v)", col.Expression)
 		} else {
 			buf.astPrintf(idx, "%v", col.Column)
-		}
-		if col.Length != nil {
-			buf.astPrintf(idx, "(%v)", col.Length)
+			if col.Length != nil {
+				buf.astPrintf(idx, "(%v)", col.Length)
+			}
 		}
 		if col.Direction == DescOrder {
 			buf.astPrintf(idx, " desc")
@@ -711,7 +714,7 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 		buf.astPrintf(idx, " %s", opt.Name)
 		if opt.String != "" {
 			buf.astPrintf(idx, " %s", opt.String)
-		} else {
+		} else if opt.Value != nil {
 			buf.astPrintf(idx, " %v", opt.Value)
 		}
 	}
@@ -786,6 +789,18 @@ func (a ReferenceAction) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (a MatchAction) Format(buf *TrackedBuffer) {
+	switch a {
+	case Full:
+		buf.literal("full")
+	case Simple:
+		buf.literal("simple")
+	case Partial:
+		buf.literal("partial")
+	}
+}
+
+// Format formats the node.
 func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 	buf.astPrintf(f, "foreign key %v%v %v", f.IndexName, f.Source, f.ReferenceDefinition)
 }
@@ -793,6 +808,9 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (ref *ReferenceDefinition) Format(buf *TrackedBuffer) {
 	buf.astPrintf(ref, "references %v %v", ref.ReferencedTable, ref.ReferencedColumns)
+	if ref.Match != DefaultMatch {
+		buf.astPrintf(ref, " match %v", ref.Match)
+	}
 	if ref.OnDelete != DefaultAction {
 		buf.astPrintf(ref, " on delete %v", ref.OnDelete)
 	}
@@ -1179,9 +1197,9 @@ func (node *NullVal) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node BoolVal) Format(buf *TrackedBuffer) {
 	if node {
-		buf.astPrintf(node, "true")
+		buf.WriteString("true")
 	} else {
-		buf.astPrintf(node, "false")
+		buf.WriteString("false")
 	}
 }
 
@@ -1233,7 +1251,7 @@ func (node *UnaryExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *IntroducerExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s %v", node.CharacterSet, node.Expr)
+	buf.astPrintf(node, "%#s %v", node.CharacterSet, node.Expr)
 }
 
 // Format formats the node.
@@ -1307,7 +1325,7 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	if containEscapableChars(funcName, NoAt) {
 		writeEscapedString(buf, funcName)
 	} else {
-		buf.literal(funcName)
+		buf.WriteString(funcName)
 	}
 	buf.astPrintf(node, "(%s%v)", distinct, node.Exprs)
 }
@@ -2141,7 +2159,21 @@ func (node *JSONSearchExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *JSONValueExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "json_value(%v, %v)", node.JSONDoc, node.Path)
+	buf.astPrintf(node, "json_value(%v, %v", node.JSONDoc, node.Path)
+
+	if node.ReturningType != nil {
+		buf.astPrintf(node, " returning %v", node.ReturningType)
+	}
+
+	if node.EmptyOnResponse != nil {
+		buf.astPrintf(node, " %v on empty", node.EmptyOnResponse)
+	}
+
+	if node.ErrorOnResponse != nil {
+		buf.astPrintf(node, " %v on error", node.ErrorOnResponse)
+	}
+
+	buf.WriteByte(')')
 }
 
 // Format formats the node

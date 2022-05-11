@@ -91,7 +91,6 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 
 	if enableSemiSync {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
-		clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 	}
 
 	// Start topo server
@@ -203,7 +202,6 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 
 	if enableSemiSync {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
-		clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 	}
 
 	// Start topo server
@@ -412,7 +410,7 @@ func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.
 
 // ErsWithVtctl runs ERS via vtctl binary
 func ErsWithVtctl(clusterInstance *cluster.LocalProcessCluster) (string, error) {
-	args := []string{"--durability_policy=semi_sync", "EmergencyReparentShard", "--", "--keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
+	args := []string{"EmergencyReparentShard", "--", "--keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
 	return clusterInstance.VtctlProcess.ExecuteCommandWithOutput(args...)
 }
 

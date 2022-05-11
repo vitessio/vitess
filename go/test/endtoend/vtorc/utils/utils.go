@@ -750,7 +750,6 @@ func SetupNewClusterSemiSync(t *testing.T) *VtOrcClusterInfo {
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster(Cell1, Hostname)
 	keyspace := &cluster.Keyspace{Name: keyspaceName}
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 	// Start topo server
 	err := clusterInstance.StartTopo()
 	require.NoError(t, err, "Error starting topo: %v", err)

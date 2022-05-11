@@ -301,7 +301,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 						return err
 					}
 					defer dbConn.Recycle()
-					return qre.execStreamSQL(dbConn, sql, func(result *sqltypes.Result) error {
+					return qre.execStreamSQL(dbConn, qre.connID != 0, sql, func(result *sqltypes.Result) error {
 						// this stream result is potentially used by more than one client, so
 						// the consolidator will return it to the pool once it knows it's no longer
 						// being shared
@@ -333,7 +333,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		conn = dbConn
 	}
 
-	return qre.execStreamSQL(conn, sql, func(result *sqltypes.Result) error {
+	return qre.execStreamSQL(conn, qre.connID != 0, sql, func(result *sqltypes.Result) error {
 		// this stream result is only used by the calling client, so it can be
 		// returned to the pool once the callback has fully returned
 		defer returnStreamResult(result)
@@ -954,7 +954,7 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
 }
 
-func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL")
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	callBackClosingSpan := func(result *sqltypes.Result) error {
@@ -963,8 +963,19 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callb
 	}
 
 	qd := NewQueryDetail(qre.logStats.Ctx, conn)
-	qre.tsv.olapql.Add(qd)
-	defer qre.tsv.olapql.Remove(qd)
+
+	// Add query detail object into QueryExecutor TableServer list w.r.t if it is a transactional or not. Previously we were adding it
+	// to olapql list regardless but that resulted in problems, where long-running stream queries which can be stateful (or transactional)
+	// weren't getting cleaned up during unserveCommon>handleShutdownGracePeriod in state_manager.go.
+	// This change will ensure that long-running streaming stateful queries get gracefully shutdown during ServingTypeChange
+	// once their grace period is over.
+	if isTransaction {
+		qre.tsv.statefulql.Add(qd)
+		defer qre.tsv.statefulql.Remove(qd)
+	} else {
+		qre.tsv.olapql.Add(qd)
+		defer qre.tsv.olapql.Remove(qd)
+	}
 
 	start := time.Now()
 	err := conn.Stream(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))

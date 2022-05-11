@@ -760,8 +760,39 @@ func (er *EvalResult) makeUnsignedIntegral() {
 	case sqltypes.IsIntegral(tt):
 		er.type_ = int16(sqltypes.Uint64)
 	case sqltypes.IsFloat(tt):
+		// We want to convert a float64 to its uint64 representation.
+		// However, the cast `uint64(f)`, when f < 0, is actually implementation-defined
+		// behavior in Go, so we cannot use it here.
+		// The most noticeable example of this are M1 Macs with their ARM64 chipsets, where
+		// the underflow is clamped at 0:
+		//
+		//		GOARCH=amd64 | uint64(-2.0) == 18446744073709551614
+		// 		GOARCH=arm64 | uint64(-2.0) == 0
+		//
+		// The most obvious way to keep this well-defined is to do a two-step conversion:
+		//		float64 -> int64 -> uint64
+		// where every step of the conversion is well-defined. However, this conversion overflows
+		// a range of floats, those larger than MaxInt64 but that would still fit in a 64-bit unsigned
+		// integer. What's the right way to handle this overflow?
+		//
+		// Fortunately for us, the `uint64(f)` conversion for negative numbers is also undefined
+		// behavior in C and C++, so MySQL is already handling this case! From running this
+		// integration test, we can verify that MySQL is using a two-step conversion and it's clamping
+		// the value to MaxInt64 on overflow:
+		//
+		//		mysql> SELECT CAST(18446744073709540000e0 AS UNSIGNED);
+		//		+------------------------------------------+
+		//		| CAST(18446744073709540000e0 AS UNSIGNED) |
+		//		+------------------------------------------+
+		//		|                      9223372036854775807 |
+		//		+------------------------------------------+
+		//
 		f := math.Round(er.float64())
-		er.setUint64(uint64(f))
+		i := uint64(int64(f))
+		if i > math.MaxInt64 && !math.Signbit(f) {
+			i = math.MaxInt64
+		}
+		er.setUint64(i)
 	case tt == sqltypes.Decimal:
 		dec := er.decimal().Round(0)
 		if dec.Sign() < 0 {
@@ -782,8 +813,15 @@ func (er *EvalResult) makeSignedIntegral() {
 	case sqltypes.IsIntegral(tt):
 		er.type_ = int16(sqltypes.Int64)
 	case sqltypes.IsFloat(tt):
+		// the int64(f) conversion is always well-defined, but for float values larger than
+		// MaxInt64, it returns a negative value. Check for underflow: if the sign of
+		// our integral is negative but our float is not, clamp to MaxInt64 like MySQL does.
 		f := math.Round(er.float64())
-		er.setInt64(int64(f))
+		i := int64(f)
+		if i < 0 && !math.Signbit(f) {
+			i = math.MaxInt64
+		}
+		er.setInt64(i)
 	case tt == sqltypes.Decimal:
 		dec := er.decimal().Round(0)
 		i, _ := dec.Int64()

@@ -121,7 +121,6 @@ func Test_getShardSets(t *testing.T) {
 		},
 		topoReadPool: pools.NewRPCPool(5, 0, nil),
 	}
-	require.NoError(t, c.Vtctld.Dial(context.Background()))
 
 	tests := []struct {
 		name           string

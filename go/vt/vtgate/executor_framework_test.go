@@ -676,26 +676,10 @@ var testPlannedQueries = map[string]bool{}
 func testQueryLog(t *testing.T, logChan chan any, method, stmtType, sql string, shardQueries int) *LogStats {
 	t.Helper()
 
-	return testQueryLogWithSavepoint(t, logChan, method, stmtType, sql, shardQueries, false /* checkSavepoint */)
-}
-
-func testQueryLogWithSavepoint(t *testing.T, logChan chan any, method, stmtType, sql string, shardQueries int, checkSavepoint bool) *LogStats {
-	t.Helper()
-
 	var logStats *LogStats
 
-	if checkSavepoint {
-		logStats = getQueryLog(logChan)
-		require.NotNil(t, logStats)
-	} else {
-		for {
-			logStats = getQueryLog(logChan)
-			require.NotNil(t, logStats)
-			if logStats.Method != "MarkSavepoint" {
-				break
-			}
-		}
-	}
+	logStats = getQueryLog(logChan)
+	require.NotNil(t, logStats)
 
 	var log bytes.Buffer
 	streamlog.GetFormatter(QueryLogger)(&log, nil, logStats)
@@ -709,11 +693,9 @@ func testQueryLogWithSavepoint(t *testing.T, logChan chan any, method, stmtType,
 	checkEqualQuery := true
 	// The internal savepoints are created with uuids so the value of it not known to assert.
 	// Therefore, the equal query check is ignored.
-	if checkSavepoint {
-		switch stmtType {
-		case "SAVEPOINT", "SAVEPOINT_ROLLBACK", "RELEASE":
-			checkEqualQuery = false
-		}
+	switch stmtType {
+	case "SAVEPOINT", "SAVEPOINT_ROLLBACK", "RELEASE":
+		checkEqualQuery = false
 	}
 	// only test the durations if there is no error (fields[16])
 	if fields[16] == "\"\"" {

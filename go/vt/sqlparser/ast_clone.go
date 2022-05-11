@@ -237,6 +237,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfLockOption(in)
 	case *LockTables:
 		return CloneRefOfLockTables(in)
+	case MatchAction:
+		return in
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
 	case *MemberOfExpr:
@@ -492,7 +494,7 @@ func CloneRefOfAlterDatabase(n *AlterDatabase) *AlterDatabase {
 	}
 	out := *n
 	out.DBName = CloneTableIdent(n.DBName)
-	out.AlterOptions = CloneSliceOfCollateAndCharset(n.AlterOptions)
+	out.AlterOptions = CloneSliceOfDatabaseOption(n.AlterOptions)
 	return &out
 }
 
@@ -785,7 +787,7 @@ func CloneRefOfCreateDatabase(n *CreateDatabase) *CreateDatabase {
 	out := *n
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.DBName = CloneTableIdent(n.DBName)
-	out.CreateOptions = CloneSliceOfCollateAndCharset(n.CreateOptions)
+	out.CreateOptions = CloneSliceOfDatabaseOption(n.CreateOptions)
 	return &out
 }
 
@@ -1382,6 +1384,9 @@ func CloneRefOfJSONValueExpr(n *JSONValueExpr) *JSONValueExpr {
 	out := *n
 	out.JSONDoc = CloneExpr(n.JSONDoc)
 	out.Path = CloneJSONPathParam(n.Path)
+	out.ReturningType = CloneRefOfConvertType(n.ReturningType)
+	out.EmptyOnResponse = CloneRefOfJtOnResponse(n.EmptyOnResponse)
+	out.ErrorOnResponse = CloneRefOfJtOnResponse(n.ErrorOnResponse)
 	return &out
 }
 
@@ -3094,14 +3099,14 @@ func CloneSliceOfRefOfColumnDefinition(n []*ColumnDefinition) []*ColumnDefinitio
 	return res
 }
 
-// CloneSliceOfCollateAndCharset creates a deep clone of the input.
-func CloneSliceOfCollateAndCharset(n []CollateAndCharset) []CollateAndCharset {
+// CloneSliceOfDatabaseOption creates a deep clone of the input.
+func CloneSliceOfDatabaseOption(n []DatabaseOption) []DatabaseOption {
 	if n == nil {
 		return nil
 	}
-	res := make([]CollateAndCharset, 0, len(n))
+	res := make([]DatabaseOption, 0, len(n))
 	for _, x := range n {
-		res = append(res, CloneCollateAndCharset(x))
+		res = append(res, CloneDatabaseOption(x))
 	}
 	return res
 }
@@ -3476,9 +3481,9 @@ func CloneSliceOfRefOfCommonTableExpr(n []*CommonTableExpr) []*CommonTableExpr {
 	return res
 }
 
-// CloneCollateAndCharset creates a deep clone of the input.
-func CloneCollateAndCharset(n CollateAndCharset) CollateAndCharset {
-	return *CloneRefOfCollateAndCharset(&n)
+// CloneDatabaseOption creates a deep clone of the input.
+func CloneDatabaseOption(n DatabaseOption) DatabaseOption {
+	return *CloneRefOfDatabaseOption(&n)
 }
 
 // CloneRefOfIndexColumn creates a deep clone of the input.
@@ -3489,6 +3494,7 @@ func CloneRefOfIndexColumn(n *IndexColumn) *IndexColumn {
 	out := *n
 	out.Column = CloneColIdent(n.Column)
 	out.Length = CloneRefOfLiteral(n.Length)
+	out.Expression = CloneExpr(n.Expression)
 	return &out
 }
 
@@ -3523,8 +3529,8 @@ func CloneRefOfRenameTablePair(n *RenameTablePair) *RenameTablePair {
 	return &out
 }
 
-// CloneRefOfCollateAndCharset creates a deep clone of the input.
-func CloneRefOfCollateAndCharset(n *CollateAndCharset) *CollateAndCharset {
+// CloneRefOfDatabaseOption creates a deep clone of the input.
+func CloneRefOfDatabaseOption(n *DatabaseOption) *DatabaseOption {
 	if n == nil {
 		return nil
 	}

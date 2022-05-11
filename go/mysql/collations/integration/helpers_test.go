@@ -31,8 +31,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
-var defaultenv = collations.Local()
-
 type testweight struct {
 	collation string
 	input     []byte
@@ -49,7 +47,7 @@ func testRemoteWeights(t *testing.T, golden io.Writer, cases []testweight) {
 
 	for _, tc := range cases {
 		t.Run(tc.collation, func(t *testing.T) {
-			local := defaultenv.LookupByName(tc.collation)
+			local := collations.Local().LookupByName(tc.collation)
 			remote := remote.NewCollation(conn, tc.collation)
 			localResult := local.WeightString(nil, tc.input, 0)
 			remoteResult := remote.WeightString(nil, tc.input, 0)
@@ -85,7 +83,7 @@ func testRemoteComparison(t *testing.T, golden io.Writer, cases []testcmp) {
 
 	for _, tc := range cases {
 		t.Run(tc.collation, func(t *testing.T) {
-			local := defaultenv.LookupByName(tc.collation)
+			local := collations.Local().LookupByName(tc.collation)
 			remote := remote.NewCollation(conn, tc.collation)
 			localResult := normalizecmp(local.Collate(tc.left, tc.right, false))
 			remoteResult := remote.Collate(tc.left, tc.right, false)
