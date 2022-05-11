@@ -158,7 +158,7 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtQr, mysqlQr *sql
 			vtCols = append(vtCols, vtField.Name)
 			myCols = append(myCols, mysqlQr.Fields[i].Name)
 		}
-		assert.Equal(t, vtCols, myCols, "column names")
+		assert.Equal(t, myCols, vtCols, "column names do not match - the expected values are what mysql produced")
 	}
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
