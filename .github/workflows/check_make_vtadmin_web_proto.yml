@@ -23,6 +23,7 @@ jobs:
             - 'Makefile'
             - 'go/vt/proto/**'
             - 'proto/*.proto'
+            - 'web/vtadmin/src/proto/**'
 
     - name: Set up Go
       uses: actions/setup-go@v2
