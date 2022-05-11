@@ -139,6 +139,18 @@ func (cached *AlterCharset) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Collate)))
 	return size
 }
+func (cached *AlterCheck) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
+	return size
+}
 func (cached *AlterColumn) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -539,7 +551,7 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(160)
 	}
 	// field Null *bool
 	size += hack.RuntimeAllocSize(int64(1))
@@ -567,6 +579,8 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	size += cached.EngineAttribute.CachedSize(true)
 	// field SecondaryEngineAttribute *vitess.io/vitess/go/vt/sqlparser.Literal
 	size += cached.SecondaryEngineAttribute.CachedSize(true)
+	// field SRID *vitess.io/vitess/go/vt/sqlparser.Literal
+	size += cached.SRID.CachedSize(true)
 	return size
 }
 func (cached *CommonTableExpr) CachedSize(alloc bool) int64 {

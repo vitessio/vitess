@@ -39,6 +39,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAliasedTableExpr(in)
 	case *AlterCharset:
 		return CloneRefOfAlterCharset(in)
+	case *AlterCheck:
+		return CloneRefOfAlterCheck(in)
 	case *AlterColumn:
 		return CloneRefOfAlterColumn(in)
 	case *AlterDatabase:
@@ -473,6 +475,16 @@ func CloneRefOfAlterCharset(n *AlterCharset) *AlterCharset {
 		return nil
 	}
 	out := *n
+	return &out
+}
+
+// CloneRefOfAlterCheck creates a deep clone of the input.
+func CloneRefOfAlterCheck(n *AlterCheck) *AlterCheck {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneColIdent(n.Name)
 	return &out
 }
 
@@ -2401,6 +2413,8 @@ func CloneAlterOption(in AlterOption) AlterOption {
 		return in
 	case *AlterCharset:
 		return CloneRefOfAlterCharset(in)
+	case *AlterCheck:
+		return CloneRefOfAlterCheck(in)
 	case *AlterColumn:
 		return CloneRefOfAlterColumn(in)
 	case *ChangeColumn:
