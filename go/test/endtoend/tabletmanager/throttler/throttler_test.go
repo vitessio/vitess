@@ -73,7 +73,7 @@ var (
 )
 
 const (
-	throttlerInitWait            = 10 * time.Second
+	throttlerInitWait            = 15 * time.Second
 	accumulateLagWait            = 2 * time.Second
 	throttlerRefreshIntervalWait = 12 * time.Second
 	replicationCatchUpWait       = 5 * time.Second
