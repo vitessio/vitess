@@ -5342,7 +5342,8 @@ func EqualsRefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
 		EqualsRefOfBool(a.Invisible, b.Invisible) &&
 		a.Format == b.Format &&
 		EqualsRefOfLiteral(a.EngineAttribute, b.EngineAttribute) &&
-		EqualsRefOfLiteral(a.SecondaryEngineAttribute, b.SecondaryEngineAttribute)
+		EqualsRefOfLiteral(a.SecondaryEngineAttribute, b.SecondaryEngineAttribute) &&
+		EqualsRefOfLiteral(a.SRID, b.SRID)
 }
 
 // EqualsSliceOfString does deep equals between the two objects.

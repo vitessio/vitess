@@ -1750,9 +1750,15 @@ type ColumnTypeOptions struct {
 	// EngineAttribute is a new attribute not used for anything yet, but accepted
 	// since 8.0.23 in the MySQL parser.
 	EngineAttribute *Literal
+
 	// SecondaryEngineAttribute is a new attribute not used for anything yet, but accepted
 	// since 8.0.23 in the MySQL parser.
 	SecondaryEngineAttribute *Literal
+
+	// SRID is an attribute that indiciates the spatial reference system.
+	//
+	// https://dev.mysql.com/doc/refman/8.0/en/spatial-type-overview.html
+	SRID *Literal
 }
 
 // IndexDefinition describes an index in a CREATE TABLE statement

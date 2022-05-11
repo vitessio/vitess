@@ -1376,6 +1376,11 @@ column_attribute_list_opt:
   {
     $1.Format = $3
   }
+| column_attribute_list_opt SRID INTEGRAL
+  {
+    $1.SRID = NewIntLiteral($3)
+    $$ = $1
+  }
 | column_attribute_list_opt VISIBLE
   {
     val := false
