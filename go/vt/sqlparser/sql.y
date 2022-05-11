@@ -451,7 +451,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <ignore> ignore_opt
 %type <str> columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
-%type <boolean> exists_opt not_exists_opt enforced_opt temp_opt full_opt
+%type <boolean> exists_opt not_exists_opt enforced enforced_opt temp_opt full_opt
 %type <empty> to_opt
 %type <str> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
@@ -2437,17 +2437,23 @@ restrict_or_cascade_opt:
     $$ = string($1)
   }
 
-enforced_opt:
-  {
-    $$ = true
-  }
-| ENFORCED
+enforced:
+  ENFORCED
   {
     $$ = true
   }
 | NOT ENFORCED
   {
     $$ = false
+  }
+
+enforced_opt:
+  {
+    $$ = true
+  }
+| enforced
+  {
+    $$ = $1
   }
 
 table_option_list_opt:
@@ -2748,6 +2754,10 @@ alter_option:
 | ALTER column_opt column_name SET DEFAULT openb expression closeb
   {
 	$$ = &AlterColumn{Column: $3, DropDefault:false, DefaultVal:$7}
+  }
+| ALTER CHECK id_or_var enforced
+  {
+    $$ = &AlterCheck{Name: $3, Enforced: $4}
   }
 | CHANGE column_opt column_name column_definition first_opt after_opt
   {

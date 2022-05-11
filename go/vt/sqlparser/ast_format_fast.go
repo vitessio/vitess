@@ -2380,6 +2380,20 @@ func (node *AddConstraintDefinition) formatFast(buf *TrackedBuffer) {
 	node.ConstraintDefinition.formatFast(buf)
 }
 
+func (node *AlterCheck) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("alter check ")
+	node.Name.formatFast(buf)
+	if node.Enforced {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[ENFORCED])
+	} else {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[NOT])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[ENFORCED])
+	}
+}
+
 // formatFast formats the node.
 func (node *AddIndexDefinition) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("add ")

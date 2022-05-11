@@ -1810,6 +1810,15 @@ func (node *AddConstraintDefinition) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "add %v", node.ConstraintDefinition)
 }
 
+func (node *AlterCheck) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "alter check %v", node.Name)
+	if node.Enforced {
+		buf.astPrintf(node, " %s", keywordStrings[ENFORCED])
+	} else {
+		buf.astPrintf(node, " %s %s", keywordStrings[NOT], keywordStrings[ENFORCED])
+	}
+}
+
 // Format formats the node.
 func (node *AddIndexDefinition) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "add %v", node.IndexDefinition)

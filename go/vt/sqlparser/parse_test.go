@@ -1302,6 +1302,10 @@ var (
 	}, {
 		input: "alter table a add check (ch_1) not enforced",
 	}, {
+		input: "alter table a alter check ch_1 enforced",
+	}, {
+		input: "alter table a alter check ch_1 not enforced",
+	}, {
 		input: "alter table a drop check ch_1",
 	}, {
 		input:  "alter table a drop constraint ch_1",
