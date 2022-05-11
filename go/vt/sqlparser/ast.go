@@ -377,12 +377,12 @@ type (
 		IfExists bool
 	}
 
-	// CollateAndCharsetType is an enum for CollateAndCharset.Type
-	CollateAndCharsetType int8
+	// DatabaseOptionType is an enum for create database options
+	DatabaseOptionType int8
 
-	// CollateAndCharset is a struct that stores Collation or Character Set value
-	CollateAndCharset struct {
-		Type      CollateAndCharsetType
+	// DatabaseOption is a struct that stores Collation or Character Set value
+	DatabaseOption struct {
+		Type      DatabaseOptionType
 		IsDefault bool
 		Value     string
 	}
@@ -392,7 +392,7 @@ type (
 		Comments      *ParsedComments
 		DBName        TableIdent
 		IfNotExists   bool
-		CreateOptions []CollateAndCharset
+		CreateOptions []DatabaseOption
 		FullyParsed   bool
 	}
 
@@ -400,7 +400,7 @@ type (
 	AlterDatabase struct {
 		DBName              TableIdent
 		UpdateDataDirectory bool
-		AlterOptions        []CollateAndCharset
+		AlterOptions        []DatabaseOption
 		FullyParsed         bool
 	}
 

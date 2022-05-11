@@ -1270,7 +1270,7 @@ func EqualsRefOfAlterDatabase(a, b *AlterDatabase) bool {
 	return a.UpdateDataDirectory == b.UpdateDataDirectory &&
 		a.FullyParsed == b.FullyParsed &&
 		EqualsTableIdent(a.DBName, b.DBName) &&
-		EqualsSliceOfCollateAndCharset(a.AlterOptions, b.AlterOptions)
+		EqualsSliceOfDatabaseOption(a.AlterOptions, b.AlterOptions)
 }
 
 // EqualsRefOfAlterMigration does deep equals between the two objects.
@@ -1621,7 +1621,7 @@ func EqualsRefOfCreateDatabase(a, b *CreateDatabase) bool {
 		a.FullyParsed == b.FullyParsed &&
 		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsTableIdent(a.DBName, b.DBName) &&
-		EqualsSliceOfCollateAndCharset(a.CreateOptions, b.CreateOptions)
+		EqualsSliceOfDatabaseOption(a.CreateOptions, b.CreateOptions)
 }
 
 // EqualsRefOfCreateTable does deep equals between the two objects.
@@ -5237,13 +5237,13 @@ func EqualsSliceOfRefOfColumnDefinition(a, b []*ColumnDefinition) bool {
 	return true
 }
 
-// EqualsSliceOfCollateAndCharset does deep equals between the two objects.
-func EqualsSliceOfCollateAndCharset(a, b []CollateAndCharset) bool {
+// EqualsSliceOfDatabaseOption does deep equals between the two objects.
+func EqualsSliceOfDatabaseOption(a, b []DatabaseOption) bool {
 	if len(a) != len(b) {
 		return false
 	}
 	for i := 0; i < len(a); i++ {
-		if !EqualsCollateAndCharset(a[i], b[i]) {
+		if !EqualsDatabaseOption(a[i], b[i]) {
 			return false
 		}
 	}
@@ -5676,8 +5676,8 @@ func EqualsSliceOfRefOfCommonTableExpr(a, b []*CommonTableExpr) bool {
 	return true
 }
 
-// EqualsCollateAndCharset does deep equals between the two objects.
-func EqualsCollateAndCharset(a, b CollateAndCharset) bool {
+// EqualsDatabaseOption does deep equals between the two objects.
+func EqualsDatabaseOption(a, b DatabaseOption) bool {
 	return a.IsDefault == b.IsDefault &&
 		a.Value == b.Value &&
 		a.Type == b.Type
@@ -5734,8 +5734,8 @@ func EqualsRefOfRenameTablePair(a, b *RenameTablePair) bool {
 		EqualsTableName(a.ToTable, b.ToTable)
 }
 
-// EqualsRefOfCollateAndCharset does deep equals between the two objects.
-func EqualsRefOfCollateAndCharset(a, b *CollateAndCharset) bool {
+// EqualsRefOfDatabaseOption does deep equals between the two objects.
+func EqualsRefOfDatabaseOption(a, b *DatabaseOption) bool {
 	if a == b {
 		return true
 	}

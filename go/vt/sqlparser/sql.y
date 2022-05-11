@@ -65,7 +65,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   jsonObjectParam *JSONObjectParam
   colIdent      ColIdent
   joinCondition *JoinCondition
-  collateAndCharset CollateAndCharset
+  databaseOption DatabaseOption
   columnType    ColumnType
   jsonPathParam JSONPathParam
 }
@@ -128,7 +128,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   columnDefinitions []*ColumnDefinition
   indexOptions  []*IndexOption
   indexColumns  []*IndexColumn
-  collateAndCharsets []CollateAndCharset
+  databaseOptions []DatabaseOption
   tableAndLockTypes TableAndLockTypes
   renameTablePairs []*RenameTablePair
   alterOptions	   []AlterOption
@@ -365,8 +365,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <alterTable> create_index_prefix
 %type <createDatabase> create_database_prefix
 %type <alterDatabase> alter_database_prefix
-%type <collateAndCharset> collate character_set
-%type <collateAndCharsets> create_options create_options_opt
+%type <databaseOption> collate character_set encryption
+%type <databaseOptions> create_options create_options_opt
 %type <boolean> default_optional first_opt linear_opt jt_exists_opt jt_path_opt partition_storage_opt
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
@@ -1160,17 +1160,25 @@ create_options_opt:
 create_options:
   character_set
   {
-    $$ = []CollateAndCharset{$1}
+    $$ = []DatabaseOption{$1}
   }
 | collate
   {
-    $$ = []CollateAndCharset{$1}
+    $$ = []DatabaseOption{$1}
+  }
+| encryption
+  {
+    $$ = []DatabaseOption{$1}
   }
 | create_options collate
   {
     $$ = append($1,$2)
   }
 | create_options character_set
+  {
+    $$ = append($1,$2)
+  }
+| create_options encryption
   {
     $$ = append($1,$2)
   }
@@ -1188,23 +1196,32 @@ default_optional:
 character_set:
   default_optional charset_or_character_set equal_opt id_or_var
   {
-    $$ = CollateAndCharset{Type:CharacterSetType, Value:($4.String()), IsDefault:$1}
+    $$ = DatabaseOption{Type:CharacterSetType, Value:($4.String()), IsDefault:$1}
   }
 | default_optional charset_or_character_set equal_opt STRING
   {
-    $$ = CollateAndCharset{Type:CharacterSetType, Value:(encodeSQLString($4)), IsDefault:$1}
+    $$ = DatabaseOption{Type:CharacterSetType, Value:(encodeSQLString($4)), IsDefault:$1}
   }
 
 collate:
   default_optional COLLATE equal_opt id_or_var
   {
-    $$ = CollateAndCharset{Type:CollateType, Value:($4.String()), IsDefault:$1}
+    $$ = DatabaseOption{Type:CollateType, Value:($4.String()), IsDefault:$1}
   }
 | default_optional COLLATE equal_opt STRING
   {
-    $$ = CollateAndCharset{Type:CollateType, Value:(encodeSQLString($4)), IsDefault:$1}
+    $$ = DatabaseOption{Type:CollateType, Value:(encodeSQLString($4)), IsDefault:$1}
   }
 
+encryption:
+  default_optional ENCRYPTION equal_opt id_or_var
+  {
+    $$ = DatabaseOption{Type:EncryptionType, Value:($4.String()), IsDefault:$1}
+  }
+| default_optional ENCRYPTION equal_opt STRING
+  {
+    $$ = DatabaseOption{Type:EncryptionType, Value:(encodeSQLString($4)), IsDefault:$1}
+  }
 
 create_like:
   LIKE table_name
@@ -2781,6 +2798,12 @@ alter_statement:
   {
     $$ = &AlterView{ViewName: $7.ToViewName(), Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
+// The syntax here causes a shift / reduce issue, because ENCRYPTION is a non reserved keyword
+// and the database identifier is optional. When no identifier is given, the current database
+// is used. This means though that `alter database encryption` is ambiguous whether it means
+// the encryption keyword, or the encryption database name, resulting in the conflict.
+// The preference here is to shift, so it is treated as a database name. This matches the MySQL
+// behavior as well.
 | alter_database_prefix table_id_opt create_options
   {
     $1.FullyParsed = true
