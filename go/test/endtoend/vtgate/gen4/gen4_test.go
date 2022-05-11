@@ -445,4 +445,5 @@ func TestUsingJoin(t *testing.T) {
 	// Gen4 only supported query.
 	mcmp.AssertMatchesNoOrder(`select t1.id from t1 join t2 using(id)`, `[[INT64(1)] [INT64(3)] [INT64(5)]]`)
 	mcmp.AssertMatchesNoOrder(`select t2.id from t2 join t3 using (id, tcol1, tcol2)`, `[[INT64(1)] [INT64(4)] [INT64(5)]]`)
+	mcmp.AssertMatchesNoOrder(`select * from t2 join t3 using (tcol1)`, `[[INT64(1)] [INT64(4)] [INT64(5)]]`)
 }

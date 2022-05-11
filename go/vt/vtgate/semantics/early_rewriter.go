@@ -243,16 +243,8 @@ func expandTableColumns(
 		if usingCols == nil {
 			usingCols = map[string]TableSet{}
 		}
-		for _, col := range tbl.getColumns() {
-			ts, found := usingCols[col.Name]
-			if found {
-				constituents := ts.Constituents()
-				if !constituents[0].Equals(currTable) {
-					// we only expand columns for the first table that uses this column in an using join
-					continue
-				}
-			}
 
+		addColName := func(col ColumnInfo) {
 			var colName *sqlparser.ColName
 			var alias sqlparser.ColIdent
 			if withQualifier {
@@ -264,6 +256,40 @@ func expandTableColumns(
 				alias = sqlparser.NewColIdent(col.Name)
 			}
 			colNames = append(colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
+		}
+
+		/*
+			Redundant column elimination and column ordering occurs according to standard SQL, producing this display order:
+			  *	First, coalesced common columns of the two joined tables, in the order in which they occur in the first table
+			  *	Second, columns unique to the first table, in order in which they occur in that table
+			  *	Third, columns unique to the second table, in order in which they occur in that table
+
+			From: https://dev.mysql.com/doc/refman/8.0/en/join.html
+		*/
+	outer:
+		// in this first loop we just find columns used in any JOIN USING used on this table
+		for _, col := range tbl.getColumns() {
+			ts, found := usingCols[col.Name]
+			if found {
+				for i, ts := range ts.Constituents() {
+					if ts.Equals(currTable) {
+						if i == 0 {
+							addColName(col)
+						} else {
+							continue outer
+						}
+					}
+				}
+			}
+		}
+
+		// and this time around we are printing any columns not involved in any JOIN USING
+		for _, col := range tbl.getColumns() {
+			if ts, found := usingCols[col.Name]; found && currTable.IsSolvedBy(ts) {
+				continue
+			}
+
+			addColName(col)
 		}
 	}
 

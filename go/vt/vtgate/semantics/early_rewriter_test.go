@@ -140,6 +140,9 @@ func TestExpandStar(t *testing.T) {
 	}, {
 		sql:    "select * from t2 join t4 using (c1), t2 as t2b join t4 as t4b using (c1)",
 		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4, t2b.c1 as c1, t2b.c2 as c2, t4b.c4 as c4 from t2 join t4, t2 as t2b join t4 as t4b where t2b.c1 = t4b.c1 and t2.c1 = t4.c1",
+	}, {
+		sql:    "select * from t1 join t5 using (b)",
+		expSQL: "select t1.b as b, t1.a as a, t1.c as c, t5.a as a from t1 join t5 where t1.b = t5.b",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {

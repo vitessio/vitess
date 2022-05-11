@@ -23,6 +23,8 @@ import (
 	"path"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -130,7 +132,7 @@ func prepareMySQLWithSchema(err error, params mysql.ConnParams, sql string) erro
 	return nil
 }
 
-func compareVitessAndMySQLResults(t *testing.T, query string, vtQr *sqltypes.Result, mysqlQr *sqltypes.Result) {
+func compareVitessAndMySQLResults(t *testing.T, query string, vtQr, mysqlQr *sqltypes.Result) {
 	if vtQr == nil && mysqlQr == nil {
 		return
 	}
@@ -141,6 +143,22 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtQr *sqltypes.Res
 	if mysqlQr == nil {
 		t.Error("MySQL result is 'nil' while Vitess' is not.")
 		return
+	}
+
+	vtColCount := len(vtQr.Fields)
+	myColCount := len(mysqlQr.Fields)
+	if vtColCount > 0 && myColCount > 0 {
+		if vtColCount != myColCount {
+			t.Errorf("column count does not match: %d vs %d", vtColCount, myColCount)
+		}
+
+		var vtCols []string
+		var myCols []string
+		for i, vtField := range vtQr.Fields {
+			vtCols = append(vtCols, vtField.Name)
+			myCols = append(myCols, mysqlQr.Fields[i].Name)
+		}
+		assert.Equal(t, vtCols, myCols, "column names")
 	}
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
