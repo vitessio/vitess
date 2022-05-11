@@ -203,6 +203,19 @@ func TestAmbiguousColumnJoin(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestAddColumn(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	time.Sleep(5 * time.Second)
+	_ = utils.Exec(t, conn, `alter table t2 add column aaa int`)
+	time.Sleep(10 * time.Second)
+	_ = utils.Exec(t, conn, "select aaa from t2")
+}
+
 func TestInitAndUpdate(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)

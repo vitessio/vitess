@@ -20,6 +20,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -118,6 +120,10 @@ func (u *updateController) getItemFromQueueLocked() *discovery.TabletHealth {
 }
 
 func (u *updateController) add(th *discovery.TabletHealth) {
+	if th.Stats != nil {
+		log.Info("add: tablet alias: ", th.Tablet.Alias, " table schema changed: ", th.Stats.TableSchemaChanged)
+	}
+
 	// For non-primary tablet health, there is no schema tracking.
 	if th.Tablet.Type != topodatapb.TabletType_PRIMARY {
 		return
@@ -149,6 +155,7 @@ func (u *updateController) add(th *discovery.TabletHealth) {
 		return
 	}
 
+	log.Info("add: queue: ", th.Tablet.Alias, " table schema changed: ", th.Stats.TableSchemaChanged, " new queue: ", u.queue == nil)
 	if u.queue == nil {
 		u.queue = &queue{}
 		go u.consume()

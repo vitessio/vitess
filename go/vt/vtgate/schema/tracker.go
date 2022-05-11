@@ -187,6 +187,8 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	log.Info("updateSchema: ", res)
+
 	// first we empty all prior schema. deleted tables will not show up in the result,
 	// so this is the only chance to delete
 	for _, tbl := range tablesUpdated {
