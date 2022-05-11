@@ -181,6 +181,7 @@ var keywords = []keyword{
 	{"subpartition", SUBPARTITION},
 	{"subpartitions", SUBPARTITIONS},
 	{"substring", SUBSTRING},
+	{"srid", SRID},
 	{"create", CREATE},
 	{"cross", CROSS},
 	{"csv", CSV},

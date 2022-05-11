@@ -974,6 +974,12 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 			buf.WriteByte(' ')
 			ct.Options.Reference.formatFast(buf)
 		}
+		if ct.Options.SRID != nil {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[SRID])
+			buf.WriteByte(' ')
+			ct.Options.SRID.formatFast(buf)
+		}
 	}
 }
 

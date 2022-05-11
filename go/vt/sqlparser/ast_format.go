@@ -702,6 +702,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		if ct.Options.Reference != nil {
 			buf.astPrintf(ct, " %v", ct.Options.Reference)
 		}
+		if ct.Options.SRID != nil {
+			buf.astPrintf(ct, " %s %v", keywordStrings[SRID], ct.Options.SRID)
+		}
 	}
 }
 
