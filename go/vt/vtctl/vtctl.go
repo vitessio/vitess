@@ -561,7 +561,10 @@ var commands = []commandGroup{
 				name:   "WaitForDrain",
 				method: commandWaitForDrain,
 				params: "[-timeout <duration>] [-retry_delay <duration>] [-initial_wait <duration>] <keyspace/shard> <served tablet type>",
-				help:   "Blocks until no new queries were observed on all tablets with the given tablet type in the specified keyspace.",
+				help: "Blocks until no new queries were observed on all tablets with the given tablet type in the specified keyspace. " +
+					" This can be used as sanity check to ensure that the tablets were drained after running vtctl MigrateServedTypes " +
+					" and vtgate is no longer using them. If -timeout is set, it fails when the timeout is reached.",
+				deprecated: true,
 			},
 			{
 				name:   "Mount",
@@ -1321,6 +1324,7 @@ func commandIgnoreHealthError(ctx context.Context, wr *wrangler.Wrangler, subFla
 }
 
 func commandWaitForDrain(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead https://vitess.io/docs/reference/vreplication/ ***\n")
 	var cells flagutil.StringListValue
 	subFlags.Var(&cells, "cells", "Specifies a comma-separated list of cells to look for tablets")
 	timeout := subFlags.Duration("timeout", 0*time.Second, "Timeout after which the command fails")
