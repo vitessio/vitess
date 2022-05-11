@@ -21,23 +21,23 @@ func TestCommentSplitting(t *testing.T) {
 		},
 		{
 			"hello world /* unterminated comment",
-			"hello world /* unterminated comment",
-			nil,
+			"hello world",
+			[]string{"unterminated comment"},
 		},
 		{
 			"before/* comment */after",
-			"before/* comment */after",
-			nil,
+			"before after",
+			[]string{"comment"},
 		},
 		{
 			"/* now */ hello /* three */ world /* comments */",
-			"hello /* three */ world",
-			[]string{"now", "comments"},
+			"hello world",
+			[]string{"now", "three", "comments"},
 		},
 		{
 			"/*/*/*/*///***/*/***///**/",
-			"*/*///***/*/***//",
-			[]string{"/", ""},
+			"* * /",
+			[]string{"/", "///**", "*", ""},
 		},
 		{
 			" no\tcomments\t",
@@ -56,6 +56,11 @@ func TestCommentSplitting(t *testing.T) {
 			"we don't -- split these",
 			nil,
 		},
+		{
+			"select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO') */ schema_snapshot.* from schema_snapshot where schema_snapshot.ready = true and schema_snapshot.migration_snapshot_applied_at is null and created_at > :vtg1 and schema_snapshot.migration_snapshot_public_id is not null and schema_snapshot.deleted_at is null order by schema_snapshot.id asc limit :vtg2",
+			"select schema_snapshot.* from schema_snapshot where schema_snapshot.ready = true and schema_snapshot.migration_snapshot_applied_at is null and created_at > :vtg1 and schema_snapshot.migration_snapshot_public_id is not null and schema_snapshot.deleted_at is null order by schema_snapshot.id asc limit :vtg2",
+			[]string{"+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO')"},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -68,39 +73,52 @@ func TestCommentSplitting(t *testing.T) {
 }
 
 func TestCommentTags(t *testing.T) {
-	sql := `INSERT INTO "polls_question" ("question_text", "pub_date") VALUES ('What is this?', '2019-05-28T18:54:50.767481+00:00'::timestamptz) RETURNING "polls_question"."id" /*controller='index',db_driver='django.db.backends.postgresql',framework='django%3A2.2.1',route='%5Epolls/%24',traceparent='00-5bd66ef5095369c7b0d1f8f4bd33716a-c532cb4098ac3dd2-01',tracestate='congo%3Dt61rcWkgMzE%2Crojo%3D00f067aa0ba902b7'*/`
+	testCases := []struct {
+		name, input, output string
+		tags                []*pbvtgate.Query_Tag
+	}{
+		{
+			"sqlcommenter",
+			`INSERT INTO "polls_question" ("question_text", "pub_date") VALUES ('What is this?', '2019-05-28T18:54:50.767481+00:00'::timestamptz) RETURNING "polls_question"."id" /*controller='index',db_driver='django.db.backends.postgresql',framework='django%3A2.2.1',route='%5Epolls/%24',traceparent='00-5bd66ef5095369c7b0d1f8f4bd33716a-c532cb4098ac3dd2-01',tracestate='congo%3Dt61rcWkgMzE%2Crojo%3D00f067aa0ba902b7'*/`,
+			`INSERT INTO "polls_question" ("question_text", "pub_date") VALUES ('What is this?', '2019-05-28T18:54:50.767481+00:00'::timestamptz) RETURNING "polls_question"."id"`,
+			[]*pbvtgate.Query_Tag{
+				{Key: "controller", Value: "index"},
+				{Key: "db_driver", Value: "django.db.backends.postgresql"},
+				{Key: "framework", Value: "django:2.2.1"},
+				{Key: "route", Value: "^polls/$"},
+				{Key: "traceparent", Value: "00-5bd66ef5095369c7b0d1f8f4bd33716a-c532cb4098ac3dd2-01"},
+				{Key: "tracestate", Value: "congo=t61rcWkgMzE,rojo=00f067aa0ba902b7"},
+			},
+		},
+		{
+			"interior comments, not sqlcommenter",
+			"select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO') */ schema_snapshot.* from schema_snapshot where schema_snapshot.ready = true and schema_snapshot.migration_snapshot_applied_at is null and created_at > :vtg1 and schema_snapshot.migration_snapshot_public_id is not null and schema_snapshot.deleted_at is null order by schema_snapshot.id asc limit :vtg2",
+			"select schema_snapshot.* from schema_snapshot where schema_snapshot.ready = true and schema_snapshot.migration_snapshot_applied_at is null and created_at > :vtg1 and schema_snapshot.migration_snapshot_public_id is not null and schema_snapshot.deleted_at is null order by schema_snapshot.id asc limit :vtg2",
+			nil,
+		},
+		{
+			"ugly",
+			` /*one='1' , two='2' */ SELECT /* th%2dree= ' 3 '*/* FROM hello/*	four='4\'s a great n\umber'*//* five ='5\\cinco' ,, six='%foo'  */`,
+			"SELECT * FROM hello",
+			[]*pbvtgate.Query_Tag{
+				{Key: "one", Value: "1"},
+				{Key: "two", Value: "2"},
+				{Key: "th-ree", Value: " 3 "},
+				{Key: "four", Value: "4's a great number"},
+				{Key: "five", Value: `5\cinco`},
+				{Key: "six", Value: "%foo"},
+			},
+		},
+	}
 
-	q, comments := splitComments(sql)
-	assert.Equal(t, "INSERT INTO \"polls_question\" (\"question_text\", \"pub_date\") VALUES ('What is this?', '2019-05-28T18:54:50.767481+00:00'::timestamptz) RETURNING \"polls_question\".\"id\"", q)
-	assert.Equal(t, []string{"controller='index',db_driver='django.db.backends.postgresql',framework='django%3A2.2.1',route='%5Epolls/%24',traceparent='00-5bd66ef5095369c7b0d1f8f4bd33716a-c532cb4098ac3dd2-01',tracestate='congo%3Dt61rcWkgMzE%2Crojo%3D00f067aa0ba902b7'"}, comments)
-
-	tags := parseCommentTags(comments)
-	assert.Equal(t, []*pbvtgate.Query_Tag{
-		{Key: "controller", Value: "index"},
-		{Key: "db_driver", Value: "django.db.backends.postgresql"},
-		{Key: "framework", Value: "django:2.2.1"},
-		{Key: "route", Value: "^polls/$"},
-		{Key: "traceparent", Value: "00-5bd66ef5095369c7b0d1f8f4bd33716a-c532cb4098ac3dd2-01"},
-		{Key: "tracestate", Value: "congo=t61rcWkgMzE,rojo=00f067aa0ba902b7"},
-	}, tags)
-}
-
-func TestCommentTagsUgly(t *testing.T) {
-	sql := ` /*one='1' , two='2' */ SELECT * FROM hello/*th%2dree= ' 3 ',    four='4\'s a great n\umber', five ='5\\cinco' ,, six='%foo'  */`
-
-	q, comments := splitComments(sql)
-	assert.Equal(t, "SELECT * FROM hello", q)
-	assert.Equal(t, []string{"one='1' , two='2'", `th%2dree= ' 3 ',    four='4\'s a great n\umber', five ='5\\cinco' ,, six='%foo'`}, comments)
-
-	tags := parseCommentTags(comments)
-	assert.Equal(t, []*pbvtgate.Query_Tag{
-		{Key: "one", Value: "1"},
-		{Key: "two", Value: "2"},
-		{Key: "th-ree", Value: " 3 "},
-		{Key: "four", Value: "4's a great number"},
-		{Key: "five", Value: `5\cinco`},
-		{Key: "six", Value: "%foo"},
-	}, tags)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			query, comments := splitComments(tc.input)
+			assert.Equal(t, tc.output, query)
+			tags := parseCommentTags(comments)
+			assert.Equal(t, tc.tags, tags)
+		})
+	}
 }
 
 func TestMoreCommentTags(t *testing.T) {
