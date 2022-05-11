@@ -962,8 +962,22 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 			// constraint exists in both tables
 			// check diff between before/after columns:
 			if sqlparser.CanonicalString(t2Constraint) != sqlparser.CanonicalString(t1Constraint) {
-				// constraints with same name have different definition. There is no ALTER INDEX statement,
-				// we're gonna drop and create.
+				// constraints with same name have different definition.
+				// First we check if this is only the enforced setting that changed which can
+				// be directly altered.
+				check1Details, ok1 := t1Constraint.Details.(*sqlparser.CheckConstraintDefinition)
+				check2Details, ok2 := t2Constraint.Details.(*sqlparser.CheckConstraintDefinition)
+				if ok1 && ok2 && sqlparser.CanonicalString(check1Details.Expr) == sqlparser.CanonicalString(check2Details.Expr) {
+					// We have the same expression, so we have a different Enforced here
+					alterConstraint := &sqlparser.AlterCheck{
+						Name:     t2Constraint.Name,
+						Enforced: check2Details.Enforced,
+					}
+					alterTable.AlterOptions = append(alterTable.AlterOptions, alterConstraint)
+					continue
+				}
+
+				// There's another change, so we need to drop and add.
 				dropConstraint := dropConstraintStatement(t1Constraint)
 				addConstraint := &sqlparser.AddConstraintDefinition{
 					ConstraintDefinition: t2Constraint,
@@ -1393,6 +1407,21 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				}
 			}
 			c.TableSpec.Constraints = append(c.TableSpec.Constraints, opt.ConstraintDefinition)
+		case *sqlparser.AlterCheck:
+			// we expect the constraint to exist
+			found := false
+			constraintName := opt.Name.String()
+			for _, constraint := range c.TableSpec.Constraints {
+				checkDetails, ok := constraint.Details.(*sqlparser.CheckConstraintDefinition)
+				if ok && constraint.Name.String() == constraintName {
+					found = true
+					checkDetails.Enforced = opt.Enforced
+					break
+				}
+			}
+			if !found {
+				return errors.Wrap(ErrApplyConstraintNotFound, opt.Name.String())
+			}
 		case *sqlparser.DropColumn:
 			// we expect the column to exist
 			found := false

@@ -47,6 +47,7 @@ var (
 	ErrApplyDuplicateTableOrView = errors.New("duplicate table or view")
 	ErrApplyDuplicateKey         = errors.New("duplicate key")
 	ErrApplyDuplicateColumn      = errors.New("duplicate column")
+	ErrApplyConstraintNotFound   = errors.New("constraint not found")
 	ErrApplyDuplicateConstraint  = errors.New("duplicate constraint")
 	ErrApplyPartitionNotFound    = errors.New("partition not found")
 	ErrApplyDuplicatePartition   = errors.New("duplicate partition")

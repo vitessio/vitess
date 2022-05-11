@@ -38,6 +38,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfAliasedTableExpr(parent, node, replacer)
 	case *AlterCharset:
 		return a.rewriteRefOfAlterCharset(parent, node, replacer)
+	case *AlterCheck:
+		return a.rewriteRefOfAlterCheck(parent, node, replacer)
 	case *AlterColumn:
 		return a.rewriteRefOfAlterColumn(parent, node, replacer)
 	case *AlterDatabase:
@@ -596,6 +598,33 @@ func (a *application) rewriteRefOfAlterCharset(parent SQLNode, node *AlterCharse
 			a.cur.parent = parent
 			a.cur.node = node
 		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfAlterCheck(parent SQLNode, node *AlterCheck, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*AlterCheck).Name = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -6335,6 +6364,8 @@ func (a *application) rewriteAlterOption(parent SQLNode, node AlterOption, repla
 		return a.rewriteAlgorithmValue(parent, node, replacer)
 	case *AlterCharset:
 		return a.rewriteRefOfAlterCharset(parent, node, replacer)
+	case *AlterCheck:
+		return a.rewriteRefOfAlterCheck(parent, node, replacer)
 	case *AlterColumn:
 		return a.rewriteRefOfAlterColumn(parent, node, replacer)
 	case *ChangeColumn:

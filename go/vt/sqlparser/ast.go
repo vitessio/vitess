@@ -168,6 +168,12 @@ type (
 		Collate      string
 	}
 
+	// AlterCheck represents the `ALTER CHECK` part in an `ALTER TABLE ALTER CHECK` command.
+	AlterCheck struct {
+		Name     ColIdent
+		Enforced bool
+	}
+
 	// KeyState is used to disable or enable the keys in an alter table statement
 	KeyState struct {
 		Enable bool
@@ -718,6 +724,7 @@ func (*AddIndexDefinition) iAlterOption()      {}
 func (*AddColumns) iAlterOption()              {}
 func (AlgorithmValue) iAlterOption()           {}
 func (*AlterColumn) iAlterOption()             {}
+func (*AlterCheck) iAlterOption()              {}
 func (*ChangeColumn) iAlterOption()            {}
 func (*ModifyColumn) iAlterOption()            {}
 func (*AlterCharset) iAlterOption()            {}
