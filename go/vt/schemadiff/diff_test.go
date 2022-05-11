@@ -319,6 +319,28 @@ func TestDiffSchemas(t *testing.T) {
 			},
 		},
 		{
+			name: "change with function",
+			from: "create table identifiers (id binary(16) NOT NULL DEFAULT (uuid_to_bin(uuid(),true)))",
+			to:   "create table identifiers (company_id mediumint unsigned NOT NULL, id binary(16) NOT NULL DEFAULT (uuid_to_bin(uuid(),true)))",
+			diffs: []string{
+				"alter table identifiers add column company_id mediumint unsigned not null first",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `identifiers` ADD COLUMN `company_id` mediumint unsigned NOT NULL FIRST",
+			},
+		},
+		{
+			name: "change within functional index",
+			from: "create table t1 (id mediumint unsigned NOT NULL, deleted_at timestamp, primary key (id), unique key deleted_check (id, (if((deleted_at is null),0,NULL))))",
+			to:   "create table t1 (id mediumint unsigned NOT NULL, deleted_at timestamp, primary key (id), unique key deleted_check (id, (if((deleted_at is not null),0,NULL))))",
+			diffs: []string{
+				"alter table t1 drop key deleted_check, add unique key deleted_check (id, (if(deleted_at is not null, 0, null)))",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t1` DROP KEY `deleted_check`, ADD UNIQUE KEY `deleted_check` (`id`, (if(`deleted_at` IS NOT NULL, 0, NULL)))",
+			},
+		},
+		{
 			name: "change of table columns, removed",
 			from: "create table t(id int primary key, i int)",
 			to:   "create table t(id int primary key)",
