@@ -1284,6 +1284,8 @@ var (
 		input:  "alter table a add constraint check (id)",
 		output: "alter table a add check (id)",
 	}, {
+		input: "alter table a add constraint c check (id)",
+	}, {
 		input:  "alter table a add id int",
 		output: "alter table a add column id int",
 	}, {
@@ -1300,17 +1302,14 @@ var (
 	}, {
 		input: "alter table a add check (ch_1) not enforced",
 	}, {
-		input:      "alter table a drop check ch_1",
-		output:     "alter table a",
-		partialDDL: true,
+		input: "alter table a drop check ch_1",
+	}, {
+		input:  "alter table a drop constraint ch_1",
+		output: "alter table a drop check ch_1",
 	}, {
 		input: "alter table a drop foreign key kx",
 	}, {
 		input: "alter table a drop primary key",
-	}, {
-		input:      "alter table a drop constraint",
-		output:     "alter table a",
-		partialDDL: true,
 	}, {
 		input:  "alter table a drop id",
 		output: "alter table a drop column id",

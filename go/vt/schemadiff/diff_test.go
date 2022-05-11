@@ -341,6 +341,17 @@ func TestDiffSchemas(t *testing.T) {
 			},
 		},
 		{
+			name: "change for a check",
+			from: "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `Check1` CHECK ((`test` >= 0)))",
+			to:   "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `RenamedCheck1` CHECK ((`test` >= 0)))",
+			diffs: []string{
+				"alter table t drop check Check1, add constraint RenamedCheck1 check (test >= 0)",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t` DROP CHECK `Check1`, ADD CONSTRAINT `RenamedCheck1` CHECK (`test` >= 0)",
+			},
+		},
+		{
 			name: "change of table columns, removed",
 			from: "create table t(id int primary key, i int)",
 			to:   "create table t(id int primary key)",
