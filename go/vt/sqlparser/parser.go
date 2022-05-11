@@ -44,7 +44,7 @@ var parserPool = sync.Pool{
 var zeroParser yyParserImpl
 
 // MySQLVersion is the version of MySQL that the parser would emulate
-var MySQLVersion = "50709" // default version if nothing else is stated
+var MySQLVersion = "80023" // default version if nothing else is stated
 
 // yyParsePooled is a wrapper around yyParse that pools the parser objects. There isn't a
 // particularly good reason to use yyParse directly, since it immediately discards its parser.
