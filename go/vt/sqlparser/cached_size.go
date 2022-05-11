@@ -543,7 +543,7 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(144)
 	}
 	// field Null *bool
 	size += hack.RuntimeAllocSize(int64(1))
@@ -565,6 +565,12 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Collate)))
 	// field Reference *vitess.io/vitess/go/vt/sqlparser.ReferenceDefinition
 	size += cached.Reference.CachedSize(true)
+	// field Invisible *bool
+	size += hack.RuntimeAllocSize(int64(1))
+	// field EngineAttribute *vitess.io/vitess/go/vt/sqlparser.Literal
+	size += cached.EngineAttribute.CachedSize(true)
+	// field SecondaryEngineAttribute *vitess.io/vitess/go/vt/sqlparser.Literal
+	size += cached.SecondaryEngineAttribute.CachedSize(true)
 	return size
 }
 func (cached *CommonTableExpr) CachedSize(alloc bool) int64 {

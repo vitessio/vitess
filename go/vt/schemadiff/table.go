@@ -481,8 +481,8 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		return nil, ErrNotFullyParsed
 	}
 
-	format := sqlparser.String(&c.CreateTable)
-	otherFormat := sqlparser.String(&otherStmt)
+	format := sqlparser.CanonicalString(&c.CreateTable)
+	otherFormat := sqlparser.CanonicalString(&otherStmt)
 	if format == otherFormat {
 		return nil, nil
 	}
@@ -593,37 +593,37 @@ func (c *CreateTableEntity) diffTableCharset(
 func isDefaultTableOptionValue(option *sqlparser.TableOption) bool {
 	switch strings.ToUpper(option.Name) {
 	case "CHECKSUM":
-		return sqlparser.String(option.Value) == "0"
+		return sqlparser.CanonicalString(option.Value) == "0"
 	case "COMMENT":
 		return option.String == ""
 	case "COMPRESSION":
-		return sqlparser.String(option.Value) == "" || sqlparser.String(option.Value) == "''"
+		return sqlparser.CanonicalString(option.Value) == "" || sqlparser.CanonicalString(option.Value) == "''"
 	case "CONNECTION":
-		return sqlparser.String(option.Value) == "" || sqlparser.String(option.Value) == "''"
+		return sqlparser.CanonicalString(option.Value) == "" || sqlparser.CanonicalString(option.Value) == "''"
 	case "DATA DIRECTORY":
-		return sqlparser.String(option.Value) == "" || sqlparser.String(option.Value) == "''"
+		return sqlparser.CanonicalString(option.Value) == "" || sqlparser.CanonicalString(option.Value) == "''"
 	case "DELAY_KEY_WRITE":
-		return sqlparser.String(option.Value) == "0"
+		return sqlparser.CanonicalString(option.Value) == "0"
 	case "ENCRYPTION":
-		return sqlparser.String(option.Value) == "N"
+		return sqlparser.CanonicalString(option.Value) == "N"
 	case "INDEX DIRECTORY":
-		return sqlparser.String(option.Value) == "" || sqlparser.String(option.Value) == "''"
+		return sqlparser.CanonicalString(option.Value) == "" || sqlparser.CanonicalString(option.Value) == "''"
 	case "KEY_BLOCK_SIZE":
-		return sqlparser.String(option.Value) == "0"
+		return sqlparser.CanonicalString(option.Value) == "0"
 	case "MAX_ROWS":
-		return sqlparser.String(option.Value) == "0"
+		return sqlparser.CanonicalString(option.Value) == "0"
 	case "MIN_ROWS":
-		return sqlparser.String(option.Value) == "0"
+		return sqlparser.CanonicalString(option.Value) == "0"
 	case "PACK_KEYS":
-		return option.String == "DEFAULT"
+		return strings.EqualFold(option.String, "DEFAULT")
 	case "ROW_FORMAT":
-		return option.String == "DEFAULT"
+		return strings.EqualFold(option.String, "DEFAULT")
 	case "STATS_AUTO_RECALC":
-		return option.String == "DEFAULT"
+		return strings.EqualFold(option.String, "DEFAULT")
 	case "STATS_PERSISTENT":
-		return option.String == "DEFAULT"
+		return strings.EqualFold(option.String, "DEFAULT")
 	case "STATS_SAMPLE_PAGES":
-		return option.String == "DEFAULT"
+		return strings.EqualFold(option.String, "DEFAULT")
 	default:
 		return false
 	}
@@ -712,7 +712,7 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 		if t1Option, ok := t1OptionsMap[t2Option.Name]; ok {
 			options1 := sqlparser.TableOptions{t1Option}
 			options2 := sqlparser.TableOptions{t2Option}
-			if sqlparser.String(options1) != sqlparser.String(options2) {
+			if sqlparser.CanonicalString(options1) != sqlparser.CanonicalString(options2) {
 				// options are different.
 				// However, we don't automatically apply these changes. It depends on the option!
 				switch strings.ToUpper(t1Option.Name) {
@@ -793,7 +793,7 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	}
 	droppedPartitions1 := []*sqlparser.PartitionDefinition{}
 	// It's OK for prefix of t1 partitions to be nonexistent in t2 (as they may have been rotated away in t2)
-	for len(definitions1) > 0 && sqlparser.String(definitions1[0]) != sqlparser.String(definitions2[0]) {
+	for len(definitions1) > 0 && sqlparser.CanonicalString(definitions1[0]) != sqlparser.CanonicalString(definitions2[0]) {
 		droppedPartitions1 = append(droppedPartitions1, definitions1[0])
 		definitions1 = definitions1[1:]
 	}
@@ -805,14 +805,14 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	if len(definitions1) > len(definitions2) {
 		return false, nil, nil
 	}
-	// To save computation, and ecause we've already shown that sqlparser.String(definitions1[0]) == sqlparser.String(definitions2[0]),
+	// To save computation, and because we've already shown that sqlparser.CanonicalString(definitions1[0]) == sqlparser.CanonicalString(definitions2[0]),
 	// we can skip one element
 	definitions1 = definitions1[1:]
 	definitions2 = definitions2[1:]
 	// Now let's ensure that whatever is remaining in definitions1 is an exact match for a prefix of definitions2
 	// It's ok if we end up with leftover elements in definition2
 	for len(definitions1) > 0 {
-		if sqlparser.String(definitions1[0]) != sqlparser.String(definitions2[0]) {
+		if sqlparser.CanonicalString(definitions1[0]) != sqlparser.CanonicalString(definitions2[0]) {
 			return false, nil, nil
 		}
 		definitions1 = definitions1[1:]
@@ -855,7 +855,7 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 			IsAll:  true,
 		}
 		alterTable.PartitionSpec = partitionSpec
-	case sqlparser.String(t1Partitions) == sqlparser.String(t2Partitions):
+	case sqlparser.CanonicalString(t1Partitions) == sqlparser.CanonicalString(t2Partitions):
 		// identical partitioning
 		return nil, nil
 	default:
@@ -928,7 +928,7 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 		if t1Constraint, ok := t1ConstraintsMap[t2ConstraintName]; ok {
 			// constraint exists in both tables
 			// check diff between before/after columns:
-			if sqlparser.String(t2Constraint) != sqlparser.String(t1Constraint) {
+			if sqlparser.CanonicalString(t2Constraint) != sqlparser.CanonicalString(t1Constraint) {
 				// constraints with same name have different definition. There is no ALTER INDEX statement,
 				// we're gonna drop and create.
 				dropConstraint := dropConstraintStatement(t1Constraint.Name)
@@ -990,7 +990,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 		if t1Key, ok := t1KeysMap[t2KeyName]; ok {
 			// key exists in both tables
 			// check diff between before/after columns:
-			if sqlparser.String(t2Key) != sqlparser.String(t1Key) {
+			if sqlparser.CanonicalString(t2Key) != sqlparser.CanonicalString(t1Key) {
 				// keys with same name have different definition. There is no ALTER INDEX statement,
 				// we're gonna drop and create.
 				dropKey := dropKeyStatement(t1Key.Info.Name)
@@ -1251,7 +1251,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				spec.Definitions[0],
 			)
 		default:
-			return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.String(spec))
+			return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.CanonicalString(spec))
 		}
 	}
 	if diff.alterTable.PartitionOption != nil {
@@ -1333,7 +1333,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					}
 				}
 			default:
-				return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.String(opt))
+				return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.CanonicalString(opt))
 			}
 			if !found {
 				return errors.Wrap(ErrApplyKeyNotFound, opt.Name.String())
@@ -1346,8 +1346,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					return errors.Wrap(ErrApplyDuplicateKey, keyName)
 				}
 			}
-			for _, col := range opt.IndexDefinition.Columns {
-				colName := col.Column.String()
+			for colName := range getKeyColumnNames(opt.IndexDefinition) {
 				if !columnExists[colName] {
 					return errors.Wrapf(ErrInvalidColumnInKey, "key: %v, column: %v", keyName, colName)
 				}
@@ -1379,7 +1378,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 		case *sqlparser.AddColumns:
 			if len(opt.Columns) != 1 {
 				// our Diff only ever generates a single column per AlterOption
-				return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.String(opt))
+				return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.CanonicalString(opt))
 			}
 			// validate no column by same name
 			addedCol := opt.Columns[0]
@@ -1433,7 +1432,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				}()
 			}
 		default:
-			return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.String(opt))
+			return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.CanonicalString(opt))
 		}
 		return nil
 	}

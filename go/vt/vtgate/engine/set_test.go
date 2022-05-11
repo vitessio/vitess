@@ -359,7 +359,8 @@ func TestSetTable(t *testing.T) {
 			"a,b|B,a,A,B,b,a",
 		)},
 	}, {
-		testName: "sql_mode change - changed additional",
+		testName:     "sql_mode change - changed additional - MySQL57",
+		mysqlVersion: "50709",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:          "sql_mode",
@@ -378,7 +379,8 @@ func TestSetTable(t *testing.T) {
 			"a,b|B,a,A,B,b,a,c",
 		)},
 	}, {
-		testName: "sql_mode change - changed less",
+		testName:     "sql_mode change - changed less - MySQL57",
+		mysqlVersion: "50709",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:          "sql_mode",
@@ -414,7 +416,8 @@ func TestSetTable(t *testing.T) {
 			"|",
 		)},
 	}, {
-		testName: "sql_mode change - empty orig",
+		testName:     "sql_mode change - empty orig - MySQL57",
+		mysqlVersion: "50709",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:          "sql_mode",

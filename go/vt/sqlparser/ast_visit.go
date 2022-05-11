@@ -236,6 +236,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfLockOption(in, f)
 	case *LockTables:
 		return VisitRefOfLockTables(in, f)
+	case MatchAction:
+		return VisitMatchAction(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
@@ -2266,6 +2268,9 @@ func VisitRefOfReferenceDefinition(in *ReferenceDefinition, f Visit) error {
 	if err := VisitColumns(in.ReferencedColumns, f); err != nil {
 		return err
 	}
+	if err := VisitMatchAction(in.Match, f); err != nil {
+		return err
+	}
 	if err := VisitReferenceAction(in.OnDelete, f); err != nil {
 		return err
 	}
@@ -3777,6 +3782,10 @@ func VisitIsolationLevel(in IsolationLevel, f Visit) error {
 	return err
 }
 func VisitListArg(in ListArg, f Visit) error {
+	_, err := f(in)
+	return err
+}
+func VisitMatchAction(in MatchAction, f Visit) error {
 	_, err := f(in)
 	return err
 }

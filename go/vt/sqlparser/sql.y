@@ -155,7 +155,8 @@ func bindVariable(yylex yyLexer, bvar string) {
   tableOptions     TableOptions
 
   colKeyOpt     ColumnKeyOption
-  ReferenceAction ReferenceAction
+  referenceAction ReferenceAction
+  matchAction MatchAction
   isolationLevel IsolationLevel
   insertAction InsertAction
   scope 	Scope
@@ -171,6 +172,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   referenceDefinition *ReferenceDefinition
 
   columnStorage ColumnStorage
+  columnFormat ColumnFormat
 
   boolean bool
   boolVal BoolVal
@@ -323,10 +325,10 @@ func bindVariable(yylex yyLexer, bvar string) {
 // MySQL reserved words that are unused by this grammar will map to this token.
 %token <str> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD
 %token <str> NTH_VALUE NTILE OF OVER PERCENT_RANK RANK RECURSIVE ROW_NUMBER SYSTEM WINDOW
-%token <str> ACTIVE ADMIN AUTOEXTEND_SIZE BUCKETS CLONE COMPONENT DEFINITION ENFORCED ENGINE_ATTRIBUTE EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
+%token <str> ACTIVE ADMIN AUTOEXTEND_SIZE BUCKETS CLONE COLUMN_FORMAT COMPONENT DEFINITION ENFORCED ENGINE_ATTRIBUTE EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <str> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
-%token <str> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD OPTIONAL ORDINALITY ORGANIZATION OTHERS PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
-%token <str> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_ENGINE_ATTRIBUTE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
+%token <str> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD OPTIONAL ORDINALITY ORGANIZATION OTHERS PARTIAL PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
+%token <str> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_ENGINE_ATTRIBUTE SECONDARY_LOAD SECONDARY_UNLOAD SIMPLE SKIP SRID
 %token <str> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE RETURNING
 
 // Explain tokens
@@ -499,12 +501,14 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <jsonObjectParams> json_object_param_list json_object_param_opt
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
 %type <str> database_or_schema column_opt insert_method_options row_format_options
-%type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
+%type <referenceAction> fk_reference_action fk_on_delete fk_on_update
+%type <matchAction> fk_match fk_match_opt fk_match_action
 %type <tableAndLockTypes> lock_table_list
 %type <tableAndLockType> lock_table
 %type <lockType> lock_type
 %type <empty> session_or_local_opt
 %type <columnStorage> column_storage
+%type <columnFormat> column_format
 %type <colKeyOpt> keys
 %type <referenceDefinition> reference_definition reference_definition_opt
 %type <str> underscore_charsets
@@ -1317,7 +1321,7 @@ generated_always_opt:
 // was specific (as stated in the MySQL guide) and did not accept arbitrary order options. For example NOT NULL DEFAULT 1 and not DEFAULT 1 NOT NULL
 column_attribute_list_opt:
   {
-    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil, As: nil}
+    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil, As: nil, Invisible: nil, Format: UnspecifiedFormat, EngineAttribute: nil, SecondaryEngineAttribute: nil }
   }
 | column_attribute_list_opt NULL
   {
@@ -1363,13 +1367,51 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt COLLATE STRING
   {
-  	$1.Collate = encodeSQLString($3)
+    $1.Collate = encodeSQLString($3)
   }
 | column_attribute_list_opt COLLATE id_or_var
   {
-	$1.Collate = string($3.String())
-	$$ = $1
+    $1.Collate = string($3.String())
+    $$ = $1
   }
+| column_attribute_list_opt COLUMN_FORMAT column_format
+  {
+    $1.Format = $3
+  }
+| column_attribute_list_opt VISIBLE
+  {
+    val := false
+    $1.Invisible = &val
+    $$ = $1
+  }
+| column_attribute_list_opt INVISIBLE
+  {
+    val := true
+    $1.Invisible = &val
+    $$ = $1
+  }
+| column_attribute_list_opt ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $1.EngineAttribute = NewStrLiteral($4)
+  }
+| column_attribute_list_opt SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $1.SecondaryEngineAttribute = NewStrLiteral($4)
+  }
+
+column_format:
+  FIXED
+{
+  $$ = FixedFormat
+}
+| DYNAMIC
+{
+  $$ = DynamicFormat
+}
+| DEFAULT
+{
+  $$ = DefaultFormat
+}
 
 column_storage:
   VIRTUAL
@@ -1410,6 +1452,18 @@ generated_column_attribute_list_opt:
 | generated_column_attribute_list_opt keys
   {
     $1.KeyOpt = $2
+    $$ = $1
+  }
+| generated_column_attribute_list_opt VISIBLE
+  {
+    val := false
+    $1.Invisible = &val
+    $$ = $1
+  }
+| generated_column_attribute_list_opt INVISIBLE
+  {
+    val := true
+    $1.Invisible = &val
     $$ = $1
   }
 
@@ -2268,25 +2322,25 @@ constraint_info:
   }
 
 reference_definition:
-  REFERENCES table_name '(' column_list ')'
+  REFERENCES table_name '(' column_list ')' fk_match_opt
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6}
   }
-| REFERENCES table_name '(' column_list ')' fk_on_delete
+| REFERENCES table_name '(' column_list ')' fk_match_opt fk_on_delete
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnDelete: $6}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6, OnDelete: $7}
   }
-| REFERENCES table_name '(' column_list ')' fk_on_update
+| REFERENCES table_name '(' column_list ')' fk_match_opt fk_on_update
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnUpdate: $6}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6, OnUpdate: $7}
   }
-| REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
+| REFERENCES table_name '(' column_list ')' fk_match_opt fk_on_delete fk_on_update
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnDelete: $6, OnUpdate: $7}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6, OnDelete: $7, OnUpdate: $8}
   }
-| REFERENCES table_name '(' column_list ')' fk_on_update fk_on_delete
+| REFERENCES table_name '(' column_list ')' fk_match_opt fk_on_update fk_on_delete
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnUpdate: $6, OnDelete: $7}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6, OnUpdate: $7, OnDelete: $8}
   }
 
 reference_definition_opt:
@@ -2302,6 +2356,35 @@ check_constraint_info:
   CHECK '(' expression ')' enforced_opt
   {
     $$ = &CheckConstraintDefinition{Expr: $3, Enforced: $5}
+  }
+
+fk_match:
+  MATCH fk_match_action
+  {
+    $$ = $2
+  }
+
+fk_match_action:
+  FULL
+  {
+    $$ = Full
+  }
+| PARTIAL
+  {
+    $$ = Partial
+  }
+| SIMPLE
+  {
+    $$ = Simple
+  }
+
+fk_match_opt:
+  {
+    $$ = DefaultMatch
+  }
+| fk_match
+  {
+    $$ = $1
   }
 
 fk_on_delete:
@@ -6523,6 +6606,7 @@ non_reserved_keyword:
 | COALESCE
 | CODE
 | COLLATION
+| COLUMN_FORMAT
 | COLUMNS
 | COMMENT_KEYWORD
 | COMMIT
@@ -6694,6 +6778,7 @@ non_reserved_keyword:
 | OVERWRITE
 | PACK_KEYS
 | PARSER
+| PARTIAL
 | PARTITIONING
 | PARTITIONS
 | PASSWORD
@@ -6749,6 +6834,7 @@ non_reserved_keyword:
 | SHARE
 | SHARED
 | SIGNED
+| SIMPLE
 | SKIP
 | SLOW
 | SMALLINT

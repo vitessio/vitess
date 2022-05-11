@@ -62,11 +62,11 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"create algorithm = merge sql security definer view a (b,c,d) as select * from e with cascaded check option",
-			"CREATE ALGORITHM = MERGE SQL SECURITY DEFINER VIEW `a`(`b`, `c`, `d`) AS SELECT * FROM `e` WITH CASCADED CHECK OPTION",
+			"CREATE ALGORITHM = merge SQL SECURITY DEFINER VIEW `a`(`b`, `c`, `d`) AS SELECT * FROM `e` WITH CASCADED CHECK OPTION",
 		},
 		{
 			"create or replace algorithm = temptable definer = a@b.c.d sql security definer view a(b,c,d) as select * from e with local check option",
-			"CREATE OR REPLACE ALGORITHM = TEMPTABLE DEFINER = a@`b.c.d` SQL SECURITY DEFINER VIEW `a`(`b`, `c`, `d`) AS SELECT * FROM `e` WITH LOCAL CHECK OPTION",
+			"CREATE OR REPLACE ALGORITHM = temptable DEFINER = a@`b.c.d` SQL SECURITY DEFINER VIEW `a`(`b`, `c`, `d`) AS SELECT * FROM `e` WITH LOCAL CHECK OPTION",
 		},
 		{
 			"create table `a`(`id` int, primary key(`id`))",
@@ -133,8 +133,8 @@ func TestCanonicalOutput(t *testing.T) {
 			"ALTER TABLE `t1` DROP FOREIGN KEY `f`",
 		},
 		{
-			"alter table t1 add constraint f foreign key (i) references parent (id) on delete cascade on update set null",
-			"ALTER TABLE `t1` ADD CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) ON DELETE CASCADE ON UPDATE SET NULL",
+			"alter table t1 add constraint f foreign key (i) references parent (id) match simple on delete cascade on update set null",
+			"ALTER TABLE `t1` ADD CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) MATCH SIMPLE ON DELETE CASCADE ON UPDATE SET NULL",
 		},
 		{
 			"alter table t1 remove partitioning",
@@ -167,6 +167,22 @@ func TestCanonicalOutput(t *testing.T) {
 		{
 			"create table entries (uid varchar(53) not null, namespace varchar(254) not null, spec json default null, primary key (namespace, uid), key entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt'))))",
 			"CREATE TABLE `entries` (\n\t`uid` varchar(53) NOT NULL,\n\t`namespace` varchar(254) NOT NULL,\n\t`spec` json DEFAULT NULL,\n\tPRIMARY KEY (`namespace`, `uid`),\n\tKEY `entries_spec_updatedAt` ((JSON_VALUE(`spec`, _utf8mb4 '$.updatedAt')))\n)",
+		},
+		{
+			"create table identifiers (id binary(16) not null default (uuid_to_bin(uuid(),true)))",
+			"CREATE TABLE `identifiers` (\n\t`id` binary(16) NOT NULL DEFAULT (uuid_to_bin(uuid(), true))\n)",
+		},
+		{
+			"create table t (\n\tid int auto_increment,\n\tusername varchar column_format dynamic\n)",
+			"CREATE TABLE `t` (\n\t`id` int AUTO_INCREMENT,\n\t`username` varchar COLUMN_FORMAT DYNAMIC\n)",
+		},
+		{
+			"create table t (\n\tid int auto_increment,\n\tusername varchar visible\n)",
+			"CREATE TABLE `t` (\n\t`id` int AUTO_INCREMENT,\n\t`username` varchar VISIBLE\n)",
+		},
+		{
+			"create table t (\n\tid int auto_increment,\n\tusername varchar engine_attribute '{}' secondary_engine_attribute '{}'\n)",
+			"CREATE TABLE `t` (\n\t`id` int AUTO_INCREMENT,\n\t`username` varchar ENGINE_ATTRIBUTE '{}' SECONDARY_ENGINE_ATTRIBUTE '{}'\n)",
 		},
 	}
 

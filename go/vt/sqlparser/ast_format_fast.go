@@ -933,6 +933,33 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 			buf.WriteByte(' ')
 			ct.Options.Comment.formatFast(buf)
 		}
+		if ct.Options.Invisible != nil {
+			if *ct.Options.Invisible {
+				buf.WriteByte(' ')
+				buf.WriteString(keywordStrings[INVISIBLE])
+			} else {
+				buf.WriteByte(' ')
+				buf.WriteString(keywordStrings[VISIBLE])
+			}
+		}
+		if ct.Options.Format != UnspecifiedFormat {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[COLUMN_FORMAT])
+			buf.WriteByte(' ')
+			buf.WriteString(ct.Options.Format.ToString())
+		}
+		if ct.Options.EngineAttribute != nil {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[ENGINE_ATTRIBUTE])
+			buf.WriteByte(' ')
+			ct.Options.EngineAttribute.formatFast(buf)
+		}
+		if ct.Options.SecondaryEngineAttribute != nil {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[SECONDARY_ENGINE_ATTRIBUTE])
+			buf.WriteByte(' ')
+			ct.Options.SecondaryEngineAttribute.formatFast(buf)
+		}
 		if ct.Options.KeyOpt == colKeyPrimary {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[PRIMARY])
@@ -1090,6 +1117,18 @@ func (a ReferenceAction) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (a MatchAction) formatFast(buf *TrackedBuffer) {
+	switch a {
+	case Full:
+		buf.WriteString("full")
+	case Simple:
+		buf.WriteString("simple")
+	case Partial:
+		buf.WriteString("partial")
+	}
+}
+
+// formatFast formats the node.
 func (f *ForeignKeyDefinition) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("foreign key ")
 	f.IndexName.formatFast(buf)
@@ -1104,6 +1143,10 @@ func (ref *ReferenceDefinition) formatFast(buf *TrackedBuffer) {
 	ref.ReferencedTable.formatFast(buf)
 	buf.WriteByte(' ')
 	ref.ReferencedColumns.formatFast(buf)
+	if ref.Match != DefaultMatch {
+		buf.WriteString(" match ")
+		ref.Match.formatFast(buf)
+	}
 	if ref.OnDelete != DefaultAction {
 		buf.WriteString(" on delete ")
 		ref.OnDelete.formatFast(buf)

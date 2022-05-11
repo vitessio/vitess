@@ -126,6 +126,18 @@ const (
 	SetDefault
 )
 
+// MatchAction indicates the type of match for a referential constraint, so
+// a `MATCH FULL`, `MATCH SIMPLE` or `MATCH PARTIAL`.
+type MatchAction int
+
+const (
+	// DefaultAction indicates no action was explicitly specified.
+	DefaultMatch MatchAction = iota
+	Full
+	Partial
+	Simple
+)
+
 // ShowTablesOpt is show tables option
 type ShowTablesOpt struct {
 	Full   string
@@ -1617,6 +1629,20 @@ func (lock LockOptionType) ToString() string {
 		return ExclusiveTypeStr
 	default:
 		return "Unknown type LockOptionType"
+	}
+}
+
+// ToString returns the string associated with JoinType
+func (columnFormat ColumnFormat) ToString() string {
+	switch columnFormat {
+	case FixedFormat:
+		return keywordStrings[FIXED]
+	case DynamicFormat:
+		return keywordStrings[DYNAMIC]
+	case DefaultFormat:
+		return keywordStrings[DEFAULT]
+	default:
+		return "Unknown column format type"
 	}
 }
 

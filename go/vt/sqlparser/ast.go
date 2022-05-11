@@ -1719,6 +1719,9 @@ type ColumnType struct {
 // ColumnStorage is an enum that defines the type of storage.
 type ColumnStorage int
 
+// ColumnFormat is an enum that defines the type of storage.
+type ColumnFormat int
+
 // ColumnTypeOptions are generic field options for a column type
 type ColumnTypeOptions struct {
 	/* We need Null to be *bool to distinguish 3 cases -
@@ -1741,6 +1744,23 @@ type ColumnTypeOptions struct {
 
 	// Key specification
 	KeyOpt ColumnKeyOption
+
+	// Stores the tri state of having either VISIBLE, INVISIBLE or nothing specified
+	// on the column. In case of nothing, this is nil, when VISIBLE is set it's false
+	// and only when INVISIBLE is set does the pointer value return true.
+	Invisible *bool
+
+	// Storage format for this specific column. This is NDB specific, but the parser
+	// still allows for it and ignores it for other storage engines. So we also should
+	// parse it but it's then not used anywhere.
+	Format ColumnFormat
+
+	// EngineAttribute is a new attribute not used for anything yet, but accepted
+	// since 8.0.23 in the MySQL parser.
+	EngineAttribute *Literal
+	// SecondaryEngineAttribute is a new attribute not used for anything yet, but accepted
+	// since 8.0.23 in the MySQL parser.
+	SecondaryEngineAttribute *Literal
 }
 
 // IndexDefinition describes an index in a CREATE TABLE statement
@@ -1804,6 +1824,7 @@ type (
 	ReferenceDefinition struct {
 		ReferencedTable   TableName
 		ReferencedColumns Columns
+		Match             MatchAction
 		OnDelete          ReferenceAction
 		OnUpdate          ReferenceAction
 	}
