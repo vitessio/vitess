@@ -3864,6 +3864,28 @@ func TestCreateTable(t *testing.T) {
 	unique index by_username3 (username)
 )`,
 		},
+		// test defining column visibility
+		{
+			input: `create table t (
+	id int auto_increment,
+	username varchar invisible,
+	login varchar visible
+)`,
+		},
+		// test adding column engine attributes
+		{
+			input: `create table t (
+	id int auto_increment,
+	username varchar engine_attribute '{}' secondary_engine_attribute '{}'
+)`,
+		},
+		// test adding column format
+		{
+			input: `create table t (
+	id int auto_increment,
+	username varchar column_format dynamic
+)`,
+		},
 		// test that indexes support USING <id>
 		{
 			input: `create table t (

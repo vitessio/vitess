@@ -1632,6 +1632,20 @@ func (lock LockOptionType) ToString() string {
 	}
 }
 
+// ToString returns the string associated with JoinType
+func (columnFormat ColumnFormat) ToString() string {
+	switch columnFormat {
+	case FixedFormat:
+		return keywordStrings[FIXED]
+	case DynamicFormat:
+		return keywordStrings[DYNAMIC]
+	case DefaultFormat:
+		return keywordStrings[DEFAULT]
+	default:
+		return "Unknown column format type"
+	}
+}
+
 // CompliantName is used to get the name of the bind variable to use for this column name
 func (node *ColName) CompliantName() string {
 	if !node.Qualifier.IsEmpty() {

@@ -5338,7 +5338,11 @@ func EqualsRefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
 		EqualsRefOfLiteral(a.Comment, b.Comment) &&
 		a.Storage == b.Storage &&
 		EqualsRefOfReferenceDefinition(a.Reference, b.Reference) &&
-		a.KeyOpt == b.KeyOpt
+		a.KeyOpt == b.KeyOpt &&
+		EqualsRefOfBool(a.Invisible, b.Invisible) &&
+		a.Format == b.Format &&
+		EqualsRefOfLiteral(a.EngineAttribute, b.EngineAttribute) &&
+		EqualsRefOfLiteral(a.SecondaryEngineAttribute, b.SecondaryEngineAttribute)
 }
 
 // EqualsSliceOfString does deep equals between the two objects.

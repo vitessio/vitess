@@ -3173,6 +3173,9 @@ func CloneRefOfColumnTypeOptions(n *ColumnTypeOptions) *ColumnTypeOptions {
 	out.As = CloneExpr(n.As)
 	out.Comment = CloneRefOfLiteral(n.Comment)
 	out.Reference = CloneRefOfReferenceDefinition(n.Reference)
+	out.Invisible = CloneRefOfBool(n.Invisible)
+	out.EngineAttribute = CloneRefOfLiteral(n.EngineAttribute)
+	out.SecondaryEngineAttribute = CloneRefOfLiteral(n.SecondaryEngineAttribute)
 	return &out
 }
 
