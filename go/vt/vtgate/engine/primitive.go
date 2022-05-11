@@ -52,6 +52,9 @@ type (
 		// Context returns the context of the current request.
 		Context() context.Context
 
+		// CancelContext cancels the highest level context and its children.
+		CancelContext()
+
 		GetKeyspace() string
 		// MaxMemoryRows returns the maxMemoryRows flag value.
 		MaxMemoryRows() int
