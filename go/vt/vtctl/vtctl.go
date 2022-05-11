@@ -332,16 +332,16 @@ var commands = []commandGroup{
 				name:   "SetShardTabletControl",
 				method: commandSetShardTabletControl,
 				params: "[--cells=c1,c2,...] [--denied_tables=t1,t2,...] [--remove] [--disable_query_service] <keyspace/shard> <tablet type>",
-				help: "Sets the TabletControl record for a shard and type. Only use this for an emergency fix or after a finished vertical split. The *MigrateServedFrom* and *MigrateServedType* commands set this field appropriately already. Always specify the denied_tables flag for vertical splits, but never for horizontal splits.\n" +
-					"To set the DisableQueryServiceFlag, keep 'denied_tables' empty, and set 'disable_query_service' to true or false. Useful to fix horizontal splits gone wrong.\n" +
-					"To change the list of denied tables, specify the 'denied_tables' parameter with the new list. Useful to fix tables that are being blocked after a vertical split.\n" +
-					"To just remove the ShardTabletControl entirely, use the 'remove' flag, useful after a vertical split is finished to remove serving restrictions.",
+				help: "Sets the TabletControl record for a shard and type. Only use this for an emergency fix.\n" +
+					"To set the DisableQueryServiceFlag, keep 'denied_tables' empty, and set 'disable_query_service' to true or false.\n" +
+					"To change the list of denied tables, specify the 'denied_tables' parameter with the new list.\n" +
+					"To just remove the ShardTabletControl entirely, use the 'remove' flag.",
 			},
 			{
 				name:   "UpdateSrvKeyspacePartition",
 				method: commandUpdateSrvKeyspacePartition,
 				params: "[--cells=c1,c2,...] [--remove] <keyspace/shard> <tablet type>",
-				help:   "Updates KeyspaceGraph partition for a shard and type. Only use this for an emergency fix during an horizontal shard split. The *MigrateServedType* commands set this field appropriately already. Specify the remove flag, if you want the shard to be removed from the desired partition.",
+				help:   "Updates KeyspaceGraph partition for a shard and type. Only use this for an emergency fix during an horizontal shard split. Specify the remove flag, if you want the shard to be removed from the desired partition.",
 			},
 			{
 				name:   "SourceShardDelete",
@@ -437,7 +437,7 @@ var commands = []commandGroup{
 				name:   "SetKeyspaceServedFrom",
 				method: commandSetKeyspaceServedFrom,
 				params: "[-source=<source keyspace name>] [-remove] [-cells=c1,c2,...] <keyspace name> <tablet type>",
-				help:   "Changes the ServedFromMap manually. This command is intended for emergency fixes. This field is automatically set when you call the *MigrateServedFrom* command. This command does not rebuild the serving graph.",
+				help:   "Changes the ServedFromMap manually. This command is intended for emergency fixes. This command does not rebuild the serving graph.",
 			},
 			{
 				name:   "RebuildKeyspaceGraph",
@@ -514,16 +514,18 @@ var commands = []commandGroup{
 				help:   "Perform a diff of all tables in the workflow",
 			},
 			{
-				name:   "MigrateServedTypes",
-				method: commandMigrateServedTypes,
-				params: "[-cells=c1,c2,...] [-reverse] [-skip-refresh-state] [-filtered_replication_wait_time=30s] [-reverse_replication=false] <keyspace/shard> <served tablet type>",
-				help:   "Migrates a serving type from the source shard to the shards that it replicates to. This command also rebuilds the serving graph. The <keyspace/shard> argument can specify any of the shards involved in the migration.",
+				name:       "MigrateServedTypes",
+				method:     commandMigrateServedTypes,
+				params:     "[-cells=c1,c2,...] [-reverse] [-skip-refresh-state] [-filtered_replication_wait_time=30s] [-reverse_replication=false] <keyspace/shard> <served tablet type>",
+				help:       "Migrates a serving type from the source shard to the shards that it replicates to. This command also rebuilds the serving graph. The <keyspace/shard> argument can specify any of the shards involved in the migration.",
+				deprecated: true,
 			},
 			{
-				name:   "MigrateServedFrom",
-				method: commandMigrateServedFrom,
-				params: "[-cells=c1,c2,...] [-reverse] [-filtered_replication_wait_time=30s] <destination keyspace/shard> <served tablet type>",
-				help:   "Makes the <destination keyspace/shard> serve the given type. This command also rebuilds the serving graph.",
+				name:       "MigrateServedFrom",
+				method:     commandMigrateServedFrom,
+				params:     "[-cells=c1,c2,...] [-reverse] [-filtered_replication_wait_time=30s] <destination keyspace/shard> <served tablet type>",
+				help:       "Makes the <destination keyspace/shard> serve the given type. This command also rebuilds the serving graph.",
+				deprecated: true,
 			},
 			{
 				name:   "SwitchReads",
@@ -559,9 +561,7 @@ var commands = []commandGroup{
 				name:   "WaitForDrain",
 				method: commandWaitForDrain,
 				params: "[-timeout <duration>] [-retry_delay <duration>] [-initial_wait <duration>] <keyspace/shard> <served tablet type>",
-				help: "Blocks until no new queries were observed on all tablets with the given tablet type in the specified keyspace. " +
-					" This can be used as sanity check to ensure that the tablets were drained after running vtctl MigrateServedTypes " +
-					" and vtgate is no longer using them. If -timeout is set, it fails when the timeout is reached.",
+				help:   "Blocks until no new queries were observed on all tablets with the given tablet type in the specified keyspace.",
 			},
 			{
 				name:   "Mount",
@@ -2719,6 +2719,7 @@ func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 }
 
 func commandSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead https://vitess.io/docs/reference/vreplication/ ***\n")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2732,6 +2733,7 @@ func commandSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 }
 
 func commandVerticalSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead https://vitess.io/docs/reference/vreplication/ ***\n")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2789,6 +2791,7 @@ func splitKeyspaceWorkflow(in string) (keyspace, workflow string, err error) {
 }
 
 func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead https://vitess.io/docs/reference/vreplication/ ***\n")
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
 	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward.")
 	skipReFreshState := subFlags.Bool("skip-refresh-state", false, "Skips refreshing the state of the source tablets after the migration, meaning that the refresh will need to be done manually, REPLICA and RDONLY only)")
@@ -2820,6 +2823,7 @@ func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFl
 }
 
 func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed, please use VReplication instead https://vitess.io/docs/reference/vreplication/ ***\n")
 	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward.")
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
 	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on primary migrations. The migration will be cancelled on a timeout.")
