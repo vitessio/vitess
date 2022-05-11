@@ -2349,6 +2349,36 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 	return nil
 }
 
+func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context.Context, onlineDDL *schema.OnlineDDL) (specialMigrationExecuted bool, err error) {
+	// Before we jump on to strategies... Some ALTERs can be optimized without having to run through
+	// a full online schema change process. Let's find out if this is the case!
+	specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL)
+	if err != nil {
+		return false, err
+	}
+	if specialPlan == nil {
+		return false, nil
+	}
+	if specialPlan != nil {
+		fmt.Printf("============ ZZZ a special plan! %v\n", specialPlan)
+	} else {
+		fmt.Printf("============ ZZZ nope special operplanation\n")
+	}
+	switch specialPlan.operation {
+	case dropFirstPartitionSpecialOperation:
+	case dropLastPartitionSpecialOperation:
+	case addPartitionSpecialOperation:
+		if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
+			return false, err
+		}
+		fmt.Printf("============ ZZZ executed a special plan! %v\n", specialPlan)
+	default:
+		return false, nil
+	}
+	return true, nil
+}
+
+// executeAlterDDLActionMigration
 func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	failMigration := func(err error) error {
 		return e.failMigration(ctx, onlineDDL, err)
@@ -2380,21 +2410,12 @@ func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL
 
 	// Before we jump on to strategies... Some ALTERs can be optimized without having to run through
 	// a full online schema change process. Let's find out if this is the case!
-	specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL)
+	specialMigrationExecuted, err := e.executeSpecialAlterDDLActionMigrationIfApplicable(ctx, onlineDDL)
 	if err != nil {
 		return failMigration(err)
 	}
-	if specialPlan != nil {
-		fmt.Printf("============ ZZZ a special plan! %v\n", specialPlan)
-	} else {
-		fmt.Printf("============ ZZZ nope special operplanation\n")
-	}
-	switch {
-	case specialPlan == nil:
-		// do nothing. Skip next checks, handle as normal migration
-	case specialPlan.operation == dropFirstPartitionSpecialOperation:
-	case specialPlan.operation == dropLastPartitionSpecialOperation:
-	case specialPlan.operation == addPartitionSpecialOperation:
+	if specialMigrationExecuted {
+		return nil
 	}
 
 	// OK, nothing special about this ALTER. Let's go ahead and execute it.

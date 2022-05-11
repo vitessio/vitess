@@ -34,14 +34,18 @@ const (
 )
 
 type SpecialAlterPlan struct {
-	operation specialAlterOperation
-	info      string
+	operation   specialAlterOperation
+	info        string
+	alterTable  *sqlparser.AlterTable
+	createTable *sqlparser.CreateTable
 }
 
-func NewSpecialAlterOperation(operation specialAlterOperation, info string) *SpecialAlterPlan {
+func NewSpecialAlterOperation(operation specialAlterOperation, info string, alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable) *SpecialAlterPlan {
 	return &SpecialAlterPlan{
-		operation: operation,
-		info:      info,
+		operation:   operation,
+		info:        info,
+		alterTable:  alterTable,
+		createTable: createTable,
 	}
 }
 
@@ -98,12 +102,12 @@ func (e *Executor) analyzeDropFirstOrLastRangePartition(alterTable *sqlparser.Al
 	firstPartitionName := part.Definitions[0].Name.String()
 	if partitionName == firstPartitionName {
 		// O-K! Dropping the first partition!
-		return NewSpecialAlterOperation(dropFirstPartitionSpecialOperation, partitionName)
+		return NewSpecialAlterOperation(dropFirstPartitionSpecialOperation, partitionName, alterTable, createTable)
 	}
 	lastPartitionName := part.Definitions[len(part.Definitions)-1].Name.String()
 	if partitionName == lastPartitionName {
 		// O-K! Dropping the last partition!
-		return NewSpecialAlterOperation(dropLastPartitionSpecialOperation, partitionName)
+		return NewSpecialAlterOperation(dropLastPartitionSpecialOperation, partitionName, alterTable, createTable)
 	}
 	return nil
 }
@@ -139,7 +143,7 @@ func (e *Executor) analyzeAddRangePartition(alterTable *sqlparser.AlterTable, cr
 	if len(part.Definitions) == 0 {
 		return nil
 	}
-	return NewSpecialAlterOperation(addPartitionSpecialOperation, partitionName)
+	return NewSpecialAlterOperation(addPartitionSpecialOperation, partitionName, alterTable, createTable)
 }
 
 // analyzeSpecialAlterScenarios checks if the given ALTER onlineDDL, and for the current state of affected table,
@@ -161,6 +165,9 @@ func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schem
 	}
 
 	if op := e.analyzeDropFirstOrLastRangePartition(alterTable, createTable); op != nil {
+		return op, nil
+	}
+	if op := e.analyzeAddRangePartition(alterTable, createTable); op != nil {
 		return op, nil
 	}
 	return nil, nil
