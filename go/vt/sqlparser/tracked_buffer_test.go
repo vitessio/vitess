@@ -62,11 +62,11 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"create algorithm = merge sql security definer view a (b,c,d) as select * from e with cascaded check option",
-			"CREATE ALGORITHM = MERGE SQL SECURITY DEFINER VIEW `a`(`b`, `c`, `d`) AS SELECT * FROM `e` WITH CASCADED CHECK OPTION",
+			"CREATE ALGORITHM = merge SQL SECURITY DEFINER VIEW `a`(`b`, `c`, `d`) AS SELECT * FROM `e` WITH CASCADED CHECK OPTION",
 		},
 		{
 			"create or replace algorithm = temptable definer = a@b.c.d sql security definer view a(b,c,d) as select * from e with local check option",
-			"CREATE OR REPLACE ALGORITHM = TEMPTABLE DEFINER = a@`b.c.d` SQL SECURITY DEFINER VIEW `a`(`b`, `c`, `d`) AS SELECT * FROM `e` WITH LOCAL CHECK OPTION",
+			"CREATE OR REPLACE ALGORITHM = temptable DEFINER = a@`b.c.d` SQL SECURITY DEFINER VIEW `a`(`b`, `c`, `d`) AS SELECT * FROM `e` WITH LOCAL CHECK OPTION",
 		},
 		{
 			"create table `a`(`id` int, primary key(`id`))",

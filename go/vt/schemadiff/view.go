@@ -217,8 +217,8 @@ func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, hints *DiffHints) (
 		return nil, ErrNotFullyParsed
 	}
 
-	format := sqlparser.String(&c.CreateView)
-	otherFormat := sqlparser.String(&otherStmt)
+	format := sqlparser.CanonicalString(&c.CreateView)
+	otherFormat := sqlparser.CanonicalString(&otherStmt)
 	if format == otherFormat {
 		return nil, nil
 	}

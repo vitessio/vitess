@@ -1688,7 +1688,7 @@ func (node *CreateView) Format(buf *TrackedBuffer) {
 		buf.literal("or replace ")
 	}
 	if node.Algorithm != "" {
-		buf.astPrintf(node, "algorithm = %s ", node.Algorithm)
+		buf.astPrintf(node, "algorithm = %#s ", node.Algorithm)
 	}
 	if node.Definer != nil {
 		buf.astPrintf(node, "definer = %v ", node.Definer)
