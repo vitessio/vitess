@@ -113,6 +113,7 @@ var keywords = []keyword{
 	{"_utf32", UNDERSCORE_UTF32},
 	{"_utf8", UNDERSCORE_UTF8},
 	{"_utf8mb4", UNDERSCORE_UTF8MB4},
+	{"_utf8mb3", UNDERSCORE_UTF8MB3},
 	{"accessible", UNUSED},
 	{"action", ACTION},
 	{"add", ADD},
