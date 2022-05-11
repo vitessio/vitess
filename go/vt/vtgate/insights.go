@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
-	math2 "math"
 	"os"
 	"strconv"
 	"strings"
@@ -28,10 +27,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"google.golang.org/protobuf/encoding/prototext"
+
+	"github.com/twmb/murmur3"
 
 	"github.com/pkg/errors"
 
@@ -358,8 +358,8 @@ func (ii *Insights) handleMessage(record interface{}) {
 }
 
 func (ii *Insights) makeKafkaKey(sql string) string {
-	h := hack.RuntimeStrhash(sql, 0x1122334455667788) & math2.MaxUint32
-	return ii.DatabaseBranchPublicID + "/" + strconv.FormatUint(h, 16)
+	h := murmur3.Sum32([]byte(sql))
+	return ii.DatabaseBranchPublicID + "/" + strconv.FormatUint(uint64(h), 16)
 }
 
 func (ii *Insights) reserveAndSend(buf []byte, topic, key string) bool {

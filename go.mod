@@ -144,6 +144,7 @@ require github.com/syndtr/goleveldb v1.0.0
 require (
 	github.com/planetscale/psevents v0.0.0-20220505072709-238f3799dfa0
 	github.com/segmentio/kafka-go v0.4.28
+	github.com/twmb/murmur3 v1.1.6
 )
 
 require (

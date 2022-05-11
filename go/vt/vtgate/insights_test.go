@@ -230,6 +230,19 @@ func TestInsightsExtraNormalization(t *testing.T) {
 		})
 }
 
+func TestMakeKafkaKeyIsDeterministic(t *testing.T) {
+	insights, err := setup(t, "localhost:1234", "mumblefoo", "", "", setupOptions{})
+	require.NoError(t, err)
+
+	sql := `this isn't even real sql`
+	key := insights.makeKafkaKey(sql)
+	assert.Equal(t, "mumblefoo/6edc967a", key)
+
+	sql = `another string value`
+	key = insights.makeKafkaKey(sql)
+	assert.Equal(t, "mumblefoo/67374b03", key)
+}
+
 func TestNormalization(t *testing.T) {
 	testCases := []struct {
 		input, output string
