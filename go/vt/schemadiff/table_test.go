@@ -1104,7 +1104,6 @@ func TestNormalize(t *testing.T) {
 			from: "create table if not exists t (id int primary key, i int)",
 			to:   "CREATE TABLE IF NOT EXISTS `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
 		},
-
 		{
 			name: "timestamp null",
 			from: "create table t (id int primary key, t timestamp null)",
@@ -1219,6 +1218,16 @@ func TestNormalize(t *testing.T) {
 			name: "correct case for engine in partitions",
 			from: "create table a (id int not null primary key) engine InnoDB, charset utf8mb4, collate utf8mb4_0900_ai_ci partition by range (`id`) (partition `p10` values less than(10) engine innodb)",
 			to:   "CREATE TABLE `a` (\n\t`id` int NOT NULL PRIMARY KEY\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci PARTITION BY RANGE (`id`) (PARTITION `p10` VALUES LESS THAN (10) ENGINE InnoDB)",
+		},
+		{
+			name: "generates a name for checks",
+			from: "create table t (id int NOT NULL, test int NOT NULL DEFAULT 0, PRIMARY KEY (id), CHECK ((test >= 0)))",
+			to:   "CREATE TABLE `t` (\n\t`id` int NOT NULL,\n\t`test` int NOT NULL DEFAULT 0,\n\tPRIMARY KEY (`id`),\n\tCONSTRAINT `t_chk_1` CHECK (`test` >= 0)\n)",
+		},
+		{
+			name: "generates a name for foreign key constraints",
+			from: "create table t1 (id int primary key, i int, foreign key (i) references parent(id))",
+			to:   "CREATE TABLE `t1` (\n\t`id` int PRIMARY KEY,\n\t`i` int,\n\tCONSTRAINT `t1_ibfk_1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n)",
 		},
 	}
 	for _, ts := range tt {
