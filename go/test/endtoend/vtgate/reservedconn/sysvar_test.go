@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -300,6 +302,27 @@ func TestSetSystemVarInTxWithConnError(t *testing.T) {
 
 	// subsequent queries on 80- will pass
 	assertMatches(t, conn, "select id, @@sql_safe_updates from test where id = 4", "[[INT64(4) INT64(1)]]")
+}
+
+func BenchmarkReservedConnFieldQuery(b *testing.B) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(b, err)
+	defer conn.Close()
+
+	utils.Exec(b, conn, "delete from test")
+	utils.Exec(b, conn, "insert into test (id, val1) values (1, 'toto'), (4, 'tata')")
+
+	// set sql_mode to empty to force the use of reserved connection
+	utils.Exec(b, conn, "set sql_mode = ''")
+	utils.AssertMatches(b, conn, "select 	@@sql_mode", `[[VARCHAR("")]]`)
+
+	for i := 0; i < b.N; i++ {
+		utils.Exec(b, conn, "select id, val1 from test")
+	}
 }
 
 func TestEnableSystemSettings(t *testing.T) {

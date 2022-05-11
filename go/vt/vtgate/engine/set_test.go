@@ -434,6 +434,23 @@ func TestSetTable(t *testing.T) {
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"a|",
 		)},
+	}, {
+		testName: "sql_mode set an unsupported mode",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:     "sql_mode",
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:     "'REAL_AS_FLOAT'",
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'REAL_AS_FLOAT' new {} false false`,
+		},
+		expectedError: "setting the REAL_AS_FLOAT sql_mode is unsupported",
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"|REAL_AS_FLOAT",
+		)},
 	}}
 
 	for _, tc := range tests {

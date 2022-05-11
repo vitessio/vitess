@@ -1775,7 +1775,6 @@ func TestReserveBeginExecute(t *testing.T) {
 	expected := []string{
 		"select 43",
 		"begin",
-		"select 42 from dual where 1 != 1",
 		"select 42 from dual limit 10001",
 	}
 	splitOutput := strings.Split(db.QueryLog(), ";")
@@ -1798,7 +1797,6 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 	assert.NotEqual(t, int64(0), reservedID, "reservedID should not be zero")
 	expected := []string{
 		"select 43",
-		"select 42 from dual where 1 != 1",
 		"select 42 from dual limit 10001",
 	}
 	splitOutput := strings.Split(db.QueryLog(), ";")
@@ -1826,7 +1824,6 @@ func TestReserveExecute_WithTx(t *testing.T) {
 	assert.Equal(t, transactionID, reservedID, "reservedID should be equal to transactionID")
 	expected := []string{
 		"select 43",
-		"select 42 from dual where 1 != 1",
 		"select 42 from dual limit 10001",
 	}
 	splitOutput := strings.Split(db.QueryLog(), ";")
