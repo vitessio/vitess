@@ -165,7 +165,7 @@ func (cached *AlterDatabase) CachedSize(alloc bool) int64 {
 	}
 	// field DBName vitess.io/vitess/go/vt/sqlparser.TableIdent
 	size += cached.DBName.CachedSize(false)
-	// field AlterOptions []vitess.io/vitess/go/vt/sqlparser.CollateAndCharset
+	// field AlterOptions []vitess.io/vitess/go/vt/sqlparser.DatabaseOption
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.AlterOptions)) * int64(24))
 		for _, elem := range cached.AlterOptions {
@@ -480,18 +480,6 @@ func (cached *ColName) CachedSize(alloc bool) int64 {
 	size += cached.Qualifier.CachedSize(false)
 	return size
 }
-func (cached *CollateAndCharset) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(24)
-	}
-	// field Value string
-	size += hack.RuntimeAllocSize(int64(len(cached.Value)))
-	return size
-}
 func (cached *CollateExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -700,7 +688,7 @@ func (cached *CreateDatabase) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	// field DBName vitess.io/vitess/go/vt/sqlparser.TableIdent
 	size += cached.DBName.CachedSize(false)
-	// field CreateOptions []vitess.io/vitess/go/vt/sqlparser.CollateAndCharset
+	// field CreateOptions []vitess.io/vitess/go/vt/sqlparser.DatabaseOption
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.CreateOptions)) * int64(24))
 		for _, elem := range cached.CreateOptions {
@@ -774,6 +762,18 @@ func (cached *CurTimeFuncExpr) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Fsp.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	return size
+}
+func (cached *DatabaseOption) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Value string
+	size += hack.RuntimeAllocSize(int64(len(cached.Value)))
 	return size
 }
 func (cached *DeallocateStmt) CachedSize(alloc bool) int64 {

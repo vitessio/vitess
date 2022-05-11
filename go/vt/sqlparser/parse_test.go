@@ -2247,8 +2247,8 @@ var (
 		output:     "create database test_db",
 		partialDDL: true,
 	}, {
-		input:  "CREATE DATABASE /*!32312 IF NOT EXISTS*/ `mysql` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;",
-		output: "create database if not exists mysql default character set utf8mb4 collate utf8mb4_0900_ai_ci",
+		input:  "CREATE DATABASE IF NOT EXISTS `mysql` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci ENCRYPTION='N';",
+		output: "create database if not exists mysql default character set utf8mb4 collate utf8mb4_0900_ai_ci encryption 'N'",
 	}, {
 		input: "drop /* simple */ database test_db",
 	}, {

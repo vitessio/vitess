@@ -12,10 +12,8 @@ env:
   GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
 
   # This is used if we need to pin the xtrabackup version used in tests.
-  # Doing so here because 2.4.25 crashes in our 5.7 tests. See:
-  #   https://jira.percona.com/browse/PXB-2756
   # If this is NOT set then the latest version available will be used.
-  XTRABACKUP_VERSION: "2.4.24-1"
+  #XTRABACKUP_VERSION: "2.4.24-1"
 
 jobs:
   build:

@@ -285,9 +285,17 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 
 		var pks []string
 		if len(td.PrimaryKeyColumns) != 0 {
+			// Use the PK
 			pks = td.PrimaryKeyColumns
 		} else {
-			pks = td.Columns
+			// Use a PK equivalent if one exists
+			if pks, err = vr.mysqld.GetPrimaryKeyEquivalentColumns(ctx, vr.dbClient.DBName(), td.Name); err != nil {
+				return nil, err
+			}
+			// Fall back to using every column in the table if there's no PK or PKE
+			if len(pks) == 0 {
+				pks = td.Columns
+			}
 		}
 		var colInfo []*ColumnInfo
 		for _, row := range qr.Rows {
