@@ -2376,8 +2376,28 @@ func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL
 		}
 		return nil
 	}
+	// This is a real TABLE and not a VIEW
 
-	// This is a real TABLE
+	// Before we jump on to strategies... Some ALTERs can be optimized without having to run through
+	// a full online schema change process. Let's find out if this is the case!
+	specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL)
+	if err != nil {
+		return failMigration(err)
+	}
+	if specialPlan != nil {
+		fmt.Printf("============ ZZZ a special plan! %v\n", specialPlan)
+	} else {
+		fmt.Printf("============ ZZZ nope special operplanation\n")
+	}
+	switch {
+	case specialPlan == nil:
+		// do nothing. Skip next checks, handle as normal migration
+	case specialPlan.operation == dropFirstPartitionSpecialOperation:
+	case specialPlan.operation == dropLastPartitionSpecialOperation:
+	case specialPlan.operation == addPartitionSpecialOperation:
+	}
+
+	// OK, nothing special about this ALTER. Let's go ahead and execute it.
 	switch onlineDDL.Strategy {
 	case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 		go func() {
