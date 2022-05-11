@@ -98,8 +98,10 @@ Otherwise, the keyspace must be empty (have no shards), or returns an error.`,
 	}
 	// SetKeyspaceDurabilityPolicy makes a SetKeyspaceDurabilityPolicy gRPC call to a vtcltd.
 	SetKeyspaceDurabilityPolicy = &cobra.Command{
-		Use:                   "SetKeyspaceDurabilityPolicy [--durability_policy=policy_name] <keyspace name>",
-		Short:                 "Changes the durability_policy used by the keyspace specified.",
+		Use:   "SetKeyspaceDurabilityPolicy [--durability_policy=policy_name] <keyspace name>",
+		Short: "Sets the durability_policy used by the specified keyspace.",
+		Long: "Sets the durability_policy used by the specified keyspace. Durability policy governs the durability of the keyspace by describing which tablets should be sending semi-sync acknowledgements to the primary. " +
+			"Possible values include 'semi_sync', 'none' and others as dictated by registered plugins.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandSetKeyspaceDurabilityPolicy,

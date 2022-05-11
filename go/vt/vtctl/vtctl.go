@@ -442,7 +442,7 @@ var commands = []commandGroup{
 				name:   "SetKeyspaceDurabilityPolicy",
 				method: commandSetKeyspaceDurabilityPolicy,
 				params: "[-durability_policy=policy_name] <keyspace name>",
-				help:   "Changes the durability_policy used by the keyspace specified.",
+				help:   "Sets the durability_policy used by the specified keyspace.",
 			},
 			{
 				name:   "RebuildKeyspaceGraph",
