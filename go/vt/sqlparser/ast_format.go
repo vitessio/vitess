@@ -1182,9 +1182,9 @@ func (node *NullVal) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node BoolVal) Format(buf *TrackedBuffer) {
 	if node {
-		buf.astPrintf(node, "true")
+		buf.WriteString("true")
 	} else {
-		buf.astPrintf(node, "false")
+		buf.WriteString("false")
 	}
 }
 
@@ -1310,7 +1310,7 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	if containEscapableChars(funcName, NoAt) {
 		writeEscapedString(buf, funcName)
 	} else {
-		buf.literal(funcName)
+		buf.WriteString(funcName)
 	}
 	buf.astPrintf(node, "(%s%v)", distinct, node.Exprs)
 }
