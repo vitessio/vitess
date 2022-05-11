@@ -481,8 +481,6 @@ export const fetchShardReplicationPositions = async ({
     keyspaces = [],
     keyspaceShards = [],
 }: FetchShardReplicationPositionsParams) => {
-    // As an easy enhancement for later, we can also validate the request parameters on the front-end
-    // instead of defaulting to '', to save a round trip.
     const req = new URLSearchParams();
     clusterIDs.forEach((c) => c && req.append('cluster', c));
     keyspaces.forEach((k) => k && req.append('keyspace', k));
