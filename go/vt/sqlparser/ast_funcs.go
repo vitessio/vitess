@@ -126,6 +126,18 @@ const (
 	SetDefault
 )
 
+// MatchAction indicates the type of match for a referential constraint, so
+// a `MATCH FULL`, `MATCH SIMPLE` or `MATCH PARTIAL`.
+type MatchAction int
+
+const (
+	// DefaultAction indicates no action was explicitly specified.
+	DefaultMatch MatchAction = iota
+	Full
+	Partial
+	Simple
+)
+
 // ShowTablesOpt is show tables option
 type ShowTablesOpt struct {
 	Full   string

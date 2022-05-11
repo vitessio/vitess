@@ -789,6 +789,18 @@ func (a ReferenceAction) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (a MatchAction) Format(buf *TrackedBuffer) {
+	switch a {
+	case Full:
+		buf.literal("full")
+	case Simple:
+		buf.literal("simple")
+	case Partial:
+		buf.literal("partial")
+	}
+}
+
+// Format formats the node.
 func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 	buf.astPrintf(f, "foreign key %v%v %v", f.IndexName, f.Source, f.ReferenceDefinition)
 }
@@ -796,6 +808,9 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (ref *ReferenceDefinition) Format(buf *TrackedBuffer) {
 	buf.astPrintf(ref, "references %v %v", ref.ReferencedTable, ref.ReferencedColumns)
+	if ref.Match != DefaultMatch {
+		buf.astPrintf(ref, " match %v", ref.Match)
+	}
 	if ref.OnDelete != DefaultAction {
 		buf.astPrintf(ref, " on delete %v", ref.OnDelete)
 	}

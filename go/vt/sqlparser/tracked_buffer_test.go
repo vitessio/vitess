@@ -133,8 +133,8 @@ func TestCanonicalOutput(t *testing.T) {
 			"ALTER TABLE `t1` DROP FOREIGN KEY `f`",
 		},
 		{
-			"alter table t1 add constraint f foreign key (i) references parent (id) on delete cascade on update set null",
-			"ALTER TABLE `t1` ADD CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) ON DELETE CASCADE ON UPDATE SET NULL",
+			"alter table t1 add constraint f foreign key (i) references parent (id) match simple on delete cascade on update set null",
+			"ALTER TABLE `t1` ADD CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) MATCH SIMPLE ON DELETE CASCADE ON UPDATE SET NULL",
 		},
 		{
 			"alter table t1 remove partitioning",

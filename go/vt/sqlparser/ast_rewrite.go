@@ -236,6 +236,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfLockOption(parent, node, replacer)
 	case *LockTables:
 		return a.rewriteRefOfLockTables(parent, node, replacer)
+	case MatchAction:
+		return a.rewriteMatchAction(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *MemberOfExpr:
@@ -4471,6 +4473,11 @@ func (a *application) rewriteRefOfReferenceDefinition(parent SQLNode, node *Refe
 	}) {
 		return false
 	}
+	if !a.rewriteMatchAction(node, node.Match, func(newNode, parent SQLNode) {
+		parent.(*ReferenceDefinition).Match = newNode.(MatchAction)
+	}) {
+		return false
+	}
 	if !a.rewriteReferenceAction(node, node.OnDelete, func(newNode, parent SQLNode) {
 		parent.(*ReferenceDefinition).OnDelete = newNode.(ReferenceAction)
 	}) {
@@ -7087,6 +7094,27 @@ func (a *application) rewriteIsolationLevel(parent SQLNode, node IsolationLevel,
 	return true
 }
 func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer replacerFunc) bool {
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteMatchAction(parent SQLNode, node MatchAction, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
