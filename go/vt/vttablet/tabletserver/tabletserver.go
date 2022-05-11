@@ -1293,7 +1293,7 @@ func (tsv *TabletServer) execRequest(
 	logStats := tabletenv.NewLogStats(ctx, requestName)
 	logStats.Target = target
 	logStats.OriginalSQL = sql
-	logStats.BindVariables = bindVariables
+	logStats.BindVariables = sqltypes.CopyBindVariables(bindVariables)
 	defer tsv.handlePanicAndSendLogStats(sql, bindVariables, logStats)
 
 	if err = tsv.sm.StartRequest(ctx, target, allowOnShutdown); err != nil {

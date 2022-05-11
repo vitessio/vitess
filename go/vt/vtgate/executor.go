@@ -941,11 +941,6 @@ type iQueryOption interface {
 // getPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
 func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, qo iQueryOption, logStats *LogStats) (*engine.Plan, error) {
-	if logStats != nil {
-		logStats.SQL = comments.Leading + sql + comments.Trailing
-		logStats.BindVariables = bindVars
-	}
-
 	if e.VSchema() == nil {
 		return nil, errors.New("vschema not initialized")
 	}
@@ -991,7 +986,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 
 	if logStats != nil {
 		logStats.SQL = comments.Leading + query + comments.Trailing
-		logStats.BindVariables = bindVars
+		logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 	}
 
 	planHash := sha256.New()
