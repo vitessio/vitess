@@ -220,6 +220,7 @@ func NewCreateTableEntity(c *sqlparser.CreateTable) *CreateTableEntity {
 // The function returns this receiver as courtesy
 func (c *CreateTableEntity) normalize() *CreateTableEntity {
 	c.normalizeUnnamedKeys()
+	c.normalizeUnnamedConstraints()
 	c.normalizeTableOptions()
 	c.normalizeColumnOptions()
 	c.normalizePartitionOptions()
@@ -403,7 +404,7 @@ func (c *CreateTableEntity) normalizePartitionOptions() {
 func (c *CreateTableEntity) normalizeUnnamedKeys() {
 	// let's ensure all keys have names
 	keyNameExists := map[string]bool{}
-	// first, we iterate and take note for all keys that do aleady have names
+	// first, we iterate and take note for all keys that do already have names
 	for _, key := range c.CreateTable.TableSpec.Indexes {
 		if name := key.Info.Name.String(); name != "" {
 			keyNameExists[name] = true
@@ -437,6 +438,35 @@ func (c *CreateTableEntity) normalizeUnnamedKeys() {
 			// OK we found a free slot!
 			key.Info.Name = sqlparser.NewColIdent(suggestedKeyName)
 			keyNameExists[suggestedKeyName] = true
+		}
+	}
+}
+
+func (c *CreateTableEntity) normalizeUnnamedConstraints() {
+	// let's ensure all keys have names
+	constraintNameExists := map[string]bool{}
+	// first, we iterate and take note for all keys that do already have names
+	for _, constraint := range c.CreateTable.TableSpec.Constraints {
+		if name := constraint.Name.String(); name != "" {
+			constraintNameExists[name] = true
+		}
+	}
+
+	// now, let's look at keys that do not have names, and assign them new names
+	for _, constraint := range c.CreateTable.TableSpec.Constraints {
+		if name := constraint.Name.String(); name == "" {
+			nameFormat := "%s_chk_%d"
+			if _, fk := constraint.Details.(*sqlparser.ForeignKeyDefinition); fk {
+				nameFormat = "%s_ibfk_%d"
+			}
+			suggestedCheckName := fmt.Sprintf(nameFormat, c.CreateTable.Table.Name.String(), 1)
+			// now let's see if that name is taken; if it is, enumerate new news until we find a free name
+			for enumerate := 2; constraintNameExists[suggestedCheckName]; enumerate++ {
+				suggestedCheckName = fmt.Sprintf(nameFormat, c.CreateTable.Table.Name.String(), enumerate)
+			}
+			// OK we found a free slot!
+			constraint.Name = sqlparser.NewColIdent(suggestedCheckName)
+			constraintNameExists[suggestedCheckName] = true
 		}
 	}
 }
@@ -512,7 +542,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		c.diffKeys(alterTable, t1Keys, t2Keys, hints)
 	}
 	{
-		// diff constraints (foreign keys)
+		// diff constraints
 		// ordered constraints for both tables:
 		t1Constraints := c.CreateTable.TableSpec.Constraints
 		t2Constraints := other.CreateTable.TableSpec.Constraints
@@ -907,8 +937,11 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 		t2ConstraintsMap[constraint.Name.String()] = constraint
 	}
 
-	dropConstraintStatement := func(name sqlparser.ColIdent) *sqlparser.DropKey {
-		return &sqlparser.DropKey{Name: name, Type: sqlparser.ForeignKeyType}
+	dropConstraintStatement := func(constraint *sqlparser.ConstraintDefinition) *sqlparser.DropKey {
+		if _, fk := constraint.Details.(*sqlparser.ForeignKeyDefinition); fk {
+			return &sqlparser.DropKey{Name: constraint.Name, Type: sqlparser.ForeignKeyType}
+		}
+		return &sqlparser.DropKey{Name: constraint.Name, Type: sqlparser.CheckKeyType}
 	}
 
 	// evaluate dropped constraints
@@ -916,7 +949,7 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 	for _, t1Constraint := range t1Constraints {
 		if _, ok := t2ConstraintsMap[t1Constraint.Name.String()]; !ok {
 			// column exists in t1 but not in t2, hence it is dropped
-			dropConstraint := dropConstraintStatement(t1Constraint.Name)
+			dropConstraint := dropConstraintStatement(t1Constraint)
 			alterTable.AlterOptions = append(alterTable.AlterOptions, dropConstraint)
 		}
 	}
@@ -931,7 +964,7 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 			if sqlparser.CanonicalString(t2Constraint) != sqlparser.CanonicalString(t1Constraint) {
 				// constraints with same name have different definition. There is no ALTER INDEX statement,
 				// we're gonna drop and create.
-				dropConstraint := dropConstraintStatement(t1Constraint.Name)
+				dropConstraint := dropConstraintStatement(t1Constraint)
 				addConstraint := &sqlparser.AddConstraintDefinition{
 					ConstraintDefinition: t2Constraint,
 				}
@@ -1324,7 +1357,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 						break
 					}
 				}
-			case sqlparser.ForeignKeyType:
+			case sqlparser.ForeignKeyType, sqlparser.CheckKeyType:
 				for i, constraint := range c.TableSpec.Constraints {
 					if constraint.Name.String() == opt.Name.String() {
 						found = true
