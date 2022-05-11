@@ -911,6 +911,33 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 			buf.WriteByte(' ')
 			ct.Options.Comment.formatFast(buf)
 		}
+		if ct.Options.Invisible != nil {
+			if *ct.Options.Invisible {
+				buf.WriteByte(' ')
+				buf.WriteString(keywordStrings[INVISIBLE])
+			} else {
+				buf.WriteByte(' ')
+				buf.WriteString(keywordStrings[VISIBLE])
+			}
+		}
+		if ct.Options.Format != UnspecifiedFormat {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[COLUMN_FORMAT])
+			buf.WriteByte(' ')
+			buf.WriteString(ct.Options.Format.ToString())
+		}
+		if ct.Options.EngineAttribute != nil {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[ENGINE_ATTRIBUTE])
+			buf.WriteByte(' ')
+			ct.Options.EngineAttribute.formatFast(buf)
+		}
+		if ct.Options.SecondaryEngineAttribute != nil {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[SECONDARY_ENGINE_ATTRIBUTE])
+			buf.WriteByte(' ')
+			ct.Options.SecondaryEngineAttribute.formatFast(buf)
+		}
 		if ct.Options.KeyOpt == colKeyPrimary {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[PRIMARY])

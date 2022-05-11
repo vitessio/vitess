@@ -161,6 +161,7 @@ var keywords = []keyword{
 	{"collate", COLLATE},
 	{"collation", COLLATION},
 	{"column", COLUMN},
+	{"column_format", COLUMN_FORMAT},
 	{"columns", COLUMNS},
 	{"comment", COMMENT_KEYWORD},
 	{"committed", COMMITTED},
