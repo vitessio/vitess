@@ -8466,7 +8466,7 @@ func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
 			expectedErr: "node doesn't exist: keyspaces/ks1",
 		},
 		{
-			name: "fail to update servedfrom map",
+			name: "fail to update durability policy",
 			keyspaces: []*vtctldatapb.Keyspace{
 				{
 					Name:     "ks1",
