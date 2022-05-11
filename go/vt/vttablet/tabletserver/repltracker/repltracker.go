@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -70,6 +71,11 @@ func NewReplTracker(env tabletenv.Env, alias *topodatapb.TabletAlias) *ReplTrack
 		hr:             newHeartbeatReader(env),
 		poller:         &poller{},
 	}
+}
+
+// HeartbeatWriter returns the heartbeat writer used by this tracker
+func (rt *ReplTracker) HeartbeatWriter() heartbeat.HeartbeatWriter {
+	return rt.hw
 }
 
 // InitDBConfig initializes the target name.

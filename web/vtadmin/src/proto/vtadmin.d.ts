@@ -121,6 +121,34 @@ export namespace vtadmin {
         public getBackups(request: vtadmin.IGetBackupsRequest): Promise<vtadmin.GetBackupsResponse>;
 
         /**
+         * Calls GetCellInfos.
+         * @param request GetCellInfosRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and GetCellInfosResponse
+         */
+        public getCellInfos(request: vtadmin.IGetCellInfosRequest, callback: vtadmin.VTAdmin.GetCellInfosCallback): void;
+
+        /**
+         * Calls GetCellInfos.
+         * @param request GetCellInfosRequest message or plain object
+         * @returns Promise
+         */
+        public getCellInfos(request: vtadmin.IGetCellInfosRequest): Promise<vtadmin.GetCellInfosResponse>;
+
+        /**
+         * Calls GetCellsAliases.
+         * @param request GetCellsAliasesRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and GetCellsAliasesResponse
+         */
+        public getCellsAliases(request: vtadmin.IGetCellsAliasesRequest, callback: vtadmin.VTAdmin.GetCellsAliasesCallback): void;
+
+        /**
+         * Calls GetCellsAliases.
+         * @param request GetCellsAliasesRequest message or plain object
+         * @returns Promise
+         */
+        public getCellsAliases(request: vtadmin.IGetCellsAliasesRequest): Promise<vtadmin.GetCellsAliasesResponse>;
+
+        /**
          * Calls GetClusters.
          * @param request GetClustersRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and GetClustersResponse
@@ -565,6 +593,20 @@ export namespace vtadmin {
         type GetBackupsCallback = (error: (Error|null), response?: vtadmin.GetBackupsResponse) => void;
 
         /**
+         * Callback as used by {@link vtadmin.VTAdmin#getCellInfos}.
+         * @param error Error, if any
+         * @param [response] GetCellInfosResponse
+         */
+        type GetCellInfosCallback = (error: (Error|null), response?: vtadmin.GetCellInfosResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getCellsAliases}.
+         * @param error Error, if any
+         * @param [response] GetCellsAliasesResponse
+         */
+        type GetCellsAliasesCallback = (error: (Error|null), response?: vtadmin.GetCellsAliasesResponse) => void;
+
+        /**
          * Callback as used by {@link vtadmin.VTAdmin#getClusters}.
          * @param error Error, if any
          * @param [response] GetClustersResponse
@@ -948,6 +990,204 @@ export namespace vtadmin {
 
         /**
          * Converts this ClusterBackup to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ClusterCellsAliases. */
+    interface IClusterCellsAliases {
+
+        /** ClusterCellsAliases cluster */
+        cluster?: (vtadmin.ICluster|null);
+
+        /** ClusterCellsAliases aliases */
+        aliases?: ({ [k: string]: topodata.ICellsAlias }|null);
+    }
+
+    /** Represents a ClusterCellsAliases. */
+    class ClusterCellsAliases implements IClusterCellsAliases {
+
+        /**
+         * Constructs a new ClusterCellsAliases.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IClusterCellsAliases);
+
+        /** ClusterCellsAliases cluster. */
+        public cluster?: (vtadmin.ICluster|null);
+
+        /** ClusterCellsAliases aliases. */
+        public aliases: { [k: string]: topodata.ICellsAlias };
+
+        /**
+         * Creates a new ClusterCellsAliases instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ClusterCellsAliases instance
+         */
+        public static create(properties?: vtadmin.IClusterCellsAliases): vtadmin.ClusterCellsAliases;
+
+        /**
+         * Encodes the specified ClusterCellsAliases message. Does not implicitly {@link vtadmin.ClusterCellsAliases.verify|verify} messages.
+         * @param message ClusterCellsAliases message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IClusterCellsAliases, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ClusterCellsAliases message, length delimited. Does not implicitly {@link vtadmin.ClusterCellsAliases.verify|verify} messages.
+         * @param message ClusterCellsAliases message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IClusterCellsAliases, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ClusterCellsAliases message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ClusterCellsAliases
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.ClusterCellsAliases;
+
+        /**
+         * Decodes a ClusterCellsAliases message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ClusterCellsAliases
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.ClusterCellsAliases;
+
+        /**
+         * Verifies a ClusterCellsAliases message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ClusterCellsAliases message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ClusterCellsAliases
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.ClusterCellsAliases;
+
+        /**
+         * Creates a plain object from a ClusterCellsAliases message. Also converts values to other types if specified.
+         * @param message ClusterCellsAliases
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.ClusterCellsAliases, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ClusterCellsAliases to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ClusterCellInfo. */
+    interface IClusterCellInfo {
+
+        /** ClusterCellInfo cluster */
+        cluster?: (vtadmin.ICluster|null);
+
+        /** ClusterCellInfo name */
+        name?: (string|null);
+
+        /** ClusterCellInfo cell_info */
+        cell_info?: (topodata.ICellInfo|null);
+    }
+
+    /** Represents a ClusterCellInfo. */
+    class ClusterCellInfo implements IClusterCellInfo {
+
+        /**
+         * Constructs a new ClusterCellInfo.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IClusterCellInfo);
+
+        /** ClusterCellInfo cluster. */
+        public cluster?: (vtadmin.ICluster|null);
+
+        /** ClusterCellInfo name. */
+        public name: string;
+
+        /** ClusterCellInfo cell_info. */
+        public cell_info?: (topodata.ICellInfo|null);
+
+        /**
+         * Creates a new ClusterCellInfo instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ClusterCellInfo instance
+         */
+        public static create(properties?: vtadmin.IClusterCellInfo): vtadmin.ClusterCellInfo;
+
+        /**
+         * Encodes the specified ClusterCellInfo message. Does not implicitly {@link vtadmin.ClusterCellInfo.verify|verify} messages.
+         * @param message ClusterCellInfo message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IClusterCellInfo, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ClusterCellInfo message, length delimited. Does not implicitly {@link vtadmin.ClusterCellInfo.verify|verify} messages.
+         * @param message ClusterCellInfo message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IClusterCellInfo, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ClusterCellInfo message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ClusterCellInfo
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.ClusterCellInfo;
+
+        /**
+         * Decodes a ClusterCellInfo message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ClusterCellInfo
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.ClusterCellInfo;
+
+        /**
+         * Verifies a ClusterCellInfo message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ClusterCellInfo message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ClusterCellInfo
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.ClusterCellInfo;
+
+        /**
+         * Creates a plain object from a ClusterCellInfo message. Also converts values to other types if specified.
+         * @param message ClusterCellInfo
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.ClusterCellInfo, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ClusterCellInfo to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -3169,6 +3409,378 @@ export namespace vtadmin {
 
         /**
          * Converts this GetBackupsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetCellInfosRequest. */
+    interface IGetCellInfosRequest {
+
+        /** GetCellInfosRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+
+        /** GetCellInfosRequest cells */
+        cells?: (string[]|null);
+
+        /** GetCellInfosRequest names_only */
+        names_only?: (boolean|null);
+    }
+
+    /** Represents a GetCellInfosRequest. */
+    class GetCellInfosRequest implements IGetCellInfosRequest {
+
+        /**
+         * Constructs a new GetCellInfosRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetCellInfosRequest);
+
+        /** GetCellInfosRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /** GetCellInfosRequest cells. */
+        public cells: string[];
+
+        /** GetCellInfosRequest names_only. */
+        public names_only: boolean;
+
+        /**
+         * Creates a new GetCellInfosRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetCellInfosRequest instance
+         */
+        public static create(properties?: vtadmin.IGetCellInfosRequest): vtadmin.GetCellInfosRequest;
+
+        /**
+         * Encodes the specified GetCellInfosRequest message. Does not implicitly {@link vtadmin.GetCellInfosRequest.verify|verify} messages.
+         * @param message GetCellInfosRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetCellInfosRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetCellInfosRequest message, length delimited. Does not implicitly {@link vtadmin.GetCellInfosRequest.verify|verify} messages.
+         * @param message GetCellInfosRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetCellInfosRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetCellInfosRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetCellInfosRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetCellInfosRequest;
+
+        /**
+         * Decodes a GetCellInfosRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetCellInfosRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetCellInfosRequest;
+
+        /**
+         * Verifies a GetCellInfosRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetCellInfosRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetCellInfosRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetCellInfosRequest;
+
+        /**
+         * Creates a plain object from a GetCellInfosRequest message. Also converts values to other types if specified.
+         * @param message GetCellInfosRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetCellInfosRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetCellInfosRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetCellInfosResponse. */
+    interface IGetCellInfosResponse {
+
+        /** GetCellInfosResponse cell_infos */
+        cell_infos?: (vtadmin.IClusterCellInfo[]|null);
+    }
+
+    /** Represents a GetCellInfosResponse. */
+    class GetCellInfosResponse implements IGetCellInfosResponse {
+
+        /**
+         * Constructs a new GetCellInfosResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetCellInfosResponse);
+
+        /** GetCellInfosResponse cell_infos. */
+        public cell_infos: vtadmin.IClusterCellInfo[];
+
+        /**
+         * Creates a new GetCellInfosResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetCellInfosResponse instance
+         */
+        public static create(properties?: vtadmin.IGetCellInfosResponse): vtadmin.GetCellInfosResponse;
+
+        /**
+         * Encodes the specified GetCellInfosResponse message. Does not implicitly {@link vtadmin.GetCellInfosResponse.verify|verify} messages.
+         * @param message GetCellInfosResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetCellInfosResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetCellInfosResponse message, length delimited. Does not implicitly {@link vtadmin.GetCellInfosResponse.verify|verify} messages.
+         * @param message GetCellInfosResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetCellInfosResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetCellInfosResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetCellInfosResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetCellInfosResponse;
+
+        /**
+         * Decodes a GetCellInfosResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetCellInfosResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetCellInfosResponse;
+
+        /**
+         * Verifies a GetCellInfosResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetCellInfosResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetCellInfosResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetCellInfosResponse;
+
+        /**
+         * Creates a plain object from a GetCellInfosResponse message. Also converts values to other types if specified.
+         * @param message GetCellInfosResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetCellInfosResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetCellInfosResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetCellsAliasesRequest. */
+    interface IGetCellsAliasesRequest {
+
+        /** GetCellsAliasesRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+    }
+
+    /** Represents a GetCellsAliasesRequest. */
+    class GetCellsAliasesRequest implements IGetCellsAliasesRequest {
+
+        /**
+         * Constructs a new GetCellsAliasesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetCellsAliasesRequest);
+
+        /** GetCellsAliasesRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /**
+         * Creates a new GetCellsAliasesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetCellsAliasesRequest instance
+         */
+        public static create(properties?: vtadmin.IGetCellsAliasesRequest): vtadmin.GetCellsAliasesRequest;
+
+        /**
+         * Encodes the specified GetCellsAliasesRequest message. Does not implicitly {@link vtadmin.GetCellsAliasesRequest.verify|verify} messages.
+         * @param message GetCellsAliasesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetCellsAliasesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetCellsAliasesRequest message, length delimited. Does not implicitly {@link vtadmin.GetCellsAliasesRequest.verify|verify} messages.
+         * @param message GetCellsAliasesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetCellsAliasesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetCellsAliasesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetCellsAliasesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetCellsAliasesRequest;
+
+        /**
+         * Decodes a GetCellsAliasesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetCellsAliasesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetCellsAliasesRequest;
+
+        /**
+         * Verifies a GetCellsAliasesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetCellsAliasesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetCellsAliasesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetCellsAliasesRequest;
+
+        /**
+         * Creates a plain object from a GetCellsAliasesRequest message. Also converts values to other types if specified.
+         * @param message GetCellsAliasesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetCellsAliasesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetCellsAliasesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetCellsAliasesResponse. */
+    interface IGetCellsAliasesResponse {
+
+        /** GetCellsAliasesResponse aliases */
+        aliases?: (vtadmin.IClusterCellsAliases[]|null);
+    }
+
+    /** Represents a GetCellsAliasesResponse. */
+    class GetCellsAliasesResponse implements IGetCellsAliasesResponse {
+
+        /**
+         * Constructs a new GetCellsAliasesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetCellsAliasesResponse);
+
+        /** GetCellsAliasesResponse aliases. */
+        public aliases: vtadmin.IClusterCellsAliases[];
+
+        /**
+         * Creates a new GetCellsAliasesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetCellsAliasesResponse instance
+         */
+        public static create(properties?: vtadmin.IGetCellsAliasesResponse): vtadmin.GetCellsAliasesResponse;
+
+        /**
+         * Encodes the specified GetCellsAliasesResponse message. Does not implicitly {@link vtadmin.GetCellsAliasesResponse.verify|verify} messages.
+         * @param message GetCellsAliasesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetCellsAliasesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetCellsAliasesResponse message, length delimited. Does not implicitly {@link vtadmin.GetCellsAliasesResponse.verify|verify} messages.
+         * @param message GetCellsAliasesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetCellsAliasesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetCellsAliasesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetCellsAliasesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetCellsAliasesResponse;
+
+        /**
+         * Decodes a GetCellsAliasesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetCellsAliasesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetCellsAliasesResponse;
+
+        /**
+         * Verifies a GetCellsAliasesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetCellsAliasesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetCellsAliasesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetCellsAliasesResponse;
+
+        /**
+         * Creates a plain object from a GetCellsAliasesResponse message. Also converts values to other types if specified.
+         * @param message GetCellsAliasesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetCellsAliasesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetCellsAliasesResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

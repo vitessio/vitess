@@ -379,15 +379,25 @@ func TestAutocommitTransactionStarted(t *testing.T) {
 		InTransaction:   true,
 		TransactionMode: vtgatepb.TransactionMode_MULTI,
 	}
-	sql := "update user set a=2 where id = 1"
 
+	// single shard query - no savepoint needed
+	sql := "update `user` set a = 2 where id = 1"
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
+	require.Len(t, sbc1.Queries, 1)
+	require.Equal(t, sql, sbc1.Queries[0].Sql)
+	testCommitCount(t, "sbc1", sbc1, 0)
 
+	sbc1.Queries = nil
+	sbc1.CommitCount.Set(0)
+
+	// multi shard query - savepoint needed
+	sql = "update `user` set a = 2 where id in (1, 4)"
+	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
 	require.Len(t, sbc1.Queries, 2)
 	require.Contains(t, sbc1.Queries[0].Sql, "savepoint")
-	require.Equal(t, "update `user` set a = 2 where id = 1", sbc1.Queries[1].Sql)
-
+	require.Equal(t, sql, sbc1.Queries[1].Sql)
 	testCommitCount(t, "sbc1", sbc1, 0)
 }
 

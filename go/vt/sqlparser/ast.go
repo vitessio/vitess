@@ -377,12 +377,12 @@ type (
 		IfExists bool
 	}
 
-	// CollateAndCharsetType is an enum for CollateAndCharset.Type
-	CollateAndCharsetType int8
+	// DatabaseOptionType is an enum for create database options
+	DatabaseOptionType int8
 
-	// CollateAndCharset is a struct that stores Collation or Character Set value
-	CollateAndCharset struct {
-		Type      CollateAndCharsetType
+	// DatabaseOption is a struct that stores Collation or Character Set value
+	DatabaseOption struct {
+		Type      DatabaseOptionType
 		IsDefault bool
 		Value     string
 	}
@@ -392,7 +392,7 @@ type (
 		Comments      *ParsedComments
 		DBName        TableIdent
 		IfNotExists   bool
-		CreateOptions []CollateAndCharset
+		CreateOptions []DatabaseOption
 		FullyParsed   bool
 	}
 
@@ -400,7 +400,7 @@ type (
 	AlterDatabase struct {
 		DBName              TableIdent
 		UpdateDataDirectory bool
-		AlterOptions        []CollateAndCharset
+		AlterOptions        []DatabaseOption
 		FullyParsed         bool
 	}
 
@@ -2396,8 +2396,11 @@ type (
 	// JSONValueExpr represents the function and arguments for JSON_VALUE()
 	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-value
 	JSONValueExpr struct {
-		JSONDoc Expr
-		Path    JSONPathParam
+		JSONDoc         Expr
+		Path            JSONPathParam
+		ReturningType   *ConvertType
+		EmptyOnResponse *JtOnResponse
+		ErrorOnResponse *JtOnResponse
 	}
 
 	// MemberOf represents the function and arguments for MEMBER OF()

@@ -957,14 +957,18 @@ func (idx *IndexDefinition) formatFast(buf *TrackedBuffer) {
 	for i, col := range idx.Columns {
 		if i != 0 {
 			buf.WriteString(", ")
-			col.Column.formatFast(buf)
+		}
+		if col.Expression != nil {
+			buf.WriteByte('(')
+			col.Expression.formatFast(buf)
+			buf.WriteByte(')')
 		} else {
 			col.Column.formatFast(buf)
-		}
-		if col.Length != nil {
-			buf.WriteByte('(')
-			col.Length.formatFast(buf)
-			buf.WriteByte(')')
+			if col.Length != nil {
+				buf.WriteByte('(')
+				col.Length.formatFast(buf)
+				buf.WriteByte(')')
+			}
 		}
 		if col.Direction == DescOrder {
 			buf.WriteString(" desc")
@@ -978,7 +982,7 @@ func (idx *IndexDefinition) formatFast(buf *TrackedBuffer) {
 		if opt.String != "" {
 			buf.WriteByte(' ')
 			buf.WriteString(opt.String)
-		} else {
+		} else if opt.Value != nil {
 			buf.WriteByte(' ')
 			opt.Value.formatFast(buf)
 		}
@@ -2800,6 +2804,24 @@ func (node *JSONValueExpr) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.JSONDoc, true)
 	buf.WriteString(", ")
 	buf.printExpr(node, node.Path, true)
+
+	if node.ReturningType != nil {
+		buf.WriteString(" returning ")
+		node.ReturningType.formatFast(buf)
+	}
+
+	if node.EmptyOnResponse != nil {
+		buf.WriteByte(' ')
+		node.EmptyOnResponse.formatFast(buf)
+		buf.WriteString(" on empty")
+	}
+
+	if node.ErrorOnResponse != nil {
+		buf.WriteByte(' ')
+		node.ErrorOnResponse.formatFast(buf)
+		buf.WriteString(" on error")
+	}
+
 	buf.WriteByte(')')
 }
 
