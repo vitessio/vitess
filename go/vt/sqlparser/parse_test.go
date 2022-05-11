@@ -3864,6 +3864,13 @@ func TestCreateTable(t *testing.T) {
 	unique index by_username3 (username)
 )`,
 		},
+		// test defining SRID
+		{
+			input: `create table t (
+	p point srid 0,
+	g geometry not null srid 4326
+)`,
+		},
 		// test defining column visibility
 		{
 			input: `create table t (
