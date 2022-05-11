@@ -572,3 +572,27 @@ func TestCharsetConversionOperators(t *testing.T) {
 		}
 	}
 }
+
+func TestCaseExpr(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	var predicates = []string{
+		"true",
+		"false",
+		"null",
+		"1=1",
+		"1=2",
+	}
+
+	for _, pred1 := range predicates {
+		for _, val1 := range bitwiseInputs {
+			for _, elseVal := range bitwiseInputs {
+				e := fmt.Sprintf("case when %s then %s else %s end", pred1, val1, elseVal)
+				t.Run(e, func(t *testing.T) {
+					compareRemoteQuery(t, conn, fmt.Sprintf("SELECT %s", e))
+				})
+			}
+		}
+	}
+}

@@ -118,7 +118,7 @@ func safeEvaluate(query string) (evalengine.EvalResult, sqltypes.Type, error) {
 	local, err := func() (expr evalengine.Expr, err error) {
 		defer func() {
 			if r := recover(); r != nil {
-				err = fmt.Errorf("PANIC: %v", r)
+				err = fmt.Errorf("PANIC during translate: %v", r)
 			}
 		}()
 		expr, err = evalengine.TranslateEx(astExpr, evalengine.LookupDefaultCollation(255), *debugSimplify)

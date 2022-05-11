@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -39,6 +40,29 @@ type (
 	OpLogicalAnd struct{}
 
 	boolean int8
+
+	// IsExpr represents the IS expression in MySQL.
+	// boolean_primary IS [NOT] {TRUE | FALSE | NULL}
+	IsExpr struct {
+		UnaryExpr
+		Op    sqlparser.IsExprOperator
+		Check func(*EvalResult) bool
+	}
+
+	WhenThen struct {
+		when Expr
+		then Expr
+	}
+
+	CaseExpr struct {
+		cases []WhenThen
+		Else  Expr
+
+		// cached values
+		cached bool
+		t      sqltypes.Type
+		f      flag
+	}
 )
 
 const (
@@ -151,14 +175,6 @@ func (l *LogicalExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	return sqltypes.Uint64, f1 | f2
 }
 
-// IsExpr represents the IS expression in MySQL.
-// boolean_primary IS [NOT] {TRUE | FALSE | NULL}
-type IsExpr struct {
-	UnaryExpr
-	Op    sqlparser.IsExprOperator
-	Check func(*EvalResult) bool
-}
-
 func (i *IsExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	var in EvalResult
 	in.init(env, i.Inner)
@@ -168,3 +184,104 @@ func (i *IsExpr) eval(env *ExpressionEnv, result *EvalResult) {
 func (i *IsExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	return sqltypes.Int64, 0
 }
+
+func (c *CaseExpr) eval(env *ExpressionEnv, result *EvalResult) {
+	c.innerEval(env, result)
+	t, _ := c.typeof(env)
+	coerceTo(result, t, collations.Unknown)
+}
+
+func (c *CaseExpr) innerEval(env *ExpressionEnv, result *EvalResult) {
+	var tst EvalResult
+	for _, whenThen := range c.cases {
+		tst.init(env, whenThen.when)
+		if tst.isTruthy() == boolTrue {
+			whenThen.then.eval(env, result)
+			return
+		}
+	}
+	if c.Else != nil {
+		c.Else.eval(env, result)
+		return
+	}
+
+	result.setNull()
+}
+
+func (c *CaseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	if c.cached {
+		return c.t, c.f
+	}
+	var types []sqltypes.Type
+	var resultFlag flag
+	if c.Else != nil {
+		t, f := c.Else.typeof(env)
+		types = append(types, t)
+		resultFlag = f
+	}
+
+	for _, whenthen := range c.cases {
+		t, f := whenthen.then.typeof(env)
+		types = append(types, t)
+		resultFlag = resultFlag | f
+	}
+
+	t := aggregatedType(types)
+
+	c.t, c.f, c.cached = t, resultFlag, true
+
+	return t, resultFlag
+}
+
+func (c *CaseExpr) format(buf *formatter, depth int) {
+	buf.WriteString("CASE")
+	for _, cs := range c.cases {
+		buf.WriteString(" WHEN ")
+		cs.when.format(buf, depth)
+		buf.WriteString(" THEN ")
+		cs.then.format(buf, depth)
+	}
+	if c.Else != nil {
+		buf.WriteString(" ELSE ")
+		c.Else.format(buf, depth)
+	}
+}
+
+func (c *CaseExpr) constant() bool {
+	// TODO we should be able to simplify more cases than constant/simplify allows us to today
+	// example: case when true then col end
+	if c.Else != nil {
+		if !c.Else.constant() {
+			return false
+		}
+	}
+
+	for _, then := range c.cases {
+		if !then.when.constant() || !then.then.constant() {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (c *CaseExpr) simplify(env *ExpressionEnv) error {
+	var err error
+	for i := range c.cases {
+		whenThen := &c.cases[i]
+		whenThen.when, err = simplifyExpr(env, whenThen.when)
+		if err != nil {
+			return err
+		}
+		whenThen.then, err = simplifyExpr(env, whenThen.then)
+		if err != nil {
+			return err
+		}
+	}
+	if c.Else != nil {
+		c.Else, err = simplifyExpr(env, c.Else)
+	}
+	return err
+}
+
+var _ Expr = (*CaseExpr)(nil)

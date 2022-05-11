@@ -82,7 +82,7 @@ func (builtinCoalesce) call(_ *ExpressionEnv, args []EvalResult, result *EvalRes
 }
 
 func (builtinCoalesce) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
-	return aggregatedType(env, args), flagNullable
+	return aggregatedTypeFromExpressions(env, args), flagNullable
 }
 
 type multiComparisonFunc func(args []EvalResult, result *EvalResult, cmp int)
@@ -435,7 +435,7 @@ func (c *WeightStringCallExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	result.setRaw(sqltypes.VarBinary, weights, collationBinary)
 }
 
-func aggregatedType(env *ExpressionEnv, expr []Expr) sqltypes.Type {
+func aggregatedType(types []sqltypes.Type) sqltypes.Type {
 	var (
 		double   int
 		decimal  int
@@ -461,8 +461,7 @@ func aggregatedType(env *ExpressionEnv, expr []Expr) sqltypes.Type {
 		total    int
 	)
 
-	for _, e := range expr {
-		tt, _ := e.typeof(env)
+	for _, tt := range types {
 		switch tt {
 		case sqltypes.Float32, sqltypes.Float64:
 			double++
@@ -593,4 +592,13 @@ func aggregatedType(env *ExpressionEnv, expr []Expr) sqltypes.Type {
 		return sqltypes.Blob
 	}
 	return sqltypes.VarChar
+
+}
+func aggregatedTypeFromExpressions(env *ExpressionEnv, expr []Expr) sqltypes.Type {
+	types := make([]sqltypes.Type, 0, len(expr))
+	for _, e := range expr {
+		tt, _ := e.typeof(env)
+		types = append(types, tt)
+	}
+	return aggregatedType(types)
 }

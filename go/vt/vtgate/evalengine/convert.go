@@ -51,6 +51,30 @@ func (c *ConvertExpr) unsupported() {
 	throwEvalError(err)
 }
 
+func coerceTo(result *EvalResult, typ sqltypes.Type, coll collations.ID) {
+	switch typ {
+	case sqltypes.Binary, sqltypes.VarBinary:
+		result.makeBinary()
+	case sqltypes.Char, sqltypes.VarChar:
+		result.makeTextualAndConvert(collations.CollationBinaryID)
+	case sqltypes.Decimal:
+		m := 10
+		d := 0
+
+		result.makeDecimal(int32(m), int32(d))
+	case sqltypes.Float32, sqltypes.Float64:
+		result.makeFloat()
+	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
+		result.makeSignedIntegral()
+	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
+		result.makeUnsignedIntegral()
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Year, sqltypes.TypeJSON, sqltypes.Time:
+		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s", typ.String()))
+	default:
+		panic("BUG: sqlparser emitted unknown type")
+	}
+}
+
 func (c *ConvertExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	result.init(env, c.Inner)
 	if result.isNull() {

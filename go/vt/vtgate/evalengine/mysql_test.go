@@ -26,7 +26,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -70,14 +69,6 @@ func testSingle(t *testing.T, query string) (EvalResult, error) {
 		return EnvWithBindVars(nil, collations.CollationUtf8mb4ID).Evaluate(converted)
 	}
 	return EvalResult{}, err
-}
-
-func testSingleType(t *testing.T, query string) (sqltypes.Type, error) {
-	converted, err := convert(t, query, false)
-	if err == nil {
-		return EnvWithBindVars(nil, collations.CollationUtf8mb4ID).TypeOf(converted)
-	}
-	return 0, err
 }
 
 func TestMySQLGolden(t *testing.T) {
@@ -136,6 +127,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingleType(t, `SELECT --9223372036854775808`)
+	eval, err := testSingle(t, `SELECT CAST(1.0e0 AS UNSIGNED)`)
 	t.Logf("eval=%s err=%v", eval.String(), err) // want value=""
 }
