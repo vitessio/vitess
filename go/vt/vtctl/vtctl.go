@@ -496,20 +496,6 @@ var commands = []commandGroup{
 				help:   "Performs materialization based on the json spec. Is used directly to form VReplication rules, with an optional step to copy table structure/DDL.",
 			},
 			{
-				name:       "SplitClone",
-				method:     commandSplitClone,
-				params:     "<keyspace> <from_shards> <to_shards>",
-				help:       "Start the SplitClone process to perform horizontal resharding. Example: SplitClone ks '0' '-80,80-'",
-				deprecated: true,
-			},
-			{
-				name:       "VerticalSplitClone",
-				method:     commandVerticalSplitClone,
-				params:     "<from_keyspace> <to_keyspace> <tables>",
-				help:       "Start the VerticalSplitClone process to perform vertical resharding. Example: SplitClone from_ks to_ks 'a,/b.*/'",
-				deprecated: true,
-			},
-			{
 				name:   "VDiff",
 				method: commandVDiff,
 				params: "[--source_cell=<cell>] [--target_cell=<cell>] [--tablet_types=in_order:RDONLY,REPLICA,PRIMARY] [--filtered_replication_wait_time=30s] [--max_extra_rows_to_compare=1000] <keyspace.workflow>",
@@ -2696,34 +2682,6 @@ func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	ms.Cell = *cells
 	ms.TabletTypes = *tabletTypes
 	return wr.Materialize(ctx, ms)
-}
-
-func commandSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead: https://vitess.io/docs/reference/vreplication/ ***\n")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 3 {
-		return fmt.Errorf("three arguments are required: keyspace, from_shards, to_shards")
-	}
-	keyspace := subFlags.Arg(0)
-	from := strings.Split(subFlags.Arg(1), ",")
-	to := strings.Split(subFlags.Arg(2), ",")
-	return wr.SplitClone(ctx, keyspace, from, to)
-}
-
-func commandVerticalSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead: https://vitess.io/docs/reference/vreplication/ ***\n")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 3 {
-		return fmt.Errorf("three arguments are required: from_keyspace, to_keyspace, tables")
-	}
-	fromKeyspace := subFlags.Arg(0)
-	toKeyspace := subFlags.Arg(1)
-	tables := strings.Split(subFlags.Arg(2), ",")
-	return wr.VerticalSplitClone(ctx, fromKeyspace, toKeyspace, tables)
 }
 
 func useVDiffV2(args []string) bool {

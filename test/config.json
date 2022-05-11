@@ -228,15 +228,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"initial_sharding": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/initialsharding/v3"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "13",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"initial_sharding_bytes": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/initialsharding/bytes"],
@@ -467,52 +458,12 @@
 			"RetryMax": 1,
 			"Tags": [""]
 		},
-		"resharding": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/resharding/v3"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "resharding",
-			"RetryMax": 1,
-			"Tags": [
-				"worker_test"
-			]
-		},
-		"resharding_bytes": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/resharding/string"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "resharding_bytes",
-			"RetryMax": 2,
-			"Tags": [
-				"worker_test"
-			]
-		},
 		"sharded": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/sharded"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtctlbackup_sharded_clustertest_heavy",
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"sharded_recovery": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/shardedrecovery"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "shardedrecovery_stress_verticalsplit_heavy",
-			"RetryMax": 2,
-			"Tags": []
-		},
-		"stress": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/stress"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "shardedrecovery_stress_verticalsplit_heavy",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -630,17 +581,6 @@
 			"Shard": "28",
 			"RetryMax": 1,
 			"Tags": []
-		},
-		"vertical_split": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/verticalsplit"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "shardedrecovery_stress_verticalsplit_heavy",
-			"RetryMax": 1,
-			"Tags": [
-				"worker_test"
-			]
 		},
 		"vtgate": {
 			"File": "unused.go",
@@ -1065,17 +1005,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"worker": {
-			"File": "worker_test.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/worker"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "worker_vault_heavy",
-			"RetryMax": 3,
-			"Tags": [
-				"worker_test"
-			]
-		},
 		"vreplication_multicell": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "MultiCell"],
@@ -1225,7 +1154,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vault"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "worker_vault_heavy",
+			"Shard": "vault_heavy",
 			"RetryMax": 1,
 			"Tags": []
 		},

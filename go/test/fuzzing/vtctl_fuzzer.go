@@ -100,8 +100,6 @@ func getCommandType(index int) string {
 		55: "CreateLookupVindex",
 		56: "ExternalizeVindex",
 		57: "Materialize",
-		58: "SplitClone",
-		59: "VerticalSplitClone",
 		60: "VDiff",
 		61: "MigrateServedTypes",
 		62: "MigrateServedFrom",

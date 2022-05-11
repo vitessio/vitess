@@ -521,7 +521,7 @@ func (blp *BinlogPlayer) setVReplicationState(state, message string) error {
 // CreateVReplicationTable returns the statements required to create
 // the _vt.vreplication table.
 // id: is an auto-increment column that identifies the stream.
-// workflow: documents the creator/manager of the stream. Example: 'SplitClone'.
+// workflow: documents the creator/manager of the stream. Example: 'MoveTables'.
 // source: contains a string proto representation of binlogpb.BinlogSource.
 // pos: initially, a start position, and is updated to the current position by the binlog player.
 // stop_pos: optional column that specifies the stop position.
