@@ -22,6 +22,8 @@ package vtexplain
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/vt/topo"
@@ -193,6 +195,10 @@ func getShardRanges(ks string, vschema *vschemapb.Keyspace, ksShardMap map[strin
 }
 
 func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error) {
+	// This method will sort the shard session lexicographically.
+	// This will ensure that the commit/rollback order is predictable.
+	sortShardSession()
+
 	// use the plan cache to get the set of plans used for this query, then
 	// clear afterwards for the next run
 	planCache := vtgateExecutor.Plans()
@@ -238,4 +244,16 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error
 	}
 
 	return plans, tabletActions, nil
+}
+
+func sortShardSession() {
+	if len(vtgateSession.ShardSessions) > 1 {
+		ss := vtgateSession.ShardSessions
+		sort.Slice(ss, func(i, j int) bool {
+			if ss[i].Target.Keyspace != ss[j].Target.Keyspace {
+				return strings.Compare(ss[i].Target.Keyspace, ss[j].Target.Keyspace) <= 0
+			}
+			return strings.Compare(ss[i].Target.Shard, ss[j].Target.Shard) <= 0
+		})
+	}
 }
