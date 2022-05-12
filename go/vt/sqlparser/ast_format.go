@@ -458,6 +458,49 @@ func (node *PartitionDefinitionOptions) Format(buf *TrackedBuffer) {
 	if node.TableSpace != "" {
 		buf.astPrintf(node, " tablespace %s", node.TableSpace)
 	}
+	if node.SubPartitionDefinitions != nil {
+		buf.astPrintf(node, " (%v)", node.SubPartitionDefinitions)
+	}
+}
+
+// Format formats the node
+func (node SubPartitionDefinitions) Format(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// Format formats the node
+func (node *SubPartitionDefinition) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "subpartition %v", node.Name)
+	buf.astPrintf(node, "%v", node.Options)
+}
+
+// Format formats the node
+func (node *SubPartitionDefinitionOptions) Format(buf *TrackedBuffer) {
+	if node.Engine != nil {
+		buf.astPrintf(node, " %v", node.Engine)
+	}
+	if node.Comment != nil {
+		buf.astPrintf(node, " comment %v", node.Comment)
+	}
+	if node.DataDirectory != nil {
+		buf.astPrintf(node, " data directory %v", node.DataDirectory)
+	}
+	if node.IndexDirectory != nil {
+		buf.astPrintf(node, " index directory %v", node.IndexDirectory)
+	}
+	if node.MaxRows != nil {
+		buf.astPrintf(node, " max_rows %d", *node.MaxRows)
+	}
+	if node.MinRows != nil {
+		buf.astPrintf(node, " min_rows %d", *node.MinRows)
+	}
+	if node.TableSpace != "" {
+		buf.astPrintf(node, " tablespace %s", node.TableSpace)
+	}
 }
 
 // Format formats the node

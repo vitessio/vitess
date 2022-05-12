@@ -345,6 +345,12 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfStream(in)
 	case *SubPartition:
 		return CloneRefOfSubPartition(in)
+	case *SubPartitionDefinition:
+		return CloneRefOfSubPartitionDefinition(in)
+	case *SubPartitionDefinitionOptions:
+		return CloneRefOfSubPartitionDefinitionOptions(in)
+	case SubPartitionDefinitions:
+		return CloneSubPartitionDefinitions(in)
 	case *Subquery:
 		return CloneRefOfSubquery(in)
 	case *SubstrExpr:
@@ -1715,6 +1721,7 @@ func CloneRefOfPartitionDefinitionOptions(n *PartitionDefinitionOptions) *Partit
 	out.IndexDirectory = CloneRefOfLiteral(n.IndexDirectory)
 	out.MaxRows = CloneRefOfInt(n.MaxRows)
 	out.MinRows = CloneRefOfInt(n.MinRows)
+	out.SubPartitionDefinitions = CloneSubPartitionDefinitions(n.SubPartitionDefinitions)
 	return &out
 }
 
@@ -2062,6 +2069,44 @@ func CloneRefOfSubPartition(n *SubPartition) *SubPartition {
 	out.ColList = CloneColumns(n.ColList)
 	out.Expr = CloneExpr(n.Expr)
 	return &out
+}
+
+// CloneRefOfSubPartitionDefinition creates a deep clone of the input.
+func CloneRefOfSubPartitionDefinition(n *SubPartitionDefinition) *SubPartitionDefinition {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneColIdent(n.Name)
+	out.Options = CloneRefOfSubPartitionDefinitionOptions(n.Options)
+	return &out
+}
+
+// CloneRefOfSubPartitionDefinitionOptions creates a deep clone of the input.
+func CloneRefOfSubPartitionDefinitionOptions(n *SubPartitionDefinitionOptions) *SubPartitionDefinitionOptions {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Comment = CloneRefOfLiteral(n.Comment)
+	out.Engine = CloneRefOfPartitionEngine(n.Engine)
+	out.DataDirectory = CloneRefOfLiteral(n.DataDirectory)
+	out.IndexDirectory = CloneRefOfLiteral(n.IndexDirectory)
+	out.MaxRows = CloneRefOfInt(n.MaxRows)
+	out.MinRows = CloneRefOfInt(n.MinRows)
+	return &out
+}
+
+// CloneSubPartitionDefinitions creates a deep clone of the input.
+func CloneSubPartitionDefinitions(n SubPartitionDefinitions) SubPartitionDefinitions {
+	if n == nil {
+		return nil
+	}
+	res := make(SubPartitionDefinitions, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneRefOfSubPartitionDefinition(x))
+	}
+	return res
 }
 
 // CloneRefOfSubquery creates a deep clone of the input.
