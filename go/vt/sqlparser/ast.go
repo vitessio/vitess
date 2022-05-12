@@ -168,6 +168,12 @@ type (
 		Collate      string
 	}
 
+	// AlterCheck represents the `ALTER CHECK` part in an `ALTER TABLE ALTER CHECK` command.
+	AlterCheck struct {
+		Name     ColIdent
+		Enforced bool
+	}
+
 	// KeyState is used to disable or enable the keys in an alter table statement
 	KeyState struct {
 		Enable bool
@@ -377,12 +383,12 @@ type (
 		IfExists bool
 	}
 
-	// CollateAndCharsetType is an enum for CollateAndCharset.Type
-	CollateAndCharsetType int8
+	// DatabaseOptionType is an enum for create database options
+	DatabaseOptionType int8
 
-	// CollateAndCharset is a struct that stores Collation or Character Set value
-	CollateAndCharset struct {
-		Type      CollateAndCharsetType
+	// DatabaseOption is a struct that stores Collation or Character Set value
+	DatabaseOption struct {
+		Type      DatabaseOptionType
 		IsDefault bool
 		Value     string
 	}
@@ -392,7 +398,7 @@ type (
 		Comments      *ParsedComments
 		DBName        TableIdent
 		IfNotExists   bool
-		CreateOptions []CollateAndCharset
+		CreateOptions []DatabaseOption
 		FullyParsed   bool
 	}
 
@@ -400,7 +406,7 @@ type (
 	AlterDatabase struct {
 		DBName              TableIdent
 		UpdateDataDirectory bool
-		AlterOptions        []CollateAndCharset
+		AlterOptions        []DatabaseOption
 		FullyParsed         bool
 	}
 
@@ -718,6 +724,7 @@ func (*AddIndexDefinition) iAlterOption()      {}
 func (*AddColumns) iAlterOption()              {}
 func (AlgorithmValue) iAlterOption()           {}
 func (*AlterColumn) iAlterOption()             {}
+func (*AlterCheck) iAlterOption()              {}
 func (*ChangeColumn) iAlterOption()            {}
 func (*ModifyColumn) iAlterOption()            {}
 func (*AlterCharset) iAlterOption()            {}
@@ -1732,6 +1739,9 @@ type ColumnType struct {
 // ColumnStorage is an enum that defines the type of storage.
 type ColumnStorage int
 
+// ColumnFormat is an enum that defines the type of storage.
+type ColumnFormat int
+
 // ColumnTypeOptions are generic field options for a column type
 type ColumnTypeOptions struct {
 	/* We need Null to be *bool to distinguish 3 cases -
@@ -1754,6 +1764,29 @@ type ColumnTypeOptions struct {
 
 	// Key specification
 	KeyOpt ColumnKeyOption
+
+	// Stores the tri state of having either VISIBLE, INVISIBLE or nothing specified
+	// on the column. In case of nothing, this is nil, when VISIBLE is set it's false
+	// and only when INVISIBLE is set does the pointer value return true.
+	Invisible *bool
+
+	// Storage format for this specific column. This is NDB specific, but the parser
+	// still allows for it and ignores it for other storage engines. So we also should
+	// parse it but it's then not used anywhere.
+	Format ColumnFormat
+
+	// EngineAttribute is a new attribute not used for anything yet, but accepted
+	// since 8.0.23 in the MySQL parser.
+	EngineAttribute *Literal
+
+	// SecondaryEngineAttribute is a new attribute not used for anything yet, but accepted
+	// since 8.0.23 in the MySQL parser.
+	SecondaryEngineAttribute *Literal
+
+	// SRID is an attribute that indiciates the spatial reference system.
+	//
+	// https://dev.mysql.com/doc/refman/8.0/en/spatial-type-overview.html
+	SRID *Literal
 }
 
 // IndexDefinition describes an index in a CREATE TABLE statement
@@ -1817,6 +1850,7 @@ type (
 	ReferenceDefinition struct {
 		ReferencedTable   TableName
 		ReferencedColumns Columns
+		Match             MatchAction
 		OnDelete          ReferenceAction
 		OnUpdate          ReferenceAction
 	}
@@ -2417,8 +2451,11 @@ type (
 	// JSONValueExpr represents the function and arguments for JSON_VALUE()
 	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-value
 	JSONValueExpr struct {
-		JSONDoc Expr
-		Path    JSONPathParam
+		JSONDoc         Expr
+		Path            JSONPathParam
+		ReturningType   *ConvertType
+		EmptyOnResponse *JtOnResponse
+		ErrorOnResponse *JtOnResponse
 	}
 
 	// MemberOf represents the function and arguments for MEMBER OF()

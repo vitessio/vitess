@@ -45,6 +45,14 @@ func (d *AlterViewEntityDiff) Statement() sqlparser.Statement {
 	return d.alterView
 }
 
+// AlterView returns the underlying sqlparser.AlterView that was generated for the diff.
+func (d *AlterViewEntityDiff) AlterView() *sqlparser.AlterView {
+	if d == nil {
+		return nil
+	}
+	return d.alterView
+}
+
 // StatementString implements EntityDiff
 func (d *AlterViewEntityDiff) StatementString() (s string) {
 	if stmt := d.Statement(); stmt != nil {
@@ -59,6 +67,11 @@ func (d *AlterViewEntityDiff) CanonicalStatementString() (s string) {
 		s = sqlparser.CanonicalString(stmt)
 	}
 	return s
+}
+
+// SubsequentDiff implements EntityDiff
+func (d *AlterViewEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
 }
 
 //
@@ -84,6 +97,14 @@ func (d *CreateViewEntityDiff) Statement() sqlparser.Statement {
 	return d.createView
 }
 
+// CreateView returns the underlying sqlparser.CreateView that was generated for the diff.
+func (d *CreateViewEntityDiff) CreateView() *sqlparser.CreateView {
+	if d == nil {
+		return nil
+	}
+	return d.createView
+}
+
 // StatementString implements EntityDiff
 func (d *CreateViewEntityDiff) StatementString() (s string) {
 	if stmt := d.Statement(); stmt != nil {
@@ -98,6 +119,11 @@ func (d *CreateViewEntityDiff) CanonicalStatementString() (s string) {
 		s = sqlparser.CanonicalString(stmt)
 	}
 	return s
+}
+
+// SubsequentDiff implements EntityDiff
+func (d *CreateViewEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
 }
 
 //
@@ -124,6 +150,14 @@ func (d *DropViewEntityDiff) Statement() sqlparser.Statement {
 	return d.dropView
 }
 
+// DropView returns the underlying sqlparser.DropView that was generated for the diff.
+func (d *DropViewEntityDiff) DropView() *sqlparser.DropView {
+	if d == nil {
+		return nil
+	}
+	return d.dropView
+}
+
 // CanonicalStatementString implements EntityDiff
 func (d *DropViewEntityDiff) CanonicalStatementString() (s string) {
 	if stmt := d.Statement(); stmt != nil {
@@ -138,6 +172,11 @@ func (d *DropViewEntityDiff) StatementString() (s string) {
 		s = sqlparser.String(stmt)
 	}
 	return s
+}
+
+// SubsequentDiff implements EntityDiff
+func (d *DropViewEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
 }
 
 // CreateViewEntity stands for a VIEW construct. It contains the view's CREATE statement.
@@ -178,8 +217,8 @@ func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, hints *DiffHints) (
 		return nil, ErrNotFullyParsed
 	}
 
-	format := sqlparser.String(&c.CreateView)
-	otherFormat := sqlparser.String(&otherStmt)
+	format := sqlparser.CanonicalString(&c.CreateView)
+	otherFormat := sqlparser.CanonicalString(&otherStmt)
 	if format == otherFormat {
 		return nil, nil
 	}

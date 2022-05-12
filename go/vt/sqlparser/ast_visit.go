@@ -38,6 +38,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAliasedTableExpr(in, f)
 	case *AlterCharset:
 		return VisitRefOfAlterCharset(in, f)
+	case *AlterCheck:
+		return VisitRefOfAlterCheck(in, f)
 	case *AlterColumn:
 		return VisitRefOfAlterColumn(in, f)
 	case *AlterDatabase:
@@ -236,6 +238,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfLockOption(in, f)
 	case *LockTables:
 		return VisitRefOfLockTables(in, f)
+	case MatchAction:
+		return VisitMatchAction(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
@@ -498,6 +502,18 @@ func VisitRefOfAlterCharset(in *AlterCharset, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfAlterCheck(in *AlterCheck, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
 	}
 	return nil
@@ -1763,6 +1779,15 @@ func VisitRefOfJSONValueExpr(in *JSONValueExpr, f Visit) error {
 	if err := VisitJSONPathParam(in.Path, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfConvertType(in.ReturningType, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfJtOnResponse(in.EmptyOnResponse, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfJtOnResponse(in.ErrorOnResponse, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfJSONValueMergeExpr(in *JSONValueMergeExpr, f Visit) error {
@@ -2259,6 +2284,9 @@ func VisitRefOfReferenceDefinition(in *ReferenceDefinition, f Visit) error {
 		return err
 	}
 	if err := VisitColumns(in.ReferencedColumns, f); err != nil {
+		return err
+	}
+	if err := VisitMatchAction(in.Match, f); err != nil {
 		return err
 	}
 	if err := VisitReferenceAction(in.OnDelete, f); err != nil {
@@ -3137,6 +3165,8 @@ func VisitAlterOption(in AlterOption, f Visit) error {
 		return VisitAlgorithmValue(in, f)
 	case *AlterCharset:
 		return VisitRefOfAlterCharset(in, f)
+	case *AlterCheck:
+		return VisitRefOfAlterCheck(in, f)
 	case *AlterColumn:
 		return VisitRefOfAlterColumn(in, f)
 	case *ChangeColumn:
@@ -3811,6 +3841,10 @@ func VisitIsolationLevel(in IsolationLevel, f Visit) error {
 	return err
 }
 func VisitListArg(in ListArg, f Visit) error {
+	_, err := f(in)
+	return err
+}
+func VisitMatchAction(in MatchAction, f Visit) error {
 	_, err := f(in)
 	return err
 }

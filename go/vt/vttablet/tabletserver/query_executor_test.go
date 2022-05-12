@@ -1292,7 +1292,7 @@ func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
 	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor")
-	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, false /* inReservedConn */)
+	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, 0, nil)
 	if err != nil {
 		panic(err)
 	}

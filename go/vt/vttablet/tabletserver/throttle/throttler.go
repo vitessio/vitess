@@ -28,6 +28,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
@@ -94,10 +95,11 @@ type Throttler struct {
 	isLeader int64
 	isOpen   int64
 
-	env            tabletenv.Env
-	pool           *connpool.Pool
-	tabletTypeFunc func() topodatapb.TabletType
-	ts             *topo.Server
+	env             tabletenv.Env
+	pool            *connpool.Pool
+	tabletTypeFunc  func() topodatapb.TabletType
+	ts              *topo.Server
+	heartbeatWriter heartbeat.HeartbeatWriter
 
 	throttleTabletTypesMap map[topodatapb.TabletType]bool
 
@@ -141,14 +143,15 @@ type ThrottlerStatus struct {
 }
 
 // NewThrottler creates a Throttler
-func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Throttler {
+func NewThrottler(env tabletenv.Env, ts *topo.Server, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType) *Throttler {
 	throttler := &Throttler{
 		isLeader: 0,
 		isOpen:   0,
 
-		env:            env,
-		tabletTypeFunc: tabletTypeFunc,
-		ts:             ts,
+		env:             env,
+		tabletTypeFunc:  tabletTypeFunc,
+		ts:              ts,
+		heartbeatWriter: heartbeatWriter,
 		pool: connpool.NewPool(env, "ThrottlerPool", tabletenv.ConnPoolConfig{
 			Size:               2,
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
@@ -257,6 +260,7 @@ func (throttler *Throttler) Open() error {
 		// since we just resume now, speed up the tickers by forcng an immediate tick
 		go t.TickNow()
 	}
+	go throttler.heartbeatWriter.RequestHeartbeats()
 
 	return nil
 }
@@ -397,6 +401,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 					if transitionedIntoLeader {
 						// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
 						go mysqlRefreshTicker.TickNow()
+						go throttler.heartbeatWriter.RequestHeartbeats()
 					}
 				}()
 			}
@@ -682,6 +687,8 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 // UnthrottleApp cancels any throttling, if any, for a given app
 func (throttler *Throttler) UnthrottleApp(appName string) (appThrottle *base.AppThrottle) {
 	throttler.throttledApps.Delete(appName)
+	// the app is likely to check
+	go throttler.heartbeatWriter.RequestHeartbeats()
 	return base.NewAppThrottle(appName, time.Now(), 0)
 }
 
@@ -798,6 +805,7 @@ func (throttler *Throttler) checkSelf(ctx context.Context, appName string, remot
 
 // CheckByType runs a check by requested check type
 func (throttler *Throttler) CheckByType(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags, checkType ThrottleCheckType) (checkResult *CheckResult) {
+	go throttler.heartbeatWriter.RequestHeartbeats()
 	switch checkType {
 	case ThrottleCheckSelf:
 		return throttler.checkSelf(ctx, appName, remoteAddr, flags)

@@ -38,6 +38,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfAliasedTableExpr(parent, node, replacer)
 	case *AlterCharset:
 		return a.rewriteRefOfAlterCharset(parent, node, replacer)
+	case *AlterCheck:
+		return a.rewriteRefOfAlterCheck(parent, node, replacer)
 	case *AlterColumn:
 		return a.rewriteRefOfAlterColumn(parent, node, replacer)
 	case *AlterDatabase:
@@ -236,6 +238,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfLockOption(parent, node, replacer)
 	case *LockTables:
 		return a.rewriteRefOfLockTables(parent, node, replacer)
+	case MatchAction:
+		return a.rewriteMatchAction(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *MemberOfExpr:
@@ -600,6 +604,33 @@ func (a *application) rewriteRefOfAlterCharset(parent SQLNode, node *AlterCharse
 			a.cur.parent = parent
 			a.cur.node = node
 		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfAlterCheck(parent SQLNode, node *AlterCheck, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*AlterCheck).Name = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -3334,6 +3365,21 @@ func (a *application) rewriteRefOfJSONValueExpr(parent SQLNode, node *JSONValueE
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfConvertType(node, node.ReturningType, func(newNode, parent SQLNode) {
+		parent.(*JSONValueExpr).ReturningType = newNode.(*ConvertType)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfJtOnResponse(node, node.EmptyOnResponse, func(newNode, parent SQLNode) {
+		parent.(*JSONValueExpr).EmptyOnResponse = newNode.(*JtOnResponse)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfJtOnResponse(node, node.ErrorOnResponse, func(newNode, parent SQLNode) {
+		parent.(*JSONValueExpr).ErrorOnResponse = newNode.(*JtOnResponse)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4464,6 +4510,11 @@ func (a *application) rewriteRefOfReferenceDefinition(parent SQLNode, node *Refe
 	}
 	if !a.rewriteColumns(node, node.ReferencedColumns, func(newNode, parent SQLNode) {
 		parent.(*ReferenceDefinition).ReferencedColumns = newNode.(Columns)
+	}) {
+		return false
+	}
+	if !a.rewriteMatchAction(node, node.Match, func(newNode, parent SQLNode) {
+		parent.(*ReferenceDefinition).Match = newNode.(MatchAction)
 	}) {
 		return false
 	}
@@ -6435,6 +6486,8 @@ func (a *application) rewriteAlterOption(parent SQLNode, node AlterOption, repla
 		return a.rewriteAlgorithmValue(parent, node, replacer)
 	case *AlterCharset:
 		return a.rewriteRefOfAlterCharset(parent, node, replacer)
+	case *AlterCheck:
+		return a.rewriteRefOfAlterCheck(parent, node, replacer)
 	case *AlterColumn:
 		return a.rewriteRefOfAlterColumn(parent, node, replacer)
 	case *ChangeColumn:
@@ -7194,6 +7247,27 @@ func (a *application) rewriteIsolationLevel(parent SQLNode, node IsolationLevel,
 	return true
 }
 func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer replacerFunc) bool {
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteMatchAction(parent SQLNode, node MatchAction, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent

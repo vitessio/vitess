@@ -65,7 +65,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   jsonObjectParam *JSONObjectParam
   colIdent      ColIdent
   joinCondition *JoinCondition
-  collateAndCharset CollateAndCharset
+  databaseOption DatabaseOption
   columnType    ColumnType
   jsonPathParam JSONPathParam
 }
@@ -131,7 +131,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   columnDefinitions []*ColumnDefinition
   indexOptions  []*IndexOption
   indexColumns  []*IndexColumn
-  collateAndCharsets []CollateAndCharset
+  databaseOptions []DatabaseOption
   tableAndLockTypes TableAndLockTypes
   renameTablePairs []*RenameTablePair
   alterOptions	   []AlterOption
@@ -158,7 +158,8 @@ func bindVariable(yylex yyLexer, bvar string) {
   tableOptions     TableOptions
 
   colKeyOpt     ColumnKeyOption
-  ReferenceAction ReferenceAction
+  referenceAction ReferenceAction
+  matchAction MatchAction
   isolationLevel IsolationLevel
   insertAction InsertAction
   scope 	Scope
@@ -174,6 +175,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   referenceDefinition *ReferenceDefinition
 
   columnStorage ColumnStorage
+  columnFormat ColumnFormat
 
   boolean bool
   boolVal BoolVal
@@ -257,7 +259,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %right <str> UNDERSCORE_DEC8 UNDERSCORE_EUCJPMS UNDERSCORE_EUCKR UNDERSCORE_GB18030 UNDERSCORE_GB2312 UNDERSCORE_GBK UNDERSCORE_GEOSTD8
 %right <str> UNDERSCORE_GREEK UNDERSCORE_HEBREW UNDERSCORE_HP8 UNDERSCORE_KEYBCS2 UNDERSCORE_KOI8R UNDERSCORE_KOI8U UNDERSCORE_LATIN1 UNDERSCORE_LATIN2 UNDERSCORE_LATIN5
 %right <str> UNDERSCORE_LATIN7 UNDERSCORE_MACCE UNDERSCORE_MACROMAN UNDERSCORE_SJIS UNDERSCORE_SWE7 UNDERSCORE_TIS620 UNDERSCORE_UCS2 UNDERSCORE_UJIS UNDERSCORE_UTF16
-%right <str> UNDERSCORE_UTF16LE UNDERSCORE_UTF32 UNDERSCORE_UTF8 UNDERSCORE_UTF8MB4
+%right <str> UNDERSCORE_UTF16LE UNDERSCORE_UTF32 UNDERSCORE_UTF8 UNDERSCORE_UTF8MB4 UNDERSCORE_UTF8MB3
 %right <str> INTERVAL
 %nonassoc <str> '.'
 
@@ -326,11 +328,11 @@ func bindVariable(yylex yyLexer, bvar string) {
 // MySQL reserved words that are unused by this grammar will map to this token.
 %token <str> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD
 %token <str> NTH_VALUE NTILE OF OVER PERCENT_RANK RANK RECURSIVE ROW_NUMBER SYSTEM WINDOW
-%token <str> ACTIVE ADMIN BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
+%token <str> ACTIVE ADMIN AUTOEXTEND_SIZE BUCKETS CLONE COLUMN_FORMAT COMPONENT DEFINITION ENFORCED ENGINE_ATTRIBUTE EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <str> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
-%token <str> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD OPTIONAL ORDINALITY ORGANIZATION OTHERS PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
-%token <str> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
-%token <str> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE
+%token <str> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD OPTIONAL ORDINALITY ORGANIZATION OTHERS PARTIAL PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
+%token <str> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_ENGINE_ATTRIBUTE SECONDARY_LOAD SECONDARY_UNLOAD SIMPLE SKIP SRID
+%token <str> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE RETURNING
 
 // Explain tokens
 %token <str> FORMAT TREE VITESS TRADITIONAL
@@ -368,8 +370,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <alterTable> create_index_prefix
 %type <createDatabase> create_database_prefix
 %type <alterDatabase> alter_database_prefix
-%type <collateAndCharset> collate character_set
-%type <collateAndCharsets> create_options create_options_opt
+%type <databaseOption> collate character_set encryption
+%type <databaseOptions> create_options create_options_opt
 %type <boolean> default_optional first_opt linear_opt jt_exists_opt jt_path_opt partition_storage_opt
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
@@ -455,7 +457,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <ignore> ignore_opt
 %type <str> columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
-%type <boolean> exists_opt not_exists_opt enforced_opt temp_opt full_opt
+%type <boolean> exists_opt not_exists_opt enforced enforced_opt temp_opt full_opt
 %type <empty> to_opt
 %type <str> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
@@ -465,7 +467,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
 %type <scope> set_session_or_global
-%type <convertType> convert_type convert_type_weight_string
+%type <convertType> convert_type returning_type_opt convert_type_weight_string
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <literal> length_opt partition_comment partition_data_directory partition_index_directory
@@ -505,12 +507,14 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <jsonObjectParams> json_object_param_list json_object_param_opt
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
 %type <str> database_or_schema column_opt insert_method_options row_format_options
-%type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
+%type <referenceAction> fk_reference_action fk_on_delete fk_on_update
+%type <matchAction> fk_match fk_match_opt fk_match_action
 %type <tableAndLockTypes> lock_table_list
 %type <tableAndLockType> lock_table
 %type <lockType> lock_type
 %type <empty> session_or_local_opt
 %type <columnStorage> column_storage
+%type <columnFormat> column_format
 %type <colKeyOpt> keys
 %type <referenceDefinition> reference_definition reference_definition_opt
 %type <str> underscore_charsets
@@ -1166,17 +1170,25 @@ create_options_opt:
 create_options:
   character_set
   {
-    $$ = []CollateAndCharset{$1}
+    $$ = []DatabaseOption{$1}
   }
 | collate
   {
-    $$ = []CollateAndCharset{$1}
+    $$ = []DatabaseOption{$1}
+  }
+| encryption
+  {
+    $$ = []DatabaseOption{$1}
   }
 | create_options collate
   {
     $$ = append($1,$2)
   }
 | create_options character_set
+  {
+    $$ = append($1,$2)
+  }
+| create_options encryption
   {
     $$ = append($1,$2)
   }
@@ -1194,23 +1206,32 @@ default_optional:
 character_set:
   default_optional charset_or_character_set equal_opt id_or_var
   {
-    $$ = CollateAndCharset{Type:CharacterSetType, Value:($4.String()), IsDefault:$1}
+    $$ = DatabaseOption{Type:CharacterSetType, Value:($4.String()), IsDefault:$1}
   }
 | default_optional charset_or_character_set equal_opt STRING
   {
-    $$ = CollateAndCharset{Type:CharacterSetType, Value:(encodeSQLString($4)), IsDefault:$1}
+    $$ = DatabaseOption{Type:CharacterSetType, Value:(encodeSQLString($4)), IsDefault:$1}
   }
 
 collate:
   default_optional COLLATE equal_opt id_or_var
   {
-    $$ = CollateAndCharset{Type:CollateType, Value:($4.String()), IsDefault:$1}
+    $$ = DatabaseOption{Type:CollateType, Value:($4.String()), IsDefault:$1}
   }
 | default_optional COLLATE equal_opt STRING
   {
-    $$ = CollateAndCharset{Type:CollateType, Value:(encodeSQLString($4)), IsDefault:$1}
+    $$ = DatabaseOption{Type:CollateType, Value:(encodeSQLString($4)), IsDefault:$1}
   }
 
+encryption:
+  default_optional ENCRYPTION equal_opt id_or_var
+  {
+    $$ = DatabaseOption{Type:EncryptionType, Value:($4.String()), IsDefault:$1}
+  }
+| default_optional ENCRYPTION equal_opt STRING
+  {
+    $$ = DatabaseOption{Type:EncryptionType, Value:(encodeSQLString($4)), IsDefault:$1}
+  }
 
 create_like:
   LIKE table_name
@@ -1304,7 +1325,7 @@ generated_always_opt:
 // was specific (as stated in the MySQL guide) and did not accept arbitrary order options. For example NOT NULL DEFAULT 1 and not DEFAULT 1 NOT NULL
 column_attribute_list_opt:
   {
-    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil, As: nil}
+    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil, As: nil, Invisible: nil, Format: UnspecifiedFormat, EngineAttribute: nil, SecondaryEngineAttribute: nil }
   }
 | column_attribute_list_opt NULL
   {
@@ -1350,13 +1371,56 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt COLLATE STRING
   {
-  	$1.Collate = encodeSQLString($3)
+    $1.Collate = encodeSQLString($3)
   }
 | column_attribute_list_opt COLLATE id_or_var
   {
-	$1.Collate = string($3.String())
-	$$ = $1
+    $1.Collate = string($3.String())
+    $$ = $1
   }
+| column_attribute_list_opt COLUMN_FORMAT column_format
+  {
+    $1.Format = $3
+  }
+| column_attribute_list_opt SRID INTEGRAL
+  {
+    $1.SRID = NewIntLiteral($3)
+    $$ = $1
+  }
+| column_attribute_list_opt VISIBLE
+  {
+    val := false
+    $1.Invisible = &val
+    $$ = $1
+  }
+| column_attribute_list_opt INVISIBLE
+  {
+    val := true
+    $1.Invisible = &val
+    $$ = $1
+  }
+| column_attribute_list_opt ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $1.EngineAttribute = NewStrLiteral($4)
+  }
+| column_attribute_list_opt SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $1.SecondaryEngineAttribute = NewStrLiteral($4)
+  }
+
+column_format:
+  FIXED
+{
+  $$ = FixedFormat
+}
+| DYNAMIC
+{
+  $$ = DynamicFormat
+}
+| DEFAULT
+{
+  $$ = DefaultFormat
+}
 
 column_storage:
   VIRTUAL
@@ -1397,6 +1461,18 @@ generated_column_attribute_list_opt:
 | generated_column_attribute_list_opt keys
   {
     $1.KeyOpt = $2
+    $$ = $1
+  }
+| generated_column_attribute_list_opt VISIBLE
+  {
+    val := false
+    $1.Invisible = &val
+    $$ = $1
+  }
+| generated_column_attribute_list_opt INVISIBLE
+  {
+    val := true
+    $1.Invisible = &val
     $$ = $1
   }
 
@@ -1667,6 +1743,10 @@ underscore_charsets:
 | UNDERSCORE_UTF8MB4
   {
     $$ = Utf8mb4Str
+  }
+| UNDERSCORE_UTF8MB3
+  {
+    $$ = Utf8Str
   }
 
 literal_or_null:
@@ -2093,9 +2173,25 @@ index_option:
   {
     $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($2)}
   }
+| VISIBLE
+  {
+    $$ = &IndexOption{Name: string($1) }
+  }
+| INVISIBLE
+  {
+    $$ = &IndexOption{Name: string($1) }
+  }
 | WITH PARSER id_or_var
   {
     $$ = &IndexOption{Name: string($1) + " " + string($2), String: $3.String()}
+  }
+| ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($3)}
+  }
+| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($3)}
   }
 
 equal_opt:
@@ -2205,7 +2301,11 @@ index_column_list:
 index_column:
   sql_id length_opt asc_desc_opt
   {
-      $$ = &IndexColumn{Column: $1, Length: $2, Direction: $3}
+    $$ = &IndexColumn{Column: $1, Length: $2, Direction: $3}
+  }
+| openb expression closeb asc_desc_opt
+  {
+    $$ = &IndexColumn{Expression: $2, Direction: $4}
   }
 
 constraint_definition:
@@ -2235,25 +2335,25 @@ constraint_info:
   }
 
 reference_definition:
-  REFERENCES table_name '(' column_list ')'
+  REFERENCES table_name '(' column_list ')' fk_match_opt
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6}
   }
-| REFERENCES table_name '(' column_list ')' fk_on_delete
+| REFERENCES table_name '(' column_list ')' fk_match_opt fk_on_delete
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnDelete: $6}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6, OnDelete: $7}
   }
-| REFERENCES table_name '(' column_list ')' fk_on_update
+| REFERENCES table_name '(' column_list ')' fk_match_opt fk_on_update
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnUpdate: $6}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6, OnUpdate: $7}
   }
-| REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
+| REFERENCES table_name '(' column_list ')' fk_match_opt fk_on_delete fk_on_update
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnDelete: $6, OnUpdate: $7}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6, OnDelete: $7, OnUpdate: $8}
   }
-| REFERENCES table_name '(' column_list ')' fk_on_update fk_on_delete
+| REFERENCES table_name '(' column_list ')' fk_match_opt fk_on_update fk_on_delete
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnUpdate: $6, OnDelete: $7}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6, OnUpdate: $7, OnDelete: $8}
   }
 
 reference_definition_opt:
@@ -2269,6 +2369,35 @@ check_constraint_info:
   CHECK '(' expression ')' enforced_opt
   {
     $$ = &CheckConstraintDefinition{Expr: $3, Enforced: $5}
+  }
+
+fk_match:
+  MATCH fk_match_action
+  {
+    $$ = $2
+  }
+
+fk_match_action:
+  FULL
+  {
+    $$ = Full
+  }
+| PARTIAL
+  {
+    $$ = Partial
+  }
+| SIMPLE
+  {
+    $$ = Simple
+  }
+
+fk_match_opt:
+  {
+    $$ = DefaultMatch
+  }
+| fk_match
+  {
+    $$ = $1
   }
 
 fk_on_delete:
@@ -2318,17 +2447,23 @@ restrict_or_cascade_opt:
     $$ = string($1)
   }
 
-enforced_opt:
-  {
-    $$ = true
-  }
-| ENFORCED
+enforced:
+  ENFORCED
   {
     $$ = true
   }
 | NOT ENFORCED
   {
     $$ = false
+  }
+
+enforced_opt:
+  {
+    $$ = true
+  }
+| enforced
+  {
+    $$ = $1
   }
 
 table_option_list_opt:
@@ -2368,6 +2503,10 @@ table_option:
   AUTO_INCREMENT equal_opt INTEGRAL
   {
     $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+  }
+| AUTOEXTEND_SIZE equal_opt INTEGRAL
+  {
+    $$ = &TableOption{Name: string($1), Value: NewIntLiteral($3)}
   }
 | AVG_ROW_LENGTH equal_opt INTEGRAL
   {
@@ -2417,6 +2556,10 @@ table_option:
   {
     $$ = &TableOption{Name:string($1), String:$3.String(), CaseSensitive: true}
   }
+| ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &TableOption{Name: string($1), Value: NewStrLiteral($3)}
+  }
 | INSERT_METHOD equal_opt insert_method_options
   {
     $$ = &TableOption{Name:string($1), String:string($3)}
@@ -2448,6 +2591,10 @@ table_option:
 | ROW_FORMAT equal_opt row_format_options
   {
     $$ = &TableOption{Name:string($1), String:string($3)}
+  }
+| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &TableOption{Name: string($1), Value: NewStrLiteral($3)}
   }
 | STATS_AUTO_RECALC equal_opt INTEGRAL
   {
@@ -2618,6 +2765,10 @@ alter_option:
   {
 	$$ = &AlterColumn{Column: $3, DropDefault:false, DefaultVal:$7}
   }
+| ALTER CHECK id_or_var enforced
+  {
+    $$ = &AlterCheck{Name: $3, Enforced: $4}
+  }
 | CHANGE column_opt column_name column_definition first_opt after_opt
   {
     $$ = &ChangeColumn{OldColumn:$3, NewColDefinition:$4, First:$5, After:$6}
@@ -2661,6 +2812,14 @@ alter_option:
 | DROP FOREIGN KEY id_or_var
   {
     $$ = &DropKey{Type:ForeignKeyType, Name:$4}
+  }
+| DROP CHECK id_or_var
+  {
+    $$ = &DropKey{Type:CheckKeyType, Name:$3}
+  }
+| DROP CONSTRAINT id_or_var
+  {
+    $$ = &DropKey{Type:CheckKeyType, Name:$3}
   }
 | FORCE
   {
@@ -2755,6 +2914,12 @@ alter_statement:
   {
     $$ = &AlterView{ViewName: $7.ToViewName(), Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
+// The syntax here causes a shift / reduce issue, because ENCRYPTION is a non reserved keyword
+// and the database identifier is optional. When no identifier is given, the current database
+// is used. This means though that `alter database encryption` is ambiguous whether it means
+// the encryption keyword, or the encryption database name, resulting in the conflict.
+// The preference here is to shift, so it is treated as a database name. This matches the MySQL
+// behavior as well.
 | alter_database_prefix table_id_opt create_options
   {
     $1.FullyParsed = true
@@ -5186,9 +5351,21 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONSearchExpr{JSONDoc: $3, OneOrAll: $5, SearchStr: $7, EscapeChar: $9, PathList:$10 }
   }
-| JSON_VALUE openb expression ',' json_path_param closeb
+| JSON_VALUE openb expression ',' json_path_param returning_type_opt closeb
   {
-    $$ = &JSONValueExpr{JSONDoc: $3, Path: $5}
+    $$ = &JSONValueExpr{JSONDoc: $3, Path: $5, ReturningType: $6}
+  }
+| JSON_VALUE openb expression ',' json_path_param returning_type_opt on_empty closeb
+  {
+    $$ = &JSONValueExpr{JSONDoc: $3, Path: $5, ReturningType: $6, EmptyOnResponse: $7}
+  }
+| JSON_VALUE openb expression ',' json_path_param returning_type_opt on_error closeb
+  {
+    $$ = &JSONValueExpr{JSONDoc: $3, Path: $5, ReturningType: $6, ErrorOnResponse: $7}
+  }
+| JSON_VALUE openb expression ',' json_path_param returning_type_opt on_empty on_error closeb
+  {
+    $$ = &JSONValueExpr{JSONDoc: $3, Path: $5, ReturningType: $6, EmptyOnResponse: $7, ErrorOnResponse: $8}
   }
 | JSON_DEPTH openb expression closeb
   {
@@ -5249,6 +5426,15 @@ UTC_DATE func_paren_opt
 | JSON_UNQUOTE openb expression closeb
   {
     $$ = &JSONUnquoteExpr{JSONValue:$3}
+  }
+
+returning_type_opt:
+  {
+    $$ = nil
+  }
+| RETURNING convert_type
+  {
+    $$ = $2
   }
 
 json_path_param_list_opt:
@@ -6442,6 +6628,7 @@ non_reserved_keyword:
 | ALWAYS
 | ASCII
 | AUTO_INCREMENT
+| AUTOEXTEND_SIZE
 | AVG_ROW_LENGTH
 | BEGIN
 | BIGINT
@@ -6462,6 +6649,7 @@ non_reserved_keyword:
 | COALESCE
 | CODE
 | COLLATION
+| COLUMN_FORMAT
 | COLUMNS
 | COMMENT_KEYWORD
 | COMMIT
@@ -6498,6 +6686,7 @@ non_reserved_keyword:
 | END
 | ENFORCED
 | ENGINE
+| ENGINE_ATTRIBUTE
 | ENGINES
 | ENUM
 | ERROR
@@ -6631,6 +6820,7 @@ non_reserved_keyword:
 | OVERWRITE
 | PACK_KEYS
 | PARSER
+| PARTIAL
 | PARTITIONING
 | PARTITIONS
 | PASSWORD
@@ -6666,6 +6856,7 @@ non_reserved_keyword:
 | RESTART
 | RETAIN
 | RETRY
+| RETURNING
 | REUSE
 | ROLE
 | ROLLBACK
@@ -6674,6 +6865,7 @@ non_reserved_keyword:
 | S3
 | SECONDARY
 | SECONDARY_ENGINE
+| SECONDARY_ENGINE_ATTRIBUTE
 | SECONDARY_LOAD
 | SECONDARY_UNLOAD
 | SECURITY
@@ -6683,6 +6875,7 @@ non_reserved_keyword:
 | SHARE
 | SHARED
 | SIGNED
+| SIMPLE
 | SKIP
 | SLOW
 | SMALLINT

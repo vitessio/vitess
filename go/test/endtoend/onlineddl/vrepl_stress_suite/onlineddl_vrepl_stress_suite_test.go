@@ -371,6 +371,7 @@ const (
 	maxTableRows                  = 4096
 	maxConcurrency                = 15
 	singleConnectionSleepInterval = 5 * time.Millisecond
+	waitForStatusTimeout          = 120 * time.Second
 )
 
 func resetOpOrder() {
@@ -430,6 +431,7 @@ func TestMain(m *testing.M) {
 			"--throttle_threshold", "1s",
 			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
+			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
 			"--vstream_packet_size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
 		}
@@ -573,7 +575,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 
 	status := schema.OnlineDDLStatusComplete
 	if !strategySetting.Strategy.IsDirect() {
-		status = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 60*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, waitForStatusTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
