@@ -434,10 +434,11 @@ var commands = []commandGroup{
 				help:   "Updates the sharding information for a keyspace.",
 			},
 			{
-				name:   "SetKeyspaceServedFrom",
-				method: commandSetKeyspaceServedFrom,
-				params: "[-source=<source keyspace name>] [-remove] [-cells=c1,c2,...] <keyspace name> <tablet type>",
-				help:   "Changes the ServedFromMap manually. This command is intended for emergency fixes. This command does not rebuild the serving graph.",
+				name:       "SetKeyspaceServedFrom",
+				method:     commandSetKeyspaceServedFrom,
+				params:     "[-source=<source keyspace name>] [-remove] [-cells=c1,c2,...] <keyspace name> <tablet type>",
+				help:       "Changes the ServedFromMap manually. This command is intended for emergency fixes. This command does not rebuild the serving graph.",
+				deprecated: true,
 			},
 			{
 				name:   "RebuildKeyspaceGraph",
@@ -2138,6 +2139,7 @@ func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, 
 }
 
 func commandSetKeyspaceServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead https://vitess.io/docs/reference/vreplication/ ***\n")
 	source := subFlags.String("source", "", "Specifies the source keyspace name")
 	remove := subFlags.Bool("remove", false, "Indicates whether to add (default) or remove the served from record")
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to affect")
