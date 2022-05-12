@@ -119,6 +119,9 @@ func bindVariable(yylex yyLexer, bvar string) {
   tableOption      *TableOption
   columnTypeOptions *ColumnTypeOptions
   partitionDefinitionOptions *PartitionDefinitionOptions
+  subPartitionDefinition *SubPartitionDefinition
+  subPartitionDefinitions SubPartitionDefinitions
+  subPartitionDefinitionOptions *SubPartitionDefinitionOptions
   constraintDefinition *ConstraintDefinition
   revertMigration *RevertMigration
   alterMigration  *AlterMigration
@@ -383,6 +386,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partitionOption> partitions_options_opt partitions_options_beginning
 %type <partitionDefinitionOptions> partition_definition_attribute_list_opt
 %type <subPartition> subpartition_opt
+%type <subPartitionDefinition> subpartition_definition
+%type <subPartitionDefinitions> subpartition_definition_list subpartition_definition_list_with_brackets
+%type <subPartitionDefinitionOptions> subpartition_definition_attribute_list_opt
 %type <intervalType> interval_time_stamp interval
 %type <str> cache_opt separator_opt flush_option for_channel_opt maxvalue
 %type <matchExprOption> match_option
@@ -3417,6 +3423,74 @@ partition_definition_attribute_list_opt:
     $$ = $1
   }
 | partition_definition_attribute_list_opt partition_tablespace_name
+  {
+    $1.TableSpace = $2
+    $$ = $1
+  }
+| partition_definition_attribute_list_opt subpartition_definition_list_with_brackets
+  {
+    $1.SubPartitionDefinitions = $2
+    $$ = $1
+  }
+
+subpartition_definition_list_with_brackets:
+  openb subpartition_definition_list closeb{
+    $$ = $2
+  }
+
+subpartition_definition_list:
+  subpartition_definition
+  {
+    $$ = SubPartitionDefinitions{$1}
+  }
+| subpartition_definition_list ',' subpartition_definition
+  {
+    $$ = append($1, $3)
+  }
+
+subpartition_definition:
+  SUBPARTITION sql_id subpartition_definition_attribute_list_opt
+  {
+    $$ = &SubPartitionDefinition{Name:$2, Options: $3}
+  }
+
+subpartition_definition_attribute_list_opt:
+  {
+    $$ = &SubPartitionDefinitionOptions{}
+  }
+| subpartition_definition_attribute_list_opt partition_comment
+  {
+    $1.Comment = $2
+    $$ = $1
+  }
+| subpartition_definition_attribute_list_opt partition_engine
+  {
+    $1.Engine = $2
+    $$ = $1
+  }
+| subpartition_definition_attribute_list_opt partition_data_directory
+  {
+    $1.DataDirectory = $2
+    $$ = $1
+  }
+| subpartition_definition_attribute_list_opt partition_index_directory
+  {
+    $1.IndexDirectory = $2
+    $$ = $1
+  }
+| subpartition_definition_attribute_list_opt partition_max_rows
+  {
+    val := $2
+    $1.MaxRows = &val
+    $$ = $1
+  }
+| subpartition_definition_attribute_list_opt partition_min_rows
+  {
+    val := $2
+    $1.MinRows = &val
+    $$ = $1
+  }
+| subpartition_definition_attribute_list_opt partition_tablespace_name
   {
     $1.TableSpace = $2
     $$ = $1
