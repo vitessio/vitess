@@ -459,7 +459,7 @@ func (node *PartitionDefinitionOptions) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " tablespace %s", node.TableSpace)
 	}
 	if node.SubPartitionDefinitions != nil {
-		buf.astPrintf(node, " %v", node.SubPartitionDefinitions)
+		buf.astPrintf(node, " (%v)", node.SubPartitionDefinitions)
 	}
 }
 

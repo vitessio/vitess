@@ -632,8 +632,9 @@ func (node *PartitionDefinitionOptions) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(node.TableSpace)
 	}
 	if node.SubPartitionDefinitions != nil {
-		buf.WriteByte(' ')
+		buf.WriteString(" (")
 		node.SubPartitionDefinitions.formatFast(buf)
+		buf.WriteByte(')')
 	}
 }
 
