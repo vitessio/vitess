@@ -167,17 +167,13 @@ func TestThrottlerBeforeMetricsCollected(t *testing.T) {
 	}
 }
 
-func warmUpHeartbeat(t *testing.T, expectErrorCode bool) {
+func warmUpHeartbeat(t *testing.T) (respStatus int) {
 	//  because we run with -heartbeat_on_demand_duration=5s, the heartbeat is "cold" right now.
 	// Let's warm it up.
 	resp, err := throttleCheck(primaryTablet)
 	time.Sleep(time.Second)
 	assert.NoError(t, err)
-	if expectErrorCode {
-		assert.NotEqual(t, http.StatusOK, resp.StatusCode)
-	} else {
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-	}
+	return resp.StatusCode
 }
 
 func TestThrottlerAfterMetricsCollected(t *testing.T) {
@@ -187,7 +183,8 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 	// By this time metrics will have been collected. We expect no lag, and something like:
 	// {"StatusCode":200,"Value":0.282278,"Threshold":1,"Message":""}
 	//
-	warmUpHeartbeat(t, true)
+	respStatus := warmUpHeartbeat(t)
+	assert.NotEqual(t, http.StatusOK, respStatus)
 	time.Sleep(time.Second)
 	{
 		resp, err := throttleCheck(primaryTablet)
@@ -245,6 +242,10 @@ func TestLag(t *testing.T) {
 
 		time.Sleep(replicationCatchUpWait)
 		// Restore
+		// by now heartbeat lease has expired. Let's warm it up
+		respStatus := warmUpHeartbeat(t)
+		assert.NotEqual(t, http.StatusOK, respStatus)
+		time.Sleep(time.Second)
 		{
 			resp, err := throttleCheck(primaryTablet)
 			assert.NoError(t, err)
@@ -272,7 +273,8 @@ func TestNoReplicas(t *testing.T) {
 		time.Sleep(throttlerRefreshIntervalWait)
 		// This makes no REPLICA servers available. We expect something like:
 		// {"StatusCode":200,"Value":0,"Threshold":1,"Message":""}
-		warmUpHeartbeat(t, false)
+		respStatus := warmUpHeartbeat(t)
+		assert.Equal(t, http.StatusOK, respStatus)
 		resp, err := throttleCheck(primaryTablet)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -283,7 +285,8 @@ func TestNoReplicas(t *testing.T) {
 
 		time.Sleep(throttlerRefreshIntervalWait)
 		// Restore valid replica
-		warmUpHeartbeat(t, true)
+		respStatus := warmUpHeartbeat(t)
+		assert.NotEqual(t, http.StatusOK, respStatus)
 		resp, err := throttleCheck(primaryTablet)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
