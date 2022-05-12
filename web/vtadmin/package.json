@@ -40,7 +40,7 @@
     "web-vitals": "^0.2.4"
   },
   "scripts": {
-    "local": "REACT_APP_VTADMIN_API_ADDRESS=\"http://localhost:14200\" REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS=\"true\" react-scripts start",
+    "local": "REACT_APP_VTADMIN_API_ADDRESS=\"http://localhost:14200\" REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS=\"true\" PORT=14201 react-scripts start",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",

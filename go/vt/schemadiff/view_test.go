@@ -117,28 +117,28 @@ func TestCreateViewDiff(t *testing.T) {
 			cdiff: "ALTER ALGORITHM = TEMPTABLE VIEW `v1` AS SELECT `a` FROM `t`",
 		},
 		{
-			name:  "algorith, case change 2",
+			name:  "algorithm, case change 2",
 			from:  "create view v1 as select a FROM t",
 			to:    "create algorithm=temptable view v2 as select a from t",
 			diff:  "alter algorithm = temptable view v1 as select a from t",
 			cdiff: "ALTER ALGORITHM = TEMPTABLE VIEW `v1` AS SELECT `a` FROM `t`",
 		},
 		{
-			name:  "algorith, case change 3",
+			name:  "algorithm, case change 3",
 			from:  "create ALGORITHM=MERGE view v1 as select a FROM t",
 			to:    "create ALGORITHM=TEMPTABLE view v2 as select a from t",
 			diff:  "alter algorithm = TEMPTABLE view v1 as select a from t",
 			cdiff: "ALTER ALGORITHM = TEMPTABLE VIEW `v1` AS SELECT `a` FROM `t`",
 		},
 		{
-			name:  "algorith value is case sensitive",
+			name:  "algorithm value is case sensitive",
 			from:  "create ALGORITHM=TEMPTABLE view v1 as select a from t",
 			to:    "create ALGORITHM=temptable view v2 as select a from t",
 			diff:  "alter algorithm = temptable view v1 as select a from t",
 			cdiff: "ALTER ALGORITHM = TEMPTABLE VIEW `v1` AS SELECT `a` FROM `t`",
 		},
 		{
-			name:  "algorith value is case sensitive 2",
+			name:  "algorithm value is case sensitive 2",
 			from:  "create ALGORITHM=temptable view v1 as select a from t",
 			to:    "create ALGORITHM=TEMPTABLE view v2 as select a from t",
 			diff:  "alter algorithm = TEMPTABLE view v1 as select a from t",
@@ -148,12 +148,12 @@ func TestCreateViewDiff(t *testing.T) {
 	hints := &DiffHints{}
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			fromStmt, err := sqlparser.Parse(ts.from)
+			fromStmt, err := sqlparser.ParseStrictDDL(ts.from)
 			assert.NoError(t, err)
 			fromCreateView, ok := fromStmt.(*sqlparser.CreateView)
 			assert.True(t, ok)
 
-			toStmt, err := sqlparser.Parse(ts.to)
+			toStmt, err := sqlparser.ParseStrictDDL(ts.to)
 			assert.NoError(t, err)
 			toCreateView, ok := toStmt.(*sqlparser.CreateView)
 			assert.True(t, ok)
@@ -184,6 +184,14 @@ func TestCreateViewDiff(t *testing.T) {
 					}
 					if ts.toName != "" {
 						assert.Equal(t, ts.toName, eTo.Name())
+					}
+					{ // Validate "apply()" on "from" converges with "to"
+						applied, err := c.Apply(alter)
+						assert.NoError(t, err)
+						require.NotNil(t, applied)
+						appliedDiff, err := eTo.Diff(applied, hints)
+						require.NoError(t, err)
+						assert.True(t, appliedDiff.IsEmpty(), "expected empty diff, found changes: %v", appliedDiff.CanonicalStatementString())
 					}
 				}
 				{

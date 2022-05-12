@@ -92,7 +92,7 @@ func startTracing(cmd *cobra.Command) {
 }
 
 func run(cmd *cobra.Command, args []string) {
-	bootSpan, _ := trace.NewSpan(context.Background(), "vtadmin.boot")
+	bootSpan, ctx := trace.NewSpan(context.Background(), "vtadmin.boot")
 	defer bootSpan.Finish()
 
 	configs := clusterFileConfig.Combine(defaultClusterConfig, clusterConfigs)
@@ -120,7 +120,7 @@ func run(cmd *cobra.Command, args []string) {
 	}
 
 	for i, cfg := range configs {
-		cluster, err := cfg.Cluster()
+		cluster, err := cfg.Cluster(ctx)
 		if err != nil {
 			bootSpan.Finish()
 			fatal(err)

@@ -44,7 +44,7 @@ In order to transition, a standalone double-dash (literally, `--`) will cause th
 
 So, to transition the above example without breakage, update the command to:
 
-```
+```shell
 $ vtctl --topo_implementation etcd2 AddCellInfo -- --root "/vitess/global"
 $ # the following will also work
 $ vtctl --topo_implementation etcd2 -- AddCellInfo --root "/vitess/global"
@@ -52,7 +52,23 @@ $ # the following will NOT work, because --topo_implementation is a top-level fl
 $ vtctl -- --topo_implementation etcd2 AddCellInfo --root "/vitess/global"
 ```
 
+### New command line flags and behavior
+
+#### vttablet --heartbeat_on_demand_duration
+
+`--heartbeat_on_demand_duration` joins the already existing heartbeat flags `--heartbeat_enable` and `--heartbeat_interval` and adds new behavior to heartbeat writes.
+
+`--heartbeat_on_demand_duration` takes a duration value, such as `5s`.
+
+The default value for `--heartbeat_on_demand_duration` is zero, which means the flag is not set and there is no change in behavior.
+
+When `--heartbeat_on_demand_duration` has a positive value, then heartbeats are only injected on demand, per internal requests. For example, when `--heartbeat_on_demand_duration=5s`, the tablet starts without injecting heartbeats. An internal module, like the lag throttle, may request the heartbeat writer for heartbeats. Starting at that point in time, and for the duration (a lease) of `5s` in our example, the tablet will write heartbeats. If no other requests come in during that duration, then the tablet then ceases to write heartbeats. If more requests for heartbeats come while heartbeats are being written, then the tablet extends the lease for the next `5s` following up each request. Thus, it stops writing heartbeats `5s` after the last request is received.
+
+The heartbeats are generated according to `--heartbeat_interval`.
+
 ### Online DDL changes
+
+See new SQL syntax for controlling/viewing throttling fomr Online DDL, down below.
 
 #### ddl_strategy: 'vitess'
 
@@ -64,9 +80,13 @@ Example:
 vtctlclient ApplySchema -skip_preflight -ddl_strategy='vitess' -sql "alter table my_table add column my_val int not null default 0" commerce
 ```
 
+### --singleton-context and REVERT migrations
+
+It is now possible to submit a migration with `--singleton-context` strategy flag, while there's a pending (queued or running) `REVERT` migration that does not have a `--singleton-context` flag.
+
 #### Behavior changes
 
-- `vtctl ApplySchema -uuid_list='...'` now rejects a migration if an existing migration has the same UUID but with different `migration_context`.
+- `vtctl ApplySchema --uuid_list='...'` now rejects a migration if an existing migration has the same UUID but with different `migration_context`.
 
 ### Table lifecycle
 
@@ -80,6 +100,8 @@ On Mysql `8.0.23` or later, the states `PURGE` and `EVAC` are automatically skip
 
 ### Tablet throttler
 
+#### API changes
+
 Added `/throttler/throttled-apps` endpoint, which reports back all current throttling instructions. Note, this only reports explicit throttling requests (sych as ones submitted by `/throtler/throttle-app?app=...`). It does not list incidental rejections based on throttle thresholds.
 
 API endpoint `/throttler/throttle-app` now accepts a `ratio` query argument, a floating point in the range `[0..1]`, where:
@@ -87,6 +109,50 @@ API endpoint `/throttler/throttle-app` now accepts a `ratio` query argument, a f
 - `0` means "do not throttle at all"
 - `1` means "always throttle"
 - any numbr in between is allowd. For example, `0.3` means "throttle in 0.3 probability", ie on a per request and based on a dice roll, there's a `30%` change a request is denied. Overall we can expect about `30%` of requests to be denied. Example: `/throttler/throttle-app?app=vreplication&ratio=0.25`
+
+See new SQL syntax for controlling/viewing throttling, down below.
+
+### New Syntax
+
+#### Control and view Online DDL throttling
+
+We introduce the following syntax, to:
+
+- Start/stop throttling for all Online DDL migrations, in general
+- Start/stop throttling for a particular Online DDL migration
+- View throttler state
+
+
+```sql
+ALTER VITESS_MIGRATION '<uuid>' THROTTLE [EXPIRE '<duration>'] [RATIO <ratio>];
+ALTER VITESS_MIGRATION THROTTLE ALL [EXPIRE '<duration>'] [RATIO <ratio>];
+ALTER VITESS_MIGRATION '<uuid>' UNTHROTTLE;
+ALTER VITESS_MIGRATION UNTHROTTLE ALL;
+SHOW VITESS_THROTTLED_APPS;
+```
+
+default `duration` is "infinite" (set as 100 years)
+
+- allowed units are (s)ec, (m)in, (h)our
+ratio is in the range `[0..1]`.
+- `1` means full throttle - the app will not make any progress
+- `0` means no throttling at all
+- `0.8` means on 8 out of 10 checks the app makes, it gets refused
+
+The syntax `SHOW VITESS_THROTTLED_APPS` is a generic call to the throttler, and returns information about all throttled apps, not specific to migrations
+
+`SHOW VITESS_MIGRATIONS ...` output now includes `user_throttle_ratio`
+
+This column is updated "once in a while", while a migration is running. Normally this is once a minute, but can be more frequent. The migration reports back what was the throttling instruction set by the user while it was/is running.
+This column does not indicate any actual lag-based throttling that takes place per production state. It only reports the explicit throttling value set by the user.
+
+### Heartbeat
+
+The throttler now checks in with the heartbeat writer to request heartbeats, any time it (the throttler) is asked for a check.
+
+When `--heartbeat_on_demand_duration` is not set, there is no change in behavior.
+
+When `--heartbeat_on_demand_duration` is set to a positive value, then the throttler ensures that the heartbeat writer generated heartbeats for at least the following duration. This also means at the first throttler check, it's possible that heartbeats are idle, and so the first check will fail. As heartbeats start running, followup checks will get a more accurate lag evaluation and will respond accordingly. In a sense, it's a "cold engine" scenario, where the engine takes time to start up, and then runs smoothly.
 
 ### Compatibility
 

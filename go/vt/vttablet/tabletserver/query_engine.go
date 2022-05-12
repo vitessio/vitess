@@ -25,6 +25,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"context"
 
 	"vitess.io/vitess/go/acl"
@@ -50,7 +52,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-//_______________________________________________
+// _______________________________________________
 
 // TabletPlan wraps the planbuilder's exec plan to enforce additional rules
 // and track stats.
@@ -98,7 +100,7 @@ func (ep *TabletPlan) buildAuthorized() {
 	}
 }
 
-//_______________________________________________
+// _______________________________________________
 
 // QueryEngine implements the core functionality of tabletserver.
 // It assumes that no requests will be sent to it before Open is
@@ -287,7 +289,7 @@ func (qe *QueryEngine) Close() {
 }
 
 // GetPlan returns the TabletPlan that for the query. Plans are cached in a cache.LRUCache.
-func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool, isReservedConn bool) (*TabletPlan, error) {
+func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool, reservedConnID int64, te *TxEngine) (*TabletPlan, error) {
 	span, ctx := trace.NewSpan(ctx, "QueryEngine.GetPlan")
 	defer span.Finish()
 
@@ -308,7 +310,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	if err != nil {
 		return nil, err
 	}
-	splan, err := planbuilder.Build(statement, qe.tables, isReservedConn, qe.env.Config().DB.DBName)
+	splan, err := planbuilder.Build(statement, qe.tables, reservedConnID != 0, qe.env.Config().DB.DBName)
 	if err != nil {
 		return nil, err
 	}
@@ -317,15 +319,30 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	plan.buildAuthorized()
 	if plan.PlanID.IsSelect() {
 		if !skipQueryPlanCache && qe.enableQueryPlanFieldCaching && plan.FieldQuery != nil {
-			conn, err := qe.conns.Get(ctx)
-			if err != nil {
-				return nil, err
+			var statefulConn *StatefulConnection
+			var conn *connpool.DBConn
+			if reservedConnID != 0 {
+				statefulConn, err = te.txPool.GetAndLock(reservedConnID, "")
+				if err != nil {
+					return nil, err
+				}
+				defer statefulConn.Unlock()
+			} else {
+				conn, err = qe.conns.Get(ctx)
+				if err != nil {
+					return nil, err
+				}
+				defer conn.Recycle()
 			}
-			defer conn.Recycle()
 
 			sql := plan.FieldQuery.Query
 			start := time.Now()
-			r, err := conn.Exec(ctx, sql, 1, true)
+			var r *sqltypes.Result
+			if reservedConnID != 0 {
+				r, err = statefulConn.Exec(ctx, sql, 1, true)
+			} else {
+				r, err = conn.Exec(ctx, sql, 1, true)
+			}
 			logStats.AddRewrittenSQL(sql, start)
 			if err != nil {
 				return nil, err

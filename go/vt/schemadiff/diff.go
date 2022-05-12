@@ -15,6 +15,15 @@ func DDLActionStr(diff EntityDiff) (string, error) {
 	return "", ErrUnexpectedDiffAction
 }
 
+// AllSubsequent returns a list of diffs starting the given diff and followed by all subsequent diffs, if any
+func AllSubsequent(diff EntityDiff) (diffs []EntityDiff) {
+	for diff != nil && !diff.IsEmpty() {
+		diffs = append(diffs, diff)
+		diff = diff.SubsequentDiff()
+	}
+	return diffs
+}
+
 // DiffCreateTablesQueries compares two `CREATE TABLE ...` queries (in string form) and returns the diff from table1 to table2.
 // Either or both of the queries can be empty. Based on this, the diff could be
 // nil, CreateTable, DropTable or AlterTable
@@ -22,7 +31,7 @@ func DiffCreateTablesQueries(query1 string, query2 string, hints *DiffHints) (En
 	var fromCreateTable *sqlparser.CreateTable
 	var ok bool
 	if query1 != "" {
-		stmt, err := sqlparser.Parse(query1)
+		stmt, err := sqlparser.ParseStrictDDL(query1)
 		if err != nil {
 			return nil, err
 		}
@@ -33,7 +42,7 @@ func DiffCreateTablesQueries(query1 string, query2 string, hints *DiffHints) (En
 	}
 	var toCreateTable *sqlparser.CreateTable
 	if query2 != "" {
-		stmt, err := sqlparser.Parse(query2)
+		stmt, err := sqlparser.ParseStrictDDL(query2)
 		if err != nil {
 			return nil, err
 		}
@@ -76,7 +85,7 @@ func DiffCreateViewsQueries(query1 string, query2 string, hints *DiffHints) (Ent
 	var fromCreateView *sqlparser.CreateView
 	var ok bool
 	if query1 != "" {
-		stmt, err := sqlparser.Parse(query1)
+		stmt, err := sqlparser.ParseStrictDDL(query1)
 		if err != nil {
 			return nil, err
 		}
@@ -87,7 +96,7 @@ func DiffCreateViewsQueries(query1 string, query2 string, hints *DiffHints) (Ent
 	}
 	var toCreateView *sqlparser.CreateView
 	if query2 != "" {
-		stmt, err := sqlparser.Parse(query2)
+		stmt, err := sqlparser.ParseStrictDDL(query2)
 		if err != nil {
 			return nil, err
 		}

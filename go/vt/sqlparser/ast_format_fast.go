@@ -406,9 +406,26 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 		alterType = "cancel"
 	case CancelAllMigrationType:
 		alterType = "cancel all"
+	case ThrottleMigrationType:
+		alterType = "throttle"
+	case ThrottleAllMigrationType:
+		alterType = "throttle all"
+	case UnthrottleMigrationType:
+		alterType = "unthrottle"
+	case UnthrottleAllMigrationType:
+		alterType = "unthrottle all"
 	}
 	buf.WriteByte(' ')
 	buf.WriteString(alterType)
+	if node.Expire != "" {
+		buf.WriteString(" expire '")
+		buf.WriteString(node.Expire)
+		buf.WriteByte('\'')
+	}
+	if node.Ratio != nil {
+		buf.WriteString(" ratio ")
+		node.Ratio.formatFast(buf)
+	}
 }
 
 // formatFast formats the node.
@@ -425,6 +442,11 @@ func (node *ShowMigrationLogs) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("show vitess_migration '")
 	buf.WriteString(node.UUID)
 	buf.WriteString("' logs")
+}
+
+// formatFast formats the node.
+func (node *ShowThrottledApps) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("show vitess_throttled_apps")
 }
 
 // formatFast formats the node.
@@ -636,6 +658,60 @@ func (node *PartitionDefinitionOptions) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(" tablespace ")
 		buf.WriteString(node.TableSpace)
 	}
+	if node.SubPartitionDefinitions != nil {
+		buf.WriteString(" (")
+		node.SubPartitionDefinitions.formatFast(buf)
+		buf.WriteByte(')')
+	}
+}
+
+// formatFast formats the node
+func (node SubPartitionDefinitions) formatFast(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.WriteString(prefix)
+		n.formatFast(buf)
+		prefix = ", "
+	}
+}
+
+// formatFast formats the node
+func (node *SubPartitionDefinition) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("subpartition ")
+	node.Name.formatFast(buf)
+	node.Options.formatFast(buf)
+}
+
+// formatFast formats the node
+func (node *SubPartitionDefinitionOptions) formatFast(buf *TrackedBuffer) {
+	if node.Engine != nil {
+		buf.WriteByte(' ')
+		node.Engine.formatFast(buf)
+	}
+	if node.Comment != nil {
+		buf.WriteString(" comment ")
+		node.Comment.formatFast(buf)
+	}
+	if node.DataDirectory != nil {
+		buf.WriteString(" data directory ")
+		node.DataDirectory.formatFast(buf)
+	}
+	if node.IndexDirectory != nil {
+		buf.WriteString(" index directory ")
+		node.IndexDirectory.formatFast(buf)
+	}
+	if node.MaxRows != nil {
+		buf.WriteString(" max_rows ")
+		buf.WriteString(fmt.Sprintf("%d", *node.MaxRows))
+	}
+	if node.MinRows != nil {
+		buf.WriteString(" min_rows ")
+		buf.WriteString(fmt.Sprintf("%d", *node.MinRows))
+	}
+	if node.TableSpace != "" {
+		buf.WriteString(" tablespace ")
+		buf.WriteString(node.TableSpace)
+	}
 }
 
 // formatFast formats the node
@@ -656,7 +732,6 @@ func (node *PartitionEngine) formatFast(buf *TrackedBuffer) {
 		buf.WriteString("storage ")
 	}
 	buf.WriteString("engine ")
-
 	buf.WriteString(node.Name)
 }
 
@@ -770,8 +845,13 @@ func (ts *TableSpec) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(opt.Name)
 		if opt.String != "" {
-			buf.WriteByte(' ')
-			buf.WriteString(opt.String)
+			if opt.CaseSensitive {
+				buf.WriteByte(' ')
+				buf.WriteString(opt.String)
+			} else {
+				buf.WriteByte(' ')
+				buf.WriteString(opt.String)
+			}
 		} else if opt.Value != nil {
 			buf.WriteByte(' ')
 			opt.Value.formatFast(buf)
@@ -912,6 +992,33 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 			buf.WriteByte(' ')
 			ct.Options.Comment.formatFast(buf)
 		}
+		if ct.Options.Invisible != nil {
+			if *ct.Options.Invisible {
+				buf.WriteByte(' ')
+				buf.WriteString(keywordStrings[INVISIBLE])
+			} else {
+				buf.WriteByte(' ')
+				buf.WriteString(keywordStrings[VISIBLE])
+			}
+		}
+		if ct.Options.Format != UnspecifiedFormat {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[COLUMN_FORMAT])
+			buf.WriteByte(' ')
+			buf.WriteString(ct.Options.Format.ToString())
+		}
+		if ct.Options.EngineAttribute != nil {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[ENGINE_ATTRIBUTE])
+			buf.WriteByte(' ')
+			ct.Options.EngineAttribute.formatFast(buf)
+		}
+		if ct.Options.SecondaryEngineAttribute != nil {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[SECONDARY_ENGINE_ATTRIBUTE])
+			buf.WriteByte(' ')
+			ct.Options.SecondaryEngineAttribute.formatFast(buf)
+		}
 		if ct.Options.KeyOpt == colKeyPrimary {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[PRIMARY])
@@ -948,6 +1055,12 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 			buf.WriteByte(' ')
 			ct.Options.Reference.formatFast(buf)
 		}
+		if ct.Options.SRID != nil {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[SRID])
+			buf.WriteByte(' ')
+			ct.Options.SRID.formatFast(buf)
+		}
 	}
 }
 
@@ -958,14 +1071,18 @@ func (idx *IndexDefinition) formatFast(buf *TrackedBuffer) {
 	for i, col := range idx.Columns {
 		if i != 0 {
 			buf.WriteString(", ")
-			col.Column.formatFast(buf)
+		}
+		if col.Expression != nil {
+			buf.WriteByte('(')
+			col.Expression.formatFast(buf)
+			buf.WriteByte(')')
 		} else {
 			col.Column.formatFast(buf)
-		}
-		if col.Length != nil {
-			buf.WriteByte('(')
-			col.Length.formatFast(buf)
-			buf.WriteByte(')')
+			if col.Length != nil {
+				buf.WriteByte('(')
+				col.Length.formatFast(buf)
+				buf.WriteByte(')')
+			}
 		}
 		if col.Direction == DescOrder {
 			buf.WriteString(" desc")
@@ -979,7 +1096,7 @@ func (idx *IndexDefinition) formatFast(buf *TrackedBuffer) {
 		if opt.String != "" {
 			buf.WriteByte(' ')
 			buf.WriteString(opt.String)
-		} else {
+		} else if opt.Value != nil {
 			buf.WriteByte(' ')
 			opt.Value.formatFast(buf)
 		}
@@ -1065,6 +1182,18 @@ func (a ReferenceAction) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (a MatchAction) formatFast(buf *TrackedBuffer) {
+	switch a {
+	case Full:
+		buf.WriteString("full")
+	case Simple:
+		buf.WriteString("simple")
+	case Partial:
+		buf.WriteString("partial")
+	}
+}
+
+// formatFast formats the node.
 func (f *ForeignKeyDefinition) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("foreign key ")
 	f.IndexName.formatFast(buf)
@@ -1079,6 +1208,10 @@ func (ref *ReferenceDefinition) formatFast(buf *TrackedBuffer) {
 	ref.ReferencedTable.formatFast(buf)
 	buf.WriteByte(' ')
 	ref.ReferencedColumns.formatFast(buf)
+	if ref.Match != DefaultMatch {
+		buf.WriteString(" match ")
+		ref.Match.formatFast(buf)
+	}
 	if ref.OnDelete != DefaultAction {
 		buf.WriteString(" on delete ")
 		ref.OnDelete.formatFast(buf)
@@ -2525,6 +2658,20 @@ func (node *AddConstraintDefinition) formatFast(buf *TrackedBuffer) {
 	node.ConstraintDefinition.formatFast(buf)
 }
 
+func (node *AlterCheck) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("alter check ")
+	node.Name.formatFast(buf)
+	if node.Enforced {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[ENFORCED])
+	} else {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[NOT])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[ENFORCED])
+	}
+}
+
 // formatFast formats the node.
 func (node *AddIndexDefinition) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("add ")
@@ -2998,6 +3145,24 @@ func (node *JSONValueExpr) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.JSONDoc, true)
 	buf.WriteString(", ")
 	buf.printExpr(node, node.Path, true)
+
+	if node.ReturningType != nil {
+		buf.WriteString(" returning ")
+		node.ReturningType.formatFast(buf)
+	}
+
+	if node.EmptyOnResponse != nil {
+		buf.WriteByte(' ')
+		node.EmptyOnResponse.formatFast(buf)
+		buf.WriteString(" on empty")
+	}
+
+	if node.ErrorOnResponse != nil {
+		buf.WriteByte(' ')
+		node.ErrorOnResponse.formatFast(buf)
+		buf.WriteString(" on error")
+	}
+
 	buf.WriteByte(')')
 }
 

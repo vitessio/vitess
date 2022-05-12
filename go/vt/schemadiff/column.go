@@ -22,17 +22,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-var charsetTypes = map[string]bool{
-	"CHAR":       true,
-	"VARCHAR":    true,
-	"TEXT":       true,
-	"TINYTEXT":   true,
-	"MEDIUMTEXT": true,
-	"LONGTEXT":   true,
-	"ENUM":       true,
-	"SET":        true,
-}
-
 func getColName(colIdent *sqlparser.ColIdent) *sqlparser.ColName {
 	return &sqlparser.ColName{Name: *colIdent}
 }
@@ -60,13 +49,13 @@ func NewColumnDefinitionEntity(c *sqlparser.ColumnDefinition) *ColumnDefinitionE
 	return &ColumnDefinitionEntity{columnDefinition: c}
 }
 
-// Diff compares this table statement with another table statement, and sees what it takes to
+// ColumnDiff compares this table statement with another table statement, and sees what it takes to
 // change this table to look like the other table.
 // It returns an AlterTable statement if changes are found, or nil if not.
 // the other table may be of different name; its name is ignored.
 func (c *ColumnDefinitionEntity) ColumnDiff(other *ColumnDefinitionEntity, hints *DiffHints) *ModifyColumnDiff {
-	format := sqlparser.String(c.columnDefinition)
-	otherFormat := sqlparser.String(other.columnDefinition)
+	format := sqlparser.CanonicalString(c.columnDefinition)
+	otherFormat := sqlparser.CanonicalString(other.columnDefinition)
 	if format == otherFormat {
 		return nil
 	}
@@ -76,5 +65,5 @@ func (c *ColumnDefinitionEntity) ColumnDiff(other *ColumnDefinitionEntity, hints
 
 // IsTextual returns true when this column is of textual type, and is capable of having a character set property
 func (c *ColumnDefinitionEntity) IsTextual() bool {
-	return charsetTypes[strings.ToUpper(c.columnDefinition.Type.Type)]
+	return charsetTypes[strings.ToLower(c.columnDefinition.Type.Type)]
 }

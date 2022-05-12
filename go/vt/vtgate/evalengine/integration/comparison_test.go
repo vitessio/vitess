@@ -317,6 +317,7 @@ func TestNumericTypes(t *testing.T) {
 		`-9223372036854775807`, // -MaxInt64
 		`-9223372036854775808`, // MinInt64
 		`-9223372036854775809`,
+		`18446744073709540000e0`,
 	}
 
 	var conn = mysqlconn(t)
@@ -391,6 +392,7 @@ func TestFloatFormatting(t *testing.T) {
 		`0xfffffffffffffffe`,
 		`0xffffffffffffffff0`,
 		`0x1fffffffffffffff`,
+		"18446744073709540000e0",
 	}
 
 	var conn = mysqlconn(t)
@@ -530,6 +532,8 @@ func TestConversionOperators(t *testing.T) {
 		`0x0`, `0x1`, `0xff`, `X'00'`, `X'01'`, `X'ff'`,
 		"NULL",
 		"0xFF666F6F626172FF", "0x666F6F626172FF", "0xFF666F6F626172",
+		"18446744073709540000e0",
+		"-18446744073709540000e0",
 	}
 	var right = []string{
 		"BINARY", "BINARY(1)", "BINARY(0)", "BINARY(16)", "BINARY(-1)",

@@ -209,11 +209,10 @@ const (
 	Utf8mb4Str  = "_utf8mb4"
 	NStringStr  = "N"
 
-	// ConvertType.Operator
+	// DatabaseOption.Type
 	CharacterSetStr = " character set"
-
-	// CollateAndCharset.Type
-	CollateStr = " collate"
+	CollateStr      = " collate"
+	EncryptionStr   = " encryption"
 
 	// MatchExpr.Option
 	NoOptionStr                              = ""
@@ -303,6 +302,7 @@ const (
 	PrimaryKeyTypeStr = "primary key"
 	ForeignKeyTypeStr = "foreign key"
 	NormalKeyTypeStr  = "key"
+	CheckKeyTypeStr   = "check"
 
 	// TrimType strings
 	BothTrimStr     = "both"
@@ -700,10 +700,11 @@ const (
 	DefaultJSONType
 )
 
-// Constant for Enum Type - CollateAndCharsetType
+// Constant for Enum Type - DatabaseOptionType
 const (
-	CollateType CollateAndCharsetType = iota
+	CollateType DatabaseOptionType = iota
 	CharacterSetType
+	EncryptionType
 )
 
 // LockType constants
@@ -764,6 +765,7 @@ const (
 	PrimaryKeyType DropKeyType = iota
 	ForeignKeyType
 	NormalKeyType
+	CheckKeyType
 )
 
 // LockOptionType constants
@@ -781,12 +783,24 @@ const (
 	CancelMigrationType
 	CancelAllMigrationType
 	CleanupMigrationType
+	ThrottleMigrationType
+	ThrottleAllMigrationType
+	UnthrottleMigrationType
+	UnthrottleAllMigrationType
 )
 
 // ColumnStorage constants
 const (
 	VirtualStorage ColumnStorage = iota
 	StoredStorage
+)
+
+// ColumnFormat constants
+const (
+	UnspecifiedFormat ColumnFormat = iota
+	FixedFormat
+	DynamicFormat
+	DefaultFormat
 )
 
 // IntervalTypes constants

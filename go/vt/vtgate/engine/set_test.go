@@ -359,7 +359,8 @@ func TestSetTable(t *testing.T) {
 			"a,b|B,a,A,B,b,a",
 		)},
 	}, {
-		testName: "sql_mode change - changed additional",
+		testName:     "sql_mode change - changed additional - MySQL57",
+		mysqlVersion: "50709",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:          "sql_mode",
@@ -378,7 +379,8 @@ func TestSetTable(t *testing.T) {
 			"a,b|B,a,A,B,b,a,c",
 		)},
 	}, {
-		testName: "sql_mode change - changed less",
+		testName:     "sql_mode change - changed less - MySQL57",
+		mysqlVersion: "50709",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:          "sql_mode",
@@ -414,7 +416,8 @@ func TestSetTable(t *testing.T) {
 			"|",
 		)},
 	}, {
-		testName: "sql_mode change - empty orig",
+		testName:     "sql_mode change - empty orig - MySQL57",
+		mysqlVersion: "50709",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:          "sql_mode",
@@ -510,6 +513,26 @@ func TestSetTable(t *testing.T) {
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|a",
+		)},
+		disableSetVar: true,
+	}, {
+		testName:     "sql_mode set an unsupported mode",
+		mysqlVersion: "80000",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'REAL_AS_FLOAT'",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'REAL_AS_FLOAT' new {} false false`,
+		},
+		expectedError: "setting the REAL_AS_FLOAT sql_mode is unsupported",
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"|REAL_AS_FLOAT",
 		)},
 		disableSetVar: true,
 	}, {

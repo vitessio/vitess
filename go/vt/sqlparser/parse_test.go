@@ -1126,8 +1126,8 @@ var (
 		input:  "set S= +- - - - -(4+1)",
 		output: "set S = - - - - -(4 + 1)",
 	}, {
-		input:  "alter table a add foo int references simple (a) on delete restrict first",
-		output: "alter table a add column foo int references simple (a) on delete restrict first",
+		input:  "alter table a add foo int references b (a) on delete restrict first",
+		output: "alter table a add column foo int references b (a) on delete restrict first",
 	}, {
 		input:  "alter table a lock default, lock = none, lock shared, lock exclusive",
 		output: "alter table a lock default, lock none, lock shared, lock exclusive",
@@ -1284,6 +1284,8 @@ var (
 		input:  "alter table a add constraint check (id)",
 		output: "alter table a add check (id)",
 	}, {
+		input: "alter table a add constraint c check (id)",
+	}, {
 		input:  "alter table a add id int",
 		output: "alter table a add column id int",
 	}, {
@@ -1300,17 +1302,18 @@ var (
 	}, {
 		input: "alter table a add check (ch_1) not enforced",
 	}, {
-		input:      "alter table a drop check ch_1",
-		output:     "alter table a",
-		partialDDL: true,
+		input: "alter table a alter check ch_1 enforced",
+	}, {
+		input: "alter table a alter check ch_1 not enforced",
+	}, {
+		input: "alter table a drop check ch_1",
+	}, {
+		input:  "alter table a drop constraint ch_1",
+		output: "alter table a drop check ch_1",
 	}, {
 		input: "alter table a drop foreign key kx",
 	}, {
 		input: "alter table a drop primary key",
-	}, {
-		input:      "alter table a drop constraint",
-		output:     "alter table a",
-		partialDDL: true,
 	}, {
 		input:  "alter table a drop id",
 		output: "alter table a drop column id",
@@ -1410,8 +1413,8 @@ var (
 		input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
 		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 	}, {
-		input:  "create table a (b1 bool NOT NULL PRIMARY KEY, b2 boolean not null references simple (a) on delete restrict, KEY b2_idx(b))",
-		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null references simple (a) on delete restrict,\n\tKEY b2_idx (b)\n)",
+		input:  "create table a (b1 bool NOT NULL PRIMARY KEY, b2 boolean not null references b (a) on delete restrict, KEY b2_idx(b))",
+		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null references b (a) on delete restrict,\n\tKEY b2_idx (b)\n)",
 	}, {
 		input: "create temporary table a (\n\tid bigint\n)",
 	}, {
@@ -1597,9 +1600,8 @@ var (
 		input:  "create fulltext index a on b (col1) key_block_size=12 with parser a comment 'string' algorithm inplace lock none",
 		output: "alter table b add fulltext index a (col1) key_block_size 12 with parser a comment 'string', algorithm = inplace, lock none",
 	}, {
-		input:      "create index a on b ((col1 + col2), (col1*col2))",
-		output:     "alter table b add index a ()",
-		partialDDL: true,
+		input:  "create index a on b ((col1 + col2), (col1*col2))",
+		output: "alter table b add index a ((col1 + col2), (col1 * col2))",
 	}, {
 		input:  "create fulltext index b using btree on A (col1 desc, col2) algorithm = inplace lock = none",
 		output: "alter table A add fulltext index b (col1 desc, col2) using btree, algorithm = inplace, lock none",
@@ -1971,6 +1973,26 @@ var (
 	}, {
 		input: "alter vitess_migration cancel all",
 	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' throttle",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' throttle expire '1h'",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' throttle ratio 0.7",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' throttle expire '1h' ratio 0.7",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' unthrottle",
+	}, {
+		input: "alter vitess_migration throttle all",
+	}, {
+		input: "alter vitess_migration unthrottle all",
+	}, {
+		input: "alter vitess_migration throttle all expire '1h'",
+	}, {
+		input: "alter vitess_migration throttle all ratio 0.7",
+	}, {
+		input: "alter vitess_migration throttle all expire '1h' ratio 0.7",
+	}, {
 		input: "show warnings",
 	}, {
 		input:  "select warnings from t",
@@ -2143,6 +2165,12 @@ var (
 		input:  "select 1 from t where foo = _utf8mb4'bar'",
 		output: "select 1 from t where foo = _utf8mb4 'bar'",
 	}, {
+		input:  "select 1 from t where foo = _utf8mb3 'bar'",
+		output: "select 1 from t where foo = _utf8 'bar'",
+	}, {
+		input:  "select 1 from t where foo = _utf8mb3'bar'",
+		output: "select 1 from t where foo = _utf8 'bar'",
+	}, {
 		input: "select match(a) against ('foo') from t",
 	}, {
 		input: "select match(a1, a2) against ('foo' in natural language mode with query expansion) from t",
@@ -2228,8 +2256,8 @@ var (
 		output:     "create database test_db",
 		partialDDL: true,
 	}, {
-		input:  "CREATE DATABASE /*!32312 IF NOT EXISTS*/ `mysql` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;",
-		output: "create database if not exists mysql default character set utf8mb4 collate utf8mb4_0900_ai_ci",
+		input:  "CREATE DATABASE IF NOT EXISTS `mysql` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci ENCRYPTION='N';",
+		output: "create database if not exists mysql default character set utf8mb4 collate utf8mb4_0900_ai_ci encryption 'N'",
 	}, {
 		input: "drop /* simple */ database test_db",
 	}, {
@@ -2655,6 +2683,27 @@ var (
 		input:  `SELECT JSON_VALUE(@j, @k)`,
 		output: `select json_value(@j, @k) from dual`,
 	}, {
+		input:  `select json_value(@j, @k RETURNING FLOAT) from dual`,
+		output: `select json_value(@j, @k returning FLOAT) from dual`,
+	}, {
+		input:  `select json_value(@j, @k RETURNING DECIMAL(4,2)) from dual`,
+		output: `select json_value(@j, @k returning DECIMAL(4, 2)) from dual`,
+	}, {
+		input:  `SELECT JSON_VALUE('{"fname": "Joe", "lname": "Palmer"}', '$.fname' returning char(49) Charset utf8mb4 error on error)`,
+		output: `select json_value('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname' returning char(49) character set utf8mb4 error on error) from dual`,
+	}, {
+		input:  `SELECT JSON_VALUE('{"item": "shoes", "price": "49.95"}', '$.price' NULL ON EMPTY) `,
+		output: `select json_value('{\"item\": \"shoes\", \"price\": \"49.95\"}', '$.price' null on empty) from dual`,
+	}, {
+		input:  `SELECT JSON_VALUE('{"item": "shoes", "price": "49.95"}', '$.price' NULL ON ERROR) `,
+		output: `select json_value('{\"item\": \"shoes\", \"price\": \"49.95\"}', '$.price' null on error) from dual`,
+	}, {
+		input:  `SELECT JSON_VALUE('{"item": "shoes", "price": "49.95"}', '$.price' NULL ON EMPTY ERROR ON ERROR) `,
+		output: `select json_value('{\"item\": \"shoes\", \"price\": \"49.95\"}', '$.price' null on empty error on error) from dual`,
+	}, {
+		input:  `select json_value(@j, @k RETURNING FLOAT NULL ON EMPTY ERROR ON ERROR) from dual`,
+		output: `select json_value(@j, @k returning FLOAT null on empty error on error) from dual`,
+	}, {
 		input:  `SELECT 17 MEMBER OF ('[23, "abc", 17, "ab", 10]')`,
 		output: `select 17 member of ('[23, \"abc\", 17, \"ab\", 10]') from dual`,
 	}, {
@@ -2883,6 +2932,9 @@ var (
 		input:  "SELECT JSON_UNQUOTE(@j)",
 		output: "select json_unquote(@j) from dual",
 	}, {
+		input:  "CREATE TABLE ts (id INT, purchased DATE) PARTITION BY RANGE( YEAR(purchased) ) SUBPARTITION BY HASH( TO_DAYS(purchased) ) ( PARTITION p0 VALUES LESS THAN (1990) (SUBPARTITION s0,SUBPARTITION s1),PARTITION p1 VALUES LESS THAN (2000),PARTITION p2 VALUES LESS THAN MAXVALUE (SUBPARTITION s2,SUBPARTITION s3));",
+		output: "create table ts (\n\tid INT,\n\tpurchased DATE\n) partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased)) (partition p0 values less than (1990) (subpartition s0, subpartition s1), partition p1 values less than (2000), partition p2 values less than maxvalue (subpartition s2, subpartition `s3`))",
+	}, {
 		input:  "SELECT val, CUME_DIST() OVER w, ROW_NUMBER() OVER w, DENSE_RANK() OVER w, PERCENT_RANK() OVER w, RANK() OVER w AS 'cd' FROM numbers",
 		output: "select val, cume_dist() over w, row_number() over w, dense_rank() over w, percent_rank() over w, rank() over w as cd from numbers",
 	}, {
@@ -2942,9 +2994,7 @@ func TestValid(t *testing.T) {
 			tree, err := Parse(tcase.input)
 			require.NoError(t, err, tcase.input)
 			out := String(tree)
-			if tcase.output != out {
-				t.Errorf("Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)
-			}
+			assert.Equal(t, tcase.output, out)
 
 			// Some statements currently only have 5.7 specifications.
 			// For mysql 8.0 syntax, the query is not entirely parsed.
@@ -3275,6 +3325,9 @@ func TestIntroducers(t *testing.T) {
 	}, {
 		input:  "select _utf8mb4 'x'",
 		output: "select _utf8mb4 'x' from dual",
+	}, {
+		input:  "select _utf8mb3 'x'",
+		output: "select _utf8 'x' from dual",
 	}}
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
@@ -3888,6 +3941,54 @@ func TestCreateTable(t *testing.T) {
 	key by_full_name (full_name)
 )`,
 		},
+		// test defining index visibility
+		{
+			input: `create table t (
+	id int auto_increment,
+	username varchar,
+	unique key by_username (username) visible,
+	unique key by_username2 (username) invisible,
+	unique index by_username3 (username)
+)`,
+		},
+		// test adding engine attributes
+		{
+			input: `create table t (
+	id int auto_increment,
+	username varchar,
+	unique key by_username (username) engine_attribute '{}' secondary_engine_attribute '{}',
+	unique index by_username3 (username)
+)`,
+		},
+		// test defining SRID
+		{
+			input: `create table t (
+	p point srid 0,
+	g geometry not null srid 4326
+)`,
+		},
+		// test defining column visibility
+		{
+			input: `create table t (
+	id int auto_increment,
+	username varchar invisible,
+	login varchar visible
+)`,
+		},
+		// test adding column engine attributes
+		{
+			input: `create table t (
+	id int auto_increment,
+	username varchar engine_attribute '{}' secondary_engine_attribute '{}'
+)`,
+		},
+		// test adding column format
+		{
+			input: `create table t (
+	id int auto_increment,
+	username varchar column_format dynamic
+)`,
+		},
 		// test that indexes support USING <id>
 		{
 			input: `create table t (
@@ -3959,24 +4060,72 @@ func TestCreateTable(t *testing.T) {
 	username varchar,
 	k int,
 	Z int,
-	newCol int references simple (a),
-	newCol int references simple (a) on delete restrict,
-	newCol int references simple (a) on delete no action,
-	newCol int references simple (a) on delete cascade on update set default,
-	newCol int references simple (a) on delete set default on update set null,
-	newCol int references simple (a) on delete set null on update restrict,
-	newCol int references simple (a) on update no action,
-	newCol int references simple (a) on update cascade,
+	newCol int references t2 (a),
+	newCol int references t2 (a) on delete restrict,
+	newCol int references t2 (a) on delete no action,
+	newCol int references t2 (a) on delete cascade on update set default,
+	newCol int references t2 (a) on delete set default on update set null,
+	newCol int references t2 (a) on delete set null on update restrict,
+	newCol int references t2 (a) on update set default on delete cascade,
+	newCol int references t2 (a) on update set null on delete set default,
+	newCol int references t2 (a) on update restrict on delete set null,
+	newCol int references t2 (a) match full on delete cascade on update set default,
+	newCol int references t2 (a) match partial on delete set default on update set null,
+	newCol int references t2 (a) match simple on delete set null on update restrict,
+	newCol int references t2 (a) on update no action,
+	newCol int references t2 (a) on update cascade,
 	primary key (id, username),
 	key by_email (email(10), username),
-	constraint second_ibfk_1 foreign key (k, j) references simple (a, b),
-	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete restrict,
-	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete no action,
-	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete cascade on update set default,
-	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete set default on update set null,
-	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete set null on update restrict,
-	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on update no action,
-	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on update cascade
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b),
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete restrict,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete no action,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete cascade on update set default,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete set default on update set null,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete set null on update restrict,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on update set default on delete cascade ,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on update set null on delete set default,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on update restrict on delete set null,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) match full on delete cascade on update set default,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) match partial on delete set default on update set null,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) match simple on delete set null on update restrict,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on update no action,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on update cascade
+)`,
+			output: `create table t (
+	id int auto_increment,
+	username varchar,
+	k int,
+	Z int,
+	newCol int references t2 (a),
+	newCol int references t2 (a) on delete restrict,
+	newCol int references t2 (a) on delete no action,
+	newCol int references t2 (a) on delete cascade on update set default,
+	newCol int references t2 (a) on delete set default on update set null,
+	newCol int references t2 (a) on delete set null on update restrict,
+	newCol int references t2 (a) on delete cascade on update set default,
+	newCol int references t2 (a) on delete set default on update set null,
+	newCol int references t2 (a) on delete set null on update restrict,
+	newCol int references t2 (a) match full on delete cascade on update set default,
+	newCol int references t2 (a) match partial on delete set default on update set null,
+	newCol int references t2 (a) match simple on delete set null on update restrict,
+	newCol int references t2 (a) on update no action,
+	newCol int references t2 (a) on update cascade,
+	primary key (id, username),
+	key by_email (email(10), username),
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b),
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete restrict,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete no action,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete cascade on update set default,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete set default on update set null,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete set null on update restrict,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete cascade on update set default,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete set default on update set null,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete set null on update restrict,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) match full on delete cascade on update set default,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) match partial on delete set default on update set null,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) match simple on delete set null on update restrict,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on update no action,
+	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on update cascade
 )`,
 		},
 		// constraint name with spaces
@@ -3995,6 +4144,7 @@ func TestCreateTable(t *testing.T) {
 	id int auto_increment
 ) engine InnoDB,
   auto_increment 123,
+  autoextend_size 16,
   avg_row_length 1,
   charset utf8mb4,
   charset latin1,
@@ -4007,6 +4157,7 @@ func TestCreateTable(t *testing.T) {
   data directory 'absolute path to directory',
   delay_key_write 1,
   encryption 'n',
+  engine_attribute '{}',
   index directory 'absolute path to directory',
   insert_method no,
   key_block_size 1024,
@@ -4015,6 +4166,7 @@ func TestCreateTable(t *testing.T) {
   pack_keys 0,
   password 'sekret',
   row_format default,
+  secondary_engine_attribute '{}',
   stats_auto_recalc default,
   stats_persistent 0,
   stats_sample_pages 1,
@@ -4566,6 +4718,120 @@ PARTITIONS 6`,
 			output: `create table t2 (
 	val INT
 ) partition by list (val) (partition mypart values in (1, 3, 5) tablespace innodb_system, partition MyPart values in (2, 4, 6) tablespace innodb_system)`,
+		},
+		{
+			// index with an expression
+			input: `create table t (
+	id int auto_increment,
+	username varchar(64),
+	nickname varchar(64),
+	email varchar(64),
+	primary key (id),
+	key email_idx (email, (if(username = '', nickname, username)))
+)`,
+		},
+		{
+			input: `create table entries (
+	uid varchar(53) character set utf8mb4 collate utf8mb4_bin not null,
+	namespace varchar(254) character set utf8mb4 collate utf8mb4_bin not null,
+	place varchar(254) character set utf8mb4 collate utf8mb4_bin not null,
+	creationTimestamp timestamp null default current_timestamp(),
+	updatedTimestamp timestamp null default current_timestamp() on update current_timestamp(),
+	labels json default null,
+	spec json default null,
+	salaryInfo json default null,
+	PRIMARY KEY (namespace, uid),
+	UNIQUE KEY namespaced_name (namespace, place),
+	UNIQUE KEY unique_uid (uid),
+	KEY entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt')))
+) ENGINE InnoDB,
+  CHARSET utf8mb4,
+  COLLATE utf8mb4_bin`,
+		},
+		{
+			input: `CREATE TABLE t1(
+    j JSON,
+    INDEX i1 ( (JSON_VALUE(j, '$.id' RETURNING UNSIGNED)) )
+)`,
+			output: `create table t1 (
+	j JSON,
+	INDEX i1 ((json_value(j, '$.id' returning UNSIGNED)))
+)`,
+		}, {
+			input: `CREATE TABLE entries (
+	uid varchar(53) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+	namespace varchar(254) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+	employee varchar(254) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+	creationTimestamp timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+	updatedTimestamp timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	labels json DEFAULT NULL,
+	spec json DEFAULT NULL,
+	salaryInfo json DEFAULT NULL,
+	PRIMARY KEY (namespace,uid),
+	UNIQUE KEY namespaced_employee (namespace,employee),
+	UNIQUE KEY unique_uid (uid),
+	KEY entries_spec_updatedAt ((json_value(spec, _utf8mb4'$.updatedAt' returning datetime)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin`,
+			output: `create table entries (
+	uid varchar(53) character set utf8mb4 collate utf8mb4_bin not null,
+	namespace varchar(254) character set utf8mb4 collate utf8mb4_bin not null,
+	employee varchar(254) character set utf8mb4 collate utf8mb4_bin not null,
+	creationTimestamp timestamp null default current_timestamp(),
+	updatedTimestamp timestamp null default current_timestamp() on update current_timestamp(),
+	labels json default null,
+	spec json default null,
+	salaryInfo json default null,
+	PRIMARY KEY (namespace, uid),
+	UNIQUE KEY namespaced_employee (namespace, employee),
+	UNIQUE KEY unique_uid (uid),
+	KEY entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt' returning datetime)))
+) ENGINE InnoDB,
+  CHARSET utf8mb4,
+  COLLATE utf8mb4_bin`,
+		}, {
+			// Subpartitions
+			input: `CREATE TABLE ts (id INT, purchased DATE)
+    PARTITION BY RANGE( YEAR(purchased) )
+    SUBPARTITION BY HASH( TO_DAYS(purchased) ) (
+        PARTITION p0 VALUES LESS THAN (1990) (
+            SUBPARTITION s0,
+            SUBPARTITION s1
+        ),
+        PARTITION p1 VALUES LESS THAN (2000) (
+            SUBPARTITION s2,
+            SUBPARTITION s31
+        ),
+        PARTITION p2 VALUES LESS THAN MAXVALUE (
+            SUBPARTITION s4,
+            SUBPARTITION s5
+        )
+    )`,
+			output: `create table ts (
+	id INT,
+	purchased DATE
+) partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased)) (partition p0 values less than (1990) (subpartition s0, subpartition s1), partition p1 values less than (2000) (subpartition s2, subpartition s31), partition p2 values less than maxvalue (subpartition s4, subpartition s5))`,
+		},
+		{
+			input: `CREATE TABLE ts (id INT, purchased DATE)
+    PARTITION BY RANGE( YEAR(purchased) )
+    SUBPARTITION BY HASH( TO_DAYS(purchased) ) (
+        PARTITION p0 VALUES LESS THAN (1990) (
+            SUBPARTITION s0 STORAGE Engine = 'innodb' data directory = '/data',
+            SUBPARTITION s1 COMMENT = 'this is s1' index directory = '/index'
+        ),
+        PARTITION p1 VALUES LESS THAN (2000) (
+            SUBPARTITION s2 MAx_rows = 4,
+            SUBPARTITION s31 min_rows = 5 tablespace = t2
+        ),
+        PARTITION p2 VALUES LESS THAN MAXVALUE (
+            SUBPARTITION s4,
+            SUBPARTITION s5
+        )
+    )`,
+			output: `create table ts (
+	id INT,
+	purchased DATE
+) partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased)) (partition p0 values less than (1990) (subpartition s0 storage engine innodb data directory '/data', subpartition s1 comment 'this is s1' index directory '/index'), partition p1 values less than (2000) (subpartition s2 max_rows 4, subpartition s31 min_rows 5 tablespace t2), partition p2 values less than maxvalue (subpartition s4, subpartition s5))`,
 		},
 	}
 	for _, test := range createTableQueries {

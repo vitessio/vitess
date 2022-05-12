@@ -2987,6 +2987,11 @@ func TestSelectScatterFails(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "scatter")
 
+	// Run the test again, to ensure it behaves the same for a cached query
+	_, err = executorExecSession(executor, "select id from user", nil, sess)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scatter")
+
 	_, err = executorExecSession(executor, "select /*vt+ ALLOW_SCATTER */ id from user", nil, sess)
 	require.NoError(t, err)
 }

@@ -80,7 +80,7 @@ type Cluster struct {
 }
 
 // New creates a new Cluster from a Config.
-func New(cfg Config) (*Cluster, error) {
+func New(ctx context.Context, cfg Config) (*Cluster, error) {
 	cluster := &Cluster{
 		ID:   cfg.ID,
 		Name: cfg.Name,
@@ -105,6 +105,10 @@ func New(cfg Config) (*Cluster, error) {
 		return nil, fmt.Errorf("error creating vtsql connection config: %w", err)
 	}
 
+	for _, opt := range cfg.vtsqlConfigOpts {
+		vtsqlCfg = opt(vtsqlCfg)
+	}
+
 	vtctldargs := buildPFlagSlice(cfg.VtctldFlags)
 
 	vtctldCfg, err := vtctldclient.Parse(protocluster, disco, vtctldargs)
@@ -112,8 +116,19 @@ func New(cfg Config) (*Cluster, error) {
 		return nil, fmt.Errorf("error creating vtctldclient proxy config: %w", err)
 	}
 
-	cluster.DB = vtsql.New(vtsqlCfg)
-	cluster.Vtctld = vtctldclient.New(vtctldCfg)
+	for _, opt := range cfg.vtctldConfigOpts {
+		vtctldCfg = opt(vtctldCfg)
+	}
+
+	cluster.DB, err = vtsql.New(ctx, vtsqlCfg)
+	if err != nil {
+		return nil, fmt.Errorf("error creating vtsql proxy: %w", err)
+	}
+
+	cluster.Vtctld, err = vtctldclient.New(ctx, vtctldCfg)
+	if err != nil {
+		return nil, fmt.Errorf("error creating vtctldclient: %w", err)
+	}
 
 	if cfg.TabletFQDNTmplStr != "" {
 		cluster.TabletFQDNTmpl, err = template.New(cluster.ID + "-tablet-fqdn").Parse(cfg.TabletFQDNTmplStr)
@@ -370,9 +385,6 @@ func (c *Cluster) DeleteShards(ctx context.Context, req *vtctldatapb.DeleteShard
 // FindAllShardsInKeyspaceOptions modify the behavior of a cluster's
 // FindAllShardsInKeyspace method.
 type FindAllShardsInKeyspaceOptions struct {
-	// SkipDial indicates that the cluster can assume the vtctldclient has
-	// already dialed up a connection to a vtctld.
-	SkipDial bool
 	// skipPool indicates that the caller has already made a successful call to
 	// Acquire on the topoReadPool. It is not exported, because the cluster
 	// pools are not exported, so it's not possible to manually Acquire from
@@ -391,12 +403,6 @@ func (c *Cluster) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 
 	AnnotateSpan(c, span)
 	span.Annotate("keyspace", keyspace)
-
-	if !opts.SkipDial {
-		if err := c.Vtctld.Dial(ctx); err != nil {
-			return nil, fmt.Errorf("failed to Dial vtctld for cluster = %s for FindAllShardsInKeyspace: %w", c.ID, err)
-		}
-	}
 
 	if !opts.skipPool {
 		if err := c.topoReadPool.Acquire(ctx); err != nil {
@@ -443,10 +449,6 @@ func (c *Cluster) FindWorkflows(ctx context.Context, keyspaces []string, opts Fi
 
 	AnnotateSpan(c, span)
 	span.Annotate("active_only", opts.ActiveOnly)
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, fmt.Errorf("FindWorkflows(cluster = %v, keyspaces = %v, opts = %v) dial failed: %w", c.ID, keyspaces, opts, err)
-	}
 
 	return c.findWorkflows(ctx, keyspaces, opts)
 }
@@ -768,6 +770,104 @@ func (c *Cluster) getShardSets(ctx context.Context, keyspaces []string, keyspace
 	return shardsByKeyspace, nil
 }
 
+// GetCellInfos returns a list of ClusterCellInfo objects for cells in the
+// given cluster.
+//
+// If req.Cells is set, cells are restricted only to cells with those names.
+// Note: specifying a cell name that does not exist in the cluster fails the
+// overall request.
+//
+// If req.NamesOnly is set, each ClusterCellInfo will only contain the Cluster
+// and Name fields. req.Cells takes precedence over this option.
+func (c *Cluster) GetCellInfos(ctx context.Context, req *vtadminpb.GetCellInfosRequest) ([]*vtadminpb.ClusterCellInfo, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetCellInfos")
+	defer span.Finish()
+
+	names := req.Cells
+	if len(names) == 0 {
+		resp, err := c.Vtctld.GetCellInfoNames(ctx, &vtctldatapb.GetCellInfoNamesRequest{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to GetCellInfoNames: %w", err)
+		}
+
+		names = resp.Names
+	}
+
+	namesOnly := req.NamesOnly
+	if namesOnly && len(req.Cells) > 0 {
+		log.Warning("Cluster.GetCellInfos: req.Cells and req.NamesOnly set, ignoring NamesOnly")
+		namesOnly = false
+	}
+
+	span.Annotate("names_only", namesOnly)
+	span.Annotate("cells", req.Cells) // deliberately not the cellnames we (maybe) fetched above
+
+	cpb := c.ToProto()
+	infos := make([]*vtadminpb.ClusterCellInfo, 0, len(names))
+	if namesOnly {
+		for _, name := range names {
+			infos = append(infos, &vtadminpb.ClusterCellInfo{
+				Cluster: cpb,
+				Name:    name,
+			})
+		}
+
+		return infos, nil
+	}
+
+	var (
+		m   sync.Mutex
+		wg  sync.WaitGroup
+		rec concurrency.AllErrorRecorder
+	)
+
+	for _, name := range names {
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+
+			resp, err := c.Vtctld.GetCellInfo(ctx, &vtctldatapb.GetCellInfoRequest{
+				Cell: name,
+			})
+			if err != nil {
+				rec.RecordError(fmt.Errorf("GetCellInfo(%s) failed: %w", name, err))
+				return
+			}
+
+			m.Lock()
+			defer m.Unlock()
+			infos = append(infos, &vtadminpb.ClusterCellInfo{
+				Cluster:  cpb,
+				Name:     name,
+				CellInfo: resp.CellInfo,
+			})
+		}(name)
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return infos, nil
+}
+
+// GetCellsAliases returns all CellsAliases in the cluster.
+func (c *Cluster) GetCellsAliases(ctx context.Context) (*vtadminpb.ClusterCellsAliases, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetCellsAliases")
+	defer span.Finish()
+
+	resp, err := c.Vtctld.GetCellsAliases(ctx, &vtctldatapb.GetCellsAliasesRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.ClusterCellsAliases{
+		Cluster: c.ToProto(),
+		Aliases: resp.Aliases,
+	}, nil
+}
+
 // GetGates returns the list of all VTGates in the cluster.
 func (c *Cluster) GetGates(ctx context.Context) ([]*vtadminpb.VTGate, error) {
 	// (TODO|@ajm188) Support tags in the vtadmin RPC request and pass them
@@ -796,10 +896,6 @@ func (c *Cluster) GetKeyspace(ctx context.Context, name string) (*vtadminpb.Keys
 	AnnotateSpan(c, span)
 	span.Annotate("keyspace", name)
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, fmt.Errorf("Vtctld.Dial failed for cluster = %s: %w", c.ID, err)
-	}
-
 	if err := c.topoReadPool.Acquire(ctx); err != nil {
 		return nil, fmt.Errorf("GetKeyspace(%s) failed to acquire topoReadPool: %w", name, err)
 	}
@@ -813,7 +909,6 @@ func (c *Cluster) GetKeyspace(ctx context.Context, name string) (*vtadminpb.Keys
 	}
 
 	shards, err := c.FindAllShardsInKeyspace(ctx, name, FindAllShardsInKeyspaceOptions{
-		SkipDial: true,
 		skipPool: true, // we already acquired before making the GetKeyspace call
 	})
 	if err != nil {
@@ -833,10 +928,6 @@ func (c *Cluster) GetKeyspaces(ctx context.Context) ([]*vtadminpb.Keyspace, erro
 	defer span.Finish()
 
 	AnnotateSpan(c, span)
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, fmt.Errorf("Vtctld.Dial(cluster=%s) failed: %w", c.ID, err)
-	}
 
 	if err := c.topoReadPool.Acquire(ctx); err != nil {
 		return nil, fmt.Errorf("GetKeyspaces() failed to acquire topoReadPool: %w", err)
@@ -861,7 +952,7 @@ func (c *Cluster) GetKeyspaces(ctx context.Context) ([]*vtadminpb.Keyspace, erro
 		go func(i int, ks *vtctldatapb.Keyspace) {
 			defer wg.Done()
 
-			shards, err := c.FindAllShardsInKeyspace(ctx, ks.Name, FindAllShardsInKeyspaceOptions{SkipDial: true})
+			shards, err := c.FindAllShardsInKeyspace(ctx, ks.Name, FindAllShardsInKeyspaceOptions{})
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -898,10 +989,6 @@ func (c *Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 }
 
 func (c *Cluster) getTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
-	if err := c.DB.Dial(ctx, ""); err != nil {
-		return nil, err
-	}
-
 	rows, err := c.DB.ShowTablets(ctx)
 	if err != nil {
 		return nil, err
@@ -993,41 +1080,12 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 	annotateGetSchemaRequest(opts.BaseRequest, span)
 	vtadminproto.AnnotateSpanWithGetSchemaTableSizeOptions(opts.TableSizeOptions, span)
 
-	var (
-		wg  sync.WaitGroup
-		rec concurrency.AllErrorRecorder
-
-		tablets []*vtadminpb.Tablet
-	)
-
-	// First, dial vtctld and fetch tablets concurrently.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		if err := c.Vtctld.Dial(ctx); err != nil {
-			rec.RecordError(fmt.Errorf("failed to Dial vtctld for cluster = %s for GetSchema: %w", c.ID, err))
-			return
-		}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		// Fetch all tablets for the keyspace.
-		var err error
-
-		tablets, err = c.FindTablets(ctx, func(tablet *vtadminpb.Tablet) bool {
-			return tablet.Tablet.Keyspace == keyspace
-		}, -1)
-		if err != nil {
-			rec.RecordError(fmt.Errorf("%w for keyspace %s", errors.ErrNoTablet, keyspace))
-		}
-	}()
-
-	wg.Wait()
-	if rec.HasErrors() {
-		return nil, rec.Error()
+	// Fetch all tablets for the keyspace.
+	tablets, err := c.FindTablets(ctx, func(tablet *vtadminpb.Tablet) bool {
+		return tablet.Tablet.Keyspace == keyspace
+	}, -1)
+	if err != nil {
+		return nil, fmt.Errorf("%w for keyspace %s", errors.ErrNoTablet, keyspace)
 	}
 
 	tabletsToQuery, err := c.getTabletsToQueryForSchemas(ctx, keyspace, tablets, opts)
@@ -1096,11 +1154,6 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 		// not need. Refactor that method so we can get better code reuse.
 		span, ctx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
 		defer span.Finish()
-
-		if err := c.Vtctld.Dial(ctx); err != nil {
-			rec.RecordError(fmt.Errorf("Vtctld.Dial(cluster=%s) failed: %w", c.ID, err))
-			return
-		}
 
 		if err := c.topoReadPool.Acquire(ctx); err != nil {
 			rec.RecordError(fmt.Errorf("GetKeyspaces() failed to acquire topoReadPool: %w", err))
@@ -1292,7 +1345,7 @@ func (c *Cluster) getSchemaFromTablets(ctx context.Context, keyspace string, tab
 
 func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace string, tablets []*vtadminpb.Tablet, opts GetSchemaOptions) ([]*vtadminpb.Tablet, error) {
 	if opts.TableSizeOptions.AggregateSizes {
-		shards, err := c.FindAllShardsInKeyspace(ctx, keyspace, FindAllShardsInKeyspaceOptions{SkipDial: true})
+		shards, err := c.FindAllShardsInKeyspace(ctx, keyspace, FindAllShardsInKeyspaceOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -1422,10 +1475,6 @@ func (c *Cluster) GetSrvVSchema(ctx context.Context, cell string) (*vtadminpb.Sr
 	AnnotateSpan(c, span)
 	span.Annotate("cell", cell)
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, fmt.Errorf("Vtctld.Dial(cluster=%s) failed: %w", c.ID, err)
-	}
-
 	if err := c.topoReadPool.Acquire(ctx); err != nil {
 		return nil, fmt.Errorf("GetSrvVSchema(%s) failed to acquire topoReadPool: %w", cell, err)
 	}
@@ -1453,10 +1502,6 @@ func (c *Cluster) GetSrvVSchemas(ctx context.Context, cells []string) ([]*vtadmi
 	defer span.Finish()
 
 	AnnotateSpan(c, span)
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, fmt.Errorf("Vtctld.Dial(cluster=%s) failed: %w", c.ID, err)
-	}
 
 	if err := c.topoReadPool.Acquire(ctx); err != nil {
 		return nil, fmt.Errorf("GetSrvVSchema(cluster = %s, cells = %v) failed to acquire topoReadPool: %w", c.ID, cells, err)
@@ -1548,10 +1593,6 @@ func (c *Cluster) GetWorkflow(ctx context.Context, keyspace string, name string,
 	span.Annotate("keyspace", keyspace)
 	span.Annotate("workflow_name", name)
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, fmt.Errorf("GetWorkflow(cluster = %v, keyspace = %v, workflow = %v, opts = %+v) dial failed: %w", c.ID, keyspace, name, opts, err)
-	}
-
 	workflows, err := c.findWorkflows(ctx, []string{keyspace}, FindWorkflowsOptions{
 		ActiveOnly: opts.ActiveOnly,
 		Filter: func(workflow *vtadminpb.Workflow) bool {
@@ -1596,10 +1637,6 @@ func (c *Cluster) GetWorkflows(ctx context.Context, keyspaces []string, opts Get
 
 	AnnotateSpan(c, span)
 	span.Annotate("active_only", opts.ActiveOnly)
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, fmt.Errorf("GetWorkflows(cluster = %v, keyspaces = %v, opts = %v) dial failed: %w", c.ID, keyspaces, opts, err)
-	}
 
 	return c.findWorkflows(ctx, keyspaces, FindWorkflowsOptions{
 		ActiveOnly:      opts.ActiveOnly,

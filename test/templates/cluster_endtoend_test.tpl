@@ -8,6 +8,11 @@ env:
   LAUNCHABLE_ORGANIZATION: "vitess"
   LAUNCHABLE_WORKSPACE: "vitess-app"
   GITHUB_PR_HEAD_SHA: "${{`{{ github.event.pull_request.head.sha }}`}}"
+{{if .InstallXtraBackup}}
+  # This is used if we need to pin the xtrabackup version used in tests.
+  # If this is NOT set then the latest version available will be used.
+  #XTRABACKUP_VERSION: "2.4.24-1"
+{{end}}
 
 jobs:
   build:
@@ -34,6 +39,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
+            - '.github/workflows/**'
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'
@@ -69,11 +75,17 @@ jobs:
 
         {{if .InstallXtraBackup}}
 
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+        wget "https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb"
         sudo apt-get install -y gnupg2
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo dpkg -i "percona-release_latest.$(lsb_release -sc)_all.deb"
         sudo apt-get update
-        sudo apt-get install percona-xtrabackup-24
+        if [[ -n $XTRABACKUP_VERSION ]]; then
+          debfile="percona-xtrabackup-24_$XTRABACKUP_VERSION.$(lsb_release -sc)_amd64.deb"
+          wget "https://repo.percona.com/pxb-24/apt/pool/main/p/percona-xtrabackup-24/$debfile"
+          sudo apt install -y "./$debfile"
+        else
+          sudo apt-get install -y percona-xtrabackup-24
+        fi
 
         {{end}}
 
