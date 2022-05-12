@@ -89,6 +89,18 @@ func (d *AlterTableEntityDiff) SubsequentDiff() EntityDiff {
 	return d.subsequentDiff
 }
 
+// SetSubsequentDiff implements EntityDiff
+func (d *AlterTableEntityDiff) SetSubsequentDiff(subDiff EntityDiff) {
+	if d == nil {
+		return
+	}
+	if subTableDiff, ok := subDiff.(*AlterTableEntityDiff); ok {
+		d.subsequentDiff = subTableDiff
+	} else {
+		d.subsequentDiff = nil
+	}
+}
+
 // addSubsequentDiff adds a subsequent diff to the tail of the diff sequence
 func (d *AlterTableEntityDiff) addSubsequentDiff(diff *AlterTableEntityDiff) {
 	if d.subsequentDiff == nil {
@@ -150,6 +162,10 @@ func (d *CreateTableEntityDiff) SubsequentDiff() EntityDiff {
 	return nil
 }
 
+// SetSubsequentDiff implements EntityDiff
+func (d *CreateTableEntityDiff) SetSubsequentDiff(EntityDiff) {
+}
+
 //
 type DropTableEntityDiff struct {
 	from      *CreateTableEntity
@@ -201,6 +217,10 @@ func (d *DropTableEntityDiff) CanonicalStatementString() (s string) {
 // SubsequentDiff implements EntityDiff
 func (d *DropTableEntityDiff) SubsequentDiff() EntityDiff {
 	return nil
+}
+
+// SetSubsequentDiff implements EntityDiff
+func (d *DropTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
 // CreateTableEntity stands for a TABLE construct. It contains the table's CREATE statement.
