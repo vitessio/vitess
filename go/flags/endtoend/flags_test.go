@@ -490,7 +490,7 @@ var (
   --binlog_ssl_server_name string
 	PITR restore parameter: TLS server name (common name) to verify against for the binlog server we are connecting to (If not set: use the hostname or IP supplied in -binlog_host).
   --binlog_use_v3_resharding_mode
-	True iff the binlog streamer should use V3-style sharding, which doesn't require a preset sharding key column. (default true)
+	(DEPRECATED) True iff the binlog streamer should use V3-style sharding, which doesn't require a preset sharding key column. (default true)
   --binlog_user string
 	PITR restore parameter: username of binlog server.
   --builtinbackup_mysqld_timeout duration

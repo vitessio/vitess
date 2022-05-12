@@ -154,7 +154,6 @@ exec $VTROOT/bin/vttablet \
   -disable_active_reparents=true \
   -port $web_port \
   -grpc_port $grpc_port \
-  -binlog_use_v3_resharding_mode=true \
   -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
   -vtctld_addr "http://vtctld:$WEB_PORT/" \
   -init_keyspace $keyspace \
