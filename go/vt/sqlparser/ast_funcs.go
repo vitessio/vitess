@@ -612,7 +612,7 @@ func NewColNameWithQualifier(identifier string, table TableName) *ColName {
 }
 
 // NewSelect is used to create a select statement
-func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, into *SelectInto, from TableExprs, where *Where, groupBy GroupBy, having *Where) *Select {
+func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, into *SelectInto, from TableExprs, where *Where, groupBy GroupBy, having *Where, windows NamedWindows) *Select {
 	var cache *bool
 	var distinct, straightJoinHint, sqlFoundRows bool
 
@@ -644,6 +644,7 @@ func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, int
 		Where:            where,
 		GroupBy:          groupBy,
 		Having:           having,
+		Windows:          windows,
 	}
 }
 

@@ -256,6 +256,10 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfModifyColumn(in, f)
 	case *NTHValueExpr:
 		return VisitRefOfNTHValueExpr(in, f)
+	case *NamedWindow:
+		return VisitRefOfNamedWindow(in, f)
+	case NamedWindows:
+		return VisitNamedWindows(in, f)
 	case *Nextval:
 		return VisitRefOfNextval(in, f)
 	case *NotExpr:
@@ -418,6 +422,10 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfWhen(in, f)
 	case *Where:
 		return VisitRefOfWhere(in, f)
+	case *WindowDefinition:
+		return VisitRefOfWindowDefinition(in, f)
+	case WindowDefinitions:
+		return VisitWindowDefinitions(in, f)
 	case *WindowSpecification:
 		return VisitRefOfWindowSpecification(in, f)
 	case *With:
@@ -2086,6 +2094,32 @@ func VisitRefOfNTHValueExpr(in *NTHValueExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfNamedWindow(in *NamedWindow, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitWindowDefinitions(in.Windows, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitNamedWindows(in NamedWindows, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitRefOfNamedWindow(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func VisitRefOfNextval(in *Nextval, f Visit) error {
 	if in == nil {
 		return nil
@@ -2562,6 +2596,9 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfWhere(in.Having, f); err != nil {
+		return err
+	}
+	if err := VisitNamedWindows(in.Windows, f); err != nil {
 		return err
 	}
 	if err := VisitOrderBy(in.OrderBy, f); err != nil {
@@ -3206,6 +3243,35 @@ func VisitRefOfWhere(in *Where, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfWindowDefinition(in *WindowDefinition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfWindowSpecification(in.WindowSpec, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitWindowDefinitions(in WindowDefinitions, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitRefOfWindowDefinition(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func VisitRefOfWindowSpecification(in *WindowSpecification, f Visit) error {
 	if in == nil {
 		return nil
@@ -3370,6 +3436,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfMemberOfExpr(in, f)
 	case *NTHValueExpr:
 		return VisitRefOfNTHValueExpr(in, f)
+	case *NamedWindow:
+		return VisitRefOfNamedWindow(in, f)
 	case *NtileExpr:
 		return VisitRefOfNtileExpr(in, f)
 	case *SubstrExpr:
@@ -3590,6 +3658,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfMemberOfExpr(in, f)
 	case *NTHValueExpr:
 		return VisitRefOfNTHValueExpr(in, f)
+	case *NamedWindow:
+		return VisitRefOfNamedWindow(in, f)
 	case *NotExpr:
 		return VisitRefOfNotExpr(in, f)
 	case *NtileExpr:
@@ -3742,6 +3812,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfMemberOfExpr(in, f)
 	case *NTHValueExpr:
 		return VisitRefOfNTHValueExpr(in, f)
+	case *NamedWindow:
+		return VisitRefOfNamedWindow(in, f)
 	case *NotExpr:
 		return VisitRefOfNotExpr(in, f)
 	case *NtileExpr:

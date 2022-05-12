@@ -616,7 +616,7 @@ var keywords = []keyword{
 	{"when", WHEN},
 	{"where", WHERE},
 	{"while", UNUSED},
-	{"window", UNUSED},
+	{"window", WINDOW},
 	{"with", WITH},
 	{"without", WITHOUT},
 	{"work", WORK},

@@ -65,6 +65,11 @@ func (node *Select) formatFast(buf *TrackedBuffer) {
 
 	node.Having.formatFast(buf)
 
+	if node.Windows != nil {
+		buf.WriteByte(' ')
+		node.Windows.formatFast(buf)
+	}
+
 	node.OrderBy.formatFast(buf)
 
 	node.Limit.formatFast(buf)
@@ -1957,6 +1962,40 @@ func (node *SubstrExpr) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(", ")
 		buf.printExpr(node, node.To, true)
 		buf.WriteByte(')')
+	}
+}
+
+// formatFast formats the node.
+func (node *NamedWindow) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("window ")
+	node.Windows.formatFast(buf)
+}
+
+// formatFast formats the node.
+func (node NamedWindows) formatFast(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.WriteString(prefix)
+		n.formatFast(buf)
+		prefix = ", "
+	}
+}
+
+// formatFast formats the node.
+func (node *WindowDefinition) formatFast(buf *TrackedBuffer) {
+	node.Name.formatFast(buf)
+	buf.WriteString(" AS (")
+	node.WindowSpec.formatFast(buf)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
+func (node WindowDefinitions) formatFast(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.WriteString(prefix)
+		n.formatFast(buf)
+		prefix = ", "
 	}
 }
 

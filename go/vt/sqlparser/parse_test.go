@@ -2927,6 +2927,9 @@ var (
 	}, {
 		input:  "SELECT LAG(val, 10) OVER w, LEAD('val', null) OVER w, LEAD(val, 1, ASCII(1)) OVER w FROM numbers",
 		output: "select lag(val, 10) over w, lead('val', null) over w, lead(val, 1, ASCII(1)) over w from numbers",
+	}, {
+		input:  "SELECT val, ROW_NUMBER() OVER (ORDER BY val) AS 'row_number' FROM numbers WINDOW w AS (ORDER BY val);",
+		output: "select val, row_number() over ( order by val asc) as `row_number` from numbers window w AS ( order by val asc)",
 	}}
 )
 

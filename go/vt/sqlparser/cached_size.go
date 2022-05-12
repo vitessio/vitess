@@ -2142,6 +2142,23 @@ func (cached *NTHValueExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *NamedWindow) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Windows vitess.io/vitess/go/vt/sqlparser.WindowDefinitions
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Windows)) * int64(8))
+		for _, elem := range cached.Windows {
+			size += elem.CachedSize(true)
+		}
+	}
+	return size
+}
 func (cached *Nextval) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2633,7 +2650,7 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(176)
+		size += int64(192)
 	}
 	// field Cache *bool
 	size += hack.RuntimeAllocSize(int64(1))
@@ -2672,6 +2689,13 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	}
 	// field Having *vitess.io/vitess/go/vt/sqlparser.Where
 	size += cached.Having.CachedSize(true)
+	// field Windows vitess.io/vitess/go/vt/sqlparser.NamedWindows
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Windows)) * int64(8))
+		for _, elem := range cached.Windows {
+			size += elem.CachedSize(true)
+		}
+	}
 	// field OrderBy vitess.io/vitess/go/vt/sqlparser.OrderBy
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(8))
@@ -3342,6 +3366,20 @@ func (cached *Where) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Expr.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	return size
+}
+func (cached *WindowDefinition) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
+	// field WindowSpec *vitess.io/vitess/go/vt/sqlparser.WindowSpecification
+	size += cached.WindowSpec.CachedSize(true)
 	return size
 }
 func (cached *WindowSpecification) CachedSize(alloc bool) int64 {

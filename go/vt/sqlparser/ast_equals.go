@@ -728,6 +728,18 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfNTHValueExpr(a, b)
+	case *NamedWindow:
+		b, ok := inB.(*NamedWindow)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNamedWindow(a, b)
+	case NamedWindows:
+		b, ok := inB.(NamedWindows)
+		if !ok {
+			return false
+		}
+		return EqualsNamedWindows(a, b)
 	case *Nextval:
 		b, ok := inB.(*Nextval)
 		if !ok {
@@ -1214,6 +1226,18 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfWhere(a, b)
+	case *WindowDefinition:
+		b, ok := inB.(*WindowDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfWindowDefinition(a, b)
+	case WindowDefinitions:
+		b, ok := inB.(WindowDefinitions)
+		if !ok {
+			return false
+		}
+		return EqualsWindowDefinitions(a, b)
 	case *WindowSpecification:
 		b, ok := inB.(*WindowSpecification)
 		if !ok {
@@ -2666,6 +2690,30 @@ func EqualsRefOfNTHValueExpr(a, b *NTHValueExpr) bool {
 		EqualsRefOfNullTreatmentClause(a.NullTreatmentClause, b.NullTreatmentClause)
 }
 
+// EqualsRefOfNamedWindow does deep equals between the two objects.
+func EqualsRefOfNamedWindow(a, b *NamedWindow) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsWindowDefinitions(a.Windows, b.Windows)
+}
+
+// EqualsNamedWindows does deep equals between the two objects.
+func EqualsNamedWindows(a, b NamedWindows) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfNamedWindow(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // EqualsRefOfNextval does deep equals between the two objects.
 func EqualsRefOfNextval(a, b *Nextval) bool {
 	if a == b {
@@ -3096,6 +3144,7 @@ func EqualsRefOfSelect(a, b *Select) bool {
 		EqualsRefOfWith(a.With, b.With) &&
 		EqualsGroupBy(a.GroupBy, b.GroupBy) &&
 		EqualsRefOfWhere(a.Having, b.Having) &&
+		EqualsNamedWindows(a.Windows, b.Windows) &&
 		EqualsOrderBy(a.OrderBy, b.OrderBy) &&
 		EqualsRefOfLimit(a.Limit, b.Limit) &&
 		a.Lock == b.Lock &&
@@ -3649,6 +3698,31 @@ func EqualsRefOfWhere(a, b *Where) bool {
 		EqualsExpr(a.Expr, b.Expr)
 }
 
+// EqualsRefOfWindowDefinition does deep equals between the two objects.
+func EqualsRefOfWindowDefinition(a, b *WindowDefinition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsRefOfWindowSpecification(a.WindowSpec, b.WindowSpec)
+}
+
+// EqualsWindowDefinitions does deep equals between the two objects.
+func EqualsWindowDefinitions(a, b WindowDefinitions) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfWindowDefinition(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // EqualsRefOfWindowSpecification does deep equals between the two objects.
 func EqualsRefOfWindowSpecification(a, b *WindowSpecification) bool {
 	if a == b {
@@ -4017,6 +4091,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfNTHValueExpr(a, b)
+	case *NamedWindow:
+		b, ok := inB.(*NamedWindow)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNamedWindow(a, b)
 	case *NtileExpr:
 		b, ok := inB.(*NtileExpr)
 		if !ok {
@@ -4572,6 +4652,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfNTHValueExpr(a, b)
+	case *NamedWindow:
+		b, ok := inB.(*NamedWindow)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNamedWindow(a, b)
 	case *NotExpr:
 		b, ok := inB.(*NotExpr)
 		if !ok {
@@ -4998,6 +5084,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfNTHValueExpr(a, b)
+	case *NamedWindow:
+		b, ok := inB.(*NamedWindow)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNamedWindow(a, b)
 	case *NotExpr:
 		b, ok := inB.(*NotExpr)
 		if !ok {

@@ -257,6 +257,10 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfModifyColumn(in)
 	case *NTHValueExpr:
 		return CloneRefOfNTHValueExpr(in)
+	case *NamedWindow:
+		return CloneRefOfNamedWindow(in)
+	case NamedWindows:
+		return CloneNamedWindows(in)
 	case *Nextval:
 		return CloneRefOfNextval(in)
 	case *NotExpr:
@@ -419,6 +423,10 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfWhen(in)
 	case *Where:
 		return CloneRefOfWhere(in)
+	case *WindowDefinition:
+		return CloneRefOfWindowDefinition(in)
+	case WindowDefinitions:
+		return CloneWindowDefinitions(in)
 	case *WindowSpecification:
 		return CloneRefOfWindowSpecification(in)
 	case *With:
@@ -1646,6 +1654,28 @@ func CloneRefOfNTHValueExpr(n *NTHValueExpr) *NTHValueExpr {
 	return &out
 }
 
+// CloneRefOfNamedWindow creates a deep clone of the input.
+func CloneRefOfNamedWindow(n *NamedWindow) *NamedWindow {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Windows = CloneWindowDefinitions(n.Windows)
+	return &out
+}
+
+// CloneNamedWindows creates a deep clone of the input.
+func CloneNamedWindows(n NamedWindows) NamedWindows {
+	if n == nil {
+		return nil
+	}
+	res := make(NamedWindows, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneRefOfNamedWindow(x))
+	}
+	return res
+}
+
 // CloneRefOfNextval creates a deep clone of the input.
 func CloneRefOfNextval(n *Nextval) *Nextval {
 	if n == nil {
@@ -2015,6 +2045,7 @@ func CloneRefOfSelect(n *Select) *Select {
 	out.With = CloneRefOfWith(n.With)
 	out.GroupBy = CloneGroupBy(n.GroupBy)
 	out.Having = CloneRefOfWhere(n.Having)
+	out.Windows = CloneNamedWindows(n.Windows)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	out.Into = CloneRefOfSelectInto(n.Into)
@@ -2494,6 +2525,29 @@ func CloneRefOfWhere(n *Where) *Where {
 	return &out
 }
 
+// CloneRefOfWindowDefinition creates a deep clone of the input.
+func CloneRefOfWindowDefinition(n *WindowDefinition) *WindowDefinition {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneColIdent(n.Name)
+	out.WindowSpec = CloneRefOfWindowSpecification(n.WindowSpec)
+	return &out
+}
+
+// CloneWindowDefinitions creates a deep clone of the input.
+func CloneWindowDefinitions(n WindowDefinitions) WindowDefinitions {
+	if n == nil {
+		return nil
+	}
+	res := make(WindowDefinitions, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneRefOfWindowDefinition(x))
+	}
+	return res
+}
+
 // CloneRefOfWindowSpecification creates a deep clone of the input.
 func CloneRefOfWindowSpecification(n *WindowSpecification) *WindowSpecification {
 	if n == nil {
@@ -2647,6 +2701,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfMemberOfExpr(in)
 	case *NTHValueExpr:
 		return CloneRefOfNTHValueExpr(in)
+	case *NamedWindow:
+		return CloneRefOfNamedWindow(in)
 	case *NtileExpr:
 		return CloneRefOfNtileExpr(in)
 	case *SubstrExpr:
@@ -2881,6 +2937,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfMemberOfExpr(in)
 	case *NTHValueExpr:
 		return CloneRefOfNTHValueExpr(in)
+	case *NamedWindow:
+		return CloneRefOfNamedWindow(in)
 	case *NotExpr:
 		return CloneRefOfNotExpr(in)
 	case *NtileExpr:
@@ -3037,6 +3095,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfMemberOfExpr(in)
 	case *NTHValueExpr:
 		return CloneRefOfNTHValueExpr(in)
+	case *NamedWindow:
+		return CloneRefOfNamedWindow(in)
 	case *NotExpr:
 		return CloneRefOfNotExpr(in)
 	case *NtileExpr:

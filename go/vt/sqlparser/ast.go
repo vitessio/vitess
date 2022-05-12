@@ -238,6 +238,7 @@ type (
 		With        *With
 		GroupBy     GroupBy
 		Having      *Where
+		Windows     NamedWindows
 		OrderBy     OrderBy
 		Limit       *Limit
 		Lock        Lock
@@ -2000,6 +2001,19 @@ type WindowSpecification struct {
 	FrameClause     *FrameClause
 }
 
+type WindowDefinition struct {
+	Name       ColIdent
+	WindowSpec *WindowSpecification
+}
+
+type WindowDefinitions []*WindowDefinition
+
+type NamedWindow struct {
+	Windows WindowDefinitions
+}
+
+type NamedWindows []*NamedWindow
+
 // FrameClause represents frame_clause
 // More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html
 type FrameClause struct {
@@ -2648,6 +2662,7 @@ func (*FirstOrLastValueExpr) iExpr()               {}
 func (*NtileExpr) iExpr()                          {}
 func (*NTHValueExpr) iExpr()                       {}
 func (*LagLeadExpr) iExpr()                        {}
+func (*NamedWindow) iExpr()                        {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -2688,6 +2703,7 @@ func (*FirstOrLastValueExpr) iCallable()               {}
 func (*NtileExpr) iCallable()                          {}
 func (*NTHValueExpr) iCallable()                       {}
 func (*LagLeadExpr) iCallable()                        {}
+func (*NamedWindow) iCallable()                        {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

@@ -54,9 +54,16 @@ func (node *Select) Format(buf *TrackedBuffer) {
 		prefix = ", "
 	}
 
-	buf.astPrintf(node, "%v%v%v%v%v%s%v",
+	buf.astPrintf(node, "%v%v%v",
 		node.Where,
-		node.GroupBy, node.Having, node.OrderBy,
+		node.GroupBy, node.Having)
+
+	if node.Windows != nil {
+		buf.astPrintf(node, " %v", node.Windows)
+	}
+
+	buf.astPrintf(node, "%v%v%s%v",
+		node.OrderBy,
 		node.Limit, node.Lock.ToString(), node.Into)
 }
 
@@ -1481,6 +1488,34 @@ func (node *SubstrExpr) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "substr(%v, %v)", node.Name, node.From)
 	} else {
 		buf.astPrintf(node, "substr(%v, %v, %v)", node.Name, node.From, node.To)
+	}
+}
+
+// Format formats the node.
+func (node *NamedWindow) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "window %v", node.Windows)
+}
+
+// Format formats the node.
+func (node NamedWindows) Format(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// Format formats the node.
+func (node *WindowDefinition) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%v AS (%v)", node.Name, node.WindowSpec)
+}
+
+// Format formats the node.
+func (node WindowDefinitions) Format(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
 	}
 }
 

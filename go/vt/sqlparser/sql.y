@@ -136,6 +136,10 @@ func bindVariable(yylex yyLexer, bvar string) {
   fromFirstLastType FromFirstLastType
   fromFirstLastClause *FromFirstLastClause
   lagLeadExprType LagLeadExprType
+  windowDefinition *WindowDefinition
+  windowDefinitions WindowDefinitions
+  namedWindow *NamedWindow
+  namedWindows NamedWindows
 
   whens         []*When
   columnDefinitions []*ColumnDefinition
@@ -252,6 +256,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> OR '|'
 %left <str> XOR
 %left <str> AND
+%left <str> WINDOW_EXPR
 %right <str> NOT '!'
 %left <str> BETWEEN CASE WHEN THEN ELSE END
 %left <str> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
@@ -405,6 +410,10 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <fromFirstLastClause> from_first_last_clause from_first_last_clause_opt
 %type <firstOrLastValueExprType> first_or_last_value_expr_type
 %type <lagLeadExprType> lag_lead_expr_type
+%type <windowDefinition> window_definition
+%type <windowDefinitions> window_definition_list
+%type <namedWindow> named_window
+%type <namedWindows> named_windows_list named_windows_list_opt
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
 %type <partitionOption> partitions_options_opt partitions_options_beginning
@@ -738,7 +747,7 @@ query_expression:
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
-	$$ = NewSelect(Comments($2), SelectExprs{&Nextval{Expr: $5}}, []string{$3}/*options*/, nil, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/)
+	$$ = NewSelect(Comments($2), SelectExprs{&Nextval{Expr: $5}}, []string{$3}/*options*/, nil, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/, nil)
   }
 
 query_expression_body:
@@ -824,14 +833,14 @@ vstream_statement:
 
 // query_primary is an unparenthesized SELECT with no order by clause or beyond.
 query_primary:
-//  1         2            3              4                    5             6                7           8
-  SELECT comment_opt select_options select_expression_list into_clause from_opt where_expression_opt group_by_opt having_opt
+//  1         2            3              4                    5             6                7           8            9           10
+  SELECT comment_opt select_options select_expression_list into_clause from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
-    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, NewWhere(WhereClause, $7), GroupBy($8), NewWhere(HavingClause, $9))
+    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, NewWhere(WhereClause, $7), GroupBy($8), NewWhere(HavingClause, $9), $10)
   }
-| SELECT comment_opt select_options select_expression_list from_opt where_expression_opt group_by_opt having_opt
+| SELECT comment_opt select_options select_expression_list from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
-    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, NewWhere(WhereClause, $6), GroupBy($7), NewWhere(HavingClause, $8))
+    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, NewWhere(WhereClause, $6), GroupBy($7), NewWhere(HavingClause, $8), $9)
   }
 
 
@@ -4609,7 +4618,6 @@ expression:
     $$ = &MemberOfExpr{Value: $1, JSONArr:$5 }
   }
 
-
 bool_pri:
 bool_pri IS NULL %prec IS
   {
@@ -5017,6 +5025,21 @@ lag_lead_expr_type:
     $$ = LeadExprType
   }
 
+window_definition:
+  sql_id AS openb window_spec closeb
+  {
+    $$ = &WindowDefinition{Name:$1, WindowSpec:$4}
+  }
+
+window_definition_list:
+  window_definition
+  {
+    $$ = WindowDefinitions{$1}
+  }
+| window_definition_list ',' window_definition
+  {
+    $$ = append($1,$3)
+  }
 
 default_opt:
   /* empty */
@@ -5811,6 +5834,31 @@ having_opt:
 | HAVING expression
   {
     $$ = $2
+  }
+
+named_window:
+  WINDOW window_definition_list %prec WINDOW_EXPR
+  {
+    $$ = &NamedWindow{$2}
+  }
+
+named_windows_list:
+  named_window
+  {
+    $$ = NamedWindows{$1}
+  }
+| named_windows_list ',' named_window
+  {
+    $$ = append($1,$3)
+  }
+
+named_windows_list_opt:
+  {
+    $$ = nil
+  }
+| named_windows_list
+  {
+    $$ = $1
   }
 
 order_by_opt:

@@ -256,6 +256,10 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfModifyColumn(parent, node, replacer)
 	case *NTHValueExpr:
 		return a.rewriteRefOfNTHValueExpr(parent, node, replacer)
+	case *NamedWindow:
+		return a.rewriteRefOfNamedWindow(parent, node, replacer)
+	case NamedWindows:
+		return a.rewriteNamedWindows(parent, node, replacer)
 	case *Nextval:
 		return a.rewriteRefOfNextval(parent, node, replacer)
 	case *NotExpr:
@@ -418,6 +422,10 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfWhen(parent, node, replacer)
 	case *Where:
 		return a.rewriteRefOfWhere(parent, node, replacer)
+	case *WindowDefinition:
+		return a.rewriteRefOfWindowDefinition(parent, node, replacer)
+	case WindowDefinitions:
+		return a.rewriteWindowDefinitions(parent, node, replacer)
 	case *WindowSpecification:
 		return a.rewriteRefOfWindowSpecification(parent, node, replacer)
 	case *With:
@@ -4037,6 +4045,70 @@ func (a *application) rewriteRefOfNTHValueExpr(parent SQLNode, node *NTHValueExp
 	}
 	return true
 }
+func (a *application) rewriteRefOfNamedWindow(parent SQLNode, node *NamedWindow, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteWindowDefinitions(node, node.Windows, func(newNode, parent SQLNode) {
+		parent.(*NamedWindow).Windows = newNode.(WindowDefinitions)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteNamedWindows(parent SQLNode, node NamedWindows, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(NamedWindows)
+			a.cur.revisit = false
+			return a.rewriteNamedWindows(parent, node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	for x, el := range node {
+		if !a.rewriteRefOfNamedWindow(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(NamedWindows)[idx] = newNode.(*NamedWindow)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfNextval(parent SQLNode, node *Nextval, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5109,6 +5181,11 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 	}
 	if !a.rewriteRefOfWhere(node, node.Having, func(newNode, parent SQLNode) {
 		parent.(*Select).Having = newNode.(*Where)
+	}) {
+		return false
+	}
+	if !a.rewriteNamedWindows(node, node.Windows, func(newNode, parent SQLNode) {
+		parent.(*Select).Windows = newNode.(NamedWindows)
 	}) {
 		return false
 	}
@@ -6581,6 +6658,75 @@ func (a *application) rewriteRefOfWhere(parent SQLNode, node *Where, replacer re
 	}
 	return true
 }
+func (a *application) rewriteRefOfWindowDefinition(parent SQLNode, node *WindowDefinition, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*WindowDefinition).Name = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfWindowSpecification(node, node.WindowSpec, func(newNode, parent SQLNode) {
+		parent.(*WindowDefinition).WindowSpec = newNode.(*WindowSpecification)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteWindowDefinitions(parent SQLNode, node WindowDefinitions, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(WindowDefinitions)
+			a.cur.revisit = false
+			return a.rewriteWindowDefinitions(parent, node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	for x, el := range node {
+		if !a.rewriteRefOfWindowDefinition(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(WindowDefinitions)[idx] = newNode.(*WindowDefinition)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *WindowSpecification, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6798,6 +6944,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
 	case *NTHValueExpr:
 		return a.rewriteRefOfNTHValueExpr(parent, node, replacer)
+	case *NamedWindow:
+		return a.rewriteRefOfNamedWindow(parent, node, replacer)
 	case *NtileExpr:
 		return a.rewriteRefOfNtileExpr(parent, node, replacer)
 	case *SubstrExpr:
@@ -7018,6 +7166,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
 	case *NTHValueExpr:
 		return a.rewriteRefOfNTHValueExpr(parent, node, replacer)
+	case *NamedWindow:
+		return a.rewriteRefOfNamedWindow(parent, node, replacer)
 	case *NotExpr:
 		return a.rewriteRefOfNotExpr(parent, node, replacer)
 	case *NtileExpr:
@@ -7170,6 +7320,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
 	case *NTHValueExpr:
 		return a.rewriteRefOfNTHValueExpr(parent, node, replacer)
+	case *NamedWindow:
+		return a.rewriteRefOfNamedWindow(parent, node, replacer)
 	case *NotExpr:
 		return a.rewriteRefOfNotExpr(parent, node, replacer)
 	case *NtileExpr:
