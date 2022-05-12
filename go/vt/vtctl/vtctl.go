@@ -428,10 +428,11 @@ var commands = []commandGroup{
 				help:   "Outputs a sorted list of all keyspaces.",
 			},
 			{
-				name:   "SetKeyspaceShardingInfo",
-				method: commandSetKeyspaceShardingInfo,
-				params: "[-force] <keyspace name> [<column name>] [<column type>]",
-				help:   "Updates the sharding information for a keyspace.",
+				name:       "SetKeyspaceShardingInfo",
+				method:     commandSetKeyspaceShardingInfo,
+				params:     "[-force] <keyspace name> [<column name>] [<column type>]",
+				help:       "Updates the sharding information for a keyspace.",
+				deprecated: true,
 			},
 			{
 				name:       "SetKeyspaceServedFrom",
@@ -2107,6 +2108,7 @@ func commandGetKeyspaces(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 }
 
 func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead https://vitess.io/docs/reference/vreplication/ ***\n")
 	force := subFlags.Bool("force", false, "Updates fields even if they are already set. Use caution before calling this command.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
