@@ -24,8 +24,14 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -208,7 +214,7 @@ func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
 
 func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
-	allCellNames = "zone1,zone2"
+	allCellNames = strings.Join(cells, ",")
 
 	vc = NewVitessCluster(t, "TestMultiCellVreplicationWorkflow", cells, mainClusterConfig)
 	require.NotNil(t, vc)
@@ -224,13 +230,101 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	vtgate = cell1.Vtgates[0]
 	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 3)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 	shardCustomer(t, true, []*Cell{cell1, cell2}, cell2.Name, true)
+
+	// we tag along this test so as not to create the overhead of creating another cluster
+	testVStreamCellFlag(t)
+}
+
+func testVStreamCellFlag(t *testing.T) {
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: "product",
+			Shard:    "0",
+			Gtid:     "",
+		}}}
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "product",
+			Filter: "select * from product",
+		}},
+	}
+	ctx := context.Background()
+
+	type vstreamTestCase struct {
+		cells       string
+		expectError bool
+	}
+
+	vstreamTestCases := []vstreamTestCase{
+		{"zone1,zone2", false},
+		{"zone7", true},
+		{"", false},
+	}
+
+	for _, tc := range vstreamTestCases {
+		t.Run("VStreamCellFlag/"+tc.cells, func(t *testing.T) {
+			conn, err := vtgateconn.Dial(ctx, fmt.Sprintf("localhost:%d", vc.ClusterConfig.vtgateGrpcPort))
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer conn.Close()
+
+			flags := &vtgatepb.VStreamFlags{}
+			if tc.cells != "" {
+				flags.Cells = tc.cells
+			}
+
+			ctx2, cancel := context.WithTimeout(ctx, 30*time.Second)
+			reader, err := conn.VStream(ctx2, topodatapb.TabletType_REPLICA, vgtid, filter, flags)
+			require.NoError(t, err)
+
+			rowsReceived := false
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for {
+					e, err := reader.Recv()
+					switch err {
+					case nil:
+						if len(e) > 0 {
+							log.Infof("received %d rows", len(e))
+							rowsReceived = true
+							cancel()
+							return
+						}
+					case io.EOF:
+						log.Infof("stream ended")
+						cancel()
+						return
+					default:
+						log.Infof("%s:: remote error: %v", time.Now(), err)
+						cancel()
+						return
+					}
+				}
+			}()
+			wg.Wait()
+
+			if tc.expectError {
+				require.False(t, rowsReceived)
+
+				// if no tablet was found the tablet picker adds a key which includes the cell name to the vtgate TabletPickerNoTabletFoundErrorCount stat
+				pickerErrorStat, err := getDebugVar(t, vc.ClusterConfig.vtgatePort, []string{"TabletPickerNoTabletFoundErrorCount"})
+				require.NoError(t, err)
+				require.Contains(t, pickerErrorStat, "zone7")
+			} else {
+				require.True(t, rowsReceived)
+			}
+		})
+	}
 }
 
 // TestCellAliasVreplicationWorkflow tests replication from a cell with an alias to test the tablet picker's alias functionality
