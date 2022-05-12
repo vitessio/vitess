@@ -122,7 +122,7 @@ func (u *updateController) getItemFromQueueLocked() *discovery.TabletHealth {
 }
 
 func (u *updateController) add(th *discovery.TabletHealth) {
-	if th.Stats != nil {
+	if th.Stats != nil && len(th.Stats.TableSchemaChanged) > 0 {
 		log.Info("add: tablet alias: ", th.Tablet.Alias, " table schema changed: ", th.Stats.TableSchemaChanged)
 	}
 
@@ -150,6 +150,7 @@ func (u *updateController) add(th *discovery.TabletHealth) {
 	}
 
 	if len(th.Stats.TableSchemaChanged) > 0 && u.ignore {
+		log.Info("add: len(th.Stats.TableSchemaChanged) > 0 && u.ignore")
 		// we got an update for this keyspace - we need to stop ignoring it, and reload everything
 		u.ignore = false
 		u.loaded = false
