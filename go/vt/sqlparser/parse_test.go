@@ -2145,6 +2145,12 @@ var (
 		input:  "select 1 from t where foo = _utf8mb4'bar'",
 		output: "select 1 from t where foo = _utf8mb4 'bar'",
 	}, {
+		input:  "select 1 from t where foo = _utf8mb3 'bar'",
+		output: "select 1 from t where foo = _utf8 'bar'",
+	}, {
+		input:  "select 1 from t where foo = _utf8mb3'bar'",
+		output: "select 1 from t where foo = _utf8 'bar'",
+	}, {
 		input: "select match(a) against ('foo') from t",
 	}, {
 		input: "select match(a1, a2) against ('foo' in natural language mode with query expansion) from t",
@@ -3235,6 +3241,9 @@ func TestIntroducers(t *testing.T) {
 	}, {
 		input:  "select _utf8mb4 'x'",
 		output: "select _utf8mb4 'x' from dual",
+	}, {
+		input:  "select _utf8mb3 'x'",
+		output: "select _utf8 'x' from dual",
 	}}
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
