@@ -604,7 +604,8 @@ func passGroupingColumns(proj *projection, groupings []offsets, grouping []abstr
 	for idx, grp := range groupings {
 		origGrp := grouping[idx]
 		var offs offsets
-		offs.col, err = proj.addColumn(origGrp.InnerIndex, sqlparser.Offset(grp.col), "")
+		alias := origGrp.AsAliasedExpr().ColumnName()
+		offs.col, err = proj.addColumn(origGrp.InnerIndex, sqlparser.Offset(grp.col), alias)
 		if err != nil {
 			return nil, err
 		}

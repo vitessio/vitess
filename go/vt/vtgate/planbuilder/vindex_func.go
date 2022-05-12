@@ -161,15 +161,8 @@ func (vf *vindexFunc) SupplyProjection(expr *sqlparser.AliasedExpr, reuse bool) 
 		}
 	}
 
-	var name string
-	if expr.As.IsEmpty() {
-		name = sqlparser.String(colName)
-	} else {
-		name = expr.As.String()
-	}
-
 	vf.eVindexFunc.Fields = append(vf.eVindexFunc.Fields, &querypb.Field{
-		Name: name,
+		Name: expr.ColumnName(),
 		Type: querypb.Type_VARBINARY,
 	})
 	vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, enum)
