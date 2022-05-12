@@ -115,7 +115,7 @@ func Convert(dst []byte, dstCharset Charset, src []byte, srcCharset Charset) ([]
 		return trans.Convert(dst, src, srcCharset)
 	}
 	switch srcCharset.(type) {
-	case Charset_utf8, Charset_utf8mb4:
+	case Charset_utf8mb3, Charset_utf8mb4:
 		return convertFastFromUTF8(dst, dstCharset, src)
 	default:
 		return convertSlow(dst, dstCharset, src, srcCharset)

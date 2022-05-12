@@ -162,24 +162,27 @@ func makeEnv(version collver) *Environment {
 	}
 
 	for collid, vi := range globalVersionInfo {
-		var ourname string
-		for mask, name := range vi.alias {
-			if mask&version != 0 {
-				ourname = name
-				break
+		var ournames []string
+		for _, alias := range vi.alias {
+			if alias.mask&version != 0 {
+				ournames = append(ournames, alias.name)
 			}
 		}
-		if ourname == "" {
+		if len(ournames) == 0 {
 			continue
 		}
 
 		collation, ok := globalAllCollations[collid]
 		if !ok {
-			env.unsupported[ourname] = collid
+			for _, name := range ournames {
+				env.unsupported[name] = collid
+			}
 			continue
 		}
 
-		env.byName[ourname] = collation
+		for _, name := range ournames {
+			env.byName[name] = collation
+		}
 		env.byID[collid] = collation
 
 		csname := collation.Charset().Name()
@@ -200,6 +203,11 @@ func makeEnv(version collver) *Environment {
 			defaults.Binary = collation
 		}
 	}
+
+	for from, to := range version.charsetAliases() {
+		env.byCharset[from] = env.byCharset[to]
+	}
+
 	return env
 }
 
