@@ -21,6 +21,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtadmin";
 
 package vtadmin;
 
+import "logutil.proto";
 import "mysqlctl.proto";
 import "tabletmanagerdata.proto";
 import "topodata.proto";
@@ -198,6 +199,13 @@ message Schema {
         uint64 data_length = 2;
         map<string, ShardTableSize> by_shard = 3;
     }
+}
+
+// Shard groups the vtctldata information about a shard record together with
+// the Vitess cluster it belongs to.
+message Shard {
+    Cluster cluster = 1;
+    vtctldata.Shard shard = 2;
 }
 
 message SrvVSchema {
@@ -568,47 +576,26 @@ message ReloadSchemasRequest {
 }
 
 message ReloadSchemasResponse {
-    // TODO: three maps, keyspace=>event stream; shard=>event stream; tablet=>event
-}
+    // TODO: docs
+    message KeyspaceResult {
+        Keyspace keyspace = 1;
+        repeated logutil.Event events = 2;
+    }
+    repeated KeyspaceResult keyspace_results = 1;
 
-/*
-message ReloadSchemaRequest {
-  topodata.TabletAlias tablet_alias = 1;
-}
+    // TODO: docs
+    message ShardResult {
+        Shard shard = 1;
+        repeated logutil.Event events = 2;
+    }
+    repeated ShardResult shard_results = 2;
 
-message ReloadSchemaResponse {
-}
-
-message ReloadSchemaKeyspaceRequest {
-  string keyspace = 1;
-  string wait_position = 2;
-  bool include_primary = 3;
-  // Concurrency is the global concurrency across all shards in the keyspace
-  // (so, at most this many tablets will be reloaded across the keyspace at any
-  // given point).
-  uint32 concurrency = 4;
-}
-
-message ReloadSchemaKeyspaceResponse {
-  repeated logutil.Event events = 1;
-}
-
-message ReloadSchemaShardRequest {
-  string keyspace = 1;
-  string shard = 2;
-  string wait_position = 3;
-  bool include_primary = 4;
-  // Concurrency is the maximum number of tablets to reload at one time.
-  uint32 concurrency = 5;
-}
-
-message ReloadSchemaShardResponse {
-  repeated logutil.Event events = 2;
-}
-*/
-
-message ReloadSchemaRequest {
-
+    // TODO: docs
+    message TabletResult {
+        Tablet tablet = 1;
+        string result = 2;
+    }
+    repeated TabletResult tablet_results = 3;
 }
 
 message ReparentTabletRequest {

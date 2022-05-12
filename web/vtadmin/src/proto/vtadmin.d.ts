@@ -1829,6 +1829,102 @@ export namespace vtadmin {
         }
     }
 
+    /** Properties of a Shard. */
+    interface IShard {
+
+        /** Shard cluster */
+        cluster?: (vtadmin.ICluster|null);
+
+        /** Shard shard */
+        shard?: (vtctldata.IShard|null);
+    }
+
+    /** Represents a Shard. */
+    class Shard implements IShard {
+
+        /**
+         * Constructs a new Shard.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IShard);
+
+        /** Shard cluster. */
+        public cluster?: (vtadmin.ICluster|null);
+
+        /** Shard shard. */
+        public shard?: (vtctldata.IShard|null);
+
+        /**
+         * Creates a new Shard instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Shard instance
+         */
+        public static create(properties?: vtadmin.IShard): vtadmin.Shard;
+
+        /**
+         * Encodes the specified Shard message. Does not implicitly {@link vtadmin.Shard.verify|verify} messages.
+         * @param message Shard message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IShard, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Shard message, length delimited. Does not implicitly {@link vtadmin.Shard.verify|verify} messages.
+         * @param message Shard message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IShard, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Shard message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Shard
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.Shard;
+
+        /**
+         * Decodes a Shard message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Shard
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.Shard;
+
+        /**
+         * Verifies a Shard message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Shard message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Shard
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.Shard;
+
+        /**
+         * Creates a plain object from a Shard message. Also converts values to other types if specified.
+         * @param message Shard
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.Shard, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Shard to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a SrvVSchema. */
     interface ISrvVSchema {
 
@@ -6845,6 +6941,15 @@ export namespace vtadmin {
 
     /** Properties of a ReloadSchemasResponse. */
     interface IReloadSchemasResponse {
+
+        /** ReloadSchemasResponse keyspace_results */
+        keyspace_results?: (vtadmin.ReloadSchemasResponse.IKeyspaceResult[]|null);
+
+        /** ReloadSchemasResponse shard_results */
+        shard_results?: (vtadmin.ReloadSchemasResponse.IShardResult[]|null);
+
+        /** ReloadSchemasResponse tablet_results */
+        tablet_results?: (vtadmin.ReloadSchemasResponse.ITabletResult[]|null);
     }
 
     /** Represents a ReloadSchemasResponse. */
@@ -6855,6 +6960,15 @@ export namespace vtadmin {
          * @param [properties] Properties to set
          */
         constructor(properties?: vtadmin.IReloadSchemasResponse);
+
+        /** ReloadSchemasResponse keyspace_results. */
+        public keyspace_results: vtadmin.ReloadSchemasResponse.IKeyspaceResult[];
+
+        /** ReloadSchemasResponse shard_results. */
+        public shard_results: vtadmin.ReloadSchemasResponse.IShardResult[];
+
+        /** ReloadSchemasResponse tablet_results. */
+        public tablet_results: vtadmin.ReloadSchemasResponse.ITabletResult[];
 
         /**
          * Creates a new ReloadSchemasResponse instance using the specified properties.
@@ -6927,88 +7041,295 @@ export namespace vtadmin {
         public toJSON(): { [k: string]: any };
     }
 
-    /** Properties of a ReloadSchemaRequest. */
-    interface IReloadSchemaRequest {
-    }
+    namespace ReloadSchemasResponse {
 
-    /** Represents a ReloadSchemaRequest. */
-    class ReloadSchemaRequest implements IReloadSchemaRequest {
+        /** Properties of a KeyspaceResult. */
+        interface IKeyspaceResult {
 
-        /**
-         * Constructs a new ReloadSchemaRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtadmin.IReloadSchemaRequest);
+            /** KeyspaceResult keyspace */
+            keyspace?: (vtadmin.IKeyspace|null);
 
-        /**
-         * Creates a new ReloadSchemaRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ReloadSchemaRequest instance
-         */
-        public static create(properties?: vtadmin.IReloadSchemaRequest): vtadmin.ReloadSchemaRequest;
+            /** KeyspaceResult events */
+            events?: (logutil.IEvent[]|null);
+        }
 
-        /**
-         * Encodes the specified ReloadSchemaRequest message. Does not implicitly {@link vtadmin.ReloadSchemaRequest.verify|verify} messages.
-         * @param message ReloadSchemaRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtadmin.IReloadSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        /** Represents a KeyspaceResult. */
+        class KeyspaceResult implements IKeyspaceResult {
 
-        /**
-         * Encodes the specified ReloadSchemaRequest message, length delimited. Does not implicitly {@link vtadmin.ReloadSchemaRequest.verify|verify} messages.
-         * @param message ReloadSchemaRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtadmin.IReloadSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+            /**
+             * Constructs a new KeyspaceResult.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: vtadmin.ReloadSchemasResponse.IKeyspaceResult);
 
-        /**
-         * Decodes a ReloadSchemaRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ReloadSchemaRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.ReloadSchemaRequest;
+            /** KeyspaceResult keyspace. */
+            public keyspace?: (vtadmin.IKeyspace|null);
 
-        /**
-         * Decodes a ReloadSchemaRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ReloadSchemaRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.ReloadSchemaRequest;
+            /** KeyspaceResult events. */
+            public events: logutil.IEvent[];
 
-        /**
-         * Verifies a ReloadSchemaRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
+            /**
+             * Creates a new KeyspaceResult instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns KeyspaceResult instance
+             */
+            public static create(properties?: vtadmin.ReloadSchemasResponse.IKeyspaceResult): vtadmin.ReloadSchemasResponse.KeyspaceResult;
 
-        /**
-         * Creates a ReloadSchemaRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ReloadSchemaRequest
-         */
-        public static fromObject(object: { [k: string]: any }): vtadmin.ReloadSchemaRequest;
+            /**
+             * Encodes the specified KeyspaceResult message. Does not implicitly {@link vtadmin.ReloadSchemasResponse.KeyspaceResult.verify|verify} messages.
+             * @param message KeyspaceResult message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: vtadmin.ReloadSchemasResponse.IKeyspaceResult, writer?: $protobuf.Writer): $protobuf.Writer;
 
-        /**
-         * Creates a plain object from a ReloadSchemaRequest message. Also converts values to other types if specified.
-         * @param message ReloadSchemaRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtadmin.ReloadSchemaRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            /**
+             * Encodes the specified KeyspaceResult message, length delimited. Does not implicitly {@link vtadmin.ReloadSchemasResponse.KeyspaceResult.verify|verify} messages.
+             * @param message KeyspaceResult message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: vtadmin.ReloadSchemasResponse.IKeyspaceResult, writer?: $protobuf.Writer): $protobuf.Writer;
 
-        /**
-         * Converts this ReloadSchemaRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
+            /**
+             * Decodes a KeyspaceResult message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns KeyspaceResult
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.ReloadSchemasResponse.KeyspaceResult;
+
+            /**
+             * Decodes a KeyspaceResult message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns KeyspaceResult
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.ReloadSchemasResponse.KeyspaceResult;
+
+            /**
+             * Verifies a KeyspaceResult message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a KeyspaceResult message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns KeyspaceResult
+             */
+            public static fromObject(object: { [k: string]: any }): vtadmin.ReloadSchemasResponse.KeyspaceResult;
+
+            /**
+             * Creates a plain object from a KeyspaceResult message. Also converts values to other types if specified.
+             * @param message KeyspaceResult
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: vtadmin.ReloadSchemasResponse.KeyspaceResult, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this KeyspaceResult to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+        }
+
+        /** Properties of a ShardResult. */
+        interface IShardResult {
+
+            /** ShardResult shard */
+            shard?: (vtadmin.IShard|null);
+
+            /** ShardResult events */
+            events?: (logutil.IEvent[]|null);
+        }
+
+        /** Represents a ShardResult. */
+        class ShardResult implements IShardResult {
+
+            /**
+             * Constructs a new ShardResult.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: vtadmin.ReloadSchemasResponse.IShardResult);
+
+            /** ShardResult shard. */
+            public shard?: (vtadmin.IShard|null);
+
+            /** ShardResult events. */
+            public events: logutil.IEvent[];
+
+            /**
+             * Creates a new ShardResult instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns ShardResult instance
+             */
+            public static create(properties?: vtadmin.ReloadSchemasResponse.IShardResult): vtadmin.ReloadSchemasResponse.ShardResult;
+
+            /**
+             * Encodes the specified ShardResult message. Does not implicitly {@link vtadmin.ReloadSchemasResponse.ShardResult.verify|verify} messages.
+             * @param message ShardResult message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: vtadmin.ReloadSchemasResponse.IShardResult, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified ShardResult message, length delimited. Does not implicitly {@link vtadmin.ReloadSchemasResponse.ShardResult.verify|verify} messages.
+             * @param message ShardResult message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: vtadmin.ReloadSchemasResponse.IShardResult, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a ShardResult message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns ShardResult
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.ReloadSchemasResponse.ShardResult;
+
+            /**
+             * Decodes a ShardResult message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns ShardResult
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.ReloadSchemasResponse.ShardResult;
+
+            /**
+             * Verifies a ShardResult message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a ShardResult message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns ShardResult
+             */
+            public static fromObject(object: { [k: string]: any }): vtadmin.ReloadSchemasResponse.ShardResult;
+
+            /**
+             * Creates a plain object from a ShardResult message. Also converts values to other types if specified.
+             * @param message ShardResult
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: vtadmin.ReloadSchemasResponse.ShardResult, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this ShardResult to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+        }
+
+        /** Properties of a TabletResult. */
+        interface ITabletResult {
+
+            /** TabletResult tablet */
+            tablet?: (vtadmin.ITablet|null);
+
+            /** TabletResult result */
+            result?: (string|null);
+        }
+
+        /** Represents a TabletResult. */
+        class TabletResult implements ITabletResult {
+
+            /**
+             * Constructs a new TabletResult.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: vtadmin.ReloadSchemasResponse.ITabletResult);
+
+            /** TabletResult tablet. */
+            public tablet?: (vtadmin.ITablet|null);
+
+            /** TabletResult result. */
+            public result: string;
+
+            /**
+             * Creates a new TabletResult instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns TabletResult instance
+             */
+            public static create(properties?: vtadmin.ReloadSchemasResponse.ITabletResult): vtadmin.ReloadSchemasResponse.TabletResult;
+
+            /**
+             * Encodes the specified TabletResult message. Does not implicitly {@link vtadmin.ReloadSchemasResponse.TabletResult.verify|verify} messages.
+             * @param message TabletResult message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: vtadmin.ReloadSchemasResponse.ITabletResult, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified TabletResult message, length delimited. Does not implicitly {@link vtadmin.ReloadSchemasResponse.TabletResult.verify|verify} messages.
+             * @param message TabletResult message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: vtadmin.ReloadSchemasResponse.ITabletResult, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a TabletResult message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns TabletResult
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.ReloadSchemasResponse.TabletResult;
+
+            /**
+             * Decodes a TabletResult message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns TabletResult
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.ReloadSchemasResponse.TabletResult;
+
+            /**
+             * Verifies a TabletResult message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a TabletResult message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns TabletResult
+             */
+            public static fromObject(object: { [k: string]: any }): vtadmin.ReloadSchemasResponse.TabletResult;
+
+            /**
+             * Creates a plain object from a TabletResult message. Also converts values to other types if specified.
+             * @param message TabletResult
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: vtadmin.ReloadSchemasResponse.TabletResult, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this TabletResult to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+        }
     }
 
     /** Properties of a ReparentTabletRequest. */
@@ -8608,6 +8929,328 @@ export namespace vtadmin {
 
         /**
          * Converts this VTExplainResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+}
+
+/** Namespace logutil. */
+export namespace logutil {
+
+    /** Level enum. */
+    enum Level {
+        INFO = 0,
+        WARNING = 1,
+        ERROR = 2,
+        CONSOLE = 3
+    }
+
+    /** Properties of an Event. */
+    interface IEvent {
+
+        /** Event time */
+        time?: (vttime.ITime|null);
+
+        /** Event level */
+        level?: (logutil.Level|null);
+
+        /** Event file */
+        file?: (string|null);
+
+        /** Event line */
+        line?: (number|Long|null);
+
+        /** Event value */
+        value?: (string|null);
+    }
+
+    /** Represents an Event. */
+    class Event implements IEvent {
+
+        /**
+         * Constructs a new Event.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: logutil.IEvent);
+
+        /** Event time. */
+        public time?: (vttime.ITime|null);
+
+        /** Event level. */
+        public level: logutil.Level;
+
+        /** Event file. */
+        public file: string;
+
+        /** Event line. */
+        public line: (number|Long);
+
+        /** Event value. */
+        public value: string;
+
+        /**
+         * Creates a new Event instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Event instance
+         */
+        public static create(properties?: logutil.IEvent): logutil.Event;
+
+        /**
+         * Encodes the specified Event message. Does not implicitly {@link logutil.Event.verify|verify} messages.
+         * @param message Event message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: logutil.IEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Event message, length delimited. Does not implicitly {@link logutil.Event.verify|verify} messages.
+         * @param message Event message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: logutil.IEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an Event message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Event
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): logutil.Event;
+
+        /**
+         * Decodes an Event message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Event
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): logutil.Event;
+
+        /**
+         * Verifies an Event message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an Event message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Event
+         */
+        public static fromObject(object: { [k: string]: any }): logutil.Event;
+
+        /**
+         * Creates a plain object from an Event message. Also converts values to other types if specified.
+         * @param message Event
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: logutil.Event, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Event to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+}
+
+/** Namespace vttime. */
+export namespace vttime {
+
+    /** Properties of a Time. */
+    interface ITime {
+
+        /** Time seconds */
+        seconds?: (number|Long|null);
+
+        /** Time nanoseconds */
+        nanoseconds?: (number|null);
+    }
+
+    /** Represents a Time. */
+    class Time implements ITime {
+
+        /**
+         * Constructs a new Time.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vttime.ITime);
+
+        /** Time seconds. */
+        public seconds: (number|Long);
+
+        /** Time nanoseconds. */
+        public nanoseconds: number;
+
+        /**
+         * Creates a new Time instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Time instance
+         */
+        public static create(properties?: vttime.ITime): vttime.Time;
+
+        /**
+         * Encodes the specified Time message. Does not implicitly {@link vttime.Time.verify|verify} messages.
+         * @param message Time message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vttime.ITime, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Time message, length delimited. Does not implicitly {@link vttime.Time.verify|verify} messages.
+         * @param message Time message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vttime.ITime, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Time message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Time
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vttime.Time;
+
+        /**
+         * Decodes a Time message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Time
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vttime.Time;
+
+        /**
+         * Verifies a Time message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Time message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Time
+         */
+        public static fromObject(object: { [k: string]: any }): vttime.Time;
+
+        /**
+         * Creates a plain object from a Time message. Also converts values to other types if specified.
+         * @param message Time
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vttime.Time, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Time to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a Duration. */
+    interface IDuration {
+
+        /** Duration seconds */
+        seconds?: (number|Long|null);
+
+        /** Duration nanos */
+        nanos?: (number|null);
+    }
+
+    /** Represents a Duration. */
+    class Duration implements IDuration {
+
+        /**
+         * Constructs a new Duration.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vttime.IDuration);
+
+        /** Duration seconds. */
+        public seconds: (number|Long);
+
+        /** Duration nanos. */
+        public nanos: number;
+
+        /**
+         * Creates a new Duration instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Duration instance
+         */
+        public static create(properties?: vttime.IDuration): vttime.Duration;
+
+        /**
+         * Encodes the specified Duration message. Does not implicitly {@link vttime.Duration.verify|verify} messages.
+         * @param message Duration message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vttime.IDuration, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Duration message, length delimited. Does not implicitly {@link vttime.Duration.verify|verify} messages.
+         * @param message Duration message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vttime.IDuration, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Duration message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Duration
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vttime.Duration;
+
+        /**
+         * Decodes a Duration message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Duration
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vttime.Duration;
+
+        /**
+         * Verifies a Duration message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Duration message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Duration
+         */
+        public static fromObject(object: { [k: string]: any }): vttime.Duration;
+
+        /**
+         * Creates a plain object from a Duration message. Also converts values to other types if specified.
+         * @param message Duration
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vttime.Duration, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Duration to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -11963,202 +12606,6 @@ export namespace topodata {
 
         /**
          * Converts this ExternalClusters to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-}
-
-/** Namespace vttime. */
-export namespace vttime {
-
-    /** Properties of a Time. */
-    interface ITime {
-
-        /** Time seconds */
-        seconds?: (number|Long|null);
-
-        /** Time nanoseconds */
-        nanoseconds?: (number|null);
-    }
-
-    /** Represents a Time. */
-    class Time implements ITime {
-
-        /**
-         * Constructs a new Time.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vttime.ITime);
-
-        /** Time seconds. */
-        public seconds: (number|Long);
-
-        /** Time nanoseconds. */
-        public nanoseconds: number;
-
-        /**
-         * Creates a new Time instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns Time instance
-         */
-        public static create(properties?: vttime.ITime): vttime.Time;
-
-        /**
-         * Encodes the specified Time message. Does not implicitly {@link vttime.Time.verify|verify} messages.
-         * @param message Time message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vttime.ITime, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified Time message, length delimited. Does not implicitly {@link vttime.Time.verify|verify} messages.
-         * @param message Time message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vttime.ITime, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a Time message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns Time
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vttime.Time;
-
-        /**
-         * Decodes a Time message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns Time
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vttime.Time;
-
-        /**
-         * Verifies a Time message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a Time message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns Time
-         */
-        public static fromObject(object: { [k: string]: any }): vttime.Time;
-
-        /**
-         * Creates a plain object from a Time message. Also converts values to other types if specified.
-         * @param message Time
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vttime.Time, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this Time to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a Duration. */
-    interface IDuration {
-
-        /** Duration seconds */
-        seconds?: (number|Long|null);
-
-        /** Duration nanos */
-        nanos?: (number|null);
-    }
-
-    /** Represents a Duration. */
-    class Duration implements IDuration {
-
-        /**
-         * Constructs a new Duration.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vttime.IDuration);
-
-        /** Duration seconds. */
-        public seconds: (number|Long);
-
-        /** Duration nanos. */
-        public nanos: number;
-
-        /**
-         * Creates a new Duration instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns Duration instance
-         */
-        public static create(properties?: vttime.IDuration): vttime.Duration;
-
-        /**
-         * Encodes the specified Duration message. Does not implicitly {@link vttime.Duration.verify|verify} messages.
-         * @param message Duration message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vttime.IDuration, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified Duration message, length delimited. Does not implicitly {@link vttime.Duration.verify|verify} messages.
-         * @param message Duration message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vttime.IDuration, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a Duration message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns Duration
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vttime.Duration;
-
-        /**
-         * Decodes a Duration message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns Duration
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vttime.Duration;
-
-        /**
-         * Verifies a Duration message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a Duration message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns Duration
-         */
-        public static fromObject(object: { [k: string]: any }): vttime.Duration;
-
-        /**
-         * Creates a plain object from a Duration message. Also converts values to other types if specified.
-         * @param message Duration
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vttime.Duration, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this Duration to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -28160,132 +28607,6 @@ export namespace replicationdata {
 
         /**
          * Converts this PrimaryStatus to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-}
-
-/** Namespace logutil. */
-export namespace logutil {
-
-    /** Level enum. */
-    enum Level {
-        INFO = 0,
-        WARNING = 1,
-        ERROR = 2,
-        CONSOLE = 3
-    }
-
-    /** Properties of an Event. */
-    interface IEvent {
-
-        /** Event time */
-        time?: (vttime.ITime|null);
-
-        /** Event level */
-        level?: (logutil.Level|null);
-
-        /** Event file */
-        file?: (string|null);
-
-        /** Event line */
-        line?: (number|Long|null);
-
-        /** Event value */
-        value?: (string|null);
-    }
-
-    /** Represents an Event. */
-    class Event implements IEvent {
-
-        /**
-         * Constructs a new Event.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: logutil.IEvent);
-
-        /** Event time. */
-        public time?: (vttime.ITime|null);
-
-        /** Event level. */
-        public level: logutil.Level;
-
-        /** Event file. */
-        public file: string;
-
-        /** Event line. */
-        public line: (number|Long);
-
-        /** Event value. */
-        public value: string;
-
-        /**
-         * Creates a new Event instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns Event instance
-         */
-        public static create(properties?: logutil.IEvent): logutil.Event;
-
-        /**
-         * Encodes the specified Event message. Does not implicitly {@link logutil.Event.verify|verify} messages.
-         * @param message Event message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: logutil.IEvent, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified Event message, length delimited. Does not implicitly {@link logutil.Event.verify|verify} messages.
-         * @param message Event message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: logutil.IEvent, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes an Event message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns Event
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): logutil.Event;
-
-        /**
-         * Decodes an Event message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns Event
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): logutil.Event;
-
-        /**
-         * Verifies an Event message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates an Event message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns Event
-         */
-        public static fromObject(object: { [k: string]: any }): logutil.Event;
-
-        /**
-         * Creates a plain object from an Event message. Also converts values to other types if specified.
-         * @param message Event
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: logutil.Event, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this Event to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
