@@ -1992,79 +1992,83 @@ type TrimFuncType int8
 // TrimType is an enum to get types of Trim
 type TrimType int8
 
-// WindowSpecification represents window_spec
-// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html
-type WindowSpecification struct {
-	Name            string
-	PartitionClause Exprs
-	OrderClause     OrderBy
-	FrameClause     *FrameClause
-}
+// Types for window functions
+type (
 
-type WindowDefinition struct {
-	Name       ColIdent
-	WindowSpec *WindowSpecification
-}
+	// WindowSpecification represents window_spec
+	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html
+	WindowSpecification struct {
+		Name            string
+		PartitionClause Exprs
+		OrderClause     OrderBy
+		FrameClause     *FrameClause
+	}
 
-type WindowDefinitions []*WindowDefinition
+	WindowDefinition struct {
+		Name       ColIdent
+		WindowSpec *WindowSpecification
+	}
 
-type NamedWindow struct {
-	Windows WindowDefinitions
-}
+	WindowDefinitions []*WindowDefinition
 
-type NamedWindows []*NamedWindow
+	NamedWindow struct {
+		Windows WindowDefinitions
+	}
 
-// FrameClause represents frame_clause
-// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html
-type FrameClause struct {
-	Unit      FrameUnitType
-	IsBetween bool
-	Start     *FramePoint
-	End       *FramePoint
-}
+	NamedWindows []*NamedWindow
 
-// FramePoint refers to frame_start/frame_end
-// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html
-type FramePoint struct {
-	Type FramePointType
-	Expr Expr
-}
+	// FrameClause represents frame_clause
+	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html
+	FrameClause struct {
+		Unit      FrameUnitType
+		IsBetween bool
+		Start     *FramePoint
+		End       *FramePoint
+	}
 
-// OverClause refers to over_clause
-// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html
-type OverClause struct {
-	WindowName string
-	WindowSpec *WindowSpecification
-}
+	// FramePoint refers to frame_start/frame_end
+	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html
+	FramePoint struct {
+		Type FramePointType
+		Expr Expr
+	}
 
-// FrameUnitType is an enum to get types of Unit used in FrameClause.
-type FrameUnitType int8
+	// OverClause refers to over_clause
+	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html
+	OverClause struct {
+		WindowName string
+		WindowSpec *WindowSpecification
+	}
 
-// FrameUnitType is an enum to get types of FramePoint.
-type FramePointType int8
+	// FrameUnitType is an enum to get types of Unit used in FrameClause.
+	FrameUnitType int8
 
-// NullTreatmentClause refers to null_treatment
-// According to SQL Docs:  Some window functions permit a null_treatment clause that specifies how to handle NULL values when calculating results.
-// This clause is optional. It is part of the SQL standard, but the MySQL implementation permits only RESPECT NULLS (which is also the default).
-// This means that NULL values are considered when calculating results. IGNORE NULLS is parsed, but produces an error.
-type NullTreatmentClause struct {
-	Type NullTreatmentType
-}
+	// FrameUnitType is an enum to get types of FramePoint.
+	FramePointType int8
 
-// NullTreatmentType is an enum to get types for NullTreatmentClause
-type NullTreatmentType int8
+	// NullTreatmentClause refers to null_treatment
+	// According to SQL Docs:  Some window functions permit a null_treatment clause that specifies how to handle NULL values when calculating results.
+	// This clause is optional. It is part of the SQL standard, but the MySQL implementation permits only RESPECT NULLS (which is also the default).
+	// This means that NULL values are considered when calculating results. IGNORE NULLS is parsed, but produces an error.
+	NullTreatmentClause struct {
+		Type NullTreatmentType
+	}
 
-// FromFirstLastClause refers to from_first_last
-// According to SQL Docs:  from_first_last is part of the SQL standard, but the MySQL implementation permits only FROM FIRST (which is also the default).
-// This means that calculations begin at the first row of the window.
-// FROM LAST is parsed, but produces an error.
-// To obtain the same effect as FROM LAST (begin calculations at the last row of the window), use ORDER BY to sort in reverse order.
-type FromFirstLastClause struct {
-	Type FromFirstLastType
-}
+	// NullTreatmentType is an enum to get types for NullTreatmentClause
+	NullTreatmentType int8
 
-// FromFirstLastType is an enum to get types for FromFirstLastClause
-type FromFirstLastType int8
+	// FromFirstLastClause refers to from_first_last
+	// According to SQL Docs:  from_first_last is part of the SQL standard, but the MySQL implementation permits only FROM FIRST (which is also the default).
+	// This means that calculations begin at the first row of the window.
+	// FROM LAST is parsed, but produces an error.
+	// To obtain the same effect as FROM LAST (begin calculations at the last row of the window), use ORDER BY to sort in reverse order.
+	FromFirstLastClause struct {
+		Type FromFirstLastType
+	}
+
+	// FromFirstLastType is an enum to get types for FromFirstLastClause
+	FromFirstLastType int8
+)
 
 // *********** Expressions
 type (
