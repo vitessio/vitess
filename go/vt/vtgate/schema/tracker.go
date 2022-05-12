@@ -229,6 +229,7 @@ func (t *Tracker) AddNewKeyspace(conn queryservice.QueryService, target *querypb
 	t.tracked[target.Keyspace] = updateController
 	err := t.LoadKeyspace(conn, target)
 	if err != nil {
+		log.Info("possibly ignoring keyspace, err: ", err)
 		updateController.setIgnore(checkIfWeShouldIgnoreKeyspace(err))
 	}
 	return err

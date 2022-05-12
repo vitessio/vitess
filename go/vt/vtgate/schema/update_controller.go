@@ -72,6 +72,7 @@ func (u *updateController) consume() {
 				success = true
 			} else {
 				if checkIfWeShouldIgnoreKeyspace(err) {
+					log.Info("ignoring keyspace")
 					u.setIgnore(true)
 				}
 				success = false
@@ -89,6 +90,7 @@ func checkIfWeShouldIgnoreKeyspace(err error) bool {
 	sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
 	if sqlErr.Num == mysql.ERBadDb || sqlErr.Num == mysql.ERNoSuchTable {
 		// if we are missing the db or table, not point in retrying
+		log.Info("ignoring keyspace: err: ", err)
 		return true
 	}
 	return false
@@ -126,6 +128,7 @@ func (u *updateController) add(th *discovery.TabletHealth) {
 
 	// For non-primary tablet health, there is no schema tracking.
 	if th.Tablet.Type != topodatapb.TabletType_PRIMARY {
+		log.Info("add: exit th.Tablet.Type != topodatapb.TabletType_PRIMARY")
 		return
 	}
 
@@ -135,12 +138,14 @@ func (u *updateController) add(th *discovery.TabletHealth) {
 	// Received a health check from primary tablet that is not reachable from VTGate.
 	// The connection will get reset and the tracker needs to reload the schema for the keyspace.
 	if !th.Serving {
+		log.Info("add: exit !th.Serving")
 		u.loaded = false
 		return
 	}
 
 	// If the keyspace schema is loaded and there is no schema change detected. Then there is nothing to process.
 	if len(th.Stats.TableSchemaChanged) == 0 && u.loaded {
+		log.Info("add: exit len(th.Stats.TableSchemaChanged) == 0 && u.loaded")
 		return
 	}
 
@@ -151,6 +156,7 @@ func (u *updateController) add(th *discovery.TabletHealth) {
 	}
 
 	if u.ignore {
+		log.Info("add: exit u.ignore")
 		// keyspace marked as not working correctly, so we are ignoring it for now
 		return
 	}
