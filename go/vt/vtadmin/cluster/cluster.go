@@ -421,6 +421,56 @@ func (c *Cluster) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 	return resp.Shards, nil
 }
 
+// FindTablet returns the first tablet in a given cluster that satisfies the filter function.
+func (c *Cluster) FindTablet(ctx context.Context, filter func(*vtadminpb.Tablet) bool) (*vtadminpb.Tablet, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.FindTablet")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	tablets, err := c.findTablets(ctx, filter, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(tablets) != 1 {
+		return nil, errors.ErrNoTablet
+	}
+
+	return tablets[0], nil
+}
+
+// FindTablets returns the first N tablets in the given cluster that satisfy
+// the filter function. If N = -1, then all matching tablets are returned.
+// Ordering is not guaranteed, and callers should write their filter functions accordingly.
+func (c *Cluster) FindTablets(ctx context.Context, filter func(*vtadminpb.Tablet) bool, n int) ([]*vtadminpb.Tablet, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.FindTablets")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	return c.findTablets(ctx, filter, n)
+}
+
+func (c *Cluster) findTablets(ctx context.Context, filter func(*vtadminpb.Tablet) bool, n int) ([]*vtadminpb.Tablet, error) {
+	span, _ := trace.FromContext(ctx)
+
+	tablets, err := c.GetTablets(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if n == -1 {
+		n = len(tablets)
+	}
+
+	if span != nil {
+		span.Annotate("max_result_length", n) // this is a bad name; I didn't want just "n", but it's more like, "requested result length".
+	}
+
+	return vtadminproto.FilterTablets(filter, tablets, n), nil
+}
+
 // FindWorkflowsOptions is the set of options for FindWorkflows requests.
 type FindWorkflowsOptions struct {
 	ActiveOnly      bool
@@ -1659,56 +1709,6 @@ func (c *Cluster) GetWorkflows(ctx context.Context, keyspaces []string, opts Get
 		IgnoreKeyspaces: opts.IgnoreKeyspaces,
 		Filter:          func(_ *vtadminpb.Workflow) bool { return true },
 	})
-}
-
-// FindTablet returns the first tablet in a given cluster that satisfies the filter function.
-func (c *Cluster) FindTablet(ctx context.Context, filter func(*vtadminpb.Tablet) bool) (*vtadminpb.Tablet, error) {
-	span, ctx := trace.NewSpan(ctx, "Cluster.FindTablet")
-	defer span.Finish()
-
-	AnnotateSpan(c, span)
-
-	tablets, err := c.findTablets(ctx, filter, 1)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(tablets) != 1 {
-		return nil, errors.ErrNoTablet
-	}
-
-	return tablets[0], nil
-}
-
-// FindTablets returns the first N tablets in the given cluster that satisfy
-// the filter function. If N = -1, then all matching tablets are returned.
-// Ordering is not guaranteed, and callers should write their filter functions accordingly.
-func (c *Cluster) FindTablets(ctx context.Context, filter func(*vtadminpb.Tablet) bool, n int) ([]*vtadminpb.Tablet, error) {
-	span, ctx := trace.NewSpan(ctx, "Cluster.FindTablets")
-	defer span.Finish()
-
-	AnnotateSpan(c, span)
-
-	return c.findTablets(ctx, filter, n)
-}
-
-func (c *Cluster) findTablets(ctx context.Context, filter func(*vtadminpb.Tablet) bool, n int) ([]*vtadminpb.Tablet, error) {
-	span, _ := trace.FromContext(ctx)
-
-	tablets, err := c.GetTablets(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if n == -1 {
-		n = len(tablets)
-	}
-
-	if span != nil {
-		span.Annotate("max_result_length", n) // this is a bad name; I didn't want just "n", but it's more like, "requested result length".
-	}
-
-	return vtadminproto.FilterTablets(filter, tablets, n), nil
 }
 
 // Debug returns a map of debug information for a cluster.
