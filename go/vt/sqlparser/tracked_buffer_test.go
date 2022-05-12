@@ -106,7 +106,7 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"create table a (id int not null primary key) engine InnoDB, charset utf8mb4, collate utf8mb4_0900_ai_ci partition by range (`id`) (partition `p10` values less than(10) engine InnoDB)",
-			"CREATE TABLE `a` (\n\t`id` int NOT NULL PRIMARY KEY\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci PARTITION BY RANGE (`id`) (PARTITION `p10` VALUES LESS THAN (10) ENGINE InnoDB)",
+			"CREATE TABLE `a` (\n\t`id` int NOT NULL PRIMARY KEY\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci\nPARTITION BY RANGE (`id`)\n(PARTITION `p10` VALUES LESS THAN (10) ENGINE InnoDB)",
 		},
 		{
 			"alter table a comment='a b c'",
@@ -142,11 +142,11 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"alter table t1 partition by hash (id) partitions 5",
-			"ALTER TABLE `t1` PARTITION BY HASH (`id`) PARTITIONS 5",
+			"ALTER TABLE `t1` \nPARTITION BY HASH (`id`) PARTITIONS 5",
 		},
 		{
 			"alter table t1 partition by list (id) (partition p1 values in (11, 21), partition p2 values in (12, 22))",
-			"ALTER TABLE `t1` PARTITION BY LIST (`id`) (PARTITION `p1` VALUES IN (11, 21), PARTITION `p2` VALUES IN (12, 22))",
+			"ALTER TABLE `t1` \nPARTITION BY LIST (`id`)\n(PARTITION `p1` VALUES IN (11, 21),\n PARTITION `p2` VALUES IN (12, 22))",
 		},
 		{
 			"alter table t1 row_format=compressed, character set=utf8",
