@@ -143,6 +143,12 @@ func TestExpandStar(t *testing.T) {
 	}, {
 		sql:    "select * from t1 join t5 using (b)",
 		expSQL: "select t1.b as b, t1.a as a, t1.c as c, t5.a as a from t1 join t5 where t1.b = t5.b",
+	}, {
+		sql:    "select * from t1 join t5 using (b) having b = 12",
+		expSQL: "select t1.b as b, t1.a as a, t1.c as c, t5.a as a from t1 join t5 where t1.b = t5.b having b = 12",
+	}, {
+		sql:    "select 1 from t1 join t5 using (b) having b = 12",
+		expSQL: "select 1 from t1 join t5 where t1.b = t5.b having t1.b = 12",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
@@ -150,9 +156,11 @@ func TestExpandStar(t *testing.T) {
 			require.NoError(t, err)
 			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
-			_, err = Analyze(selectStatement, cDB, schemaInfo)
+			st, err := Analyze(selectStatement, cDB, schemaInfo)
 			if tcase.expErr == "" {
 				require.NoError(t, err)
+				require.NoError(t, st.NotUnshardedErr)
+				require.NoError(t, st.NotSingleRouteErr)
 				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
 			} else {
 				require.EqualError(t, err, tcase.expErr)
