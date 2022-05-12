@@ -1284,6 +1284,8 @@ var (
 		input:  "alter table a add constraint check (id)",
 		output: "alter table a add check (id)",
 	}, {
+		input: "alter table a add constraint c check (id)",
+	}, {
 		input:  "alter table a add id int",
 		output: "alter table a add column id int",
 	}, {
@@ -1300,17 +1302,18 @@ var (
 	}, {
 		input: "alter table a add check (ch_1) not enforced",
 	}, {
-		input:      "alter table a drop check ch_1",
-		output:     "alter table a",
-		partialDDL: true,
+		input: "alter table a alter check ch_1 enforced",
+	}, {
+		input: "alter table a alter check ch_1 not enforced",
+	}, {
+		input: "alter table a drop check ch_1",
+	}, {
+		input:  "alter table a drop constraint ch_1",
+		output: "alter table a drop check ch_1",
 	}, {
 		input: "alter table a drop foreign key kx",
 	}, {
 		input: "alter table a drop primary key",
-	}, {
-		input:      "alter table a drop constraint",
-		output:     "alter table a",
-		partialDDL: true,
 	}, {
 		input:  "alter table a drop id",
 		output: "alter table a drop column id",
@@ -2162,6 +2165,12 @@ var (
 		input:  "select 1 from t where foo = _utf8mb4'bar'",
 		output: "select 1 from t where foo = _utf8mb4 'bar'",
 	}, {
+		input:  "select 1 from t where foo = _utf8mb3 'bar'",
+		output: "select 1 from t where foo = _utf8 'bar'",
+	}, {
+		input:  "select 1 from t where foo = _utf8mb3'bar'",
+		output: "select 1 from t where foo = _utf8 'bar'",
+	}, {
 		input: "select match(a) against ('foo') from t",
 	}, {
 		input: "select match(a1, a2) against ('foo' in natural language mode with query expansion) from t",
@@ -2925,6 +2934,9 @@ var (
 	}, {
 		input:  "SELECT JSON_UNQUOTE(@j)",
 		output: "select json_unquote(@j) from dual",
+	}, {
+		input:  "CREATE TABLE ts (id INT, purchased DATE) PARTITION BY RANGE( YEAR(purchased) ) SUBPARTITION BY HASH( TO_DAYS(purchased) ) ( PARTITION p0 VALUES LESS THAN (1990) (SUBPARTITION s0,SUBPARTITION s1),PARTITION p1 VALUES LESS THAN (2000),PARTITION p2 VALUES LESS THAN MAXVALUE (SUBPARTITION s2,SUBPARTITION s3));",
+		output: "create table ts (\n\tid INT,\n\tpurchased DATE\n) partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased)) (partition p0 values less than (1990) (subpartition s0, subpartition s1), partition p1 values less than (2000), partition p2 values less than maxvalue (subpartition s2, subpartition `s3`))",
 	}}
 )
 
@@ -3250,6 +3262,9 @@ func TestIntroducers(t *testing.T) {
 	}, {
 		input:  "select _utf8mb4 'x'",
 		output: "select _utf8mb4 'x' from dual",
+	}, {
+		input:  "select _utf8mb3 'x'",
+		output: "select _utf8 'x' from dual",
 	}}
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
@@ -3880,6 +3895,13 @@ func TestCreateTable(t *testing.T) {
 	username varchar,
 	unique key by_username (username) engine_attribute '{}' secondary_engine_attribute '{}',
 	unique index by_username3 (username)
+)`,
+		},
+		// test defining SRID
+		{
+			input: `create table t (
+	p point srid 0,
+	g geometry not null srid 4326
 )`,
 		},
 		// test defining column visibility
@@ -4703,6 +4725,50 @@ PARTITIONS 6`,
 ) ENGINE InnoDB,
   CHARSET utf8mb4,
   COLLATE utf8mb4_bin`,
+		}, {
+			// Subpartitions
+			input: `CREATE TABLE ts (id INT, purchased DATE)
+    PARTITION BY RANGE( YEAR(purchased) )
+    SUBPARTITION BY HASH( TO_DAYS(purchased) ) (
+        PARTITION p0 VALUES LESS THAN (1990) (
+            SUBPARTITION s0,
+            SUBPARTITION s1
+        ),
+        PARTITION p1 VALUES LESS THAN (2000) (
+            SUBPARTITION s2,
+            SUBPARTITION s31
+        ),
+        PARTITION p2 VALUES LESS THAN MAXVALUE (
+            SUBPARTITION s4,
+            SUBPARTITION s5
+        )
+    )`,
+			output: `create table ts (
+	id INT,
+	purchased DATE
+) partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased)) (partition p0 values less than (1990) (subpartition s0, subpartition s1), partition p1 values less than (2000) (subpartition s2, subpartition s31), partition p2 values less than maxvalue (subpartition s4, subpartition s5))`,
+		},
+		{
+			input: `CREATE TABLE ts (id INT, purchased DATE)
+    PARTITION BY RANGE( YEAR(purchased) )
+    SUBPARTITION BY HASH( TO_DAYS(purchased) ) (
+        PARTITION p0 VALUES LESS THAN (1990) (
+            SUBPARTITION s0 STORAGE Engine = 'innodb' data directory = '/data',
+            SUBPARTITION s1 COMMENT = 'this is s1' index directory = '/index'
+        ),
+        PARTITION p1 VALUES LESS THAN (2000) (
+            SUBPARTITION s2 MAx_rows = 4,
+            SUBPARTITION s31 min_rows = 5 tablespace = t2
+        ),
+        PARTITION p2 VALUES LESS THAN MAXVALUE (
+            SUBPARTITION s4,
+            SUBPARTITION s5
+        )
+    )`,
+			output: `create table ts (
+	id INT,
+	purchased DATE
+) partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased)) (partition p0 values less than (1990) (subpartition s0 storage engine innodb data directory '/data', subpartition s1 comment 'this is s1' index directory '/index'), partition p1 values less than (2000) (subpartition s2 max_rows 4, subpartition s31 min_rows 5 tablespace t2), partition p2 values less than maxvalue (subpartition s4, subpartition s5))`,
 		},
 	}
 	for _, test := range createTableQueries {

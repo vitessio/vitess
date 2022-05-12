@@ -34,7 +34,7 @@ import (
 )
 
 // AssertMatches ensures the given query produces the expected results.
-func AssertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
+func AssertMatches(t testing.TB, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := Exec(t, conn, query)
 	got := fmt.Sprintf("%v", qr.Rows)
@@ -99,7 +99,7 @@ func AssertResultIsEmpty(t *testing.T, conn *mysql.Conn, pre string) {
 
 // Exec executes the given query using the given connection. The results are returned.
 // The test fails if the query produces an error.
-func Exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
+func Exec(t testing.TB, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err, "for query: "+query)

@@ -653,6 +653,60 @@ func (node *PartitionDefinitionOptions) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(" tablespace ")
 		buf.WriteString(node.TableSpace)
 	}
+	if node.SubPartitionDefinitions != nil {
+		buf.WriteString(" (")
+		node.SubPartitionDefinitions.formatFast(buf)
+		buf.WriteByte(')')
+	}
+}
+
+// formatFast formats the node
+func (node SubPartitionDefinitions) formatFast(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.WriteString(prefix)
+		n.formatFast(buf)
+		prefix = ", "
+	}
+}
+
+// formatFast formats the node
+func (node *SubPartitionDefinition) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("subpartition ")
+	node.Name.formatFast(buf)
+	node.Options.formatFast(buf)
+}
+
+// formatFast formats the node
+func (node *SubPartitionDefinitionOptions) formatFast(buf *TrackedBuffer) {
+	if node.Engine != nil {
+		buf.WriteByte(' ')
+		node.Engine.formatFast(buf)
+	}
+	if node.Comment != nil {
+		buf.WriteString(" comment ")
+		node.Comment.formatFast(buf)
+	}
+	if node.DataDirectory != nil {
+		buf.WriteString(" data directory ")
+		node.DataDirectory.formatFast(buf)
+	}
+	if node.IndexDirectory != nil {
+		buf.WriteString(" index directory ")
+		node.IndexDirectory.formatFast(buf)
+	}
+	if node.MaxRows != nil {
+		buf.WriteString(" max_rows ")
+		buf.WriteString(fmt.Sprintf("%d", *node.MaxRows))
+	}
+	if node.MinRows != nil {
+		buf.WriteString(" min_rows ")
+		buf.WriteString(fmt.Sprintf("%d", *node.MinRows))
+	}
+	if node.TableSpace != "" {
+		buf.WriteString(" tablespace ")
+		buf.WriteString(node.TableSpace)
+	}
 }
 
 // formatFast formats the node
@@ -995,6 +1049,12 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		if ct.Options.Reference != nil {
 			buf.WriteByte(' ')
 			ct.Options.Reference.formatFast(buf)
+		}
+		if ct.Options.SRID != nil {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[SRID])
+			buf.WriteByte(' ')
+			ct.Options.SRID.formatFast(buf)
 		}
 	}
 }
@@ -2394,6 +2454,20 @@ func (node *AlterTable) formatFast(buf *TrackedBuffer) {
 func (node *AddConstraintDefinition) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("add ")
 	node.ConstraintDefinition.formatFast(buf)
+}
+
+func (node *AlterCheck) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("alter check ")
+	node.Name.formatFast(buf)
+	if node.Enforced {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[ENFORCED])
+	} else {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[NOT])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[ENFORCED])
+	}
 }
 
 // formatFast formats the node.

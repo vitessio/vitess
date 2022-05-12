@@ -168,6 +168,12 @@ type (
 		Collate      string
 	}
 
+	// AlterCheck represents the `ALTER CHECK` part in an `ALTER TABLE ALTER CHECK` command.
+	AlterCheck struct {
+		Name     ColIdent
+		Enforced bool
+	}
+
 	// KeyState is used to disable or enable the keys in an alter table statement
 	KeyState struct {
 		Enable bool
@@ -726,6 +732,7 @@ func (*AddIndexDefinition) iAlterOption()      {}
 func (*AddColumns) iAlterOption()              {}
 func (AlgorithmValue) iAlterOption()           {}
 func (*AlterColumn) iAlterOption()             {}
+func (*AlterCheck) iAlterOption()              {}
 func (*ChangeColumn) iAlterOption()            {}
 func (*ModifyColumn) iAlterOption()            {}
 func (*AlterCharset) iAlterOption()            {}
@@ -1626,7 +1633,28 @@ type PartitionDefinition struct {
 }
 
 type PartitionDefinitionOptions struct {
-	ValueRange     *PartitionValueRange
+	ValueRange              *PartitionValueRange
+	Comment                 *Literal
+	Engine                  *PartitionEngine
+	DataDirectory           *Literal
+	IndexDirectory          *Literal
+	MaxRows                 *int
+	MinRows                 *int
+	TableSpace              string
+	SubPartitionDefinitions SubPartitionDefinitions
+}
+
+// Subpartition Definition Corresponds to the subpartition_definition option of partition_definition
+type SubPartitionDefinition struct {
+	Name    ColIdent
+	Options *SubPartitionDefinitionOptions
+}
+
+// This is a list of SubPartitionDefinition
+type SubPartitionDefinitions []*SubPartitionDefinition
+
+// Different options/attributes that can be provided to a subpartition_definition.
+type SubPartitionDefinitionOptions struct {
 	Comment        *Literal
 	Engine         *PartitionEngine
 	DataDirectory  *Literal
@@ -1758,9 +1786,15 @@ type ColumnTypeOptions struct {
 	// EngineAttribute is a new attribute not used for anything yet, but accepted
 	// since 8.0.23 in the MySQL parser.
 	EngineAttribute *Literal
+
 	// SecondaryEngineAttribute is a new attribute not used for anything yet, but accepted
 	// since 8.0.23 in the MySQL parser.
 	SecondaryEngineAttribute *Literal
+
+	// SRID is an attribute that indiciates the spatial reference system.
+	//
+	// https://dev.mysql.com/doc/refman/8.0/en/spatial-type-overview.html
+	SRID *Literal
 }
 
 // IndexDefinition describes an index in a CREATE TABLE statement

@@ -74,6 +74,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfAlterCharset(a, b)
+	case *AlterCheck:
+		b, ok := inB.(*AlterCheck)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterCheck(a, b)
 	case *AlterColumn:
 		b, ok := inB.(*AlterColumn)
 		if !ok {
@@ -992,6 +998,24 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfSubPartition(a, b)
+	case *SubPartitionDefinition:
+		b, ok := inB.(*SubPartitionDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubPartitionDefinition(a, b)
+	case *SubPartitionDefinitionOptions:
+		b, ok := inB.(*SubPartitionDefinitionOptions)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubPartitionDefinitionOptions(a, b)
+	case SubPartitionDefinitions:
+		b, ok := inB.(SubPartitionDefinitions)
+		if !ok {
+			return false
+		}
+		return EqualsSubPartitionDefinitions(a, b)
 	case *Subquery:
 		b, ok := inB.(*Subquery)
 		if !ok {
@@ -1256,6 +1280,18 @@ func EqualsRefOfAlterCharset(a, b *AlterCharset) bool {
 	}
 	return a.CharacterSet == b.CharacterSet &&
 		a.Collate == b.Collate
+}
+
+// EqualsRefOfAlterCheck does deep equals between the two objects.
+func EqualsRefOfAlterCheck(a, b *AlterCheck) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Enforced == b.Enforced &&
+		EqualsColIdent(a.Name, b.Name)
 }
 
 // EqualsRefOfAlterColumn does deep equals between the two objects.
@@ -2695,7 +2731,8 @@ func EqualsRefOfPartitionDefinitionOptions(a, b *PartitionDefinitionOptions) boo
 		EqualsRefOfLiteral(a.DataDirectory, b.DataDirectory) &&
 		EqualsRefOfLiteral(a.IndexDirectory, b.IndexDirectory) &&
 		EqualsRefOfInt(a.MaxRows, b.MaxRows) &&
-		EqualsRefOfInt(a.MinRows, b.MinRows)
+		EqualsRefOfInt(a.MinRows, b.MinRows) &&
+		EqualsSubPartitionDefinitions(a.SubPartitionDefinitions, b.SubPartitionDefinitions)
 }
 
 // EqualsRefOfPartitionEngine does deep equals between the two objects.
@@ -3125,6 +3162,48 @@ func EqualsRefOfSubPartition(a, b *SubPartition) bool {
 		EqualsExpr(a.Expr, b.Expr)
 }
 
+// EqualsRefOfSubPartitionDefinition does deep equals between the two objects.
+func EqualsRefOfSubPartitionDefinition(a, b *SubPartitionDefinition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsRefOfSubPartitionDefinitionOptions(a.Options, b.Options)
+}
+
+// EqualsRefOfSubPartitionDefinitionOptions does deep equals between the two objects.
+func EqualsRefOfSubPartitionDefinitionOptions(a, b *SubPartitionDefinitionOptions) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.TableSpace == b.TableSpace &&
+		EqualsRefOfLiteral(a.Comment, b.Comment) &&
+		EqualsRefOfPartitionEngine(a.Engine, b.Engine) &&
+		EqualsRefOfLiteral(a.DataDirectory, b.DataDirectory) &&
+		EqualsRefOfLiteral(a.IndexDirectory, b.IndexDirectory) &&
+		EqualsRefOfInt(a.MaxRows, b.MaxRows) &&
+		EqualsRefOfInt(a.MinRows, b.MinRows)
+}
+
+// EqualsSubPartitionDefinitions does deep equals between the two objects.
+func EqualsSubPartitionDefinitions(a, b SubPartitionDefinitions) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfSubPartitionDefinition(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // EqualsRefOfSubquery does deep equals between the two objects.
 func EqualsRefOfSubquery(a, b *Subquery) bool {
 	if a == b {
@@ -3540,6 +3619,12 @@ func EqualsAlterOption(inA, inB AlterOption) bool {
 			return false
 		}
 		return EqualsRefOfAlterCharset(a, b)
+	case *AlterCheck:
+		b, ok := inB.(*AlterCheck)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterCheck(a, b)
 	case *AlterColumn:
 		b, ok := inB.(*AlterColumn)
 		if !ok {
@@ -5367,7 +5452,8 @@ func EqualsRefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
 		EqualsRefOfBool(a.Invisible, b.Invisible) &&
 		a.Format == b.Format &&
 		EqualsRefOfLiteral(a.EngineAttribute, b.EngineAttribute) &&
-		EqualsRefOfLiteral(a.SecondaryEngineAttribute, b.SecondaryEngineAttribute)
+		EqualsRefOfLiteral(a.SecondaryEngineAttribute, b.SecondaryEngineAttribute) &&
+		EqualsRefOfLiteral(a.SRID, b.SRID)
 }
 
 // EqualsSliceOfString does deep equals between the two objects.

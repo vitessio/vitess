@@ -184,6 +184,10 @@ func TestCanonicalOutput(t *testing.T) {
 			"create table t (\n\tid int auto_increment,\n\tusername varchar engine_attribute '{}' secondary_engine_attribute '{}'\n)",
 			"CREATE TABLE `t` (\n\t`id` int AUTO_INCREMENT,\n\t`username` varchar ENGINE_ATTRIBUTE '{}' SECONDARY_ENGINE_ATTRIBUTE '{}'\n)",
 		},
+		{
+			"create table t (p point srid 0, g geometry not null srid 4326)",
+			"CREATE TABLE `t` (\n\t`p` point SRID 0,\n\t`g` geometry NOT NULL SRID 4326\n)",
+		},
 	}
 
 	for _, tc := range testcases {

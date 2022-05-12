@@ -38,6 +38,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAliasedTableExpr(in, f)
 	case *AlterCharset:
 		return VisitRefOfAlterCharset(in, f)
+	case *AlterCheck:
+		return VisitRefOfAlterCheck(in, f)
 	case *AlterColumn:
 		return VisitRefOfAlterColumn(in, f)
 	case *AlterDatabase:
@@ -344,6 +346,12 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfStream(in, f)
 	case *SubPartition:
 		return VisitRefOfSubPartition(in, f)
+	case *SubPartitionDefinition:
+		return VisitRefOfSubPartitionDefinition(in, f)
+	case *SubPartitionDefinitionOptions:
+		return VisitRefOfSubPartitionDefinitionOptions(in, f)
+	case SubPartitionDefinitions:
+		return VisitSubPartitionDefinitions(in, f)
 	case *Subquery:
 		return VisitRefOfSubquery(in, f)
 	case *SubstrExpr:
@@ -496,6 +504,18 @@ func VisitRefOfAlterCharset(in *AlterCharset, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfAlterCheck(in *AlterCheck, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
 	}
 	return nil
@@ -2154,6 +2174,9 @@ func VisitRefOfPartitionDefinitionOptions(in *PartitionDefinitionOptions, f Visi
 	if err := VisitRefOfLiteral(in.IndexDirectory, f); err != nil {
 		return err
 	}
+	if err := VisitSubPartitionDefinitions(in.SubPartitionDefinitions, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfPartitionEngine(in *PartitionEngine, f Visit) error {
@@ -2638,6 +2661,56 @@ func VisitRefOfSubPartition(in *SubPartition, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfSubPartitionDefinition(in *SubPartitionDefinition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfSubPartitionDefinitionOptions(in.Options, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfSubPartitionDefinitionOptions(in *SubPartitionDefinitionOptions, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.Comment, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfPartitionEngine(in.Engine, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.DataDirectory, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.IndexDirectory, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitSubPartitionDefinitions(in SubPartitionDefinitions, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitRefOfSubPartitionDefinition(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func VisitRefOfSubquery(in *Subquery, f Visit) error {
 	if in == nil {
 		return nil
@@ -3106,6 +3179,8 @@ func VisitAlterOption(in AlterOption, f Visit) error {
 		return VisitAlgorithmValue(in, f)
 	case *AlterCharset:
 		return VisitRefOfAlterCharset(in, f)
+	case *AlterCheck:
+		return VisitRefOfAlterCheck(in, f)
 	case *AlterColumn:
 		return VisitRefOfAlterColumn(in, f)
 	case *ChangeColumn:

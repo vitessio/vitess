@@ -302,6 +302,7 @@ const (
 	PrimaryKeyTypeStr = "primary key"
 	ForeignKeyTypeStr = "foreign key"
 	NormalKeyTypeStr  = "key"
+	CheckKeyTypeStr   = "check"
 
 	// TrimType strings
 	BothTrimStr     = "both"
@@ -682,6 +683,7 @@ const (
 	PrimaryKeyType DropKeyType = iota
 	ForeignKeyType
 	NormalKeyType
+	CheckKeyType
 )
 
 // LockOptionType constants
