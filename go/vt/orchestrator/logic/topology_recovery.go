@@ -1605,10 +1605,18 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 		return nil, err
 	}
 	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false /*failIfFailedInstanceInActiveRecovery*/, false /*failIfClusterInActiveRecovery*/)
-	if topologyRecovery == nil || err != nil {
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("could not register recovery on %+v. Unable to issue PlannedReparentShard.", analysisEntry.AnalyzedInstanceKey))
+	if err != nil {
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("could not register recovery on %+v. Unable to issue PlannedReparentShard. err=%v", analysisEntry.AnalyzedInstanceKey, err))
 		return topologyRecovery, err
 	}
+	if topologyRecovery == nil {
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("could not register recovery on %+v. Unable to issue PlannedReparentShard. Recovery is nil", analysisEntry.AnalyzedInstanceKey))
+		return nil, nil
+	}
+	// recovery is now registered. From now on this process owns the recovery and other processes will notbe able to run
+	// a recovery for some time.
+	// Let's audit anything that happens from this point on, including any early return
+	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("registered recovery on %+v. Recovery: %+v", analysisEntry.AnalyzedInstanceKey, topologyRecovery))
 	var promotedReplica *inst.Instance
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
 	// So that after the active period passes, we are able to run other recoveries.
@@ -1618,6 +1626,7 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 
 	primaryTablet, err := inst.ReadTablet(clusterPrimary.Key)
 	if err != nil {
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("rerror reading primary tablet %+v: %+v", clusterPrimary.Key, err))
 		return topologyRecovery, err
 	}
 	if designatedKey != nil && !designatedKey.IsValid() {
@@ -1628,6 +1637,7 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 	if designatedKey != nil {
 		designatedTablet, err := inst.ReadTablet(*designatedKey)
 		if err != nil {
+			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("rerror reading designated tablet %+v: %+v", *designatedKey, err))
 			return topologyRecovery, err
 		}
 		designatedTabletAlias = designatedTablet.Alias
