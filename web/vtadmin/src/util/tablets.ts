@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { invertBy } from 'lodash-es';
+import { invertBy, padStart } from 'lodash-es';
 import { topodata, vtadmin as pb } from '../proto/vtadmin';
 
 /**
@@ -33,6 +33,15 @@ export const TABLET_TYPES = Object.entries(invertBy(topodata.TabletType)).reduce
  */
 export const formatAlias = <A extends topodata.ITabletAlias>(alias: A | null | undefined) =>
     alias?.uid ? `${alias.cell}-${alias.uid}` : null;
+
+/**
+ * formatAlias formats a tablet.alias object as a single string,
+ * with the uid left-padded with zeroes.
+ *
+ * This function can be removed once https://github.com/vitessio/vitess/issues/8751 is complete.
+ */
+export const formatPaddedAlias = <A extends topodata.ITabletAlias>(alias: A | null | undefined) =>
+    alias?.cell && alias?.uid ? `${alias.cell}-${padStart(alias.uid.toString(), 10, '0')}` : null;
 
 export const formatType = (t: pb.Tablet) => t.tablet?.type && TABLET_TYPES[t.tablet?.type];
 
