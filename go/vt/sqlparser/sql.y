@@ -472,7 +472,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <literal> length_opt partition_comment partition_data_directory partition_index_directory
 %type <expr> func_datetime_precision
-%type <str> charset_opt charset_convert_opt collate_opt
+%type <str> charset_opt collate_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolean> unsigned_opt zero_fill_opt without_valid_opt
 %type <strs> enum_values
@@ -2096,23 +2096,6 @@ zero_fill_opt:
   }
 
 charset_opt:
-  {
-    $$ = ""
-  }
-| charset_or_character_set sql_id
-  {
-    $$ = string($2.String())
-  }
-| charset_or_character_set STRING
-  {
-    $$ = encodeSQLString($2)
-  }
-| charset_or_character_set BINARY
-  {
-    $$ = string($2)
-  }
-
-charset_convert_opt:
   {
     $$ = ""
   }
@@ -5731,7 +5714,7 @@ convert_type:
   {
     $$ = &ConvertType{Type: string($1), Length: $2}
   }
-| CHAR length_opt charset_convert_opt
+| CHAR length_opt charset_opt
   {
     $$ = &ConvertType{Type: string($1), Length: $2, Charset: $3}
   }

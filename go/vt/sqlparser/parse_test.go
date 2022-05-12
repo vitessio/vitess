@@ -4774,6 +4774,10 @@ PARTITIONS 6`,
 			input:  "create table t (i bigint) charset ascii",
 			output: "create table t (\n\ti bigint\n) charset ascii",
 		},
+		{
+			input:  "create table t (i1 char ascii, i2 char character set ascii)",
+			output: "create table t (\n\ti1 char character set latin1,\n\ti2 char character set ascii\n)",
+		},
 	}
 	for _, test := range createTableQueries {
 		sql := strings.TrimSpace(test.input)
