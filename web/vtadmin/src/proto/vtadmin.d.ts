@@ -415,6 +415,20 @@ export namespace vtadmin {
         public reparentTablet(request: vtadmin.IReparentTabletRequest): Promise<vtadmin.ReparentTabletResponse>;
 
         /**
+         * Calls ReloadSchemas.
+         * @param request ReloadSchemasRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and ReloadSchemasResponse
+         */
+        public reloadSchemas(request: vtadmin.IReloadSchemasRequest, callback: vtadmin.VTAdmin.ReloadSchemasCallback): void;
+
+        /**
+         * Calls ReloadSchemas.
+         * @param request ReloadSchemasRequest message or plain object
+         * @returns Promise
+         */
+        public reloadSchemas(request: vtadmin.IReloadSchemasRequest): Promise<vtadmin.ReloadSchemasResponse>;
+
+        /**
          * Calls RunHealthCheck.
          * @param request RunHealthCheckRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and RunHealthCheckResponse
@@ -738,6 +752,13 @@ export namespace vtadmin {
          * @param [response] ReparentTabletResponse
          */
         type ReparentTabletCallback = (error: (Error|null), response?: vtadmin.ReparentTabletResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#reloadSchemas}.
+         * @param error Error, if any
+         * @param [response] ReloadSchemasResponse
+         */
+        type ReloadSchemasCallback = (error: (Error|null), response?: vtadmin.ReloadSchemasResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#runHealthCheck}.
@@ -6691,6 +6712,300 @@ export namespace vtadmin {
 
         /**
          * Converts this RefreshStateResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ReloadSchemasRequest. */
+    interface IReloadSchemasRequest {
+
+        /** ReloadSchemasRequest keyspaces */
+        keyspaces?: (string[]|null);
+
+        /** ReloadSchemasRequest keyspace_shards */
+        keyspace_shards?: (string[]|null);
+
+        /** ReloadSchemasRequest tablets */
+        tablets?: (topodata.ITabletAlias[]|null);
+
+        /** ReloadSchemasRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+
+        /** ReloadSchemasRequest concurrency */
+        concurrency?: (number|null);
+
+        /** ReloadSchemasRequest wait_position */
+        wait_position?: (string|null);
+
+        /** ReloadSchemasRequest include_primary */
+        include_primary?: (boolean|null);
+    }
+
+    /** Represents a ReloadSchemasRequest. */
+    class ReloadSchemasRequest implements IReloadSchemasRequest {
+
+        /**
+         * Constructs a new ReloadSchemasRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IReloadSchemasRequest);
+
+        /** ReloadSchemasRequest keyspaces. */
+        public keyspaces: string[];
+
+        /** ReloadSchemasRequest keyspace_shards. */
+        public keyspace_shards: string[];
+
+        /** ReloadSchemasRequest tablets. */
+        public tablets: topodata.ITabletAlias[];
+
+        /** ReloadSchemasRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /** ReloadSchemasRequest concurrency. */
+        public concurrency: number;
+
+        /** ReloadSchemasRequest wait_position. */
+        public wait_position: string;
+
+        /** ReloadSchemasRequest include_primary. */
+        public include_primary: boolean;
+
+        /**
+         * Creates a new ReloadSchemasRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReloadSchemasRequest instance
+         */
+        public static create(properties?: vtadmin.IReloadSchemasRequest): vtadmin.ReloadSchemasRequest;
+
+        /**
+         * Encodes the specified ReloadSchemasRequest message. Does not implicitly {@link vtadmin.ReloadSchemasRequest.verify|verify} messages.
+         * @param message ReloadSchemasRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IReloadSchemasRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReloadSchemasRequest message, length delimited. Does not implicitly {@link vtadmin.ReloadSchemasRequest.verify|verify} messages.
+         * @param message ReloadSchemasRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IReloadSchemasRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReloadSchemasRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReloadSchemasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.ReloadSchemasRequest;
+
+        /**
+         * Decodes a ReloadSchemasRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReloadSchemasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.ReloadSchemasRequest;
+
+        /**
+         * Verifies a ReloadSchemasRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReloadSchemasRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReloadSchemasRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.ReloadSchemasRequest;
+
+        /**
+         * Creates a plain object from a ReloadSchemasRequest message. Also converts values to other types if specified.
+         * @param message ReloadSchemasRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.ReloadSchemasRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReloadSchemasRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ReloadSchemasResponse. */
+    interface IReloadSchemasResponse {
+    }
+
+    /** Represents a ReloadSchemasResponse. */
+    class ReloadSchemasResponse implements IReloadSchemasResponse {
+
+        /**
+         * Constructs a new ReloadSchemasResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IReloadSchemasResponse);
+
+        /**
+         * Creates a new ReloadSchemasResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReloadSchemasResponse instance
+         */
+        public static create(properties?: vtadmin.IReloadSchemasResponse): vtadmin.ReloadSchemasResponse;
+
+        /**
+         * Encodes the specified ReloadSchemasResponse message. Does not implicitly {@link vtadmin.ReloadSchemasResponse.verify|verify} messages.
+         * @param message ReloadSchemasResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IReloadSchemasResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReloadSchemasResponse message, length delimited. Does not implicitly {@link vtadmin.ReloadSchemasResponse.verify|verify} messages.
+         * @param message ReloadSchemasResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IReloadSchemasResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReloadSchemasResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReloadSchemasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.ReloadSchemasResponse;
+
+        /**
+         * Decodes a ReloadSchemasResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReloadSchemasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.ReloadSchemasResponse;
+
+        /**
+         * Verifies a ReloadSchemasResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReloadSchemasResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReloadSchemasResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.ReloadSchemasResponse;
+
+        /**
+         * Creates a plain object from a ReloadSchemasResponse message. Also converts values to other types if specified.
+         * @param message ReloadSchemasResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.ReloadSchemasResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReloadSchemasResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ReloadSchemaRequest. */
+    interface IReloadSchemaRequest {
+    }
+
+    /** Represents a ReloadSchemaRequest. */
+    class ReloadSchemaRequest implements IReloadSchemaRequest {
+
+        /**
+         * Constructs a new ReloadSchemaRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IReloadSchemaRequest);
+
+        /**
+         * Creates a new ReloadSchemaRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReloadSchemaRequest instance
+         */
+        public static create(properties?: vtadmin.IReloadSchemaRequest): vtadmin.ReloadSchemaRequest;
+
+        /**
+         * Encodes the specified ReloadSchemaRequest message. Does not implicitly {@link vtadmin.ReloadSchemaRequest.verify|verify} messages.
+         * @param message ReloadSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IReloadSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReloadSchemaRequest message, length delimited. Does not implicitly {@link vtadmin.ReloadSchemaRequest.verify|verify} messages.
+         * @param message ReloadSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IReloadSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReloadSchemaRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReloadSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.ReloadSchemaRequest;
+
+        /**
+         * Decodes a ReloadSchemaRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReloadSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.ReloadSchemaRequest;
+
+        /**
+         * Verifies a ReloadSchemaRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReloadSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReloadSchemaRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.ReloadSchemaRequest;
+
+        /**
+         * Creates a plain object from a ReloadSchemaRequest message. Also converts values to other types if specified.
+         * @param message ReloadSchemaRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.ReloadSchemaRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReloadSchemaRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

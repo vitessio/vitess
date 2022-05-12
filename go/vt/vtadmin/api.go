@@ -1557,6 +1557,11 @@ func (api *API) RefreshState(ctx context.Context, req *vtadminpb.RefreshStateReq
 	return &vtadminpb.RefreshStateResponse{Status: "ok"}, nil
 }
 
+// ReloadSchemas is part of the vtadminpb.VTAdminServer interface.
+func (api *API) ReloadSchemas(ctx context.Context, req *vtadminpb.ReloadSchemasRequest) (*vtadminpb.ReloadSchemasResponse, error) {
+	panic("unimplemented!")
+}
+
 // ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
 func (api *API) ValidateKeyspace(ctx context.Context, req *vtadminpb.ValidateKeyspaceRequest) (*vtctldatapb.ValidateKeyspaceResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.ValidateKeyspace")

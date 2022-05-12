@@ -103,6 +103,10 @@ service VTAdmin {
     // This only works if the current replica position matches the last known
     // reparent action.
     rpc ReparentTablet(ReparentTabletRequest) returns (ReparentTabletResponse) {};
+    // ReloadSchemas reloads the schema definition across keyspaces, shards, or
+    // tablets in one or more clusters, depending on the request fields (see
+    // ReloadSchemasRequest for details).
+    rpc ReloadSchemas(ReloadSchemasRequest) returns (ReloadSchemasResponse) {};
     // RunHealthCheck runs a healthcheck on the tablet.
     rpc RunHealthCheck(RunHealthCheckRequest) returns (RunHealthCheckResponse) {};
     // SetReadOnly sets the tablet to read-only mode.
@@ -516,6 +520,95 @@ message RefreshStateRequest {
 
 message RefreshStateResponse {
     string status = 1;
+}
+
+message ReloadSchemasRequest {
+    // Keyspaces, if set, will reload schemas across one or more keyspaces. A
+    // keyspace not existing in a cluster will not fail the overall request.
+    //
+    // Superceded by KeyspaceShards and Tablets, in that order.
+    repeated string keyspaces = 1;
+    // KeyspaceShards, if set, will reload schemas across one or more shards.
+    // Each element must be a valid keyspace/shard according to
+    // topoproto.ParseKeyspaceShard. A shard not existing in a cluster will not
+    // fail the overall request.
+    //
+    // Supercedes Keyspaces, and is superceded by Tablets.
+    repeated string keyspace_shards = 2;
+    // Tablets, if set will reload schemas across one or more tablets.
+    // Supercedes both Keyspaces and KeyspaceShards.
+    repeated topodata.TabletAlias tablets = 3;
+    // ClusterIds optionally restricts the reload operation to clusters with
+    // the specified IDs. An empty list of ClusterIds will operate on all
+    // clusters.
+    repeated string cluster_ids = 4;
+    // Concurrency controls the number of tablets to reload at any given time.
+    // Its semantics depend on whether the request is for keyspace, shard, or
+    // tablet mode.
+    //
+    // In Keyspaces mode, Concurrency is the number of tablets to reload at once
+    // *per keyspace*.
+    //
+    // In KeyspaceShards mode, Concurrency is the number of tablets to reload at
+    // once *per shard*.
+    //
+    // In Tablets mode, Concurrency is the number of tablets to reload at once
+    // *per cluster*.
+    uint32 concurrency = 5;
+    // WaitPosition is the replication position that replicating tablets should
+    // reach prior to reloading their schemas.
+    //
+    // Does not apply in Tablets mode.
+    string wait_position = 6;
+    // IncludePrimary, if set, will reload the schemas on PRIMARY tablets as
+    // well as REPLICA and RDONLY.
+    //
+    // Does not apply in Tablets mode.
+    bool include_primary = 7;
+}
+
+message ReloadSchemasResponse {
+    // TODO: three maps, keyspace=>event stream; shard=>event stream; tablet=>event
+}
+
+/*
+message ReloadSchemaRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message ReloadSchemaResponse {
+}
+
+message ReloadSchemaKeyspaceRequest {
+  string keyspace = 1;
+  string wait_position = 2;
+  bool include_primary = 3;
+  // Concurrency is the global concurrency across all shards in the keyspace
+  // (so, at most this many tablets will be reloaded across the keyspace at any
+  // given point).
+  uint32 concurrency = 4;
+}
+
+message ReloadSchemaKeyspaceResponse {
+  repeated logutil.Event events = 1;
+}
+
+message ReloadSchemaShardRequest {
+  string keyspace = 1;
+  string shard = 2;
+  string wait_position = 3;
+  bool include_primary = 4;
+  // Concurrency is the maximum number of tablets to reload at one time.
+  uint32 concurrency = 5;
+}
+
+message ReloadSchemaShardResponse {
+  repeated logutil.Event events = 2;
+}
+*/
+
+message ReloadSchemaRequest {
+
 }
 
 message ReparentTabletRequest {
