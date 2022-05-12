@@ -444,19 +444,12 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 			}
 		}
 
-		var alias string
-		if aliasedExpr.As.IsEmpty() {
-			alias = sqlparser.String(aliasedExpr.Expr)
-		} else {
-			alias = aliasedExpr.As.String()
-		}
-
 		idxCopy := idx
 		out = append(out, Aggr{
 			Original: aliasedExpr,
 			Func:     fExpr,
 			OpCode:   opcode,
-			Alias:    alias,
+			Alias:    aliasedExpr.ColumnName(),
 			Index:    &idxCopy,
 			Distinct: fExpr.Distinct,
 		})
