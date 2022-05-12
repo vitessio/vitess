@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { UseMutationResult } from 'react-query';
-import { Icon, Icons } from '../../Icon';
-import { TextInput } from '../../TextInput';
+import { Icon, Icons } from './Icon';
+import { TextInput } from './TextInput';
 
 type Mutation = UseMutationResult & {
     mutate: () => void;

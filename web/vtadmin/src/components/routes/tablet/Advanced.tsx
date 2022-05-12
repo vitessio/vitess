@@ -11,9 +11,9 @@ import {
 } from '../../../hooks/api';
 import { vtadmin } from '../../../proto/vtadmin';
 import { isPrimary } from '../../../util/tablets';
+import DangerAction from '../../DangerAction';
 import { Icon, Icons } from '../../Icon';
 import { success, warn } from '../../Snackbar';
-import DangerAction from './DangerAction';
 
 interface AdvancedProps {
     tablet: vtadmin.Tablet | undefined;
