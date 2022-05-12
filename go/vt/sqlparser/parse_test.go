@@ -4770,6 +4770,10 @@ PARTITIONS 6`,
 	purchased DATE
 ) partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased)) (partition p0 values less than (1990) (subpartition s0 storage engine innodb data directory '/data', subpartition s1 comment 'this is s1' index directory '/index'), partition p1 values less than (2000) (subpartition s2 max_rows 4, subpartition s31 min_rows 5 tablespace t2), partition p2 values less than maxvalue (subpartition s4, subpartition s5))`,
 		},
+		{
+			input:  "create table t (i bigint) charset ascii",
+			output: "create table t (\n\ti bigint\n) charset ascii",
+		},
 	}
 	for _, test := range createTableQueries {
 		sql := strings.TrimSpace(test.input)
