@@ -701,6 +701,10 @@ const (
 	CancelMigrationType
 	CancelAllMigrationType
 	CleanupMigrationType
+	ThrottleMigrationType
+	ThrottleAllMigrationType
+	UnthrottleMigrationType
+	UnthrottleAllMigrationType
 )
 
 // ColumnStorage constants

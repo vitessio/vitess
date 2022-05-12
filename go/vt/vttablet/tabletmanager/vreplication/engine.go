@@ -67,7 +67,8 @@ var withDDL *withddl.WithDDL
 var withDDLInitialQueries []string
 
 const (
-	throttlerAppName = "vreplication"
+	throttlerVReplicationAppName = "vreplication"
+	throttlerOnlineDDLAppName    = "online-ddl"
 )
 
 func init() {
@@ -143,7 +144,7 @@ func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mys
 		mysqld:          mysqld,
 		journaler:       make(map[string]*journalEvent),
 		ec:              newExternalConnector(config.ExternalConnections),
-		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckPrimaryWrite),
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerVReplicationAppName, throttle.ThrottleCheckPrimaryWrite),
 	}
 
 	return vre

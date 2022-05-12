@@ -62,6 +62,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/vexec"
 )
@@ -129,6 +130,7 @@ var (
 	migrationFailureFileName = "migration-failure.log"
 	onlineDDLUser            = "vt-online-ddl-internal"
 	onlineDDLGrant           = fmt.Sprintf("'%s'@'%s'", onlineDDLUser, "%")
+	throttlerOnlineDDLApp    = "online-ddl"
 )
 
 type mysqlVariables struct {
@@ -145,6 +147,7 @@ type Executor struct {
 	pool                  *connpool.Pool
 	tabletTypeFunc        func() topodatapb.TabletType
 	ts                    *topo.Server
+	lagThrottler          *throttle.Throttler
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, bufferQueries bool)
 	tabletAlias           *topodatapb.TabletAlias
 
@@ -204,6 +207,7 @@ func newGCTableRetainTime() time.Time {
 
 // NewExecutor creates a new gh-ost executor.
 func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *topo.Server,
+	lagThrottler *throttle.Throttler,
 	tabletTypeFunc func() topodatapb.TabletType,
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, bufferQueries bool),
 ) *Executor {
@@ -217,6 +221,7 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 		}),
 		tabletTypeFunc:        tabletTypeFunc,
 		ts:                    ts,
+		lagThrottler:          lagThrottler,
 		toggleBufferTableFunc: toggleBufferTableFunc,
 		ticks:                 timer.NewTimer(*migrationCheckInterval),
 	}
@@ -1228,7 +1233,7 @@ exit $exit_code
 			fmt.Sprintf("--serve-socket-file=%s", serveSocketFile),
 			fmt.Sprintf("--hooks-path=%s", tempDir),
 			fmt.Sprintf(`--hooks-hint-token=%s`, onlineDDL.UUID),
-			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check?app=online-ddl:gh-ost:%s&p=low`, *servenv.Port, onlineDDL.UUID),
+			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check?app=%s:gh-ost:%s&p=low`, *servenv.Port, throttlerOnlineDDLApp, onlineDDL.UUID),
 			fmt.Sprintf(`--database=%s`, e.dbName),
 			fmt.Sprintf(`--table=%s`, onlineDDL.Table),
 			fmt.Sprintf(`--alter=%s`, alterOptions),
@@ -1380,7 +1385,7 @@ export MYSQL_PWD
 		my ($self, %args) = @_;
 
 		return sub {
-			if (head("http://localhost:{{VTTABLET_PORT}}/throttler/check?app=online-ddl:pt-osc:{{MIGRATION_UUID}}&p=low")) {
+			if (head("http://localhost:{{VTTABLET_PORT}}/throttler/check?app={{THROTTLER_ONLINE_DDL_APP}}:pt-osc:{{MIGRATION_UUID}}&p=low")) {
 				# Got HTTP 200 OK, means throttler is happy
 				return 0;
 			}	else {
@@ -1394,6 +1399,8 @@ export MYSQL_PWD
 	`
 	pluginCode = strings.ReplaceAll(pluginCode, "{{VTTABLET_PORT}}", fmt.Sprintf("%d", *servenv.Port))
 	pluginCode = strings.ReplaceAll(pluginCode, "{{MIGRATION_UUID}}", onlineDDL.UUID)
+	pluginCode = strings.ReplaceAll(pluginCode, "{{THROTTLER_ONLINE_DDL_APP}}", throttlerOnlineDDLApp)
+
 	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusRunning}}", string(schema.OnlineDDLStatusRunning))
 	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusComplete}}", string(schema.OnlineDDLStatusComplete))
 	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusFailed}}", string(schema.OnlineDDLStatusFailed))
@@ -1694,6 +1701,68 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) 
 		result.AppendResult(res)
 	}
 	return result, nil
+}
+
+func (e *Executor) validateThrottleParams(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal) (duration time.Duration, ratio float64, err error) {
+	duration = time.Hour * 24 * 365 * 100
+	if expireString != "" {
+		duration, err = time.ParseDuration(expireString)
+		if err != nil || duration < 0 {
+			return duration, ratio, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid EXPIRE value: %s. Try '120s', '30m', '1h', etc. Allowed units are (s)ec, (m)in, (h)hour", expireString)
+		}
+	}
+	ratio = 1.0
+	if ratioLiteral != nil {
+		ratio, err = strconv.ParseFloat(ratioLiteral.Val, 64)
+		if err != nil || ratio < 0 || ratio > 1 {
+			return duration, ratio, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid RATIO value: %s. Try any decimal number between '0.0' (no throttle) and `1.0` (fully throttled)", ratioLiteral.Val)
+		}
+	}
+	return duration, ratio, nil
+}
+
+// ThrottleMigration
+func (e *Executor) ThrottleMigration(ctx context.Context, uuid string, expireString string, ratioLiteral *sqlparser.Literal) (result *sqltypes.Result, err error) {
+	duration, ratio, err := e.validateThrottleParams(ctx, expireString, ratioLiteral)
+	if err != nil {
+		return nil, err
+	}
+	if err := e.lagThrottler.CheckIsReady(); err != nil {
+		return nil, err
+	}
+	_ = e.lagThrottler.ThrottleApp(uuid, time.Now().Add(duration), ratio)
+	return emptyResult, nil
+}
+
+// ThrottleAllMigrations
+func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal) (result *sqltypes.Result, err error) {
+	duration, ratio, err := e.validateThrottleParams(ctx, expireString, ratioLiteral)
+	if err != nil {
+		return nil, err
+	}
+	if err := e.lagThrottler.CheckIsReady(); err != nil {
+		return nil, err
+	}
+	_ = e.lagThrottler.ThrottleApp(throttlerOnlineDDLApp, time.Now().Add(duration), ratio)
+	return emptyResult, nil
+}
+
+// UnthrottleMigration
+func (e *Executor) UnthrottleMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
+	if err := e.lagThrottler.CheckIsReady(); err != nil {
+		return nil, err
+	}
+	_ = e.lagThrottler.UnthrottleApp(uuid)
+	return emptyResult, nil
+}
+
+// UnthrottleAllMigrations
+func (e *Executor) UnthrottleAllMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+	if err := e.lagThrottler.CheckIsReady(); err != nil {
+		return nil, err
+	}
+	_ = e.lagThrottler.UnthrottleApp(throttlerOnlineDDLApp)
+	return emptyResult, nil
 }
 
 // scheduleNextMigration attemps to schedule a single migration to run next.
@@ -2818,6 +2887,17 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
+	var currentUserThrottleRatio float64
+	if err := e.lagThrottler.CheckIsReady(); err == nil {
+		// No point in reviewing throttler info if it's not enabled&open
+		for _, app := range e.lagThrottler.ThrottledApps() {
+			if app.AppName == throttlerOnlineDDLApp {
+				currentUserThrottleRatio = app.Ratio
+				break
+			}
+		}
+	}
+
 	r, err := e.execQuery(ctx, sqlSelectRunningMigrations)
 	if err != nil {
 		return countRunnning, cancellable, err
@@ -2858,6 +2938,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 
 		uuidsFoundRunning[uuid] = true
 
+		_ = e.updateMigrationUserThrottleRatio(ctx, uuid, currentUserThrottleRatio)
 		switch onlineDDL.StrategySetting().Strategy {
 		case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 			{
@@ -3498,6 +3579,18 @@ func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid stri
 func (e *Executor) updateMigrationStowawayTable(ctx context.Context, uuid string, tableName string) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationStowawayTable,
 		sqltypes.StringBindVariable(tableName),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationUserThrottleRatio(ctx context.Context, uuid string, ratio float64) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationUserThrottleRatio,
+		sqltypes.Float64BindVariable(ratio),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {

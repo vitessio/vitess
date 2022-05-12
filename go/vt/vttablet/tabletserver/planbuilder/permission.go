@@ -51,7 +51,7 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 		for _, t := range node.AffectedTables() {
 			permissions = buildTableNamePermissions(t, tableacl.ADMIN, permissions)
 		}
-	case *sqlparser.AlterMigration, *sqlparser.RevertMigration, *sqlparser.ShowMigrationLogs:
+	case *sqlparser.AlterMigration, *sqlparser.RevertMigration, *sqlparser.ShowMigrationLogs, *sqlparser.ShowThrottledApps:
 		permissions = []Permission{} // TODO(shlomi) what are the correct permissions here? Table is unknown
 	case *sqlparser.Flush:
 		for _, t := range node.TableNames {
