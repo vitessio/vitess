@@ -18,6 +18,7 @@ package schema
 
 import (
 	"context"
+	"go.uber.org/atomic"
 	"sync"
 	"time"
 
@@ -122,14 +123,17 @@ func (t *Tracker) getKeyspaceUpdateController(th *discovery.TabletHealth) *updat
 
 	ksUpdater, exists := t.tracked[th.Target.Keyspace]
 	if !exists {
-		ksUpdater = t.newUpdateController()
+		ksUpdater = t.newUpdateController(th.Target.Keyspace)
 		t.tracked[th.Target.Keyspace] = ksUpdater
 	}
 	return ksUpdater
 }
 
-func (t *Tracker) newUpdateController() *updateController {
-	return &updateController{update: t.updateSchema, reloadKeyspace: t.initKeyspace, signal: t.signal, consumeDelay: t.consumeDelay}
+var c = atomic.Int32{}
+
+func (t *Tracker) newUpdateController(ks string) *updateController {
+	defer c.Inc()
+	return &updateController{update: t.updateSchema, reloadKeyspace: t.initKeyspace, signal: t.signal, consumeDelay: t.consumeDelay, ksName: ks, ID: int(c.Load())}
 }
 
 func (t *Tracker) initKeyspace(th *discovery.TabletHealth) error {
@@ -225,7 +229,7 @@ func (t *Tracker) RegisterSignalReceiver(f func()) {
 
 // AddNewKeyspace adds keyspace to the tracker.
 func (t *Tracker) AddNewKeyspace(conn queryservice.QueryService, target *querypb.Target) error {
-	updateController := t.newUpdateController()
+	updateController := t.newUpdateController(target.Keyspace)
 	t.tracked[target.Keyspace] = updateController
 	err := t.LoadKeyspace(conn, target)
 	if err != nil {

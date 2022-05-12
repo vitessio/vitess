@@ -38,6 +38,8 @@ type (
 		mu             sync.Mutex
 		queue          *queue
 		consumeDelay   time.Duration
+		ksName         string
+		ID             int
 		update         func(th *discovery.TabletHealth) bool
 		reloadKeyspace func(th *discovery.TabletHealth) error
 		signal         func()
@@ -123,12 +125,16 @@ func (u *updateController) getItemFromQueueLocked() *discovery.TabletHealth {
 
 func (u *updateController) add(th *discovery.TabletHealth) {
 	if th.Stats != nil && len(th.Stats.TableSchemaChanged) > 0 {
-		log.Info("add: tablet alias: ", th.Tablet.Alias, " table schema changed: ", th.Stats.TableSchemaChanged)
+		log.Info("ks: ", u.ksName, ", id:", u.ID, " | add: tablet alias: ", th.Tablet.Alias, " table schema changed: ", th.Stats.TableSchemaChanged)
 	}
 
 	// For non-primary tablet health, there is no schema tracking.
 	if th.Tablet.Type != topodatapb.TabletType_PRIMARY {
-		log.Info("add: exit th.Tablet.Type != topodatapb.TabletType_PRIMARY")
+		if th.Stats != nil {
+			log.Info("ks: ", u.ksName, ", id:", u.ID, " | add: exit th.Tablet.Type != topodatapb.TabletType_PRIMARY, has schema changed: ", th.Stats.TableSchemaChanged)
+		} else {
+			log.Info("ks: ", u.ksName, ", id:", u.ID, " | add: exit th.Tablet.Type != topodatapb.TabletType_PRIMARY, has no th.Stats")
+		}
 		return
 	}
 
@@ -138,31 +144,31 @@ func (u *updateController) add(th *discovery.TabletHealth) {
 	// Received a health check from primary tablet that is not reachable from VTGate.
 	// The connection will get reset and the tracker needs to reload the schema for the keyspace.
 	if !th.Serving {
-		log.Info("add: exit !th.Serving")
+		log.Info("ks: ", u.ksName, ", id:", u.ID, " | add: exit !th.Serving")
 		u.loaded = false
 		return
 	}
 
 	// If the keyspace schema is loaded and there is no schema change detected. Then there is nothing to process.
 	if len(th.Stats.TableSchemaChanged) == 0 && u.loaded {
-		log.Info("add: exit len(th.Stats.TableSchemaChanged) == 0 && u.loaded")
+		log.Info("ks: ", u.ksName, ", id:", u.ID, " | add: exit len(th.Stats.TableSchemaChanged) == 0 && u.loaded")
 		return
 	}
 
 	if len(th.Stats.TableSchemaChanged) > 0 && u.ignore {
-		log.Info("add: len(th.Stats.TableSchemaChanged) > 0 && u.ignore")
+		log.Info("ks: ", u.ksName, ", id:", u.ID, " | add: len(th.Stats.TableSchemaChanged) > 0 && u.ignore")
 		// we got an update for this keyspace - we need to stop ignoring it, and reload everything
 		u.ignore = false
 		u.loaded = false
 	}
 
 	if u.ignore {
-		log.Info("add: exit u.ignore")
+		log.Info("ks: ", u.ksName, ", id:", u.ID, " | add: exit u.ignore")
 		// keyspace marked as not working correctly, so we are ignoring it for now
 		return
 	}
 
-	log.Info("add: queue: ", th.Tablet.Alias, " table schema changed: ", th.Stats.TableSchemaChanged, " new queue: ", u.queue == nil)
+	log.Info("ks: ", u.ksName, ", id:", u.ID, " | add: queue: ", th.Tablet.Alias, " table schema changed: ", th.Stats.TableSchemaChanged, " new queue: ", u.queue == nil)
 	if u.queue == nil {
 		u.queue = &queue{}
 		go u.consume()
