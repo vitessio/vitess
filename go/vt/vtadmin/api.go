@@ -1071,7 +1071,7 @@ func (api *API) ReparentTablet(ctx context.Context, req *vtadminpb.ReparentTable
 		return nil, fmt.Errorf("Error reparenting tablet: %w", err)
 	}
 
-	return &vtadminpb.ReparentTabletResponse{Keyspace: r.Keyspace, Primary: r.Primary.String(), Shard: r.Shard}, nil
+	return &vtadminpb.ReparentTabletResponse{Keyspace: r.Keyspace, Primary: r.Primary, Shard: r.Shard}, nil
 }
 
 // PingTablet is part of the vtadminpb.VTAdminServer interface.
@@ -1837,16 +1837,10 @@ func (api *API) getClustersForRequest(ids []string) ([]*cluster.Cluster, []strin
 	return clusters, ids
 }
 
-func (api *API) getTabletForAction(ctx context.Context, span trace.Span, action rbac.Action, alias string, clusterIds []string) (*vtadminpb.Tablet, error) {
-	span.Annotate("tablet_alias", alias)
-
-	tabletAlias, err := topoproto.ParseTabletAlias(alias)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse tablet_alias %s: %w", alias, err)
-	}
-
-	span.Annotate("tablet_cell", tabletAlias.Cell)
-	span.Annotate("tablet_uid", tabletAlias.Uid)
+func (api *API) getTabletForAction(ctx context.Context, span trace.Span, action rbac.Action, alias *topodatapb.TabletAlias, clusterIds []string) (*vtadminpb.Tablet, error) {
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(alias))
+	span.Annotate("tablet_cell", alias.Cell)
+	span.Annotate("tablet_uid", alias.Uid)
 
 	clusters, ids := api.getClustersForRequest(clusterIds)
 
@@ -1867,16 +1861,18 @@ func (api *API) getTabletForAction(ctx context.Context, span trace.Span, action 
 		go func(c *cluster.Cluster) {
 			defer wg.Done()
 
-			ts, err := c.GetTablets(ctx)
+			ts, err := c.FindTablets(ctx, func(t *vtadminpb.Tablet) bool {
+				return topoproto.TabletAliasEqual(t.Tablet.Alias, alias)
+			}, -1)
 			if err != nil {
-				er.RecordError(fmt.Errorf("GetTablets(cluster = %s): %w", c.ID, err))
+				er.RecordError(fmt.Errorf("FindTablets(cluster = %s): %w", c.ID, err))
 				return
 			}
 
 			var found []*vtadminpb.Tablet
 
 			for _, t := range ts {
-				if t.Tablet.Alias.Cell == tabletAlias.Cell && t.Tablet.Alias.Uid == tabletAlias.Uid {
+				if t.Tablet.Alias.Cell == alias.Cell && t.Tablet.Alias.Uid == alias.Uid {
 					found = append(found, t)
 				}
 			}
