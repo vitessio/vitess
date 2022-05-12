@@ -195,7 +195,7 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 		resp, body, err := throttledApps(primaryTablet)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Contains(t, body, "abusing-app")
+		assert.Contains(t, body, "always-throttled-app")
 	}
 	{
 		resp, err := throttleCheckSelf(primaryTablet)

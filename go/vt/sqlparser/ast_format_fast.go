@@ -401,9 +401,26 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 		alterType = "cancel"
 	case CancelAllMigrationType:
 		alterType = "cancel all"
+	case ThrottleMigrationType:
+		alterType = "throttle"
+	case ThrottleAllMigrationType:
+		alterType = "throttle all"
+	case UnthrottleMigrationType:
+		alterType = "unthrottle"
+	case UnthrottleAllMigrationType:
+		alterType = "unthrottle all"
 	}
 	buf.WriteByte(' ')
 	buf.WriteString(alterType)
+	if node.Expire != "" {
+		buf.WriteString(" expire '")
+		buf.WriteString(node.Expire)
+		buf.WriteByte('\'')
+	}
+	if node.Ratio != nil {
+		buf.WriteString(" ratio ")
+		node.Ratio.formatFast(buf)
+	}
 }
 
 // formatFast formats the node.
@@ -420,6 +437,11 @@ func (node *ShowMigrationLogs) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("show vitess_migration '")
 	buf.WriteString(node.UUID)
 	buf.WriteString("' logs")
+}
+
+// formatFast formats the node.
+func (node *ShowThrottledApps) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("show vitess_throttled_apps")
 }
 
 // formatFast formats the node.

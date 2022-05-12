@@ -9,6 +9,7 @@ package throttle
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -66,9 +67,10 @@ var (
 	throttleMetricQuery       = flag.String("throttle_metrics_query", "", "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
 	throttleMetricThreshold   = flag.Float64("throttle_metrics_threshold", math.MaxFloat64, "Override default throttle threshold, respective to -throttle_metrics_query")
 	throttlerCheckAsCheckSelf = flag.Bool("throttle_check_as_check_self", false, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
-)
-var (
+
 	replicationLagQuery = `select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from _vt.heartbeat`
+
+	ErrThrottlerNotReady = errors.New("throttler not enabled/ready")
 )
 
 // ThrottleCheckType allows a client to indicate what type of check it wants to issue. See available types below.
@@ -91,9 +93,10 @@ type Throttler struct {
 	keyspace string
 	shard    string
 
-	check    *ThrottlerCheck
-	isLeader int64
-	isOpen   int64
+	check     *ThrottlerCheck
+	isEnabled bool
+	isLeader  int64
+	isOpen    int64
 
 	env             tabletenv.Env
 	pool            *connpool.Pool
@@ -159,6 +162,7 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, heartbeatWriter heartbeat.
 	}
 
 	if env.Config().EnableLagThrottler {
+		throttler.isEnabled = true
 		throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
 
 		throttler.mysqlInventoryChan = make(chan *mysql.Inventory, 1)
@@ -179,12 +183,24 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, heartbeatWriter heartbeat.
 
 		throttler.httpClient = base.SetupHTTPClient(2 * mysqlCollectInterval)
 		throttler.initThrottleTabletTypes()
-		throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
+		throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
 		throttler.check = NewThrottlerCheck(throttler)
 		throttler.initConfig()
 		throttler.check.SelfChecks(context.Background())
+	} else {
+		// Create an empty cache, just so that it isn't nil
+		throttler.throttledApps = cache.New(cache.NoExpiration, 0)
 	}
 	return throttler
+}
+
+// CheckIsReady checks if this throttler is ready to serve. If not, it returns an error
+func (throttler *Throttler) CheckIsReady() error {
+	if throttler.isEnabled && throttler.IsOpen() {
+		// all good
+		return nil
+	}
+	return ErrThrottlerNotReady
 }
 
 // initThrottleTabletTypes reads the user supplied throttle_tablet_types and sets these
@@ -241,6 +257,12 @@ func (throttler *Throttler) initConfig() {
 		ThrottleThreshold: throttler.MetricsThreshold.Get(),
 		IgnoreHostsCount:  0,
 	}
+}
+
+func (throttler *Throttler) IsOpen() bool {
+	throttler.initMutex.Lock()
+	defer throttler.initMutex.Unlock()
+	return atomic.LoadInt64(&throttler.isOpen) > 0
 }
 
 // Open opens database pool and initializes the schema

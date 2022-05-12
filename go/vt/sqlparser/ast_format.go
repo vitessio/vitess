@@ -272,8 +272,22 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 		alterType = "cancel"
 	case CancelAllMigrationType:
 		alterType = "cancel all"
+	case ThrottleMigrationType:
+		alterType = "throttle"
+	case ThrottleAllMigrationType:
+		alterType = "throttle all"
+	case UnthrottleMigrationType:
+		alterType = "unthrottle"
+	case UnthrottleAllMigrationType:
+		alterType = "unthrottle all"
 	}
 	buf.astPrintf(node, " %s", alterType)
+	if node.Expire != "" {
+		buf.astPrintf(node, " expire '%s'", node.Expire)
+	}
+	if node.Ratio != nil {
+		buf.astPrintf(node, " ratio %v", node.Ratio)
+	}
 }
 
 // Format formats the node.
@@ -284,6 +298,11 @@ func (node *RevertMigration) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *ShowMigrationLogs) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "show vitess_migration '%s' logs", node.UUID)
+}
+
+// Format formats the node.
+func (node *ShowThrottledApps) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show vitess_throttled_apps")
 }
 
 // Format formats the node.
