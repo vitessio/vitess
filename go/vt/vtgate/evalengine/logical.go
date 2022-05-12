@@ -57,11 +57,6 @@ type (
 	CaseExpr struct {
 		cases []WhenThen
 		Else  Expr
-
-		// cached values
-		cached bool
-		t      sqltypes.Type
-		f      flag
 	}
 )
 
@@ -186,51 +181,62 @@ func (i *IsExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 }
 
 func (c *CaseExpr) eval(env *ExpressionEnv, result *EvalResult) {
-	c.innerEval(env, result)
-	t, _ := c.typeof(env)
-	coerceTo(result, t, collations.Unknown)
-}
+	var tmp EvalResult
+	var matched = false
+	var ca collationAggregation
+	var local = collations.Local()
 
-func (c *CaseExpr) innerEval(env *ExpressionEnv, result *EvalResult) {
-	var tst EvalResult
+	// From what we can tell, MySQL actually evaluates all the branches
+	// of a CASE expression, even after a truthy match. I.e. the CASE
+	// operator does _not_ short-circuit.
+
 	for _, whenThen := range c.cases {
-		tst.init(env, whenThen.when)
-		if tst.isTruthy() == boolTrue {
-			whenThen.then.eval(env, result)
-			return
+		tmp.init(env, whenThen.when)
+		truthy := tmp.isTruthy() == boolTrue
+
+		tmp.init(env, whenThen.then)
+		ca.add(local, tmp.collation())
+
+		if !matched && truthy {
+			tmp.resolve()
+			*result = tmp
+			matched = true
 		}
 	}
 	if c.Else != nil {
-		c.Else.eval(env, result)
-		return
+		tmp.init(env, c.Else)
+		ca.add(local, tmp.collation())
+
+		if !matched {
+			tmp.resolve()
+			*result = tmp
+			matched = true
+		}
 	}
 
-	result.setNull()
+	if !matched {
+		result.setNull()
+	}
+
+	t, _ := c.typeof(env)
+	result.coerce(t, ca.result().Collation)
 }
 
 func (c *CaseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
-	if c.cached {
-		return c.t, c.f
-	}
-	var types []sqltypes.Type
+	var ta typeAggregation
 	var resultFlag flag
-	if c.Else != nil {
-		t, f := c.Else.typeof(env)
-		types = append(types, t)
-		resultFlag = f
-	}
 
 	for _, whenthen := range c.cases {
 		t, f := whenthen.then.typeof(env)
-		types = append(types, t)
+		ta.add(t, f)
 		resultFlag = resultFlag | f
 	}
-
-	t := aggregatedType(types)
-
-	c.t, c.f, c.cached = t, resultFlag, true
-
-	return t, resultFlag
+	if c.Else != nil {
+		t, f := c.Else.typeof(env)
+		ta.add(t, f)
+		resultFlag = f
+	}
+	return ta.result(), resultFlag
 }
 
 func (c *CaseExpr) format(buf *formatter, depth int) {

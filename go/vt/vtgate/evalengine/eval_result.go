@@ -52,6 +52,8 @@ const (
 	flagHex flag = 1 << 8
 	// flagBit marks that this value originated from a bit literal
 	flagBit flag = 1 << 9
+	// flagExplicitCollation marks that this value has an explicit collation
+	flagExplicitCollation flag = 1 << 10
 
 	// flagIntegerRange are the flags that mark overflow/underflow in integers
 	flagIntegerRange = flagIntegerOvf | flagIntegerCap | flagIntegerUdf
@@ -329,9 +331,7 @@ func (er *EvalResult) isTruthy() boolean {
 
 func (er *EvalResult) makeBinary() {
 	er.resolve()
-	if er.bytes_ == nil {
-		er.bytes_ = er.toRawBytes()
-	}
+	er.bytes_ = er.toRawBytes()
 	er.type_ = int16(sqltypes.VarBinary)
 	er.collation_ = collationBinary
 	er.clearFlags(flagBit | flagHex)
@@ -339,32 +339,28 @@ func (er *EvalResult) makeBinary() {
 
 func (er *EvalResult) makeTextual(collation collations.ID) {
 	er.resolve()
-	if er.bytes_ == nil {
-		er.bytes_ = er.toRawBytes()
-	}
+	er.bytes_ = er.toRawBytes()
 	er.collation_.Collation = collation
 	er.type_ = int16(sqltypes.VarChar)
 }
 
 func (er *EvalResult) makeTextualAndConvert(collation collations.ID) bool {
 	er.resolve()
-	if er.bytes_ == nil {
-		er.bytes_ = er.toRawBytes()
-	}
+	er.bytes_ = er.toRawBytes()
 	if er.collation_.Collation == collations.Unknown {
 		er.collation_.Collation = collations.CollationBinaryID
 	}
-
-	var err error
-	environment := collations.Local()
-	fromCollation := environment.LookupByID(er.collation_.Collation)
-	toCollation := environment.LookupByID(collation)
-	er.bytes_, err = collations.Convert(nil, toCollation, er.bytes_, fromCollation)
-	if err != nil {
-		er.setNull()
-		return false
+	if collation != collations.CollationBinaryID && collation != er.collation_.Collation {
+		var err error
+		environment := collations.Local()
+		fromCollation := environment.LookupByID(er.collation_.Collation)
+		toCollation := environment.LookupByID(collation)
+		er.bytes_, err = collations.Convert(nil, toCollation, er.bytes_, fromCollation)
+		if err != nil {
+			er.setNull()
+			return false
+		}
 	}
-
 	er.collation_.Collation = collation
 	er.type_ = int16(sqltypes.VarChar)
 	return true
@@ -719,6 +715,9 @@ func (er *EvalResult) makeDecimal(m, d int32) {
 	var dec decimal.Decimal
 	switch tt := er.typeof(); {
 	case tt == sqltypes.Decimal:
+		if m == 0 && d == 0 {
+			return
+		}
 		dec = er.decimal()
 	case sqltypes.IsFloat(tt):
 		dec = decimal.NewFromFloatMySQL(er.float64())
@@ -727,7 +726,12 @@ func (er *EvalResult) makeDecimal(m, d int32) {
 	case sqltypes.IsUnsigned(tt):
 		dec = decimal.NewFromUint(er.uint64())
 	}
-	er.setDecimal(dec.Clamp(m-d, d), d)
+
+	if m == 0 && d == 0 {
+		er.setDecimal(dec, -dec.Exponent())
+	} else {
+		er.setDecimal(dec.Clamp(m-d, d), d)
+	}
 }
 
 func (er *EvalResult) makeNumeric() {
@@ -858,6 +862,42 @@ func (er *EvalResult) coerceToDecimal() decimal.Decimal {
 	}
 }
 
+func (er *EvalResult) coerce(typ sqltypes.Type, coll collations.ID) {
+	if coll == collations.Unknown {
+		panic("EvalResult.coerce with no collation")
+	}
+	if typ == sqltypes.VarChar || typ == sqltypes.Char {
+		// if we have an explicit VARCHAR coercion, always force it so the collation is replaced in the target
+		er.makeTextual(coll)
+		return
+	}
+	if er.typeof() == typ || er.isNull() {
+		// nothing to be done here
+		return
+	}
+	er.resolve()
+	switch typ {
+	case sqltypes.Null:
+		er.setNull()
+	case sqltypes.Binary, sqltypes.VarBinary:
+		er.makeBinary()
+	case sqltypes.Char, sqltypes.VarChar:
+		panic("unreacheable")
+	case sqltypes.Decimal:
+		er.makeDecimal(0, 0)
+	case sqltypes.Float32, sqltypes.Float64:
+		er.makeFloat()
+	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
+		er.makeSignedIntegral()
+	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
+		er.makeUnsignedIntegral()
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Year, sqltypes.TypeJSON, sqltypes.Time, sqltypes.Bit:
+		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s", typ.String()))
+	default:
+		panic(fmt.Sprintf("BUG: emitted unknown type: %s", typ))
+	}
+}
+
 func (er *EvalResult) String() string {
 	return er.value().String()
 }
@@ -909,6 +949,16 @@ func (er *EvalResult) Value() sqltypes.Value {
 		panic("did not resolve EvalResult after evaluation")
 	}
 	return er.value()
+}
+
+func (er *EvalResult) Collation() collations.ID {
+	if er.expr != nil {
+		panic("did not resolve EvalResult after evaluation")
+	}
+	if er.collation_.Collation == collations.Unknown {
+		return collations.CollationBinaryID
+	}
+	return er.collation_.Collation
 }
 
 // TupleValues allows for retrieval of the value we expose for public consumption

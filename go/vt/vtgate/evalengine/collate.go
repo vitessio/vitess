@@ -38,7 +38,7 @@ var collationNumeric = collations.TypedCollation{
 
 var collationBinary = collations.TypedCollation{
 	Collation:    collations.CollationBinaryID,
-	Coercibility: collations.CoerceExplicit,
+	Coercibility: collations.CoerceCoercible,
 	Repertoire:   collations.RepertoireASCII,
 }
 
@@ -51,7 +51,8 @@ func (c *CollateExpr) eval(env *ExpressionEnv, out *EvalResult) {
 }
 
 func (c *CollateExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
-	return c.Inner.typeof(env)
+	t, f := c.Inner.typeof(env)
+	return t, f | flagExplicitCollation
 }
 
 type LookupDefaultCollation collations.ID
