@@ -1869,16 +1869,8 @@ func (api *API) getTabletForAction(ctx context.Context, span trace.Span, action 
 				return
 			}
 
-			var found []*vtadminpb.Tablet
-
-			for _, t := range ts {
-				if t.Tablet.Alias.Cell == alias.Cell && t.Tablet.Alias.Uid == alias.Uid {
-					found = append(found, t)
-				}
-			}
-
 			m.Lock()
-			tablets = append(tablets, found...)
+			tablets = append(tablets, ts...)
 			m.Unlock()
 		}(c)
 	}
