@@ -69,7 +69,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	}
 
 	var err error
-	hp.qp, err = abstract.CreateQPFromSelect(hp.sel, ctx.SemTable)
+	hp.qp, err = abstract.CreateQPFromSelect(hp.sel)
 	if err != nil {
 		return nil, err
 	}
@@ -494,10 +494,6 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		return newPlan, nil
 	}
 
-	if hp.qp.ProjectionError != nil {
-		return nil, hp.qp.ProjectionError
-	}
-
 	return hp.planAggrUsingOA(ctx, plan, grouping)
 }
 
@@ -652,15 +648,17 @@ func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets
 
 		opcode := engine.AggregateSum
 		if aggr.OpCode == engine.AggregateMin ||
-			aggr.OpCode == engine.AggregateMax {
+			aggr.OpCode == engine.AggregateMax ||
+			aggr.OpCode == engine.AggregateRandom {
 			opcode = aggr.OpCode
 		}
 
 		aggrParams[idx] = &engine.AggregateParams{
-			Opcode: opcode,
-			Col:    offset,
-			Alias:  aggr.Alias,
-			Expr:   aggr.Func,
+			Opcode:   opcode,
+			Col:      offset,
+			Alias:    aggr.Alias,
+			Expr:     aggr.Func,
+			Original: aggr.Original,
 		}
 	}
 	return aggrParams, nil
@@ -700,6 +698,7 @@ func addColumnsToOA(
 				WCol:        o.wsCol,
 				Alias:       a.Alias,
 				Expr:        a.Func,
+				Original:    a.Original,
 				CollationID: collID,
 			})
 		}
@@ -742,7 +741,7 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 			err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(expr.Original))
 			return
 		}
-		inner, innerWS, err := hp.qp.GetSimplifiedExpr(aliasedExpr.Expr, ctx.SemTable)
+		inner, innerWS, err := hp.qp.GetSimplifiedExpr(aliasedExpr.Expr)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -798,13 +797,10 @@ func newOffset(col int) offsets {
 	return offsets{col: col, wsCol: -1}
 }
 
-func (hp *horizonPlanning) createGroupingsForColumns(
-	ctx *plancontext.PlanningContext,
-	columns []*sqlparser.ColName,
-) ([]abstract.GroupBy, error) {
+func (hp *horizonPlanning) createGroupingsForColumns(columns []*sqlparser.ColName) ([]abstract.GroupBy, error) {
 	var lhsGrouping []abstract.GroupBy
 	for _, lhsColumn := range columns {
-		expr, wsExpr, err := hp.qp.GetSimplifiedExpr(lhsColumn, ctx.SemTable)
+		expr, wsExpr, err := hp.qp.GetSimplifiedExpr(lhsColumn)
 		if err != nil {
 			return nil, err
 		}
@@ -818,6 +814,9 @@ func (hp *horizonPlanning) createGroupingsForColumns(
 }
 
 func isCountStar(f *sqlparser.FuncExpr) bool {
+	if f == nil {
+		return false
+	}
 	_, isStar := f.Exprs[0].(*sqlparser.StarExpr)
 	return isStar
 }
@@ -1094,8 +1093,8 @@ func findExprInOrderedAggr(plan *orderedAggregate, order abstract.OrderBy) (keyC
 		}
 	}
 	for _, aggregate := range plan.aggregates {
-		if sqlparser.EqualsExpr(order.WeightStrExpr, aggregate.Expr) ||
-			sqlparser.EqualsExpr(order.Inner.Expr, aggregate.Expr) {
+		if sqlparser.EqualsExpr(order.WeightStrExpr, aggregate.Original.Expr) ||
+			sqlparser.EqualsExpr(order.Inner.Expr, aggregate.Original.Expr) {
 			return aggregate.Col, -1, true
 		}
 	}
