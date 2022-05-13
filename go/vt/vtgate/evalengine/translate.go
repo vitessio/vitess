@@ -489,6 +489,54 @@ func translateConvertUsingExpr(expr *sqlparser.ConvertUsingExpr, lookup Translat
 	return &using, nil
 }
 
+func translateCaseExpr(node *sqlparser.CaseExpr, lookup TranslationLookup) (Expr, error) {
+	var err error
+	var result CaseExpr
+
+	if node.Else != nil {
+		result.Else, err = translateExpr(node.Else, lookup)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var cmpbase Expr
+	if node.Expr != nil {
+		cmpbase, err = translateExpr(node.Expr, lookup)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for _, when := range node.Whens {
+		var cond, val Expr
+
+		cond, err = translateExpr(when.Cond, lookup)
+		if err != nil {
+			return nil, err
+		}
+
+		val, err = translateExpr(when.Val, lookup)
+		if err != nil {
+			return nil, err
+		}
+
+		if cmpbase != nil {
+			cond, err = translateComparisonExpr2(sqlparser.EqualOp, cmpbase, cond)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		result.cases = append(result.cases, WhenThen{
+			when: cond,
+			then: val,
+		})
+	}
+
+	return &result, nil
+}
+
 func translateExprNotSupported(e sqlparser.Expr) error {
 	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", ErrTranslateExprNotSupported, sqlparser.String(e))
 }
@@ -544,6 +592,8 @@ func translateExpr(e sqlparser.Expr, lookup TranslationLookup) (Expr, error) {
 		return translateConvertExpr(node, lookup)
 	case *sqlparser.ConvertUsingExpr:
 		return translateConvertUsingExpr(node, lookup)
+	case *sqlparser.CaseExpr:
+		return translateCaseExpr(node, lookup)
 	default:
 		return nil, translateExprNotSupported(e)
 	}
