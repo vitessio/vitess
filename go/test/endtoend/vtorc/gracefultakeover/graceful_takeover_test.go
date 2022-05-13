@@ -66,6 +66,12 @@ func TestGracefulPrimaryTakeover(t *testing.T) {
 	match := utils.WaitForReadOnlyValue(t, curPrimary, 0)
 	require.True(t, match)
 
+	// this is added to reduce flakiness. We need to wait for 1 second before calling
+	// Graceful primray takeover to ensure that the recovery is registered. If the second recovery
+	// ran in less than 1 second, then trying to acknowledge completed recoveries fails because
+	// we try to set the same end timestamp on the recovery of first 2 failures which fails the unique constraint
+	time.Sleep(1 * time.Second)
+
 	status, _ := utils.MakeAPICall(t, fmt.Sprintf("http://localhost:%d/api/graceful-primary-takeover/localhost/%d/localhost/%d", clusterInfo.ClusterInstance.VtorcProcesses[0].WebPort, curPrimary.MySQLPort, replica.MySQLPort))
 	assert.Equal(t, 200, status)
 
