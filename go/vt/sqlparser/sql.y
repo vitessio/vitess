@@ -437,7 +437,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> select_option algorithm_view security_view security_view_opt
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
-%type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression
+%type <expr> expression frame_expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr
+%type <expr> interval_value simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression
 %type <tableExprs> from_opt table_references from_clause
 %type <tableExpr> table_reference table_factor join_table json_table_function
 %type <jtColumnDefinition> jt_column
@@ -5122,13 +5123,13 @@ function_call_keyword
   {
 	 $$ = &Default{ColName: $2}
   }
-| INTERVAL simple_expr sql_id
+| interval_value
   {
 	// This rule prevents the usage of INTERVAL
 	// as a function. If support is needed for that,
 	// we'll need to revisit this. The solution
 	// will be non-trivial because of grammar conflicts.
-	$$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
+	$$ = $1
   }
 | column_name JSON_EXTRACT_OP text_literal_or_arg
   {
@@ -5137,6 +5138,12 @@ function_call_keyword
 | column_name JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
   {
 	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
+  }
+
+interval_value:
+  INTERVAL simple_expr sql_id
+  {
+     $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
   }
 
 trim_type:
@@ -5204,13 +5211,23 @@ frame_point:
   {
     $$ = &FramePoint{Type:$1}
   }
-| expression PRECEDING
+| frame_expression PRECEDING
   {
     $$ = &FramePoint{Type:ExprPrecedingType, Expr:$1}
   }
-| expression FOLLOWING
+| frame_expression FOLLOWING
   {
     $$ = &FramePoint{Type:ExprFollowingType, Expr:$1}
+  }
+
+frame_expression:
+  NUM_literal
+  {
+    $$ = $1
+  }
+| interval_value
+  {
+    $$ = $1
   }
 
 frame_clause_opt:
