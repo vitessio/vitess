@@ -5988,7 +5988,7 @@ match_option:
  }
 
 charset:
-  id_or_var
+  sql_id
   {
     $$ = string($1.String())
   }

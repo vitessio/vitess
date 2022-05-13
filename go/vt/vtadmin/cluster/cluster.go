@@ -785,7 +785,12 @@ func (c *Cluster) GetCellInfos(ctx context.Context, req *vtadminpb.GetCellInfosR
 
 	names := req.Cells
 	if len(names) == 0 {
+		if err := c.topoReadPool.Acquire(ctx); err != nil {
+			return nil, fmt.Errorf("GetCellInfoNames() failed to acquire topoReadPool: %w", err)
+		}
 		resp, err := c.Vtctld.GetCellInfoNames(ctx, &vtctldatapb.GetCellInfoNamesRequest{})
+		c.topoReadPool.Release()
+
 		if err != nil {
 			return nil, fmt.Errorf("failed to GetCellInfoNames: %w", err)
 		}
@@ -826,9 +831,15 @@ func (c *Cluster) GetCellInfos(ctx context.Context, req *vtadminpb.GetCellInfosR
 		go func(name string) {
 			defer wg.Done()
 
+			if err := c.topoReadPool.Acquire(ctx); err != nil {
+				rec.RecordError(fmt.Errorf("GetCellInfo(%s) failed to acquire topoReadPool: %w", name, err))
+				return
+			}
 			resp, err := c.Vtctld.GetCellInfo(ctx, &vtctldatapb.GetCellInfoRequest{
 				Cell: name,
 			})
+			c.topoReadPool.Release()
+
 			if err != nil {
 				rec.RecordError(fmt.Errorf("GetCellInfo(%s) failed: %w", name, err))
 				return
@@ -856,6 +867,11 @@ func (c *Cluster) GetCellInfos(ctx context.Context, req *vtadminpb.GetCellInfosR
 func (c *Cluster) GetCellsAliases(ctx context.Context) (*vtadminpb.ClusterCellsAliases, error) {
 	span, ctx := trace.NewSpan(ctx, "Cluster.GetCellsAliases")
 	defer span.Finish()
+
+	if err := c.topoReadPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("GetCellsAliases() failed to acquire topoReadPool: %w", err)
+	}
+	defer c.topoReadPool.Release()
 
 	resp, err := c.Vtctld.GetCellsAliases(ctx, &vtctldatapb.GetCellsAliasesRequest{})
 	if err != nil {

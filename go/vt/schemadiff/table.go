@@ -89,6 +89,18 @@ func (d *AlterTableEntityDiff) SubsequentDiff() EntityDiff {
 	return d.subsequentDiff
 }
 
+// SetSubsequentDiff implements EntityDiff
+func (d *AlterTableEntityDiff) SetSubsequentDiff(subDiff EntityDiff) {
+	if d == nil {
+		return
+	}
+	if subTableDiff, ok := subDiff.(*AlterTableEntityDiff); ok {
+		d.subsequentDiff = subTableDiff
+	} else {
+		d.subsequentDiff = nil
+	}
+}
+
 // addSubsequentDiff adds a subsequent diff to the tail of the diff sequence
 func (d *AlterTableEntityDiff) addSubsequentDiff(diff *AlterTableEntityDiff) {
 	if d.subsequentDiff == nil {
@@ -150,6 +162,10 @@ func (d *CreateTableEntityDiff) SubsequentDiff() EntityDiff {
 	return nil
 }
 
+// SetSubsequentDiff implements EntityDiff
+func (d *CreateTableEntityDiff) SetSubsequentDiff(EntityDiff) {
+}
+
 //
 type DropTableEntityDiff struct {
 	from      *CreateTableEntity
@@ -203,6 +219,10 @@ func (d *DropTableEntityDiff) SubsequentDiff() EntityDiff {
 	return nil
 }
 
+// SetSubsequentDiff implements EntityDiff
+func (d *DropTableEntityDiff) SetSubsequentDiff(EntityDiff) {
+}
+
 // CreateTableEntity stands for a TABLE construct. It contains the table's CREATE statement.
 type CreateTableEntity struct {
 	sqlparser.CreateTable
@@ -232,7 +252,7 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 		switch strings.ToUpper(opt.Name) {
 		case "CHARSET", "COLLATE":
 			opt.String = strings.ToLower(opt.String)
-			if charset, ok := charsetAliases[opt.String]; ok {
+			if charset, ok := collationEnv.CharsetAlias(opt.String); ok {
 				opt.String = charset
 			}
 		case "ENGINE":
@@ -260,12 +280,6 @@ func defaultCharset() string {
 }
 
 func defaultCharsetCollation(charset string) string {
-	// The collation tables are based on utf8, not the utf8mb3 alias.
-	// We already normalize to utf8mb3 to be explicit, so we have to
-	// map it back here to find the default collation for utf8mb3.
-	if charset == "utf8mb3" {
-		charset = "utf8"
-	}
 	collation := collationEnv.DefaultCollationForCharset(charset)
 	if collation == nil {
 		return ""
@@ -328,7 +342,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 
 		// Map any charset aliases to the real charset. This applies mainly right
 		// now to utf8 being an alias for utf8mb3.
-		if charset, ok := charsetAliases[col.Type.Charset]; ok {
+		if charset, ok := collationEnv.CharsetAlias(col.Type.Charset); ok {
 			col.Type.Charset = charset
 		}
 

@@ -1910,6 +1910,19 @@ func (es *ExtractedSubquery) updateAlternative() {
 	}
 }
 
+// ColumnName returns the alias if one was provided, otherwise prints the AST
+func (ae *AliasedExpr) ColumnName() string {
+	if !ae.As.IsEmpty() {
+		return ae.As.String()
+	}
+
+	if col, ok := ae.Expr.(*ColName); ok {
+		return col.Name.String()
+	}
+
+	return String(ae.Expr)
+}
+
 func isExprLiteral(expr Expr) bool {
 	switch expr := expr.(type) {
 	case *Literal:

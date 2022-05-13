@@ -21,10 +21,8 @@ import (
 	"unicode/utf8"
 )
 
-type ErrFailedConversion int
-
-func (e ErrFailedConversion) Error() string {
-	return fmt.Sprintf("failed to convert %d codepoints", e)
+func failedConversionError(from, to Charset, input []byte) error {
+	return fmt.Errorf("Cannot convert string %q from %s to %s", input, from.Name(), to.Name())
 }
 
 func convertFastFromUTF8(dst []byte, dstCharset Charset, src []byte) ([]byte, error) {
@@ -53,13 +51,14 @@ func convertFastFromUTF8(dst []byte, dstCharset Charset, src []byte) ([]byte, er
 	}
 
 	if failed > 0 {
-		return dst[:nDst], ErrFailedConversion(failed)
+		return dst[:nDst], failedConversionError(&Charset_utf8mb4{}, dstCharset, src)
 	}
 	return dst[:nDst], nil
 }
 
 func convertSlow(dst []byte, dstCharset Charset, src []byte, srcCharset Charset) ([]byte, error) {
 	var failed, nDst int
+	var original = src
 
 	if dst == nil {
 		dst = make([]byte, len(src)*3)
@@ -93,7 +92,7 @@ func convertSlow(dst []byte, dstCharset Charset, src []byte, srcCharset Charset)
 	}
 
 	if failed > 0 {
-		return dst[:nDst], ErrFailedConversion(failed)
+		return dst[:nDst], failedConversionError(srcCharset, dstCharset, original)
 	}
 	return dst[:nDst], nil
 }
@@ -115,7 +114,9 @@ func Convert(dst []byte, dstCharset Charset, src []byte, srcCharset Charset) ([]
 		return trans.Convert(dst, src, srcCharset)
 	}
 	switch srcCharset.(type) {
-	case Charset_utf8, Charset_utf8mb4:
+	case Charset_binary:
+		return ConvertFromBinary(dst, dstCharset, src)
+	case Charset_utf8mb3, Charset_utf8mb4:
 		return convertFastFromUTF8(dst, dstCharset, src)
 	default:
 		return convertSlow(dst, dstCharset, src, srcCharset)
@@ -141,7 +142,7 @@ func ConvertFromBinary(dst []byte, dstCharset Charset, src []byte) ([]byte, erro
 		dst = append(dst, src...)
 	}
 	if !Validate(dstCharset, dst) {
-		return nil, ErrFailedConversion(1)
+		return nil, failedConversionError(&Charset_binary{}, dstCharset, src)
 	}
 	return dst, nil
 }

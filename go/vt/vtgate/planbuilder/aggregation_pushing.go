@@ -38,7 +38,7 @@ func (hp *horizonPlanning) pushAggregation(
 	switch plan := plan.(type) {
 	case *routeGen4:
 		output = plan
-		groupingOffsets, outputAggrsOffset, err = pushAggrOnRoute(ctx, plan, aggregations, grouping, ignoreOutputOrder)
+		groupingOffsets, outputAggrsOffset, _, err = pushAggrOnRoute(ctx, plan, aggregations, grouping, ignoreOutputOrder)
 		return
 
 	case *joinGen4:
@@ -67,14 +67,18 @@ func pushAggrOnRoute(
 	aggregations []abstract.Aggr,
 	grouping []abstract.GroupBy,
 	ignoreOutputOrder bool,
-) ([]offsets, [][]offsets, error) {
+) (
+	groupingOffsets []offsets,
+	vtgateAggregation [][]offsets,
+	nonAggrOffsets []offsets,
+	err error,
+) {
 	columnOrderMatters := !ignoreOutputOrder
 	sel, isSel := plan.Select.(*sqlparser.Select)
 	if !isSel {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't plan aggregation on union")
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't plan aggregation on union")
 	}
 
-	var vtgateAggregation [][]offsets
 	var groupingCols []int
 	var reorg = passThrough
 
@@ -88,7 +92,7 @@ func pushAggrOnRoute(
 		grouping, reorg, it = sortOffsets(grouping, aggregations)
 		vtgateAggregation, groupingCols, err = pushAggrsAndGroupingInOrder(ctx, plan, it, sel, vtgateAggregation, groupingCols)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	} else {
 		// if we haven't already pushed the aggregations, now is the time
@@ -98,7 +102,7 @@ func pushAggrOnRoute(
 		}
 	}
 
-	groupingOffsets := make([]offsets, 0, len(grouping))
+	groupingOffsets = make([]offsets, 0, len(grouping))
 	for idx, expr := range grouping {
 		sel.AddGroupBy(expr.Inner)
 		var pos offsets
@@ -106,7 +110,7 @@ func pushAggrOnRoute(
 			// we have not yet pushed anything, so we need to push the expression first
 			col, _, err := addExpressionToRoute(ctx, plan, &sqlparser.AliasedExpr{Expr: expr.Inner}, true)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			pos = newOffset(col)
 		} else {
@@ -117,7 +121,7 @@ func pushAggrOnRoute(
 			wsExpr := weightStringFor(expr.WeightStrExpr)
 			wsCol, _, err := addExpressionToRoute(ctx, plan, &sqlparser.AliasedExpr{Expr: wsExpr}, true)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			pos.wsCol = wsCol
 			sel.AddGroupBy(wsExpr)
@@ -126,7 +130,7 @@ func pushAggrOnRoute(
 	}
 
 	groupingOffsets, vtgateAggregation = reorg(groupingOffsets, vtgateAggregation)
-	return groupingOffsets, vtgateAggregation, nil
+	return groupingOffsets, vtgateAggregation, nil, nil
 }
 
 func pushAggrsAndGroupingInOrder(
@@ -214,7 +218,7 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 
 	// We need to group by the columns used in the join condition.
 	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
-	lhsCols, err := hp.createGroupingsForColumns(ctx, join.LHSColumns)
+	lhsCols, err := hp.createGroupingsForColumns(join.LHSColumns)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -298,7 +302,7 @@ func (hp *horizonPlanning) pushAggrOnSemiJoin(
 ) ([]offsets, [][]offsets, error) {
 	// We need to group by the columns used in the join condition.
 	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
-	lhsCols, err := hp.createGroupingsForColumns(ctx, join.LHSColumns)
+	lhsCols, err := hp.createGroupingsForColumns(join.LHSColumns)
 	if err != nil {
 		return nil, nil, err
 	}

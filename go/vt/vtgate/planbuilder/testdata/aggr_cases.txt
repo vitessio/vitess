@@ -944,7 +944,28 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'id'; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select id, count(*) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Scalar",
+    "Aggregates": "random(0) AS id, sum(1) AS count(*)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, count(*) from `user` where 1 != 1",
+        "Query": "select id, count(*) from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # scatter aggregate using distinctdistinct
 "select distinct col from user"
@@ -1692,7 +1713,31 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'd' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "random(3) AS d, sum(4) AS count(*)",
+    "GroupBy": "(0|5), (1|6), (2|7)",
+    "ResultColumns": 5,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by a, weight_string(a), b, weight_string(b), c, weight_string(c)",
+        "OrderBy": "(0|5) ASC, (1|6) ASC, (2|7) ASC",
+        "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by a, weight_string(a), b, weight_string(b), c, weight_string(c) order by a asc, b asc, c asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # scatter aggregate with named order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3 order by a, b, c"
@@ -1721,7 +1766,31 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     ]
   }
 }
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'd' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by a, b, c",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "random(3) AS d, sum(4) AS count(*)",
+    "GroupBy": "(0|5), (1|6), (2|7)",
+    "ResultColumns": 5,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by a, weight_string(a), b, weight_string(b), c, weight_string(c)",
+        "OrderBy": "(0|5) ASC, (1|6) ASC, (2|7) ASC",
+        "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by a, weight_string(a), b, weight_string(b), c, weight_string(c) order by a asc, b asc, c asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # scatter aggregate with jumbled order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3, 4 order by d, b, a, c"
@@ -2043,7 +2112,7 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'a'; this is incompatible with sql_mode=only_full_group_by
+Gen4 error: [BUG] unable to plan distinct query as the column is not projected: a
 
 # distinct and aggregate functions
 "select distinct a, count(*) from user group by a"
@@ -2113,7 +2182,31 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
 # Group by invalid column number (code is duplicated from symab).
 "select id from user group by 1.1"
 "column number is not an int"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'id' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user group by 1.1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "random(0) AS id",
+    "GroupBy": "1",
+    "ResultColumns": 1,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, 1.1 from `user` where 1 != 1 group by 1.1",
+        "OrderBy": "1 ASC",
+        "Query": "select id, 1.1 from `user` group by 1.1 order by 1.1 asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # Group by out of range column number (code is duplicated from symab).
 "select id from user group by 2"
@@ -2298,7 +2391,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Projection",
         "Expressions": [
-          "[COLUMN 0]",
+          "[COLUMN 0] as a",
           "[COLUMN 1]"
         ],
         "Inputs": [
@@ -3240,7 +3333,7 @@ Gen4 error: cannot push projections in ordered aggregates
       {
         "OperatorType": "Projection",
         "Expressions": [
-          "[COLUMN 0]",
+          "[COLUMN 0] as a",
           "[COLUMN 2] * [COLUMN 3] as count(*)",
           "[COLUMN 1]"
         ],
@@ -3298,7 +3391,7 @@ Gen4 error: cannot push projections in ordered aggregates
       {
         "OperatorType": "Projection",
         "Expressions": [
-          "[COLUMN 0]",
+          "[COLUMN 0] as a",
           "[COLUMN 2] * [COLUMN 3] as count(user_extra.a)",
           "[COLUMN 1]"
         ],
@@ -3358,7 +3451,7 @@ Gen4 error: cannot push projections in ordered aggregates
         "Expressions": [
           "([COLUMN 2] * [COLUMN 3]) * [COLUMN 4] as count(u.textcol1)",
           "([COLUMN 5] * [COLUMN 6]) * [COLUMN 7] as count(ue.foo)",
-          "[COLUMN 0]",
+          "[COLUMN 0] as bar",
           "[COLUMN 1]"
         ],
         "Inputs": [
@@ -3717,8 +3810,8 @@ Gen4 error: cannot push projections in ordered aggregates
       {
         "OperatorType": "Projection",
         "Expressions": [
-          "[COLUMN 0]",
-          "[COLUMN 1]",
+          "[COLUMN 0] as textcol1",
+          "[COLUMN 1] as val2",
           "[COLUMN 2]"
         ],
         "Inputs": [
@@ -3808,9 +3901,9 @@ Gen4 error: cannot push projections in ordered aggregates
       {
         "OperatorType": "Projection",
         "Expressions": [
-          "[COLUMN 0]",
+          "[COLUMN 0] as col",
           "[COLUMN 3] as min(user_extra.foo)",
-          "[COLUMN 1]",
+          "[COLUMN 1] as bar",
           "[COLUMN 4] as max(user_extra.bar)",
           "[COLUMN 2]"
         ],

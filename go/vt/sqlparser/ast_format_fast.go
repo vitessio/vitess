@@ -737,7 +737,7 @@ func (node *PartitionEngine) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *PartitionOption) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("partition by")
+	buf.WriteString("\npartition by")
 	if node.IsLinear {
 		buf.WriteString(" linear")
 	}
@@ -777,10 +777,10 @@ func (node *PartitionOption) formatFast(buf *TrackedBuffer) {
 		node.SubPartition.formatFast(buf)
 	}
 	if node.Definitions != nil {
-		buf.WriteString(" (")
+		buf.WriteString("\n(")
 		for i, pd := range node.Definitions {
 			if i != 0 {
-				buf.WriteString(", ")
+				buf.WriteString(",\n ")
 			}
 			pd.formatFast(buf)
 		}
@@ -862,7 +862,6 @@ func (ts *TableSpec) formatFast(buf *TrackedBuffer) {
 		}
 	}
 	if ts.PartitionOption != nil {
-		buf.WriteByte(' ')
 		ts.PartitionOption.formatFast(buf)
 	}
 }
