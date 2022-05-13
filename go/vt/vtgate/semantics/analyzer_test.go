@@ -768,7 +768,7 @@ func TestGroupByBinding(t *testing.T) {
 		t.Run(tc.sql, func(t *testing.T) {
 			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
 			sel, _ := stmt.(*sqlparser.Select)
-			grp := sel.GroupBy[0]
+			grp := sel.GroupBy.Exprs[0]
 			d := semTable.RecursiveDeps(grp)
 			require.Equal(t, tc.deps, d, tc.sql)
 		})

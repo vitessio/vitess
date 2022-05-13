@@ -2013,9 +2013,16 @@ func (node *When) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node GroupBy) formatFast(buf *TrackedBuffer) {
+func (node *GroupBy) formatFast(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	if node.All {
+		buf.WriteString(" group by all")
+		return
+	}
 	prefix := " group by "
-	for _, n := range node {
+	for _, n := range node.Exprs {
 		buf.WriteString(prefix)
 		n.formatFast(buf)
 		prefix = ", "

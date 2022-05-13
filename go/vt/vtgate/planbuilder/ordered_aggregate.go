@@ -91,7 +91,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	}
 
 	// Check if we can allow aggregates.
-	hasAggregates := sqlparser.ContainsAggregation(sel.SelectExprs) || len(sel.GroupBy) > 0
+	hasAggregates := sqlparser.ContainsAggregation(sel.SelectExprs) || len(sel.GroupBy.Exprs) > 0
 	if !hasAggregates && !sel.Distinct {
 		return nil
 	}
@@ -169,7 +169,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 // error conditions are treated as no match for simplicity; They will be
 // subsequently caught downstream.
 func (pb *primitiveBuilder) groupByHasUniqueVindex(sel *sqlparser.Select, rb *route) bool {
-	for _, expr := range sel.GroupBy {
+	for _, expr := range sel.GroupBy.Exprs {
 		var matchedExpr sqlparser.Expr
 		switch node := expr.(type) {
 		case *sqlparser.ColName:

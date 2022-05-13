@@ -151,8 +151,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfForeignKeyDefinition(in)
 	case *FuncExpr:
 		return CloneRefOfFuncExpr(in)
-	case GroupBy:
-		return CloneGroupBy(in)
+	case *GroupBy:
+		return CloneRefOfGroupBy(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
 	case *IndexDefinition:
@@ -1080,16 +1080,14 @@ func CloneRefOfFuncExpr(n *FuncExpr) *FuncExpr {
 	return &out
 }
 
-// CloneGroupBy creates a deep clone of the input.
-func CloneGroupBy(n GroupBy) GroupBy {
+// CloneRefOfGroupBy creates a deep clone of the input.
+func CloneRefOfGroupBy(n *GroupBy) *GroupBy {
 	if n == nil {
 		return nil
 	}
-	res := make(GroupBy, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneExpr(x))
-	}
-	return res
+	out := *n
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
+	return &out
 }
 
 // CloneRefOfGroupConcatExpr creates a deep clone of the input.
@@ -1905,7 +1903,7 @@ func CloneRefOfSelect(n *Select) *Select {
 	out.SelectExprs = CloneSelectExprs(n.SelectExprs)
 	out.Where = CloneRefOfWhere(n.Where)
 	out.With = CloneRefOfWith(n.With)
-	out.GroupBy = CloneGroupBy(n.GroupBy)
+	out.GroupBy = CloneRefOfGroupBy(n.GroupBy)
 	out.Having = CloneRefOfWhere(n.Having)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
@@ -3261,6 +3259,18 @@ func CloneSliceOfString(n []string) []string {
 	}
 	res := make([]string, 0, len(n))
 	copy(res, n)
+	return res
+}
+
+// CloneSliceOfExpr creates a deep clone of the input.
+func CloneSliceOfExpr(n []Expr) []Expr {
+	if n == nil {
+		return nil
+	}
+	res := make([]Expr, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneExpr(x))
+	}
 	return res
 }
 

@@ -1513,9 +1513,16 @@ func (node *When) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node GroupBy) Format(buf *TrackedBuffer) {
+func (node *GroupBy) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	if node.All {
+		buf.WriteString(" group by all")
+		return
+	}
 	prefix := " group by "
-	for _, n := range node {
+	for _, n := range node.Exprs {
 		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}

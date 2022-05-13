@@ -421,6 +421,9 @@ var (
 		input:  "SELECT * FROM t1 USE INDEX FOR JOIN (i1) FORCE INDEX FOR JOIN (i2) IGNORE KEY FOR GROUP BY (i1, i2)",
 		output: "select * from t1 use index for join (i1) force index for join (i2) ignore index for group by (i1, i2)",
 	}, {
+		input:  "SELECT * FROM t1 GROUP BY ALL",
+		output: "select * from t1 group by all",
+	}, {
 		input:  "SELECT * FROM t1 USE KEY (), t2 FORCE KEY (i2), t3 IGNORE INDEX FOR GROUP BY (i1, i2)",
 		output: "select * from t1 use index (), t2 force index (i2), t3 ignore index for group by (i1, i2)",
 	}, {

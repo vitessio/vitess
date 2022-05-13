@@ -410,12 +410,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfFuncExpr(a, b)
-	case GroupBy:
-		b, ok := inB.(GroupBy)
+	case *GroupBy:
+		b, ok := inB.(*GroupBy)
 		if !ok {
 			return false
 		}
-		return EqualsGroupBy(a, b)
+		return EqualsRefOfGroupBy(a, b)
 	case *GroupConcatExpr:
 		b, ok := inB.(*GroupConcatExpr)
 		if !ok {
@@ -1996,17 +1996,16 @@ func EqualsRefOfFuncExpr(a, b *FuncExpr) bool {
 		EqualsSelectExprs(a.Exprs, b.Exprs)
 }
 
-// EqualsGroupBy does deep equals between the two objects.
-func EqualsGroupBy(a, b GroupBy) bool {
-	if len(a) != len(b) {
+// EqualsRefOfGroupBy does deep equals between the two objects.
+func EqualsRefOfGroupBy(a, b *GroupBy) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
 		return false
 	}
-	for i := 0; i < len(a); i++ {
-		if !EqualsExpr(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
+	return a.All == b.All &&
+		EqualsSliceOfExpr(a.Exprs, b.Exprs)
 }
 
 // EqualsRefOfGroupConcatExpr does deep equals between the two objects.
@@ -2948,7 +2947,7 @@ func EqualsRefOfSelect(a, b *Select) bool {
 		EqualsSelectExprs(a.SelectExprs, b.SelectExprs) &&
 		EqualsRefOfWhere(a.Where, b.Where) &&
 		EqualsRefOfWith(a.With, b.With) &&
-		EqualsGroupBy(a.GroupBy, b.GroupBy) &&
+		EqualsRefOfGroupBy(a.GroupBy, b.GroupBy) &&
 		EqualsRefOfWhere(a.Having, b.Having) &&
 		EqualsOrderBy(a.OrderBy, b.OrderBy) &&
 		EqualsRefOfLimit(a.Limit, b.Limit) &&
@@ -5463,6 +5462,19 @@ func EqualsSliceOfString(a, b []string) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsSliceOfExpr does deep equals between the two objects.
+func EqualsSliceOfExpr(a, b []Expr) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsExpr(a[i], b[i]) {
 			return false
 		}
 	}

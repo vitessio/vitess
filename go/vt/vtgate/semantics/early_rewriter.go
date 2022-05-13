@@ -68,7 +68,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		}
 	case *sqlparser.Order:
 		r.clause = "order clause"
-	case sqlparser.GroupBy:
+	case *sqlparser.GroupBy:
 		r.clause = "group statement"
 
 	case *sqlparser.Literal:

@@ -1145,6 +1145,25 @@ func (cached *FuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *GroupBy) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Exprs []vitess.io/vitess/go/vt/sqlparser.Expr
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Exprs)) * int64(16))
+		for _, elem := range cached.Exprs {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	return size
+}
 func (cached *GroupConcatExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2508,7 +2527,7 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(176)
+		size += int64(160)
 	}
 	// field Cache *bool
 	size += hack.RuntimeAllocSize(int64(1))
@@ -2536,15 +2555,8 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	size += cached.Where.CachedSize(true)
 	// field With *vitess.io/vitess/go/vt/sqlparser.With
 	size += cached.With.CachedSize(true)
-	// field GroupBy vitess.io/vitess/go/vt/sqlparser.GroupBy
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.GroupBy)) * int64(16))
-		for _, elem := range cached.GroupBy {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
-	}
+	// field GroupBy *vitess.io/vitess/go/vt/sqlparser.GroupBy
+	size += cached.GroupBy.CachedSize(true)
 	// field Having *vitess.io/vitess/go/vt/sqlparser.Where
 	size += cached.Having.CachedSize(true)
 	// field OrderBy vitess.io/vitess/go/vt/sqlparser.OrderBy

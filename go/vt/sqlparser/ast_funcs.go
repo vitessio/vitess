@@ -627,7 +627,7 @@ func NewColNameWithQualifier(identifier string, table TableName) *ColName {
 }
 
 // NewSelect is used to create a select statement
-func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, into *SelectInto, from TableExprs, where *Where, groupBy GroupBy, having *Where) *Select {
+func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, into *SelectInto, from TableExprs, where *Where, groupBy *GroupBy, having *Where) *Select {
 	var cache *bool
 	var distinct, straightJoinHint, sqlFoundRows bool
 
@@ -914,13 +914,16 @@ func (node *Select) AddHaving(expr Expr) {
 
 // AddGroupBy adds a grouping expression, unless it's already present
 func (node *Select) AddGroupBy(expr Expr) {
-	for _, gb := range node.GroupBy {
+	if node.GroupBy.All {
+		return
+	}
+	for _, gb := range node.GroupBy.Exprs {
 		if EqualsExpr(gb, expr) {
 			// group by columns are sets - duplicates don't add anything, so we can just skip these
 			return
 		}
 	}
-	node.GroupBy = append(node.GroupBy, expr)
+	node.GroupBy.Exprs = append(node.GroupBy.Exprs, expr)
 }
 
 // AddWhere adds the boolean expression to the

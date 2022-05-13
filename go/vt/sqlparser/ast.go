@@ -242,7 +242,7 @@ type (
 		SelectExprs SelectExprs
 		Where       *Where
 		With        *With
-		GroupBy     GroupBy
+		GroupBy     *GroupBy
 		Having      *Where
 		OrderBy     OrderBy
 		Limit       *Limit
@@ -2647,7 +2647,10 @@ type ConvertType struct {
 }
 
 // GroupBy represents a GROUP BY clause.
-type GroupBy []Expr
+type GroupBy struct {
+	Exprs []Expr
+	All   bool
+}
 
 // OrderBy represents an ORDER By clause.
 type OrderBy []*Order

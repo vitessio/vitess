@@ -23,8 +23,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.GroupBy) (logicalPlan, error) {
-	if len(groupBy) == 0 {
+func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy *sqlparser.GroupBy) (logicalPlan, error) {
+	if len(groupBy.Exprs) == 0 {
 		// if we have no grouping declared, we only want to visit orderedAggregate
 		_, isOrdered := input.(*orderedAggregate)
 		if !isOrdered {
@@ -51,7 +51,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 		node.Select.(*sqlparser.Select).GroupBy = groupBy
 		return node, nil
 	case *orderedAggregate:
-		for _, expr := range groupBy {
+		for _, expr := range groupBy.Exprs {
 			colNumber := -1
 			switch e := expr.(type) {
 			case *sqlparser.ColName:
@@ -81,7 +81,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 		}
 		// Append the distinct aggregate if any.
 		if node.extraDistinct != nil {
-			groupBy = append(groupBy, node.extraDistinct)
+			groupBy.Exprs = append(groupBy.Exprs, node.extraDistinct)
 		}
 
 		newInput, err := planGroupBy(pb, node.input, groupBy)

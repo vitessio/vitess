@@ -110,12 +110,12 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 				}
 			}
 		}
-	case sqlparser.GroupBy:
+	case *sqlparser.GroupBy:
 		err := s.createSpecialScopePostProjection(cursor.Parent())
 		if err != nil {
 			return err
 		}
-		for _, expr := range node {
+		for _, expr := range node.Exprs {
 			lit := keepIntLiteral(expr)
 			if lit != nil {
 				s.specialExprScopes[lit] = s.currentScope()
@@ -156,7 +156,7 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 		if isParentSelectStatement(cursor) {
 			s.popScope()
 		}
-	case *sqlparser.Select, sqlparser.GroupBy, *sqlparser.Update:
+	case *sqlparser.Select, *sqlparser.GroupBy, *sqlparser.Update:
 		s.popScope()
 	case *sqlparser.Where:
 		if node.Type != sqlparser.HavingClause {

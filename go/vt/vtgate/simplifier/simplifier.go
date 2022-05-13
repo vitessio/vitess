@@ -275,14 +275,14 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 				}
 			}
 			cursor.Replace(newExprs)
-		case sqlparser.GroupBy:
-			var newExprs sqlparser.GroupBy
-			for _, expr := range node {
+		case *sqlparser.GroupBy:
+			var newExprs []sqlparser.Expr
+			for _, expr := range node.Exprs {
 				if shouldKeepExpr(expr) {
 					newExprs = append(newExprs, expr)
 				}
 			}
-			cursor.Replace(newExprs)
+			node.Exprs = newExprs
 		case sqlparser.OrderBy:
 			var newExprs sqlparser.OrderBy
 			for _, expr := range node {
@@ -400,12 +400,11 @@ func visitAllExpressionsInAST(clone sqlparser.SelectStatement, visit func(expres
 				exprs = input
 			}
 			abort = !visitExpressions(exprs, set, visit)
-		case sqlparser.GroupBy:
+		case *sqlparser.GroupBy:
 			set := func(input []sqlparser.Expr) {
-				node = input
-				cursor.Replace(node)
+				node.Exprs = input
 			}
-			abort = !visitExpressions(node, set, visit)
+			abort = !visitExpressions(node.Exprs, set, visit)
 		case sqlparser.OrderBy:
 			for idx := 0; idx < len(node); idx++ {
 				order := node[idx]

@@ -149,6 +149,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   tableExprs    TableExprs
   tableNames    TableNames
   exprs         Exprs
+  groupBy       *GroupBy
   values        Values
   valTuple      ValTuple
   orderBy       OrderBy
@@ -430,7 +431,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <whens> when_expression_list
 %type <when> when_expression
 %type <expr> expression_opt else_expression_opt
-%type <exprs> group_by_opt
+%type <groupBy> group_by_opt
 %type <expr> having_opt
 %type <orderBy> order_by_opt order_list order_by_clause
 %type <order> order
@@ -810,11 +811,11 @@ query_primary:
 //  1         2            3              4                    5             6                7           8
   SELECT comment_opt select_options select_expression_list into_clause from_opt where_expression_opt group_by_opt having_opt
   {
-    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, NewWhere(WhereClause, $7), GroupBy($8), NewWhere(HavingClause, $9))
+    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, NewWhere(WhereClause, $7), $8, NewWhere(HavingClause, $9))
   }
 | SELECT comment_opt select_options select_expression_list from_opt where_expression_opt group_by_opt having_opt
   {
-    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, NewWhere(WhereClause, $6), GroupBy($7), NewWhere(HavingClause, $8))
+    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, NewWhere(WhereClause, $6), $7, NewWhere(HavingClause, $8))
   }
 
 
@@ -5857,7 +5858,15 @@ group_by_opt:
   }
 | GROUP BY expression_list
   {
-    $$ = $3
+    $$ = &GroupBy{
+      Exprs: $3,
+    }
+  }
+| GROUP BY ALL
+  {
+    $$ = &GroupBy{
+      All: true,
+    }
   }
 
 having_opt:

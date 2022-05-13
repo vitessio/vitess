@@ -150,8 +150,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfForeignKeyDefinition(parent, node, replacer)
 	case *FuncExpr:
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
-	case GroupBy:
-		return a.rewriteGroupBy(parent, node, replacer)
+	case *GroupBy:
+		return a.rewriteRefOfGroupBy(parent, node, replacer)
 	case *GroupConcatExpr:
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case *IndexDefinition:
@@ -2381,7 +2381,7 @@ func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, repla
 	}
 	return true
 }
-func (a *application) rewriteGroupBy(parent SQLNode, node GroupBy, replacer replacerFunc) bool {
+func (a *application) rewriteRefOfGroupBy(parent SQLNode, node *GroupBy, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}
@@ -2389,20 +2389,14 @@ func (a *application) rewriteGroupBy(parent SQLNode, node GroupBy, replacer repl
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		kontinue := !a.pre(&a.cur)
-		if a.cur.revisit {
-			node = a.cur.node.(GroupBy)
-			a.cur.revisit = false
-			return a.rewriteGroupBy(parent, node, replacer)
-		}
-		if kontinue {
+		if !a.pre(&a.cur) {
 			return true
 		}
 	}
-	for x, el := range node {
+	for x, el := range node.Exprs {
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(GroupBy)[idx] = newNode.(Expr)
+				parent.(*GroupBy).Exprs[idx] = newNode.(Expr)
 			}
 		}(x)) {
 			return false
@@ -4823,8 +4817,8 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 	}) {
 		return false
 	}
-	if !a.rewriteGroupBy(node, node.GroupBy, func(newNode, parent SQLNode) {
-		parent.(*Select).GroupBy = newNode.(GroupBy)
+	if !a.rewriteRefOfGroupBy(node, node.GroupBy, func(newNode, parent SQLNode) {
+		parent.(*Select).GroupBy = newNode.(*GroupBy)
 	}) {
 		return false
 	}
