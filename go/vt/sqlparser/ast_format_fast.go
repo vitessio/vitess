@@ -401,9 +401,26 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 		alterType = "cancel"
 	case CancelAllMigrationType:
 		alterType = "cancel all"
+	case ThrottleMigrationType:
+		alterType = "throttle"
+	case ThrottleAllMigrationType:
+		alterType = "throttle all"
+	case UnthrottleMigrationType:
+		alterType = "unthrottle"
+	case UnthrottleAllMigrationType:
+		alterType = "unthrottle all"
 	}
 	buf.WriteByte(' ')
 	buf.WriteString(alterType)
+	if node.Expire != "" {
+		buf.WriteString(" expire '")
+		buf.WriteString(node.Expire)
+		buf.WriteByte('\'')
+	}
+	if node.Ratio != nil {
+		buf.WriteString(" ratio ")
+		node.Ratio.formatFast(buf)
+	}
 }
 
 // formatFast formats the node.
@@ -420,6 +437,11 @@ func (node *ShowMigrationLogs) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("show vitess_migration '")
 	buf.WriteString(node.UUID)
 	buf.WriteString("' logs")
+}
+
+// formatFast formats the node.
+func (node *ShowThrottledApps) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("show vitess_throttled_apps")
 }
 
 // formatFast formats the node.
@@ -631,6 +653,60 @@ func (node *PartitionDefinitionOptions) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(" tablespace ")
 		buf.WriteString(node.TableSpace)
 	}
+	if node.SubPartitionDefinitions != nil {
+		buf.WriteString(" (")
+		node.SubPartitionDefinitions.formatFast(buf)
+		buf.WriteByte(')')
+	}
+}
+
+// formatFast formats the node
+func (node SubPartitionDefinitions) formatFast(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.WriteString(prefix)
+		n.formatFast(buf)
+		prefix = ", "
+	}
+}
+
+// formatFast formats the node
+func (node *SubPartitionDefinition) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("subpartition ")
+	node.Name.formatFast(buf)
+	node.Options.formatFast(buf)
+}
+
+// formatFast formats the node
+func (node *SubPartitionDefinitionOptions) formatFast(buf *TrackedBuffer) {
+	if node.Engine != nil {
+		buf.WriteByte(' ')
+		node.Engine.formatFast(buf)
+	}
+	if node.Comment != nil {
+		buf.WriteString(" comment ")
+		node.Comment.formatFast(buf)
+	}
+	if node.DataDirectory != nil {
+		buf.WriteString(" data directory ")
+		node.DataDirectory.formatFast(buf)
+	}
+	if node.IndexDirectory != nil {
+		buf.WriteString(" index directory ")
+		node.IndexDirectory.formatFast(buf)
+	}
+	if node.MaxRows != nil {
+		buf.WriteString(" max_rows ")
+		buf.WriteString(fmt.Sprintf("%d", *node.MaxRows))
+	}
+	if node.MinRows != nil {
+		buf.WriteString(" min_rows ")
+		buf.WriteString(fmt.Sprintf("%d", *node.MinRows))
+	}
+	if node.TableSpace != "" {
+		buf.WriteString(" tablespace ")
+		buf.WriteString(node.TableSpace)
+	}
 }
 
 // formatFast formats the node
@@ -656,7 +732,7 @@ func (node *PartitionEngine) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *PartitionOption) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("partition by")
+	buf.WriteString("\npartition by")
 	if node.IsLinear {
 		buf.WriteString(" linear")
 	}
@@ -696,10 +772,10 @@ func (node *PartitionOption) formatFast(buf *TrackedBuffer) {
 		node.SubPartition.formatFast(buf)
 	}
 	if node.Definitions != nil {
-		buf.WriteString(" (")
+		buf.WriteString("\n(")
 		for i, pd := range node.Definitions {
 			if i != 0 {
-				buf.WriteString(", ")
+				buf.WriteString(",\n ")
 			}
 			pd.formatFast(buf)
 		}
@@ -781,7 +857,6 @@ func (ts *TableSpec) formatFast(buf *TrackedBuffer) {
 		}
 	}
 	if ts.PartitionOption != nil {
-		buf.WriteByte(' ')
 		ts.PartitionOption.formatFast(buf)
 	}
 }
@@ -2378,6 +2453,20 @@ func (node *AlterTable) formatFast(buf *TrackedBuffer) {
 func (node *AddConstraintDefinition) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("add ")
 	node.ConstraintDefinition.formatFast(buf)
+}
+
+func (node *AlterCheck) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("alter check ")
+	node.Name.formatFast(buf)
+	if node.Enforced {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[ENFORCED])
+	} else {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[NOT])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[ENFORCED])
+	}
 }
 
 // formatFast formats the node.

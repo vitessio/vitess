@@ -119,6 +119,9 @@ func bindVariable(yylex yyLexer, bvar string) {
   tableOption      *TableOption
   columnTypeOptions *ColumnTypeOptions
   partitionDefinitionOptions *PartitionDefinitionOptions
+  subPartitionDefinition *SubPartitionDefinition
+  subPartitionDefinitions SubPartitionDefinitions
+  subPartitionDefinitionOptions *SubPartitionDefinitionOptions
   constraintDefinition *ConstraintDefinition
   revertMigration *RevertMigration
   alterMigration  *AlterMigration
@@ -256,7 +259,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %right <str> UNDERSCORE_DEC8 UNDERSCORE_EUCJPMS UNDERSCORE_EUCKR UNDERSCORE_GB18030 UNDERSCORE_GB2312 UNDERSCORE_GBK UNDERSCORE_GEOSTD8
 %right <str> UNDERSCORE_GREEK UNDERSCORE_HEBREW UNDERSCORE_HP8 UNDERSCORE_KEYBCS2 UNDERSCORE_KOI8R UNDERSCORE_KOI8U UNDERSCORE_LATIN1 UNDERSCORE_LATIN2 UNDERSCORE_LATIN5
 %right <str> UNDERSCORE_LATIN7 UNDERSCORE_MACCE UNDERSCORE_MACROMAN UNDERSCORE_SJIS UNDERSCORE_SWE7 UNDERSCORE_TIS620 UNDERSCORE_UCS2 UNDERSCORE_UJIS UNDERSCORE_UTF16
-%right <str> UNDERSCORE_UTF16LE UNDERSCORE_UTF32 UNDERSCORE_UTF8 UNDERSCORE_UTF8MB4
+%right <str> UNDERSCORE_UTF16LE UNDERSCORE_UTF32 UNDERSCORE_UTF8 UNDERSCORE_UTF8MB4 UNDERSCORE_UTF8MB3
 %right <str> INTERVAL
 %nonassoc <str> '.'
 
@@ -277,7 +280,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Migration tokens
-%token <str> VITESS_MIGRATION CANCEL RETRY COMPLETE CLEANUP
+%token <str> VITESS_MIGRATION CANCEL RETRY COMPLETE CLEANUP THROTTLE UNTHROTTLE EXPIRE RATIO
 
 // Transaction Tokens
 %token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -298,7 +301,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 // SHOW tokens
 %token <str> CODE COLLATION COLUMNS DATABASES ENGINES EVENT EXTENDED FIELDS FULL FUNCTION GTID_EXECUTED
 %token <str> KEYSPACES OPEN PLUGINS PRIVILEGES PROCESSLIST SCHEMAS TABLES TRIGGERS USER
-%token <str> VGTID_EXECUTED VITESS_KEYSPACES VITESS_METADATA VITESS_MIGRATIONS VITESS_REPLICATION_STATUS VITESS_SHARDS VITESS_TABLETS VITESS_TARGET VSCHEMA
+%token <str> VGTID_EXECUTED VITESS_KEYSPACES VITESS_METADATA VITESS_MIGRATIONS VITESS_REPLICATION_STATUS VITESS_SHARDS VITESS_TABLETS VITESS_TARGET VSCHEMA VITESS_THROTTLED_APPS
 
 // SET tokens
 %token <str> NAMES GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -383,6 +386,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partitionOption> partitions_options_opt partitions_options_beginning
 %type <partitionDefinitionOptions> partition_definition_attribute_list_opt
 %type <subPartition> subpartition_opt
+%type <subPartitionDefinition> subpartition_definition
+%type <subPartitionDefinitions> subpartition_definition_list subpartition_definition_list_with_brackets
+%type <subPartitionDefinitionOptions> subpartition_definition_attribute_list_opt
 %type <intervalType> interval_time_stamp interval
 %type <str> cache_opt separator_opt flush_option for_channel_opt maxvalue
 %type <matchExprOption> match_option
@@ -451,7 +457,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <ignore> ignore_opt
 %type <str> columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
-%type <boolean> exists_opt not_exists_opt enforced_opt temp_opt full_opt
+%type <boolean> exists_opt not_exists_opt enforced enforced_opt temp_opt full_opt
 %type <empty> to_opt
 %type <str> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
@@ -512,6 +518,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <colKeyOpt> keys
 %type <referenceDefinition> reference_definition reference_definition_opt
 %type <str> underscore_charsets
+%type <str> expire_opt
+%type <literal> ratio_opt
 %start any_command
 
 %%
@@ -1738,6 +1746,10 @@ underscore_charsets:
   {
     $$ = Utf8mb4Str
   }
+| UNDERSCORE_UTF8MB3
+  {
+    $$ = Utf8Str
+  }
 
 literal_or_null:
 literal
@@ -2437,17 +2449,23 @@ restrict_or_cascade_opt:
     $$ = string($1)
   }
 
-enforced_opt:
-  {
-    $$ = true
-  }
-| ENFORCED
+enforced:
+  ENFORCED
   {
     $$ = true
   }
 | NOT ENFORCED
   {
     $$ = false
+  }
+
+enforced_opt:
+  {
+    $$ = true
+  }
+| enforced
+  {
+    $$ = $1
   }
 
 table_option_list_opt:
@@ -2673,6 +2691,28 @@ after_opt:
     $$ = $2
   }
 
+expire_opt:
+  {
+    $$ = ""
+  }
+| EXPIRE STRING
+  {
+    $$ = string($2)
+  }
+
+ratio_opt:
+  {
+    $$ = nil
+  }
+| RATIO INTEGRAL
+  {
+    $$ = NewIntLiteral($2)
+  }
+| RATIO DECIMAL
+  {
+    $$ = NewDecimalLiteral($2)
+  }
+
 alter_commands_list:
   {
     $$ = nil
@@ -2748,6 +2788,10 @@ alter_option:
 | ALTER column_opt column_name SET DEFAULT openb expression closeb
   {
 	$$ = &AlterColumn{Column: $3, DropDefault:false, DefaultVal:$7}
+  }
+| ALTER CHECK id_or_var enforced
+  {
+    $$ = &AlterCheck{Name: $3, Enforced: $4}
   }
 | CHANGE column_opt column_name column_definition first_opt after_opt
   {
@@ -3014,6 +3058,36 @@ alter_statement:
   {
     $$ = &AlterMigration{
       Type: CancelAllMigrationType,
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION STRING THROTTLE expire_opt ratio_opt
+  {
+    $$ = &AlterMigration{
+      Type: ThrottleMigrationType,
+      UUID: string($4),
+      Expire: $6,
+      Ratio: $7,
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION THROTTLE ALL expire_opt ratio_opt
+  {
+    $$ = &AlterMigration{
+      Type: ThrottleAllMigrationType,
+      Expire: $6,
+      Ratio: $7,
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION STRING UNTHROTTLE
+  {
+    $$ = &AlterMigration{
+      Type: UnthrottleMigrationType,
+      UUID: string($4),
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION UNTHROTTLE ALL
+  {
+    $$ = &AlterMigration{
+      Type: UnthrottleAllMigrationType,
     }
   }
 
@@ -3407,6 +3481,74 @@ partition_definition_attribute_list_opt:
     $1.TableSpace = $2
     $$ = $1
   }
+| partition_definition_attribute_list_opt subpartition_definition_list_with_brackets
+  {
+    $1.SubPartitionDefinitions = $2
+    $$ = $1
+  }
+
+subpartition_definition_list_with_brackets:
+  openb subpartition_definition_list closeb{
+    $$ = $2
+  }
+
+subpartition_definition_list:
+  subpartition_definition
+  {
+    $$ = SubPartitionDefinitions{$1}
+  }
+| subpartition_definition_list ',' subpartition_definition
+  {
+    $$ = append($1, $3)
+  }
+
+subpartition_definition:
+  SUBPARTITION sql_id subpartition_definition_attribute_list_opt
+  {
+    $$ = &SubPartitionDefinition{Name:$2, Options: $3}
+  }
+
+subpartition_definition_attribute_list_opt:
+  {
+    $$ = &SubPartitionDefinitionOptions{}
+  }
+| subpartition_definition_attribute_list_opt partition_comment
+  {
+    $1.Comment = $2
+    $$ = $1
+  }
+| subpartition_definition_attribute_list_opt partition_engine
+  {
+    $1.Engine = $2
+    $$ = $1
+  }
+| subpartition_definition_attribute_list_opt partition_data_directory
+  {
+    $1.DataDirectory = $2
+    $$ = $1
+  }
+| subpartition_definition_attribute_list_opt partition_index_directory
+  {
+    $1.IndexDirectory = $2
+    $$ = $1
+  }
+| subpartition_definition_attribute_list_opt partition_max_rows
+  {
+    val := $2
+    $1.MaxRows = &val
+    $$ = $1
+  }
+| subpartition_definition_attribute_list_opt partition_min_rows
+  {
+    val := $2
+    $1.MinRows = &val
+    $$ = $1
+  }
+| subpartition_definition_attribute_list_opt partition_tablespace_name
+  {
+    $1.TableSpace = $2
+    $$ = $1
+  }
 
 partition_value_range:
   VALUES LESS THAN row_tuple
@@ -3684,6 +3826,10 @@ show_statement:
 | SHOW VITESS_MIGRATION STRING LOGS
   {
     $$ = &ShowMigrationLogs{UUID: string($3)}
+  }
+| SHOW VITESS_THROTTLED_APPS
+  {
+    $$ = &ShowThrottledApps{}
   }
 | SHOW VITESS_REPLICATION_STATUS like_opt
   {
@@ -5536,7 +5682,7 @@ match_option:
  }
 
 charset:
-  id_or_var
+  sql_id
   {
     $$ = string($1.String())
   }
@@ -6609,6 +6755,7 @@ non_reserved_keyword:
 | EXCLUSIVE
 | EXECUTE
 | EXPANSION
+| EXPIRE
 | EXPORT
 | EXTENDED
 | FLOAT_TYPE
@@ -6751,6 +6898,7 @@ non_reserved_keyword:
 | PROCESSLIST
 | QUERY
 | RANDOM
+| RATIO
 | REAL
 | REBUILD
 | REDUNDANT
@@ -6811,6 +6959,7 @@ non_reserved_keyword:
 | TEXT
 | THAN
 | THREAD_PRIORITY
+| THROTTLE
 | TIES
 | TIME
 | TIMESTAMP
@@ -6828,6 +6977,7 @@ non_reserved_keyword:
 | UNDEFINED
 | UNICODE
 | UNSIGNED
+| UNTHROTTLE
 | UNUSED
 | UPGRADE
 | USER
@@ -6851,6 +7001,7 @@ non_reserved_keyword:
 | VITESS_SHARDS
 | VITESS_TABLETS
 | VITESS_TARGET
+| VITESS_THROTTLED_APPS
 | VSCHEMA
 | WARNINGS
 | WITHOUT

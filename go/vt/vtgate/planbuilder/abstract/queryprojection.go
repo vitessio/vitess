@@ -26,7 +26,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
@@ -131,7 +130,7 @@ func (s SelectExpr) GetAliasedExpr() (*sqlparser.AliasedExpr, error) {
 }
 
 // CreateQPFromSelect creates the QueryProjection for the input *sqlparser.Select
-func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*QueryProjection, error) {
+func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 	qp := &QueryProjection{
 		Distinct: sel.Distinct,
 	}
@@ -142,7 +141,7 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 	}
 	for _, group := range sel.GroupBy {
 		selectExprIdx, aliasExpr := qp.FindSelectExprIndexForExpr(group)
-		expr, weightStrExpr, err := qp.GetSimplifiedExpr(group, semTable)
+		expr, weightStrExpr, err := qp.GetSimplifiedExpr(group)
 		if err != nil {
 			return nil, err
 		}
@@ -161,7 +160,7 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 		qp.groupByExprs = append(qp.groupByExprs, groupBy)
 	}
 
-	err = qp.addOrderBy(sel.OrderBy, semTable)
+	err = qp.addOrderBy(sel.OrderBy)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +203,7 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 }
 
 // CreateQPFromUnion creates the QueryProjection for the input *sqlparser.Union
-func CreateQPFromUnion(union *sqlparser.Union, semTable *semantics.SemTable) (*QueryProjection, error) {
+func CreateQPFromUnion(union *sqlparser.Union) (*QueryProjection, error) {
 	qp := &QueryProjection{}
 
 	sel := sqlparser.GetFirstSelect(union)
@@ -213,7 +212,7 @@ func CreateQPFromUnion(union *sqlparser.Union, semTable *semantics.SemTable) (*Q
 		return nil, err
 	}
 
-	err = qp.addOrderBy(union.OrderBy, semTable)
+	err = qp.addOrderBy(union.OrderBy)
 	if err != nil {
 		return nil, err
 	}
@@ -221,10 +220,10 @@ func CreateQPFromUnion(union *sqlparser.Union, semTable *semantics.SemTable) (*Q
 	return qp, nil
 }
 
-func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy, semTable *semantics.SemTable) error {
+func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy) error {
 	canPushDownSorting := true
 	for _, order := range orderBy {
-		expr, weightStrExpr, err := qp.GetSimplifiedExpr(order.Expr, semTable)
+		expr, weightStrExpr, err := qp.GetSimplifiedExpr(order.Expr)
 		if err != nil {
 			return err
 		}
@@ -310,10 +309,7 @@ func (qp *QueryProjection) isExprInGroupByExprs(expr SelectExpr) bool {
 }
 
 // GetSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, and returns an expression that is simpler to evaluate
-func (qp *QueryProjection) GetSimplifiedExpr(
-	e sqlparser.Expr,
-	semTable *semantics.SemTable,
-) (expr sqlparser.Expr, weightStrExpr sqlparser.Expr, err error) {
+func (qp *QueryProjection) GetSimplifiedExpr(e sqlparser.Expr) (expr sqlparser.Expr, weightStrExpr sqlparser.Expr, err error) {
 	// If the ORDER BY is against a column alias, we need to remember the expression
 	// behind the alias. The weightstring(.) calls needs to be done against that expression and not the alias.
 	// Eg - select music.foo as bar, weightstring(music.foo) from music order by bar
@@ -458,7 +454,7 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 			Original: aliasedExpr,
 			Func:     fExpr,
 			OpCode:   opcode,
-			Alias:    alias,
+			Alias:    aliasedExpr.ColumnName(),
 			Index:    &idxCopy,
 			Distinct: fExpr.Distinct,
 		})

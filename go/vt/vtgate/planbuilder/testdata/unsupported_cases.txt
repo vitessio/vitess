@@ -41,12 +41,12 @@ Gen4 plan same as above
 # join with USING construct
 "select * from user join user_extra using(id)"
 "unsupported: join with USING(column_list) clause for complex queries"
-Gen4 plan same as above
+Gen4 error: can't handle JOIN USING without authoritative tables
 
 # join with USING construct with 3 tables
 "select user.id from user join user_extra using(id) join music using(id2)"
 "unsupported: join with USING(column_list) clause for complex queries"
-Gen4 plan same as above
+Gen4 error: can't handle JOIN USING without authoritative tables
 
 # natural left join
 "select * from user natural left join user_extra"
@@ -173,7 +173,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
         "Expressions": [
           "[COLUMN 2] * [COLUMN 3] as `user`.id",
           "[COLUMN 1]",
-          "[COLUMN 0]"
+          "[COLUMN 0] as id"
         ],
         "Inputs": [
           {
@@ -231,7 +231,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
         "Expressions": [
           "[COLUMN 2] * [COLUMN 3] as `user`.col",
           "[COLUMN 1]",
-          "[COLUMN 0]"
+          "[COLUMN 0] as id"
         ],
         "Inputs": [
           {
@@ -697,11 +697,6 @@ Gen4 error: can't push predicates on concatenate
 # insert having subquery in row values
 "insert into user(id, name) values ((select 1 from user where id = 1), 'A')"
 "expr cannot be translated, not supported: (select 1 from `user` where id = 1)"
-Gen4 plan same as above
-
-# join with USING construct
-"select user.id from user join user_extra using(id)"
-"unsupported: join with USING(column_list) clause for complex queries"
 Gen4 plan same as above
 
 # lateral derived tables

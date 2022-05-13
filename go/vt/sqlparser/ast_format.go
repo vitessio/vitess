@@ -272,8 +272,22 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 		alterType = "cancel"
 	case CancelAllMigrationType:
 		alterType = "cancel all"
+	case ThrottleMigrationType:
+		alterType = "throttle"
+	case ThrottleAllMigrationType:
+		alterType = "throttle all"
+	case UnthrottleMigrationType:
+		alterType = "unthrottle"
+	case UnthrottleAllMigrationType:
+		alterType = "unthrottle all"
 	}
 	buf.astPrintf(node, " %s", alterType)
+	if node.Expire != "" {
+		buf.astPrintf(node, " expire '%s'", node.Expire)
+	}
+	if node.Ratio != nil {
+		buf.astPrintf(node, " ratio %v", node.Ratio)
+	}
 }
 
 // Format formats the node.
@@ -284,6 +298,11 @@ func (node *RevertMigration) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *ShowMigrationLogs) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "show vitess_migration '%s' logs", node.UUID)
+}
+
+// Format formats the node.
+func (node *ShowThrottledApps) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show vitess_throttled_apps")
 }
 
 // Format formats the node.
@@ -458,6 +477,49 @@ func (node *PartitionDefinitionOptions) Format(buf *TrackedBuffer) {
 	if node.TableSpace != "" {
 		buf.astPrintf(node, " tablespace %s", node.TableSpace)
 	}
+	if node.SubPartitionDefinitions != nil {
+		buf.astPrintf(node, " (%v)", node.SubPartitionDefinitions)
+	}
+}
+
+// Format formats the node
+func (node SubPartitionDefinitions) Format(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// Format formats the node
+func (node *SubPartitionDefinition) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "subpartition %v", node.Name)
+	buf.astPrintf(node, "%v", node.Options)
+}
+
+// Format formats the node
+func (node *SubPartitionDefinitionOptions) Format(buf *TrackedBuffer) {
+	if node.Engine != nil {
+		buf.astPrintf(node, " %v", node.Engine)
+	}
+	if node.Comment != nil {
+		buf.astPrintf(node, " comment %v", node.Comment)
+	}
+	if node.DataDirectory != nil {
+		buf.astPrintf(node, " data directory %v", node.DataDirectory)
+	}
+	if node.IndexDirectory != nil {
+		buf.astPrintf(node, " index directory %v", node.IndexDirectory)
+	}
+	if node.MaxRows != nil {
+		buf.astPrintf(node, " max_rows %d", *node.MaxRows)
+	}
+	if node.MinRows != nil {
+		buf.astPrintf(node, " min_rows %d", *node.MinRows)
+	}
+	if node.TableSpace != "" {
+		buf.astPrintf(node, " tablespace %s", node.TableSpace)
+	}
 }
 
 // Format formats the node
@@ -481,7 +543,7 @@ func (node *PartitionEngine) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *PartitionOption) Format(buf *TrackedBuffer) {
-	buf.literal("partition by")
+	buf.literal("\npartition by")
 	if node.IsLinear {
 		buf.literal(" linear")
 	}
@@ -511,10 +573,10 @@ func (node *PartitionOption) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " %v", node.SubPartition)
 	}
 	if node.Definitions != nil {
-		buf.literal(" (")
+		buf.literal("\n(")
 		for i, pd := range node.Definitions {
 			if i != 0 {
-				buf.literal(", ")
+				buf.literal(",\n ")
 			}
 			buf.astPrintf(node, "%v", pd)
 		}
@@ -581,7 +643,7 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 		}
 	}
 	if ts.PartitionOption != nil {
-		buf.astPrintf(ts, " %v", ts.PartitionOption)
+		buf.astPrintf(ts, "%v", ts.PartitionOption)
 	}
 }
 
@@ -1808,6 +1870,15 @@ func (node *AlterTable) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *AddConstraintDefinition) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "add %v", node.ConstraintDefinition)
+}
+
+func (node *AlterCheck) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "alter check %v", node.Name)
+	if node.Enforced {
+		buf.astPrintf(node, " %s", keywordStrings[ENFORCED])
+	} else {
+		buf.astPrintf(node, " %s %s", keywordStrings[NOT], keywordStrings[ENFORCED])
+	}
 }
 
 // Format formats the node.

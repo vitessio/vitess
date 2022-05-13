@@ -1007,11 +1007,12 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	plan.Warnings = vcursor.warnings
 	vcursor.warnings = nil
 
-	if qo.cachePlan() && sqlparser.CachePlan(statement) {
+	err = e.checkThatPlanIsValid(stmt, plan)
+	// Only cache the plan if it is valid (i.e. does not scatter)
+	if err == nil && qo.cachePlan() && sqlparser.CachePlan(statement) {
 		e.plans.Set(planKey, plan)
 	}
-
-	return e.checkThatPlanIsValid(stmt, plan)
+	return plan, err
 }
 
 func (e *Executor) canNormalizeStatement(stmt sqlparser.Statement, qo iQueryOption, setVarComment string) bool {
@@ -1319,9 +1320,9 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 	return nil
 }
 
-func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.Plan) (*engine.Plan, error) {
+func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.Plan) error {
 	if e.allowScatter || sqlparser.AllowScatterDirective(stmt) {
-		return plan, nil
+		return nil
 	}
 	// we go over all the primitives in the plan, searching for a route that is of SelectScatter opcode
 	badPrimitive := engine.Find(func(node engine.Primitive) bool {
@@ -1333,10 +1334,10 @@ func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.P
 	}, plan.Instructions)
 
 	if badPrimitive == nil {
-		return plan, nil
+		return nil
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "plan includes scatter, which is disallowed using the `no_scatter` command line argument")
+	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "plan includes scatter, which is disallowed using the `no_scatter` command line argument")
 }
 
 func getTabletThrottlerStatus(tabletHostPort string) (string, error) {

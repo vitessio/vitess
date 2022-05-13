@@ -2391,7 +2391,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Projection",
         "Expressions": [
-          "[COLUMN 0]",
+          "[COLUMN 0] as a",
           "[COLUMN 1]"
         ],
         "Inputs": [
@@ -3333,7 +3333,7 @@ Gen4 error: cannot push projections in ordered aggregates
       {
         "OperatorType": "Projection",
         "Expressions": [
-          "[COLUMN 0]",
+          "[COLUMN 0] as a",
           "[COLUMN 2] * [COLUMN 3] as count(*)",
           "[COLUMN 1]"
         ],
@@ -3391,7 +3391,7 @@ Gen4 error: cannot push projections in ordered aggregates
       {
         "OperatorType": "Projection",
         "Expressions": [
-          "[COLUMN 0]",
+          "[COLUMN 0] as a",
           "[COLUMN 2] * [COLUMN 3] as count(user_extra.a)",
           "[COLUMN 1]"
         ],
@@ -3451,7 +3451,7 @@ Gen4 error: cannot push projections in ordered aggregates
         "Expressions": [
           "([COLUMN 2] * [COLUMN 3]) * [COLUMN 4] as count(u.textcol1)",
           "([COLUMN 5] * [COLUMN 6]) * [COLUMN 7] as count(ue.foo)",
-          "[COLUMN 0]",
+          "[COLUMN 0] as bar",
           "[COLUMN 1]"
         ],
         "Inputs": [
@@ -3810,8 +3810,8 @@ Gen4 error: cannot push projections in ordered aggregates
       {
         "OperatorType": "Projection",
         "Expressions": [
-          "[COLUMN 0]",
-          "[COLUMN 1]",
+          "[COLUMN 0] as textcol1",
+          "[COLUMN 1] as val2",
           "[COLUMN 2]"
         ],
         "Inputs": [
@@ -3901,9 +3901,9 @@ Gen4 error: cannot push projections in ordered aggregates
       {
         "OperatorType": "Projection",
         "Expressions": [
-          "[COLUMN 0]",
+          "[COLUMN 0] as col",
           "[COLUMN 3] as min(user_extra.foo)",
-          "[COLUMN 1]",
+          "[COLUMN 1] as bar",
           "[COLUMN 4] as max(user_extra.bar)",
           "[COLUMN 2]"
         ],

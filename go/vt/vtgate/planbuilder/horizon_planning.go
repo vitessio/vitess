@@ -69,7 +69,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	}
 
 	var err error
-	hp.qp, err = abstract.CreateQPFromSelect(hp.sel, ctx.SemTable)
+	hp.qp, err = abstract.CreateQPFromSelect(hp.sel)
 	if err != nil {
 		return nil, err
 	}
@@ -600,7 +600,8 @@ func passGroupingColumns(proj *projection, groupings []offsets, grouping []abstr
 	for idx, grp := range groupings {
 		origGrp := grouping[idx]
 		var offs offsets
-		offs.col, err = proj.addColumn(origGrp.InnerIndex, sqlparser.Offset(grp.col), "")
+		alias := origGrp.AsAliasedExpr().ColumnName()
+		offs.col, err = proj.addColumn(origGrp.InnerIndex, sqlparser.Offset(grp.col), alias)
 		if err != nil {
 			return nil, err
 		}
@@ -740,7 +741,7 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 			err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(expr.Original))
 			return
 		}
-		inner, innerWS, err := hp.qp.GetSimplifiedExpr(aliasedExpr.Expr, ctx.SemTable)
+		inner, innerWS, err := hp.qp.GetSimplifiedExpr(aliasedExpr.Expr)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -796,13 +797,10 @@ func newOffset(col int) offsets {
 	return offsets{col: col, wsCol: -1}
 }
 
-func (hp *horizonPlanning) createGroupingsForColumns(
-	ctx *plancontext.PlanningContext,
-	columns []*sqlparser.ColName,
-) ([]abstract.GroupBy, error) {
+func (hp *horizonPlanning) createGroupingsForColumns(columns []*sqlparser.ColName) ([]abstract.GroupBy, error) {
 	var lhsGrouping []abstract.GroupBy
 	for _, lhsColumn := range columns {
-		expr, wsExpr, err := hp.qp.GetSimplifiedExpr(lhsColumn, ctx.SemTable)
+		expr, wsExpr, err := hp.qp.GetSimplifiedExpr(lhsColumn)
 		if err != nil {
 			return nil, err
 		}
