@@ -1241,9 +1241,9 @@ var (
 		input:  "alter table t2 add primary key `zzz` (id)",
 		output: "alter table t2 add primary key (id)",
 	}, {
-		input: "alter table a partition by hash (id) partitions 4",
+		input: "alter table a \npartition by hash (id) partitions 4",
 	}, {
-		input: "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than maxvalue)",
+		input: "alter table a \npartition by range (id)\n(partition p0 values less than (10),\n partition p1 values less than maxvalue)",
 	}, {
 		input:      "create database a garbage values",
 		output:     "create database a",
@@ -1434,28 +1434,28 @@ var (
 		input: "create table invalid_enum_value_name (\n\there_be_enum enum('$§!') default null\n)",
 	}, {
 		input:  "create table t (id int) partition by hash (id) partitions 3",
-		output: "create table t (\n\tid int\n) partition by hash (id) partitions 3",
+		output: "create table t (\n\tid int\n)\npartition by hash (id) partitions 3",
 	}, {
 		input:  "create table t (hired date) partition by linear hash (year(hired)) partitions 4",
-		output: "create table t (\n\thired date\n) partition by linear hash (year(hired)) partitions 4",
+		output: "create table t (\n\thired date\n)\npartition by linear hash (year(hired)) partitions 4",
 	}, {
 		input:  "create table t (id int) partition by key (id) partitions 2",
-		output: "create table t (\n\tid int\n) partition by key (id) partitions 2",
+		output: "create table t (\n\tid int\n)\npartition by key (id) partitions 2",
 	}, {
 		input:  "create table t (id int) partition by key algorithm = 1 (id)",
-		output: "create table t (\n\tid int\n) partition by key algorithm = 1 (id)",
+		output: "create table t (\n\tid int\n)\npartition by key algorithm = 1 (id)",
 	}, {
 		input:  "create table t (id int not null) partition by linear key (id) partitions 5",
-		output: "create table t (\n\tid int not null\n) partition by linear key (id) partitions 5",
+		output: "create table t (\n\tid int not null\n)\npartition by linear key (id) partitions 5",
 	}, {
-		input:  "create table t (id int) partition by list (id)",
-		output: "create table t (\n\tid int\n) partition by list (id)", // TODO PARTITION BY LIST(id) (PARTITION p0 VALUES IN (1, 4, 7))
+		input:  "create table t (id int) partition by list (id) (partition p0 values in (1, 4, 7))",
+		output: "create table t (\n\tid int\n)\npartition by list (id)\n(partition p0 values in (1, 4, 7))",
 	}, {
 		input:  "create table t (renewal date) partition by range columns (renewal) (partition p0 values less than ('2021-08-27'))",
-		output: "create table t (\n\trenewal date\n) partition by range columns (renewal) (partition p0 values less than ('2021-08-27'))",
+		output: "create table t (\n\trenewal date\n)\npartition by range columns (renewal)\n(partition p0 values less than ('2021-08-27'))",
 	}, {
 		input:  "create table t (pur date) partition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2 (partition p0 values less than (2015), partition p2 values less than (2018))",
-		output: "create table t (\n\tpur date\n) partition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2 (partition p0 values less than (2015), partition p2 values less than (2018))",
+		output: "create table t (\n\tpur date\n)\npartition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2\n(partition p0 values less than (2015),\n partition p2 values less than (2018))",
 	}, {
 		// Alter Vschema does not reach the vttablets, so we don't need to run the normalizer test
 		input:                "alter vschema create vindex hash_vdx using `hash`",
@@ -2936,7 +2936,7 @@ var (
 		output: "select json_unquote(@j) from dual",
 	}, {
 		input:  "CREATE TABLE ts (id INT, purchased DATE) PARTITION BY RANGE( YEAR(purchased) ) SUBPARTITION BY HASH( TO_DAYS(purchased) ) ( PARTITION p0 VALUES LESS THAN (1990) (SUBPARTITION s0,SUBPARTITION s1),PARTITION p1 VALUES LESS THAN (2000),PARTITION p2 VALUES LESS THAN MAXVALUE (SUBPARTITION s2,SUBPARTITION s3));",
-		output: "create table ts (\n\tid INT,\n\tpurchased DATE\n) partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased)) (partition p0 values less than (1990) (subpartition s0, subpartition s1), partition p1 values less than (2000), partition p2 values less than maxvalue (subpartition s2, subpartition `s3`))",
+		output: "create table ts (\n\tid INT,\n\tpurchased DATE\n)\npartition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))\n(partition p0 values less than (1990) (subpartition s0, subpartition s1),\n partition p1 values less than (2000),\n partition p2 values less than maxvalue (subpartition s2, subpartition `s3`))",
 	}}
 )
 
@@ -4361,7 +4361,12 @@ PARTITION BY RANGE (store_id) (
 	separated DATE not null default '9999-12-31',
 	job_code INT not null,
 	store_id INT not null
-) partition by range (store_id) (partition p0 values less than (6), partition p1 values less than (11), partition p2 values less than (16), partition p3 values less than (21))`,
+)
+partition by range (store_id)
+(partition p0 values less than (6),
+ partition p1 values less than (11),
+ partition p2 values less than (16),
+ partition p3 values less than (21))`,
 		},
 		{
 			input: `CREATE TABLE employees (
@@ -4387,7 +4392,12 @@ PARTITION BY RANGE (store_id) (
 	separated DATE not null default '9999-12-31',
 	job_code INT not null,
 	store_id INT not null
-) partition by range (store_id) (partition p0 values less than (6), partition p1 values less than (11), partition p2 values less than (16), partition p3 values less than maxvalue)`,
+)
+partition by range (store_id)
+(partition p0 values less than (6),
+ partition p1 values less than (11),
+ partition p2 values less than (16),
+ partition p3 values less than maxvalue)`,
 		},
 		{
 			input: `CREATE TABLE employees (
@@ -4412,7 +4422,11 @@ PARTITION BY RANGE (job_code) (
 	separated DATE not null default '9999-12-31',
 	job_code INT not null,
 	store_id INT not null
-) partition by range (job_code) (partition p0 values less than (100), partition p1 values less than (1000), partition p2 values less than (10000))`,
+)
+partition by range (job_code)
+(partition p0 values less than (100),
+ partition p1 values less than (1000),
+ partition p2 values less than (10000))`,
 		},
 		{
 			input: `CREATE TABLE employees (
@@ -4438,7 +4452,12 @@ PARTITION BY RANGE ( YEAR(separated) ) (
 	separated DATE not null default '9999-12-31',
 	job_code INT,
 	store_id INT
-) partition by range (YEAR(separated)) (partition p0 values less than (1991), partition p1 values less than (1996), partition p2 values less than (2001), partition p3 values less than maxvalue)`,
+)
+partition by range (YEAR(separated))
+(partition p0 values less than (1991),
+ partition p1 values less than (1996),
+ partition p2 values less than (2001),
+ partition p3 values less than maxvalue)`,
 		},
 		{
 			input: `CREATE TABLE quarterly_report_status (
@@ -4462,7 +4481,18 @@ PARTITION BY RANGE ( UNIX_TIMESTAMP(report_updated) ) (
 	report_id INT not null,
 	report_status VARCHAR(20) not null,
 	report_updated TIMESTAMP not null default current_timestamp() on update current_timestamp()
-) partition by range (UNIX_TIMESTAMP(report_updated)) (partition p0 values less than (UNIX_TIMESTAMP('2008-01-01 00:00:00')), partition p1 values less than (UNIX_TIMESTAMP('2008-04-01 00:00:00')), partition p2 values less than (UNIX_TIMESTAMP('2008-07-01 00:00:00')), partition p3 values less than (UNIX_TIMESTAMP('2008-10-01 00:00:00')), partition p4 values less than (UNIX_TIMESTAMP('2009-01-01 00:00:00')), partition p5 values less than (UNIX_TIMESTAMP('2009-04-01 00:00:00')), partition p6 values less than (UNIX_TIMESTAMP('2009-07-01 00:00:00')), partition p7 values less than (UNIX_TIMESTAMP('2009-10-01 00:00:00')), partition p8 values less than (UNIX_TIMESTAMP('2010-01-01 00:00:00')), partition p9 values less than maxvalue)`,
+)
+partition by range (UNIX_TIMESTAMP(report_updated))
+(partition p0 values less than (UNIX_TIMESTAMP('2008-01-01 00:00:00')),
+ partition p1 values less than (UNIX_TIMESTAMP('2008-04-01 00:00:00')),
+ partition p2 values less than (UNIX_TIMESTAMP('2008-07-01 00:00:00')),
+ partition p3 values less than (UNIX_TIMESTAMP('2008-10-01 00:00:00')),
+ partition p4 values less than (UNIX_TIMESTAMP('2009-01-01 00:00:00')),
+ partition p5 values less than (UNIX_TIMESTAMP('2009-04-01 00:00:00')),
+ partition p6 values less than (UNIX_TIMESTAMP('2009-07-01 00:00:00')),
+ partition p7 values less than (UNIX_TIMESTAMP('2009-10-01 00:00:00')),
+ partition p8 values less than (UNIX_TIMESTAMP('2010-01-01 00:00:00')),
+ partition p9 values less than maxvalue)`,
 		},
 		{
 			input: `CREATE TABLE quarterly_report_status (
@@ -4486,7 +4516,18 @@ PARTITION BY RANGE ( UNIX_TIMESTAMP(report_updated) ) (
 	report_id INT not null,
 	report_status VARCHAR(20) not null,
 	report_updated TIMESTAMP not null default current_timestamp() on update current_timestamp()
-) partition by range (UNIX_TIMESTAMP(report_updated)) (partition p0 values less than (UNIX_TIMESTAMP('2008-01-01 00:00:00')), partition p1 values less than (UNIX_TIMESTAMP('2008-04-01 00:00:00')), partition p2 values less than (UNIX_TIMESTAMP('2008-07-01 00:00:00')), partition p3 values less than (UNIX_TIMESTAMP('2008-10-01 00:00:00')), partition p4 values less than (UNIX_TIMESTAMP('2009-01-01 00:00:00')), partition p5 values less than (UNIX_TIMESTAMP('2009-04-01 00:00:00')), partition p6 values less than (UNIX_TIMESTAMP('2009-07-01 00:00:00')), partition p7 values less than (UNIX_TIMESTAMP('2009-10-01 00:00:00')), partition p8 values less than (UNIX_TIMESTAMP('2010-01-01 00:00:00')), partition p9 values less than maxvalue)`,
+)
+partition by range (UNIX_TIMESTAMP(report_updated))
+(partition p0 values less than (UNIX_TIMESTAMP('2008-01-01 00:00:00')),
+ partition p1 values less than (UNIX_TIMESTAMP('2008-04-01 00:00:00')),
+ partition p2 values less than (UNIX_TIMESTAMP('2008-07-01 00:00:00')),
+ partition p3 values less than (UNIX_TIMESTAMP('2008-10-01 00:00:00')),
+ partition p4 values less than (UNIX_TIMESTAMP('2009-01-01 00:00:00')),
+ partition p5 values less than (UNIX_TIMESTAMP('2009-04-01 00:00:00')),
+ partition p6 values less than (UNIX_TIMESTAMP('2009-07-01 00:00:00')),
+ partition p7 values less than (UNIX_TIMESTAMP('2009-10-01 00:00:00')),
+ partition p8 values less than (UNIX_TIMESTAMP('2010-01-01 00:00:00')),
+ partition p9 values less than maxvalue)`,
 		},
 		{
 			input: `CREATE TABLE members (
@@ -4509,7 +4550,13 @@ PARTITION BY RANGE COLUMNS(joined) (
 	username VARCHAR(16) not null,
 	email VARCHAR(35),
 	joined DATE not null
-) partition by range columns (joined) (partition p0 values less than ('1960-01-01'), partition p1 values less than ('1970-01-01'), partition p2 values less than ('1980-01-01'), partition p3 values less than ('1990-01-01'), partition p4 values less than maxvalue)`,
+)
+partition by range columns (joined)
+(partition p0 values less than ('1960-01-01'),
+ partition p1 values less than ('1970-01-01'),
+ partition p2 values less than ('1980-01-01'),
+ partition p3 values less than ('1990-01-01'),
+ partition p4 values less than maxvalue)`,
 		},
 		{
 			input: `CREATE TABLE ti (id INT, amount DECIMAL(7,2), tr_date DATE)
@@ -4520,7 +4567,8 @@ PARTITION BY RANGE COLUMNS(joined) (
 	id INT,
 	amount DECIMAL(7,2),
 	tr_date DATE
-) ENGINE INNODB partition by hash (MONTH(tr_date)) partitions 6`,
+) ENGINE INNODB
+partition by hash (MONTH(tr_date)) partitions 6`,
 		},
 		{
 			input: `CREATE TABLE members (
@@ -4538,7 +4586,8 @@ PARTITIONS 6`,
 	username VARCHAR(16) not null,
 	email VARCHAR(35),
 	joined DATE not null
-) partition by key (joined) partitions 6`,
+)
+partition by key (joined) partitions 6`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
@@ -4548,7 +4597,10 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5), partition MyPart values in (2, 4, 6))`,
+)
+partition by list (val)
+(partition mypart values in (1, 3, 5),
+ partition MyPart values in (2, 4, 6))`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
@@ -4558,7 +4610,10 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR, partition MyPart values in (2, 4, 6))`,
+)
+partition by list (val)
+(partition mypart values in (1, 3, 5) storage engine FOOBAR,
+ partition MyPart values in (2, 4, 6))`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
@@ -4568,7 +4623,10 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) engine FOOBAR, partition MyPart values in (2, 4, 6))`,
+)
+partition by list (val)
+(partition mypart values in (1, 3, 5) engine FOOBAR,
+ partition MyPart values in (2, 4, 6))`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
@@ -4578,7 +4636,10 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR, partition MyPart values in (2, 4, 6))`,
+)
+partition by list (val)
+(partition mypart values in (1, 3, 5) storage engine FOOBAR,
+ partition MyPart values in (2, 4, 6))`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
@@ -4588,7 +4649,10 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR comment 'test', partition MyPart values in (2, 4, 6) comment 'test2')`,
+)
+partition by list (val)
+(partition mypart values in (1, 3, 5) storage engine FOOBAR comment 'test',
+ partition MyPart values in (2, 4, 6) comment 'test2')`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
@@ -4598,7 +4662,10 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR data directory 'test', partition MyPart values in (2, 4, 6) data directory 'test2')`,
+)
+partition by list (val)
+(partition mypart values in (1, 3, 5) storage engine FOOBAR data directory 'test',
+ partition MyPart values in (2, 4, 6) data directory 'test2')`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
@@ -4608,13 +4675,19 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) index directory 'test', partition MyPart values in (2, 4, 6) index directory 'test2')`,
+)
+partition by list (val)
+(partition mypart values in (1, 3, 5) index directory 'test',
+ partition MyPart values in (2, 4, 6) index directory 'test2')`,
 		},
 		{
 			input: `create table t1 (id int primary key) partition by list (id) (partition p1 values in(11,21), partition p2 values in (12,22))`,
 			output: `create table t1 (
 	id int primary key
-) partition by list (id) (partition p1 values in (11, 21), partition p2 values in (12, 22))`,
+)
+partition by list (id)
+(partition p1 values in (11, 21),
+ partition p2 values in (12, 22))`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
@@ -4624,7 +4697,10 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) storage engine FOOBAR comment 'before' data directory 'test', partition MyPart values in (2, 4, 6) data directory 'test2')`,
+)
+partition by list (val)
+(partition mypart values in (1, 3, 5) storage engine FOOBAR comment 'before' data directory 'test',
+ partition MyPart values in (2, 4, 6) data directory 'test2')`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
@@ -4634,7 +4710,10 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) max_rows 4, partition MyPart values in (2, 4, 6) max_rows 10)`,
+)
+partition by list (val)
+(partition mypart values in (1, 3, 5) max_rows 4,
+ partition MyPart values in (2, 4, 6) max_rows 10)`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
@@ -4644,7 +4723,10 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) min_rows 4, partition MyPart values in (2, 4, 6) min_rows 10)`,
+)
+partition by list (val)
+(partition mypart values in (1, 3, 5) min_rows 4,
+ partition MyPart values in (2, 4, 6) min_rows 10)`,
 		},
 		{
 			input: `CREATE TABLE t2 (val INT)
@@ -4654,7 +4736,10 @@ PARTITIONS 6`,
 )`,
 			output: `create table t2 (
 	val INT
-) partition by list (val) (partition mypart values in (1, 3, 5) tablespace innodb_system, partition MyPart values in (2, 4, 6) tablespace innodb_system)`,
+)
+partition by list (val)
+(partition mypart values in (1, 3, 5) tablespace innodb_system,
+ partition MyPart values in (2, 4, 6) tablespace innodb_system)`,
 		},
 		{
 			// index with an expression
@@ -4746,7 +4831,11 @@ PARTITIONS 6`,
 			output: `create table ts (
 	id INT,
 	purchased DATE
-) partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased)) (partition p0 values less than (1990) (subpartition s0, subpartition s1), partition p1 values less than (2000) (subpartition s2, subpartition s31), partition p2 values less than maxvalue (subpartition s4, subpartition s5))`,
+)
+partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
+(partition p0 values less than (1990) (subpartition s0, subpartition s1),
+ partition p1 values less than (2000) (subpartition s2, subpartition s31),
+ partition p2 values less than maxvalue (subpartition s4, subpartition s5))`,
 		},
 		{
 			input: `CREATE TABLE ts (id INT, purchased DATE)
@@ -4768,7 +4857,11 @@ PARTITIONS 6`,
 			output: `create table ts (
 	id INT,
 	purchased DATE
-) partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased)) (partition p0 values less than (1990) (subpartition s0 storage engine innodb data directory '/data', subpartition s1 comment 'this is s1' index directory '/index'), partition p1 values less than (2000) (subpartition s2 max_rows 4, subpartition s31 min_rows 5 tablespace t2), partition p2 values less than maxvalue (subpartition s4, subpartition s5))`,
+)
+partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
+(partition p0 values less than (1990) (subpartition s0 storage engine innodb data directory '/data', subpartition s1 comment 'this is s1' index directory '/index'),
+ partition p1 values less than (2000) (subpartition s2 max_rows 4, subpartition s31 min_rows 5 tablespace t2),
+ partition p2 values less than maxvalue (subpartition s4, subpartition s5))`,
 		},
 		{
 			input:  "create table t (i bigint) charset ascii",
@@ -5109,7 +5202,10 @@ func TestParseVersionedComments(t *testing.T) {
 			output: `create table table1 (
 	id int
 ) ENGINE InnoDB,
-  CHARSET utf8mb4 partition by range (id) (partition x values less than (5) engine InnoDB, partition t values less than (20) engine InnoDB)`,
+  CHARSET utf8mb4
+partition by range (id)
+(partition x values less than (5) engine InnoDB,
+ partition t values less than (20) engine InnoDB)`,
 		},
 	}
 
