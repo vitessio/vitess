@@ -332,7 +332,7 @@ var commands = []commandGroup{
 				name:   "SetShardTabletControl",
 				method: commandSetShardTabletControl,
 				params: "[--cells=c1,c2,...] [--denied_tables=t1,t2,...] [--remove] [--disable_query_service] <keyspace/shard> <tablet type>",
-				help: "Sets the TabletControl record for a shard and type. Only use this for an emergency fix.\n" +
+				help: "Sets the TabletControl record for a shard and tablet type. Only use this for an emergency fix.\n" +
 					"To set the DisableQueryServiceFlag, keep 'denied_tables' empty, and set 'disable_query_service' to true or false.\n" +
 					"To change the list of denied tables, specify the 'denied_tables' parameter with the new list.\n" +
 					"To just remove the ShardTabletControl entirely, use the 'remove' flag.",
@@ -341,7 +341,7 @@ var commands = []commandGroup{
 				name:   "UpdateSrvKeyspacePartition",
 				method: commandUpdateSrvKeyspacePartition,
 				params: "[--cells=c1,c2,...] [--remove] <keyspace/shard> <tablet type>",
-				help:   "Updates KeyspaceGraph partition for a shard and type. Only use this for an emergency fix during an horizontal shard split. Specify the remove flag, if you want the shard to be removed from the desired partition.",
+				help:   "Updates KeyspaceGraph partition for a shard and tablet type. Only use this for an emergency fix during an horizontal shard split. Specify the remove flag, if you want the shard to be removed from the desired partition.",
 			},
 			{
 				name:   "SourceShardDelete",
@@ -2831,7 +2831,7 @@ func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFl
 }
 
 func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed, please use VReplication instead https://vitess.io/docs/reference/vreplication/ ***\n")
+	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead https://vitess.io/docs/reference/vreplication/ ***\n")
 	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward.")
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
 	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on primary migrations. The migration will be cancelled on a timeout.")

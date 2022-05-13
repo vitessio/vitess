@@ -91,7 +91,7 @@ Otherwise, the keyspace must be empty (have no shards), or returns an error.`,
 	// SetKeyspaceServedFrom makes a SetKeyspaceServedFrom gRPC call to a vtcltd.
 	SetKeyspaceServedFrom = &cobra.Command{
 		Use:                   "SetKeyspaceServedFrom [--source <keyspace>] [--remove] [--cells=<cells>] <keyspace> <tablet_type>",
-		Short:                 "Updates the ServedFromMap for a keyspace manually. This command is intended for emergency fixes. This command does not rebuild the serving graph.",
+		Short:                 "(DEPRECATED) Updates the ServedFromMap for a keyspace manually. This command is intended for emergency fixes. This command does not rebuild the serving graph.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
 		RunE:                  commandSetKeyspaceServedFrom,
@@ -99,7 +99,7 @@ Otherwise, the keyspace must be empty (have no shards), or returns an error.`,
 	// SetKeyspaceShardingInfo makes a SetKeyspaceShardingInfo gRPC call to a vtcltd.
 	SetKeyspaceShardingInfo = &cobra.Command{
 		Use:                   "SetKeyspaceShardingInfo [--force] <keyspace> [<column name> [<column type>]]",
-		Short:                 "Updates the sharding information for a keyspace.",
+		Short:                 "(DEPRECATED) Updates the sharding information for a keyspace.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.RangeArgs(1, 3),
 		RunE:                  commandSetKeyspaceShardingInfo,
