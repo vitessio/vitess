@@ -204,3 +204,48 @@ func TestCreateViewDiff(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeView(t *testing.T) {
+	tt := []struct {
+		name string
+		from string
+		to   string
+	}{
+		{
+			name: "basic view",
+			from: "create view v1 as select a, b, c from t",
+			to:   "CREATE VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
+		},
+		{
+			name: "default algorithm",
+			from: "create algorithm=undefined view v1 as select a, b, c from t",
+			to:   "CREATE VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
+		},
+		{
+			name: "non-default algorithm",
+			from: "create algorithm=merge view v1 as select a, b, c from t",
+			to:   "CREATE ALGORITHM = merge VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
+		},
+		{
+			name: "default security model",
+			from: "create sql security DEFINER view v1 as select a, b, c from t",
+			to:   "CREATE VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
+		},
+		{
+			name: "non-default security model",
+			from: "create sql security invoker view v1 as select a, b, c from t",
+			to:   "CREATE SQL SECURITY INVOKER VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.name, func(t *testing.T) {
+			stmt, err := sqlparser.ParseStrictDDL(ts.from)
+			require.NoError(t, err)
+			fromCreateView, ok := stmt.(*sqlparser.CreateView)
+			require.True(t, ok)
+
+			from := NewCreateViewEntity(fromCreateView)
+			assert.Equal(t, ts.to, sqlparser.CanonicalString(from))
+		})
+	}
+}

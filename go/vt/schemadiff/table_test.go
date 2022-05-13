@@ -1229,6 +1229,36 @@ func TestNormalize(t *testing.T) {
 			from: "create table t1 (id int primary key, i int, foreign key (i) references parent(id))",
 			to:   "CREATE TABLE `t1` (\n\t`id` int PRIMARY KEY,\n\t`i` int,\n\tCONSTRAINT `t1_ibfk_1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n)",
 		},
+		{
+			name: "drops default index type",
+			from: "create table t (id int primary key, i1 int, key i1_idx(i1) using btree)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1_idx` (`i1`)\n)",
+		},
+		{
+			name: "does not drop non-default index type",
+			from: "create table t (id int primary key, i1 int, key i1_idx(i1) using hash)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1_idx` (`i1`) USING HASH\n)",
+		},
+		{
+			name: "drops default index visibility",
+			from: "create table t (id int primary key, i1 int, key i1_idx(i1) visible)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1_idx` (`i1`)\n)",
+		},
+		{
+			name: "drops non-default index visibility",
+			from: "create table t (id int primary key, i1 int, key i1_idx(i1) invisible)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1_idx` (`i1`) INVISIBLE\n)",
+		},
+		{
+			name: "drops default column visibility",
+			from: "create table t (id int primary key, i1 int visible)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int\n)",
+		},
+		{
+			name: "drops non-default column visibility",
+			from: "create table t (id int primary key, i1 int invisible)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int INVISIBLE\n)",
+		},
 	}
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {

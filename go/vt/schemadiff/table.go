@@ -239,7 +239,7 @@ func NewCreateTableEntity(c *sqlparser.CreateTable) *CreateTableEntity {
 // - table option case (upper/lower/special)
 // The function returns this receiver as courtesy
 func (c *CreateTableEntity) normalize() *CreateTableEntity {
-	c.normalizeUnnamedKeys()
+	c.normalizeKeys()
 	c.normalizeUnnamedConstraints()
 	c.normalizeTableOptions()
 	c.normalizeColumnOptions()
@@ -340,6 +340,11 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			}
 		}
 
+		if col.Type.Options.Invisible != nil && !*col.Type.Options.Invisible {
+			// If a column is marked `VISIBLE`, that's the same as the default.
+			col.Type.Options.Invisible = nil
+		}
+
 		// Map any charset aliases to the real charset. This applies mainly right
 		// now to utf8 being an alias for utf8mb3.
 		if charset, ok := collationEnv.CharsetAlias(col.Type.Charset); ok {
@@ -415,7 +420,7 @@ func (c *CreateTableEntity) normalizePartitionOptions() {
 	}
 }
 
-func (c *CreateTableEntity) normalizeUnnamedKeys() {
+func (c *CreateTableEntity) normalizeKeys() {
 	// let's ensure all keys have names
 	keyNameExists := map[string]bool{}
 	// first, we iterate and take note for all keys that do already have names
@@ -424,8 +429,8 @@ func (c *CreateTableEntity) normalizeUnnamedKeys() {
 			keyNameExists[name] = true
 		}
 	}
-	// now, let's look at keys that do not have names, and assign them new names
 	for _, key := range c.CreateTable.TableSpec.Indexes {
+		// now, let's look at keys that do not have names, and assign them new names
 		if name := key.Info.Name.String(); name == "" {
 			// we know there must be at least one column covered by this key
 			var colName string
@@ -453,6 +458,21 @@ func (c *CreateTableEntity) normalizeUnnamedKeys() {
 			key.Info.Name = sqlparser.NewColIdent(suggestedKeyName)
 			keyNameExists[suggestedKeyName] = true
 		}
+
+		// Drop options that are the same as the default.
+		keptOptions := make([]*sqlparser.IndexOption, 0, len(key.Options))
+		for _, option := range key.Options {
+			switch strings.ToUpper(option.Name) {
+			case "USING":
+				if strings.EqualFold(option.String, "BTREE") {
+					continue
+				}
+			case "VISIBLE":
+				continue
+			}
+			keptOptions = append(keptOptions, option)
+		}
+		key.Options = keptOptions
 	}
 }
 
