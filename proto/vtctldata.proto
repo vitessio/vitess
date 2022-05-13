@@ -926,6 +926,16 @@ message RunHealthCheckRequest {
 message RunHealthCheckResponse {
 }
 
+message SetKeyspaceDurabilityPolicyRequest {
+  string keyspace = 1;
+  string durability_policy = 2;
+}
+
+message SetKeyspaceDurabilityPolicyResponse {
+  // Keyspace is the updated keyspace record.
+  topodata.Keyspace keyspace = 1;
+}
+
 message SetKeyspaceServedFromRequest {
   string keyspace = 1;
   topodata.TabletType tablet_type = 2;
@@ -950,17 +960,6 @@ message SetKeyspaceShardingInfoResponse {
   // Keyspace is the updated keyspace record.
   topodata.Keyspace keyspace = 1;
 }
-
-message SetKeyspaceDurabilityPolicyRequest {
-  string keyspace = 1;
-  string durability_policy = 2;
-}
-
-message SetKeyspaceDurabilityPolicyResponse {
-  // Keyspace is the updated keyspace record.
-  topodata.Keyspace keyspace = 1;
-}
-
 
 message SetShardIsPrimaryServingRequest {
   string keyspace = 1;

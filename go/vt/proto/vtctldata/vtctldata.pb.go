@@ -6797,6 +6797,109 @@ func (*RunHealthCheckResponse) Descriptor() ([]byte, []int) {
 	return file_vtctldata_proto_rawDescGZIP(), []int{117}
 }
 
+type SetKeyspaceDurabilityPolicyRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Keyspace         string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	DurabilityPolicy string `protobuf:"bytes,2,opt,name=durability_policy,json=durabilityPolicy,proto3" json:"durability_policy,omitempty"`
+}
+
+func (x *SetKeyspaceDurabilityPolicyRequest) Reset() {
+	*x = SetKeyspaceDurabilityPolicyRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[118]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SetKeyspaceDurabilityPolicyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetKeyspaceDurabilityPolicyRequest) ProtoMessage() {}
+
+func (x *SetKeyspaceDurabilityPolicyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[118]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetKeyspaceDurabilityPolicyRequest.ProtoReflect.Descriptor instead.
+func (*SetKeyspaceDurabilityPolicyRequest) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{118}
+}
+
+func (x *SetKeyspaceDurabilityPolicyRequest) GetKeyspace() string {
+	if x != nil {
+		return x.Keyspace
+	}
+	return ""
+}
+
+func (x *SetKeyspaceDurabilityPolicyRequest) GetDurabilityPolicy() string {
+	if x != nil {
+		return x.DurabilityPolicy
+	}
+	return ""
+}
+
+type SetKeyspaceDurabilityPolicyResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Keyspace is the updated keyspace record.
+	Keyspace *topodata.Keyspace `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+}
+
+func (x *SetKeyspaceDurabilityPolicyResponse) Reset() {
+	*x = SetKeyspaceDurabilityPolicyResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[119]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SetKeyspaceDurabilityPolicyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetKeyspaceDurabilityPolicyResponse) ProtoMessage() {}
+
+func (x *SetKeyspaceDurabilityPolicyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[119]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetKeyspaceDurabilityPolicyResponse.ProtoReflect.Descriptor instead.
+func (*SetKeyspaceDurabilityPolicyResponse) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{119}
+}
+
+func (x *SetKeyspaceDurabilityPolicyResponse) GetKeyspace() *topodata.Keyspace {
+	if x != nil {
+		return x.Keyspace
+	}
+	return nil
+}
+
 type SetKeyspaceServedFromRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -6812,7 +6915,7 @@ type SetKeyspaceServedFromRequest struct {
 func (x *SetKeyspaceServedFromRequest) Reset() {
 	*x = SetKeyspaceServedFromRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[118]
+		mi := &file_vtctldata_proto_msgTypes[120]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6825,7 +6928,7 @@ func (x *SetKeyspaceServedFromRequest) String() string {
 func (*SetKeyspaceServedFromRequest) ProtoMessage() {}
 
 func (x *SetKeyspaceServedFromRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[118]
+	mi := &file_vtctldata_proto_msgTypes[120]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6838,7 +6941,7 @@ func (x *SetKeyspaceServedFromRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetKeyspaceServedFromRequest.ProtoReflect.Descriptor instead.
 func (*SetKeyspaceServedFromRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{118}
+	return file_vtctldata_proto_rawDescGZIP(), []int{120}
 }
 
 func (x *SetKeyspaceServedFromRequest) GetKeyspace() string {
@@ -6888,7 +6991,7 @@ type SetKeyspaceServedFromResponse struct {
 func (x *SetKeyspaceServedFromResponse) Reset() {
 	*x = SetKeyspaceServedFromResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[119]
+		mi := &file_vtctldata_proto_msgTypes[121]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6901,7 +7004,7 @@ func (x *SetKeyspaceServedFromResponse) String() string {
 func (*SetKeyspaceServedFromResponse) ProtoMessage() {}
 
 func (x *SetKeyspaceServedFromResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[119]
+	mi := &file_vtctldata_proto_msgTypes[121]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6914,7 +7017,7 @@ func (x *SetKeyspaceServedFromResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetKeyspaceServedFromResponse.ProtoReflect.Descriptor instead.
 func (*SetKeyspaceServedFromResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{119}
+	return file_vtctldata_proto_rawDescGZIP(), []int{121}
 }
 
 func (x *SetKeyspaceServedFromResponse) GetKeyspace() *topodata.Keyspace {
@@ -6938,7 +7041,7 @@ type SetKeyspaceShardingInfoRequest struct {
 func (x *SetKeyspaceShardingInfoRequest) Reset() {
 	*x = SetKeyspaceShardingInfoRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[120]
+		mi := &file_vtctldata_proto_msgTypes[122]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6951,7 +7054,7 @@ func (x *SetKeyspaceShardingInfoRequest) String() string {
 func (*SetKeyspaceShardingInfoRequest) ProtoMessage() {}
 
 func (x *SetKeyspaceShardingInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[120]
+	mi := &file_vtctldata_proto_msgTypes[122]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6964,7 +7067,7 @@ func (x *SetKeyspaceShardingInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetKeyspaceShardingInfoRequest.ProtoReflect.Descriptor instead.
 func (*SetKeyspaceShardingInfoRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{120}
+	return file_vtctldata_proto_rawDescGZIP(), []int{122}
 }
 
 func (x *SetKeyspaceShardingInfoRequest) GetKeyspace() string {
@@ -7007,7 +7110,7 @@ type SetKeyspaceShardingInfoResponse struct {
 func (x *SetKeyspaceShardingInfoResponse) Reset() {
 	*x = SetKeyspaceShardingInfoResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[121]
+		mi := &file_vtctldata_proto_msgTypes[123]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7020,7 +7123,7 @@ func (x *SetKeyspaceShardingInfoResponse) String() string {
 func (*SetKeyspaceShardingInfoResponse) ProtoMessage() {}
 
 func (x *SetKeyspaceShardingInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[121]
+	mi := &file_vtctldata_proto_msgTypes[123]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7033,113 +7136,10 @@ func (x *SetKeyspaceShardingInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetKeyspaceShardingInfoResponse.ProtoReflect.Descriptor instead.
 func (*SetKeyspaceShardingInfoResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{121}
-}
-
-func (x *SetKeyspaceShardingInfoResponse) GetKeyspace() *topodata.Keyspace {
-	if x != nil {
-		return x.Keyspace
-	}
-	return nil
-}
-
-type SetKeyspaceDurabilityPolicyRequest struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Keyspace         string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
-	DurabilityPolicy string `protobuf:"bytes,2,opt,name=durability_policy,json=durabilityPolicy,proto3" json:"durability_policy,omitempty"`
-}
-
-func (x *SetKeyspaceDurabilityPolicyRequest) Reset() {
-	*x = SetKeyspaceDurabilityPolicyRequest{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[122]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *SetKeyspaceDurabilityPolicyRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SetKeyspaceDurabilityPolicyRequest) ProtoMessage() {}
-
-func (x *SetKeyspaceDurabilityPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[122]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SetKeyspaceDurabilityPolicyRequest.ProtoReflect.Descriptor instead.
-func (*SetKeyspaceDurabilityPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{122}
-}
-
-func (x *SetKeyspaceDurabilityPolicyRequest) GetKeyspace() string {
-	if x != nil {
-		return x.Keyspace
-	}
-	return ""
-}
-
-func (x *SetKeyspaceDurabilityPolicyRequest) GetDurabilityPolicy() string {
-	if x != nil {
-		return x.DurabilityPolicy
-	}
-	return ""
-}
-
-type SetKeyspaceDurabilityPolicyResponse struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	// Keyspace is the updated keyspace record.
-	Keyspace *topodata.Keyspace `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
-}
-
-func (x *SetKeyspaceDurabilityPolicyResponse) Reset() {
-	*x = SetKeyspaceDurabilityPolicyResponse{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[123]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *SetKeyspaceDurabilityPolicyResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SetKeyspaceDurabilityPolicyResponse) ProtoMessage() {}
-
-func (x *SetKeyspaceDurabilityPolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[123]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SetKeyspaceDurabilityPolicyResponse.ProtoReflect.Descriptor instead.
-func (*SetKeyspaceDurabilityPolicyResponse) Descriptor() ([]byte, []int) {
 	return file_vtctldata_proto_rawDescGZIP(), []int{123}
 }
 
-func (x *SetKeyspaceDurabilityPolicyResponse) GetKeyspace() *topodata.Keyspace {
+func (x *SetKeyspaceShardingInfoResponse) GetKeyspace() *topodata.Keyspace {
 	if x != nil {
 		return x.Keyspace
 	}
@@ -10869,41 +10869,7 @@ var file_vtctldata_proto_rawDesc = []byte{
 	0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52,
 	0x0b, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x22, 0x18, 0x0a, 0x16,
 	0x52, 0x75, 0x6e, 0x48, 0x65, 0x61, 0x6c, 0x74, 0x68, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x52, 0x65,
-	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0xc8, 0x01, 0x0a, 0x1c, 0x53, 0x65, 0x74, 0x4b, 0x65,
-	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x53, 0x65, 0x72, 0x76, 0x65, 0x64, 0x46, 0x72, 0x6f, 0x6d,
-	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70,
-	0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70,
-	0x61, 0x63, 0x65, 0x12, 0x35, 0x0a, 0x0b, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x74, 0x79,
-	0x70, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x14, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64,
-	0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79, 0x70, 0x65, 0x52, 0x0a,
-	0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79, 0x70, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x63, 0x65,
-	0x6c, 0x6c, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x09, 0x52, 0x05, 0x63, 0x65, 0x6c, 0x6c, 0x73,
-	0x12, 0x16, 0x0a, 0x06, 0x72, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08,
-	0x52, 0x06, 0x72, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x12, 0x27, 0x0a, 0x0f, 0x73, 0x6f, 0x75, 0x72,
-	0x63, 0x65, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28,
-	0x09, 0x52, 0x0e, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
-	0x65, 0x22, 0x4f, 0x0a, 0x1d, 0x53, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65,
-	0x53, 0x65, 0x72, 0x76, 0x65, 0x64, 0x46, 0x72, 0x6f, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x12, 0x2e, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e,
-	0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61,
-	0x63, 0x65, 0x22, 0xae, 0x01, 0x0a, 0x1e, 0x53, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61,
-	0x63, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x69, 0x6e, 0x67, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65,
-	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
-	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
-	0x65, 0x12, 0x1f, 0x0a, 0x0b, 0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x5f, 0x6e, 0x61, 0x6d, 0x65,
-	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x4e, 0x61,
-	0x6d, 0x65, 0x12, 0x39, 0x0a, 0x0b, 0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x5f, 0x74, 0x79, 0x70,
-	0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x18, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61,
-	0x74, 0x61, 0x2e, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x49, 0x64, 0x54, 0x79, 0x70,
-	0x65, 0x52, 0x0a, 0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x54, 0x79, 0x70, 0x65, 0x12, 0x14, 0x0a,
-	0x05, 0x66, 0x6f, 0x72, 0x63, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08, 0x52, 0x05, 0x66, 0x6f,
-	0x72, 0x63, 0x65, 0x22, 0x51, 0x0a, 0x1f, 0x53, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61,
-	0x63, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x69, 0x6e, 0x67, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65,
-	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2e, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61,
-	0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64,
-	0x61, 0x74, 0x61, 0x2e, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x08, 0x6b, 0x65,
-	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x22, 0x6d, 0x0a, 0x22, 0x53, 0x65, 0x74, 0x4b, 0x65, 0x79,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x6d, 0x0a, 0x22, 0x53, 0x65, 0x74, 0x4b, 0x65, 0x79,
 	0x73, 0x70, 0x61, 0x63, 0x65, 0x44, 0x75, 0x72, 0x61, 0x62, 0x69, 0x6c, 0x69, 0x74, 0x79, 0x50,
 	0x6f, 0x6c, 0x69, 0x63, 0x79, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08,
 	0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08,
@@ -10913,6 +10879,40 @@ var file_vtctldata_proto_rawDesc = []byte{
 	0x6f, 0x6c, 0x69, 0x63, 0x79, 0x22, 0x55, 0x0a, 0x23, 0x53, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x73,
 	0x70, 0x61, 0x63, 0x65, 0x44, 0x75, 0x72, 0x61, 0x62, 0x69, 0x6c, 0x69, 0x74, 0x79, 0x50, 0x6f,
 	0x6c, 0x69, 0x63, 0x79, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2e, 0x0a, 0x08,
+	0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12,
+	0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61,
+	0x63, 0x65, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x22, 0xc8, 0x01, 0x0a,
+	0x1c, 0x53, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x53, 0x65, 0x72, 0x76,
+	0x65, 0x64, 0x46, 0x72, 0x6f, 0x6d, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a,
+	0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x35, 0x0a, 0x0b, 0x74, 0x61, 0x62,
+	0x6c, 0x65, 0x74, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x14,
+	0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74,
+	0x54, 0x79, 0x70, 0x65, 0x52, 0x0a, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79, 0x70, 0x65,
+	0x12, 0x14, 0x0a, 0x05, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x09, 0x52,
+	0x05, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x12, 0x16, 0x0a, 0x06, 0x72, 0x65, 0x6d, 0x6f, 0x76, 0x65,
+	0x18, 0x04, 0x20, 0x01, 0x28, 0x08, 0x52, 0x06, 0x72, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x12, 0x27,
+	0x0a, 0x0f, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
+	0x65, 0x18, 0x05, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0e, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x4b,
+	0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x22, 0x4f, 0x0a, 0x1d, 0x53, 0x65, 0x74, 0x4b, 0x65,
+	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x53, 0x65, 0x72, 0x76, 0x65, 0x64, 0x46, 0x72, 0x6f, 0x6d,
+	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2e, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73,
+	0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x74, 0x6f, 0x70,
+	0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x08,
+	0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x22, 0xae, 0x01, 0x0a, 0x1e, 0x53, 0x65, 0x74,
+	0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x69, 0x6e, 0x67,
+	0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b,
+	0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b,
+	0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x1f, 0x0a, 0x0b, 0x63, 0x6f, 0x6c, 0x75, 0x6d,
+	0x6e, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x63, 0x6f,
+	0x6c, 0x75, 0x6d, 0x6e, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x39, 0x0a, 0x0b, 0x63, 0x6f, 0x6c, 0x75,
+	0x6d, 0x6e, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x18, 0x2e,
+	0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
+	0x65, 0x49, 0x64, 0x54, 0x79, 0x70, 0x65, 0x52, 0x0a, 0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x54,
+	0x79, 0x70, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x66, 0x6f, 0x72, 0x63, 0x65, 0x18, 0x04, 0x20, 0x01,
+	0x28, 0x08, 0x52, 0x05, 0x66, 0x6f, 0x72, 0x63, 0x65, 0x22, 0x51, 0x0a, 0x1f, 0x53, 0x65, 0x74,
+	0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x69, 0x6e, 0x67,
+	0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2e, 0x0a, 0x08,
 	0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12,
 	0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61,
 	0x63, 0x65, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x22, 0x72, 0x0a, 0x1f,
@@ -11390,12 +11390,12 @@ var file_vtctldata_proto_goTypes = []interface{}{
 	(*RestoreFromBackupResponse)(nil),            // 116: vtctldata.RestoreFromBackupResponse
 	(*RunHealthCheckRequest)(nil),                // 117: vtctldata.RunHealthCheckRequest
 	(*RunHealthCheckResponse)(nil),               // 118: vtctldata.RunHealthCheckResponse
-	(*SetKeyspaceServedFromRequest)(nil),         // 119: vtctldata.SetKeyspaceServedFromRequest
-	(*SetKeyspaceServedFromResponse)(nil),        // 120: vtctldata.SetKeyspaceServedFromResponse
-	(*SetKeyspaceShardingInfoRequest)(nil),       // 121: vtctldata.SetKeyspaceShardingInfoRequest
-	(*SetKeyspaceShardingInfoResponse)(nil),      // 122: vtctldata.SetKeyspaceShardingInfoResponse
-	(*SetKeyspaceDurabilityPolicyRequest)(nil),   // 123: vtctldata.SetKeyspaceDurabilityPolicyRequest
-	(*SetKeyspaceDurabilityPolicyResponse)(nil),  // 124: vtctldata.SetKeyspaceDurabilityPolicyResponse
+	(*SetKeyspaceDurabilityPolicyRequest)(nil),   // 119: vtctldata.SetKeyspaceDurabilityPolicyRequest
+	(*SetKeyspaceDurabilityPolicyResponse)(nil),  // 120: vtctldata.SetKeyspaceDurabilityPolicyResponse
+	(*SetKeyspaceServedFromRequest)(nil),         // 121: vtctldata.SetKeyspaceServedFromRequest
+	(*SetKeyspaceServedFromResponse)(nil),        // 122: vtctldata.SetKeyspaceServedFromResponse
+	(*SetKeyspaceShardingInfoRequest)(nil),       // 123: vtctldata.SetKeyspaceShardingInfoRequest
+	(*SetKeyspaceShardingInfoResponse)(nil),      // 124: vtctldata.SetKeyspaceShardingInfoResponse
 	(*SetShardIsPrimaryServingRequest)(nil),      // 125: vtctldata.SetShardIsPrimaryServingRequest
 	(*SetShardIsPrimaryServingResponse)(nil),     // 126: vtctldata.SetShardIsPrimaryServingResponse
 	(*SetShardTabletControlRequest)(nil),         // 127: vtctldata.SetShardTabletControlRequest
@@ -11574,11 +11574,11 @@ var file_vtctldata_proto_depIdxs = []int32{
 	194, // 83: vtctldata.RestoreFromBackupResponse.tablet_alias:type_name -> topodata.TabletAlias
 	186, // 84: vtctldata.RestoreFromBackupResponse.event:type_name -> logutil.Event
 	194, // 85: vtctldata.RunHealthCheckRequest.tablet_alias:type_name -> topodata.TabletAlias
-	195, // 86: vtctldata.SetKeyspaceServedFromRequest.tablet_type:type_name -> topodata.TabletType
-	187, // 87: vtctldata.SetKeyspaceServedFromResponse.keyspace:type_name -> topodata.Keyspace
-	197, // 88: vtctldata.SetKeyspaceShardingInfoRequest.column_type:type_name -> topodata.KeyspaceIdType
-	187, // 89: vtctldata.SetKeyspaceShardingInfoResponse.keyspace:type_name -> topodata.Keyspace
-	187, // 90: vtctldata.SetKeyspaceDurabilityPolicyResponse.keyspace:type_name -> topodata.Keyspace
+	187, // 86: vtctldata.SetKeyspaceDurabilityPolicyResponse.keyspace:type_name -> topodata.Keyspace
+	195, // 87: vtctldata.SetKeyspaceServedFromRequest.tablet_type:type_name -> topodata.TabletType
+	187, // 88: vtctldata.SetKeyspaceServedFromResponse.keyspace:type_name -> topodata.Keyspace
+	197, // 89: vtctldata.SetKeyspaceShardingInfoRequest.column_type:type_name -> topodata.KeyspaceIdType
+	187, // 90: vtctldata.SetKeyspaceShardingInfoResponse.keyspace:type_name -> topodata.Keyspace
 	188, // 91: vtctldata.SetShardIsPrimaryServingResponse.shard:type_name -> topodata.Shard
 	195, // 92: vtctldata.SetShardTabletControlRequest.tablet_type:type_name -> topodata.TabletType
 	188, // 93: vtctldata.SetShardTabletControlResponse.shard:type_name -> topodata.Shard
@@ -13060,54 +13060,6 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[118].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetKeyspaceServedFromRequest); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_vtctldata_proto_msgTypes[119].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetKeyspaceServedFromResponse); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_vtctldata_proto_msgTypes[120].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetKeyspaceShardingInfoRequest); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_vtctldata_proto_msgTypes[121].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetKeyspaceShardingInfoResponse); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_vtctldata_proto_msgTypes[122].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*SetKeyspaceDurabilityPolicyRequest); i {
 			case 0:
 				return &v.state
@@ -13119,8 +13071,56 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[123].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[119].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*SetKeyspaceDurabilityPolicyResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[120].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SetKeyspaceServedFromRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[121].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SetKeyspaceServedFromResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[122].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SetKeyspaceShardingInfoRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[123].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SetKeyspaceShardingInfoResponse); i {
 			case 0:
 				return &v.state
 			case 1:

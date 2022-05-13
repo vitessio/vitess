@@ -302,6 +302,8 @@ type VtctldClient interface {
 	RestoreFromBackup(ctx context.Context, in *vtctldata.RestoreFromBackupRequest, opts ...grpc.CallOption) (Vtctld_RestoreFromBackupClient, error)
 	// RunHealthCheck runs a healthcheck on the remote tablet.
 	RunHealthCheck(ctx context.Context, in *vtctldata.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldata.RunHealthCheckResponse, error)
+	// SetKeyspaceDurabilityPolicy updates the DurabilityPolicy for a keyspace.
+	SetKeyspaceDurabilityPolicy(ctx context.Context, in *vtctldata.SetKeyspaceDurabilityPolicyRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceDurabilityPolicyResponse, error)
 	// SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
 	// only for emergency fixes. This does not rebuild the serving graph.
 	//
@@ -309,8 +311,6 @@ type VtctldClient interface {
 	SetKeyspaceServedFrom(ctx context.Context, in *vtctldata.SetKeyspaceServedFromRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceServedFromResponse, error)
 	// SetKeyspaceShardingInfo updates the sharding information for a keyspace.
 	SetKeyspaceShardingInfo(ctx context.Context, in *vtctldata.SetKeyspaceShardingInfoRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceShardingInfoResponse, error)
-	// SetKeyspaceDurabilityPolicy updates the DurabilityPolicy for a keyspace.
-	SetKeyspaceDurabilityPolicy(ctx context.Context, in *vtctldata.SetKeyspaceDurabilityPolicyRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceDurabilityPolicyResponse, error)
 	// SetShardIsPrimaryServing adds or removes a shard from serving.
 	//
 	// This is meant as an emergency function. It does not rebuild any serving
@@ -976,6 +976,15 @@ func (c *vtctldClient) RunHealthCheck(ctx context.Context, in *vtctldata.RunHeal
 	return out, nil
 }
 
+func (c *vtctldClient) SetKeyspaceDurabilityPolicy(ctx context.Context, in *vtctldata.SetKeyspaceDurabilityPolicyRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceDurabilityPolicyResponse, error) {
+	out := new(vtctldata.SetKeyspaceDurabilityPolicyResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetKeyspaceDurabilityPolicy", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) SetKeyspaceServedFrom(ctx context.Context, in *vtctldata.SetKeyspaceServedFromRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceServedFromResponse, error) {
 	out := new(vtctldata.SetKeyspaceServedFromResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetKeyspaceServedFrom", in, out, opts...)
@@ -988,15 +997,6 @@ func (c *vtctldClient) SetKeyspaceServedFrom(ctx context.Context, in *vtctldata.
 func (c *vtctldClient) SetKeyspaceShardingInfo(ctx context.Context, in *vtctldata.SetKeyspaceShardingInfoRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceShardingInfoResponse, error) {
 	out := new(vtctldata.SetKeyspaceShardingInfoResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetKeyspaceShardingInfo", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vtctldClient) SetKeyspaceDurabilityPolicy(ctx context.Context, in *vtctldata.SetKeyspaceDurabilityPolicyRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceDurabilityPolicyResponse, error) {
-	out := new(vtctldata.SetKeyspaceDurabilityPolicyResponse)
-	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetKeyspaceDurabilityPolicy", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1362,6 +1362,8 @@ type VtctldServer interface {
 	RestoreFromBackup(*vtctldata.RestoreFromBackupRequest, Vtctld_RestoreFromBackupServer) error
 	// RunHealthCheck runs a healthcheck on the remote tablet.
 	RunHealthCheck(context.Context, *vtctldata.RunHealthCheckRequest) (*vtctldata.RunHealthCheckResponse, error)
+	// SetKeyspaceDurabilityPolicy updates the DurabilityPolicy for a keyspace.
+	SetKeyspaceDurabilityPolicy(context.Context, *vtctldata.SetKeyspaceDurabilityPolicyRequest) (*vtctldata.SetKeyspaceDurabilityPolicyResponse, error)
 	// SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
 	// only for emergency fixes. This does not rebuild the serving graph.
 	//
@@ -1369,8 +1371,6 @@ type VtctldServer interface {
 	SetKeyspaceServedFrom(context.Context, *vtctldata.SetKeyspaceServedFromRequest) (*vtctldata.SetKeyspaceServedFromResponse, error)
 	// SetKeyspaceShardingInfo updates the sharding information for a keyspace.
 	SetKeyspaceShardingInfo(context.Context, *vtctldata.SetKeyspaceShardingInfoRequest) (*vtctldata.SetKeyspaceShardingInfoResponse, error)
-	// SetKeyspaceDurabilityPolicy updates the DurabilityPolicy for a keyspace.
-	SetKeyspaceDurabilityPolicy(context.Context, *vtctldata.SetKeyspaceDurabilityPolicyRequest) (*vtctldata.SetKeyspaceDurabilityPolicyResponse, error)
 	// SetShardIsPrimaryServing adds or removes a shard from serving.
 	//
 	// This is meant as an emergency function. It does not rebuild any serving
@@ -1628,14 +1628,14 @@ func (UnimplementedVtctldServer) RestoreFromBackup(*vtctldata.RestoreFromBackupR
 func (UnimplementedVtctldServer) RunHealthCheck(context.Context, *vtctldata.RunHealthCheckRequest) (*vtctldata.RunHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
 }
+func (UnimplementedVtctldServer) SetKeyspaceDurabilityPolicy(context.Context, *vtctldata.SetKeyspaceDurabilityPolicyRequest) (*vtctldata.SetKeyspaceDurabilityPolicyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetKeyspaceDurabilityPolicy not implemented")
+}
 func (UnimplementedVtctldServer) SetKeyspaceServedFrom(context.Context, *vtctldata.SetKeyspaceServedFromRequest) (*vtctldata.SetKeyspaceServedFromResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetKeyspaceServedFrom not implemented")
 }
 func (UnimplementedVtctldServer) SetKeyspaceShardingInfo(context.Context, *vtctldata.SetKeyspaceShardingInfoRequest) (*vtctldata.SetKeyspaceShardingInfoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetKeyspaceShardingInfo not implemented")
-}
-func (UnimplementedVtctldServer) SetKeyspaceDurabilityPolicy(context.Context, *vtctldata.SetKeyspaceDurabilityPolicyRequest) (*vtctldata.SetKeyspaceDurabilityPolicyResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SetKeyspaceDurabilityPolicy not implemented")
 }
 func (UnimplementedVtctldServer) SetShardIsPrimaryServing(context.Context, *vtctldata.SetShardIsPrimaryServingRequest) (*vtctldata.SetShardIsPrimaryServingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetShardIsPrimaryServing not implemented")
@@ -2730,6 +2730,24 @@ func _Vtctld_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_SetKeyspaceDurabilityPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.SetKeyspaceDurabilityPolicyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).SetKeyspaceDurabilityPolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/SetKeyspaceDurabilityPolicy",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).SetKeyspaceDurabilityPolicy(ctx, req.(*vtctldata.SetKeyspaceDurabilityPolicyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_SetKeyspaceServedFrom_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.SetKeyspaceServedFromRequest)
 	if err := dec(in); err != nil {
@@ -2762,24 +2780,6 @@ func _Vtctld_SetKeyspaceShardingInfo_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).SetKeyspaceShardingInfo(ctx, req.(*vtctldata.SetKeyspaceShardingInfoRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Vtctld_SetKeyspaceDurabilityPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtctldata.SetKeyspaceDurabilityPolicyRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VtctldServer).SetKeyspaceDurabilityPolicy(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtctlservice.Vtctld/SetKeyspaceDurabilityPolicy",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VtctldServer).SetKeyspaceDurabilityPolicy(ctx, req.(*vtctldata.SetKeyspaceDurabilityPolicyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3382,16 +3382,16 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_RunHealthCheck_Handler,
 		},
 		{
+			MethodName: "SetKeyspaceDurabilityPolicy",
+			Handler:    _Vtctld_SetKeyspaceDurabilityPolicy_Handler,
+		},
+		{
 			MethodName: "SetKeyspaceServedFrom",
 			Handler:    _Vtctld_SetKeyspaceServedFrom_Handler,
 		},
 		{
 			MethodName: "SetKeyspaceShardingInfo",
 			Handler:    _Vtctld_SetKeyspaceShardingInfo_Handler,
-		},
-		{
-			MethodName: "SetKeyspaceDurabilityPolicy",
-			Handler:    _Vtctld_SetKeyspaceDurabilityPolicy_Handler,
 		},
 		{
 			MethodName: "SetShardIsPrimaryServing",

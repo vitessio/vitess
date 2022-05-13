@@ -40930,6 +40930,192 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a SetKeyspaceDurabilityPolicyRequest. */
+    interface ISetKeyspaceDurabilityPolicyRequest {
+
+        /** SetKeyspaceDurabilityPolicyRequest keyspace */
+        keyspace?: (string|null);
+
+        /** SetKeyspaceDurabilityPolicyRequest durability_policy */
+        durability_policy?: (string|null);
+    }
+
+    /** Represents a SetKeyspaceDurabilityPolicyRequest. */
+    class SetKeyspaceDurabilityPolicyRequest implements ISetKeyspaceDurabilityPolicyRequest {
+
+        /**
+         * Constructs a new SetKeyspaceDurabilityPolicyRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISetKeyspaceDurabilityPolicyRequest);
+
+        /** SetKeyspaceDurabilityPolicyRequest keyspace. */
+        public keyspace: string;
+
+        /** SetKeyspaceDurabilityPolicyRequest durability_policy. */
+        public durability_policy: string;
+
+        /**
+         * Creates a new SetKeyspaceDurabilityPolicyRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SetKeyspaceDurabilityPolicyRequest instance
+         */
+        public static create(properties?: vtctldata.ISetKeyspaceDurabilityPolicyRequest): vtctldata.SetKeyspaceDurabilityPolicyRequest;
+
+        /**
+         * Encodes the specified SetKeyspaceDurabilityPolicyRequest message. Does not implicitly {@link vtctldata.SetKeyspaceDurabilityPolicyRequest.verify|verify} messages.
+         * @param message SetKeyspaceDurabilityPolicyRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISetKeyspaceDurabilityPolicyRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SetKeyspaceDurabilityPolicyRequest message, length delimited. Does not implicitly {@link vtctldata.SetKeyspaceDurabilityPolicyRequest.verify|verify} messages.
+         * @param message SetKeyspaceDurabilityPolicyRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISetKeyspaceDurabilityPolicyRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SetKeyspaceDurabilityPolicyRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SetKeyspaceDurabilityPolicyRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetKeyspaceDurabilityPolicyRequest;
+
+        /**
+         * Decodes a SetKeyspaceDurabilityPolicyRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SetKeyspaceDurabilityPolicyRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetKeyspaceDurabilityPolicyRequest;
+
+        /**
+         * Verifies a SetKeyspaceDurabilityPolicyRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SetKeyspaceDurabilityPolicyRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SetKeyspaceDurabilityPolicyRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SetKeyspaceDurabilityPolicyRequest;
+
+        /**
+         * Creates a plain object from a SetKeyspaceDurabilityPolicyRequest message. Also converts values to other types if specified.
+         * @param message SetKeyspaceDurabilityPolicyRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SetKeyspaceDurabilityPolicyRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SetKeyspaceDurabilityPolicyRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SetKeyspaceDurabilityPolicyResponse. */
+    interface ISetKeyspaceDurabilityPolicyResponse {
+
+        /** SetKeyspaceDurabilityPolicyResponse keyspace */
+        keyspace?: (topodata.IKeyspace|null);
+    }
+
+    /** Represents a SetKeyspaceDurabilityPolicyResponse. */
+    class SetKeyspaceDurabilityPolicyResponse implements ISetKeyspaceDurabilityPolicyResponse {
+
+        /**
+         * Constructs a new SetKeyspaceDurabilityPolicyResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISetKeyspaceDurabilityPolicyResponse);
+
+        /** SetKeyspaceDurabilityPolicyResponse keyspace. */
+        public keyspace?: (topodata.IKeyspace|null);
+
+        /**
+         * Creates a new SetKeyspaceDurabilityPolicyResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SetKeyspaceDurabilityPolicyResponse instance
+         */
+        public static create(properties?: vtctldata.ISetKeyspaceDurabilityPolicyResponse): vtctldata.SetKeyspaceDurabilityPolicyResponse;
+
+        /**
+         * Encodes the specified SetKeyspaceDurabilityPolicyResponse message. Does not implicitly {@link vtctldata.SetKeyspaceDurabilityPolicyResponse.verify|verify} messages.
+         * @param message SetKeyspaceDurabilityPolicyResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISetKeyspaceDurabilityPolicyResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SetKeyspaceDurabilityPolicyResponse message, length delimited. Does not implicitly {@link vtctldata.SetKeyspaceDurabilityPolicyResponse.verify|verify} messages.
+         * @param message SetKeyspaceDurabilityPolicyResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISetKeyspaceDurabilityPolicyResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SetKeyspaceDurabilityPolicyResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SetKeyspaceDurabilityPolicyResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetKeyspaceDurabilityPolicyResponse;
+
+        /**
+         * Decodes a SetKeyspaceDurabilityPolicyResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SetKeyspaceDurabilityPolicyResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetKeyspaceDurabilityPolicyResponse;
+
+        /**
+         * Verifies a SetKeyspaceDurabilityPolicyResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SetKeyspaceDurabilityPolicyResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SetKeyspaceDurabilityPolicyResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SetKeyspaceDurabilityPolicyResponse;
+
+        /**
+         * Creates a plain object from a SetKeyspaceDurabilityPolicyResponse message. Also converts values to other types if specified.
+         * @param message SetKeyspaceDurabilityPolicyResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SetKeyspaceDurabilityPolicyResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SetKeyspaceDurabilityPolicyResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a SetKeyspaceServedFromRequest. */
     interface ISetKeyspaceServedFromRequest {
 
@@ -41327,192 +41513,6 @@ export namespace vtctldata {
 
         /**
          * Converts this SetKeyspaceShardingInfoResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a SetKeyspaceDurabilityPolicyRequest. */
-    interface ISetKeyspaceDurabilityPolicyRequest {
-
-        /** SetKeyspaceDurabilityPolicyRequest keyspace */
-        keyspace?: (string|null);
-
-        /** SetKeyspaceDurabilityPolicyRequest durability_policy */
-        durability_policy?: (string|null);
-    }
-
-    /** Represents a SetKeyspaceDurabilityPolicyRequest. */
-    class SetKeyspaceDurabilityPolicyRequest implements ISetKeyspaceDurabilityPolicyRequest {
-
-        /**
-         * Constructs a new SetKeyspaceDurabilityPolicyRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtctldata.ISetKeyspaceDurabilityPolicyRequest);
-
-        /** SetKeyspaceDurabilityPolicyRequest keyspace. */
-        public keyspace: string;
-
-        /** SetKeyspaceDurabilityPolicyRequest durability_policy. */
-        public durability_policy: string;
-
-        /**
-         * Creates a new SetKeyspaceDurabilityPolicyRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns SetKeyspaceDurabilityPolicyRequest instance
-         */
-        public static create(properties?: vtctldata.ISetKeyspaceDurabilityPolicyRequest): vtctldata.SetKeyspaceDurabilityPolicyRequest;
-
-        /**
-         * Encodes the specified SetKeyspaceDurabilityPolicyRequest message. Does not implicitly {@link vtctldata.SetKeyspaceDurabilityPolicyRequest.verify|verify} messages.
-         * @param message SetKeyspaceDurabilityPolicyRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtctldata.ISetKeyspaceDurabilityPolicyRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified SetKeyspaceDurabilityPolicyRequest message, length delimited. Does not implicitly {@link vtctldata.SetKeyspaceDurabilityPolicyRequest.verify|verify} messages.
-         * @param message SetKeyspaceDurabilityPolicyRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtctldata.ISetKeyspaceDurabilityPolicyRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a SetKeyspaceDurabilityPolicyRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns SetKeyspaceDurabilityPolicyRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetKeyspaceDurabilityPolicyRequest;
-
-        /**
-         * Decodes a SetKeyspaceDurabilityPolicyRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns SetKeyspaceDurabilityPolicyRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetKeyspaceDurabilityPolicyRequest;
-
-        /**
-         * Verifies a SetKeyspaceDurabilityPolicyRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a SetKeyspaceDurabilityPolicyRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns SetKeyspaceDurabilityPolicyRequest
-         */
-        public static fromObject(object: { [k: string]: any }): vtctldata.SetKeyspaceDurabilityPolicyRequest;
-
-        /**
-         * Creates a plain object from a SetKeyspaceDurabilityPolicyRequest message. Also converts values to other types if specified.
-         * @param message SetKeyspaceDurabilityPolicyRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtctldata.SetKeyspaceDurabilityPolicyRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this SetKeyspaceDurabilityPolicyRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a SetKeyspaceDurabilityPolicyResponse. */
-    interface ISetKeyspaceDurabilityPolicyResponse {
-
-        /** SetKeyspaceDurabilityPolicyResponse keyspace */
-        keyspace?: (topodata.IKeyspace|null);
-    }
-
-    /** Represents a SetKeyspaceDurabilityPolicyResponse. */
-    class SetKeyspaceDurabilityPolicyResponse implements ISetKeyspaceDurabilityPolicyResponse {
-
-        /**
-         * Constructs a new SetKeyspaceDurabilityPolicyResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtctldata.ISetKeyspaceDurabilityPolicyResponse);
-
-        /** SetKeyspaceDurabilityPolicyResponse keyspace. */
-        public keyspace?: (topodata.IKeyspace|null);
-
-        /**
-         * Creates a new SetKeyspaceDurabilityPolicyResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns SetKeyspaceDurabilityPolicyResponse instance
-         */
-        public static create(properties?: vtctldata.ISetKeyspaceDurabilityPolicyResponse): vtctldata.SetKeyspaceDurabilityPolicyResponse;
-
-        /**
-         * Encodes the specified SetKeyspaceDurabilityPolicyResponse message. Does not implicitly {@link vtctldata.SetKeyspaceDurabilityPolicyResponse.verify|verify} messages.
-         * @param message SetKeyspaceDurabilityPolicyResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtctldata.ISetKeyspaceDurabilityPolicyResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified SetKeyspaceDurabilityPolicyResponse message, length delimited. Does not implicitly {@link vtctldata.SetKeyspaceDurabilityPolicyResponse.verify|verify} messages.
-         * @param message SetKeyspaceDurabilityPolicyResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtctldata.ISetKeyspaceDurabilityPolicyResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a SetKeyspaceDurabilityPolicyResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns SetKeyspaceDurabilityPolicyResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetKeyspaceDurabilityPolicyResponse;
-
-        /**
-         * Decodes a SetKeyspaceDurabilityPolicyResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns SetKeyspaceDurabilityPolicyResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetKeyspaceDurabilityPolicyResponse;
-
-        /**
-         * Verifies a SetKeyspaceDurabilityPolicyResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a SetKeyspaceDurabilityPolicyResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns SetKeyspaceDurabilityPolicyResponse
-         */
-        public static fromObject(object: { [k: string]: any }): vtctldata.SetKeyspaceDurabilityPolicyResponse;
-
-        /**
-         * Creates a plain object from a SetKeyspaceDurabilityPolicyResponse message. Also converts values to other types if specified.
-         * @param message SetKeyspaceDurabilityPolicyResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtctldata.SetKeyspaceDurabilityPolicyResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this SetKeyspaceDurabilityPolicyResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

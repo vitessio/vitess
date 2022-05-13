@@ -2395,6 +2395,44 @@ func (s *VtctldServer) RunHealthCheck(ctx context.Context, req *vtctldatapb.RunH
 	return &vtctldatapb.RunHealthCheckResponse{}, nil
 }
 
+// SetKeyspaceDurabilityPolicy is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SetKeyspaceDurabilityPolicy(ctx context.Context, req *vtctldatapb.SetKeyspaceDurabilityPolicyRequest) (*vtctldatapb.SetKeyspaceDurabilityPolicyResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetKeyspaceDurabilityPolicy")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("durability_policy", req.DurabilityPolicy)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "SetKeyspaceDurabilityPolicy")
+	if lockErr != nil {
+		return nil, lockErr
+	}
+
+	var err error
+	defer unlock(&err)
+
+	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	policyValid := reparentutil.CheckDurabilityPolicyExists(req.DurabilityPolicy)
+	if !policyValid {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "durability policy <%v> is not a valid policy. Please register it as a policy first", req.DurabilityPolicy)
+	}
+
+	ki.DurabilityPolicy = req.DurabilityPolicy
+
+	err = s.ts.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.SetKeyspaceDurabilityPolicyResponse{
+		Keyspace: ki.Keyspace,
+	}, nil
+}
+
 // SetKeyspaceServedFrom is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) SetKeyspaceServedFrom(ctx context.Context, req *vtctldatapb.SetKeyspaceServedFromRequest) (*vtctldatapb.SetKeyspaceServedFromResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetKeyspaceServedFrom")
@@ -2430,44 +2468,6 @@ func (s *VtctldServer) SetKeyspaceServedFrom(ctx context.Context, req *vtctldata
 	}
 
 	return &vtctldatapb.SetKeyspaceServedFromResponse{
-		Keyspace: ki.Keyspace,
-	}, nil
-}
-
-// SetKeyspaceDurabilityPolicy is part of the vtctlservicepb.VtctldServer interface.
-func (s *VtctldServer) SetKeyspaceDurabilityPolicy(ctx context.Context, req *vtctldatapb.SetKeyspaceDurabilityPolicyRequest) (*vtctldatapb.SetKeyspaceDurabilityPolicyResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetKeyspaceDurabilityPolicy")
-	defer span.Finish()
-
-	span.Annotate("keyspace", req.Keyspace)
-	span.Annotate("durability_policy", req.DurabilityPolicy)
-
-	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "SetKeyspaceDurabilityPolicy")
-	if lockErr != nil {
-		return nil, lockErr
-	}
-
-	var err error
-	defer unlock(&err)
-
-	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
-	if err != nil {
-		return nil, err
-	}
-
-	policyValid := reparentutil.CheckDurabilityPolicyExists(req.DurabilityPolicy)
-	if !policyValid {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "durability policy <%v> is not a valid policy. Please register it as a policy first", req.DurabilityPolicy)
-	}
-
-	ki.DurabilityPolicy = req.DurabilityPolicy
-
-	err = s.ts.UpdateKeyspace(ctx, ki)
-	if err != nil {
-		return nil, err
-	}
-
-	return &vtctldatapb.SetKeyspaceDurabilityPolicyResponse{
 		Keyspace: ki.Keyspace,
 	}, nil
 }
