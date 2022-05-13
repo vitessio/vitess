@@ -194,11 +194,15 @@ func TestInsightsComments(t *testing.T) {
 func TestInsightsErrors(t *testing.T) {
 	insightsTestHelper(t, true, setupOptions{},
 		[]insightsQuery{
-			{sql: "select this does not parse", error: "syntax error at position 21"},
+			{sql: "select this does not parse", error: "syntax error at position 21 after 'does'"},
+			{sql: "nor does this", error: "this is a fake error, BindVars: {'foo'}"},
+			{sql: "third bogus", error: "another fake error, Sql: \"third bogus\""},
 		},
 		[]insightsKafkaExpectation{
-			expect(queryTopic, `normalized_sql:{value:\"<error>\"}`, `error:{value:\"syntax error at position 21\"}`, `statement_type:{value:\"ERROR\"}`).butNot("this does not parse"),
-			expect(queryStatsBundleTopic, `normalized_sql:{value:\"<error>\"}`, `statement_type:\"ERROR\"`, "query_count:1", "error_count:1").butNot("this does not parse"),
+			expect(queryTopic, `normalized_sql:{value:\"<error>\"}`, `error:{value:\"syntax error at position 21\"}`, `statement_type:{value:\"ERROR\"}`).butNot("does"),
+			expect(queryStatsBundleTopic, `normalized_sql:{value:\"<error>\"}`, `statement_type:\"ERROR\"`, "query_count:3", "error_count:3").butNot("does", "foo", "bogus"),
+			expect(queryTopic, `normalized_sql:{value:\"<error>\"}`, `error:{value:\"this is a fake error\"}`, `statement_type:{value:\"ERROR\"}`).butNot("foo", "BindVars"),
+			expect(queryTopic, `normalized_sql:{value:\"<error>\"}`, `error:{value:\"another fake error\"}`, `statement_type:{value:\"ERROR\"}`).butNot("Sql", "bogus"),
 		})
 }
 
@@ -303,6 +307,64 @@ func TestNormalization(t *testing.T) {
 			out, err := normalizeSQL(tc.input)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.output, out)
+		})
+	}
+}
+
+func TestErrorNormalization(t *testing.T) {
+	testCases := []struct {
+		name, input, output string
+	}{
+		{
+			"no change",
+			"nothing to normalize here",
+			"nothing to normalize here",
+		},
+		{
+			"truncates after 'code ='",
+			`target: mars.-.primary: vttablet: rpc error: code = InvalidArgument desc = Unknown system variable 'query_response_time_stats' (errno 1193) (sqlstate HY000) (CallerID: planetscale-admin): Sql: \"select @@query_response_time_stats from dual\", BindVars: {}: 2760`,
+			`target: mars.-.primary: vttablet: rpc error: code = InvalidArgument`,
+		},
+		{
+			"truncates after 'Duplicate entry'",
+			`target: keep3rv1.-.primary: vttablet: Duplicate entry '0' for key 'stats.id' (errno 1062) (sqlstate 23000) (CallerID: planetscale-admin): Sql: \"insert into stats(jobs, work_done, keepers, rewarded_kp3r, bonded_kp3r) values (:v1, :v2, :v3, :v4, :v5)\", BindVars: {v1: \"type:VARBINARY value:\\\"0\\\"\"v2: \"type:VARBINARY value:\\\"1\\\"\"v3: \"type:VARBINARY value:\\\"0\\\"\"v4: \"type:VARBINARY value:\\\"0\\\"\"v5: \"type:VARBINARY value:\\\"0\\\"\"}`,
+			`target: keep3rv1.-.primary: vttablet: Duplicate entry`,
+		},
+		{
+			"truncates after 'syntax error'",
+			`syntax error at position 42 near 'WHERE'`,
+			`syntax error at position 42`,
+		},
+		{
+			"removes Sql after colon",
+			`target: workmade.-.primary: vttablet: Data too long for column 'signupIpAddress' at row 1 (errno 1406) (sqlstate 22001) (CallerID: planetscale-admin): Sql: \"insert into User(id, firstName, lastName, password, phone, email, citizenship, dob, address_street1, address_city, address_state, address_zip, address_country, piiSsn, signupIpAddress, createdAt, updatedAt) values (:v1, :v2, :v3, :v4, :v5, :v6, :v7, :v8, :v9, :v10, :v11, :v12, :v13, :v14, :v15, :v16, :v17)\", BindVars: {v1: \"type:VARBINARY value:\\\"$guid\\\"\"v10: \"type:VARBINARY value:\\\"$city\\\"\"v11: \"type:VARBINARY value:\\\"$state\\\"\"v12: \"type:VARBINARY value:\\\"$zip\\\"\"v13: \"type:VARBINARY value:\\\"$country\\\"\"v14: \"type:VARBINARY value:\\\"$tok\\\"\"v15: \"type:VARBINARY value:\\\"$ips\\\"\"v16: \"type:VARCHAR value:\\\"$ts\\\"\"v17: \"type:VARCHAR value:\\\"$ts\\\"\"v2: \"type:VARBINARY value:\\\"$firstname\\\"\"v3: \"type:VARBINARY value:\\\"$lastname\\\"\"v4: \"type:VARBINARY value:\\\"$blob\\\"\"v5: \"type:VARBINARY value:\\\"$phone\\\"\"v6: \"type:VARBINARY value:\\\"$email\\\"\"v7: \"type:VARBINARY value:\\\"$country\\\"\"v8: \"type:VARBINARY value:\\\"$birthday\\\"\"v9: \"type:VARBINARY value:\\\"$address\\\"\"}: 1`,
+			`target: workmade.-.primary: vttablet: Data too long for column 'signupIpAddress' at row 1 (errno 1406) (sqlstate 22001) (CallerID: planetscale-admin)`,
+		},
+		{
+			"removes Sql after comma",
+			`target: workmade.-.primary: vttablet: Data too long for column 'signupIpAddress' at row 1 (errno 1406) (sqlstate 22001) (CallerID: planetscale-admin): Junk: "whatever", Sql: \"insert into User(id, firstName, lastName, password, phone, email, citizenship, dob, address_street1, address_city, address_state, address_zip, address_country, piiSsn, signupIpAddress, createdAt, updatedAt) values (:v1, :v2, :v3, :v4, :v5, :v6, :v7, :v8, :v9, :v10, :v11, :v12, :v13, :v14, :v15, :v16, :v17)\", BindVars: {v1: \"type:VARBINARY value:\\\"$guid\\\"\"v10: \"type:VARBINARY value:\\\"$city\\\"\"v11: \"type:VARBINARY value:\\\"$state\\\"\"v12: \"type:VARBINARY value:\\\"$zip\\\"\"v13: \"type:VARBINARY value:\\\"$country\\\"\"v14: \"type:VARBINARY value:\\\"$tok\\\"\"v15: \"type:VARBINARY value:\\\"$ips\\\"\"v16: \"type:VARCHAR value:\\\"$ts\\\"\"v17: \"type:VARCHAR value:\\\"$ts\\\"\"v2: \"type:VARBINARY value:\\\"$firstname\\\"\"v3: \"type:VARBINARY value:\\\"$lastname\\\"\"v4: \"type:VARBINARY value:\\\"$blob\\\"\"v5: \"type:VARBINARY value:\\\"$phone\\\"\"v6: \"type:VARBINARY value:\\\"$email\\\"\"v7: \"type:VARBINARY value:\\\"$country\\\"\"v8: \"type:VARBINARY value:\\\"$birthday\\\"\"v9: \"type:VARBINARY value:\\\"$address\\\"\"}: 1`,
+			`target: workmade.-.primary: vttablet: Data too long for column 'signupIpAddress' at row 1 (errno 1406) (sqlstate 22001) (CallerID: planetscale-admin): Junk: "whatever"`,
+		},
+		{
+			"removes BindVars after colon",
+			`target: workmade.-.primary: vttablet: Data too long for column 'signupIpAddress' at row 1 (errno 1406) (sqlstate 22001) (CallerID: planetscale-admin): BindVars: {v1: \"type:VARBINARY value:\\\"$guid\\\"\"v10: \"type:VARBINARY value:\\\"$city\\\"\"v11: \"type:VARBINARY value:\\\"$state\\\"\"v12: \"type:VARBINARY value:\\\"$zip\\\"\"v13: \"type:VARBINARY value:\\\"$country\\\"\"v14: \"type:VARBINARY value:\\\"$tok\\\"\"v15: \"type:VARBINARY value:\\\"$ips\\\"\"v16: \"type:VARCHAR value:\\\"$ts\\\"\"v17: \"type:VARCHAR value:\\\"$ts\\\"\"v2: \"type:VARBINARY value:\\\"$firstname\\\"\"v3: \"type:VARBINARY value:\\\"$lastname\\\"\"v4: \"type:VARBINARY value:\\\"$blob\\\"\"v5: \"type:VARBINARY value:\\\"$phone\\\"\"v6: \"type:VARBINARY value:\\\"$email\\\"\"v7: \"type:VARBINARY value:\\\"$country\\\"\"v8: \"type:VARBINARY value:\\\"$birthday\\\"\"v9: \"type:VARBINARY value:\\\"$address\\\"\"}: 1`,
+			`target: workmade.-.primary: vttablet: Data too long for column 'signupIpAddress' at row 1 (errno 1406) (sqlstate 22001) (CallerID: planetscale-admin)`,
+		},
+		{
+			"removes BindVars after comma",
+			`target: workmade.-.primary: vttablet: Data too long for column 'signupIpAddress' at row 1 (errno 1406) (sqlstate 22001) (CallerID: planetscale-admin): Junk: "whatever", BindVars: {v1: \"type:VARBINARY value:\\\"$guid\\\"\"v10: \"type:VARBINARY value:\\\"$city\\\"\"v11: \"type:VARBINARY value:\\\"$state\\\"\"v12: \"type:VARBINARY value:\\\"$zip\\\"\"v13: \"type:VARBINARY value:\\\"$country\\\"\"v14: \"type:VARBINARY value:\\\"$tok\\\"\"v15: \"type:VARBINARY value:\\\"$ips\\\"\"v16: \"type:VARCHAR value:\\\"$ts\\\"\"v17: \"type:VARCHAR value:\\\"$ts\\\"\"v2: \"type:VARBINARY value:\\\"$firstname\\\"\"v3: \"type:VARBINARY value:\\\"$lastname\\\"\"v4: \"type:VARBINARY value:\\\"$blob\\\"\"v5: \"type:VARBINARY value:\\\"$phone\\\"\"v6: \"type:VARBINARY value:\\\"$email\\\"\"v7: \"type:VARBINARY value:\\\"$country\\\"\"v8: \"type:VARBINARY value:\\\"$birthday\\\"\"v9: \"type:VARBINARY value:\\\"$address\\\"\"}: 1`,
+			`target: workmade.-.primary: vttablet: Data too long for column 'signupIpAddress' at row 1 (errno 1406) (sqlstate 22001) (CallerID: planetscale-admin): Junk: "whatever"`,
+		},
+		{
+			"truncates very long strings",
+			"Doloribus quo ullam labore nostrum nihil dolore nemo. Ad molestiae ab at dolores et. Iusto adipisci tempora et quia blanditiis et.  Velit alias eos quia et velit. Impedit ipsa itaque facilis repellendus. Quidem fuga sit voluptas minus. Neque amet et necessitatibus voluptatum. Voluptatem eum consequatur et dolor. Nulla deserunt quia cum ea hic architecto.  Eum et sed quo et officia nostrum eos. Nam quisquam et dolor repellat. Ea aperiam iste et.  Sint commodi non ut non occaecati velit. Architecto et fuga alias blanditiis consequatur qui ipsa magnam. Ea velit mollitia sed eligendi dolor et. Commodi et non sint optio asperiores.  Et dolores id corrupti voluptatum quasi voluptatem ipsam voluptatem. Dolorum et natus fugit. Ad id ea laudantium adipisci molestiae ratione eum quisquam.",
+			"Doloribus quo ullam labore nostrum nihil dolore nemo. Ad molestiae ab at dolores et. Iusto adipisci tempora et quia blanditiis et.  Velit alias eos quia et velit. Impedit ipsa itaque facilis repellendus. Quidem fuga sit voluptas minus. Neque amet et necess",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			op := normalizeError(tc.input)
+			assert.Equal(t, tc.output, op)
 		})
 	}
 }
