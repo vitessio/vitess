@@ -17,14 +17,15 @@ limitations under the License.
 package aggregation
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func start(t *testing.T) (utils.MySQLCompare, func()) {
@@ -295,4 +296,21 @@ func TestGreaterEqualFilterOnScatter(t *testing.T) {
 			utils.AssertContainsError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) >= 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
 		})
 	}
+}
+
+func TestGroupByOnlyFullGroupByOff(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "insert into t9(id1, id2, id3) values(1,'a', '1'), (2,'Abc','2'), (3,'b', '3'), (4,'c', '4'), (5,'test', '5')")
+	utils.Exec(t, conn, "insert into t9(id1, id2, id3) values(6,'a', '11'), (7,'Abc','22'), (8,'b', '33'), (9,'c', '44'), (10,'test', '55')")
+	utils.Exec(t, conn, "set @@sql_mode = ' '")
+
+	// We do not use AssertMatches here because the results for the second column are random
+	utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ id2, id3 from t9 group by id2")
 }
