@@ -503,6 +503,9 @@ func translateCaseExpr(node *sqlparser.CaseExpr, lookup TranslationLookup) (Expr
 	var cmpbase Expr
 	if node.Expr != nil {
 		cmpbase, err = translateExpr(node.Expr, lookup)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	for _, when := range node.Whens {
