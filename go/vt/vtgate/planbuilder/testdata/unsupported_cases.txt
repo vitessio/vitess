@@ -705,6 +705,6 @@ Gen4 plan same as above
 Gen4 plan same as above
 
 # json_table expressions
-"SELECT * FROM JSON_TABLE('[ {"c1": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt"
+"SELECT * FROM JSON_TABLE('[ {\"c1\": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt"
 "unsupported: json_table expressions"
 Gen4 plan same as above
