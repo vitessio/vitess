@@ -157,10 +157,6 @@ func TestDurabilityPolicyField(t *testing.T) {
 	require.NoError(t, err, out)
 	checkDurabilityPolicy(t, "semi_sync")
 
-	out, err = clusterForKSTest.VtctlProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", "--", "--durability-policy=none", "ks_durability")
-	require.NoError(t, err, out)
-	checkDurabilityPolicy(t, "none")
-
 	out, err = clusterForKSTest.VtctlProcess.ExecuteCommandWithOutput("DeleteKeyspace", "ks_durability")
 	require.NoError(t, err, out)
 }
