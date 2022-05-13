@@ -99,21 +99,25 @@ service VTAdmin {
     rpc PingTablet(PingTabletRequest) returns (PingTabletResponse) {};
     // RefreshState reloads the tablet record on the specified tablet.
     rpc RefreshState(RefreshStateRequest) returns (RefreshStateResponse) {};
-    // ReparentTablet 
+    // ReparentTablet reparents a tablet to the current primary in the shard.
+    // This only works if the current replica position matches the last known
+    // reparent action.
     rpc ReparentTablet(ReparentTabletRequest) returns (ReparentTabletResponse) {};
-    // RunHealthCheck runs a health check on the tablet
+    // RunHealthCheck runs a healthcheck on the tablet.
     rpc RunHealthCheck(RunHealthCheckRequest) returns (RunHealthCheckResponse) {};
-    // SetReadOnly will set the tablet to read only mode
+    // SetReadOnly sets the tablet to read-only mode.
     rpc SetReadOnly(SetReadOnlyRequest) returns (SetReadOnlyResponse) {};
-    // SetReadWrite will set the tablet to read-write mode
+    // SetReadWrite sets the tablet to read-write mode.
     rpc SetReadWrite(SetReadWriteRequest) returns (SetReadWriteResponse) {};
-    // StartReplication will run the underlying database command to start replication on a tablet
+    // StartReplication runs the underlying database command to start
+    // replication on a tablet.
     rpc StartReplication(StartReplicationRequest) returns (StartReplicationResponse) {};
-    // StopReplication will run th underlying database command to stop replication on a tablet
+    // StopReplication runs the underlying database command to stop replication
+    // on a tablet
     rpc StopReplication(StopReplicationRequest) returns (StopReplicationResponse) {};
     // ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
     rpc ValidateKeyspace(ValidateKeyspaceRequest) returns (vtctldata.ValidateKeyspaceResponse) {};
-    // ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace
+    // ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace.
     rpc ValidateSchemaKeyspace(ValidateSchemaKeyspaceRequest) returns (vtctldata.ValidateSchemaKeyspaceResponse) {};
 	// ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
     rpc ValidateVersionKeyspace(ValidateVersionKeyspaceRequest) returns (vtctldata.ValidateVersionKeyspaceResponse) {};
@@ -279,7 +283,7 @@ message DeleteShardsRequest {
 }
 
 message DeleteTabletRequest {
-    string alias = 1;
+    topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
 }
 
@@ -421,8 +425,8 @@ message GetSchemaTableSizeOptions {
 }
 
 message GetTabletRequest {
-    // Unique (per cluster) tablet alias of the standard form: "$cell-$uid"
-    string alias = 1;
+    // Unique (per cluster) tablet alias.
+    topodata.TabletAlias alias = 1;
     // ClusterIDs is an optional parameter to narrow the scope of the search, if
     // the caller knows which cluster the tablet may be in, or, to disamiguate if
     // multiple clusters have a tablet with the same hostname.
@@ -493,7 +497,7 @@ message GetWorkflowsResponse {
 
 message PingTabletRequest {
     // Unique (per cluster) tablet alias of the standard form: "$cell-$uid"
-    string alias = 1;
+    topodata.TabletAlias alias = 1;
     // ClusterIDs is an optional parameter to narrow the scope of the search, if
     // the caller knows which cluster the tablet may be in, or, to disamiguate if
     // multiple clusters have a tablet with the same hostname.
@@ -505,7 +509,7 @@ message PingTabletResponse {
 }
 
 message RefreshStateRequest {
-    string alias = 1;
+    topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
 }
 
@@ -514,18 +518,18 @@ message RefreshStateResponse {
 }
 
 message ReparentTabletRequest {
-    string alias = 1;
+    topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
 }
 
 message ReparentTabletResponse {
     string keyspace = 1;
     string shard = 2;
-    string primary = 3;
+    topodata.TabletAlias primary = 3;
 }
 
 message RunHealthCheckRequest {
-    string alias = 1;
+    topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
 }
 
@@ -534,25 +538,23 @@ message RunHealthCheckResponse {
 }
 
 message SetReadOnlyRequest {
-    string alias = 1;
+    topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
 }
 
 message SetReadOnlyResponse {
-
 }
 
 message SetReadWriteRequest {
-    string alias = 1;
+    topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
 }
 
 message SetReadWriteResponse {
-    
 }
 
 message StartReplicationRequest {
-    string alias = 1;
+    topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
 }
 
@@ -561,7 +563,7 @@ message StartReplicationResponse {
 }
 
 message StopReplicationRequest {
-    string alias = 1;
+    topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
 }
 
