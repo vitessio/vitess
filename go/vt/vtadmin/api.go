@@ -1559,7 +1559,44 @@ func (api *API) RefreshState(ctx context.Context, req *vtadminpb.RefreshStateReq
 
 // ReloadSchemas is part of the vtadminpb.VTAdminServer interface.
 func (api *API) ReloadSchemas(ctx context.Context, req *vtadminpb.ReloadSchemasRequest) (*vtadminpb.ReloadSchemasResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "API.ReloadSchemas")
+	defer span.Finish()
+
+	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+
+	var (
+		m    sync.Mutex
+		wg   sync.WaitGroup
+		rec  concurrency.AllErrorRecorder
+		resp vtadminpb.ReloadSchemasResponse
+	)
+
+	for _, c := range clusters {
+		wg.Add(1)
+
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			cr, err := c.ReloadSchemas(ctx, req)
+			if err != nil {
+				rec.RecordError(fmt.Errorf("ReloadSchemas(cluster = %s) failed: %w", c.ID, err))
+				return
+			}
+
+			m.Lock()
+			defer m.Unlock()
+			resp.KeyspaceResults = append(resp.KeyspaceResults, cr.KeyspaceResults...)
+			resp.ShardResults = append(resp.ShardResults, cr.ShardResults...)
+			resp.TabletResults = append(resp.TabletResults, cr.TabletResults...)
+		}(c)
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return &resp, nil
 }
 
 // ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
