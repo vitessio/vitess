@@ -409,13 +409,6 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 			return nil, err
 		}
 
-		var alias string
-		if aliasedExpr.As.IsEmpty() {
-			alias = sqlparser.String(aliasedExpr.Expr)
-		} else {
-			alias = aliasedExpr.As.String()
-		}
-
 		idxCopy := idx
 
 		if !sqlparser.ContainsAggregation(expr.Col) {
@@ -423,7 +416,7 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 				out = append(out, Aggr{
 					Original: aliasedExpr,
 					OpCode:   engine.AggregateRandom,
-					Alias:    alias,
+					Alias:    aliasedExpr.ColumnName(),
 					Index:    &idxCopy,
 				})
 			}
