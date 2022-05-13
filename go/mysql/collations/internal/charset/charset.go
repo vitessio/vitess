@@ -40,7 +40,7 @@ type UnicodeMapping = eightbit.UnicodeMapping
 
 // Unicode encodings
 
-type Charset_utf8 = unicode.Charset_utf8mb3
+type Charset_utf8mb3 = unicode.Charset_utf8mb3
 type Charset_utf8mb4 = unicode.Charset_utf8mb4
 type Charset_utf16 = unicode.Charset_utf16be
 type Charset_utf16le = unicode.Charset_utf16le
@@ -75,7 +75,7 @@ func IsMultibyteByName(csname string) bool {
 
 func IsUnicode(charset Charset) bool {
 	switch charset.(type) {
-	case Charset_utf8, Charset_utf8mb4:
+	case Charset_utf8mb3, Charset_utf8mb4:
 		return true
 	case Charset_utf16, Charset_utf16le, Charset_ucs2:
 		return true
@@ -88,7 +88,7 @@ func IsUnicode(charset Charset) bool {
 
 func IsUnicodeByName(csname string) bool {
 	switch csname {
-	case "utf8", "utf8mb4", "utf16", "utf16le", "ucs2", "utf32":
+	case "utf8", "utf8mb3", "utf8mb4", "utf16", "utf16le", "ucs2", "utf32":
 		return true
 	default:
 		return false

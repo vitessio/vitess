@@ -138,7 +138,7 @@ func checkCompatibleCollations(
 			}
 		}
 
-	case charset.Charset_utf8, charset.Charset_ucs2, charset.Charset_utf16, charset.Charset_utf16le:
+	case charset.Charset_utf8mb3, charset.Charset_ucs2, charset.Charset_utf16, charset.Charset_utf16le:
 		switch {
 		case leftCoercibility < rightCoercibility:
 			return true
