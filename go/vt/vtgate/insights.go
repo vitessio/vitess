@@ -263,8 +263,7 @@ func (ii *Insights) logToKafka(logger *streamlog.StreamLogger) error {
 		RequiredAcks: kafka.RequireOne,
 		Async:        true,
 
-		// The logger is pretty chatty (at least one log line per batch), so we shouldn't send this if filling up logs is a concern
-		Logger:      kafka.LoggerFunc(log.Infof),
+		// Not setting Logger, because it records one log line per message
 		ErrorLogger: kafka.LoggerFunc(log.Errorf),
 		Completion: func(messages []kafka.Message, err error) {
 			release := 0
