@@ -438,11 +438,6 @@ var commands = []commandGroup{
 				method: commandSetKeyspaceServedFrom,
 				params: "[-source=<source keyspace name>] [-remove] [-cells=c1,c2,...] <keyspace name> <tablet type>",
 				help:   "Changes the ServedFromMap manually. This command is intended for emergency fixes. This field is automatically set when you call the *MigrateServedFrom* command. This command does not rebuild the serving graph.",
-			}, {
-				name:   "SetKeyspaceDurabilityPolicy",
-				method: commandSetKeyspaceDurabilityPolicy,
-				params: "[-durability-policy=policy_name] <keyspace name>",
-				help:   "Sets the durability-policy used by the specified keyspace.",
 			},
 			{
 				name:   "RebuildKeyspaceGraph",
@@ -2166,23 +2161,6 @@ func commandSetKeyspaceServedFrom(ctx context.Context, wr *wrangler.Wrangler, su
 		Cells:          cells,
 		Remove:         *remove,
 		SourceKeyspace: *source,
-	})
-	return err
-}
-
-func commandSetKeyspaceDurabilityPolicy(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	durabilityPolicy := subFlags.String("durability-policy", "none", "type of durability to enforce for this keyspace. Default is none. Other values include 'semi_sync' and others as dictated by registered plugins")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the <keyspace name> argument is required for the SetKeyspaceDurabilityPolicy command")
-	}
-	keyspace := subFlags.Arg(0)
-
-	_, err := wr.VtctldServer().SetKeyspaceDurabilityPolicy(ctx, &vtctldatapb.SetKeyspaceDurabilityPolicyRequest{
-		Keyspace:         keyspace,
-		DurabilityPolicy: *durabilityPolicy,
 	})
 	return err
 }
