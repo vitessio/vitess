@@ -266,7 +266,7 @@ var keywords = []keyword{
 	{"float4", UNUSED},
 	{"float8", UNUSED},
 	{"flush", FLUSH},
-	{"folllowing", FOLLOWING},
+	{"following", FOLLOWING},
 	{"for", FOR},
 	{"force", FORCE},
 	{"foreign", FOREIGN},
