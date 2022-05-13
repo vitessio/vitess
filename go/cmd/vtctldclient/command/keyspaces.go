@@ -88,14 +88,6 @@ Otherwise, the keyspace must be empty (have no shards), or returns an error.`,
 		Args:  cobra.ExactArgs(2),
 		RunE:  commandRemoveKeyspaceCell,
 	}
-	// SetKeyspaceServedFrom makes a SetKeyspaceServedFrom gRPC call to a vtcltd.
-	SetKeyspaceServedFrom = &cobra.Command{
-		Use:                   "SetKeyspaceServedFrom [--source <keyspace>] [--remove] [--cells=<cells>] <keyspace> <tablet_type>",
-		Short:                 "Updates the ServedFromMap for a keyspace manually. This command is intended for emergency fixes; the map is automatically set by MigrateServedTypes. This command does not rebuild the serving graph.",
-		DisableFlagsInUseLine: true,
-		Args:                  cobra.ExactArgs(2),
-		RunE:                  commandSetKeyspaceServedFrom,
-	}
 	// SetKeyspaceDurabilityPolicy makes a SetKeyspaceDurabilityPolicy gRPC call to a vtcltd.
 	SetKeyspaceDurabilityPolicy = &cobra.Command{
 		Use:   "SetKeyspaceDurabilityPolicy [--durability-policy=policy_name] <keyspace name>",
@@ -105,6 +97,14 @@ Otherwise, the keyspace must be empty (have no shards), or returns an error.`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandSetKeyspaceDurabilityPolicy,
+	}
+	// SetKeyspaceServedFrom makes a SetKeyspaceServedFrom gRPC call to a vtcltd.
+	SetKeyspaceServedFrom = &cobra.Command{
+		Use:                   "SetKeyspaceServedFrom [--source <keyspace>] [--remove] [--cells=<cells>] <keyspace> <tablet_type>",
+		Short:                 "Updates the ServedFromMap for a keyspace manually. This command is intended for emergency fixes; the map is automatically set by MigrateServedTypes. This command does not rebuild the serving graph.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandSetKeyspaceServedFrom,
 	}
 	// SetKeyspaceShardingInfo makes a SetKeyspaceShardingInfo gRPC call to a vtcltd.
 	SetKeyspaceShardingInfo = &cobra.Command{
@@ -325,6 +325,31 @@ func commandRemoveKeyspaceCell(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+var setKeyspaceDurabilityPolicyOptions = struct {
+	DurabilityPolicy string
+}{}
+
+func commandSetKeyspaceDurabilityPolicy(cmd *cobra.Command, args []string) error {
+	keyspace := cmd.Flags().Arg(0)
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.SetKeyspaceDurabilityPolicy(commandCtx, &vtctldatapb.SetKeyspaceDurabilityPolicyRequest{
+		Keyspace:         keyspace,
+		DurabilityPolicy: setKeyspaceDurabilityPolicyOptions.DurabilityPolicy,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
 var setKeyspaceServedFromOptions = struct {
 	Cells          []string
 	SourceKeyspace string
@@ -346,31 +371,6 @@ func commandSetKeyspaceServedFrom(cmd *cobra.Command, args []string) error {
 		Cells:          setKeyspaceServedFromOptions.Cells,
 		SourceKeyspace: setKeyspaceServedFromOptions.SourceKeyspace,
 		Remove:         setKeyspaceServedFromOptions.Remove,
-	})
-	if err != nil {
-		return err
-	}
-
-	data, err := cli.MarshalJSON(resp)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("%s\n", data)
-	return nil
-}
-
-var setKeyspaceDurabilityPolicyOptions = struct {
-	DurabilityPolicy string
-}{}
-
-func commandSetKeyspaceDurabilityPolicy(cmd *cobra.Command, args []string) error {
-	keyspace := cmd.Flags().Arg(0)
-	cli.FinishedParsing(cmd)
-
-	resp, err := client.SetKeyspaceDurabilityPolicy(commandCtx, &vtctldatapb.SetKeyspaceDurabilityPolicyRequest{
-		Keyspace:         keyspace,
-		DurabilityPolicy: setKeyspaceDurabilityPolicyOptions.DurabilityPolicy,
 	})
 	if err != nil {
 		return err
