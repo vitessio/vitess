@@ -40,13 +40,15 @@ import (
 )
 
 type vcopier struct {
-	vr        *vreplicator
-	tablePlan *TablePlan
+	vr               *vreplicator
+	tablePlan        *TablePlan
+	throttlerAppName string
 }
 
 func newVCopier(vr *vreplicator) *vcopier {
 	return &vcopier{
-		vr: vr,
+		vr:               vr,
+		throttlerAppName: vr.throttlerAppName(),
 	}
 }
 
@@ -225,6 +227,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var updateCopyState *sqlparser.ParsedQuery
 	var bv map[string]*querypb.BindVariable
 	var sqlbuffer bytes2.Buffer
+
 	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		for {
 			select {
@@ -236,7 +239,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			default:
 			}
 			// verify throttler is happy, otherwise keep looping
-			if vc.vr.vre.throttlerClient.ThrottleCheckOKOrWait(ctx) {
+			if vc.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vc.throttlerAppName) {
 				break
 			}
 		}

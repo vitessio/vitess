@@ -67,7 +67,7 @@ func NewSchemaFromEntities(entities []Entity) (*Schema, error) {
 	return schema, nil
 }
 
-// NewSchemaFromEntities creates a valid and normalized schema based on list of valid statements
+// NewSchemaFromStatements creates a valid and normalized schema based on list of valid statements
 func NewSchemaFromStatements(statements []sqlparser.Statement) (*Schema, error) {
 	entities := []Entity{}
 	for _, s := range statements {
@@ -77,13 +77,13 @@ func NewSchemaFromStatements(statements []sqlparser.Statement) (*Schema, error) 
 		case *sqlparser.CreateView:
 			entities = append(entities, NewCreateViewEntity(stmt))
 		default:
-			return nil, errors.Wrap(ErrUnsupportedStatement, sqlparser.String(s))
+			return nil, errors.Wrap(ErrUnsupportedStatement, sqlparser.CanonicalString(s))
 		}
 	}
 	return NewSchemaFromEntities(entities)
 }
 
-// NewSchemaFromEntities creates a valid and normalized schema based on list of queries
+// NewSchemaFromQueries creates a valid and normalized schema based on list of queries
 func NewSchemaFromQueries(queries []string) (*Schema, error) {
 	statements := []sqlparser.Statement{}
 	for _, q := range queries {
@@ -96,7 +96,7 @@ func NewSchemaFromQueries(queries []string) (*Schema, error) {
 	return NewSchemaFromStatements(statements)
 }
 
-// NewSchemaFromEntities creates a valid and normalized schema based on a SQL blog that contains
+// NewSchemaFromSQL creates a valid and normalized schema based on a SQL blob that contains
 // CREATE statements for various objects (tables, views)
 func NewSchemaFromSQL(sql string) (*Schema, error) {
 	statements := []sqlparser.Statement{}
@@ -234,7 +234,7 @@ func (s *Schema) Entities() []Entity {
 
 // EntityNames is a convenience function that returns just the names of entities, in good order
 func (s *Schema) EntityNames() []string {
-	names := []string{}
+	var names []string
 	for _, e := range s.Entities() {
 		names = append(names, e.Name())
 	}
@@ -254,7 +254,7 @@ func (s *Schema) Tables() []*CreateTableEntity {
 
 // TableNames is a convenience function that returns just the names of tables, in good order
 func (s *Schema) TableNames() []string {
-	names := []string{}
+	var names []string
 	for _, e := range s.Tables() {
 		names = append(names, e.Name())
 	}
@@ -274,7 +274,7 @@ func (s *Schema) Views() []*CreateViewEntity {
 
 // ViewNames is a convenience function that returns just the names of views, in good order
 func (s *Schema) ViewNames() []string {
-	names := []string{}
+	var names []string
 	for _, e := range s.Views() {
 		names = append(names, e.Name())
 	}

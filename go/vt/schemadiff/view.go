@@ -69,7 +69,15 @@ func (d *AlterViewEntityDiff) CanonicalStatementString() (s string) {
 	return s
 }
 
-//
+// SubsequentDiff implements EntityDiff
+func (d *AlterViewEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
+}
+
+// SetSubsequentDiff implements EntityDiff
+func (d *AlterViewEntityDiff) SetSubsequentDiff(EntityDiff) {
+}
+
 type CreateViewEntityDiff struct {
 	createView *sqlparser.CreateView
 }
@@ -79,7 +87,7 @@ func (d *CreateViewEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
-// IsEmpty implements EntityDiff
+// Entities implements EntityDiff
 func (d *CreateViewEntityDiff) Entities() (from Entity, to Entity) {
 	return nil, &CreateViewEntity{CreateView: *d.createView}
 }
@@ -116,7 +124,15 @@ func (d *CreateViewEntityDiff) CanonicalStatementString() (s string) {
 	return s
 }
 
-//
+// SubsequentDiff implements EntityDiff
+func (d *CreateViewEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
+}
+
+// SetSubsequentDiff implements EntityDiff
+func (d *CreateViewEntityDiff) SetSubsequentDiff(EntityDiff) {
+}
+
 type DropViewEntityDiff struct {
 	from     *CreateViewEntity
 	dropView *sqlparser.DropView
@@ -127,7 +143,7 @@ func (d *DropViewEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
-// IsEmpty implements EntityDiff
+// Entities implements EntityDiff
 func (d *DropViewEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, nil
 }
@@ -164,6 +180,15 @@ func (d *DropViewEntityDiff) StatementString() (s string) {
 	return s
 }
 
+// SubsequentDiff implements EntityDiff
+func (d *DropViewEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
+}
+
+// SetSubsequentDiff implements EntityDiff
+func (d *DropViewEntityDiff) SetSubsequentDiff(EntityDiff) {
+}
+
 // CreateViewEntity stands for a VIEW construct. It contains the view's CREATE statement.
 type CreateViewEntity struct {
 	sqlparser.CreateView
@@ -187,7 +212,7 @@ func (c *CreateViewEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, err
 	return c.ViewDiff(otherCreateView, hints)
 }
 
-// Diff compares this view statement with another view statement, and sees what it takes to
+// ViewDiff compares this view statement with another view statement, and sees what it takes to
 // change this view to look like the other view.
 // It returns an AlterView statement if changes are found, or nil if not.
 // the other view may be of different name; its name is ignored.
@@ -202,8 +227,8 @@ func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, hints *DiffHints) (
 		return nil, ErrNotFullyParsed
 	}
 
-	format := sqlparser.String(&c.CreateView)
-	otherFormat := sqlparser.String(&otherStmt)
+	format := sqlparser.CanonicalString(&c.CreateView)
+	otherFormat := sqlparser.CanonicalString(&otherStmt)
 	if format == otherFormat {
 		return nil, nil
 	}

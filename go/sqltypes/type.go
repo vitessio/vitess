@@ -38,6 +38,12 @@ const (
 	flagIsBinary   = int(querypb.Flag_ISBINARY)
 )
 
+const (
+	TimestampFormat           = "2006-01-02 15:04:05"
+	TimestampFormatPrecision3 = "2006-01-02 15:04:05.000"
+	TimestampFormatPrecision6 = "2006-01-02 15:04:05.000000"
+)
+
 // IsIntegral returns true if querypb.Type is an integral
 // (signed/unsigned) that can be represented using
 // up to 64 binary bits.

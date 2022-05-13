@@ -410,7 +410,7 @@ func TestAutocommitDirectTarget(t *testing.T) {
 		Autocommit:      true,
 		TransactionMode: vtgatepb.TransactionMode_MULTI,
 	}
-	sql := "insert into simple(val) values ('val')"
+	sql := "insert into `simple`(val) values ('val')"
 
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)

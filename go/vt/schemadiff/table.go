@@ -35,6 +35,8 @@ type AlterTableEntityDiff struct {
 	from       *CreateTableEntity
 	to         *CreateTableEntity
 	alterTable *sqlparser.AlterTable
+
+	subsequentDiff *AlterTableEntityDiff
 }
 
 // IsEmpty implements EntityDiff
@@ -77,6 +79,35 @@ func (d *AlterTableEntityDiff) CanonicalStatementString() (s string) {
 		s = sqlparser.CanonicalString(stmt)
 	}
 	return s
+}
+
+// SubsequentDiff implements EntityDiff
+func (d *AlterTableEntityDiff) SubsequentDiff() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	return d.subsequentDiff
+}
+
+// SetSubsequentDiff implements EntityDiff
+func (d *AlterTableEntityDiff) SetSubsequentDiff(subDiff EntityDiff) {
+	if d == nil {
+		return
+	}
+	if subTableDiff, ok := subDiff.(*AlterTableEntityDiff); ok {
+		d.subsequentDiff = subTableDiff
+	} else {
+		d.subsequentDiff = nil
+	}
+}
+
+// addSubsequentDiff adds a subsequent diff to the tail of the diff sequence
+func (d *AlterTableEntityDiff) addSubsequentDiff(diff *AlterTableEntityDiff) {
+	if d.subsequentDiff == nil {
+		d.subsequentDiff = diff
+	} else {
+		d.subsequentDiff.addSubsequentDiff(diff)
+	}
 }
 
 //
@@ -124,6 +155,15 @@ func (d *CreateTableEntityDiff) CanonicalStatementString() (s string) {
 		s = sqlparser.CanonicalString(stmt)
 	}
 	return s
+}
+
+// SubsequentDiff implements EntityDiff
+func (d *CreateTableEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
+}
+
+// SetSubsequentDiff implements EntityDiff
+func (d *CreateTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
 //
@@ -174,6 +214,15 @@ func (d *DropTableEntityDiff) CanonicalStatementString() (s string) {
 	return s
 }
 
+// SubsequentDiff implements EntityDiff
+func (d *DropTableEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
+}
+
+// SetSubsequentDiff implements EntityDiff
+func (d *DropTableEntityDiff) SetSubsequentDiff(EntityDiff) {
+}
+
 // CreateTableEntity stands for a TABLE construct. It contains the table's CREATE statement.
 type CreateTableEntity struct {
 	sqlparser.CreateTable
@@ -191,6 +240,7 @@ func NewCreateTableEntity(c *sqlparser.CreateTable) *CreateTableEntity {
 // The function returns this receiver as courtesy
 func (c *CreateTableEntity) normalize() *CreateTableEntity {
 	c.normalizeUnnamedKeys()
+	c.normalizeUnnamedConstraints()
 	c.normalizeTableOptions()
 	c.normalizeColumnOptions()
 	c.normalizePartitionOptions()
@@ -202,7 +252,7 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 		switch strings.ToUpper(opt.Name) {
 		case "CHARSET", "COLLATE":
 			opt.String = strings.ToLower(opt.String)
-			if charset, ok := charsetAliases[opt.String]; ok {
+			if charset, ok := collationEnv.CharsetAlias(opt.String); ok {
 				opt.String = charset
 			}
 		case "ENGINE":
@@ -230,12 +280,6 @@ func defaultCharset() string {
 }
 
 func defaultCharsetCollation(charset string) string {
-	// The collation tables are based on utf8, not the utf8mb3 alias.
-	// We already normalize to utf8mb3 to be explicit, so we have to
-	// map it back here to find the default collation for utf8mb3.
-	if charset == "utf8mb3" {
-		charset = "utf8"
-	}
 	collation := collationEnv.DefaultCollationForCharset(charset)
 	if collation == nil {
 		return ""
@@ -298,7 +342,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 
 		// Map any charset aliases to the real charset. This applies mainly right
 		// now to utf8 being an alias for utf8mb3.
-		if charset, ok := charsetAliases[col.Type.Charset]; ok {
+		if charset, ok := collationEnv.CharsetAlias(col.Type.Charset); ok {
 			col.Type.Charset = charset
 		}
 
@@ -374,7 +418,7 @@ func (c *CreateTableEntity) normalizePartitionOptions() {
 func (c *CreateTableEntity) normalizeUnnamedKeys() {
 	// let's ensure all keys have names
 	keyNameExists := map[string]bool{}
-	// first, we iterate and take note for all keys that do aleady have names
+	// first, we iterate and take note for all keys that do already have names
 	for _, key := range c.CreateTable.TableSpec.Indexes {
 		if name := key.Info.Name.String(); name != "" {
 			keyNameExists[name] = true
@@ -408,6 +452,35 @@ func (c *CreateTableEntity) normalizeUnnamedKeys() {
 			// OK we found a free slot!
 			key.Info.Name = sqlparser.NewColIdent(suggestedKeyName)
 			keyNameExists[suggestedKeyName] = true
+		}
+	}
+}
+
+func (c *CreateTableEntity) normalizeUnnamedConstraints() {
+	// let's ensure all keys have names
+	constraintNameExists := map[string]bool{}
+	// first, we iterate and take note for all keys that do already have names
+	for _, constraint := range c.CreateTable.TableSpec.Constraints {
+		if name := constraint.Name.String(); name != "" {
+			constraintNameExists[name] = true
+		}
+	}
+
+	// now, let's look at keys that do not have names, and assign them new names
+	for _, constraint := range c.CreateTable.TableSpec.Constraints {
+		if name := constraint.Name.String(); name == "" {
+			nameFormat := "%s_chk_%d"
+			if _, fk := constraint.Details.(*sqlparser.ForeignKeyDefinition); fk {
+				nameFormat = "%s_ibfk_%d"
+			}
+			suggestedCheckName := fmt.Sprintf(nameFormat, c.CreateTable.Table.Name.String(), 1)
+			// now let's see if that name is taken; if it is, enumerate new news until we find a free name
+			for enumerate := 2; constraintNameExists[suggestedCheckName]; enumerate++ {
+				suggestedCheckName = fmt.Sprintf(nameFormat, c.CreateTable.Table.Name.String(), enumerate)
+			}
+			// OK we found a free slot!
+			constraint.Name = sqlparser.NewColIdent(suggestedCheckName)
+			constraintNameExists[suggestedCheckName] = true
 		}
 	}
 }
@@ -452,8 +525,8 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		return nil, ErrNotFullyParsed
 	}
 
-	format := sqlparser.String(&c.CreateTable)
-	otherFormat := sqlparser.String(&otherStmt)
+	format := sqlparser.CanonicalString(&c.CreateTable)
+	otherFormat := sqlparser.CanonicalString(&otherStmt)
 	if format == otherFormat {
 		return nil, nil
 	}
@@ -462,6 +535,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		Table: otherStmt.Table,
 	}
 	diffedTableCharset := ""
+	var partitionSpecs []*sqlparser.PartitionSpec
 	{
 		t1Options := c.CreateTable.TableSpec.Options
 		t2Options := other.CreateTable.TableSpec.Options
@@ -482,7 +556,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		c.diffKeys(alterTable, t1Keys, t2Keys, hints)
 	}
 	{
-		// diff constraints (foreign keys)
+		// diff constraints
 		// ordered constraints for both tables:
 		t1Constraints := c.CreateTable.TableSpec.Constraints
 		t2Constraints := other.CreateTable.TableSpec.Constraints
@@ -493,7 +567,9 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		// ordered keys for both tables:
 		t1Partitions := c.CreateTable.TableSpec.PartitionOption
 		t2Partitions := other.CreateTable.TableSpec.PartitionOption
-		if err := c.diffPartitions(alterTable, t1Partitions, t2Partitions, hints); err != nil {
+		var err error
+		partitionSpecs, err = c.diffPartitions(alterTable, t1Partitions, t2Partitions, hints)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -506,13 +582,35 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 			return nil, err
 		}
 	}
-	if len(alterTable.AlterOptions) == 0 && alterTable.PartitionSpec == nil && alterTable.PartitionOption == nil {
+	if len(alterTable.AlterOptions) == 0 && alterTable.PartitionOption == nil && alterTable.PartitionSpec == nil && len(partitionSpecs) == 0 {
 		// it's possible that the table definitions are different, and still there's no
 		// "real" difference. Reasons could be:
 		// - reordered keys -- we treat that as non-diff
 		return nil, nil
 	}
-	return &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}, nil
+	if len(partitionSpecs) == 0 {
+		return &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}, nil
+	}
+	// partitionSpecs has multiple entries
+	if len(alterTable.AlterOptions) > 0 ||
+		alterTable.PartitionOption != nil ||
+		alterTable.PartitionSpec != nil {
+		return nil, ErrMixedPartitionAndNonPartitionChanges
+	}
+	var parentAlterTableEntityDiff *AlterTableEntityDiff
+	for _, partitionSpec := range partitionSpecs {
+		alterTable := &sqlparser.AlterTable{
+			Table:         otherStmt.Table,
+			PartitionSpec: partitionSpec,
+		}
+		diff := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+		if parentAlterTableEntityDiff == nil {
+			parentAlterTableEntityDiff = diff
+		} else {
+			parentAlterTableEntityDiff.addSubsequentDiff(diff)
+		}
+	}
+	return parentAlterTableEntityDiff, nil
 }
 
 func (c *CreateTableEntity) diffTableCharset(
@@ -539,37 +637,37 @@ func (c *CreateTableEntity) diffTableCharset(
 func isDefaultTableOptionValue(option *sqlparser.TableOption) bool {
 	switch strings.ToUpper(option.Name) {
 	case "CHECKSUM":
-		return sqlparser.String(option.Value) == "0"
+		return sqlparser.CanonicalString(option.Value) == "0"
 	case "COMMENT":
 		return option.String == ""
 	case "COMPRESSION":
-		return sqlparser.String(option.Value) == "" || sqlparser.String(option.Value) == "''"
+		return sqlparser.CanonicalString(option.Value) == "" || sqlparser.CanonicalString(option.Value) == "''"
 	case "CONNECTION":
-		return sqlparser.String(option.Value) == "" || sqlparser.String(option.Value) == "''"
+		return sqlparser.CanonicalString(option.Value) == "" || sqlparser.CanonicalString(option.Value) == "''"
 	case "DATA DIRECTORY":
-		return sqlparser.String(option.Value) == "" || sqlparser.String(option.Value) == "''"
+		return sqlparser.CanonicalString(option.Value) == "" || sqlparser.CanonicalString(option.Value) == "''"
 	case "DELAY_KEY_WRITE":
-		return sqlparser.String(option.Value) == "0"
+		return sqlparser.CanonicalString(option.Value) == "0"
 	case "ENCRYPTION":
-		return sqlparser.String(option.Value) == "N"
+		return sqlparser.CanonicalString(option.Value) == "N"
 	case "INDEX DIRECTORY":
-		return sqlparser.String(option.Value) == "" || sqlparser.String(option.Value) == "''"
+		return sqlparser.CanonicalString(option.Value) == "" || sqlparser.CanonicalString(option.Value) == "''"
 	case "KEY_BLOCK_SIZE":
-		return sqlparser.String(option.Value) == "0"
+		return sqlparser.CanonicalString(option.Value) == "0"
 	case "MAX_ROWS":
-		return sqlparser.String(option.Value) == "0"
+		return sqlparser.CanonicalString(option.Value) == "0"
 	case "MIN_ROWS":
-		return sqlparser.String(option.Value) == "0"
+		return sqlparser.CanonicalString(option.Value) == "0"
 	case "PACK_KEYS":
-		return option.String == "DEFAULT"
+		return strings.EqualFold(option.String, "DEFAULT")
 	case "ROW_FORMAT":
-		return option.String == "DEFAULT"
+		return strings.EqualFold(option.String, "DEFAULT")
 	case "STATS_AUTO_RECALC":
-		return option.String == "DEFAULT"
+		return strings.EqualFold(option.String, "DEFAULT")
 	case "STATS_PERSISTENT":
-		return option.String == "DEFAULT"
+		return strings.EqualFold(option.String, "DEFAULT")
 	case "STATS_SAMPLE_PAGES":
-		return option.String == "DEFAULT"
+		return strings.EqualFold(option.String, "DEFAULT")
 	default:
 		return false
 	}
@@ -658,7 +756,7 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 		if t1Option, ok := t1OptionsMap[t2Option.Name]; ok {
 			options1 := sqlparser.TableOptions{t1Option}
 			options2 := sqlparser.TableOptions{t2Option}
-			if sqlparser.String(options1) != sqlparser.String(options2) {
+			if sqlparser.CanonicalString(options1) != sqlparser.CanonicalString(options2) {
 				// options are different.
 				// However, we don't automatically apply these changes. It depends on the option!
 				switch strings.ToUpper(t1Option.Name) {
@@ -720,59 +818,77 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 func (c *CreateTableEntity) isRangePartitionsRotation(
 	t1Partitions *sqlparser.PartitionOption,
 	t2Partitions *sqlparser.PartitionOption,
-) (bool, []sqlparser.AlterOption) {
+) (bool, []*sqlparser.PartitionSpec, error) {
 	// Validate that both tables have range partitioning
 	if t1Partitions.Type != t2Partitions.Type {
-		return false, nil
+		return false, nil, nil
 	}
 	if t1Partitions.Type != sqlparser.RangeType {
-		return false, nil
+		return false, nil, nil
 	}
 	definitions1 := t1Partitions.Definitions
 	definitions2 := t2Partitions.Definitions
 	// there has to be a non-empty shared list, therefore both definitions must be non-empty:
 	if len(definitions1) == 0 {
-		return false, nil
+		return false, nil, nil
 	}
 	if len(definitions2) == 0 {
-		return false, nil
+		return false, nil, nil
 	}
+	droppedPartitions1 := []*sqlparser.PartitionDefinition{}
 	// It's OK for prefix of t1 partitions to be nonexistent in t2 (as they may have been rotated away in t2)
-	for len(definitions1) > 0 && sqlparser.String(definitions1[0]) != sqlparser.String(definitions2[0]) {
+	for len(definitions1) > 0 && sqlparser.CanonicalString(definitions1[0]) != sqlparser.CanonicalString(definitions2[0]) {
+		droppedPartitions1 = append(droppedPartitions1, definitions1[0])
 		definitions1 = definitions1[1:]
 	}
 	if len(definitions1) == 0 {
 		// We've exhaused definition1 trying to find a shared partition with definitions2. Nothing found.
 		// so there is no shared sequence between the two tables.
-		return false, nil
+		return false, nil, nil
 	}
 	if len(definitions1) > len(definitions2) {
-		return false, nil
+		return false, nil, nil
 	}
-	// To save computation, and ecause we've already shown that sqlparser.String(definitions1[0]) == sqlparser.String(definitions2[0]),
+	// To save computation, and because we've already shown that sqlparser.CanonicalString(definitions1[0]) == sqlparser.CanonicalString(definitions2[0]),
 	// we can skip one element
 	definitions1 = definitions1[1:]
 	definitions2 = definitions2[1:]
 	// Now let's ensure that whatever is remaining in definitions1 is an exact match for a prefix of definitions2
 	// It's ok if we end up with leftover elements in definition2
 	for len(definitions1) > 0 {
-		if sqlparser.String(definitions1[0]) != sqlparser.String(definitions2[0]) {
-			return false, nil
+		if sqlparser.CanonicalString(definitions1[0]) != sqlparser.CanonicalString(definitions2[0]) {
+			return false, nil, nil
 		}
 		definitions1 = definitions1[1:]
 		definitions2 = definitions2[1:]
 	}
-	return true, nil
+	partitionSpecs := []*sqlparser.PartitionSpec{}
+	addedPartitions2 := definitions2
+	for _, p := range droppedPartitions1 {
+		partitionSpec := &sqlparser.PartitionSpec{
+			Action: sqlparser.DropAction,
+			Names:  []sqlparser.ColIdent{p.Name},
+		}
+		partitionSpecs = append(partitionSpecs, partitionSpec)
+	}
+	for _, p := range addedPartitions2 {
+		partitionSpec := &sqlparser.PartitionSpec{
+			Action:      sqlparser.AddAction,
+			Definitions: []*sqlparser.PartitionDefinition{p},
+		}
+		partitionSpecs = append(partitionSpecs, partitionSpec)
+	}
+	return true, partitionSpecs, nil
 }
 
 func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 	t1Partitions *sqlparser.PartitionOption,
 	t2Partitions *sqlparser.PartitionOption,
 	hints *DiffHints,
-) error {
+) (partitionSpecs []*sqlparser.PartitionSpec, err error) {
 	switch {
 	case t1Partitions == nil && t2Partitions == nil:
-		return nil
+		return nil, nil
 	case t1Partitions == nil:
 		// add partitioning
 		alterTable.PartitionOption = t2Partitions
@@ -783,9 +899,9 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 			IsAll:  true,
 		}
 		alterTable.PartitionSpec = partitionSpec
-	case sqlparser.String(t1Partitions) == sqlparser.String(t2Partitions):
+	case sqlparser.CanonicalString(t1Partitions) == sqlparser.CanonicalString(t2Partitions):
 		// identical partitioning
-		return nil
+		return nil, nil
 	default:
 		// partitioning was changed
 		// For most cases, we produce a complete re-partitioing schema: we don't try and figure out the minimal
@@ -798,19 +914,27 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 		// Having said that, we _do_ analyze the scenario of a RANGE partitioning rotation of partitions:
 		// where zero or more partitions may have been dropped from the earlier range, and zero or more
 		// partitions have been added with a later range:
-		if isRotation, _ := c.isRangePartitionsRotation(t1Partitions, t2Partitions); isRotation {
+		isRotation, partitionSpecs, err := c.isRangePartitionsRotation(t1Partitions, t2Partitions)
+		if err != nil {
+			return nil, err
+		}
+		if isRotation {
 			switch hints.RangeRotationStrategy {
 			case RangeRotationIgnore:
-				return nil
+				return nil, nil
 			case RangeRotationStatements:
-				return ErrRangeRotattionStatementsStrategyUnsupported
+				if len(partitionSpecs) == 1 {
+					alterTable.PartitionSpec = partitionSpecs[0]
+					partitionSpecs = nil
+				}
+				return partitionSpecs, nil
 			case RangeRotationFullSpec:
 				// proceed to return a full rebuild
 			}
 		}
 		alterTable.PartitionOption = t2Partitions
 	}
-	return nil
+	return nil, nil
 }
 
 func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
@@ -827,8 +951,11 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 		t2ConstraintsMap[constraint.Name.String()] = constraint
 	}
 
-	dropConstraintStatement := func(name sqlparser.ColIdent) *sqlparser.DropKey {
-		return &sqlparser.DropKey{Name: name, Type: sqlparser.ForeignKeyType}
+	dropConstraintStatement := func(constraint *sqlparser.ConstraintDefinition) *sqlparser.DropKey {
+		if _, fk := constraint.Details.(*sqlparser.ForeignKeyDefinition); fk {
+			return &sqlparser.DropKey{Name: constraint.Name, Type: sqlparser.ForeignKeyType}
+		}
+		return &sqlparser.DropKey{Name: constraint.Name, Type: sqlparser.CheckKeyType}
 	}
 
 	// evaluate dropped constraints
@@ -836,7 +963,7 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 	for _, t1Constraint := range t1Constraints {
 		if _, ok := t2ConstraintsMap[t1Constraint.Name.String()]; !ok {
 			// column exists in t1 but not in t2, hence it is dropped
-			dropConstraint := dropConstraintStatement(t1Constraint.Name)
+			dropConstraint := dropConstraintStatement(t1Constraint)
 			alterTable.AlterOptions = append(alterTable.AlterOptions, dropConstraint)
 		}
 	}
@@ -848,10 +975,24 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 		if t1Constraint, ok := t1ConstraintsMap[t2ConstraintName]; ok {
 			// constraint exists in both tables
 			// check diff between before/after columns:
-			if sqlparser.String(t2Constraint) != sqlparser.String(t1Constraint) {
-				// constraints with same name have different definition. There is no ALTER INDEX statement,
-				// we're gonna drop and create.
-				dropConstraint := dropConstraintStatement(t1Constraint.Name)
+			if sqlparser.CanonicalString(t2Constraint) != sqlparser.CanonicalString(t1Constraint) {
+				// constraints with same name have different definition.
+				// First we check if this is only the enforced setting that changed which can
+				// be directly altered.
+				check1Details, ok1 := t1Constraint.Details.(*sqlparser.CheckConstraintDefinition)
+				check2Details, ok2 := t2Constraint.Details.(*sqlparser.CheckConstraintDefinition)
+				if ok1 && ok2 && sqlparser.CanonicalString(check1Details.Expr) == sqlparser.CanonicalString(check2Details.Expr) {
+					// We have the same expression, so we have a different Enforced here
+					alterConstraint := &sqlparser.AlterCheck{
+						Name:     t2Constraint.Name,
+						Enforced: check2Details.Enforced,
+					}
+					alterTable.AlterOptions = append(alterTable.AlterOptions, alterConstraint)
+					continue
+				}
+
+				// There's another change, so we need to drop and add.
+				dropConstraint := dropConstraintStatement(t1Constraint)
 				addConstraint := &sqlparser.AddConstraintDefinition{
 					ConstraintDefinition: t2Constraint,
 				}
@@ -910,7 +1051,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 		if t1Key, ok := t1KeysMap[t2KeyName]; ok {
 			// key exists in both tables
 			// check diff between before/after columns:
-			if sqlparser.String(t2Key) != sqlparser.String(t1Key) {
+			if sqlparser.CanonicalString(t2Key) != sqlparser.CanonicalString(t1Key) {
 				// keys with same name have different definition. There is no ALTER INDEX statement,
 				// we're gonna drop and create.
 				dropKey := dropKeyStatement(t1Key.Info.Name)
@@ -1124,13 +1265,54 @@ func sortAlterOptions(diff *AlterTableEntityDiff) {
 // supported modifications are only those created by schemadiff's Diff() function.
 func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 	sortAlterOptions(diff)
+	// Apply partitioning changes:
 	if spec := diff.alterTable.PartitionSpec; spec != nil {
 		switch {
 		case spec.Action == sqlparser.RemoveAction && spec.IsAll:
 			// Remove partitioning
 			c.TableSpec.PartitionOption = nil
+		case spec.Action == sqlparser.DropAction && len(spec.Names) > 0:
+			for _, dropPartitionName := range spec.Names {
+				// Drop partitions
+				partitionName := dropPartitionName.String()
+				if c.TableSpec.PartitionOption == nil {
+					return errors.Wrap(ErrApplyPartitionNotFound, partitionName)
+				}
+				partitionFound := false
+				for i, p := range c.TableSpec.PartitionOption.Definitions {
+					if p.Name.String() == partitionName {
+						c.TableSpec.PartitionOption.Definitions = append(
+							c.TableSpec.PartitionOption.Definitions[0:i],
+							c.TableSpec.PartitionOption.Definitions[i+1:]...,
+						)
+						partitionFound = true
+						break
+					}
+				}
+				if !partitionFound {
+					return errors.Wrap(ErrApplyPartitionNotFound, partitionName)
+				}
+			}
+		case spec.Action == sqlparser.AddAction && len(spec.Definitions) == 1:
+			// Add one partition
+			partitionName := spec.Definitions[0].Name.String()
+			if c.TableSpec.PartitionOption == nil {
+				return ErrApplyNoPartitions
+			}
+			if len(c.TableSpec.PartitionOption.Definitions) == 0 {
+				return ErrApplyNoPartitions
+			}
+			for _, p := range c.TableSpec.PartitionOption.Definitions {
+				if p.Name.String() == partitionName {
+					return errors.Wrap(ErrApplyDuplicatePartition, partitionName)
+				}
+			}
+			c.TableSpec.PartitionOption.Definitions = append(
+				c.TableSpec.PartitionOption.Definitions,
+				spec.Definitions[0],
+			)
 		default:
-			return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.String(spec))
+			return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.CanonicalString(spec))
 		}
 	}
 	if diff.alterTable.PartitionOption != nil {
@@ -1203,7 +1385,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 						break
 					}
 				}
-			case sqlparser.ForeignKeyType:
+			case sqlparser.ForeignKeyType, sqlparser.CheckKeyType:
 				for i, constraint := range c.TableSpec.Constraints {
 					if constraint.Name.String() == opt.Name.String() {
 						found = true
@@ -1212,7 +1394,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					}
 				}
 			default:
-				return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.String(opt))
+				return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.CanonicalString(opt))
 			}
 			if !found {
 				return errors.Wrap(ErrApplyKeyNotFound, opt.Name.String())
@@ -1225,8 +1407,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					return errors.Wrap(ErrApplyDuplicateKey, keyName)
 				}
 			}
-			for _, col := range opt.IndexDefinition.Columns {
-				colName := col.Column.String()
+			for colName := range getKeyColumnNames(opt.IndexDefinition) {
 				if !columnExists[colName] {
 					return errors.Wrapf(ErrInvalidColumnInKey, "key: %v, column: %v", keyName, colName)
 				}
@@ -1240,6 +1421,21 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				}
 			}
 			c.TableSpec.Constraints = append(c.TableSpec.Constraints, opt.ConstraintDefinition)
+		case *sqlparser.AlterCheck:
+			// we expect the constraint to exist
+			found := false
+			constraintName := opt.Name.String()
+			for _, constraint := range c.TableSpec.Constraints {
+				checkDetails, ok := constraint.Details.(*sqlparser.CheckConstraintDefinition)
+				if ok && constraint.Name.String() == constraintName {
+					found = true
+					checkDetails.Enforced = opt.Enforced
+					break
+				}
+			}
+			if !found {
+				return errors.Wrap(ErrApplyConstraintNotFound, opt.Name.String())
+			}
 		case *sqlparser.DropColumn:
 			// we expect the column to exist
 			found := false
@@ -1258,7 +1454,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 		case *sqlparser.AddColumns:
 			if len(opt.Columns) != 1 {
 				// our Diff only ever generates a single column per AlterOption
-				return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.String(opt))
+				return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.CanonicalString(opt))
 			}
 			// validate no column by same name
 			addedCol := opt.Columns[0]
@@ -1312,7 +1508,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				}()
 			}
 		default:
-			return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.String(opt))
+			return errors.Wrap(ErrUnsupportedApplyOperation, sqlparser.CanonicalString(opt))
 		}
 		return nil
 	}
@@ -1333,10 +1529,6 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 // Apply attempts to apply given ALTER TABLE diff onto the table defined by this entity.
 // This entity is unmodified. If successful, a new CREATE TABLE entity is returned.
 func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
-	alterDiff, ok := diff.(*AlterTableEntityDiff)
-	if !ok {
-		return nil, ErrEntityTypeMismatch
-	}
 	dupCreateTable := &sqlparser.CreateTable{
 		Temp:        c.Temp,
 		Table:       c.Table,
@@ -1359,8 +1551,17 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 		dupCreateTable.Comments = &d
 	}
 	dup := &CreateTableEntity{CreateTable: *dupCreateTable}
-	if err := dup.apply(alterDiff); err != nil {
-		return nil, err
+	for diff != nil {
+		alterDiff, ok := diff.(*AlterTableEntityDiff)
+		if !ok {
+			return nil, ErrEntityTypeMismatch
+		}
+		if !diff.IsEmpty() {
+			if err := dup.apply(alterDiff); err != nil {
+				return nil, err
+			}
+		}
+		diff = diff.SubsequentDiff()
 	}
 	return dup, nil
 }
@@ -1441,15 +1642,68 @@ func getKeyColumnNames(key *sqlparser.IndexDefinition) (colNames map[string]bool
 // validate checks that the table structure is valid:
 // - all columns referenced by keys exist
 func (c *CreateTableEntity) validate() error {
-	// validate all columns referenced by indexes do in fact exist
 	columnExists := map[string]bool{}
 	for _, col := range c.CreateTable.TableSpec.Columns {
-		columnExists[col.Name.String()] = true
+		colName := col.Name.String()
+		if columnExists[colName] {
+			return errors.Wrapf(ErrApplyDuplicateColumn, "column: %v", colName)
+		}
+		columnExists[colName] = true
 	}
+	// validate all columns referenced by indexes do in fact exist
 	for _, key := range c.CreateTable.TableSpec.Indexes {
 		for colName := range getKeyColumnNames(key) {
 			if !columnExists[colName] {
 				return errors.Wrapf(ErrInvalidColumnInKey, "key: %v, column: %v", key.Info.Name.String(), colName)
+			}
+		}
+	}
+	if partition := c.CreateTable.TableSpec.PartitionOption; partition != nil {
+		// validate no two partitions have same name
+		partitionExists := map[string]bool{}
+		for _, p := range partition.Definitions {
+			partitionName := p.Name.String()
+			if partitionExists[partitionName] {
+				return errors.Wrapf(ErrApplyDuplicatePartition, "partition: %v", partitionName)
+			}
+			partitionExists[partitionName] = true
+		}
+		// validate columns referenced by partitions do in fact exist
+		// also, validate that all unique keys include partitioned columns
+		partitionColNames := []string{}
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node := node.(type) {
+			case *sqlparser.ColName:
+				partitionColNames = append(partitionColNames, node.Name.String())
+			}
+			return true, nil
+		}, partition.Expr)
+		if err != nil {
+			return err
+		}
+
+		for _, partitionColName := range partitionColNames {
+			// Validate columns exists in table:
+			if !columnExists[partitionColName] {
+				return errors.Wrapf(ErrInvalidColumnInPartition, "column: %v", partitionColName)
+			}
+
+			// Validate all unique keys include this column:
+			for _, key := range c.CreateTable.TableSpec.Indexes {
+				if !key.Info.Unique {
+					continue
+				}
+				colFound := false
+				for _, col := range key.Columns {
+					colName := col.Column.String()
+					if colName == partitionColName {
+						colFound = true
+						break
+					}
+				}
+				if !colFound {
+					return errors.Wrapf(ErrMissingParitionColumnInUniqueKey, "column: %v not found in key: %v", partitionColName, key.Info.Name.String())
+				}
 			}
 		}
 	}

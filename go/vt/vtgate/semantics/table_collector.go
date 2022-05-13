@@ -134,6 +134,15 @@ func (tc *tableCollector) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	panic("unknown table")
 }
 
+// tableInfoFor returns the table info for the table set. It should contains only single table.
+func (tc *tableCollector) tableInfoFor(id TableSet) (TableInfo, error) {
+	offset := id.TableOffset()
+	if offset < 0 {
+		return nil, ErrMultipleTables
+	}
+	return tc.Tables[offset], nil
+}
+
 func (tc *tableCollector) createTable(
 	t sqlparser.TableName,
 	alias *sqlparser.AliasedTableExpr,

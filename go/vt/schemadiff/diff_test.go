@@ -319,6 +319,61 @@ func TestDiffSchemas(t *testing.T) {
 			},
 		},
 		{
+			name: "change with function",
+			from: "create table identifiers (id binary(16) NOT NULL DEFAULT (uuid_to_bin(uuid(),true)))",
+			to:   "create table identifiers (company_id mediumint unsigned NOT NULL, id binary(16) NOT NULL DEFAULT (uuid_to_bin(uuid(),true)))",
+			diffs: []string{
+				"alter table identifiers add column company_id mediumint unsigned not null first",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `identifiers` ADD COLUMN `company_id` mediumint unsigned NOT NULL FIRST",
+			},
+		},
+		{
+			name: "change within functional index",
+			from: "create table t1 (id mediumint unsigned NOT NULL, deleted_at timestamp, primary key (id), unique key deleted_check (id, (if((deleted_at is null),0,NULL))))",
+			to:   "create table t1 (id mediumint unsigned NOT NULL, deleted_at timestamp, primary key (id), unique key deleted_check (id, (if((deleted_at is not null),0,NULL))))",
+			diffs: []string{
+				"alter table t1 drop key deleted_check, add unique key deleted_check (id, (if(deleted_at is not null, 0, null)))",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t1` DROP KEY `deleted_check`, ADD UNIQUE KEY `deleted_check` (`id`, (if(`deleted_at` IS NOT NULL, 0, NULL)))",
+			},
+		},
+		{
+			name: "change for a check",
+			from: "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `Check1` CHECK ((`test` >= 0)))",
+			to:   "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `RenamedCheck1` CHECK ((`test` >= 0)))",
+			diffs: []string{
+				"alter table t drop check Check1, add constraint RenamedCheck1 check (test >= 0)",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t` DROP CHECK `Check1`, ADD CONSTRAINT `RenamedCheck1` CHECK (`test` >= 0)",
+			},
+		},
+		{
+			name: "not enforce a check",
+			from: "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `Check1` CHECK ((`test` >= 0)))",
+			to:   "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `Check1` CHECK ((`test` >= 0)) NOT ENFORCED)",
+			diffs: []string{
+				"alter table t alter check Check1 not enforced",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t` ALTER CHECK `Check1` NOT ENFORCED",
+			},
+		},
+		{
+			name: "enforce a check",
+			from: "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `Check1` CHECK ((`test` >= 0)) NOT ENFORCED)",
+			to:   "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `Check1` CHECK ((`test` >= 0)))",
+			diffs: []string{
+				"alter table t alter check Check1 enforced",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t` ALTER CHECK `Check1` ENFORCED",
+			},
+		},
+		{
 			name: "change of table columns, removed",
 			from: "create table t(id int primary key, i int)",
 			to:   "create table t(id int primary key)",

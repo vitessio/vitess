@@ -116,7 +116,7 @@ func Convert(dst []byte, dstCharset Charset, src []byte, srcCharset Charset) ([]
 	switch srcCharset.(type) {
 	case Charset_binary:
 		return ConvertFromBinary(dst, dstCharset, src)
-	case Charset_utf8, Charset_utf8mb4:
+	case Charset_utf8mb3, Charset_utf8mb4:
 		return convertFastFromUTF8(dst, dstCharset, src)
 	default:
 		return convertSlow(dst, dstCharset, src, srcCharset)
