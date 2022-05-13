@@ -97,7 +97,7 @@ Durability policy governs the durability of the keyspace by describing which tab
 Possible values include 'semi_sync', 'none' and others as dictated by registered plugins.
 
 To set the durability policy of customer keyspace to semi_sync, you would use the following command:
-SetKeyspaceDurabilityPolicy --durability_policy='semi_sync' customer`,
+SetKeyspaceDurabilityPolicy --durability-policy='semi_sync' customer`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandSetKeyspaceDurabilityPolicy,
