@@ -1326,7 +1326,7 @@ func commandIgnoreHealthError(ctx context.Context, wr *wrangler.Wrangler, subFla
 }
 
 func commandWaitForDrain(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead https://vitess.io/docs/reference/vreplication/ ***\n")
+	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead: https://vitess.io/docs/reference/vreplication/ ***\n")
 	var cells flagutil.StringListValue
 	subFlags.Var(&cells, "cells", "Specifies a comma-separated list of cells to look for tablets")
 	timeout := subFlags.Duration("timeout", 0*time.Second, "Timeout after which the command fails")
@@ -2108,7 +2108,7 @@ func commandGetKeyspaces(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 }
 
 func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead https://vitess.io/docs/reference/vreplication/ ***\n")
+	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead: https://vitess.io/docs/reference/vreplication/ ***\n")
 	force := subFlags.Bool("force", false, "Updates fields even if they are already set. Use caution before calling this command.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -2141,7 +2141,7 @@ func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, 
 }
 
 func commandSetKeyspaceServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead https://vitess.io/docs/reference/vreplication/ ***\n")
+	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead: https://vitess.io/docs/reference/vreplication/ ***\n")
 	source := subFlags.String("source", "", "Specifies the source keyspace name")
 	remove := subFlags.Bool("remove", false, "Indicates whether to add (default) or remove the served from record")
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to affect")
@@ -2727,7 +2727,7 @@ func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 }
 
 func commandSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead https://vitess.io/docs/reference/vreplication/ ***\n")
+	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead: https://vitess.io/docs/reference/vreplication/ ***\n")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2741,7 +2741,7 @@ func commandSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 }
 
 func commandVerticalSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead https://vitess.io/docs/reference/vreplication/ ***\n")
+	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead: https://vitess.io/docs/reference/vreplication/ ***\n")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2799,7 +2799,7 @@ func splitKeyspaceWorkflow(in string) (keyspace, workflow string, err error) {
 }
 
 func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead https://vitess.io/docs/reference/vreplication/ ***\n")
+	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead: https://vitess.io/docs/reference/vreplication/ ***\n")
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
 	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward.")
 	skipReFreshState := subFlags.Bool("skip-refresh-state", false, "Skips refreshing the state of the source tablets after the migration, meaning that the refresh will need to be done manually, REPLICA and RDONLY only)")
@@ -2831,7 +2831,7 @@ func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFl
 }
 
 func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead https://vitess.io/docs/reference/vreplication/ ***\n")
+	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead: https://vitess.io/docs/reference/vreplication/ ***\n")
 	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward.")
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
 	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on primary migrations. The migration will be cancelled on a timeout.")
