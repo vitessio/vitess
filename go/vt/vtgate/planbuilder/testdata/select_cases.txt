@@ -3472,3 +3472,49 @@ Gen4 plan same as above
     ]
   }
 }
+
+# group by all
+"select id, name, sum(id) from user group by all"
+"unsupported: group by all with v3"
+{
+  "QueryType": "SELECT",
+  "Original": "select id, name, sum(id) from user group by all",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id, `name`, sum(id) from `user` where 1 != 1 group by id, `name`",
+    "Query": "select id, `name`, sum(id) from `user` group by id, `name`",
+    "Table": "`user`"
+  }
+}
+
+"select col, sum(col2) from user group by all"
+"unsupported: group by all with v3"
+{
+  "QueryType": "SELECT",
+  "Original": "select col, sum(col2) from user group by all",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "sum(1) AS sum(col2)",
+    "GroupBy": "0",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, sum(col2) from `user` where 1 != 1 group by col",
+        "OrderBy": "0 ASC",
+        "Query": "select col, sum(col2) from `user` group by col order by col asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}

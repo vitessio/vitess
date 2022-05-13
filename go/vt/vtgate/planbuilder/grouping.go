@@ -24,7 +24,7 @@ import (
 )
 
 func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy *sqlparser.GroupBy) (logicalPlan, error) {
-	if len(groupBy.Exprs) == 0 {
+	if groupBy == nil || len(groupBy.Exprs) == 0 {
 		// if we have no grouping declared, we only want to visit orderedAggregate
 		_, isOrdered := input.(*orderedAggregate)
 		if !isOrdered {
@@ -51,6 +51,9 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy *sqlparser.Gro
 		node.Select.(*sqlparser.Select).GroupBy = groupBy
 		return node, nil
 	case *orderedAggregate:
+		if groupBy == nil {
+			groupBy = &sqlparser.GroupBy{}
+		}
 		for _, expr := range groupBy.Exprs {
 			colNumber := -1
 			switch e := expr.(type) {

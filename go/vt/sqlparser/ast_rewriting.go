@@ -518,7 +518,7 @@ func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 
 	if len(sel.SelectExprs) != 1 ||
 		len(sel.OrderBy) != 0 ||
-		len(sel.GroupBy.Exprs) != 0 ||
+		(sel.GroupBy != nil && len(sel.GroupBy.Exprs) != 0) ||
 		len(sel.From) != 1 ||
 		sel.Where != nil ||
 		sel.Having != nil ||

@@ -139,25 +139,27 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, group := range sel.GroupBy.Exprs {
-		selectExprIdx, aliasExpr := qp.FindSelectExprIndexForExpr(group)
-		expr, weightStrExpr, err := qp.GetSimplifiedExpr(group)
-		if err != nil {
-			return nil, err
-		}
-		err = checkForInvalidGroupingExpressions(weightStrExpr)
-		if err != nil {
-			return nil, err
-		}
+	if sel.GroupBy != nil {
+		for _, group := range sel.GroupBy.Exprs {
+			selectExprIdx, aliasExpr := qp.FindSelectExprIndexForExpr(group)
+			expr, weightStrExpr, err := qp.GetSimplifiedExpr(group)
+			if err != nil {
+				return nil, err
+			}
+			err = checkForInvalidGroupingExpressions(weightStrExpr)
+			if err != nil {
+				return nil, err
+			}
 
-		groupBy := GroupBy{
-			Inner:         expr,
-			WeightStrExpr: weightStrExpr,
-			InnerIndex:    selectExprIdx,
-			aliasedExpr:   aliasExpr,
-		}
+			groupBy := GroupBy{
+				Inner:         expr,
+				WeightStrExpr: weightStrExpr,
+				InnerIndex:    selectExprIdx,
+				aliasedExpr:   aliasExpr,
+			}
 
-		qp.groupByExprs = append(qp.groupByExprs, groupBy)
+			qp.groupByExprs = append(qp.groupByExprs, groupBy)
+		}
 	}
 
 	err = qp.addOrderBy(sel.OrderBy)

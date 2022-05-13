@@ -914,6 +914,9 @@ func (node *Select) AddHaving(expr Expr) {
 
 // AddGroupBy adds a grouping expression, unless it's already present
 func (node *Select) AddGroupBy(expr Expr) {
+	if node.GroupBy == nil {
+		node.GroupBy = &GroupBy{}
+	}
 	if node.GroupBy.All {
 		return
 	}
