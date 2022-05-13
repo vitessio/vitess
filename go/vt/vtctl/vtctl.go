@@ -512,7 +512,7 @@ var commands = []commandGroup{
 			{
 				name:   "VDiff",
 				method: commandVDiff,
-				params: "[--source_cell=<cell>] [--target_cell=<cell>] [--tablet_types=PRIMARY,REPLICA,RDONLY] [--filtered_replication_wait_time=30s] [--max_extra_rows_to_compare=1000] <keyspace.workflow>",
+				params: "[--source_cell=<cell>] [--target_cell=<cell>] [--tablet_types=in_order:RDONLY,REPLICA,PRIMARY] [--filtered_replication_wait_time=30s] [--max_extra_rows_to_compare=1000] <keyspace.workflow>",
 				help:   "Perform a diff of all tables in the workflow",
 			},
 			{
