@@ -108,7 +108,7 @@ sleep $sleeptime
 
 # Create the cell
 # https://vitess.io/blog/2020-04-27-life-of-a-cluster/
-$VTROOT/bin/vtctlclient --server vtctld:$GRPC_PORT AddCellInfo --root vitess/$CELL --server_address consul1:8500 $CELL || true
+$VTROOT/bin/vtctlclient --server vtctld:$GRPC_PORT -- AddCellInfo --root vitess/$CELL --server_address consul1:8500 $CELL || true
 
 #Populate external db conditional args
 if [ $tablet_role = "externalprimary" ]; then
