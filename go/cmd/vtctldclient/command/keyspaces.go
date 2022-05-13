@@ -92,8 +92,12 @@ Otherwise, the keyspace must be empty (have no shards), or returns an error.`,
 	SetKeyspaceDurabilityPolicy = &cobra.Command{
 		Use:   "SetKeyspaceDurabilityPolicy [--durability-policy=policy_name] <keyspace name>",
 		Short: "Sets the durability-policy used by the specified keyspace.",
-		Long: "Sets the durability-policy used by the specified keyspace. Durability policy governs the durability of the keyspace by describing which tablets should be sending semi-sync acknowledgements to the primary. " +
-			"Possible values include 'semi_sync', 'none' and others as dictated by registered plugins.",
+		Long: `Sets the durability-policy used by the specified keyspace. 
+Durability policy governs the durability of the keyspace by describing which tablets should be sending semi-sync acknowledgements to the primary.
+Possible values include 'semi_sync', 'none' and others as dictated by registered plugins.
+
+To set the durability policy of customer keyspace to semi_sync, you would use the following command:
+SetKeyspaceDurabilityPolicy --durability_policy='semi_sync' customer`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandSetKeyspaceDurabilityPolicy,
