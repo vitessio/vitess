@@ -814,6 +814,9 @@ func (hp *horizonPlanning) createGroupingsForColumns(columns []*sqlparser.ColNam
 }
 
 func isCountStar(f *sqlparser.FuncExpr) bool {
+	if f == nil {
+		return false
+	}
 	_, isStar := f.Exprs[0].(*sqlparser.StarExpr)
 	return isStar
 }

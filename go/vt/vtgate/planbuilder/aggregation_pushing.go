@@ -28,7 +28,13 @@ import (
 )
 
 // pushAggregation pushes grouping and aggregation as far down in the tree as possible
-func (hp *horizonPlanning) pushAggregation(ctx *plancontext.PlanningContext, plan logicalPlan, grouping []abstract.GroupBy, aggregations []abstract.Aggr, ignoreOutputOrder bool) (output logicalPlan, groupingOffsets []offsets, outputAggrsOffset [][]offsets, err error) {
+func (hp *horizonPlanning) pushAggregation(
+	ctx *plancontext.PlanningContext,
+	plan logicalPlan,
+	grouping []abstract.GroupBy,
+	aggregations []abstract.Aggr,
+	ignoreOutputOrder bool,
+) (output logicalPlan, groupingOffsets []offsets, outputAggrsOffset [][]offsets, err error) {
 	switch plan := plan.(type) {
 	case *routeGen4:
 		output = plan
@@ -371,7 +377,7 @@ func splitAggregationsToLeftAndRight(
 	var lhsAggrs, rhsAggrs []*abstract.Aggr
 	for _, aggr := range aggregations {
 		newAggr := aggr
-		if aggr.Func != nil && isCountStar(aggr.Func) {
+		if isCountStar(aggr.Func) {
 			lhsAggrs = append(lhsAggrs, &newAggr)
 			rhsAggrs = append(rhsAggrs, &newAggr)
 		} else {
