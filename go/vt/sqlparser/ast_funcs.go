@@ -1738,6 +1738,15 @@ func IsAggregation(node SQLNode) bool {
 	return false
 }
 
+// IsLiteral returns true if the node is a literal expression
+func IsLiteral(node Expr) bool {
+	switch node.(type) {
+	case *Literal:
+		return true
+	}
+	return false
+}
+
 // GetFirstSelect gets the first select statement
 func GetFirstSelect(selStmt SelectStatement) *Select {
 	if selStmt == nil {
