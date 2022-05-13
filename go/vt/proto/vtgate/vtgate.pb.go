@@ -1064,7 +1064,8 @@ type VStreamFlags struct {
 	HeartbeatInterval uint32 `protobuf:"varint,2,opt,name=heartbeat_interval,json=heartbeatInterval,proto3" json:"heartbeat_interval,omitempty"`
 	// stop streams on a reshard (journal event)
 	StopOnReshard bool `protobuf:"varint,3,opt,name=stop_on_reshard,json=stopOnReshard,proto3" json:"stop_on_reshard,omitempty"`
-	// additional cells to pick source tablets from
+	// if specified, these cells (comma-separated) are used to pick source tablets from.
+	// defaults to the cell of the vtgate serving the VStream API.
 	Cells string `protobuf:"bytes,4,opt,name=cells,proto3" json:"cells,omitempty"`
 }
 

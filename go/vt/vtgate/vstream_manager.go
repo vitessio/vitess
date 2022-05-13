@@ -414,8 +414,11 @@ func (vs *vstream) alignStreams(ctx context.Context, event *binlogdatapb.VEvent,
 func (vs *vstream) getCells() []string {
 	var cells []string
 	if vs.optCells != "" {
-		cells = strings.Split(strings.TrimSpace(vs.optCells), ",")
+		for _, cell := range strings.Split(strings.TrimSpace(vs.optCells), ",") {
+			cells = append(cells, strings.TrimSpace(cell))
+		}
 	}
+
 	vtgateCell := vs.vsm.cell
 	if len(cells) == 0 {
 		cells = append(cells, vtgateCell)

@@ -230,7 +230,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	vtgate = cell1.Vtgates[0]
 	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 3)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -269,7 +269,7 @@ func testVStreamCellFlag(t *testing.T) {
 	}
 
 	for _, tc := range vstreamTestCases {
-		t.Run("VStreamCellFlag/"+tc.cells, func(t *testing.T) {
+		t.Run("VStreamCellsFlag/"+tc.cells, func(t *testing.T) {
 			conn, err := vtgateconn.Dial(ctx, fmt.Sprintf("localhost:%d", vc.ClusterConfig.vtgateGrpcPort))
 			if err != nil {
 				log.Fatal(err)
@@ -290,25 +290,19 @@ func testVStreamCellFlag(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				for {
-					e, err := reader.Recv()
-					switch err {
-					case nil:
-						if len(e) > 0 {
-							log.Infof("received %d rows", len(e))
-							rowsReceived = true
-							cancel()
-							return
-						}
-					case io.EOF:
-						log.Infof("stream ended")
-						cancel()
-						return
-					default:
-						log.Infof("%s:: remote error: %v", time.Now(), err)
-						cancel()
-						return
+				defer cancel()
+
+				events, err := reader.Recv()
+				switch err {
+				case nil:
+					if len(events) > 0 {
+						log.Infof("received %d events", len(events))
+						rowsReceived = true
 					}
+				case io.EOF:
+					log.Infof("stream ended without data")
+				default:
+					log.Infof("%s:: remote error: %v", time.Now(), err)
 				}
 			}()
 			wg.Wait()
