@@ -490,29 +490,39 @@ func translateConvertUsingExpr(expr *sqlparser.ConvertUsingExpr, lookup Translat
 }
 
 func translateCaseExpr(node *sqlparser.CaseExpr, lookup TranslationLookup) (Expr, error) {
-	if node.Expr != nil {
-		// currently only support CASE with no value
-		return nil, translateExprNotSupported(node)
-	}
+	var err error
+	var result CaseExpr
 
-	result := &CaseExpr{}
 	if node.Else != nil {
-		e, err := translateExpr(node.Else, lookup)
+		result.Else, err = translateExpr(node.Else, lookup)
 		if err != nil {
 			return nil, err
 		}
-		result.Else = e
+	}
+
+	var cmpbase Expr
+	if node.Expr != nil {
+		cmpbase, err = translateExpr(node.Expr, lookup)
 	}
 
 	for _, when := range node.Whens {
-		cond, err := translateExpr(when.Cond, lookup)
+		var cond, val Expr
+
+		cond, err = translateExpr(when.Cond, lookup)
 		if err != nil {
 			return nil, err
 		}
 
-		val, err := translateExpr(when.Val, lookup)
+		val, err = translateExpr(when.Val, lookup)
 		if err != nil {
 			return nil, err
+		}
+
+		if cmpbase != nil {
+			cond, err = translateComparisonExpr2(sqlparser.EqualOp, cmpbase, cond)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		result.cases = append(result.cases, WhenThen{
@@ -521,7 +531,7 @@ func translateCaseExpr(node *sqlparser.CaseExpr, lookup TranslationLookup) (Expr
 		})
 	}
 
-	return result, nil
+	return &result, nil
 }
 
 func translateExprNotSupported(e sqlparser.Expr) error {

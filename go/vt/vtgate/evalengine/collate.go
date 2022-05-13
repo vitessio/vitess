@@ -98,10 +98,16 @@ func mergeCollations(left, right *EvalResult) (collations.ID, error) {
 	}
 
 	if coerceLeft != nil {
-		left.bytes_, _ = coerceLeft(nil, left.bytes())
+		left.bytes_, err = coerceLeft(nil, left.bytes())
+		if err != nil {
+			throwEvalError(err)
+		}
 	}
 	if coerceRight != nil {
-		right.bytes_, _ = coerceRight(nil, right.bytes())
+		right.bytes_, err = coerceRight(nil, right.bytes())
+		if err != nil {
+			throwEvalError(err)
+		}
 	}
 
 	left.replaceCollation(mc)

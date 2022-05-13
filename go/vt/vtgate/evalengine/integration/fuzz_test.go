@@ -87,6 +87,7 @@ var knownErrors = []*regexp.Regexp{
 	regexp.MustCompile(`value is out of range in '(.*?)'`),
 	regexp.MustCompile(`Operand should contain (\d+) column\(s\)`),
 	regexp.MustCompile(`You have an error in your SQL syntax; (.*?)`),
+	regexp.MustCompile(`Cannot convert string '(.*?)' from \w+ to \w+`),
 }
 
 func errorsMatch(remote, local error) bool {

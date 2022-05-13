@@ -139,9 +139,8 @@ func compareRemoteExpr(t *testing.T, conn *mysql.Conn, expr string) {
 
 var comparisonElements = []string{"NULL", "-1", "0", "1",
 	`'foo'`, `'bar'`, `'FOO'`, `'BAR'`,
-	`'foo' collate utf8mb4_0900_as_cs`, // invalid collation for testing error messages
-	`'foo' collate utf8mb4_0900_cs_as`,
-	`'FOO' collate utf8mb4_0900_cs_as`,
+	`'foo' collate utf8mb4_0900_as_cs`,
+	`'FOO' collate utf8mb4_0900_as_cs`,
 	`_latin1 'foo'`,
 	`_latin1 'FOO'`,
 }
@@ -601,7 +600,7 @@ func TestCharsetConversionOperators(t *testing.T) {
 	}
 }
 
-func TestCaseExpr(t *testing.T) {
+func TestCaseExprWithPredicate(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
@@ -623,6 +622,48 @@ func TestCaseExpr(t *testing.T) {
 				query := fmt.Sprintf("case when %s then %s else %s end", pred1, val1, elseVal)
 				compareRemoteExpr(t, conn, query)
 			}
+		}
+	}
+}
+
+// HACK: for CASE comparisons, the expression is supposed to decompose like this:
+//		CASE a WHEN b THEN bb WHEN c THEN cc ELSE d
+//			=> CASE WHEN a = b THEN bb WHEN a == c THEN cc ELSE d
+// See: https://dev.mysql.com/doc/refman/5.7/en/flow-control-functions.html#operator_case
+// However, MySQL does not seem to be using the real `=` operator for some of these comparisons
+// namely, numerical comparisons are coerced into an unsigned form when they shouldn't.
+// Example:
+//		SELECT -1 = 18446744073709551615
+//			=> 0
+//		SELECT -1 WHEN 18446744073709551615 THEN 1 ELSE 0 END
+//			=> 1
+// This does not happen for other types, which all follow the behavior of the `=` operator,
+// so we're going to assume this is a bug for now.
+func comparisonSkip(a, b string) bool {
+	if a == "-1" && b == "18446744073709551615" {
+		return true
+	}
+	if b == "-1" && a == "18446744073709551615" {
+		return true
+	}
+	return false
+}
+
+func TestCaseExprWithValue(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	var elements []string
+	elements = append(elements, bitwiseInputs...)
+	elements = append(elements, comparisonElements...)
+
+	for _, cmpbase := range elements {
+		for _, val1 := range elements {
+			if comparisonSkip(cmpbase, val1) {
+				continue
+			}
+			query := fmt.Sprintf("case %s when %s then 1 else 0 end", cmpbase, val1)
+			compareRemoteExpr(t, conn, query)
 		}
 	}
 }

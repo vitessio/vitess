@@ -257,13 +257,13 @@ func (env *Environment) MergeCollations(left, right TypedCollation, opt Coercion
 		if left.Coercibility <= right.Coercibility {
 			return left, nil, nil, nil
 		}
-		return right, nil, nil, nil
+		goto coerceToRight
 	}
 	if _, rightIsBinary := rightColl.(*Collation_binary); rightIsBinary {
 		if left.Coercibility >= right.Coercibility {
 			return right, nil, nil, nil
 		}
-		return left, nil, nil, nil
+		goto coerceToLeft
 	}
 
 	if opt.ConvertToSuperset {
