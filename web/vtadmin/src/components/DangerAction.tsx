@@ -51,7 +51,7 @@ const DangerAction: React.FC<DangerActionProps> = ({
     const [typedAlias, setTypedAlias] = useState('');
 
     return (
-        <div className="p-8">
+        <div className="p-8" title={title}>
             <div className="flex justify-between items-center">
                 <p className="text-base font-bold m-0 text-gray-900">{title}</p>
                 <a

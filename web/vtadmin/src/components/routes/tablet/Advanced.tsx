@@ -16,7 +16,8 @@
 
 import React from 'react';
 import { UseMutationResult } from 'react-query';
-import { useHistory, useParams } from 'react-router-dom';
+import { useHistory } from 'react-router-dom';
+import { DeleteTabletParams } from '../../../api/http';
 import {
     useDeleteTablet,
     useReparentTablet,
@@ -25,38 +26,36 @@ import {
     useStartReplication,
     useStopReplication,
 } from '../../../hooks/api';
-import { vtadmin } from '../../../proto/vtadmin';
+import { topodata, vtadmin, vtctldata } from '../../../proto/vtadmin';
 import { isPrimary } from '../../../util/tablets';
 import DangerAction from '../../DangerAction';
 import { Icon, Icons } from '../../Icon';
 import { success, warn } from '../../Snackbar';
 
 interface AdvancedProps {
+    alias: string;
+    clusterID: string;
     tablet: vtadmin.Tablet | undefined;
 }
 
-interface RouteParams {
-    alias: string;
-    clusterID: string;
-}
-
-const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
-    const { clusterID, alias } = useParams<RouteParams>();
+const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
     const history = useHistory();
     const primary = isPrimary(tablet);
 
-    const deleteTabletMutation = useDeleteTablet(
-        { allowPrimary: true, alias, clusterID },
-        {
-            onSuccess: () => {
-                success(
-                    `Initiated deletion for tablet ${alias}. It may take some time for the tablet to disappear from the topology.`
-                );
-                history.push('/tablets');
-            },
-            onError: (error) => warn(`There was an error deleting tablet: ${error}`),
-        }
-    );
+    const deleteParams: DeleteTabletParams = { alias, clusterID };
+    if (tablet?.tablet?.type === topodata.TabletType.PRIMARY) {
+        deleteParams.allowPrimary = true;
+    }
+
+    const deleteTabletMutation = useDeleteTablet(deleteParams, {
+        onSuccess: () => {
+            success(
+                `Initiated deletion for tablet ${alias}. It may take some time for the tablet to disappear from the topology.`
+            );
+            history.push('/tablets');
+        },
+        onError: (error) => warn(`There was an error deleting tablet: ${error}`),
+    });
 
     const reparentTabletMutation = useReparentTablet(
         { alias, clusterID },
