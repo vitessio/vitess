@@ -49,7 +49,9 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
         { allowPrimary: true, alias, clusterID },
         {
             onSuccess: () => {
-                success(`Successfully deleted tablet ${alias}`);
+                success(
+                    `Initiated deletion for tablet ${alias}. It may take some time for the tablet to disappear from the topology.`
+                );
                 history.push('/tablets');
             },
             onError: (error) => warn(`There was an error deleting tablet: ${error}`),
