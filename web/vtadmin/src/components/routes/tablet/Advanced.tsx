@@ -46,7 +46,7 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
     const primary = isPrimary(tablet);
 
     const deleteTabletMutation = useDeleteTablet(
-        { alias, clusterID },
+        { allowPrimary: true, alias, clusterID },
         {
             onSuccess: () => {
                 success(`Successfully deleted tablet ${alias}`);
