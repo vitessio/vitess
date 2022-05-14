@@ -108,10 +108,11 @@ describe('Advanced', () => {
 
             await waitFor(() => {
                 expect(global.fetch).toHaveBeenCalledTimes(1);
-                expect(global.fetch).toHaveBeenCalledWith('/api/tablet/zone1-101?cluster=some-cluster-id', {
-                    credentials: undefined,
-                    method: 'delete',
-                });
+            });
+
+            expect(global.fetch).toHaveBeenCalledWith('/api/tablet/zone1-101?cluster=some-cluster-id', {
+                credentials: undefined,
+                method: 'delete',
             });
         });
 
@@ -138,14 +139,15 @@ describe('Advanced', () => {
 
             await waitFor(() => {
                 expect(global.fetch).toHaveBeenCalledTimes(1);
-                expect(global.fetch).toHaveBeenCalledWith(
-                    '/api/tablet/zone1-101?cluster=some-cluster-id&allow_primary=true',
-                    {
-                        credentials: undefined,
-                        method: 'delete',
-                    }
-                );
             });
+
+            expect(global.fetch).toHaveBeenCalledWith(
+                '/api/tablet/zone1-101?cluster=some-cluster-id&allow_primary=true',
+                {
+                    credentials: undefined,
+                    method: 'delete',
+                }
+            );
         });
     });
 });

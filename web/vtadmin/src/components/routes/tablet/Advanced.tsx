@@ -26,7 +26,7 @@ import {
     useStartReplication,
     useStopReplication,
 } from '../../../hooks/api';
-import { topodata, vtadmin, vtctldata } from '../../../proto/vtadmin';
+import { topodata, vtadmin } from '../../../proto/vtadmin';
 import { isPrimary } from '../../../util/tablets';
 import DangerAction from '../../DangerAction';
 import { Icon, Icons } from '../../Icon';
