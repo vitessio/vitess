@@ -635,6 +635,11 @@ func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry inst.Replicatio
 		return false, nil, err
 	}
 	log.Infof("Analysis: %v, will fix incorrect primaryship %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
+	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
+	// So that after the active period passes, we are able to run other recoveries.
+	defer func() {
+		resolveRecovery(topologyRecovery, nil)
+	}()
 
 	// Reset replication on current primary.
 	_, err = inst.ResetReplicationOperation(&analysisEntry.AnalyzedInstanceKey)
@@ -668,6 +673,12 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnaly
 		return false, nil, err
 	}
 	log.Infof("Analysis: %v, deadprimary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
+	var promotedReplica *inst.Instance
+	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
+	// So that after the active period passes, we are able to run other recoveries.
+	defer func() {
+		resolveRecovery(topologyRecovery, promotedReplica)
+	}()
 
 	ev, err := reparentutil.NewEmergencyReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
 		level := event.GetLevel()
@@ -693,7 +704,6 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnaly
 
 	// We should refresh the tablet information again to update our information.
 	RefreshTablets(true /* forceRefresh */)
-	var promotedReplica *inst.Instance
 	if ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
 			Hostname: ev.NewPrimary.MysqlHostname,
@@ -710,8 +720,6 @@ func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.Re
 		AuditTopologyRecovery(topologyRecovery, message)
 		inst.AuditOperation("recover-dead-primary", &analysisEntry.AnalyzedInstanceKey, message)
 	}
-	// And this is the end; whether successful or not, we're done.
-	resolveRecovery(topologyRecovery, promotedReplica)
 	// Now, see whether we are successful or not. From this point there's no going back.
 	if promotedReplica != nil {
 		// Success!
@@ -1119,13 +1127,6 @@ func RecoverDeadCoPrimary(topologyRecovery *TopologyRecovery, skipProcesses bool
 
 // checkAndRecoverGenericProblem is a general-purpose recovery function
 func checkAndRecoverLockedSemiSyncPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-
-	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, true, true)
-	if topologyRecovery == nil {
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another RecoverLockedSemiSyncPrimary.", analysisEntry.AnalyzedInstanceKey))
-		return false, nil, err
-	}
-
 	return false, nil, nil
 }
 
@@ -1616,6 +1617,12 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 	// a recovery for some time.
 	// Let's audit anything that happens from this point on, including any early return
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("registered recovery on %+v. Recovery: %+v", analysisEntry.AnalyzedInstanceKey, topologyRecovery))
+	var promotedReplica *inst.Instance
+	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
+	// So that after the active period passes, we are able to run other recoveries.
+	defer func() {
+		resolveRecovery(topologyRecovery, promotedReplica)
+	}()
 
 	primaryTablet, err := inst.ReadTablet(clusterPrimary.Key)
 	if err != nil {
@@ -1670,7 +1677,6 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 	// For example, if we do not refresh the tablets forcefully and the new primary is found in the cache then its source key is not updated and this spawns off
 	// PrimaryHasPrimary analysis which runs ERS
 	RefreshTablets(true /* forceRefresh */)
-	var promotedReplica *inst.Instance
 	if ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
 			Hostname: ev.NewPrimary.MysqlHostname,
@@ -1687,8 +1693,6 @@ func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.Re
 		AuditTopologyRecovery(topologyRecovery, message)
 		inst.AuditOperation(string(analysisEntry.Analysis), &analysisEntry.AnalyzedInstanceKey, message)
 	}
-	// And this is the end; whether successful or not, we're done.
-	resolveRecovery(topologyRecovery, promotedReplica)
 	// Now, see whether we are successful or not. From this point there's no going back.
 	if promotedReplica != nil {
 		// Success!
@@ -1731,6 +1735,13 @@ func electNewPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis
 	}
 	log.Infof("Analysis: %v, will elect a new primary: %v", analysisEntry.Analysis, analysisEntry.SuggestedClusterAlias)
 
+	var promotedReplica *inst.Instance
+	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
+	// So that after the active period passes, we are able to run other recoveries.
+	defer func() {
+		resolveRecovery(topologyRecovery, promotedReplica)
+	}()
+
 	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		return false, topologyRecovery, err
@@ -1760,7 +1771,6 @@ func electNewPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis
 	// For example, if we do not refresh the tablets forcefully and the new primary is found in the cache then its source key is not updated and this spawns off
 	// PrimaryHasPrimary analysis which runs ERS
 	RefreshTablets(true /* forceRefresh */)
-	var promotedReplica *inst.Instance
 	if ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
 			Hostname: ev.NewPrimary.MysqlHostname,
@@ -1779,6 +1789,11 @@ func fixPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis, can
 		return false, nil, err
 	}
 	log.Infof("Analysis: %v, will fix primary to read-write %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
+	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
+	// So that after the active period passes, we are able to run other recoveries.
+	defer func() {
+		resolveRecovery(topologyRecovery, nil)
+	}()
 
 	// TODO(sougou): this code pattern has reached DRY limits. Reuse.
 	count := inst.SemiSyncAckers(analysisEntry.AnalyzedInstanceKey)
@@ -1802,6 +1817,11 @@ func fixReplica(ctx context.Context, analysisEntry inst.ReplicationAnalysis, can
 		return false, nil, err
 	}
 	log.Infof("Analysis: %v, will fix replica %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
+	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
+	// So that after the active period passes, we are able to run other recoveries.
+	defer func() {
+		resolveRecovery(topologyRecovery, nil)
+	}()
 
 	if _, err := inst.SetReadOnly(&analysisEntry.AnalyzedInstanceKey, true); err != nil {
 		return false, topologyRecovery, err

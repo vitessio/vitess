@@ -724,26 +724,6 @@ func MakeAPICall(t *testing.T, url string) (status int, response string) {
 	return res.StatusCode, body
 }
 
-// MakeAPICallUntilRegistered is used to make an API call and retry if we see a 500 - no successor promoted output. This happens when some other recovery had previously run
-// and the API recovery was unable to be registered due to active timeout period.
-func MakeAPICallUntilRegistered(t *testing.T, url string) (status int, response string) {
-	timeout := time.After(10 * time.Second)
-	for {
-		select {
-		case <-timeout:
-			t.Fatal("timedout waiting for api to register correctly")
-			return
-		default:
-			status, response = MakeAPICall(t, url)
-			if status == 500 && strings.Contains(response, "no successor promoted") {
-				time.Sleep(1 * time.Second)
-				break
-			}
-			return status, response
-		}
-	}
-}
-
 // SetupNewClusterSemiSync is used to setup a new cluster with semi-sync set.
 // It creates a cluster with 4 tablets, one of which is a Replica
 func SetupNewClusterSemiSync(t *testing.T) *VtOrcClusterInfo {
@@ -830,4 +810,24 @@ func IsPrimarySemiSyncSetupCorrectly(t *testing.T, tablet *cluster.Vttablet, sem
 	dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_master_enabled", "")
 	require.NoError(t, err)
 	return semiSyncVal == dbVar
+}
+
+// WaitForReadOnlyValue waits for the read_only global variable to reach the provided value
+func WaitForReadOnlyValue(t *testing.T, curPrimary *cluster.Vttablet, expectValue int64) (match bool) {
+	timeout := 15 * time.Second
+	startTime := time.Now()
+	for time.Since(startTime) < timeout {
+		qr, err := RunSQL(t, "select @@global.read_only as read_only", curPrimary, "")
+		require.NoError(t, err)
+		require.NotNil(t, qr)
+		row := qr.Named().Row()
+		require.NotNil(t, row)
+		readOnly, err := row.ToInt64("read_only")
+		require.NoError(t, err)
+		if readOnly == expectValue {
+			return true
+		}
+		time.Sleep(time.Second)
+	}
+	return false
 }
