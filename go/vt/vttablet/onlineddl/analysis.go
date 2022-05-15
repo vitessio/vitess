@@ -169,11 +169,15 @@ func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schem
 		return nil, err
 	}
 
-	if op := e.analyzeDropFirstOrLastRangePartition(alterTable, createTable); op != nil {
-		return op, nil
-	}
-	if op := e.analyzeAddRangePartition(alterTable, createTable); op != nil {
-		return op, nil
+	// special plans which support reverts are trivially desired:
+	// special plans which do not support reverts are flag protected:
+	if onlineDDL.StrategySetting().IsFastOverRevertibleFlag() {
+		if op := e.analyzeDropFirstOrLastRangePartition(alterTable, createTable); op != nil {
+			return op, nil
+		}
+		if op := e.analyzeAddRangePartition(alterTable, createTable); op != nil {
+			return op, nil
+		}
 	}
 	return nil, nil
 }

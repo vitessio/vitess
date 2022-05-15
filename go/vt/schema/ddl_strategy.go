@@ -35,6 +35,7 @@ const (
 	allowZeroInDateFlag    = "allow-zero-in-date"
 	postponeCompletionFlag = "postpone-completion"
 	allowConcurrentFlag    = "allow-concurrent"
+	fastOverRevertibleFlag = "fast-over-revertible"
 	vreplicationTestSuite  = "vreplication-test-suite"
 )
 
@@ -150,6 +151,11 @@ func (setting *DDLStrategySetting) IsAllowConcurrent() bool {
 	return setting.hasFlag(allowConcurrentFlag)
 }
 
+// IsFastOverRevertibleFlag checks if strategy options include -fast-ver-revertible
+func (setting *DDLStrategySetting) IsFastOverRevertibleFlag() bool {
+	return setting.hasFlag(fastOverRevertibleFlag)
+}
+
 // IsVreplicationTestSuite checks if strategy options include -vreplicatoin-test-suite
 func (setting *DDLStrategySetting) IsVreplicationTestSuite() bool {
 	return setting.hasFlag(vreplicationTestSuite)
@@ -174,6 +180,7 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, allowZeroInDateFlag):
 		case isFlag(opt, postponeCompletionFlag):
 		case isFlag(opt, allowConcurrentFlag):
+		case isFlag(opt, fastOverRevertibleFlag):
 		case isFlag(opt, vreplicationTestSuite):
 		default:
 			validOpts = append(validOpts, opt)
