@@ -234,7 +234,7 @@ func (env *ExpressionEnv) typecheck(expr Expr) {
 		}
 	case *CallExpr:
 		env.typecheck(expr.Arguments)
-	case *Literal, *Column, *BindVariable: // noop
+	case *Literal, *Column, *BindVariable, *CaseExpr: // noop
 	default:
 		panic(fmt.Sprintf("unhandled cardinality: %T", expr))
 	}

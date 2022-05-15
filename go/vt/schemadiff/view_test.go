@@ -117,28 +117,28 @@ func TestCreateViewDiff(t *testing.T) {
 			cdiff: "ALTER ALGORITHM = TEMPTABLE VIEW `v1` AS SELECT `a` FROM `t`",
 		},
 		{
-			name:  "algorith, case change 2",
+			name:  "algorithm, case change 2",
 			from:  "create view v1 as select a FROM t",
 			to:    "create algorithm=temptable view v2 as select a from t",
 			diff:  "alter algorithm = temptable view v1 as select a from t",
 			cdiff: "ALTER ALGORITHM = TEMPTABLE VIEW `v1` AS SELECT `a` FROM `t`",
 		},
 		{
-			name:  "algorith, case change 3",
+			name:  "algorithm, case change 3",
 			from:  "create ALGORITHM=MERGE view v1 as select a FROM t",
 			to:    "create ALGORITHM=TEMPTABLE view v2 as select a from t",
 			diff:  "alter algorithm = TEMPTABLE view v1 as select a from t",
 			cdiff: "ALTER ALGORITHM = TEMPTABLE VIEW `v1` AS SELECT `a` FROM `t`",
 		},
 		{
-			name:  "algorith value is case sensitive",
+			name:  "algorithm value is case sensitive",
 			from:  "create ALGORITHM=TEMPTABLE view v1 as select a from t",
 			to:    "create ALGORITHM=temptable view v2 as select a from t",
 			diff:  "alter algorithm = temptable view v1 as select a from t",
 			cdiff: "ALTER ALGORITHM = TEMPTABLE VIEW `v1` AS SELECT `a` FROM `t`",
 		},
 		{
-			name:  "algorith value is case sensitive 2",
+			name:  "algorithm value is case sensitive 2",
 			from:  "create ALGORITHM=temptable view v1 as select a from t",
 			to:    "create ALGORITHM=TEMPTABLE view v2 as select a from t",
 			diff:  "alter algorithm = TEMPTABLE view v1 as select a from t",
@@ -201,6 +201,51 @@ func TestCreateViewDiff(t *testing.T) {
 					assert.NoError(t, err)
 				}
 			}
+		})
+	}
+}
+
+func TestNormalizeView(t *testing.T) {
+	tt := []struct {
+		name string
+		from string
+		to   string
+	}{
+		{
+			name: "basic view",
+			from: "create view v1 as select a, b, c from t",
+			to:   "CREATE VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
+		},
+		{
+			name: "default algorithm",
+			from: "create algorithm=undefined view v1 as select a, b, c from t",
+			to:   "CREATE VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
+		},
+		{
+			name: "non-default algorithm",
+			from: "create algorithm=merge view v1 as select a, b, c from t",
+			to:   "CREATE ALGORITHM = merge VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
+		},
+		{
+			name: "default security model",
+			from: "create sql security DEFINER view v1 as select a, b, c from t",
+			to:   "CREATE VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
+		},
+		{
+			name: "non-default security model",
+			from: "create sql security invoker view v1 as select a, b, c from t",
+			to:   "CREATE SQL SECURITY INVOKER VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.name, func(t *testing.T) {
+			stmt, err := sqlparser.ParseStrictDDL(ts.from)
+			require.NoError(t, err)
+			fromCreateView, ok := stmt.(*sqlparser.CreateView)
+			require.True(t, ok)
+
+			from := NewCreateViewEntity(fromCreateView)
+			assert.Equal(t, ts.to, sqlparser.CanonicalString(from))
 		})
 	}
 }

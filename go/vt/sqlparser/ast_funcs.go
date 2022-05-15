@@ -126,6 +126,18 @@ const (
 	SetDefault
 )
 
+// MatchAction indicates the type of match for a referential constraint, so
+// a `MATCH FULL`, `MATCH SIMPLE` or `MATCH PARTIAL`.
+type MatchAction int
+
+const (
+	// DefaultAction indicates no action was explicitly specified.
+	DefaultMatch MatchAction = iota
+	Full
+	Partial
+	Simple
+)
+
 // ShowTablesOpt is show tables option
 type ShowTablesOpt struct {
 	Full   string
@@ -1599,6 +1611,8 @@ func (key DropKeyType) ToString() string {
 		return ForeignKeyTypeStr
 	case NormalKeyType:
 		return NormalKeyTypeStr
+	case CheckKeyType:
+		return CheckKeyTypeStr
 	default:
 		return "Unknown DropKeyType"
 	}
@@ -1617,6 +1631,20 @@ func (lock LockOptionType) ToString() string {
 		return ExclusiveTypeStr
 	default:
 		return "Unknown type LockOptionType"
+	}
+}
+
+// ToString returns the string associated with JoinType
+func (columnFormat ColumnFormat) ToString() string {
+	switch columnFormat {
+	case FixedFormat:
+		return keywordStrings[FIXED]
+	case DynamicFormat:
+		return keywordStrings[DYNAMIC]
+	case DefaultFormat:
+		return keywordStrings[DEFAULT]
+	default:
+		return "Unknown column format type"
 	}
 }
 
@@ -1783,6 +1811,19 @@ func (es *ExtractedSubquery) updateAlternative() {
 		}
 		es.alternative = expr
 	}
+}
+
+// ColumnName returns the alias if one was provided, otherwise prints the AST
+func (ae *AliasedExpr) ColumnName() string {
+	if !ae.As.IsEmpty() {
+		return ae.As.String()
+	}
+
+	if col, ok := ae.Expr.(*ColName); ok {
+		return col.Name.String()
+	}
+
+	return String(ae.Expr)
 }
 
 func isExprLiteral(expr Expr) bool {

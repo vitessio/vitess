@@ -162,24 +162,27 @@ func makeEnv(version collver) *Environment {
 	}
 
 	for collid, vi := range globalVersionInfo {
-		var ourname string
-		for mask, name := range vi.alias {
-			if mask&version != 0 {
-				ourname = name
-				break
+		var ournames []string
+		for _, alias := range vi.alias {
+			if alias.mask&version != 0 {
+				ournames = append(ournames, alias.name)
 			}
 		}
-		if ourname == "" {
+		if len(ournames) == 0 {
 			continue
 		}
 
 		collation, ok := globalAllCollations[collid]
 		if !ok {
-			env.unsupported[ourname] = collid
+			for _, name := range ournames {
+				env.unsupported[name] = collid
+			}
 			continue
 		}
 
-		env.byName[ourname] = collation
+		for _, name := range ournames {
+			env.byName[name] = collation
+		}
 		env.byID[collid] = collation
 
 		csname := collation.Charset().Name()
@@ -200,6 +203,11 @@ func makeEnv(version collver) *Environment {
 			defaults.Binary = collation
 		}
 	}
+
+	for from, to := range version.charsetAliases() {
+		env.byCharset[from] = env.byCharset[to]
+	}
+
 	return env
 }
 
@@ -210,6 +218,15 @@ const (
 	CollationUtf8mb4ID = 255
 	CollationBinaryID  = 63
 )
+
+// CharsetAlias returns the internal charset name for the given charset.
+// For now, this only maps `utf8` to `utf8mb3`; in future versions of MySQL,
+// this mapping will change, so it's important to use this helper so that
+// Vitess code has a consistent mapping for the active collations environment.
+func (env *Environment) CharsetAlias(charset string) (alias string, ok bool) {
+	alias, ok = env.version.charsetAliases()[charset]
+	return
+}
 
 // DefaultConnectionCharset is the default charset that Vitess will use when negotiating a
 // charset in a MySQL connection handshake. Note that in this context, a 'charset' is equivalent

@@ -273,6 +273,10 @@ func TestNormalizeValidSQL(t *testing.T) {
 			}
 			tree, err := Parse(tcase.input)
 			require.NoError(t, err, tcase.input)
+			// Skip the test for the queries that do not run the normalizer
+			if !CanNormalize(tree) {
+				return
+			}
 			bv := make(map[string]*querypb.BindVariable)
 			known := make(BindVars)
 			err = Normalize(tree, NewReservedVars("vtg", known), bv)

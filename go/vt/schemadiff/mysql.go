@@ -21,10 +21,6 @@ var engineCasing = map[string]string{
 	"MYISAM": "MyISAM",
 }
 
-var charsetAliases = map[string]string{
-	"utf8": "utf8mb3",
-}
-
 var integralTypes = map[string]bool{
 	"tinyint":   true,
 	"smallint":  true,

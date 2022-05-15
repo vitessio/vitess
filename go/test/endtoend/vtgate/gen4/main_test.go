@@ -18,8 +18,13 @@ package vtgate
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 
@@ -30,6 +35,7 @@ import (
 var (
 	clusterInstance  *cluster.LocalProcessCluster
 	vtParams         mysql.ConnParams
+	mysqlParams      mysql.ConnParams
 	shardedKs        = "ks"
 	unshardedKs      = "uks"
 	shardedKsShards  = []string{"-19a0", "19a0-20", "20-20c0", "20c0-"}
@@ -214,6 +220,9 @@ func TestMain(m *testing.M) {
 			SchemaSQL: shardedSchemaSQL,
 			VSchema:   shardedVSchema,
 		}
+
+		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
 		err = clusterInstance.StartKeyspace(*sKs, shardedKsShards, 0, false)
 		if err != nil {
 			return 1
@@ -250,7 +259,36 @@ func TestMain(m *testing.M) {
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
 		}
+
+		conn, closer, err := utils.NewMySQL(clusterInstance, shardedKs, shardedSchemaSQL)
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+		defer closer()
+		mysqlParams = conn
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func start(t *testing.T) (utils.MySQLCompare, func()) {
+	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+	require.NoError(t, err)
+	deleteAll := func() {
+		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
+
+		tables := []string{"t1", "t2", "t3", "user_region", "region_tbl", "multicol_tbl", "t1_id2_idx", "t2_id4_idx", "u_a", "u_b"}
+		for _, table := range tables {
+			_, _ = mcmp.ExecAndIgnore("delete from " + table)
+		}
+	}
+
+	deleteAll()
+
+	return mcmp, func() {
+		deleteAll()
+		mcmp.Close()
+		cluster.PanicHandler(t)
+	}
 }

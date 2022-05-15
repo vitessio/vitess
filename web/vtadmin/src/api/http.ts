@@ -469,3 +469,26 @@ export const validateVersionKeyspace = async ({ clusterID, keyspace }: ValidateV
 
     return vtctldata.ValidateVersionKeyspaceResponse.create(result);
 };
+
+export interface FetchShardReplicationPositionsParams {
+    clusterIDs?: (string | null | undefined)[];
+    keyspaces?: (string | null | undefined)[];
+    keyspaceShards?: (string | null | undefined)[];
+}
+
+export const fetchShardReplicationPositions = async ({
+    clusterIDs = [],
+    keyspaces = [],
+    keyspaceShards = [],
+}: FetchShardReplicationPositionsParams) => {
+    const req = new URLSearchParams();
+    clusterIDs.forEach((c) => c && req.append('cluster', c));
+    keyspaces.forEach((k) => k && req.append('keyspace', k));
+    keyspaceShards.forEach((s) => s && req.append('keyspace_shard', s));
+
+    const { result } = await vtfetch(`/api/shard_replication_positions?${req}`);
+    const err = pb.GetShardReplicationPositionsResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.GetShardReplicationPositionsResponse.create(result);
+};

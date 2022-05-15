@@ -38,6 +38,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfAliasedTableExpr(parent, node, replacer)
 	case *AlterCharset:
 		return a.rewriteRefOfAlterCharset(parent, node, replacer)
+	case *AlterCheck:
+		return a.rewriteRefOfAlterCheck(parent, node, replacer)
 	case *AlterColumn:
 		return a.rewriteRefOfAlterColumn(parent, node, replacer)
 	case *AlterDatabase:
@@ -236,6 +238,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfLockOption(parent, node, replacer)
 	case *LockTables:
 		return a.rewriteRefOfLockTables(parent, node, replacer)
+	case MatchAction:
+		return a.rewriteMatchAction(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *MemberOfExpr:
@@ -334,12 +338,20 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfShowMigrationLogs(parent, node, replacer)
 	case *ShowOther:
 		return a.rewriteRefOfShowOther(parent, node, replacer)
+	case *ShowThrottledApps:
+		return a.rewriteRefOfShowThrottledApps(parent, node, replacer)
 	case *StarExpr:
 		return a.rewriteRefOfStarExpr(parent, node, replacer)
 	case *Stream:
 		return a.rewriteRefOfStream(parent, node, replacer)
 	case *SubPartition:
 		return a.rewriteRefOfSubPartition(parent, node, replacer)
+	case *SubPartitionDefinition:
+		return a.rewriteRefOfSubPartitionDefinition(parent, node, replacer)
+	case *SubPartitionDefinitionOptions:
+		return a.rewriteRefOfSubPartitionDefinitionOptions(parent, node, replacer)
+	case SubPartitionDefinitions:
+		return a.rewriteSubPartitionDefinitions(parent, node, replacer)
 	case *Subquery:
 		return a.rewriteRefOfSubquery(parent, node, replacer)
 	case *SubstrExpr:
@@ -600,6 +612,33 @@ func (a *application) rewriteRefOfAlterCharset(parent SQLNode, node *AlterCharse
 	}
 	return true
 }
+func (a *application) rewriteRefOfAlterCheck(parent SQLNode, node *AlterCheck, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*AlterCheck).Name = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfAlterColumn(parent SQLNode, node *AlterColumn, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -671,12 +710,15 @@ func (a *application) rewriteRefOfAlterMigration(parent SQLNode, node *AlterMigr
 			return true
 		}
 	}
+	if !a.rewriteRefOfLiteral(node, node.Ratio, func(newNode, parent SQLNode) {
+		parent.(*AlterMigration).Ratio = newNode.(*Literal)
+	}) {
+		return false
+	}
 	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -4222,6 +4264,11 @@ func (a *application) rewriteRefOfPartitionDefinitionOptions(parent SQLNode, nod
 	}) {
 		return false
 	}
+	if !a.rewriteSubPartitionDefinitions(node, node.SubPartitionDefinitions, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinitionOptions).SubPartitionDefinitions = newNode.(SubPartitionDefinitions)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4468,6 +4515,11 @@ func (a *application) rewriteRefOfReferenceDefinition(parent SQLNode, node *Refe
 	}
 	if !a.rewriteColumns(node, node.ReferencedColumns, func(newNode, parent SQLNode) {
 		parent.(*ReferenceDefinition).ReferencedColumns = newNode.(Columns)
+	}) {
+		return false
+	}
+	if !a.rewriteMatchAction(node, node.Match, func(newNode, parent SQLNode) {
+		parent.(*ReferenceDefinition).Match = newNode.(MatchAction)
 	}) {
 		return false
 	}
@@ -5178,6 +5230,30 @@ func (a *application) rewriteRefOfShowOther(parent SQLNode, node *ShowOther, rep
 	}
 	return true
 }
+func (a *application) rewriteRefOfShowThrottledApps(parent SQLNode, node *ShowThrottledApps, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5263,6 +5339,117 @@ func (a *application) rewriteRefOfSubPartition(parent SQLNode, node *SubPartitio
 		parent.(*SubPartition).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfSubPartitionDefinition(parent SQLNode, node *SubPartitionDefinition, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*SubPartitionDefinition).Name = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfSubPartitionDefinitionOptions(node, node.Options, func(newNode, parent SQLNode) {
+		parent.(*SubPartitionDefinition).Options = newNode.(*SubPartitionDefinitionOptions)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfSubPartitionDefinitionOptions(parent SQLNode, node *SubPartitionDefinitionOptions, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteRefOfLiteral(node, node.Comment, func(newNode, parent SQLNode) {
+		parent.(*SubPartitionDefinitionOptions).Comment = newNode.(*Literal)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfPartitionEngine(node, node.Engine, func(newNode, parent SQLNode) {
+		parent.(*SubPartitionDefinitionOptions).Engine = newNode.(*PartitionEngine)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfLiteral(node, node.DataDirectory, func(newNode, parent SQLNode) {
+		parent.(*SubPartitionDefinitionOptions).DataDirectory = newNode.(*Literal)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfLiteral(node, node.IndexDirectory, func(newNode, parent SQLNode) {
+		parent.(*SubPartitionDefinitionOptions).IndexDirectory = newNode.(*Literal)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteSubPartitionDefinitions(parent SQLNode, node SubPartitionDefinitions, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(SubPartitionDefinitions)
+			a.cur.revisit = false
+			return a.rewriteSubPartitionDefinitions(parent, node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	for x, el := range node {
+		if !a.rewriteRefOfSubPartitionDefinition(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(SubPartitionDefinitions)[idx] = newNode.(*SubPartitionDefinition)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6328,6 +6515,8 @@ func (a *application) rewriteAlterOption(parent SQLNode, node AlterOption, repla
 		return a.rewriteAlgorithmValue(parent, node, replacer)
 	case *AlterCharset:
 		return a.rewriteRefOfAlterCharset(parent, node, replacer)
+	case *AlterCheck:
+		return a.rewriteRefOfAlterCheck(parent, node, replacer)
 	case *AlterColumn:
 		return a.rewriteRefOfAlterColumn(parent, node, replacer)
 	case *ChangeColumn:
@@ -6944,6 +7133,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfShow(parent, node, replacer)
 	case *ShowMigrationLogs:
 		return a.rewriteRefOfShowMigrationLogs(parent, node, replacer)
+	case *ShowThrottledApps:
+		return a.rewriteRefOfShowThrottledApps(parent, node, replacer)
 	case *Stream:
 		return a.rewriteRefOfStream(parent, node, replacer)
 	case *TruncateTable:
@@ -7087,6 +7278,27 @@ func (a *application) rewriteIsolationLevel(parent SQLNode, node IsolationLevel,
 	return true
 }
 func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer replacerFunc) bool {
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteMatchAction(parent SQLNode, node MatchAction, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
