@@ -110,6 +110,9 @@ var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Mi
 var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Hour, "How long should vttablet keep an old migrated table before purging it")
 var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
 
+// deprecated, only here for backwards compatibility:
+var deprecatedOnlineDDLCheckInterval = flag.Duration("online_ddl_check_interval", 0, "deprecated. Will be removed in next Vitess version")
+
 const (
 	maxPasswordLength                        = 32 // MySQL's *replication* password may not exceed 32 characters
 	staleMigrationMinutes                    = 10
@@ -211,6 +214,10 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 	tabletTypeFunc func() topodatapb.TabletType,
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, bufferQueries bool),
 ) *Executor {
+
+	if *deprecatedOnlineDDLCheckInterval != 0 {
+		log.Warningf("the flag '--online_ddl_check_interval' is deprecated and will be removed in future versions. It is currently unused.")
+	}
 	return &Executor{
 		env:         env,
 		tabletAlias: proto.Clone(tabletAlias).(*topodatapb.TabletAlias),

@@ -1029,6 +1029,8 @@ var (
 	socket file to use for remote mysqlctl actions (empty for local actions)
   --onclose_timeout duration
 	wait no more than this for OnClose handlers before stopping (default 1ns)
+  --online_ddl_check_interval duration
+	deprecated. Will be removed in next Vitess version
   --onterm_timeout duration
 	wait no more than this for OnTermSync handlers before stopping (default 10s)
   --opentsdb_uri string
