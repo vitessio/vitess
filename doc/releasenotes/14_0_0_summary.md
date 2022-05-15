@@ -68,7 +68,7 @@ The heartbeats are generated according to `--heartbeat_interval`.
 
 #### Deprecation of --online_ddl_check_interval
 
-The flag `--online_ddl_check_interval` is deprecated and will be removed in `v15`. It has been unsued in `v13`.
+The flag `--online_ddl_check_interval` is deprecated and will be removed in `v15`. It has been unused in `v13`.
 
 ### Online DDL changes
 
