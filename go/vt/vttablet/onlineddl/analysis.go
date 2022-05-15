@@ -18,6 +18,7 @@ package onlineddl
 
 import (
 	"context"
+	"fmt"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
@@ -47,6 +48,10 @@ func NewSpecialAlterOperation(operation specialAlterOperation, info string, alte
 		alterTable:  alterTable,
 		createTable: createTable,
 	}
+}
+
+func (p *SpecialAlterPlan) String() string {
+	return fmt.Sprintf("%s:%s", string(p.operation), p.info)
 }
 
 // getCreateTableStatement gets a formal AlterTable representation of the given table
