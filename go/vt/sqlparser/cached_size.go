@@ -157,7 +157,7 @@ func (cached *AlterColumn) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(48)
 	}
 	// field Column *vitess.io/vitess/go/vt/sqlparser.ColName
 	size += cached.Column.CachedSize(true)
@@ -165,6 +165,8 @@ func (cached *AlterColumn) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.DefaultVal.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field Invisible *bool
+	size += hack.RuntimeAllocSize(int64(1))
 	return size
 }
 func (cached *AlterDatabase) CachedSize(alloc bool) int64 {

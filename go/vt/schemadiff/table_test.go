@@ -1041,6 +1041,30 @@ func TestValidate(t *testing.T) {
 			alter:     "alter table t add column i int",
 			expectErr: ErrApplyDuplicatePartition,
 		},
+		{
+			name:  "change to visible with alter column",
+			from:  "create table t (id int, i int invisible, primary key (id))",
+			alter: "alter table t alter column i set visible",
+			to:    "create table t (id int, i int, primary key (id))",
+		},
+		{
+			name:  "change to invisible with alter column",
+			from:  "create table t (id int, i int, primary key (id))",
+			alter: "alter table t alter column i set invisible",
+			to:    "create table t (id int, i int invisible, primary key (id))",
+		},
+		{
+			name:  "remove default with alter column",
+			from:  "create table t (id int, i int default 0, primary key (id))",
+			alter: "alter table t alter column i drop default",
+			to:    "create table t (id int, i int, primary key (id))",
+		},
+		{
+			name:  "change default with alter column",
+			from:  "create table t (id int, i int, primary key (id))",
+			alter: "alter table t alter column i set default 0",
+			to:    "create table t (id int, i int default 0, primary key (id))",
+		},
 	}
 	hints := DiffHints{}
 	for _, ts := range tt {

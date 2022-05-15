@@ -1304,7 +1304,8 @@ func EqualsRefOfAlterColumn(a, b *AlterColumn) bool {
 	}
 	return a.DropDefault == b.DropDefault &&
 		EqualsRefOfColName(a.Column, b.Column) &&
-		EqualsExpr(a.DefaultVal, b.DefaultVal)
+		EqualsExpr(a.DefaultVal, b.DefaultVal) &&
+		EqualsRefOfBool(a.Invisible, b.Invisible)
 }
 
 // EqualsRefOfAlterDatabase does deep equals between the two objects.
@@ -5354,6 +5355,17 @@ func EqualsSliceOfRefOfColumnDefinition(a, b []*ColumnDefinition) bool {
 	return true
 }
 
+// EqualsRefOfBool does deep equals between the two objects.
+func EqualsRefOfBool(a, b *bool) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
 // EqualsSliceOfDatabaseOption does deep equals between the two objects.
 func EqualsSliceOfDatabaseOption(a, b []DatabaseOption) bool {
 	if len(a) != len(b) {
@@ -5657,17 +5669,6 @@ func EqualsRefOfRootNode(a, b *RootNode) bool {
 		return false
 	}
 	return EqualsSQLNode(a.SQLNode, b.SQLNode)
-}
-
-// EqualsRefOfBool does deep equals between the two objects.
-func EqualsRefOfBool(a, b *bool) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return *a == *b
 }
 
 // EqualsSliceOfTableExpr does deep equals between the two objects.

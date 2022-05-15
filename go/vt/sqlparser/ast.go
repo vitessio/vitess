@@ -128,11 +128,12 @@ type (
 	// AlgorithmValue is the algorithm specified in the alter table command
 	AlgorithmValue string
 
-	// AlterColumn is used to add or drop defaults to columns in alter table command
+	// AlterColumn is used to add or drop defaults & visibility to columns in alter table command
 	AlterColumn struct {
 		Column      *ColName
 		DropDefault bool
 		DefaultVal  Expr
+		Invisible   *bool
 	}
 
 	// With contains the lists of common table expression and specifies if it is recursive or not

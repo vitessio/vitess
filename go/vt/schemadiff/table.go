@@ -1172,7 +1172,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		// check diff between before/after columns:
 		modifyColumnDiff := t1ColEntity.ColumnDiff(t2ColEntity, hints)
 		if modifyColumnDiff == nil {
-			// even if there's no apparent change, there can still be implciit changes
+			// even if there's no apparent change, there can still be implicit changes
 			// it is possible that the table charset is changed. the column may be some col1 TEXT NOT NULL, possibly in both varsions 1 and 2,
 			// but implicitly the column has changed its characters set. So we need to explicitly ass a MODIFY COLUMN statement, so that
 			// MySQL rebuilds it.
@@ -1491,6 +1491,24 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			}
 			if !found {
 				return errors.Wrap(ErrApplyColumnNotFound, opt.NewColDefinition.Name.String())
+			}
+		case *sqlparser.AlterColumn:
+			// we expect the column to exist
+			found := false
+			for _, col := range c.TableSpec.Columns {
+				if col.Name.String() == opt.Column.Name.String() {
+					found = true
+					if opt.DropDefault {
+						col.Type.Options.Default = nil
+					} else if opt.DefaultVal != nil {
+						col.Type.Options.Default = opt.DefaultVal
+					}
+					col.Type.Options.Invisible = opt.Invisible
+					break
+				}
+			}
+			if !found {
+				return errors.Wrap(ErrApplyColumnNotFound, opt.Column.Name.String())
 			}
 		case sqlparser.TableOptions:
 			// Apply table options. Options that have their DEFAULT value are actually remvoed.

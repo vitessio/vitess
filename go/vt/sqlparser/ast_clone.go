@@ -504,6 +504,7 @@ func CloneRefOfAlterColumn(n *AlterColumn) *AlterColumn {
 	out := *n
 	out.Column = CloneRefOfColName(n.Column)
 	out.DefaultVal = CloneExpr(n.DefaultVal)
+	out.Invisible = CloneRefOfBool(n.Invisible)
 	return &out
 }
 
@@ -3173,6 +3174,15 @@ func CloneSliceOfRefOfColumnDefinition(n []*ColumnDefinition) []*ColumnDefinitio
 	return res
 }
 
+// CloneRefOfBool creates a deep clone of the input.
+func CloneRefOfBool(n *bool) *bool {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
 // CloneSliceOfDatabaseOption creates a deep clone of the input.
 func CloneSliceOfDatabaseOption(n []DatabaseOption) []DatabaseOption {
 	if n == nil {
@@ -3434,15 +3444,6 @@ func CloneRefOfRootNode(n *RootNode) *RootNode {
 	}
 	out := *n
 	out.SQLNode = CloneSQLNode(n.SQLNode)
-	return &out
-}
-
-// CloneRefOfBool creates a deep clone of the input.
-func CloneRefOfBool(n *bool) *bool {
-	if n == nil {
-		return nil
-	}
-	out := *n
 	return &out
 }
 
