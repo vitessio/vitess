@@ -82,9 +82,9 @@ Online DDL is no longer experimental (with the exception of `pt-osc` strategy). 
 - Postponed migrations
 - and all other functionality
 
-Are all considered production ready.
+Are all considered production-ready.
 
-`pt-osc` streategy (online DDL via 3rd party `pt-online-schema-change`) remains experimental.
+`pt-osc` strategy (online DDL via 3rd party `pt-online-schema-change`) remains experimental.
 
 #### Throttling
 
