@@ -626,7 +626,11 @@ func assertQueriesWithSavepoint(t *testing.T, sbc *sandboxconn.SandboxConn, want
 			if !strings.HasPrefix(expected, "savepoint") {
 				t.Fatal("savepoint expected")
 			}
-			savepointStore[expected[10:]] = got[10:]
+			if sp, exists := savepointStore[expected[10:]]; exists {
+				assert.Equal(t, sp, got[10:])
+			} else {
+				savepointStore[expected[10:]] = got[10:]
+			}
 			continue
 		}
 		if strings.HasPrefix(got, "rollback to") {
