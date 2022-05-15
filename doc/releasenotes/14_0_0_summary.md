@@ -66,6 +66,10 @@ When `--heartbeat_on_demand_duration` has a positive value, then heartbeats are 
 
 The heartbeats are generated according to `--heartbeat_interval`.
 
+#### Deprecation of --online_ddl_check_interval
+
+The flag `--online_ddl_check_interval` is deperecated and will be removed in `v15`.
+
 ### Online DDL changes
 
 See new SQL syntax for controlling/viewing throttling fomr Online DDL, down below.
