@@ -91,25 +91,6 @@ func TestKeyspaceShard(t *testing.T) {
 	utils.CheckReplication(t, clusterInfo, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
 }
 
-func waitForReadOnlyValue(t *testing.T, curPrimary *cluster.Vttablet, expectValue int64) (match bool) {
-	timeout := 15 * time.Second
-	startTime := time.Now()
-	for time.Since(startTime) < timeout {
-		qr, err := utils.RunSQL(t, "select @@global.read_only as read_only", curPrimary, "")
-		require.NoError(t, err)
-		require.NotNil(t, qr)
-		row := qr.Named().Row()
-		require.NotNil(t, row)
-		readOnly, err := row.ToInt64("read_only")
-		require.NoError(t, err)
-		if readOnly == expectValue {
-			return true
-		}
-		time.Sleep(time.Second)
-	}
-	return false
-}
-
 // 3. make primary readonly, let orc repair
 func TestPrimaryReadOnly(t *testing.T) {
 	defer cluster.PanicHandler(t)
@@ -128,7 +109,7 @@ func TestPrimaryReadOnly(t *testing.T) {
 	require.NoError(t, err)
 
 	// wait for repair
-	match := waitForReadOnlyValue(t, curPrimary, 0)
+	match := utils.WaitForReadOnlyValue(t, curPrimary, 0)
 	require.True(t, match)
 }
 
@@ -158,7 +139,7 @@ func TestReplicaReadWrite(t *testing.T) {
 	require.NoError(t, err)
 
 	// wait for repair
-	match := waitForReadOnlyValue(t, replica, 1)
+	match := utils.WaitForReadOnlyValue(t, replica, 1)
 	require.True(t, match)
 }
 
