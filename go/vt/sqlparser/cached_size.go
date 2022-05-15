@@ -188,6 +188,18 @@ func (cached *AlterDatabase) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *AlterIndex) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
+	return size
+}
 func (cached *AlterMigration) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

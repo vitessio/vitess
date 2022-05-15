@@ -2803,6 +2803,14 @@ alter_option:
   {
     $$ = &AlterCheck{Name: $3, Enforced: $4}
   }
+| ALTER INDEX id_or_var VISIBLE
+  {
+    $$ = &AlterIndex{Name: $3, Invisible: false}
+  }
+| ALTER INDEX id_or_var INVISIBLE
+  {
+    $$ = &AlterIndex{Name: $3, Invisible: true}
+  }
 | CHANGE column_opt column_name column_definition first_opt after_opt
   {
     $$ = &ChangeColumn{OldColumn:$3, NewColDefinition:$4, First:$5, After:$6}

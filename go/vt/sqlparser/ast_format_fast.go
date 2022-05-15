@@ -2528,6 +2528,17 @@ func (node *AlterColumn) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node
+func (node *AlterIndex) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("alter index ")
+	node.Name.formatFast(buf)
+	if node.Invisible {
+		buf.WriteString(" invisible")
+	} else {
+		buf.WriteString(" visible")
+	}
+}
+
+// formatFast formats the node
 func (node *ChangeColumn) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("change column ")
 	node.OldColumn.formatFast(buf)

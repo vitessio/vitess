@@ -45,6 +45,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAlterColumn(in)
 	case *AlterDatabase:
 		return CloneRefOfAlterDatabase(in)
+	case *AlterIndex:
+		return CloneRefOfAlterIndex(in)
 	case *AlterMigration:
 		return CloneRefOfAlterMigration(in)
 	case *AlterTable:
@@ -516,6 +518,16 @@ func CloneRefOfAlterDatabase(n *AlterDatabase) *AlterDatabase {
 	out := *n
 	out.DBName = CloneTableIdent(n.DBName)
 	out.AlterOptions = CloneSliceOfDatabaseOption(n.AlterOptions)
+	return &out
+}
+
+// CloneRefOfAlterIndex creates a deep clone of the input.
+func CloneRefOfAlterIndex(n *AlterIndex) *AlterIndex {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneColIdent(n.Name)
 	return &out
 }
 
@@ -2476,6 +2488,8 @@ func CloneAlterOption(in AlterOption) AlterOption {
 		return CloneRefOfAlterCheck(in)
 	case *AlterColumn:
 		return CloneRefOfAlterColumn(in)
+	case *AlterIndex:
+		return CloneRefOfAlterIndex(in)
 	case *ChangeColumn:
 		return CloneRefOfChangeColumn(in)
 	case *DropColumn:

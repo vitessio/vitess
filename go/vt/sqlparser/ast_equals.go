@@ -92,6 +92,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfAlterDatabase(a, b)
+	case *AlterIndex:
+		b, ok := inB.(*AlterIndex)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterIndex(a, b)
 	case *AlterMigration:
 		b, ok := inB.(*AlterMigration)
 		if !ok {
@@ -1320,6 +1326,18 @@ func EqualsRefOfAlterDatabase(a, b *AlterDatabase) bool {
 		a.FullyParsed == b.FullyParsed &&
 		EqualsTableIdent(a.DBName, b.DBName) &&
 		EqualsSliceOfDatabaseOption(a.AlterOptions, b.AlterOptions)
+}
+
+// EqualsRefOfAlterIndex does deep equals between the two objects.
+func EqualsRefOfAlterIndex(a, b *AlterIndex) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Invisible == b.Invisible &&
+		EqualsColIdent(a.Name, b.Name)
 }
 
 // EqualsRefOfAlterMigration does deep equals between the two objects.
@@ -3632,6 +3650,12 @@ func EqualsAlterOption(inA, inB AlterOption) bool {
 			return false
 		}
 		return EqualsRefOfAlterColumn(a, b)
+	case *AlterIndex:
+		b, ok := inB.(*AlterIndex)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterIndex(a, b)
 	case *ChangeColumn:
 		b, ok := inB.(*ChangeColumn)
 		if !ok {

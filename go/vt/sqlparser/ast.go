@@ -175,6 +175,12 @@ type (
 		Enforced bool
 	}
 
+	// AlterIndex represents the `ALTER INDEX` part in an `ALTER TABLE ALTER INDEX` command.
+	AlterIndex struct {
+		Name      ColIdent
+		Invisible bool
+	}
+
 	// KeyState is used to disable or enable the keys in an alter table statement
 	KeyState struct {
 		Enable bool
@@ -734,6 +740,7 @@ func (*AddColumns) iAlterOption()              {}
 func (AlgorithmValue) iAlterOption()           {}
 func (*AlterColumn) iAlterOption()             {}
 func (*AlterCheck) iAlterOption()              {}
+func (*AlterIndex) iAlterOption()              {}
 func (*ChangeColumn) iAlterOption()            {}
 func (*ModifyColumn) iAlterOption()            {}
 func (*AlterCharset) iAlterOption()            {}

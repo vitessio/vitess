@@ -1057,8 +1057,16 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 			// key exists in both tables
 			// check diff between before/after columns:
 			if sqlparser.CanonicalString(t2Key) != sqlparser.CanonicalString(t1Key) {
-				// keys with same name have different definition. There is no ALTER INDEX statement,
-				// we're gonna drop and create.
+				indexVisibilityChange, newVisibility := indexOnlyVisibilityChange(t1Key, t2Key)
+				if indexVisibilityChange {
+					alterTable.AlterOptions = append(alterTable.AlterOptions, &sqlparser.AlterIndex{
+						Name:      t2Key.Info.Name,
+						Invisible: newVisibility,
+					})
+					continue
+				}
+
+				// For other changes, we're gonna drop and create.
 				dropKey := dropKeyStatement(t1Key.Info.Name)
 				addKey := &sqlparser.AddIndexDefinition{
 					IndexDefinition: t2Key,
@@ -1074,6 +1082,37 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 			alterTable.AlterOptions = append(alterTable.AlterOptions, addKey)
 		}
 	}
+}
+
+// indexOnlyVisibilityChange checks whether the change on an index is only
+// a visibility change. In that case we can use `ALTER INDEX`.
+// Returns if this is a visibility only change and if true, whether
+// the new visibility is invisible or not.
+func indexOnlyVisibilityChange(t1Key, t2Key *sqlparser.IndexDefinition) (bool, bool) {
+	t1KeyCopy := sqlparser.CloneRefOfIndexDefinition(t1Key)
+	t2KeyCopy := sqlparser.CloneRefOfIndexDefinition(t2Key)
+	t1KeyKeptOptions := make([]*sqlparser.IndexOption, 0, len(t1KeyCopy.Options))
+	t2KeyInvisible := false
+	for _, opt := range t1KeyCopy.Options {
+		if strings.EqualFold(opt.Name, "INVISIBLE") {
+			continue
+		}
+		t1KeyKeptOptions = append(t1KeyKeptOptions, opt)
+	}
+	t1KeyCopy.Options = t1KeyKeptOptions
+	t2KeyKeptOptions := make([]*sqlparser.IndexOption, 0, len(t2KeyCopy.Options))
+	for _, opt := range t2KeyCopy.Options {
+		if strings.EqualFold(opt.Name, "INVISIBLE") {
+			t2KeyInvisible = true
+			continue
+		}
+		t2KeyKeptOptions = append(t2KeyKeptOptions, opt)
+	}
+	t2KeyCopy.Options = t2KeyKeptOptions
+	if sqlparser.CanonicalString(t2KeyCopy) == sqlparser.CanonicalString(t1KeyCopy) {
+		return true, t2KeyInvisible
+	}
+	return false, false
 }
 
 // evaluateColumnReordering produces a minimal reordering set of columns. To elaborate:
@@ -1509,6 +1548,30 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			}
 			if !found {
 				return errors.Wrap(ErrApplyColumnNotFound, opt.Column.Name.String())
+			}
+		case *sqlparser.AlterIndex:
+			// we expect the index to exist
+			found := false
+			for _, idx := range c.TableSpec.Indexes {
+				if idx.Info.Name.String() == opt.Name.String() {
+					found = true
+					if opt.Invisible {
+						idx.Options = append(idx.Options, &sqlparser.IndexOption{Name: "INVISIBLE"})
+					} else {
+						keptOptions := make([]*sqlparser.IndexOption, 0, len(idx.Options))
+						for _, idxOpt := range idx.Options {
+							if strings.EqualFold(idxOpt.Name, "INVISIBLE") {
+								continue
+							}
+							keptOptions = append(keptOptions, idxOpt)
+						}
+						idx.Options = keptOptions
+					}
+					break
+				}
+			}
+			if !found {
+				return errors.Wrap(ErrApplyKeyNotFound, opt.Name.String())
 			}
 		case sqlparser.TableOptions:
 			// Apply table options. Options that have their DEFAULT value are actually remvoed.

@@ -1932,6 +1932,16 @@ func (node *AlterColumn) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node
+func (node *AlterIndex) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "alter index %v", node.Name)
+	if node.Invisible {
+		buf.astPrintf(node, " invisible")
+	} else {
+		buf.astPrintf(node, " visible")
+	}
+}
+
+// Format formats the node
 func (node *ChangeColumn) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "change column %v %v", node.OldColumn, node.NewColDefinition)
 	if node.First {

@@ -1137,6 +1137,8 @@ var (
 	}, {
 		input: "alter table a alter column x set visible, alter column x2 set invisible",
 	}, {
+		input: "alter table a alter index x visible, alter index x2 invisible",
+	}, {
 		input: "alter table a add spatial key foo (column1)",
 	}, {
 		input: "alter table a add fulltext key foo (column1), order by a, b, c",
