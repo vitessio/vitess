@@ -602,22 +602,11 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 			return nil, err
 		}
 	}
-	if len(alterTable.AlterOptions) == 0 && alterTable.PartitionOption == nil && alterTable.PartitionSpec == nil && len(partitionSpecs) == 0 {
-		// it's possible that the table definitions are different, and still there's no
-		// "real" difference. Reasons could be:
-		// - reordered keys -- we treat that as non-diff
-		return nil, nil
-	}
-	if len(partitionSpecs) == 0 {
-		return &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}, nil
-	}
-	// partitionSpecs has multiple entries
-	if len(alterTable.AlterOptions) > 0 ||
-		alterTable.PartitionOption != nil ||
-		alterTable.PartitionSpec != nil {
-		return nil, ErrMixedPartitionAndNonPartitionChanges
-	}
 	var parentAlterTableEntityDiff *AlterTableEntityDiff
+	tableSpecHasChanged := len(alterTable.AlterOptions) > 0 || alterTable.PartitionOption != nil || alterTable.PartitionSpec != nil
+	if tableSpecHasChanged {
+		parentAlterTableEntityDiff = &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+	}
 	for _, partitionSpec := range partitionSpecs {
 		alterTable := &sqlparser.AlterTable{
 			Table:         otherStmt.Table,
@@ -942,11 +931,7 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 			switch hints.RangeRotationStrategy {
 			case RangeRotationIgnore:
 				return nil, nil
-			case RangeRotationStatements:
-				if len(partitionSpecs) == 1 {
-					alterTable.PartitionSpec = partitionSpecs[0]
-					partitionSpecs = nil
-				}
+			case RangeRotationDistinctStatements:
 				return partitionSpecs, nil
 			case RangeRotationFullSpec:
 				// proceed to return a full rebuild

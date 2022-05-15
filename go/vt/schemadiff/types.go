@@ -99,7 +99,7 @@ const (
 
 const (
 	RangeRotationFullSpec = iota
-	RangeRotationStatements
+	RangeRotationDistinctStatements
 	RangeRotationIgnore
 )
 

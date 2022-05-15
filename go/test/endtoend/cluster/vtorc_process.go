@@ -71,7 +71,9 @@ func (config *VtorcConfiguration) AddDefaults(webPort int) {
 	config.MySQLTopologyPassword = "orc_client_user_password"
 	config.MySQLReplicaUser = "vt_repl"
 	config.MySQLReplicaPassword = ""
-	config.RecoveryPeriodBlockSeconds = 1
+	if config.RecoveryPeriodBlockSeconds == 0 {
+		config.RecoveryPeriodBlockSeconds = 1
+	}
 	config.InstancePollSeconds = 1
 	config.ListenAddress = fmt.Sprintf(":%d", webPort)
 }
