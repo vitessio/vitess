@@ -216,7 +216,7 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 ) *Executor {
 
 	if *deprecatedOnlineDDLCheckInterval != 0 {
-		log.Warningf("the flag '--online_ddl_check_interval' is deprecated and will be removed in future versions")
+		log.Warningf("the flag '--online_ddl_check_interval' is deprecated and will be removed in future versions. It is currently unused.")
 	}
 	return &Executor{
 		env:         env,
