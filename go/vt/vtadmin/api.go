@@ -1035,6 +1035,7 @@ func (api *API) DeleteTablet(ctx context.Context, req *vtadminpb.DeleteTabletReq
 	cluster.AnnotateSpan(c, span)
 
 	_, err = c.Vtctld.DeleteTablets(ctx, &vtctldatapb.DeleteTabletsRequest{
+		AllowPrimary: req.AllowPrimary,
 		TabletAliases: []*topodatapb.TabletAlias{
 			tablet.Tablet.Alias,
 		},

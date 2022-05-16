@@ -56,9 +56,15 @@ func DeleteTablet(ctx context.Context, r Request, api *API) *JSONResponse {
 		return NewJSONResponse(nil, err)
 	}
 
+	allowPrimary, err := r.ParseQueryParamAsBool("allow_primary", false)
+	if err != nil {
+		return NewJSONResponse(nil, err)
+	}
+
 	deleted, err := api.server.DeleteTablet(ctx, &vtadminpb.DeleteTabletRequest{
-		Alias:      alias,
-		ClusterIds: r.URL.Query()["cluster"],
+		Alias:        alias,
+		AllowPrimary: allowPrimary,
+		ClusterIds:   r.URL.Query()["cluster"],
 	})
 
 	return NewJSONResponse(deleted, err)

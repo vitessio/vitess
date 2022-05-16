@@ -2936,6 +2936,9 @@ export namespace vtadmin {
 
         /** DeleteTabletRequest cluster_ids */
         cluster_ids?: (string[]|null);
+
+        /** DeleteTabletRequest allow_primary */
+        allow_primary?: (boolean|null);
     }
 
     /** Represents a DeleteTabletRequest. */
@@ -2952,6 +2955,9 @@ export namespace vtadmin {
 
         /** DeleteTabletRequest cluster_ids. */
         public cluster_ids: string[];
+
+        /** DeleteTabletRequest allow_primary. */
+        public allow_primary: boolean;
 
         /**
          * Creates a new DeleteTabletRequest instance using the specified properties.
