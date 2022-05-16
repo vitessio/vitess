@@ -107,9 +107,6 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 		if _, ok := vindex.Vindex.(vindexes.Lookup); !ok {
 			return nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update lookup vindexes. Invalid update on vindex: %v", vindex.Name)
 		}
-		if !vindex.Owned {
-			return nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update owned vindexes. Invalid update on vindex: %v", vindex.Name)
-		}
 		changedVindexes[vindex.Name] = &engine.VindexValues{
 			PvMap:  vindexValueMap,
 			Offset: offset,
