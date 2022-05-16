@@ -18,7 +18,7 @@ package onlineddl
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
@@ -29,29 +29,40 @@ import (
 type specialAlterOperation string
 
 const (
-	dropFirstPartitionSpecialOperation specialAlterOperation = "drop-first-partition"
-	dropLastPartitionSpecialOperation  specialAlterOperation = "drop-last-partition"
-	addPartitionSpecialOperation       specialAlterOperation = "add-partition"
+	dropRangePartitionSpecialOperation specialAlterOperation = "drop-range-partition"
+	addRangePartitionSpecialOperation  specialAlterOperation = "add-range-partition"
 )
 
 type SpecialAlterPlan struct {
 	operation   specialAlterOperation
-	info        string
+	details     map[string]string
 	alterTable  *sqlparser.AlterTable
 	createTable *sqlparser.CreateTable
 }
 
-func NewSpecialAlterOperation(operation specialAlterOperation, info string, alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable) *SpecialAlterPlan {
+func NewSpecialAlterOperation(operation specialAlterOperation, alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable) *SpecialAlterPlan {
 	return &SpecialAlterPlan{
 		operation:   operation,
-		info:        info,
+		details:     map[string]string{"operation": string(operation)},
 		alterTable:  alterTable,
 		createTable: createTable,
 	}
 }
 
+func (p *SpecialAlterPlan) SetDetail(key string, val string) *SpecialAlterPlan {
+	p.details[key] = val
+	return p
+}
+func (p *SpecialAlterPlan) Detail(key string) string {
+	return p.details[key]
+}
+
 func (p *SpecialAlterPlan) String() string {
-	return fmt.Sprintf("%s:%s", string(p.operation), p.info)
+	b, err := json.Marshal(p.details)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 // getCreateTableStatement gets a formal AlterTable representation of the given table
@@ -66,30 +77,30 @@ func (e *Executor) getCreateTableStatement(ctx context.Context, tableName string
 	}
 	createTable, ok := stmt.(*sqlparser.CreateTable)
 	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CREATE TABLE. Got %v", sqlparser.String(stmt))
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CREATE TABLE. Got %v", sqlparser.CanonicalString(stmt))
 	}
 	return createTable, nil
 }
 
 // analyzeDropFirstOrLastRangePartition sees if the online DDL drops the first or last partition
 //  in a range partitioned table
-func (e *Executor) analyzeDropFirstOrLastRangePartition(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable) *SpecialAlterPlan {
+func (e *Executor) analyzeDropRangePartition(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable) (*SpecialAlterPlan, error) {
 	// we are looking for a `ALTER TABLE <table> DROP PARTITION <name>` statement with nothing else
 	if len(alterTable.AlterOptions) > 0 {
-		return nil
+		return nil, nil
 	}
 	if alterTable.PartitionOption != nil {
-		return nil
+		return nil, nil
 	}
 	spec := alterTable.PartitionSpec
 	if spec == nil {
-		return nil
+		return nil, nil
 	}
 	if spec.Action != sqlparser.DropAction {
-		return nil
+		return nil, nil
 	}
 	if len(spec.Names) != 1 {
-		return nil
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vitess only supports dropping a single partition per query: %v", sqlparser.CanonicalString(alterTable))
 	}
 	partitionName := spec.Names[0].String()
 	// OK then!
@@ -97,24 +108,31 @@ func (e *Executor) analyzeDropFirstOrLastRangePartition(alterTable *sqlparser.Al
 	// Now, is this query dropping the first parititon in a RANGE partitioned table?
 	part := createTable.TableSpec.PartitionOption
 	if part.Type != sqlparser.RangeType {
-		return nil
+		return nil, nil
 	}
 	if len(part.Definitions) == 0 {
-		return nil
+		return nil, nil
 	}
-	// See if this is either a first partition or a last partition.
-	// If there's only one partition, we consider it as first.
-	firstPartitionName := part.Definitions[0].Name.String()
-	if partitionName == firstPartitionName {
-		// O-K! Dropping the first partition!
-		return NewSpecialAlterOperation(dropFirstPartitionSpecialOperation, partitionName, alterTable, createTable)
+	var partitionDefinition *sqlparser.PartitionDefinition
+	var nextPartitionName string
+	for i, p := range part.Definitions {
+		if p.Name.String() == partitionName {
+			partitionDefinition = p
+			if i+1 < len(part.Definitions) {
+				nextPartitionName = part.Definitions[i+1].Name.String()
+			}
+			break
+		}
 	}
-	lastPartitionName := part.Definitions[len(part.Definitions)-1].Name.String()
-	if partitionName == lastPartitionName {
-		// O-K! Dropping the last partition!
-		return NewSpecialAlterOperation(dropLastPartitionSpecialOperation, partitionName, alterTable, createTable)
+	if partitionDefinition == nil {
+		// dropping a nonexistent partition. We'll let the "standard" migration execution flow deal with that.
+		return nil, nil
 	}
-	return nil
+	op := NewSpecialAlterOperation(dropRangePartitionSpecialOperation, alterTable, createTable)
+	op.SetDetail("partition_name", partitionName)
+	op.SetDetail("partition_definition", sqlparser.CanonicalString(partitionDefinition))
+	op.SetDetail("next_partition_name", nextPartitionName)
+	return op, nil
 }
 
 // analyzeDropFirstOrLastRangePartition sees if the online DDL drops the first or last partition
@@ -137,7 +155,8 @@ func (e *Executor) analyzeAddRangePartition(alterTable *sqlparser.AlterTable, cr
 	if len(spec.Definitions) != 1 {
 		return nil
 	}
-	partitionName := spec.Definitions[0].Name.String()
+	partitionDefinition := spec.Definitions[0]
+	partitionName := partitionDefinition.Name.String()
 	// OK then!
 
 	// Now, is this query adding a parititon in a RANGE partitioned table?
@@ -148,7 +167,10 @@ func (e *Executor) analyzeAddRangePartition(alterTable *sqlparser.AlterTable, cr
 	if len(part.Definitions) == 0 {
 		return nil
 	}
-	return NewSpecialAlterOperation(addPartitionSpecialOperation, partitionName, alterTable, createTable)
+	op := NewSpecialAlterOperation(addRangePartitionSpecialOperation, alterTable, createTable)
+	op.SetDetail("partition_name", partitionName)
+	op.SetDetail("partition_definition", sqlparser.CanonicalString(partitionDefinition))
+	return op
 }
 
 // analyzeSpecialAlterScenarios checks if the given ALTER onlineDDL, and for the current state of affected table,
@@ -161,7 +183,7 @@ func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schem
 	alterTable, ok := ddlStmt.(*sqlparser.AlterTable)
 	if !ok {
 		// We only deal here with ALTER TABLE
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected ALTER TABLE. Got %v", sqlparser.String(ddlStmt))
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected ALTER TABLE. Got %v", sqlparser.CanonicalString(ddlStmt))
 	}
 
 	createTable, err := e.getCreateTableStatement(ctx, onlineDDL.Table)
@@ -172,7 +194,11 @@ func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schem
 	// special plans which support reverts are trivially desired:
 	// special plans which do not support reverts are flag protected:
 	if onlineDDL.StrategySetting().IsFastOverRevertibleFlag() {
-		if op := e.analyzeDropFirstOrLastRangePartition(alterTable, createTable); op != nil {
+		op, err := e.analyzeDropRangePartition(alterTable, createTable)
+		if err != nil {
+			return nil, err
+		}
+		if op != nil {
 			return op, nil
 		}
 		if op := e.analyzeAddRangePartition(alterTable, createTable); op != nil {

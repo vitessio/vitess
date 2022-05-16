@@ -2430,7 +2430,7 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 		return false, nil
 	}
 	switch specialPlan.operation {
-	case dropFirstPartitionSpecialOperation, dropLastPartitionSpecialOperation:
+	case dropRangePartitionSpecialOperation:
 		dropPartition := func() error {
 			artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
 			if err != nil {
@@ -2456,12 +2456,13 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 				return err
 			}
 			// Exchange with partition
-			parsed = sqlparser.BuildParsedQuery(sqlAlterTableExchangePartition, onlineDDL.Table, specialPlan.info, artifactTableName)
+			partitionName := specialPlan.Detail("partition_name")
+			parsed = sqlparser.BuildParsedQuery(sqlAlterTableExchangePartition, onlineDDL.Table, partitionName, artifactTableName)
 			if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
 				return err
 			}
 			// Drop table's partition
-			parsed = sqlparser.BuildParsedQuery(sqlAlterTableDropPartition, onlineDDL.Table, specialPlan.info)
+			parsed = sqlparser.BuildParsedQuery(sqlAlterTableDropPartition, onlineDDL.Table, partitionName)
 			if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
 				return err
 			}
@@ -2470,7 +2471,7 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 		if err := dropPartition(); err != nil {
 			return false, err
 		}
-	case addPartitionSpecialOperation:
+	case addRangePartitionSpecialOperation:
 		if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 			return false, err
 		}
