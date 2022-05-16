@@ -16,6 +16,7 @@
 
 import React, { useState } from 'react';
 import { UseMutationResult } from 'react-query';
+
 import { Icon, Icons } from './Icon';
 import { TextInput } from './TextInput';
 
@@ -24,17 +25,14 @@ type Mutation = UseMutationResult & {
 };
 
 export interface DangerActionProps {
-    // Required
+    confirmationPrompt?: React.ReactNode;
     confirmationValue: string;
-    description: JSX.Element;
+    description: React.ReactNode;
     documentationLink: string;
     loadingText: string;
     loadedText: string;
     mutation: UseMutationResult;
     title: string;
-
-    // Optional
-    confirmationPrompt?: React.ReactNode;
     warnings?: React.ReactNodeArray;
 }
 
