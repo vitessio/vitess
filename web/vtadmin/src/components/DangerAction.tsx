@@ -31,12 +31,11 @@ export interface DangerActionProps {
     loadingText: string;
     loadedText: string;
     mutation: UseMutationResult;
-    primary: boolean;
-    primaryDescription: JSX.Element;
     title: string;
 
     // Optional
     confirmationPrompt?: React.ReactNode;
+    warnings?: React.ReactNodeArray;
 }
 
 const DangerAction: React.FC<DangerActionProps> = ({
@@ -45,11 +44,10 @@ const DangerAction: React.FC<DangerActionProps> = ({
     title,
     description,
     documentationLink,
-    primary,
-    primaryDescription,
     mutation,
     loadingText,
     loadedText,
+    warnings = [],
 }) => {
     const [typedAlias, setTypedAlias] = useState('');
 
@@ -68,11 +66,15 @@ const DangerAction: React.FC<DangerActionProps> = ({
                 </a>
             </div>
             <p className="text-base mt-0">{description}</p>
-            {primary && (
-                <div className="text-danger flex items-center">
-                    <Icon icon={Icons.alertFail} className="fill-current text-danger inline mr-2" />
-                    {primaryDescription}
-                </div>
+
+            {warnings.map(
+                (warning, i) =>
+                    warning && (
+                        <div className="text-danger flex items-center" key={i}>
+                            <Icon icon={Icons.alertFail} className="fill-current text-danger inline mr-2" />
+                            {warning}
+                        </div>
+                    )
             )}
 
             <p className="text-base">

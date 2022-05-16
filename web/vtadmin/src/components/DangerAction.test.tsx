@@ -75,8 +75,6 @@ describe('DangerAction', () => {
                     documentationLink="https://test.com"
                     loadedText="Do Action"
                     loadingText="Doing Action..."
-                    primary={false}
-                    primaryDescription={<>A warning goes here.</>}
                     title="A Title"
                 />
             </QueryClientProvider>
