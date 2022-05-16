@@ -698,6 +698,7 @@ func TestSchemaChange(t *testing.T) {
 	})
 
 	// PARTITIONS
+
 	checkPartitionedTableCountRows := func(t *testing.T, expectRows int64) {
 		rs := onlineddl.VtgateExecQuery(t, &vtParams, "select count(*) as c from part_test", "")
 		require.NotNil(t, rs)
@@ -717,34 +718,54 @@ func TestSchemaChange(t *testing.T) {
 		populatePartitionedTable(t)
 		checkPartitionedTableCountRows(t, 6)
 	})
-	t.Run("partitions: drop first partition", func(t *testing.T) {
-		// The table exists. A noop.
-		uuid := testOnlineDDLStatementForTable(t, "alter table part_test drop partition `p1`", ddlStrategy+" --fast-over-revertible", "vtgate", "")
-		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-		checkTable(t, partitionedTableName, true)
-
-		checkPartitionedTableCountRows(t, 5)
-	})
-	t.Run("partitions: fail revert drop first partition", func(t *testing.T) {
-		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
-		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
-
-		checkPartitionedTableCountRows(t, 5)
-	})
 	t.Run("partitions: add new partition", func(t *testing.T) {
-		// The table exists. A noop.
-		uuid := testOnlineDDLStatementForTable(t, "alter table part_test add partition (PARTITION p7 VALUES LESS THAN (70))", ddlStrategy+" --fast-over-revertible", "vtgate", "")
+		uuid := testOnlineDDLStatementForTable(t, "alter table part_test add partition (PARTITION p7 VALUES LESS THAN (70))", ddlStrategy, "vtgate", "")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, partitionedTableName, true)
+
+		checkPartitionedTableCountRows(t, 6)
+
+		_ = onlineddl.VtgateExecQuery(t, &vtParams, "INSERT INTO part_test (id) VALUES (67)", "")
+		checkPartitionedTableCountRows(t, 7)
 	})
-	t.Run("partitions: fail revert add new partition", func(t *testing.T) {
+	t.Run("partitions: revert add new partition", func(t *testing.T) {
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+
+		checkPartitionedTableCountRows(t, 6)
 	})
+	t.Run("partitions: drop last partition", func(t *testing.T) {
+		uuid := testOnlineDDLStatementForTable(t, "alter table part_test drop partition `p6`", ddlStrategy, "vtgate", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, partitionedTableName, true)
+
+		checkPartitionedTableCountRows(t, 5)
+	})
+	t.Run("partitions: revert drop last partition", func(t *testing.T) {
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+
+		checkPartitionedTableCountRows(t, 6)
+	})
+	// t.Run("partitions: drop first partition", func(t *testing.T) {
+	// 	uuid := testOnlineDDLStatementForTable(t, "alter table part_test drop partition `p1`", ddlStrategy, "vtgate", "")
+	// 	uuids = append(uuids, uuid)
+	// 	onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+	// 	checkTable(t, partitionedTableName, true)
+
+	// 	checkPartitionedTableCountRows(t, 5)
+	// })
+	// t.Run("partitions: revert drop first partition", func(t *testing.T) {
+	// 	uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+	// 	uuids = append(uuids, uuid)
+	// 	onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+
+	// 	checkPartitionedTableCountRows(t, 6)
+	// })
 
 	// FAILURES
 	t.Run("fail online DROP TABLE", func(t *testing.T) {
