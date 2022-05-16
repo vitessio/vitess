@@ -129,7 +129,9 @@ export const CreateKeyspace = () => {
                                     value={formData.shardingColumnName || ''}
                                 />
                             </Label>
-                            <span className="text-sm">The name of the column to use for sharding operations.</span>
+                            <span className="text-sm">
+                                Optional. The name of the column to use for sharding operations.
+                            </span>
                         </div>
                     </details>
 
