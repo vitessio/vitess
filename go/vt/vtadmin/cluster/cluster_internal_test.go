@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"testing"
 
@@ -458,6 +459,336 @@ func Test_reloadKeyspaceSchemas(t *testing.T) {
 			})
 			sort.Slice(results, func(i, j int) bool {
 				return results[i].Keyspace.Keyspace.Name < results[j].Keyspace.Keyspace.Name
+			})
+			utils.MustMatch(t, tt.expected, results)
+		})
+	}
+}
+
+func Test_reloadShardSchemas(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		cluster   *Cluster
+		req       *vtadminpb.ReloadSchemasRequest
+		expected  []*vtadminpb.ReloadSchemasResponse_ShardResult
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			cluster: &Cluster{
+				ID:   "test",
+				Name: "test",
+				Vtctld: &fakevtctldclient.VtctldClient{
+					FindAllShardsInKeyspaceResults: map[string]struct {
+						Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+						Error    error
+					}{
+						"ks1": {
+							Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+								Shards: map[string]*vtctldatapb.Shard{
+									"-": {
+										Keyspace: "ks1",
+										Name:     "-",
+									},
+								},
+							},
+						},
+						"ks2": {
+							Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+								Shards: map[string]*vtctldatapb.Shard{
+									"-80": {
+										Keyspace: "ks2",
+										Name:     "-80",
+									},
+									"80-": {
+										Keyspace: "ks2",
+										Name:     "80-",
+									},
+								},
+							},
+						},
+					},
+					GetKeyspaceResults: map[string]struct {
+						Response *vtctldatapb.GetKeyspaceResponse
+						Error    error
+					}{
+						"ks1": {
+							Response: &vtctldatapb.GetKeyspaceResponse{
+								Keyspace: &vtctldatapb.Keyspace{
+									Name: "ks1",
+								},
+							},
+						},
+						"ks2": {
+							Response: &vtctldatapb.GetKeyspaceResponse{
+								Keyspace: &vtctldatapb.Keyspace{
+									Name: "ks2",
+								},
+							},
+						},
+					},
+					GetKeyspacesResults: struct {
+						Keyspaces []*vtctldatapb.Keyspace
+						Error     error
+					}{
+						Keyspaces: []*vtctldatapb.Keyspace{
+							{
+								Name: "ks1",
+							},
+							{
+								Name: "ks2",
+							},
+						},
+					},
+					ReloadSchemaShardResults: map[string]struct {
+						Response *vtctldatapb.ReloadSchemaShardResponse
+						Error    error
+					}{
+						"ks1/-": {
+							Response: &vtctldatapb.ReloadSchemaShardResponse{
+								Events: []*logutilpb.Event{
+									{},
+								},
+							},
+						},
+						"ks2/-80": {
+							Response: &vtctldatapb.ReloadSchemaShardResponse{
+								Events: []*logutilpb.Event{
+									{}, {},
+								},
+							},
+						},
+						"ks2/80-": { // skipped via request params
+							Error: assert.AnError,
+						},
+					},
+				},
+				topoReadPool: pools.NewRPCPool(5, 0, nil),
+			},
+			req: &vtadminpb.ReloadSchemasRequest{
+				KeyspaceShards: []string{"ks1/-", "ks2/-80"},
+			},
+			expected: []*vtadminpb.ReloadSchemasResponse_ShardResult{
+				{
+					Shard: &vtadminpb.Shard{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "test",
+							Name: "test",
+						},
+						Shard: &vtctldatapb.Shard{
+							Keyspace: "ks1",
+							Name:     "-",
+						},
+					},
+					Events: []*logutilpb.Event{
+						{},
+					},
+				},
+				{
+					Shard: &vtadminpb.Shard{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "test",
+							Name: "test",
+						},
+						Shard: &vtctldatapb.Shard{
+							Keyspace: "ks2",
+							Name:     "-80",
+						},
+					},
+					Events: []*logutilpb.Event{
+						{}, {},
+					},
+				},
+			},
+		},
+		{
+			name: "one shard fails",
+			cluster: &Cluster{
+				ID:   "test",
+				Name: "test",
+				Vtctld: &fakevtctldclient.VtctldClient{
+					FindAllShardsInKeyspaceResults: map[string]struct {
+						Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+						Error    error
+					}{
+						"ks1": {
+							Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+								Shards: map[string]*vtctldatapb.Shard{
+									"-": {
+										Keyspace: "ks1",
+										Name:     "-",
+									},
+								},
+							},
+						},
+						"ks2": {
+							Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+								Shards: map[string]*vtctldatapb.Shard{
+									"-80": {
+										Keyspace: "ks2",
+										Name:     "-80",
+									},
+									"80-": {
+										Keyspace: "ks2",
+										Name:     "80-",
+									},
+								},
+							},
+						},
+					},
+					GetKeyspaceResults: map[string]struct {
+						Response *vtctldatapb.GetKeyspaceResponse
+						Error    error
+					}{
+						"ks1": {
+							Response: &vtctldatapb.GetKeyspaceResponse{
+								Keyspace: &vtctldatapb.Keyspace{
+									Name: "ks1",
+								},
+							},
+						},
+						"ks2": {
+							Response: &vtctldatapb.GetKeyspaceResponse{
+								Keyspace: &vtctldatapb.Keyspace{
+									Name: "ks2",
+								},
+							},
+						},
+					},
+					GetKeyspacesResults: struct {
+						Keyspaces []*vtctldatapb.Keyspace
+						Error     error
+					}{
+						Keyspaces: []*vtctldatapb.Keyspace{
+							{
+								Name: "ks1",
+							},
+							{
+								Name: "ks2",
+							},
+						},
+					},
+					ReloadSchemaShardResults: map[string]struct {
+						Response *vtctldatapb.ReloadSchemaShardResponse
+						Error    error
+					}{
+						"ks1/-": {
+							Response: &vtctldatapb.ReloadSchemaShardResponse{
+								Events: []*logutilpb.Event{
+									{},
+								},
+							},
+						},
+						"ks2/-80": {
+							Response: &vtctldatapb.ReloadSchemaShardResponse{
+								Events: []*logutilpb.Event{
+									{}, {},
+								},
+							},
+						},
+						"ks2/80-": {
+							Error: assert.AnError,
+						},
+					},
+				},
+				topoReadPool: pools.NewRPCPool(5, 0, nil),
+			},
+			req: &vtadminpb.ReloadSchemasRequest{
+				KeyspaceShards: []string{"ks1/-", "ks2/-80", "ks2/80-"},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "getShardSets failure",
+			cluster: &Cluster{
+				ID:   "test",
+				Name: "test",
+				Vtctld: &fakevtctldclient.VtctldClient{
+					GetKeyspaceResults: map[string]struct {
+						Response *vtctldatapb.GetKeyspaceResponse
+						Error    error
+					}{
+						"ks1": {
+							Error: assert.AnError,
+						},
+						"ks2": {
+							Response: &vtctldatapb.GetKeyspaceResponse{
+								Keyspace: &vtctldatapb.Keyspace{
+									Name: "ks2",
+								},
+							},
+						},
+					},
+					GetKeyspacesResults: struct {
+						Keyspaces []*vtctldatapb.Keyspace
+						Error     error
+					}{
+						Keyspaces: []*vtctldatapb.Keyspace{
+							{
+								Name: "ks1",
+							},
+							{
+								Name: "ks2",
+							},
+						},
+					},
+					ReloadSchemaShardResults: map[string]struct {
+						Response *vtctldatapb.ReloadSchemaShardResponse
+						Error    error
+					}{
+						"ks1/-": {
+							Response: &vtctldatapb.ReloadSchemaShardResponse{
+								Events: []*logutilpb.Event{
+									{},
+								},
+							},
+						},
+						"ks2/-80": {
+							Response: &vtctldatapb.ReloadSchemaShardResponse{
+								Events: []*logutilpb.Event{
+									{}, {},
+								},
+							},
+						},
+						"ks2/80-": { // skipped via request params
+							Error: assert.AnError,
+						},
+					},
+				},
+				topoReadPool: pools.NewRPCPool(5, 0, nil),
+			},
+			req: &vtadminpb.ReloadSchemasRequest{
+				KeyspaceShards: []string{"ks1/-"},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			results, err := tt.cluster.reloadShardSchemas(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+
+			keyFn := func(shard *vtadminpb.Shard) string {
+				return fmt.Sprintf("%s/%s", shard.Shard.Keyspace, shard.Shard.Name)
+			}
+			sort.Slice(tt.expected, func(i, j int) bool {
+				return keyFn(tt.expected[i].Shard) < keyFn(tt.expected[j].Shard)
+			})
+			sort.Slice(results, func(i, j int) bool {
+				return keyFn(results[i].Shard) < keyFn(results[j].Shard)
 			})
 			utils.MustMatch(t, tt.expected, results)
 		})
