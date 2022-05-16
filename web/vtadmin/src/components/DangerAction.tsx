@@ -16,6 +16,7 @@
 
 import React, { useState } from 'react';
 import { UseMutationResult } from 'react-query';
+
 import { Icon, Icons } from './Icon';
 import { TextInput } from './TextInput';
 
@@ -23,35 +24,39 @@ type Mutation = UseMutationResult & {
     mutate: () => void;
 };
 
-interface DangerActionProps {
-    title: string;
-    action: string;
-    description: JSX.Element;
-    primary: boolean;
-    primaryDescription: JSX.Element;
-    alias: string;
-    mutation: UseMutationResult;
+export interface DangerActionProps {
+    confirmationValue: string;
+    description: React.ReactNode;
+    documentationLink: string;
     loadingText: string;
     loadedText: string;
-    documentationLink: string;
+    mutation: UseMutationResult;
+    title: string;
+    warnings?: React.ReactNodeArray;
 }
 
+/**
+ * DangerAction is a panel used for initiating mutations on entity pages.
+ * When rendering multiple DangerAction components, ensure they are in
+ * a surrounding <div> to ensure the first: and last: CSS selectors work.
+ */
 const DangerAction: React.FC<DangerActionProps> = ({
+    confirmationValue,
     title,
     description,
-    action,
     documentationLink,
-    primary,
-    primaryDescription,
-    alias,
     mutation,
     loadingText,
     loadedText,
+    warnings = [],
 }) => {
     const [typedAlias, setTypedAlias] = useState('');
 
     return (
-        <div className="p-8" title={title}>
+        <div
+            className="p-9 pb-12 last:border-b border border-red-400 border-b-0 first:rounded-t-lg last:rounded-b-lg"
+            title={title}
+        >
             <div className="flex justify-between items-center">
                 <p className="text-base font-bold m-0 text-gray-900">{title}</p>
                 <a
@@ -65,20 +70,26 @@ const DangerAction: React.FC<DangerActionProps> = ({
                 </a>
             </div>
             <p className="text-base mt-0">{description}</p>
-            {primary && (
-                <div className="text-danger flex items-center">
-                    <Icon icon={Icons.alertFail} className="fill-current text-danger inline mr-2" />
-                    {primaryDescription}
-                </div>
+
+            {warnings.map(
+                (warning, i) =>
+                    warning && (
+                        <div className="text-danger flex items-center" key={i}>
+                            <Icon icon={Icons.alertFail} className="fill-current text-danger inline mr-2" />
+                            {warning}
+                        </div>
+                    )
             )}
 
-            <p className="text-base">Please type the tablet's alias to {action}:</p>
+            <p className="text-base">
+                Please type <span className="font-bold">{confirmationValue}</span> confirm.
+            </p>
             <div className="w-1/3">
-                <TextInput placeholder="zone-xxx" value={typedAlias} onChange={(e) => setTypedAlias(e.target.value)} />
+                <TextInput value={typedAlias} onChange={(e) => setTypedAlias(e.target.value)} />
             </div>
             <button
                 className="btn btn-secondary btn-danger mt-4"
-                disabled={typedAlias !== alias || mutation.isLoading}
+                disabled={typedAlias !== confirmationValue || mutation.isLoading}
                 onClick={() => {
                     (mutation as Mutation).mutate();
                     setTypedAlias('');

@@ -224,76 +224,66 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
             </div>
             <div className="my-8">
                 <h3 className="mb-4">Danger</h3>
-                <div className="border border-danger rounded-lg">
+                <div>
                     {primary && (
-                        <div>
-                            <div className="border-red-400 border-b w-full" />
+                        <>
                             <DangerAction
+                                confirmationValue={alias}
                                 title="Set Read-Only"
                                 documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadonly"
-                                primaryDescription={
-                                    <div>
-                                        This will disable writing on the primary tablet {alias}. Use with caution.
-                                    </div>
-                                }
+                                warnings={[
+                                    `This will disable writing on the primary tablet ${alias}. Use with caution.`,
+                                ]}
                                 description={
                                     <>
                                         Set tablet <span className="font-bold">{alias}</span> to read-only.
                                     </>
                                 }
-                                action="set tablet to read-only"
                                 mutation={setReadOnlyMutation as UseMutationResult}
                                 loadingText="Setting..."
                                 loadedText="Set to read-only"
-                                primary={primary}
-                                alias={alias}
                             />
-                            <div className="border-red-400 border-b w-full" />
+
                             <DangerAction
+                                confirmationValue={alias}
                                 title="Set Read-Write"
                                 documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadwrite"
-                                primaryDescription={
-                                    <div>
-                                        This will re-enable writing on the primary tablet {alias}. Use with caution.
-                                    </div>
-                                }
+                                warnings={[
+                                    `This will re-enable writing on the primary tablet ${alias}. Use with caution.`,
+                                ]}
                                 description={
                                     <>
                                         Set tablet <span className="font-bold">{alias}</span> to read-write.
                                     </>
                                 }
-                                action="set tablet to read-only"
                                 mutation={setReadWriteMutation as UseMutationResult}
                                 loadingText="Setting..."
                                 loadedText="Set to read-write"
-                                primary={primary}
-                                alias={alias}
                             />
-                            <div className="border-red-400 border-b w-full" />
-                        </div>
+                        </>
                     )}
                     <DangerAction
+                        confirmationValue={alias}
                         title="Delete Tablet"
                         documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#deletetablet"
-                        primaryDescription={
-                            <div>
-                                Tablet {alias} is the primary tablet. Flag{' '}
-                                <span className="font-mono bg-red-100 p-1 text-sm">-allow_primary=true</span> will be
-                                applied in order to delete the primary tablet.
-                            </div>
-                        }
+                        warnings={[
+                            primary && (
+                                <>
+                                    Tablet {alias} is the primary tablet. Flag{' '}
+                                    <span className="font-mono bg-red-100 p-1 text-sm">-allow_primary=true</span> will
+                                    be applied in order to delete the primary tablet.
+                                </>
+                            ),
+                        ]}
                         description={
                             <>
                                 Delete tablet <span className="font-bold">{alias}</span>. Doing so will remove it from
                                 the topology, but vttablet and MySQL won't be touched.
                             </>
                         }
-                        action="delete the tablet"
                         mutation={deleteTabletMutation as UseMutationResult}
                         loadingText="Deleting..."
                         loadedText="Delete"
-                        primary={primary}
-                        alias={alias}
                     />
                 </div>
             </div>
