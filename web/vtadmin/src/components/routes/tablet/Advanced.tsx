@@ -236,9 +236,9 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                                     </div>
                                 }
                                 description={
-                                    <div>
+                                    <>
                                         Set tablet <span className="font-bold">{alias}</span> to read-only.
-                                    </div>
+                                    </>
                                 }
                                 action="set tablet to read-only"
                                 mutation={setReadOnlyMutation as UseMutationResult}
@@ -257,9 +257,9 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                                     </div>
                                 }
                                 description={
-                                    <div>
+                                    <>
                                         Set tablet <span className="font-bold">{alias}</span> to read-write.
-                                    </div>
+                                    </>
                                 }
                                 action="set tablet to read-only"
                                 mutation={setReadWriteMutation as UseMutationResult}
@@ -282,10 +282,10 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                             </div>
                         }
                         description={
-                            <div>
+                            <>
                                 Delete tablet <span className="font-bold">{alias}</span>. Doing so will remove it from
                                 the topology, but vttablet and MySQL won't be touched.
-                            </div>
+                            </>
                         }
                         action="delete the tablet"
                         mutation={deleteTabletMutation as UseMutationResult}
