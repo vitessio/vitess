@@ -229,6 +229,7 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                         <div>
                             <div className="border-red-400 border-b w-full" />
                             <DangerAction
+                                confirmationValue={alias}
                                 title="Set Read-Only"
                                 documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadonly"
                                 primaryDescription={
@@ -241,15 +242,20 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                                         Set tablet <span className="font-bold">{alias}</span> to read-only.
                                     </>
                                 }
-                                action="set tablet to read-only"
+                                confirmationPrompt={
+                                    <>
+                                        Please type <span className="font-semibold font-mono">{alias}</span> to set the
+                                        tablet to read-only:
+                                    </>
+                                }
                                 mutation={setReadOnlyMutation as UseMutationResult}
                                 loadingText="Setting..."
                                 loadedText="Set to read-only"
                                 primary={primary}
-                                alias={alias}
                             />
                             <div className="border-red-400 border-b w-full" />
                             <DangerAction
+                                confirmationValue={alias}
                                 title="Set Read-Write"
                                 documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadwrite"
                                 primaryDescription={
@@ -262,17 +268,22 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                                         Set tablet <span className="font-bold">{alias}</span> to read-write.
                                     </>
                                 }
-                                action="set tablet to read-only"
+                                confirmationPrompt={
+                                    <>
+                                        Please type <span className="font-semibold font-mono">{alias}</span> to set the
+                                        tablet to read-write:
+                                    </>
+                                }
                                 mutation={setReadWriteMutation as UseMutationResult}
                                 loadingText="Setting..."
                                 loadedText="Set to read-write"
                                 primary={primary}
-                                alias={alias}
                             />
                             <div className="border-red-400 border-b w-full" />
                         </div>
                     )}
                     <DangerAction
+                        confirmationValue={alias}
                         title="Delete Tablet"
                         documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#deletetablet"
                         primaryDescription={
@@ -288,12 +299,16 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                                 the topology, but vttablet and MySQL won't be touched.
                             </>
                         }
-                        action="delete the tablet"
+                        confirmationPrompt={
+                            <>
+                                Please type <span className="font-semibold font-mono">{alias}</span> to delete the
+                                tablet.
+                            </>
+                        }
                         mutation={deleteTabletMutation as UseMutationResult}
                         loadingText="Deleting..."
                         loadedText="Delete"
                         primary={primary}
-                        alias={alias}
                     />
                 </div>
             </div>

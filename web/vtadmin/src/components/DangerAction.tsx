@@ -24,26 +24,29 @@ type Mutation = UseMutationResult & {
 };
 
 export interface DangerActionProps {
-    title: string;
-    action: string;
+    // Required
+    confirmationValue: string;
     description: JSX.Element;
-    primary: boolean;
-    primaryDescription: JSX.Element;
-    alias: string;
-    mutation: UseMutationResult;
+    documentationLink: string;
     loadingText: string;
     loadedText: string;
-    documentationLink: string;
+    mutation: UseMutationResult;
+    primary: boolean;
+    primaryDescription: JSX.Element;
+    title: string;
+
+    // Optional
+    confirmationPrompt?: React.ReactNode;
 }
 
 const DangerAction: React.FC<DangerActionProps> = ({
+    confirmationPrompt,
+    confirmationValue,
     title,
     description,
-    action,
     documentationLink,
     primary,
     primaryDescription,
-    alias,
     mutation,
     loadingText,
     loadedText,
@@ -72,13 +75,19 @@ const DangerAction: React.FC<DangerActionProps> = ({
                 </div>
             )}
 
-            <p className="text-base">Please type the tablet's alias to {action}:</p>
+            <p className="text-base">
+                {confirmationPrompt || (
+                    <>
+                        Please type <span className="font-bold">{confirmationValue}</span> to complete this action:
+                    </>
+                )}
+            </p>
             <div className="w-1/3">
-                <TextInput placeholder="zone-xxx" value={typedAlias} onChange={(e) => setTypedAlias(e.target.value)} />
+                <TextInput value={typedAlias} onChange={(e) => setTypedAlias(e.target.value)} />
             </div>
             <button
                 className="btn btn-secondary btn-danger mt-4"
-                disabled={typedAlias !== alias || mutation.isLoading}
+                disabled={typedAlias !== confirmationValue || mutation.isLoading}
                 onClick={() => {
                     (mutation as Mutation).mutate();
                     setTypedAlias('');

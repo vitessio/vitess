@@ -70,8 +70,7 @@ describe('DangerAction', () => {
         render(
             <QueryClientProvider client={queryClient}>
                 <Wrapper
-                    action="complete an action"
-                    alias="zone1-101"
+                    confirmationValue="zone1-101"
                     description={<>Hello world!</>}
                     documentationLink="https://test.com"
                     loadedText="Do Action"
