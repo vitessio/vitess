@@ -31,6 +31,11 @@ const TEST_PROCESS_ENV = {
     REACT_APP_VTADMIN_API_ADDRESS: '',
 };
 
+// This integration test verifies the behaviour from the form UI
+// all the way down to the network level (which we mock with msw).
+// It's a very comprehensive test (good!), but does make some assumptions
+// about UI structure (boo!), which means this test is rather brittle
+// to UI changes (e.g., like how the Select works, adding new form fields, etc.)
 describe('CreateKeyspace integration test', () => {
     const server = setupServer();
 
