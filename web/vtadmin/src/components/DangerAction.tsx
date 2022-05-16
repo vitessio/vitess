@@ -23,7 +23,7 @@ type Mutation = UseMutationResult & {
     mutate: () => void;
 };
 
-interface DangerActionProps {
+export interface DangerActionProps {
     title: string;
     action: string;
     description: JSX.Element;
