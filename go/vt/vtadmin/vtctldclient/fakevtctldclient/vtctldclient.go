@@ -77,6 +77,10 @@ type VtctldClient struct {
 		Response *vtctldatapb.ShardReplicationPositionsResponse
 		Error    error
 	}
+	ReloadSchemaKeyspaceResults map[string]struct {
+		Response *vtctldatapb.ReloadSchemaKeyspaceResponse
+		Error    error
+	}
 }
 
 // Compile-time type assertion to make sure we haven't overriden a method
@@ -240,4 +244,17 @@ func (fake *VtctldClient) ShardReplicationPositions(ctx context.Context, req *vt
 	}
 
 	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// ReloadSchemaKeyspace is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ReloadSchemaKeyspace(ctx context.Context, req *vtctldatapb.ReloadSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ReloadSchemaKeyspaceResponse, error) {
+	if fake.ReloadSchemaKeyspaceResults == nil {
+		return nil, fmt.Errorf("%w: ReloadSchemaKeyspaceResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	if result, ok := fake.ReloadSchemaKeyspaceResults[req.Keyspace]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, req.Keyspace)
 }

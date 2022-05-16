@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"context"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,11 +26,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/pools"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -179,6 +183,283 @@ func Test_getShardSets(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.result, result)
+		})
+	}
+}
+
+func Test_reloadKeyspaceSchemas(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		cluster   *Cluster
+		req       *vtadminpb.ReloadSchemasRequest
+		expected  []*vtadminpb.ReloadSchemasResponse_KeyspaceResult
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			cluster: &Cluster{
+				ID:   "test",
+				Name: "test",
+				Vtctld: &fakevtctldclient.VtctldClient{
+					GetKeyspacesResults: struct {
+						Keyspaces []*vtctldatapb.Keyspace
+						Error     error
+					}{
+						Keyspaces: []*vtctldatapb.Keyspace{
+							{
+								Name: "ks1",
+							},
+							{
+								Name: "ks2",
+							},
+						},
+					},
+					ReloadSchemaKeyspaceResults: map[string]struct {
+						Response *vtctldatapb.ReloadSchemaKeyspaceResponse
+						Error    error
+					}{
+						"ks1": {
+							Response: &vtctldatapb.ReloadSchemaKeyspaceResponse{
+								Events: []*logutilpb.Event{
+									{}, {}, {},
+								},
+							},
+						},
+						"ks2": {
+							Error: assert.AnError, // _would_ cause a failure but our request filters it out
+						},
+					},
+				},
+				topoReadPool: pools.NewRPCPool(5, 0, nil),
+			},
+			req: &vtadminpb.ReloadSchemasRequest{
+				Keyspaces: []string{"ks1"},
+			},
+			expected: []*vtadminpb.ReloadSchemasResponse_KeyspaceResult{
+				{
+					Keyspace: &vtadminpb.Keyspace{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "test",
+							Name: "test",
+						},
+						Keyspace: &vtctldatapb.Keyspace{
+							Name: "ks1",
+						},
+					},
+					Events: []*logutilpb.Event{
+						{}, {}, {},
+					},
+				},
+			},
+		},
+		{
+			name: "no keyspaces specified defaults to all",
+			cluster: &Cluster{
+				ID:   "test",
+				Name: "test",
+				Vtctld: &fakevtctldclient.VtctldClient{
+					GetKeyspacesResults: struct {
+						Keyspaces []*vtctldatapb.Keyspace
+						Error     error
+					}{
+						Keyspaces: []*vtctldatapb.Keyspace{
+							{
+								Name: "ks1",
+							},
+							{
+								Name: "ks2",
+							},
+						},
+					},
+					ReloadSchemaKeyspaceResults: map[string]struct {
+						Response *vtctldatapb.ReloadSchemaKeyspaceResponse
+						Error    error
+					}{
+						"ks1": {
+							Response: &vtctldatapb.ReloadSchemaKeyspaceResponse{
+								Events: []*logutilpb.Event{
+									{},
+								},
+							},
+						},
+						"ks2": {
+							Response: &vtctldatapb.ReloadSchemaKeyspaceResponse{
+								Events: []*logutilpb.Event{
+									{}, {},
+								},
+							},
+						},
+					},
+				},
+				topoReadPool: pools.NewRPCPool(5, 0, nil),
+			},
+			req: &vtadminpb.ReloadSchemasRequest{},
+			expected: []*vtadminpb.ReloadSchemasResponse_KeyspaceResult{
+				{
+					Keyspace: &vtadminpb.Keyspace{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "test",
+							Name: "test",
+						},
+						Keyspace: &vtctldatapb.Keyspace{
+							Name: "ks1",
+						},
+					},
+					Events: []*logutilpb.Event{
+						{},
+					},
+				},
+				{
+					Keyspace: &vtadminpb.Keyspace{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "test",
+							Name: "test",
+						},
+						Keyspace: &vtctldatapb.Keyspace{
+							Name: "ks2",
+						},
+					},
+					Events: []*logutilpb.Event{
+						{}, {},
+					},
+				},
+			},
+		},
+		{
+			name: "skip keyspaces not in cluster",
+			cluster: &Cluster{
+				ID:   "test",
+				Name: "test",
+				Vtctld: &fakevtctldclient.VtctldClient{
+					GetKeyspacesResults: struct {
+						Keyspaces []*vtctldatapb.Keyspace
+						Error     error
+					}{
+						Keyspaces: []*vtctldatapb.Keyspace{
+							{
+								Name: "ks1",
+							},
+						},
+					},
+					ReloadSchemaKeyspaceResults: map[string]struct {
+						Response *vtctldatapb.ReloadSchemaKeyspaceResponse
+						Error    error
+					}{
+						"ks1": {
+							Response: &vtctldatapb.ReloadSchemaKeyspaceResponse{
+								Events: []*logutilpb.Event{
+									{}, {}, {},
+								},
+							},
+						},
+					},
+				},
+				topoReadPool: pools.NewRPCPool(5, 0, nil),
+			},
+			req: &vtadminpb.ReloadSchemasRequest{
+				Keyspaces: []string{"ks1", "anotherclusterks1"},
+			},
+			expected: []*vtadminpb.ReloadSchemasResponse_KeyspaceResult{
+				{
+					Keyspace: &vtadminpb.Keyspace{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "test",
+							Name: "test",
+						},
+						Keyspace: &vtctldatapb.Keyspace{
+							Name: "ks1",
+						},
+					},
+					Events: []*logutilpb.Event{
+						{}, {}, {},
+					},
+				},
+			},
+		},
+		{
+			name: "GetKeyspaces error",
+			cluster: &Cluster{
+				ID:   "test",
+				Name: "test",
+				Vtctld: &fakevtctldclient.VtctldClient{
+					GetKeyspacesResults: struct {
+						Keyspaces []*vtctldatapb.Keyspace
+						Error     error
+					}{
+						Error: assert.AnError,
+					},
+				},
+				topoReadPool: pools.NewRPCPool(5, 0, nil),
+			},
+			req:       &vtadminpb.ReloadSchemasRequest{},
+			shouldErr: true,
+		},
+		{
+			name: "ReloadSchemaKeyspace error",
+			cluster: &Cluster{
+				ID:   "test",
+				Name: "test",
+				Vtctld: &fakevtctldclient.VtctldClient{
+					GetKeyspacesResults: struct {
+						Keyspaces []*vtctldatapb.Keyspace
+						Error     error
+					}{
+						Keyspaces: []*vtctldatapb.Keyspace{
+							{
+								Name: "ks1",
+							},
+							{
+								Name: "ks2",
+							},
+						},
+					},
+					ReloadSchemaKeyspaceResults: map[string]struct {
+						Response *vtctldatapb.ReloadSchemaKeyspaceResponse
+						Error    error
+					}{
+						"ks1": {
+							Response: &vtctldatapb.ReloadSchemaKeyspaceResponse{
+								Events: []*logutilpb.Event{
+									{}, {}, {},
+								},
+							},
+						},
+						"ks2": {
+							Error: assert.AnError,
+						},
+					},
+				},
+				topoReadPool: pools.NewRPCPool(5, 0, nil),
+			},
+			req:       &vtadminpb.ReloadSchemasRequest{},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			results, err := tt.cluster.reloadKeyspaceSchemas(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+
+			sort.Slice(tt.expected, func(i, j int) bool {
+				return tt.expected[i].Keyspace.Keyspace.Name < tt.expected[j].Keyspace.Keyspace.Name
+			})
+			sort.Slice(results, func(i, j int) bool {
+				return results[i].Keyspace.Keyspace.Name < results[j].Keyspace.Keyspace.Name
+			})
+			utils.MustMatch(t, tt.expected, results)
 		})
 	}
 }
