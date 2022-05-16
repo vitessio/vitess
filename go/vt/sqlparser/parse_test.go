@@ -1127,88 +1127,88 @@ var (
 		output: "set S = - - - - -(4 + 1)",
 	}, {
 		input:  "alter table a add foo int references b (a) on delete restrict first",
-		output: "alter table a add column foo int references b (a) on delete restrict first",
+		output: "alter table a\n\tadd column foo int references b (a) on delete restrict first",
 	}, {
 		input:  "alter table a lock default, lock = none, lock shared, lock exclusive",
-		output: "alter table a lock default, lock none, lock shared, lock exclusive",
+		output: "alter table a\n\tlock default,\n\tlock none,\n\tlock shared,\n\tlock exclusive",
 	}, {
 		input:  "alter table a alter x set default NULL, alter column x2 set default 's', alter x3 drop default",
-		output: "alter table a alter column x set default null, alter column x2 set default 's', alter column x3 drop default",
+		output: "alter table a\n\talter column x set default null,\n\talter column x2 set default 's',\n\talter column x3 drop default",
 	}, {
-		input: "alter table a alter column x set visible, alter column x2 set invisible",
+		input: "alter table a\n\talter column x set visible,\n\talter column x2 set invisible",
 	}, {
-		input: "alter table a alter index x visible, alter index x2 invisible",
+		input: "alter table a\n\talter index x visible,\n\talter index x2 invisible",
 	}, {
-		input: "alter table a add spatial key foo (column1)",
+		input: "alter table a\n\tadd spatial key foo (column1)",
 	}, {
-		input: "alter table a add fulltext key foo (column1), order by a, b, c",
+		input: "alter table a\n\tadd fulltext key foo (column1),\n\torder by a, b, c",
 	}, {
-		input: "alter table a add unique key foo (column1)",
+		input: "alter table a\n\tadd unique key foo (column1)",
 	}, {
-		input: "alter /*vt+ strategy=online */ table a add unique key foo (column1)",
+		input: "alter /*vt+ strategy=online */ table a\n\tadd unique key foo (column1)",
 	}, {
-		input: "alter table a change column s foo int default 1 after x",
+		input: "alter table a\n\tchange column s foo int default 1 after x",
 	}, {
-		input: "alter table a modify column foo int default 1 first",
+		input: "alter table a\n\tmodify column foo int default 1 first",
 	}, {
 		input:  "alter table a add foo varchar(255) generated always as (concat(bar, ' ', baz)) stored",
-		output: "alter table a add column foo varchar(255) as (concat(bar, ' ', baz)) stored",
+		output: "alter table a\n\tadd column foo varchar(255) as (concat(bar, ' ', baz)) stored",
 	}, {
 		input:  "alter table a add foo varchar(255) generated always as (concat(bar, ' ', baz))",
-		output: "alter table a add column foo varchar(255) as (concat(bar, ' ', baz)) virtual",
+		output: "alter table a\n\tadd column foo varchar(255) as (concat(bar, ' ', baz)) virtual",
 	}, {
 		input:  "alter table a add foo varchar(255) generated always as (concat(bar, ' ', baz)) null",
-		output: "alter table a add column foo varchar(255) as (concat(bar, ' ', baz)) virtual null",
+		output: "alter table a\n\tadd column foo varchar(255) as (concat(bar, ' ', baz)) virtual null",
 	}, {
 		input:  "alter table a add foo varchar(255) generated always as (concat(bar, ' ', baz)) not null",
-		output: "alter table a add column foo varchar(255) as (concat(bar, ' ', baz)) virtual not null",
+		output: "alter table a\n\tadd column foo varchar(255) as (concat(bar, ' ', baz)) virtual not null",
 	}, {
 		input:  "alter table a change column s foo varchar(255) generated always as (concat(bar, ' ', baz)) stored",
-		output: "alter table a change column s foo varchar(255) as (concat(bar, ' ', baz)) stored",
+		output: "alter table a\n\tchange column s foo varchar(255) as (concat(bar, ' ', baz)) stored",
 	}, {
 		input:  "alter table a modify column foo varchar(255) generated always as (concat(bar, ' ', baz))",
-		output: "alter table a modify column foo varchar(255) as (concat(bar, ' ', baz)) virtual",
+		output: "alter table a\n\tmodify column foo varchar(255) as (concat(bar, ' ', baz)) virtual",
 	}, {
 		input:  "alter table a character set utf32 collate = 'utf'",
-		output: "alter table a charset utf32 collate utf",
+		output: "alter table a\n\tcharset utf32 collate utf",
 	}, {
-		input: "alter table a convert to character set utf32",
+		input: "alter table a\n\tconvert to character set utf32",
 	}, {
-		input: "alter table `By` add column foo int, algorithm = default",
+		input: "alter table `By`\n\tadd column foo int,\n\talgorithm = default",
 	}, {
-		input: "alter table `By` add column foo int, algorithm = instant",
+		input: "alter table `By`\n\tadd column foo int,\n\talgorithm = instant",
 	}, {
-		input: "alter table a rename b",
+		input: "alter table a\n\trename b",
 	}, {
-		input: "alter table `By` rename `bY`",
+		input: "alter table `By`\n\trename `bY`",
 	}, {
 		input:  "alter table a rename to b",
-		output: "alter table a rename b",
+		output: "alter table a\n\trename b",
 	}, {
 		input:  "alter table a rename as b",
-		output: "alter table a rename b",
+		output: "alter table a\n\trename b",
 	}, {
-		input: "alter table a rename index foo to bar, with validation",
+		input: "alter table a\n\trename index foo to bar,\n\twith validation",
 	}, {
 		input:  "alter table a rename key foo to bar",
-		output: "alter table a rename index foo to bar",
+		output: "alter table a\n\trename index foo to bar",
 	}, {
-		input: "alter table e auto_increment 20",
+		input: "alter table e\n\tauto_increment 20",
 	}, {
 		input:  "alter table e character set = 'ascii'",
-		output: "alter table e charset ascii",
+		output: "alter table e\n\tcharset ascii",
 	}, {
-		input: "alter table e enable keys, discard tablespace, force",
+		input: "alter table e\n\tenable keys,\n\tdiscard tablespace,\n\tforce",
 	}, {
 		input:  "alter table e default character set = 'ascii'",
-		output: "alter table e charset ascii",
+		output: "alter table e\n\tcharset ascii",
 	}, {
-		input: "alter table e comment 'hello' remove partitioning",
+		input: "alter table e\n\tcomment 'hello' remove partitioning",
 	}, {
 		input:  "alter table a reorganize partition b into (partition c values less than (?), partition d values less than (maxvalue))",
 		output: "alter table a reorganize partition b into (partition c values less than (:v1), partition d values less than maxvalue)",
 	}, {
-		input: "alter table a algorithm = default, lock none, add partition (partition d values less than maxvalue)",
+		input: "alter table a\n\talgorithm = default,\n\tlock none, add partition (partition d values less than maxvalue)",
 	}, {
 		input: "alter table a discard partition all tablespace",
 	}, {
@@ -1245,7 +1245,7 @@ var (
 		input: "alter table a upgrade partitioning",
 	}, {
 		input:  "alter table t2 add primary key `zzz` (id)",
-		output: "alter table t2 add primary key (id)",
+		output: "alter table t2\n\tadd primary key (id)",
 	}, {
 		input: "alter table a \npartition by hash (id) partitions 4",
 	}, {
@@ -1255,80 +1255,80 @@ var (
 		output:     "create database a",
 		partialDDL: true,
 	}, {
-		input: "alter table `Post With Space` drop foreign key `Post With Space_ibfk_1`",
+		input: "alter table `Post With Space`\n\tdrop foreign key `Post With Space_ibfk_1`",
 	}, {
-		input: "alter table a add column (id int, id2 char(23))",
+		input: "alter table a\n\tadd column (id int, id2 char(23))",
 	}, {
-		input: "alter table a add index idx (id)",
+		input: "alter table a\n\tadd index idx (id)",
 	}, {
-		input: "alter table a add fulltext index idx (id)",
+		input: "alter table a\n\tadd fulltext index idx (id)",
 	}, {
-		input: "alter table a add spatial index idx (id)",
+		input: "alter table a\n\tadd spatial index idx (id)",
 	}, {
-		input: "alter table a add fulltext index idx (id)",
+		input: "alter table a\n\tadd fulltext index idx (id)",
 	}, {
-		input: "alter table a add foreign key (id) references f (id)",
+		input: "alter table a\n\tadd foreign key (id) references f (id)",
 	}, {
-		input: "alter table a add foreign key the_idx(id) references f (id)",
+		input: "alter table a\n\tadd foreign key the_idx(id) references f (id)",
 	}, {
-		input: "alter table a add primary key (id)",
+		input: "alter table a\n\tadd primary key (id)",
 	}, {
-		input: "alter table a add constraint b primary key (id)",
+		input: "alter table a\n\tadd constraint b primary key (id)",
 	}, {
-		input: "alter table a add constraint b primary key (id)",
+		input: "alter table a\n\tadd constraint b primary key (id)",
 	}, {
-		input: "alter table a add constraint b unique key (id)",
+		input: "alter table a\n\tadd constraint b unique key (id)",
 	}, {
 		input:  "alter table t add column iii int signed not null",
-		output: "alter table t add column iii int not null",
+		output: "alter table t\n\tadd column iii int not null",
 	}, {
-		input: "alter table t add column iii int unsigned not null",
+		input: "alter table t\n\tadd column iii int unsigned not null",
 	}, {
 		input:  "alter table a add constraint b unique c (id)",
-		output: "alter table a add constraint b unique key c (id)",
+		output: "alter table a\n\tadd constraint b unique key c (id)",
 	}, {
 		input:  "alter table a add constraint check (id)",
-		output: "alter table a add check (id)",
+		output: "alter table a\n\tadd check (id)",
 	}, {
-		input: "alter table a add constraint c check (id)",
+		input: "alter table a\n\tadd constraint c check (id)",
 	}, {
 		input:  "alter table a add id int",
-		output: "alter table a add column id int",
+		output: "alter table a\n\tadd column id int",
 	}, {
-		input: "alter table a add column id int first",
+		input: "alter table a\n\tadd column id int first",
 	}, {
-		input: "alter table a add column id int after id2",
+		input: "alter table a\n\tadd column id int after id2",
 	}, {
-		input: "alter table a drop column id",
+		input: "alter table a\n\tdrop column id",
 	}, {
 		input: "alter table a drop partition p2712, p123",
 	}, {
 		input:  "alter table a drop index idx",
-		output: "alter table a drop key idx",
+		output: "alter table a\n\tdrop key idx",
 	}, {
-		input: "alter table a add check (ch_1) not enforced",
+		input: "alter table a\n\tadd check (ch_1) not enforced",
 	}, {
-		input: "alter table a alter check ch_1 enforced",
+		input: "alter table a\n\talter check ch_1 enforced",
 	}, {
-		input: "alter table a alter check ch_1 not enforced",
+		input: "alter table a\n\talter check ch_1 not enforced",
 	}, {
-		input: "alter table a drop check ch_1",
+		input: "alter table a\n\tdrop check ch_1",
 	}, {
 		input:  "alter table a drop constraint ch_1",
-		output: "alter table a drop check ch_1",
+		output: "alter table a\n\tdrop check ch_1",
 	}, {
-		input: "alter table a drop foreign key kx",
+		input: "alter table a\n\tdrop foreign key kx",
 	}, {
-		input: "alter table a drop primary key",
+		input: "alter table a\n\tdrop primary key",
 	}, {
 		input:  "alter table a drop id",
-		output: "alter table a drop column id",
+		output: "alter table a\n\tdrop column id",
 	}, {
 		input:  "ALTER TABLE `product115s` CHANGE `part_number` `part_number` varchar(255) DEFAULT '0' NOT NULL",
-		output: "alter table product115s change column part_number part_number varchar(255) not null default '0'",
+		output: "alter table product115s\n\tchange column part_number part_number varchar(255) not null default '0'",
 	}, {
 		input:  "ALTER TABLE distributors ADD CONSTRAINT zipchk CHECK (char_length(zipcode) = 5)",
-		output: "alter table distributors add constraint zipchk check (char_length(zipcode) = 5)",
+		output: "alter table distributors\n\tadd constraint zipchk check (char_length(zipcode) = 5)",
 	}, {
 		input: "alter database character set geostd8",
 	}, {
@@ -1589,28 +1589,28 @@ var (
 		ignoreNormalizerTest: true,
 	}, {
 		input:  "create index a on b (col1)",
-		output: "alter table b add index a (col1)",
+		output: "alter table b\n\tadd index a (col1)",
 	}, {
 		input:  "create unique index a on b (col1)",
-		output: "alter table b add unique index a (col1)",
+		output: "alter table b\n\tadd unique index a (col1)",
 	}, {
 		input:  "create unique index a using foo on b (col1 desc)",
-		output: "alter table b add unique index a (col1 desc) using foo",
+		output: "alter table b\n\tadd unique index a (col1 desc) using foo",
 	}, {
 		input:  "create fulltext index a on b (col1) with parser a",
-		output: "alter table b add fulltext index a (col1) with parser a",
+		output: "alter table b\n\tadd fulltext index a (col1) with parser a",
 	}, {
 		input:  "create spatial index a on b (col1)",
-		output: "alter table b add spatial index a (col1)",
+		output: "alter table b\n\tadd spatial index a (col1)",
 	}, {
 		input:  "create fulltext index a on b (col1) key_block_size=12 with parser a comment 'string' algorithm inplace lock none",
-		output: "alter table b add fulltext index a (col1) key_block_size 12 with parser a comment 'string', algorithm = inplace, lock none",
+		output: "alter table b\n\tadd fulltext index a (col1) key_block_size 12 with parser a comment 'string',\n\talgorithm = inplace,\n\tlock none",
 	}, {
 		input:  "create index a on b ((col1 + col2), (col1*col2))",
-		output: "alter table b add index a ((col1 + col2), (col1 * col2))",
+		output: "alter table b\n\tadd index a ((col1 + col2), (col1 * col2))",
 	}, {
 		input:  "create fulltext index b using btree on A (col1 desc, col2) algorithm = inplace lock = none",
-		output: "alter table A add fulltext index b (col1 desc, col2) using btree, algorithm = inplace, lock none",
+		output: "alter table A\n\tadd fulltext index b (col1 desc, col2) using btree,\n\talgorithm = inplace,\n\tlock none",
 	}, {
 		input: "create algorithm = merge sql security definer view a as select * from e",
 	}, {
@@ -1695,10 +1695,10 @@ var (
 		output: "drop view if exists a",
 	}, {
 		input:  "drop index b on a lock = none algorithm default",
-		output: "alter table a drop key b, lock none, algorithm = default",
+		output: "alter table a\n\tdrop key b,\n\tlock none,\n\talgorithm = default",
 	}, {
 		input:  "drop index `PRIMARY` on a lock none",
-		output: "alter table a drop primary key, lock none",
+		output: "alter table a\n\tdrop primary key,\n\tlock none",
 	}, {
 		input:  "analyze table a",
 		output: "otherread",
@@ -3294,7 +3294,7 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "create table A (\n\tB int\n)",
 	}, {
 		input:  "create index b on A (col1 desc)",
-		output: "alter table A add index b (col1 desc)",
+		output: "alter table A\n\tadd index b (col1 desc)",
 	}, {
 		input:  "alter table A foo",
 		output: "alter table A",
@@ -3307,10 +3307,10 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "alter view a as select * from t",
 	}, {
 		input:  "alter table A rename to B",
-		output: "alter table A rename B",
+		output: "alter table A\n\trename B",
 	}, {
 		input:  "alter table `A r` rename to `B r`",
-		output: "alter table `A r` rename `B r`",
+		output: "alter table `A r`\n\trename `B r`",
 	}, {
 		input: "rename table A to B",
 	}, {
@@ -3321,7 +3321,7 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "drop table if exists B",
 	}, {
 		input:  "drop index b on A",
-		output: "alter table A drop key b",
+		output: "alter table A\n\tdrop key b",
 	}, {
 		input: "select a from B",
 	}, {

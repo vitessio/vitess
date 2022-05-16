@@ -2431,7 +2431,7 @@ func (node *AlterTable) formatFast(buf *TrackedBuffer) {
 		if i != 0 {
 			buf.WriteByte(',')
 		}
-		buf.WriteByte(' ')
+		buf.WriteString("\n\t")
 		option.formatFast(buf)
 		if node.PartitionSpec != nil && node.PartitionSpec.Action != RemoveAction {
 			prefix = ","

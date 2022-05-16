@@ -62,7 +62,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "Query": "alter table a add column id int"
+    "Query": "alter table a\n\tadd column id int"
   }
 }
 Gen4 plan same as above
@@ -78,7 +78,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "Query": "alter table `user` add column id int"
+    "Query": "alter table `user`\n\tadd column id int"
   }
 }
 Gen4 plan same as above
@@ -94,7 +94,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "Query": "alter table a add column id int"
+    "Query": "alter table a\n\tadd column id int"
   }
 }
 Gen4 plan same as above
@@ -202,7 +202,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "Query": "alter table `user` add index a (id)"
+    "Query": "alter table `user`\n\tadd index a (id)"
   }
 }
 Gen4 plan same as above
@@ -218,7 +218,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "Query": "alter table unknown add index a (id)"
+    "Query": "alter table unknown\n\tadd index a (id)"
   }
 }
 Gen4 plan same as above

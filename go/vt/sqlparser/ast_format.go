@@ -1854,7 +1854,7 @@ func (node *AlterTable) Format(buf *TrackedBuffer) {
 		if i != 0 {
 			buf.WriteByte(',')
 		}
-		buf.astPrintf(node, " %v", option)
+		buf.astPrintf(node, "\n\t%v", option)
 		if node.PartitionSpec != nil && node.PartitionSpec.Action != RemoveAction {
 			prefix = ","
 		}

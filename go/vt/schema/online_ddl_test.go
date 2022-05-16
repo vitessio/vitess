@@ -261,7 +261,7 @@ func TestNewOnlineDDLs(t *testing.T) {
 	}
 	tests := map[string]expect{
 		"alter table t add column i int, drop column d": {sqls: []string{"alter table t add column i int, drop column d"}},
-		"create table t (id int primary key)":           {sqls: []string{"create table t (id int primary key)"}},
+		"create table t (id int primary key)":           {sqls: []string{"create table t ( id int primary key)"}},
 		"drop table t":                                  {sqls: []string{"drop table t"}},
 		"drop table if exists t":                        {sqls: []string{"drop table if exists t"}},
 		"drop table t1, t2, t3":                         {sqls: []string{"drop table t1", "drop table t2", "drop table t3"}},
@@ -314,7 +314,7 @@ func TestNewOnlineDDLs(t *testing.T) {
 				sql, err := onlineDDL.sqlWithoutComments()
 				assert.NoError(t, err)
 				sql = strings.ReplaceAll(sql, "\n", "")
-				sql = strings.ReplaceAll(sql, "\t", "")
+				sql = strings.ReplaceAll(sql, "\t", " ")
 				sqls = append(sqls, sql)
 				assert.Equal(t, expect.isView, onlineDDL.IsView())
 			}

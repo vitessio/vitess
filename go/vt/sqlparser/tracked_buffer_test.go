@@ -98,7 +98,7 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"alter table a engine=InnoDB",
-			"ALTER TABLE `a` ENGINE InnoDB",
+			"ALTER TABLE `a`\n\tENGINE InnoDB",
 		},
 		{
 			"create table a (v varchar(32)) engine=InnoDB",
@@ -110,31 +110,31 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"alter table a comment='a b c'",
-			"ALTER TABLE `a` COMMENT 'a b c'",
+			"ALTER TABLE `a`\n\tCOMMENT 'a b c'",
 		},
 		{
 			"alter table a add column c char not null default 'x'",
-			"ALTER TABLE `a` ADD COLUMN `c` char NOT NULL DEFAULT 'x'",
+			"ALTER TABLE `a`\n\tADD COLUMN `c` char NOT NULL DEFAULT 'x'",
 		},
 		{
 			"alter table t2 modify column id bigint unsigned primary key",
-			"ALTER TABLE `t2` MODIFY COLUMN `id` bigint unsigned PRIMARY KEY",
+			"ALTER TABLE `t2`\n\tMODIFY COLUMN `id` bigint unsigned PRIMARY KEY",
 		},
 		{
 			"alter table t1 modify column a int first, modify column b int after a",
-			"ALTER TABLE `t1` MODIFY COLUMN `a` int FIRST, MODIFY COLUMN `b` int AFTER `a`",
+			"ALTER TABLE `t1`\n\tMODIFY COLUMN `a` int FIRST,\n\tMODIFY COLUMN `b` int AFTER `a`",
 		},
 		{
 			"alter table t1 drop key `PRIMARY`, add primary key (id,n)",
-			"ALTER TABLE `t1` DROP KEY `PRIMARY`, ADD PRIMARY KEY (`id`, `n`)",
+			"ALTER TABLE `t1`\n\tDROP KEY `PRIMARY`,\n\tADD PRIMARY KEY (`id`, `n`)",
 		},
 		{
 			"alter table t1 drop foreign key f",
-			"ALTER TABLE `t1` DROP FOREIGN KEY `f`",
+			"ALTER TABLE `t1`\n\tDROP FOREIGN KEY `f`",
 		},
 		{
 			"alter table t1 add constraint f foreign key (i) references parent (id) match simple on delete cascade on update set null",
-			"ALTER TABLE `t1` ADD CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) MATCH SIMPLE ON DELETE CASCADE ON UPDATE SET NULL",
+			"ALTER TABLE `t1`\n\tADD CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) MATCH SIMPLE ON DELETE CASCADE ON UPDATE SET NULL",
 		},
 		{
 			"alter table t1 remove partitioning",
@@ -150,7 +150,7 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"alter table t1 row_format=compressed, character set=utf8",
-			"ALTER TABLE `t1` ROW_FORMAT COMPRESSED, CHARSET utf8",
+			"ALTER TABLE `t1`\n\tROW_FORMAT COMPRESSED,\n\tCHARSET utf8",
 		},
 		{
 			"create table a (id int primary key) row_format=compressed, character set=utf8mb4 collate=utf8mb4_0900_ai_ci",

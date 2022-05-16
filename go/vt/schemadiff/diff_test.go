@@ -46,8 +46,8 @@ func TestDiffTables(t *testing.T) {
 			name:     "change of columns",
 			from:     "create table t(id int primary key)",
 			to:       "create table t(id int primary key, i int)",
-			diff:     "alter table t add column i int",
-			cdiff:    "ALTER TABLE `t` ADD COLUMN `i` int",
+			diff:     "alter table t\n\tadd column i int",
+			cdiff:    "ALTER TABLE `t`\n\tADD COLUMN `i` int",
 			action:   "alter",
 			fromName: "t",
 			toName:   "t",
@@ -301,10 +301,10 @@ func TestDiffSchemas(t *testing.T) {
 			from: "create table t(id int primary key, v varchar(10))",
 			to:   "create table t(id int primary key, v varchar(20))",
 			diffs: []string{
-				"alter table t modify column v varchar(20)",
+				"alter table t\n\tmodify column v varchar(20)",
 			},
 			cdiffs: []string{
-				"ALTER TABLE `t` MODIFY COLUMN `v` varchar(20)",
+				"ALTER TABLE `t`\n\tMODIFY COLUMN `v` varchar(20)",
 			},
 		},
 		{
@@ -312,10 +312,10 @@ func TestDiffSchemas(t *testing.T) {
 			from: "create table t(id int primary key)",
 			to:   "create table t(id int primary key, i int)",
 			diffs: []string{
-				"alter table t add column i int",
+				"alter table t\n\tadd column i int",
 			},
 			cdiffs: []string{
-				"ALTER TABLE `t` ADD COLUMN `i` int",
+				"ALTER TABLE `t`\n\tADD COLUMN `i` int",
 			},
 		},
 		{
@@ -323,10 +323,10 @@ func TestDiffSchemas(t *testing.T) {
 			from: "create table identifiers (id binary(16) NOT NULL DEFAULT (uuid_to_bin(uuid(),true)))",
 			to:   "create table identifiers (company_id mediumint unsigned NOT NULL, id binary(16) NOT NULL DEFAULT (uuid_to_bin(uuid(),true)))",
 			diffs: []string{
-				"alter table identifiers add column company_id mediumint unsigned not null first",
+				"alter table identifiers\n\tadd column company_id mediumint unsigned not null first",
 			},
 			cdiffs: []string{
-				"ALTER TABLE `identifiers` ADD COLUMN `company_id` mediumint unsigned NOT NULL FIRST",
+				"ALTER TABLE `identifiers`\n\tADD COLUMN `company_id` mediumint unsigned NOT NULL FIRST",
 			},
 		},
 		{
@@ -334,10 +334,10 @@ func TestDiffSchemas(t *testing.T) {
 			from: "create table t1 (id mediumint unsigned NOT NULL, deleted_at timestamp, primary key (id), unique key deleted_check (id, (if((deleted_at is null),0,NULL))))",
 			to:   "create table t1 (id mediumint unsigned NOT NULL, deleted_at timestamp, primary key (id), unique key deleted_check (id, (if((deleted_at is not null),0,NULL))))",
 			diffs: []string{
-				"alter table t1 drop key deleted_check, add unique key deleted_check (id, (if(deleted_at is not null, 0, null)))",
+				"alter table t1\n\tdrop key deleted_check,\n\tadd unique key deleted_check (id, (if(deleted_at is not null, 0, null)))",
 			},
 			cdiffs: []string{
-				"ALTER TABLE `t1` DROP KEY `deleted_check`, ADD UNIQUE KEY `deleted_check` (`id`, (if(`deleted_at` IS NOT NULL, 0, NULL)))",
+				"ALTER TABLE `t1`\n\tDROP KEY `deleted_check`,\n\tADD UNIQUE KEY `deleted_check` (`id`, (if(`deleted_at` IS NOT NULL, 0, NULL)))",
 			},
 		},
 		{
@@ -345,10 +345,10 @@ func TestDiffSchemas(t *testing.T) {
 			from: "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `Check1` CHECK ((`test` >= 0)))",
 			to:   "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `RenamedCheck1` CHECK ((`test` >= 0)))",
 			diffs: []string{
-				"alter table t drop check Check1, add constraint RenamedCheck1 check (test >= 0)",
+				"alter table t\n\tdrop check Check1,\n\tadd constraint RenamedCheck1 check (test >= 0)",
 			},
 			cdiffs: []string{
-				"ALTER TABLE `t` DROP CHECK `Check1`, ADD CONSTRAINT `RenamedCheck1` CHECK (`test` >= 0)",
+				"ALTER TABLE `t`\n\tDROP CHECK `Check1`,\n\tADD CONSTRAINT `RenamedCheck1` CHECK (`test` >= 0)",
 			},
 		},
 		{
@@ -356,10 +356,10 @@ func TestDiffSchemas(t *testing.T) {
 			from: "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `Check1` CHECK ((`test` >= 0)))",
 			to:   "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `Check1` CHECK ((`test` >= 0)) NOT ENFORCED)",
 			diffs: []string{
-				"alter table t alter check Check1 not enforced",
+				"alter table t\n\talter check Check1 not enforced",
 			},
 			cdiffs: []string{
-				"ALTER TABLE `t` ALTER CHECK `Check1` NOT ENFORCED",
+				"ALTER TABLE `t`\n\tALTER CHECK `Check1` NOT ENFORCED",
 			},
 		},
 		{
@@ -367,10 +367,10 @@ func TestDiffSchemas(t *testing.T) {
 			from: "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `Check1` CHECK ((`test` >= 0)) NOT ENFORCED)",
 			to:   "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `Check1` CHECK ((`test` >= 0)))",
 			diffs: []string{
-				"alter table t alter check Check1 enforced",
+				"alter table t\n\talter check Check1 enforced",
 			},
 			cdiffs: []string{
-				"ALTER TABLE `t` ALTER CHECK `Check1` ENFORCED",
+				"ALTER TABLE `t`\n\tALTER CHECK `Check1` ENFORCED",
 			},
 		},
 		{
@@ -378,10 +378,10 @@ func TestDiffSchemas(t *testing.T) {
 			from: "create table t(id int primary key, i int)",
 			to:   "create table t(id int primary key)",
 			diffs: []string{
-				"alter table t drop column i",
+				"alter table t\n\tdrop column i",
 			},
 			cdiffs: []string{
-				"ALTER TABLE `t` DROP COLUMN `i`",
+				"ALTER TABLE `t`\n\tDROP COLUMN `i`",
 			},
 		},
 		{
@@ -421,12 +421,12 @@ func TestDiffSchemas(t *testing.T) {
 			to:   "create table t4(id int primary key); create table t2(id bigint primary key); create table t3(id int primary key)",
 			diffs: []string{
 				"drop table t1",
-				"alter table t2 modify column id bigint primary key",
+				"alter table t2\n\tmodify column id bigint primary key",
 				"create table t4 (\n\tid int primary key\n)",
 			},
 			cdiffs: []string{
 				"DROP TABLE `t1`",
-				"ALTER TABLE `t2` MODIFY COLUMN `id` bigint PRIMARY KEY",
+				"ALTER TABLE `t2`\n\tMODIFY COLUMN `id` bigint PRIMARY KEY",
 				"CREATE TABLE `t4` (\n\t`id` int PRIMARY KEY\n)",
 			},
 		},
@@ -513,7 +513,7 @@ func TestDiffSchemas(t *testing.T) {
 			diffs: []string{
 				"drop table t1",
 				"drop view v1",
-				"alter table t2 modify column id bigint primary key",
+				"alter table t2\n\tmodify column id bigint primary key",
 				"create table t4 (\n\tid int primary key\n)",
 				"alter view v2 as select id from t2",
 				"create view v0 as select * from v2, t2",
@@ -521,7 +521,7 @@ func TestDiffSchemas(t *testing.T) {
 			cdiffs: []string{
 				"DROP TABLE `t1`",
 				"DROP VIEW `v1`",
-				"ALTER TABLE `t2` MODIFY COLUMN `id` bigint PRIMARY KEY",
+				"ALTER TABLE `t2`\n\tMODIFY COLUMN `id` bigint PRIMARY KEY",
 				"CREATE TABLE `t4` (\n\t`id` int PRIMARY KEY\n)",
 				"ALTER VIEW `v2` AS SELECT `id` FROM `t2`",
 				"CREATE VIEW `v0` AS SELECT * FROM `v2`, `t2`",
