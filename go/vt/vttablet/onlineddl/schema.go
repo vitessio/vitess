@@ -522,7 +522,7 @@ const (
 			AND TABLES.TABLE_NAME=%a
 			AND AUTO_INCREMENT IS NOT NULL
 		`
-	sqlAlterTableAutoIncrement      = "ALTER TABLE `%a` AUTO_INCREMENT=%a"
+	sqlAlterTableAutoIncrement      = "ALTER TABLE `%s` AUTO_INCREMENT=%a"
 	sqlAlterTableExchangePartition  = "ALTER TABLE `%a` EXCHANGE PARTITION `%a` WITH TABLE `%a`"
 	sqlAlterTableRemovePartitioning = "ALTER TABLE `%a` REMOVE PARTITIONING"
 	sqlAlterTableDropPartition      = "ALTER TABLE `%a` DROP PARTITION `%a`"
