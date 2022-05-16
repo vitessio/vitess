@@ -227,7 +227,6 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                 <div className="border border-danger rounded-lg">
                     {primary && (
                         <div>
-                            <div className="border-red-400 border-b w-full" />
                             <DangerAction
                                 confirmationValue={alias}
                                 title="Set Read-Only"
