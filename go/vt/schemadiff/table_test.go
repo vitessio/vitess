@@ -991,7 +991,7 @@ func TestValidate(t *testing.T) {
 			name:      "unique key does not all partitioned columns",
 			from:      "create table t (id int, i int, primary key (id, i)) partition by hash (i) partitions 4",
 			alter:     "alter table t add unique key id_idx(id)",
-			expectErr: ErrMissingParitionColumnInUniqueKey,
+			expectErr: ErrMissingPartitionColumnInUniqueKey,
 		},
 		{
 			name:      "add multiple keys, multi columns, missing column",

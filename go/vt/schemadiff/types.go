@@ -53,9 +53,9 @@ var (
 	ErrApplyDuplicatePartition   = errors.New("duplicate partition")
 	ErrApplyNoPartitions         = errors.New("no partitions found")
 
-	ErrInvalidColumnInKey               = errors.New("invalid column referenced by key")
-	ErrInvalidColumnInPartition         = errors.New("invalid column referenced by partition")
-	ErrMissingParitionColumnInUniqueKey = errors.New("unique key must include all columns in a parititioning function")
+	ErrInvalidColumnInKey                = errors.New("invalid column referenced by key")
+	ErrInvalidColumnInPartition          = errors.New("invalid column referenced by partition")
+	ErrMissingPartitionColumnInUniqueKey = errors.New("unique key must include all columns in a parititioning function")
 )
 
 // Entity stands for a database object we can diff:

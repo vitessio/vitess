@@ -1707,7 +1707,7 @@ func (c *CreateTableEntity) validate() error {
 					}
 				}
 				if !colFound {
-					return errors.Wrapf(ErrMissingParitionColumnInUniqueKey, "column: %v not found in key: %v", partitionColName, key.Info.Name.String())
+					return errors.Wrapf(ErrMissingPartitionColumnInUniqueKey, "column: %v not found in key: %v", partitionColName, key.Info.Name.String())
 				}
 			}
 		}
