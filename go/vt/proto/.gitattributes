@@ -1,0 +1,2 @@
+.gitattributes
+*/*.pb.go -diff
