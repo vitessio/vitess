@@ -47,6 +47,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		isPostponeCompletion bool
 		isAllowConcurrent    bool
 		fastOverRevertible   bool
+		fastRangeRotation    bool
 		runtimeOptions       string
 		err                  error
 	}{
@@ -129,6 +130,13 @@ func TestParseDDLStrategy(t *testing.T) {
 			runtimeOptions:     "",
 			fastOverRevertible: true,
 		},
+		{
+			strategyVariable:  "vitess --fast-range-rotation",
+			strategy:          DDLStrategyVitess,
+			options:           "--fast-range-rotation",
+			runtimeOptions:    "",
+			fastRangeRotation: true,
+		},
 	}
 	for _, ts := range tt {
 		setting, err := ParseDDLStrategy(ts.strategyVariable)
@@ -140,6 +148,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		assert.Equal(t, ts.isPostponeCompletion, setting.IsPostponeCompletion())
 		assert.Equal(t, ts.isAllowConcurrent, setting.IsAllowConcurrent())
 		assert.Equal(t, ts.fastOverRevertible, setting.IsFastOverRevertibleFlag())
+		assert.Equal(t, ts.fastRangeRotation, setting.IsFastRangeRotationFlag())
 
 		runtimeOptions := strings.Join(setting.RuntimeOptions(), " ")
 		assert.Equal(t, ts.runtimeOptions, runtimeOptions)
