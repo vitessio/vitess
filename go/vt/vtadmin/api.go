@@ -1574,6 +1574,10 @@ func (api *API) ReloadSchemas(ctx context.Context, req *vtadminpb.ReloadSchemasR
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaResource, rbac.ReloadAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {

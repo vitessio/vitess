@@ -68,6 +68,7 @@ const (
 	GetAction    Action = "get"
 	PingAction   Action = "ping"
 	PutAction    Action = "put"
+	ReloadAction Action = "reload"
 )
 
 // Resource is an enum representing all resources managed by vtadmin.
