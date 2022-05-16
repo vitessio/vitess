@@ -104,7 +104,7 @@ func (e *Executor) analyzeDropRangePartition(alterTable *sqlparser.AlterTable, c
 	partitionName := spec.Names[0].String()
 	// OK then!
 
-	// Now, is this query dropping the first parititon in a RANGE partitioned table?
+	// Now, is this query dropping the first partition in a RANGE partitioned table?
 	part := createTable.TableSpec.PartitionOption
 	if part.Type != sqlparser.RangeType {
 		return nil, nil
@@ -191,7 +191,7 @@ func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schem
 
 	// special plans which support reverts are trivially desired:
 	// special plans which do not support reverts are flag protected:
-	if onlineDDL.StrategySetting().IsFastOverRevertibleFlag() {
+	if onlineDDL.StrategySetting().IsFastRangeRotationFlag() {
 		op, err := e.analyzeDropRangePartition(alterTable, createTable)
 		if err != nil {
 			return nil, err
