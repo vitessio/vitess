@@ -25,7 +25,6 @@ type Mutation = UseMutationResult & {
 };
 
 export interface DangerActionProps {
-    confirmationPrompt?: React.ReactNode;
     confirmationValue: string;
     description: React.ReactNode;
     documentationLink: string;
@@ -37,7 +36,6 @@ export interface DangerActionProps {
 }
 
 const DangerAction: React.FC<DangerActionProps> = ({
-    confirmationPrompt,
     confirmationValue,
     title,
     description,
@@ -76,11 +74,7 @@ const DangerAction: React.FC<DangerActionProps> = ({
             )}
 
             <p className="text-base">
-                {confirmationPrompt || (
-                    <>
-                        Please type <span className="font-bold">{confirmationValue}</span> to complete this action:
-                    </>
-                )}
+                Please type <span className="font-bold">{confirmationValue}</span> confirm.
             </p>
             <div className="w-1/3">
                 <TextInput value={typedAlias} onChange={(e) => setTypedAlias(e.target.value)} />

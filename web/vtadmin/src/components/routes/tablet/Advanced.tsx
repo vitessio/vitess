@@ -239,12 +239,6 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                                         Set tablet <span className="font-bold">{alias}</span> to read-only.
                                     </>
                                 }
-                                confirmationPrompt={
-                                    <>
-                                        Please type <span className="font-semibold font-mono">{alias}</span> to set the
-                                        tablet to read-only:
-                                    </>
-                                }
                                 mutation={setReadOnlyMutation as UseMutationResult}
                                 loadingText="Setting..."
                                 loadedText="Set to read-only"
@@ -260,12 +254,6 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                                 description={
                                     <>
                                         Set tablet <span className="font-bold">{alias}</span> to read-write.
-                                    </>
-                                }
-                                confirmationPrompt={
-                                    <>
-                                        Please type <span className="font-semibold font-mono">{alias}</span> to set the
-                                        tablet to read-write:
                                     </>
                                 }
                                 mutation={setReadWriteMutation as UseMutationResult}
@@ -292,12 +280,6 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                             <>
                                 Delete tablet <span className="font-bold">{alias}</span>. Doing so will remove it from
                                 the topology, but vttablet and MySQL won't be touched.
-                            </>
-                        }
-                        confirmationPrompt={
-                            <>
-                                Please type <span className="font-semibold font-mono">{alias}</span> to delete the
-                                tablet.
                             </>
                         }
                         mutation={deleteTabletMutation as UseMutationResult}
