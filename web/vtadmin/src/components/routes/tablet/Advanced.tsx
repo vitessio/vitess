@@ -232,7 +232,7 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                                 title="Set Read-Only"
                                 documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadonly"
                                 warnings={[
-                                    <>This will disable writing on the primary tablet {alias}. Use with caution.</>,
+                                    `This will disable writing on the primary tablet ${alias}. Use with caution.`,
                                 ]}
                                 description={
                                     <>
@@ -249,7 +249,7 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                                 title="Set Read-Write"
                                 documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadwrite"
                                 warnings={[
-                                    <>This will re-enable writing on the primary tablet {alias}. Use with caution.</>,
+                                    `This will re-enable writing on the primary tablet ${alias}. Use with caution.`,
                                 ]}
                                 description={
                                     <>
