@@ -122,13 +122,15 @@ export const CreateKeyspace = () => {
 
                     <details>
                         <summary className="font-semibold cursor-pointer">Advanced options</summary>
-                        <Label className="block my-8" label="Sharding Column Name">
-                            <TextInput
-                                onChange={(e) => setFormData({ ...formData, shardingColumnName: e.target.value })}
-                                value={formData.shardingColumnName || ''}
-                            />
-                        </Label>
-                        <span className="text-sm">The name of the column to use for sharding operations.</span>
+                        <div className="my-8">
+                            <Label className="block" label="Sharding Column Name">
+                                <TextInput
+                                    onChange={(e) => setFormData({ ...formData, shardingColumnName: e.target.value })}
+                                    value={formData.shardingColumnName || ''}
+                                />
+                            </Label>
+                            <span className="text-sm">The name of the column to use for sharding operations.</span>
+                        </div>
                     </details>
 
                     {mutation.isError && !mutation.isLoading && (
