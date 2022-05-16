@@ -1757,6 +1757,11 @@ func (c *Cluster) reloadKeyspaceSchemas(ctx context.Context, req *vtadminpb.Relo
 			return nil, err
 		}
 
+		// The request specified no keyspace names, so default to all of them.
+		if len(req.Keyspaces) == 0 {
+			return resp.Keyspaces, nil
+		}
+
 		keyspaceNames := sets.NewString(req.Keyspaces...)
 
 		for _, ks := range resp.Keyspaces {
