@@ -285,6 +285,7 @@ message DeleteShardsRequest {
 message DeleteTabletRequest {
     topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
+    bool allow_primary = 3;
 }
 
 message DeleteTabletResponse {

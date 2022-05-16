@@ -133,7 +133,7 @@ export const Tablet = () => {
 
                     {!isReadOnlyMode() && (
                         <Route path={`${path}/advanced`}>
-                            <Advanced tablet={tablet} />
+                            <Advanced alias={alias} clusterID={clusterID} tablet={tablet} />
                         </Route>
                     )}
 

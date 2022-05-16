@@ -1291,6 +1291,16 @@ func (m *DeleteTabletRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.AllowPrimary {
+		i--
+		if m.AllowPrimary {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x18
+	}
 	if len(m.ClusterIds) > 0 {
 		for iNdEx := len(m.ClusterIds) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.ClusterIds[iNdEx])
@@ -4563,6 +4573,9 @@ func (m *DeleteTabletRequest) SizeVT() (n int) {
 			l = len(s)
 			n += 1 + l + sov(uint64(l))
 		}
+	}
+	if m.AllowPrimary {
+		n += 2
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -9162,6 +9175,26 @@ func (m *DeleteTabletRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.ClusterIds = append(m.ClusterIds, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AllowPrimary", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.AllowPrimary = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
