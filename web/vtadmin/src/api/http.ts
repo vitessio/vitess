@@ -194,6 +194,23 @@ export const fetchKeyspaces = async () =>
         },
     });
 
+export interface CreateKeyspaceParams {
+    clusterID: string;
+    options: vtctldata.ICreateKeyspaceRequest;
+}
+
+export const createKeyspace = async (params: CreateKeyspaceParams) => {
+    const { result } = await vtfetch(`/api/keyspace/${params.clusterID}`, {
+        body: JSON.stringify(params.options),
+        method: 'post',
+    });
+
+    const err = pb.CreateKeyspaceResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.CreateKeyspaceResponse.create(result);
+};
+
 export const fetchSchemas = async () =>
     vtfetchEntities({
         endpoint: '/api/schemas',
