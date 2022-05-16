@@ -32,6 +32,7 @@ import { KeyspaceLink } from '../links/KeyspaceLink';
 import KeyspaceActions from './keyspaces/KeyspaceActions';
 import { ReadOnlyGate } from '../ReadOnlyGate';
 import { isReadOnlyMode } from '../../util/env';
+import { Link } from 'react-router-dom';
 
 export const Keyspaces = () => {
     useDocumentTitle('Keyspaces');
@@ -88,7 +89,16 @@ export const Keyspaces = () => {
     return (
         <div>
             <WorkspaceHeader>
-                <WorkspaceTitle>Keyspaces</WorkspaceTitle>
+                <div className="flex items-top justify-between max-w-screen-md">
+                    <WorkspaceTitle>Keyspaces</WorkspaceTitle>
+                    <ReadOnlyGate>
+                        <div>
+                            <Link className="btn btn-secondary btn-md" to="/keyspaces/create">
+                                Create a Keyspace
+                            </Link>
+                        </div>
+                    </ReadOnlyGate>
+                </div>
             </WorkspaceHeader>
             <ContentContainer>
                 <DataFilter
