@@ -86,11 +86,10 @@ describe('DangerAction', () => {
         const input = screen.getByRole('textbox');
 
         // Enter the confirmation text
-        expect(button).toHaveAttribute('disabled');
-        await userEvent.type(input, 'zone1-101');
+        await user.type(input, 'zone1-101');
         expect(button).not.toHaveAttribute('disabled');
 
-        await userEvent.click(button);
+        await user.click(button);
 
         // Validate form while API request is in flight
         expect(button).toHaveTextContent('Doing Action...');
@@ -100,5 +99,38 @@ describe('DangerAction', () => {
 
         // Wait for API request to complete
         await waitFor(() => expect(button).toHaveTextContent('Do Action'));
+    });
+
+    it('enables form submission if and only if input matches confirmation', async () => {
+        render(
+            <QueryClientProvider client={queryClient}>
+                <Wrapper
+                    confirmationValue="zone1-101"
+                    description={<>Hello world!</>}
+                    documentationLink="https://test.com"
+                    loadedText="Do Action"
+                    loadingText="Doing Action..."
+                    title="A Title"
+                />
+            </QueryClientProvider>
+        );
+
+        const user = userEvent.setup();
+
+        const button = screen.getByRole('button');
+        const input = screen.getByRole('textbox');
+
+        expect(button).toHaveAttribute('disabled');
+
+        const invalidInputs = [' ', 'zone-100', 'zone1'];
+        for (let i = 0; i < invalidInputs.length; i++) {
+            await user.clear(input);
+            await user.type(input, invalidInputs[i]);
+            expect(button).toHaveAttribute('disabled');
+        }
+
+        await user.clear(input);
+        await user.type(input, 'zone1-101');
+        expect(button).not.toHaveAttribute('disabled');
     });
 });
