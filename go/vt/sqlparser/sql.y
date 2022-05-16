@@ -217,7 +217,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> NEXT VALUE SHARE MODE
 %token <str> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
 %left <str> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
-%left <str> ON USING INPLACE COPY ALGORITHM NONE SHARED EXCLUSIVE
+%left <str> ON USING INPLACE COPY INSTANT ALGORITHM NONE SHARED EXCLUSIVE
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
 %token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
@@ -2789,9 +2789,27 @@ alter_option:
   {
 	$$ = &AlterColumn{Column: $3, DropDefault:false, DefaultVal:$7}
   }
+| ALTER column_opt column_name SET VISIBLE
+  {
+    val := false
+    $$ = &AlterColumn{Column: $3, Invisible:&val}
+  }
+| ALTER column_opt column_name SET INVISIBLE
+  {
+    val := true
+    $$ = &AlterColumn{Column: $3, Invisible:&val}
+  }
 | ALTER CHECK id_or_var enforced
   {
     $$ = &AlterCheck{Name: $3, Enforced: $4}
+  }
+| ALTER INDEX id_or_var VISIBLE
+  {
+    $$ = &AlterIndex{Name: $3, Invisible: false}
+  }
+| ALTER INDEX id_or_var INVISIBLE
+  {
+    $$ = &AlterIndex{Name: $3, Invisible: true}
   }
 | CHANGE column_opt column_name column_definition first_opt after_opt
   {
@@ -2878,6 +2896,10 @@ alter_commands_modifier:
       $$ = AlgorithmValue(string($3))
     }
   | ALGORITHM equal_opt COPY
+    {
+      $$ = AlgorithmValue(string($3))
+    }
+  | ALGORITHM equal_opt INSTANT
     {
       $$ = AlgorithmValue(string($3))
     }
@@ -5989,6 +6011,10 @@ algorithm_index:
   {
     $$ = AlgorithmValue($3)
   }
+| ALGORITHM equal_opt INSTANT
+  {
+    $$ = AlgorithmValue($3)
+  }
 
 algorithm_view:
   {
@@ -6783,6 +6809,7 @@ non_reserved_keyword:
 | INACTIVE
 | INPLACE
 | INSERT_METHOD
+| INSTANT
 | INT
 | INTEGER
 | INVISIBLE

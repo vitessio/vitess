@@ -1916,11 +1916,28 @@ func (node AlgorithmValue) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *AlterColumn) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "alter column %v", node.Column)
 	if node.DropDefault {
-		buf.astPrintf(node, "alter column %v drop default", node.Column)
+		buf.astPrintf(node, " drop default")
+	} else if node.DefaultVal != nil {
+		buf.astPrintf(node, " set default %v", node.DefaultVal)
+	}
+	if node.Invisible != nil {
+		if *node.Invisible {
+			buf.astPrintf(node, " set invisible")
+		} else {
+			buf.astPrintf(node, " set visible")
+		}
+	}
+}
+
+// Format formats the node
+func (node *AlterIndex) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "alter index %v", node.Name)
+	if node.Invisible {
+		buf.astPrintf(node, " invisible")
 	} else {
-		buf.astPrintf(node, "alter column %v set default", node.Column)
-		buf.astPrintf(node, " %v", node.DefaultVal)
+		buf.astPrintf(node, " visible")
 	}
 }
 

@@ -128,11 +128,12 @@ type (
 	// AlgorithmValue is the algorithm specified in the alter table command
 	AlgorithmValue string
 
-	// AlterColumn is used to add or drop defaults to columns in alter table command
+	// AlterColumn is used to add or drop defaults & visibility to columns in alter table command
 	AlterColumn struct {
 		Column      *ColName
 		DropDefault bool
 		DefaultVal  Expr
+		Invisible   *bool
 	}
 
 	// With contains the lists of common table expression and specifies if it is recursive or not
@@ -172,6 +173,12 @@ type (
 	AlterCheck struct {
 		Name     ColIdent
 		Enforced bool
+	}
+
+	// AlterIndex represents the `ALTER INDEX` part in an `ALTER TABLE ALTER INDEX` command.
+	AlterIndex struct {
+		Name      ColIdent
+		Invisible bool
 	}
 
 	// KeyState is used to disable or enable the keys in an alter table statement
@@ -733,6 +740,7 @@ func (*AddColumns) iAlterOption()              {}
 func (AlgorithmValue) iAlterOption()           {}
 func (*AlterColumn) iAlterOption()             {}
 func (*AlterCheck) iAlterOption()              {}
+func (*AlterIndex) iAlterOption()              {}
 func (*ChangeColumn) iAlterOption()            {}
 func (*ModifyColumn) iAlterOption()            {}
 func (*AlterCharset) iAlterOption()            {}
