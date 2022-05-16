@@ -9,7 +9,6 @@
   "dependencies": {
     "@bugsnag/js": "^7.10.1",
     "@headlessui/react": "^1.4.2",
-    "@testing-library/user-event": "^12.6.0",
     "@types/classnames": "^2.2.11",
     "@types/jest": "^26.0.19",
     "@types/node": "^12.19.9",
@@ -82,6 +81,7 @@
     "@testing-library/jest-dom": "^5.11.9",
     "@testing-library/react": "^11.2.5",
     "@testing-library/react-hooks": "^5.0.3",
+    "@testing-library/user-event": "^14.2.0",
     "@types/lodash-es": "^4.17.4",
     "autoprefixer": "^10.4.2",
     "msw": "^0.36.8",
