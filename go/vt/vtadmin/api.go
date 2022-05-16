@@ -90,11 +90,6 @@ type Options struct {
 
 // NewAPI returns a new API, configured to service the given set of clusters,
 // and configured with the given options.
-//
-// If opts.GRPCOpts.Services is nil, NewAPI will automatically add
-// "vtadmin.VTAdminServer" to the list of services queryable in the healthcheck
-// service. Callers can opt-out of this behavior by explicitly setting this
-// value to the empty slice.
 func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	clusterMap := make(map[string]*cluster.Cluster, len(clusters))
 	for _, cluster := range clusters {
