@@ -81,6 +81,10 @@ type VtctldClient struct {
 		Response *vtctldatapb.ReloadSchemaKeyspaceResponse
 		Error    error
 	}
+	ReloadSchemaResults map[string]struct {
+		Response *vtctldatapb.ReloadSchemaResponse
+		Error    error
+	}
 	ReloadSchemaShardResults map[string]struct {
 		Response *vtctldatapb.ReloadSchemaShardResponse
 		Error    error
@@ -244,6 +248,20 @@ func (fake *VtctldClient) ShardReplicationPositions(ctx context.Context, req *vt
 
 	key := fmt.Sprintf("%s/%s", req.Keyspace, req.Shard)
 	if result, ok := fake.ShardReplicationPositionsResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// ReloadSchema is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ReloadSchema(ctx context.Context, req *vtctldatapb.ReloadSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ReloadSchemaResponse, error) {
+	if fake.ReloadSchemaResults == nil {
+		return nil, fmt.Errorf("%w: ReloadSchemaResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(req.TabletAlias)
+	if result, ok := fake.ReloadSchemaResults[key]; ok {
 		return result.Response, result.Error
 	}
 

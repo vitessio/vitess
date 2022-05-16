@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"sort"
 	"testing"
@@ -29,7 +30,12 @@ import (
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vitessdriver"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
+	"vitess.io/vitess/go/vt/vtadmin/vtsql"
+	"vitess.io/vitess/go/vt/vtadmin/vtsql/fakevtsql"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
@@ -789,6 +795,202 @@ func Test_reloadShardSchemas(t *testing.T) {
 			})
 			sort.Slice(results, func(i, j int) bool {
 				return keyFn(results[i].Shard) < keyFn(results[j].Shard)
+			})
+			utils.MustMatch(t, tt.expected, results)
+		})
+	}
+}
+
+func Test_reloadTabletSchemas(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		cluster   *Cluster
+		tablets   []*vtadminpb.Tablet
+		dbErr     bool
+		req       *vtadminpb.ReloadSchemasRequest
+		expected  []*vtadminpb.ReloadSchemasResponse_TabletResult
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			cluster: &Cluster{
+				ID:   "test",
+				Name: "test",
+				Vtctld: &fakevtctldclient.VtctldClient{
+					ReloadSchemaResults: map[string]struct {
+						Response *vtctldatapb.ReloadSchemaResponse
+						Error    error
+					}{
+						"zone1-0000000100": {
+							Response: &vtctldatapb.ReloadSchemaResponse{},
+						},
+						"zone1-0000000101": {
+							Response: &vtctldatapb.ReloadSchemaResponse{},
+						},
+						"zone2-0000000200": {
+							Response: &vtctldatapb.ReloadSchemaResponse{},
+						},
+						"zone5-0000000500": {
+							Error: assert.AnError,
+						},
+					},
+				},
+			},
+			tablets: []*vtadminpb.Tablet{
+				{
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				{
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				{
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone2",
+							Uid:  200,
+						},
+					},
+				},
+				{
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone5",
+							Uid:  500,
+						},
+					},
+				},
+			},
+			req: &vtadminpb.ReloadSchemasRequest{
+				Tablets: []*topodatapb.TabletAlias{
+					{Cell: "zone1", Uid: 100},
+					{Cell: "zone1", Uid: 101},
+					{Cell: "zone2", Uid: 200},
+					{Cell: "zone5", Uid: 500},
+				},
+			},
+			expected: []*vtadminpb.ReloadSchemasResponse_TabletResult{
+				{
+					Tablet: &vtadminpb.Tablet{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "test",
+							Name: "test",
+						},
+						Tablet: &topodatapb.Tablet{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "zone1",
+								Uid:  100,
+							},
+						},
+					},
+					Result: "ok",
+				},
+				{
+					Tablet: &vtadminpb.Tablet{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "test",
+							Name: "test",
+						},
+						Tablet: &topodatapb.Tablet{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "zone1",
+								Uid:  101,
+							},
+						},
+					},
+					Result: "ok",
+				},
+				{
+					Tablet: &vtadminpb.Tablet{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "test",
+							Name: "test",
+						},
+						Tablet: &topodatapb.Tablet{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "zone2",
+								Uid:  200,
+							},
+						},
+					},
+					Result: "ok",
+				},
+				{
+					Tablet: &vtadminpb.Tablet{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "test",
+							Name: "test",
+						},
+						Tablet: &topodatapb.Tablet{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "zone5",
+								Uid:  500,
+							},
+						},
+					},
+					Result: assert.AnError.Error(),
+				},
+			},
+		},
+		{
+			name:    "FindTablets error",
+			cluster: &Cluster{},
+			dbErr:   true,
+			req: &vtadminpb.ReloadSchemasRequest{
+				Tablets: []*topodatapb.TabletAlias{
+					{Cell: "zone1", Uid: 100},
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := vtsql.WithDialFunc(func(c vitessdriver.Configuration) (*sql.DB, error) {
+				return sql.OpenDB(&fakevtsql.Connector{
+					Tablets:   tt.tablets,
+					ShouldErr: tt.dbErr,
+				}), nil
+			})(&vtsql.Config{
+				Cluster:         tt.cluster.ToProto(),
+				ResolverOptions: &resolver.Options{},
+			})
+			db, err := vtsql.New(ctx, cfg)
+			require.NoError(t, err)
+			defer db.Close()
+
+			tt.cluster.DB = db
+
+			results, err := tt.cluster.reloadTabletSchemas(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+
+			sort.Slice(tt.expected, func(i, j int) bool {
+				return topoproto.TabletAliasString(tt.expected[i].Tablet.Tablet.Alias) < topoproto.TabletAliasString(tt.expected[j].Tablet.Tablet.Alias)
+			})
+			sort.Slice(results, func(i, j int) bool {
+				return topoproto.TabletAliasString(results[i].Tablet.Tablet.Alias) < topoproto.TabletAliasString(results[j].Tablet.Tablet.Alias)
 			})
 			utils.MustMatch(t, tt.expected, results)
 		})
