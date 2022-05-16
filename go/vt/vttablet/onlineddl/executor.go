@@ -1989,6 +1989,19 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 		}
 	}
 
+	// Before we jump on to strategies... If we're reverting a migration that was executed with a special plan,
+	// then the revert needs to run with a special plan
+	if specialPlanDetails := row.AsString("special_plan", ""); specialPlanDetails != "" {
+		specialMigrationExecuted, err := e.executeSpecialRevertAlterDDLActionMigrationIfApplicable(ctx, onlineDDL, revertMigration, specialPlanDetails)
+		if err != nil {
+			return err
+		}
+		if specialMigrationExecuted {
+			// that's it! Reverted.
+			return nil
+		}
+	}
+
 	switch revertedActionStr {
 	case sqlparser.CreateStr:
 		{
@@ -2418,17 +2431,8 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 	return nil
 }
 
-// executeSpecialAlterDDLActionMigrationIfApplicable sees if the given migration can be executed via special execution path, that isn't a full blown online schema change process.
-func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context.Context, onlineDDL *schema.OnlineDDL) (specialMigrationExecuted bool, err error) {
-	// Before we jump on to strategies... Some ALTERs can be optimized without having to run through
-	// a full online schema change process. Let's find out if this is the case!
-	specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL)
-	if err != nil {
-		return false, err
-	}
-	if specialPlan == nil {
-		return false, nil
-	}
+// executeSpecialAlterDDLActionMigration executed a special plan migration
+func (e *Executor) executeSpecialAlterDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, specialPlan *SpecialAlterPlan) (specialMigrationExecuted bool, err error) {
 	switch specialPlan.operation {
 	case dropRangePartitionSpecialOperation:
 		dropPartition := func() error {
@@ -2472,17 +2476,47 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 			return false, err
 		}
 	case addRangePartitionSpecialOperation:
+		partitionDefinition := specialPlan.Detail("partition_definition")
+		parsed := sqlparser.BuildParsedQuery(sqlAlterTableAddPartition, onlineDDL.Table, partitionDefinition)
+		onlineDDL.SQL = parsed.Query
 		if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 			return false, err
 		}
 	default:
-		return false, nil
+		return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot execute special plan: %v", specialPlan.operation)
 	}
 	if err := e.updateMigrationSpecialPlan(ctx, onlineDDL.UUID, specialPlan.String()); err != nil {
 		return true, err
 	}
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 	return true, nil
+}
+
+// executeSpecialAlterDDLActionMigrationIfApplicable sees if the given migration can be executed via special execution path, that isn't a full blown online schema change process.
+func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context.Context, onlineDDL *schema.OnlineDDL) (specialMigrationExecuted bool, err error) {
+	// Before we jump on to strategies... Some ALTERs can be optimized without having to run through
+	// a full online schema change process. Let's find out if this is the case!
+	specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL)
+	if err != nil {
+		return false, err
+	}
+	if specialPlan == nil {
+		return false, nil
+	}
+	return e.executeSpecialAlterDDLActionMigration(ctx, onlineDDL, specialPlan)
+}
+
+// executeSpecialRevertAlterDDLActionMigrationIfApplicable sees if the given revert migration can and should be
+// executed with a special plan, and if so, proceeds to execute it.
+func (e *Executor) executeSpecialRevertAlterDDLActionMigrationIfApplicable(ctx context.Context, onlineDDL *schema.OnlineDDL, revertOnlineDDL *schema.OnlineDDL, revertPlanDetails string) (specialMigrationExecuted bool, err error) {
+	specialPlan, err := e.analyzeSpecialRevertAlterPlan(ctx, revertOnlineDDL, revertPlanDetails)
+	if err != nil {
+		return false, err
+	}
+	if specialPlan == nil {
+		return false, nil
+	}
+	return e.executeSpecialAlterDDLActionMigration(ctx, onlineDDL, specialPlan)
 }
 
 // executeAlterDDLActionMigration

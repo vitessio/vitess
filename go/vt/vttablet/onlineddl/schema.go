@@ -399,7 +399,8 @@ const (
 			stowaway_table,
 			rows_copied,
 			vitess_liveness_indicator,
-			postpone_completion
+			postpone_completion,
+			special_plan
 		FROM _vt.schema_migrations
 		WHERE
 			migration_uuid=%a
@@ -522,10 +523,11 @@ const (
 			AND TABLES.TABLE_NAME=%a
 			AND AUTO_INCREMENT IS NOT NULL
 		`
-	sqlAlterTableAutoIncrement      = "ALTER TABLE `%a` AUTO_INCREMENT=%a"
+	sqlAlterTableAutoIncrement      = "ALTER TABLE `%s` AUTO_INCREMENT=%a"
 	sqlAlterTableExchangePartition  = "ALTER TABLE `%a` EXCHANGE PARTITION `%a` WITH TABLE `%a`"
 	sqlAlterTableRemovePartitioning = "ALTER TABLE `%a` REMOVE PARTITIONING"
 	sqlAlterTableDropPartition      = "ALTER TABLE `%a` DROP PARTITION `%a`"
+	sqlAlterTableAddPartition       = "ALTER TABLE `%a` ADD PARTITION (%s)"
 	sqlStartVReplStream             = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
 	sqlStopVReplStream              = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
 	sqlDeleteVReplStream            = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"

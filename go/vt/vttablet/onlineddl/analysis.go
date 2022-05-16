@@ -190,18 +190,50 @@ func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schem
 	}
 
 	// special plans which support reverts are trivially desired:
+	op, err := e.analyzeDropRangePartition(alterTable, createTable)
+	if err != nil {
+		return nil, err
+	}
+	if op != nil {
+		return op, nil
+	}
+	if op := e.analyzeAddRangePartition(alterTable, createTable); op != nil {
+		return op, nil
+	}
 	// special plans which do not support reverts are flag protected:
 	if onlineDDL.StrategySetting().IsFastOverRevertibleFlag() {
-		op, err := e.analyzeDropRangePartition(alterTable, createTable)
-		if err != nil {
-			return nil, err
-		}
-		if op != nil {
-			return op, nil
-		}
-		if op := e.analyzeAddRangePartition(alterTable, createTable); op != nil {
-			return op, nil
-		}
 	}
 	return nil, nil
+}
+
+// analyzeSpecialRevertAlterPlan checks if the given migration can be reverted using a special plan.
+// This can happen if the migration itself was executed with a special plan.
+func (e *Executor) analyzeSpecialRevertAlterPlan(ctx context.Context, revertOnlineDDL *schema.OnlineDDL, revertPlanDetails string) (*SpecialAlterPlan, error) {
+	if revertPlanDetails == "" {
+		return nil, nil
+	}
+	var details map[string]string
+	err := json.Unmarshal([]byte(revertPlanDetails), &details)
+	if err != nil {
+		return nil, err
+	}
+	specialOperation := specialAlterOperation(details["operation"])
+	switch specialOperation {
+	case addRangePartitionSpecialOperation:
+		op := NewSpecialAlterOperation(dropRangePartitionSpecialOperation, nil, nil)
+		op.SetDetail("partition_name", details["partition_name"])
+		op.SetDetail("partition_definition", details["partition_definition"])
+		op.SetDetail("next_partition_name", "")
+		return op, nil
+	case dropRangePartitionSpecialOperation:
+		if details["next_partition_name"] != "" {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot revert this partition yet")
+		}
+		op := NewSpecialAlterOperation(addRangePartitionSpecialOperation, nil, nil)
+		op.SetDetail("partition_name", details["partition_name"])
+		op.SetDetail("partition_definition", details["partition_definition"])
+		return op, nil
+	default:
+		return nil, nil
+	}
 }
