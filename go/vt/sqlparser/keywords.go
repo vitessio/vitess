@@ -307,6 +307,7 @@ var keywords = []keyword{
 	{"insensitive", UNUSED},
 	{"insert", INSERT},
 	{"insert_method", INSERT_METHOD},
+	{"instant", INSTANT},
 	{"invisible", INVISIBLE},
 	{"int", INT},
 	{"int1", UNUSED},

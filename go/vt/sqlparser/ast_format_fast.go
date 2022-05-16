@@ -2510,16 +2510,31 @@ func (node AlgorithmValue) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node
 func (node *AlterColumn) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("alter column ")
+	node.Column.formatFast(buf)
 	if node.DropDefault {
-		buf.WriteString("alter column ")
-		node.Column.formatFast(buf)
 		buf.WriteString(" drop default")
-	} else {
-		buf.WriteString("alter column ")
-		node.Column.formatFast(buf)
-		buf.WriteString(" set default")
-		buf.WriteByte(' ')
+	} else if node.DefaultVal != nil {
+		buf.WriteString(" set default ")
 		node.DefaultVal.formatFast(buf)
+	}
+	if node.Invisible != nil {
+		if *node.Invisible {
+			buf.WriteString(" set invisible")
+		} else {
+			buf.WriteString(" set visible")
+		}
+	}
+}
+
+// formatFast formats the node
+func (node *AlterIndex) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("alter index ")
+	node.Name.formatFast(buf)
+	if node.Invisible {
+		buf.WriteString(" invisible")
+	} else {
+		buf.WriteString(" visible")
 	}
 }
 

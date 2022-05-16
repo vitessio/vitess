@@ -44,6 +44,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAlterColumn(in, f)
 	case *AlterDatabase:
 		return VisitRefOfAlterDatabase(in, f)
+	case *AlterIndex:
+		return VisitRefOfAlterIndex(in, f)
 	case *AlterMigration:
 		return VisitRefOfAlterMigration(in, f)
 	case *AlterTable:
@@ -543,6 +545,18 @@ func VisitRefOfAlterDatabase(in *AlterDatabase, f Visit) error {
 		return err
 	}
 	if err := VisitTableIdent(in.DBName, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfAlterIndex(in *AlterIndex, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
 	}
 	return nil
@@ -3183,6 +3197,8 @@ func VisitAlterOption(in AlterOption, f Visit) error {
 		return VisitRefOfAlterCheck(in, f)
 	case *AlterColumn:
 		return VisitRefOfAlterColumn(in, f)
+	case *AlterIndex:
+		return VisitRefOfAlterIndex(in, f)
 	case *ChangeColumn:
 		return VisitRefOfChangeColumn(in, f)
 	case *DropColumn:

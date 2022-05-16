@@ -1135,6 +1135,10 @@ var (
 		input:  "alter table a alter x set default NULL, alter column x2 set default 's', alter x3 drop default",
 		output: "alter table a alter column x set default null, alter column x2 set default 's', alter column x3 drop default",
 	}, {
+		input: "alter table a alter column x set visible, alter column x2 set invisible",
+	}, {
+		input: "alter table a alter index x visible, alter index x2 invisible",
+	}, {
 		input: "alter table a add spatial key foo (column1)",
 	}, {
 		input: "alter table a add fulltext key foo (column1), order by a, b, c",
@@ -1171,6 +1175,8 @@ var (
 		input: "alter table a convert to character set utf32",
 	}, {
 		input: "alter table `By` add column foo int, algorithm = default",
+	}, {
+		input: "alter table `By` add column foo int, algorithm = instant",
 	}, {
 		input: "alter table a rename b",
 	}, {

@@ -92,6 +92,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfAlterDatabase(a, b)
+	case *AlterIndex:
+		b, ok := inB.(*AlterIndex)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterIndex(a, b)
 	case *AlterMigration:
 		b, ok := inB.(*AlterMigration)
 		if !ok {
@@ -1304,7 +1310,8 @@ func EqualsRefOfAlterColumn(a, b *AlterColumn) bool {
 	}
 	return a.DropDefault == b.DropDefault &&
 		EqualsRefOfColName(a.Column, b.Column) &&
-		EqualsExpr(a.DefaultVal, b.DefaultVal)
+		EqualsExpr(a.DefaultVal, b.DefaultVal) &&
+		EqualsRefOfBool(a.Invisible, b.Invisible)
 }
 
 // EqualsRefOfAlterDatabase does deep equals between the two objects.
@@ -1319,6 +1326,18 @@ func EqualsRefOfAlterDatabase(a, b *AlterDatabase) bool {
 		a.FullyParsed == b.FullyParsed &&
 		EqualsTableIdent(a.DBName, b.DBName) &&
 		EqualsSliceOfDatabaseOption(a.AlterOptions, b.AlterOptions)
+}
+
+// EqualsRefOfAlterIndex does deep equals between the two objects.
+func EqualsRefOfAlterIndex(a, b *AlterIndex) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Invisible == b.Invisible &&
+		EqualsColIdent(a.Name, b.Name)
 }
 
 // EqualsRefOfAlterMigration does deep equals between the two objects.
@@ -3631,6 +3650,12 @@ func EqualsAlterOption(inA, inB AlterOption) bool {
 			return false
 		}
 		return EqualsRefOfAlterColumn(a, b)
+	case *AlterIndex:
+		b, ok := inB.(*AlterIndex)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterIndex(a, b)
 	case *ChangeColumn:
 		b, ok := inB.(*ChangeColumn)
 		if !ok {
@@ -5354,6 +5379,17 @@ func EqualsSliceOfRefOfColumnDefinition(a, b []*ColumnDefinition) bool {
 	return true
 }
 
+// EqualsRefOfBool does deep equals between the two objects.
+func EqualsRefOfBool(a, b *bool) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
 // EqualsSliceOfDatabaseOption does deep equals between the two objects.
 func EqualsSliceOfDatabaseOption(a, b []DatabaseOption) bool {
 	if len(a) != len(b) {
@@ -5657,17 +5693,6 @@ func EqualsRefOfRootNode(a, b *RootNode) bool {
 		return false
 	}
 	return EqualsSQLNode(a.SQLNode, b.SQLNode)
-}
-
-// EqualsRefOfBool does deep equals between the two objects.
-func EqualsRefOfBool(a, b *bool) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return *a == *b
 }
 
 // EqualsSliceOfTableExpr does deep equals between the two objects.

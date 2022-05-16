@@ -344,6 +344,20 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:  "alter table t1 add key i_idx3 (id)",
 			cdiff: "ALTER TABLE `t1` ADD KEY `i_idx3` (`id`)",
 		},
+		{
+			name:  "key made visible",
+			from:  "create table t1 (`id` int primary key, i int, key i_idx(i) invisible)",
+			to:    "create table t1 (`id` int primary key, i int, key i_idx(i))",
+			diff:  "alter table t1 alter index i_idx visible",
+			cdiff: "ALTER TABLE `t1` ALTER INDEX `i_idx` VISIBLE",
+		},
+		{
+			name:  "key made invisible",
+			from:  "create table t1 (`id` int primary key, i int, key i_idx(i))",
+			to:    "create table t1 (`id` int primary key, i int, key i_idx(i) invisible)",
+			diff:  "alter table t1 alter index i_idx invisible",
+			cdiff: "ALTER TABLE `t1` ALTER INDEX `i_idx` INVISIBLE",
+		},
 		// foreign keys
 		{
 			name:  "drop foreign key",
@@ -1040,6 +1054,42 @@ func TestValidate(t *testing.T) {
 			from:      "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p2 values less than (30))",
 			alter:     "alter table t add column i int",
 			expectErr: ErrApplyDuplicatePartition,
+		},
+		{
+			name:  "change to visible with alter column",
+			from:  "create table t (id int, i int invisible, primary key (id))",
+			alter: "alter table t alter column i set visible",
+			to:    "create table t (id int, i int, primary key (id))",
+		},
+		{
+			name:  "change to invisible with alter column",
+			from:  "create table t (id int, i int, primary key (id))",
+			alter: "alter table t alter column i set invisible",
+			to:    "create table t (id int, i int invisible, primary key (id))",
+		},
+		{
+			name:  "remove default with alter column",
+			from:  "create table t (id int, i int default 0, primary key (id))",
+			alter: "alter table t alter column i drop default",
+			to:    "create table t (id int, i int, primary key (id))",
+		},
+		{
+			name:  "change default with alter column",
+			from:  "create table t (id int, i int, primary key (id))",
+			alter: "alter table t alter column i set default 0",
+			to:    "create table t (id int, i int default 0, primary key (id))",
+		},
+		{
+			name:  "change to visible with alter index",
+			from:  "create table t (id int primary key, i int, key i_idx(i) invisible)",
+			alter: "alter table t alter index i_idx visible",
+			to:    "create table t (id int primary key, i int, key i_idx(i))",
+		},
+		{
+			name:  "change to invisible with alter index",
+			from:  "create table t (id int primary key, i int, key i_idx(i))",
+			alter: "alter table t alter index i_idx invisible",
+			to:    "create table t (id int primary key, i int, key i_idx(i) invisible)",
 		},
 	}
 	hints := DiffHints{}
