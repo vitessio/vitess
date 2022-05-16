@@ -35,6 +35,11 @@ export interface DangerActionProps {
     warnings?: React.ReactNodeArray;
 }
 
+/**
+ * DangerAction is a panel used for initiating mutations on entity pages.
+ * When rendering multiple DangerAction components, ensure they are in
+ * a surrounding <div> to ensure the first: and last: CSS selectors work.
+ */
 const DangerAction: React.FC<DangerActionProps> = ({
     confirmationValue,
     title,
@@ -48,7 +53,10 @@ const DangerAction: React.FC<DangerActionProps> = ({
     const [typedAlias, setTypedAlias] = useState('');
 
     return (
-        <div className="p-8" title={title}>
+        <div
+            className="p-9 pb-12 last:border-b border border-red-400 border-b-0 first:rounded-t-lg last:rounded-b-lg"
+            title={title}
+        >
             <div className="flex justify-between items-center">
                 <p className="text-base font-bold m-0 text-gray-900">{title}</p>
                 <a

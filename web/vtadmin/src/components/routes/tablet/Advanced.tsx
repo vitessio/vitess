@@ -224,9 +224,9 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
             </div>
             <div className="my-8">
                 <h3 className="mb-4">Danger</h3>
-                <div className="border border-danger rounded-lg">
+                <div>
                     {primary && (
-                        <div>
+                        <>
                             <DangerAction
                                 confirmationValue={alias}
                                 title="Set Read-Only"
@@ -243,7 +243,7 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                                 loadingText="Setting..."
                                 loadedText="Set to read-only"
                             />
-                            <div className="border-red-400 border-b w-full" />
+
                             <DangerAction
                                 confirmationValue={alias}
                                 title="Set Read-Write"
@@ -260,8 +260,7 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                                 loadingText="Setting..."
                                 loadedText="Set to read-write"
                             />
-                            <div className="border-red-400 border-b w-full" />
-                        </div>
+                        </>
                     )}
                     <DangerAction
                         confirmationValue={alias}
