@@ -151,7 +151,7 @@ func (setting *DDLStrategySetting) IsAllowConcurrent() bool {
 	return setting.hasFlag(allowConcurrentFlag)
 }
 
-// IsFastOverRevertibleFlag checks if strategy options include -fast-ver-revertible
+// IsFastOverRevertibleFlag checks if strategy options include -fast-over-revertible
 func (setting *DDLStrategySetting) IsFastOverRevertibleFlag() bool {
 	return setting.hasFlag(fastOverRevertibleFlag)
 }

@@ -82,8 +82,7 @@ func (e *Executor) getCreateTableStatement(ctx context.Context, tableName string
 	return createTable, nil
 }
 
-// analyzeDropFirstOrLastRangePartition sees if the online DDL drops the first or last partition
-//  in a range partitioned table
+// analyzeDropRangePartition sees if the online DDL drops a single partition in a range partitioned table
 func (e *Executor) analyzeDropRangePartition(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable) (*SpecialAlterPlan, error) {
 	// we are looking for a `ALTER TABLE <table> DROP PARTITION <name>` statement with nothing else
 	if len(alterTable.AlterOptions) > 0 {
@@ -135,8 +134,7 @@ func (e *Executor) analyzeDropRangePartition(alterTable *sqlparser.AlterTable, c
 	return op, nil
 }
 
-// analyzeDropFirstOrLastRangePartition sees if the online DDL drops the first or last partition
-//  in a range partitioned table
+// analyzeAddRangePartition sees if the online DDL adds a partition in a range partitioned table
 func (e *Executor) analyzeAddRangePartition(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable) *SpecialAlterPlan {
 	// we are looking for a `ALTER TABLE <table> ADD PARTITION (PARTITION ...)` statement with nothing else
 	if len(alterTable.AlterOptions) > 0 {
@@ -159,7 +157,7 @@ func (e *Executor) analyzeAddRangePartition(alterTable *sqlparser.AlterTable, cr
 	partitionName := partitionDefinition.Name.String()
 	// OK then!
 
-	// Now, is this query adding a parititon in a RANGE partitioned table?
+	// Now, is this query adding a partition in a RANGE partitioned table?
 	part := createTable.TableSpec.PartitionOption
 	if part.Type != sqlparser.RangeType {
 		return nil
@@ -173,8 +171,8 @@ func (e *Executor) analyzeAddRangePartition(alterTable *sqlparser.AlterTable, cr
 	return op
 }
 
-// analyzeSpecialAlterScenarios checks if the given ALTER onlineDDL, and for the current state of affected table,
-// can be executed in a special way
+// analyzeSpecialAlterPlan checks if the given ALTER onlineDDL, and for the current state of affected table,
+// can be executed in a special way. If so, it returns with a "special plan"
 func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schema.OnlineDDL) (*SpecialAlterPlan, error) {
 	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
 	if err != nil {
