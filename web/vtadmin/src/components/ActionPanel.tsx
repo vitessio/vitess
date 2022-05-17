@@ -54,11 +54,12 @@ const ActionPanel: React.FC<ActionPanelProps> = ({
     loadedText,
     warnings = [],
 }) => {
-    const [typedAlias, setTypedAlias] = useState('');
+    const [typedConfirmation, setTypedConfirmation] = useState('');
 
     const requiresConfirmation = typeof confirmationValue === 'string' && !!confirmationValue;
 
-    const isDisabled = !!disabled || mutation.isLoading || (requiresConfirmation && typedAlias !== confirmationValue);
+    const isDisabled =
+        !!disabled || mutation.isLoading || (requiresConfirmation && typedConfirmation !== confirmationValue);
 
     return (
         <div
@@ -97,7 +98,7 @@ const ActionPanel: React.FC<ActionPanelProps> = ({
                         Please type <span className="font-bold">{confirmationValue}</span> confirm.
                     </p>
                     <div className="w-1/3">
-                        <TextInput value={typedAlias} onChange={(e) => setTypedAlias(e.target.value)} />
+                        <TextInput value={typedConfirmation} onChange={(e) => setTypedConfirmation(e.target.value)} />
                     </div>
                 </>
             )}
@@ -107,7 +108,7 @@ const ActionPanel: React.FC<ActionPanelProps> = ({
                 disabled={isDisabled}
                 onClick={() => {
                     (mutation as Mutation).mutate();
-                    setTypedAlias('');
+                    setTypedConfirmation('');
                 }}
             >
                 {mutation.isLoading ? loadingText : loadedText}
