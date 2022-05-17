@@ -69,6 +69,23 @@ func TestGroupBy(t *testing.T) {
 	utils.AssertMatches(t, conn, "select id6, id7, count(*) k from t3 group by id6, id7 order by k", `[[INT64(3) INT64(6) INT64(1)] [INT64(2) INT64(4) INT64(2)] [INT64(1) INT64(2) INT64(3)]]`)
 }
 
+func TestGroupByOnlyFullGroupByOff(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "insert into t9(id1, id2, id3) values(1,'a', '1'), (2,'Abc','2'), (3,'b', '3'), (4,'c', '4'), (5,'test', '5')")
+	utils.Exec(t, conn, "insert into t9(id1, id2, id3) values(6,'a', '11'), (7,'Abc','22'), (8,'b', '33'), (9,'c', '44'), (10,'test', '55')")
+	utils.Exec(t, conn, "set @@sql_mode = ' '")
+
+	// We do not use AssertMatches here because the results for the second column are random
+	utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ id2, id3 from t9 group by id2")
+}
+
 func TestDistinct(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
