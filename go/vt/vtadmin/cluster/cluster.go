@@ -281,6 +281,7 @@ func (c *Cluster) CreateKeyspace(ctx context.Context, req *vtctldatapb.CreateKey
 	if err := c.topoRWPool.Acquire(ctx); err != nil {
 		return nil, fmt.Errorf("CreateKeyspace(%+v) failed to acquire topoRWPool: %w", req, err)
 	}
+	defer c.topoRWPool.Release()
 
 	resp, err := c.Vtctld.CreateKeyspace(ctx, req)
 	if err != nil {
@@ -322,6 +323,7 @@ func (c *Cluster) CreateShard(ctx context.Context, req *vtctldatapb.CreateShardR
 	if err := c.topoRWPool.Acquire(ctx); err != nil {
 		return nil, fmt.Errorf("CreateShard(%+v) failed to acquire topoRWPool: %w", req, err)
 	}
+	defer c.topoRWPool.Release()
 
 	return c.Vtctld.CreateShard(ctx, req)
 }
@@ -347,6 +349,7 @@ func (c *Cluster) DeleteKeyspace(ctx context.Context, req *vtctldatapb.DeleteKey
 	if err := c.topoRWPool.Acquire(ctx); err != nil {
 		return nil, fmt.Errorf("DeleteKeyspace(%+v) failed to acquire topoRWPool: %w", req, err)
 	}
+	defer c.topoRWPool.Release()
 
 	return c.Vtctld.DeleteKeyspace(ctx, req)
 }
@@ -378,6 +381,7 @@ func (c *Cluster) DeleteShards(ctx context.Context, req *vtctldatapb.DeleteShard
 	if err := c.topoRWPool.Acquire(ctx); err != nil {
 		return nil, fmt.Errorf("DeleteShards(%+v) failed to acquire topoRWPool: %w", req, err)
 	}
+	defer c.topoRWPool.Release()
 
 	return c.Vtctld.DeleteShards(ctx, req)
 }
