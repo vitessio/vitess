@@ -1425,7 +1425,7 @@ func (api *API) ReparentTablet(ctx context.Context, req *vtadminpb.ReparentTable
 	span, ctx := trace.NewSpan(ctx, "API.ReparentTablet")
 	defer span.Finish()
 
-	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
+	tablet, err := api.getTabletForAction(ctx, span, rbac.ReparentTabletAction, req.Alias, req.ClusterIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1435,17 +1435,7 @@ func (api *API) ReparentTablet(ctx context.Context, req *vtadminpb.ReparentTable
 		return nil, err
 	}
 
-	cluster.AnnotateSpan(c, span)
-
-	r, err := c.Vtctld.ReparentTablet(ctx, &vtctldatapb.ReparentTabletRequest{
-		Tablet: tablet.Tablet.Alias,
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("Error reparenting tablet: %w", err)
-	}
-
-	return &vtadminpb.ReparentTabletResponse{Keyspace: r.Keyspace, Primary: r.Primary, Shard: r.Shard}, nil
+	return c.ReparentTablet(ctx, tablet)
 }
 
 // RunHealthCheck is part of the vtadminpb.VTAdminServer interface.

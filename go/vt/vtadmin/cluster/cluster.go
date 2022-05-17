@@ -2009,6 +2009,34 @@ func (c *Cluster) reloadTabletSchemas(ctx context.Context, req *vtadminpb.Reload
 	return results, nil
 }
 
+// ReparentTablet reparents the specified tablet to its shard's current primary.
+// The tablet's current replica position must match the last-known reparent
+// action.
+func (c *Cluster) ReparentTablet(ctx context.Context, tablet *vtadminpb.Tablet) (*vtadminpb.ReparentTabletResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.ReparentTablet")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
+
+	if err := c.topoRWPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("ReparentTablet(%v) failed to acquire topoRWPool: %w", topoproto.TabletAliasString(tablet.Tablet.Alias), err)
+	}
+	defer c.topoRWPool.Release()
+
+	resp, err := c.Vtctld.ReparentTablet(ctx, &vtctldatapb.ReparentTabletRequest{Tablet: tablet.Tablet.Alias})
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.ReparentTabletResponse{
+		Keyspace: resp.Keyspace,
+		Shard:    resp.Shard,
+		Primary:  resp.Primary,
+		Cluster:  c.ToProto(),
+	}, nil
+}
+
 // Debug returns a map of debug information for a cluster.
 func (c *Cluster) Debug() map[string]any {
 	m := map[string]any{

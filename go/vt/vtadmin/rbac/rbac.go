@@ -63,12 +63,18 @@ type Action string
 
 // Action definitions.
 const (
+	/* generic actions */
+
 	CreateAction Action = "create"
 	DeleteAction Action = "delete"
 	GetAction    Action = "get"
 	PingAction   Action = "ping"
 	PutAction    Action = "put"
 	ReloadAction Action = "reload"
+
+	/* tablet-specific reparent actions */
+
+	ReparentTabletAction Action = "reparent_tablet"
 )
 
 // Resource is an enum representing all resources managed by vtadmin.
