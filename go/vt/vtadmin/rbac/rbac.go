@@ -72,9 +72,10 @@ const (
 	PutAction    Action = "put"
 	ReloadAction Action = "reload"
 
-	/* tablet-specific reparent actions */
+	/* tablet-specific actions */
 
-	ReparentTabletAction Action = "reparent_tablet"
+	ManageTabletReplicationAction Action = "manage_tablet_replication" // Start/Stop Replication
+	ReparentTabletAction          Action = "reparent_tablet"
 )
 
 // Resource is an enum representing all resources managed by vtadmin.

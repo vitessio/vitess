@@ -1529,7 +1529,7 @@ func (api *API) StartReplication(ctx context.Context, req *vtadminpb.StartReplic
 	span, ctx := trace.NewSpan(ctx, "API.StartReplication")
 	defer span.Finish()
 
-	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
+	tablet, err := api.getTabletForAction(ctx, span, rbac.ManageTabletReplicationAction, req.Alias, req.ClusterIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1539,17 +1539,15 @@ func (api *API) StartReplication(ctx context.Context, req *vtadminpb.StartReplic
 		return nil, err
 	}
 
-	cluster.AnnotateSpan(c, span)
-
-	_, err = c.Vtctld.StartReplication(ctx, &vtctldatapb.StartReplicationRequest{
-		TabletAlias: tablet.Tablet.Alias,
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("Error starting replication: %w", err)
+	start := true
+	if err := c.ToggleTabletReplication(ctx, tablet, start); err != nil {
+		return nil, err
 	}
 
-	return &vtadminpb.StartReplicationResponse{Status: "ok"}, nil
+	return &vtadminpb.StartReplicationResponse{
+		Status:  "ok",
+		Cluster: c.ToProto(),
+	}, nil
 }
 
 // StopReplication is part of the vtadminpb.VTAdminServer interface.
@@ -1557,7 +1555,7 @@ func (api *API) StopReplication(ctx context.Context, req *vtadminpb.StopReplicat
 	span, ctx := trace.NewSpan(ctx, "API.StopReplication")
 	defer span.Finish()
 
-	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
+	tablet, err := api.getTabletForAction(ctx, span, rbac.ManageTabletReplicationAction, req.Alias, req.ClusterIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1567,17 +1565,15 @@ func (api *API) StopReplication(ctx context.Context, req *vtadminpb.StopReplicat
 		return nil, err
 	}
 
-	cluster.AnnotateSpan(c, span)
-
-	_, err = c.Vtctld.StopReplication(ctx, &vtctldatapb.StopReplicationRequest{
-		TabletAlias: tablet.Tablet.Alias,
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("Error stopping replication: %w", err)
+	start := true
+	if err := c.ToggleTabletReplication(ctx, tablet, !start); err != nil {
+		return nil, err
 	}
 
-	return &vtadminpb.StopReplicationResponse{Status: "ok"}, nil
+	return &vtadminpb.StopReplicationResponse{
+		Status:  "ok",
+		Cluster: c.ToProto(),
+	}, nil
 }
 
 // ValidateKeyspace is part of the vtadminpb.VTAdminServer interface.

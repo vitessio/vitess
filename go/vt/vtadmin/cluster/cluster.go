@@ -2037,6 +2037,30 @@ func (c *Cluster) ReparentTablet(ctx context.Context, tablet *vtadminpb.Tablet) 
 	}, nil
 }
 
+// ToggleTabletReplication either starts or stops replication on the specified
+// tablet.
+func (c *Cluster) ToggleTabletReplication(ctx context.Context, tablet *vtadminpb.Tablet, start bool) (err error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.ToggleTabletReplication")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
+	span.Annotate("start", start)
+	span.Annotate("stop", !start)
+
+	if start {
+		_, err = c.Vtctld.StartReplication(ctx, &vtctldatapb.StartReplicationRequest{
+			TabletAlias: tablet.Tablet.Alias,
+		})
+	} else {
+		_, err = c.Vtctld.StopReplication(ctx, &vtctldatapb.StopReplicationRequest{
+			TabletAlias: tablet.Tablet.Alias,
+		})
+	}
+
+	return err
+}
+
 // Debug returns a map of debug information for a cluster.
 func (c *Cluster) Debug() map[string]any {
 	m := map[string]any{
