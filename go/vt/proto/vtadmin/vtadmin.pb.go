@@ -3623,9 +3623,18 @@ type ReloadSchemasResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
+	// KeyspaceResults is the list of KeyspaceResult objects for a ReloadSchemas
+	// operation. It is only set when the request mandates Keyspaces mode (see
+	// ReloadSchemasRequest).
 	KeyspaceResults []*ReloadSchemasResponse_KeyspaceResult `protobuf:"bytes,1,rep,name=keyspace_results,json=keyspaceResults,proto3" json:"keyspace_results,omitempty"`
-	ShardResults    []*ReloadSchemasResponse_ShardResult    `protobuf:"bytes,2,rep,name=shard_results,json=shardResults,proto3" json:"shard_results,omitempty"`
-	TabletResults   []*ReloadSchemasResponse_TabletResult   `protobuf:"bytes,3,rep,name=tablet_results,json=tabletResults,proto3" json:"tablet_results,omitempty"`
+	// ShardResults is the list of ShardResult objects for a ReloadSchemas
+	// operation. It is only set when the request mandates KeyspaceShards mode
+	// (see ReloadSchemasRequest).
+	ShardResults []*ReloadSchemasResponse_ShardResult `protobuf:"bytes,2,rep,name=shard_results,json=shardResults,proto3" json:"shard_results,omitempty"`
+	// TabletResults is the list of TabletResult objects for a ReloadSchemas
+	// operation. It is only set when the request mandates Tablets mode (see
+	// ReloadSchemasRequest).
+	TabletResults []*ReloadSchemasResponse_TabletResult `protobuf:"bytes,3,rep,name=tablet_results,json=tabletResults,proto3" json:"tablet_results,omitempty"`
 }
 
 func (x *ReloadSchemasResponse) Reset() {
@@ -4694,7 +4703,12 @@ func (x *Schema_TableSize) GetByShard() map[string]*Schema_ShardTableSize {
 	return nil
 }
 
-// TODO: docs
+// KeyspaceResult is a grouping of a Keyspace and any log events that
+// occurred in that keyspace during a schema reload (usually associated with
+// partial errors - ReloadSchemas requests are best-effort).
+//
+// It is only set when a ReloadSchemas request mandates Keyspaces mode
+// (see ReloadSchemasRequest).
 type ReloadSchemasResponse_KeyspaceResult struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -4750,7 +4764,12 @@ func (x *ReloadSchemasResponse_KeyspaceResult) GetEvents() []*logutil.Event {
 	return nil
 }
 
-// TODO: docs
+// ShardResult is a grouping of a Shard and any log events that occurred in
+// that shard during a schema reload (usually associated with partial
+// errors - ReloadSchemas requests are best-effort).
+//
+// It is only set when a ReloadSchemas request mandates KeyspaceShards mode
+// (see ReloadSchemasRequest).
 type ReloadSchemasResponse_ShardResult struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -4806,7 +4825,13 @@ func (x *ReloadSchemasResponse_ShardResult) GetEvents() []*logutil.Event {
 	return nil
 }
 
-// TODO: docs
+// TabletResult is a grouping of a Tablet and the result of reloading that
+// Tablet's schema. Result will either be the string "ok", or the error
+// message from that tablet. Note ReloadSchemas is best-effort, so tablet's
+// failing to reload is not treated as an overall failure.
+//
+// It is only set when a ReloadSchemas request mandates Tablets mode (see
+// ReloadSchemasRequest).
 type ReloadSchemasResponse_TabletResult struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
