@@ -92,7 +92,8 @@ const ActionPanel: React.FC<ActionPanelProps> = ({
                     )
             )}
 
-            {requiresConfirmation && (
+            {/* Don't render the confirmation input if "disabled" prop is set */}
+            {requiresConfirmation && !disabled && (
                 <>
                     <p className="text-base">
                         Please type <span className="font-bold">{confirmationValue}</span> confirm.

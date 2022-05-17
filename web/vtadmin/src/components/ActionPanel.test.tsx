@@ -133,4 +133,48 @@ describe('ActionPanel', () => {
         await user.type(input, 'zone1-101');
         expect(button).not.toHaveAttribute('disabled');
     });
+
+    it('does not render confirmation if "confirmationValue" not set', async () => {
+        render(
+            <QueryClientProvider client={queryClient}>
+                <Wrapper
+                    description={<>Hello world!</>}
+                    documentationLink="https://test.com"
+                    loadedText="Do Action"
+                    loadingText="Doing Action..."
+                    title="A Title"
+                />
+            </QueryClientProvider>
+        );
+
+        const user = userEvent.setup();
+
+        const button = screen.getByRole('button');
+        const input = screen.queryByRole('textbox');
+
+        expect(input).toBeNull();
+        expect(button).not.toHaveAttribute('disabled');
+    });
+
+    it('disables interaction when "disabled" prop is set', () => {
+        render(
+            <QueryClientProvider client={queryClient}>
+                <Wrapper
+                    confirmationValue="zone1-101"
+                    description={<>Hello world!</>}
+                    disabled
+                    documentationLink="https://test.com"
+                    loadedText="Do Action"
+                    loadingText="Doing Action..."
+                    title="A Title"
+                />
+            </QueryClientProvider>
+        );
+
+        const button = screen.getByRole('button');
+        const input = screen.queryByRole('textbox');
+
+        expect(input).toBeNull();
+        expect(button).toHaveAttribute('disabled');
+    });
 });
