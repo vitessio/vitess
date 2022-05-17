@@ -1367,14 +1367,8 @@ func (api *API) RefreshState(ctx context.Context, req *vtadminpb.RefreshStateReq
 		return nil, err
 	}
 
-	cluster.AnnotateSpan(c, span)
-
-	_, err = c.Vtctld.RefreshState(ctx, &vtctldatapb.RefreshStateRequest{
-		TabletAlias: tablet.Tablet.Alias,
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("Error pinging cluster: %w", err)
+	if err := c.RefreshState(ctx, tablet); err != nil {
+		return nil, err
 	}
 
 	return &vtadminpb.RefreshStateResponse{Status: "ok"}, nil

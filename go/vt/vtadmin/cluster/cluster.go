@@ -1731,6 +1731,25 @@ func (c *Cluster) GetWorkflows(ctx context.Context, keyspaces []string, opts Get
 	})
 }
 
+// RefreshState reloads the tablet record from a cluster's topo on a tablet.
+func (c *Cluster) RefreshState(ctx context.Context, tablet *vtadminpb.Tablet) error {
+	span, ctx := trace.NewSpan(ctx, "Cluster.RefreshState")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
+
+	if err := c.topoReadPool.Acquire(ctx); err != nil {
+		return fmt.Errorf("RefreshState(%v) failed to acquire topoReadPool: %w", topoproto.TabletAliasString(tablet.Tablet.Alias), err)
+	}
+	defer c.topoReadPool.Release()
+
+	_, err := c.Vtctld.RefreshState(ctx, &vtctldatapb.RefreshStateRequest{
+		TabletAlias: tablet.Tablet.Alias,
+	})
+	return err
+}
+
 // ReloadSchemas reloads schemas in one or more keyspaces, shards, or tablets
 // in the cluster, depending on the request parameters.
 func (c *Cluster) ReloadSchemas(ctx context.Context, req *vtadminpb.ReloadSchemasRequest) (*vtadminpb.ReloadSchemasResponse, error) {
