@@ -324,6 +324,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/schema/{table}", httpAPI.Adapt(vtadminhttp.FindSchema)).Name("API.FindSchema")
 	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
 	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
+	router.HandleFunc("/schemas/reload", httpAPI.Adapt(vtadminhttp.ReloadSchemas)).Name("API.ReloadSchemas").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/shard_replication_positions", httpAPI.Adapt(vtadminhttp.GetShardReplicationPositions)).Name("API.GetShardReplicationPositions")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateShard)).Name("API.CreateShard").Methods("POST")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.DeleteShards)).Name("API.DeleteShards").Methods("DELETE")
@@ -335,6 +336,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/tablet/{tablet}/healthcheck", httpAPI.Adapt(vtadminhttp.RunHealthCheck)).Name("API.RunHealthCheck")
 	router.HandleFunc("/tablet/{tablet}/ping", httpAPI.Adapt(vtadminhttp.PingTablet)).Name("API.PingTablet")
 	router.HandleFunc("/tablet/{tablet}/refresh", httpAPI.Adapt(vtadminhttp.RefreshState)).Name("API.RefreshState").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/reload_schema", httpAPI.Adapt(vtadminhttp.ReloadTabletSchema)).Name("API.ReloadTabletSchema").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/reparent", httpAPI.Adapt(vtadminhttp.ReparentTablet)).Name("API.ReparentTablet").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/set_read_only", httpAPI.Adapt(vtadminhttp.SetReadOnly)).Name("API.SetReadOnly").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/set_read_write", httpAPI.Adapt(vtadminhttp.SetReadWrite)).Name("API.SetReadWrite").Methods("PUT", "OPTIONS")
@@ -1555,6 +1557,52 @@ func (api *API) RefreshState(ctx context.Context, req *vtadminpb.RefreshStateReq
 	}
 
 	return &vtadminpb.RefreshStateResponse{Status: "ok"}, nil
+}
+
+// ReloadSchemas is part of the vtadminpb.VTAdminServer interface.
+func (api *API) ReloadSchemas(ctx context.Context, req *vtadminpb.ReloadSchemasRequest) (*vtadminpb.ReloadSchemasResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ReloadSchemas")
+	defer span.Finish()
+
+	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+
+	var (
+		m    sync.Mutex
+		wg   sync.WaitGroup
+		rec  concurrency.AllErrorRecorder
+		resp vtadminpb.ReloadSchemasResponse
+	)
+
+	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaResource, rbac.ReloadAction) {
+			continue
+		}
+
+		wg.Add(1)
+
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			cr, err := c.ReloadSchemas(ctx, req)
+			if err != nil {
+				rec.RecordError(fmt.Errorf("ReloadSchemas(cluster = %s) failed: %w", c.ID, err))
+				return
+			}
+
+			m.Lock()
+			defer m.Unlock()
+			resp.KeyspaceResults = append(resp.KeyspaceResults, cr.KeyspaceResults...)
+			resp.ShardResults = append(resp.ShardResults, cr.ShardResults...)
+			resp.TabletResults = append(resp.TabletResults, cr.TabletResults...)
+		}(c)
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return &resp, nil
 }
 
 // ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.

@@ -421,6 +421,56 @@ func (c *Cluster) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 	return resp.Shards, nil
 }
 
+// FindTablet returns the first tablet in a given cluster that satisfies the filter function.
+func (c *Cluster) FindTablet(ctx context.Context, filter func(*vtadminpb.Tablet) bool) (*vtadminpb.Tablet, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.FindTablet")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	tablets, err := c.findTablets(ctx, filter, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(tablets) != 1 {
+		return nil, errors.ErrNoTablet
+	}
+
+	return tablets[0], nil
+}
+
+// FindTablets returns the first N tablets in the given cluster that satisfy
+// the filter function. If N = -1, then all matching tablets are returned.
+// Ordering is not guaranteed, and callers should write their filter functions accordingly.
+func (c *Cluster) FindTablets(ctx context.Context, filter func(*vtadminpb.Tablet) bool, n int) ([]*vtadminpb.Tablet, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.FindTablets")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	return c.findTablets(ctx, filter, n)
+}
+
+func (c *Cluster) findTablets(ctx context.Context, filter func(*vtadminpb.Tablet) bool, n int) ([]*vtadminpb.Tablet, error) {
+	span, _ := trace.FromContext(ctx)
+
+	tablets, err := c.GetTablets(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if n == -1 {
+		n = len(tablets)
+	}
+
+	if span != nil {
+		span.Annotate("max_result_length", n) // this is a bad name; I didn't want just "n", but it's more like, "requested result length".
+	}
+
+	return vtadminproto.FilterTablets(filter, tablets, n), nil
+}
+
 // FindWorkflowsOptions is the set of options for FindWorkflows requests.
 type FindWorkflowsOptions struct {
 	ActiveOnly      bool
@@ -1661,54 +1711,263 @@ func (c *Cluster) GetWorkflows(ctx context.Context, keyspaces []string, opts Get
 	})
 }
 
-// FindTablet returns the first tablet in a given cluster that satisfies the filter function.
-func (c *Cluster) FindTablet(ctx context.Context, filter func(*vtadminpb.Tablet) bool) (*vtadminpb.Tablet, error) {
-	span, ctx := trace.NewSpan(ctx, "Cluster.FindTablet")
+// ReloadSchemas reloads schemas in one or more keyspaces, shards, or tablets
+// in the cluster, depending on the request parameters.
+func (c *Cluster) ReloadSchemas(ctx context.Context, req *vtadminpb.ReloadSchemasRequest) (*vtadminpb.ReloadSchemasResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.ReloadSchemas")
 	defer span.Finish()
 
 	AnnotateSpan(c, span)
 
-	tablets, err := c.findTablets(ctx, filter, 1)
+	var (
+		resp vtadminpb.ReloadSchemasResponse
+		err  error
+	)
+	switch {
+	case len(req.Tablets) > 0:
+		resp.TabletResults, err = c.reloadTabletSchemas(ctx, req)
+	case len(req.KeyspaceShards) > 0:
+		resp.ShardResults, err = c.reloadShardSchemas(ctx, req)
+	default:
+		resp.KeyspaceResults, err = c.reloadKeyspaceSchemas(ctx, req)
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
-	if len(tablets) != 1 {
-		return nil, errors.ErrNoTablet
-	}
-
-	return tablets[0], nil
+	return &resp, nil
 }
 
-// FindTablets returns the first N tablets in the given cluster that satisfy
-// the filter function. If N = -1, then all matching tablets are returned.
-// Ordering is not guaranteed, and callers should write their filter functions accordingly.
-func (c *Cluster) FindTablets(ctx context.Context, filter func(*vtadminpb.Tablet) bool, n int) ([]*vtadminpb.Tablet, error) {
-	span, ctx := trace.NewSpan(ctx, "Cluster.FindTablets")
-	defer span.Finish()
+// reloadKeyspaceSchemas reloads schemas in one or more keyspaces in the
+// cluster.
+func (c *Cluster) reloadKeyspaceSchemas(ctx context.Context, req *vtadminpb.ReloadSchemasRequest) ([]*vtadminpb.ReloadSchemasResponse_KeyspaceResult, error) {
+	keyspaces, err := func() (keyspaces []*vtctldatapb.Keyspace, err error) {
+		span, ctx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
+		defer span.Finish()
 
-	AnnotateSpan(c, span)
+		if err := c.topoReadPool.Acquire(ctx); err != nil {
+			return nil, fmt.Errorf("ReloadSchemas: failed to acquire topoReadPool: %w", err)
+		}
 
-	return c.findTablets(ctx, filter, n)
-}
+		// Load all keyspaces up front so we don't have to make one-trip per
+		// keyspace to check its existence.
+		resp, err := c.Vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
+		if err != nil {
+			return nil, err
+		}
 
-func (c *Cluster) findTablets(ctx context.Context, filter func(*vtadminpb.Tablet) bool, n int) ([]*vtadminpb.Tablet, error) {
-	span, _ := trace.FromContext(ctx)
+		// The request specified no keyspace names, so default to all of them.
+		if len(req.Keyspaces) == 0 {
+			return resp.Keyspaces, nil
+		}
 
-	tablets, err := c.GetTablets(ctx)
+		keyspaceNames := sets.NewString(req.Keyspaces...)
+
+		for _, ks := range resp.Keyspaces {
+			if keyspaceNames.Has(ks.Name) {
+				keyspaces = append(keyspaces, ks)
+			}
+		}
+
+		return keyspaces, nil
+	}()
 	if err != nil {
 		return nil, err
 	}
 
-	if n == -1 {
-		n = len(tablets)
+	var (
+		m   sync.Mutex
+		wg  sync.WaitGroup
+		rec concurrency.AllErrorRecorder
+
+		cpb     = c.ToProto()
+		results = make([]*vtadminpb.ReloadSchemasResponse_KeyspaceResult, 0, len(keyspaces))
+	)
+
+	for _, ks := range keyspaces {
+		wg.Add(1)
+		go func(ks *vtctldatapb.Keyspace) {
+			defer wg.Done()
+
+			span, ctx := trace.NewSpan(ctx, "Cluster.ReloadSchemaKeyspace")
+			defer span.Finish()
+
+			AnnotateSpan(c, span)
+			span.Annotate("keyspace", ks.Name)
+			span.Annotate("concurrency", req.Concurrency)
+			span.Annotate("include_primary", req.IncludePrimary)
+			span.Annotate("wait_position", req.WaitPosition)
+
+			resp, err := c.Vtctld.ReloadSchemaKeyspace(ctx, &vtctldatapb.ReloadSchemaKeyspaceRequest{
+				Keyspace:       ks.Name,
+				Concurrency:    req.Concurrency,
+				IncludePrimary: req.IncludePrimary,
+				WaitPosition:   req.WaitPosition,
+			})
+			if err != nil {
+				rec.RecordError(fmt.Errorf("ReloadSchemaKeyspace(%s) failed: %w", ks.Name, err))
+				return
+			}
+
+			m.Lock()
+			defer m.Unlock()
+			results = append(results, &vtadminpb.ReloadSchemasResponse_KeyspaceResult{
+				Keyspace: &vtadminpb.Keyspace{
+					Cluster:  cpb,
+					Keyspace: ks,
+				},
+				Events: resp.Events,
+			})
+		}(ks)
 	}
 
-	if span != nil {
-		span.Annotate("max_result_length", n) // this is a bad name; I didn't want just "n", but it's more like, "requested result length".
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
 	}
 
-	return vtadminproto.FilterTablets(filter, tablets, n), nil
+	return results, nil
+}
+
+// reloadShardSchemas reloads schemas in one or more shards in the cluster.
+func (c *Cluster) reloadShardSchemas(ctx context.Context, req *vtadminpb.ReloadSchemasRequest) ([]*vtadminpb.ReloadSchemasResponse_ShardResult, error) {
+	shardSets, err := c.getShardSets(ctx, nil, req.KeyspaceShards)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		m   sync.Mutex
+		wg  sync.WaitGroup
+		rec concurrency.AllErrorRecorder
+
+		cpb     = c.ToProto()
+		results = make([]*vtadminpb.ReloadSchemasResponse_ShardResult, 0, len(shardSets))
+	)
+
+	for ks, shards := range shardSets {
+		for _, shard := range shards.UnsortedList() {
+			wg.Add(1)
+			go func(keyspace, shard string) {
+				defer wg.Done()
+
+				span, ctx := trace.NewSpan(ctx, "Cluster.reloadShardSchema")
+				defer span.Finish()
+
+				AnnotateSpan(c, span)
+				span.Annotate("keyspace", keyspace)
+				span.Annotate("shard", shard)
+				span.Annotate("concurrency", req.Concurrency)
+				span.Annotate("include_primary", req.IncludePrimary)
+				span.Annotate("wait_position", req.WaitPosition)
+
+				resp, err := c.Vtctld.ReloadSchemaShard(ctx, &vtctldatapb.ReloadSchemaShardRequest{
+					Keyspace:       keyspace,
+					Shard:          shard,
+					Concurrency:    req.Concurrency,
+					IncludePrimary: req.IncludePrimary,
+					WaitPosition:   req.WaitPosition,
+				})
+				if err != nil {
+					rec.RecordError(fmt.Errorf("ReloadSchemaShard(%s/%s) failed: %w", keyspace, shard, err))
+					return
+				}
+
+				m.Lock()
+				defer m.Unlock()
+				results = append(results, &vtadminpb.ReloadSchemasResponse_ShardResult{
+					Shard: &vtadminpb.Shard{
+						Cluster: cpb,
+						Shard: &vtctldatapb.Shard{
+							Keyspace: keyspace,
+							Name:     shard,
+						},
+					},
+					Events: resp.Events,
+				})
+			}(ks, shard)
+		}
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return results, nil
+}
+
+// reloadTabletSchemas reloads schemas in one or more tablets in the cluster.
+func (c *Cluster) reloadTabletSchemas(ctx context.Context, req *vtadminpb.ReloadSchemasRequest) ([]*vtadminpb.ReloadSchemasResponse_TabletResult, error) {
+	aliasSet := sets.NewString()
+	for _, alias := range req.Tablets {
+		aliasSet.Insert(topoproto.TabletAliasString(alias))
+	}
+
+	tablets, err := c.FindTablets(ctx, func(t *vtadminpb.Tablet) bool {
+		return aliasSet.Has(topoproto.TabletAliasString(t.Tablet.Alias))
+	}, -1)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		m           sync.Mutex
+		wg          sync.WaitGroup
+		ch          = make(chan *vtadminpb.Tablet)
+		concurrency = int(req.Concurrency)
+
+		results = make([]*vtadminpb.ReloadSchemasResponse_TabletResult, 0, len(tablets))
+	)
+
+	if concurrency < 1 {
+		concurrency = len(tablets)
+	}
+
+	reloadTablet := func(t *vtadminpb.Tablet) *vtadminpb.ReloadSchemasResponse_TabletResult {
+		span, ctx := trace.NewSpan(ctx, "Cluster.reloadTabletSchema")
+		defer span.Finish()
+
+		AnnotateSpan(c, span)
+		span.Annotate("tablet_alias", topoproto.TabletAliasString(t.Tablet.Alias))
+
+		result := &vtadminpb.ReloadSchemasResponse_TabletResult{
+			Tablet: t,
+			Result: "ok",
+		}
+		_, err := c.Vtctld.ReloadSchema(ctx, &vtctldatapb.ReloadSchemaRequest{
+			TabletAlias: t.Tablet.Alias,
+		})
+		if err != nil {
+			result.Result = err.Error()
+		}
+
+		return result
+	}
+
+	wg.Add(concurrency)
+	for i := 0; i < concurrency; i++ {
+		go func() {
+			defer wg.Done()
+			for tablet := range ch {
+				result := reloadTablet(tablet)
+
+				m.Lock()
+				results = append(results, result)
+				m.Unlock()
+			}
+		}()
+	}
+
+	for _, t := range tablets {
+		ch <- t
+	}
+
+	close(ch)
+	wg.Wait()
+
+	return results, nil
 }
 
 // Debug returns a map of debug information for a cluster.

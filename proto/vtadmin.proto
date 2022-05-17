@@ -21,6 +21,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtadmin";
 
 package vtadmin;
 
+import "logutil.proto";
 import "mysqlctl.proto";
 import "tabletmanagerdata.proto";
 import "topodata.proto";
@@ -103,6 +104,10 @@ service VTAdmin {
     // This only works if the current replica position matches the last known
     // reparent action.
     rpc ReparentTablet(ReparentTabletRequest) returns (ReparentTabletResponse) {};
+    // ReloadSchemas reloads the schema definition across keyspaces, shards, or
+    // tablets in one or more clusters, depending on the request fields (see
+    // ReloadSchemasRequest for details).
+    rpc ReloadSchemas(ReloadSchemasRequest) returns (ReloadSchemasResponse) {};
     // RunHealthCheck runs a healthcheck on the tablet.
     rpc RunHealthCheck(RunHealthCheckRequest) returns (RunHealthCheckResponse) {};
     // SetReadOnly sets the tablet to read-only mode.
@@ -194,6 +199,13 @@ message Schema {
         uint64 data_length = 2;
         map<string, ShardTableSize> by_shard = 3;
     }
+}
+
+// Shard groups the vtctldata information about a shard record together with
+// the Vitess cluster it belongs to.
+message Shard {
+    Cluster cluster = 1;
+    vtctldata.Shard shard = 2;
 }
 
 message SrvVSchema {
@@ -516,6 +528,99 @@ message RefreshStateRequest {
 
 message RefreshStateResponse {
     string status = 1;
+}
+
+message ReloadSchemasRequest {
+    // Keyspaces, if set, will reload schemas across one or more keyspaces. A
+    // keyspace not existing in a cluster will not fail the overall request.
+    //
+    // Superceded by KeyspaceShards and Tablets, in that order.
+    repeated string keyspaces = 1;
+    // KeyspaceShards, if set, will reload schemas across one or more shards.
+    // Each element must be a valid keyspace/shard according to
+    // topoproto.ParseKeyspaceShard. A shard not existing in a cluster will not
+    // fail the overall request.
+    //
+    // Supercedes Keyspaces, and is superceded by Tablets.
+    repeated string keyspace_shards = 2;
+    // Tablets, if set will reload schemas across one or more tablets.
+    // Supercedes both Keyspaces and KeyspaceShards.
+    repeated topodata.TabletAlias tablets = 3;
+    // ClusterIds optionally restricts the reload operation to clusters with
+    // the specified IDs. An empty list of ClusterIds will operate on all
+    // clusters.
+    repeated string cluster_ids = 4;
+    // Concurrency controls the number of tablets to reload at any given time.
+    // Its semantics depend on whether the request is for keyspace, shard, or
+    // tablet mode.
+    //
+    // In Keyspaces mode, Concurrency is the number of tablets to reload at once
+    // *per keyspace*.
+    //
+    // In KeyspaceShards mode, Concurrency is the number of tablets to reload at
+    // once *per shard*.
+    //
+    // In Tablets mode, Concurrency is the number of tablets to reload at once
+    // *per cluster*.
+    uint32 concurrency = 5;
+    // WaitPosition is the replication position that replicating tablets should
+    // reach prior to reloading their schemas.
+    //
+    // Does not apply in Tablets mode.
+    string wait_position = 6;
+    // IncludePrimary, if set, will reload the schemas on PRIMARY tablets as
+    // well as REPLICA and RDONLY.
+    //
+    // Does not apply in Tablets mode.
+    bool include_primary = 7;
+}
+
+message ReloadSchemasResponse {
+    // KeyspaceResult is a grouping of a Keyspace and any log events that
+    // occurred in that keyspace during a schema reload (usually associated with
+    // partial errors - ReloadSchemas requests are best-effort).
+    //
+    // It is only set when a ReloadSchemas request mandates Keyspaces mode
+    // (see ReloadSchemasRequest).
+    message KeyspaceResult {
+        Keyspace keyspace = 1;
+        repeated logutil.Event events = 2;
+    }
+    // KeyspaceResults is the list of KeyspaceResult objects for a ReloadSchemas
+    // operation. It is only set when the request mandates Keyspaces mode (see
+    // ReloadSchemasRequest).
+    repeated KeyspaceResult keyspace_results = 1;
+
+    // ShardResult is a grouping of a Shard and any log events that occurred in
+    // that shard during a schema reload (usually associated with partial
+    // errors - ReloadSchemas requests are best-effort).
+    //
+    // It is only set when a ReloadSchemas request mandates KeyspaceShards mode
+    // (see ReloadSchemasRequest).
+    message ShardResult {
+        Shard shard = 1;
+        repeated logutil.Event events = 2;
+    }
+    // ShardResults is the list of ShardResult objects for a ReloadSchemas
+    // operation. It is only set when the request mandates KeyspaceShards mode
+    // (see ReloadSchemasRequest).
+    repeated ShardResult shard_results = 2;
+
+    // TabletResult is a grouping of a Tablet and the result of reloading that
+    // Tablet's schema. Result will either be the string "ok", or the error
+    // message from that tablet. Note ReloadSchemas is best-effort, so tablet's
+    // failing to reload is not treated as an overall failure.
+    //
+    // It is only set when a ReloadSchemas request mandates Tablets mode (see
+    // ReloadSchemasRequest).
+    message TabletResult {
+        Tablet tablet = 1;
+        string result = 2;
+    }
+    // TabletResults is the list of TabletResult objects for a ReloadSchemas
+    // operation. It is only set when the request mandates Tablets mode (see
+    // ReloadSchemasRequest).
+    repeated TabletResult tablet_results = 3;
 }
 
 message ReparentTabletRequest {
