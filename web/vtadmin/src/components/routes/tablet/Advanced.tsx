@@ -28,7 +28,7 @@ import {
 } from '../../../hooks/api';
 import { topodata, vtadmin } from '../../../proto/vtadmin';
 import { isPrimary } from '../../../util/tablets';
-import DangerAction from '../../DangerAction';
+import ActionPanel from '../../ActionPanel';
 import { Icon, Icons } from '../../Icon';
 import { success, warn } from '../../Snackbar';
 
@@ -227,7 +227,7 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                 <div>
                     {primary && (
                         <>
-                            <DangerAction
+                            <ActionPanel
                                 confirmationValue={alias}
                                 title="Set Read-Only"
                                 documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadonly"
@@ -244,7 +244,7 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                                 loadedText="Set to read-only"
                             />
 
-                            <DangerAction
+                            <ActionPanel
                                 confirmationValue={alias}
                                 title="Set Read-Write"
                                 documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadwrite"
@@ -262,7 +262,7 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                             />
                         </>
                     )}
-                    <DangerAction
+                    <ActionPanel
                         confirmationValue={alias}
                         title="Delete Tablet"
                         documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#deletetablet"

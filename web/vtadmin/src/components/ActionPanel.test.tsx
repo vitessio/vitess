@@ -20,7 +20,7 @@ import { rest } from 'msw';
 import { setupServer } from 'msw/node';
 import { QueryClient, QueryClientProvider, useMutation } from 'react-query';
 
-import DangerAction, { DangerActionProps } from './DangerAction';
+import ActionPanel, { ActionPanelProps } from './ActionPanel';
 
 const ORIGINAL_PROCESS_ENV = process.env;
 const TEST_PROCESS_ENV = {
@@ -28,7 +28,7 @@ const TEST_PROCESS_ENV = {
     REACT_APP_VTADMIN_API_ADDRESS: '',
 };
 
-describe('DangerAction', () => {
+describe('ActionPanel', () => {
     const server = setupServer(
         rest.post('/api/test', (req, res, ctx) => {
             return res(ctx.json({ ok: true }));
@@ -44,9 +44,9 @@ describe('DangerAction', () => {
      * that is _within_ the context of a QueryClientProvider. This Wrapper component
      * provides such a function and should be `render`ed in the context QueryClientProvider.
      */
-    const Wrapper: React.FC<Omit<DangerActionProps, 'mutation'>> = (props) => {
+    const Wrapper: React.FC<Omit<ActionPanelProps, 'mutation'>> = (props) => {
         const mutation = useMutation(() => fetch('/api/test', { method: 'post' }));
-        return <DangerAction {...props} mutation={mutation as any} />;
+        return <ActionPanel {...props} mutation={mutation as any} />;
     };
 
     beforeAll(() => {

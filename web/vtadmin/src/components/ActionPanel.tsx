@@ -24,7 +24,7 @@ type Mutation = UseMutationResult & {
     mutate: () => void;
 };
 
-export interface DangerActionProps {
+export interface ActionPanelProps {
     confirmationValue: string;
     description: React.ReactNode;
     documentationLink: string;
@@ -36,11 +36,11 @@ export interface DangerActionProps {
 }
 
 /**
- * DangerAction is a panel used for initiating mutations on entity pages.
- * When rendering multiple DangerAction components, ensure they are in
+ * ActionPanel is a panel used for initiating mutations on entity pages.
+ * When rendering multiple ActionPanel components, ensure they are in
  * a surrounding <div> to ensure the first: and last: CSS selectors work.
  */
-const DangerAction: React.FC<DangerActionProps> = ({
+const ActionPanel: React.FC<ActionPanelProps> = ({
     confirmationValue,
     title,
     description,
@@ -101,4 +101,4 @@ const DangerAction: React.FC<DangerActionProps> = ({
     );
 };
 
-export default DangerAction;
+export default ActionPanel;
