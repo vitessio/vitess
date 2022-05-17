@@ -46,6 +46,9 @@ var (
 
 	_ = flag.String("web_dir", "", "NOT USED, here for backward compatibility")
 	_ = flag.String("web_dir2", "", "NOT USED, here for backward compatibility")
+
+	// deprecated, only here for backwards compatibility:
+	deprecatedOnlineDDLCheckInterval = flag.Duration("online_ddl_check_interval", 0, "deprecated. Will be removed in next Vitess version")
 )
 
 const (
@@ -54,6 +57,10 @@ const (
 
 // InitVtctld initializes all the vtctld functionality.
 func InitVtctld(ts *topo.Server) error {
+	if *deprecatedOnlineDDLCheckInterval != 0 {
+		log.Warningf("the flag '--online_ddl_check_interval' is deprecated and will be removed in future versions. It is currently unused.")
+	}
+
 	err := reparentutil.SetDurabilityPolicy("none")
 	if err != nil {
 		log.Errorf("error in setting durability policy: %v", err)
