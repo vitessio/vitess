@@ -84,70 +84,207 @@ describe('Advanced', () => {
         process.env = { ...ORIGINAL_PROCESS_ENV };
     });
 
-    describe('Delete', () => {
-        it('deletes the tablet', async () => {
-            const tablet = makeTablet();
-            renderHelper(
-                <Advanced
-                    alias={formatAlias(tablet.tablet?.alias) as string}
-                    clusterID={tablet.cluster?.id as string}
-                    tablet={tablet}
-                />
-            );
+    describe('Advanced tablet actions', () => {
+        describe('Start Replication', () => {
+            it('starts replication', async () => {
+                const tablet = makeTablet();
+                const alias = formatAlias(tablet.tablet?.alias) as string;
+                renderHelper(<Advanced alias={alias} clusterID={tablet.cluster?.id as string} tablet={tablet} />);
 
-            const container = screen.getByTitle('Delete Tablet');
-            const button = within(container).getByRole('button');
-            const input = within(container).getByRole('textbox');
+                const container = screen.getByTitle('Start Replication');
+                const button = within(container).getByRole('button');
 
-            expect(button).toHaveAttribute('disabled');
+                // This action does not require confirmation
+                const input = within(container).queryByRole('textbox');
+                expect(input).toBeNull();
 
-            fireEvent.change(input, { target: { value: 'zone1-101' } });
-            expect(button).not.toHaveAttribute('disabled');
+                expect(button).not.toHaveAttribute('disabled');
 
-            fireEvent.click(button);
+                fireEvent.click(button);
 
-            await waitFor(() => {
-                expect(global.fetch).toHaveBeenCalledTimes(1);
+                await waitFor(() => {
+                    expect(global.fetch).toHaveBeenCalledTimes(1);
+                });
+
+                expect(global.fetch).toHaveBeenCalledWith(
+                    `/api/tablet/${alias}/start_replication?cluster=some-cluster-id`,
+                    {
+                        credentials: undefined,
+                        method: 'put',
+                    }
+                );
             });
 
-            expect(global.fetch).toHaveBeenCalledWith('/api/tablet/zone1-101?cluster=some-cluster-id', {
-                credentials: undefined,
-                method: 'delete',
+            it('prevents starting replication if primary', () => {
+                const tablet = makePrimaryTablet();
+                renderHelper(
+                    <Advanced
+                        alias={formatAlias(tablet.tablet?.alias) as string}
+                        clusterID={tablet.cluster?.id as string}
+                        tablet={tablet}
+                    />
+                );
+
+                const container = screen.getByTitle('Start Replication');
+                const button = within(container).getByRole('button');
+                expect(button).toHaveAttribute('disabled');
             });
         });
 
-        it('deletes the tablet with allow_master=true if primary', async () => {
-            const tablet = makePrimaryTablet();
-            renderHelper(
-                <Advanced
-                    alias={formatAlias(tablet.tablet?.alias) as string}
-                    clusterID={tablet.cluster?.id as string}
-                    tablet={tablet}
-                />
-            );
+        describe('Stop Replication', () => {
+            it('stops replication', async () => {
+                const tablet = makeTablet();
+                const alias = formatAlias(tablet.tablet?.alias) as string;
+                renderHelper(<Advanced alias={alias} clusterID={tablet.cluster?.id as string} tablet={tablet} />);
 
-            const container = screen.getByTitle('Delete Tablet');
-            const button = within(container).getByRole('button');
-            const input = within(container).getByRole('textbox');
+                const container = screen.getByTitle('Stop Replication');
+                const button = within(container).getByRole('button');
 
-            expect(button).toHaveAttribute('disabled');
+                // This action does not require confirmation
+                const input = within(container).queryByRole('textbox');
+                expect(input).toBeNull();
 
-            fireEvent.change(input, { target: { value: 'zone1-101' } });
-            expect(button).not.toHaveAttribute('disabled');
+                expect(button).not.toHaveAttribute('disabled');
 
-            fireEvent.click(button);
+                fireEvent.click(button);
 
-            await waitFor(() => {
-                expect(global.fetch).toHaveBeenCalledTimes(1);
+                await waitFor(() => {
+                    expect(global.fetch).toHaveBeenCalledTimes(1);
+                });
+
+                expect(global.fetch).toHaveBeenCalledWith(
+                    `/api/tablet/${alias}/stop_replication?cluster=some-cluster-id`,
+                    {
+                        credentials: undefined,
+                        method: 'put',
+                    }
+                );
             });
 
-            expect(global.fetch).toHaveBeenCalledWith(
-                '/api/tablet/zone1-101?cluster=some-cluster-id&allow_primary=true',
-                {
+            it('prevents stopping replication if primary', () => {
+                const tablet = makePrimaryTablet();
+                renderHelper(
+                    <Advanced
+                        alias={formatAlias(tablet.tablet?.alias) as string}
+                        clusterID={tablet.cluster?.id as string}
+                        tablet={tablet}
+                    />
+                );
+
+                const container = screen.getByTitle('Stop Replication');
+                const button = within(container).getByRole('button');
+                expect(button).toHaveAttribute('disabled');
+            });
+        });
+
+        describe('Reparent', () => {
+            it('reparents', async () => {
+                const tablet = makeTablet();
+                const alias = formatAlias(tablet.tablet?.alias) as string;
+                renderHelper(<Advanced alias={alias} clusterID={tablet.cluster?.id as string} tablet={tablet} />);
+
+                const container = screen.getByTitle('Reparent');
+                const button = within(container).getByRole('button');
+
+                // This action does not require confirmation
+                const input = within(container).queryByRole('textbox');
+                expect(input).toBeNull();
+
+                expect(button).not.toHaveAttribute('disabled');
+
+                fireEvent.click(button);
+
+                await waitFor(() => {
+                    expect(global.fetch).toHaveBeenCalledTimes(1);
+                });
+
+                expect(global.fetch).toHaveBeenCalledWith(`/api/tablet/${alias}/reparent`, {
+                    credentials: undefined,
+                    method: 'put',
+                });
+            });
+
+            it('prevents reparenting if primary', () => {
+                const tablet = makePrimaryTablet();
+                renderHelper(
+                    <Advanced
+                        alias={formatAlias(tablet.tablet?.alias) as string}
+                        clusterID={tablet.cluster?.id as string}
+                        tablet={tablet}
+                    />
+                );
+
+                const container = screen.getByTitle('Reparent');
+                const button = within(container).getByRole('button');
+                expect(button).toHaveAttribute('disabled');
+            });
+        });
+
+        describe('Delete', () => {
+            it('deletes the tablet', async () => {
+                const tablet = makeTablet();
+                renderHelper(
+                    <Advanced
+                        alias={formatAlias(tablet.tablet?.alias) as string}
+                        clusterID={tablet.cluster?.id as string}
+                        tablet={tablet}
+                    />
+                );
+
+                const container = screen.getByTitle('Delete Tablet');
+                const button = within(container).getByRole('button');
+                const input = within(container).getByRole('textbox');
+
+                expect(button).toHaveAttribute('disabled');
+
+                fireEvent.change(input, { target: { value: 'zone1-101' } });
+                expect(button).not.toHaveAttribute('disabled');
+
+                fireEvent.click(button);
+
+                await waitFor(() => {
+                    expect(global.fetch).toHaveBeenCalledTimes(1);
+                });
+
+                expect(global.fetch).toHaveBeenCalledWith('/api/tablet/zone1-101?cluster=some-cluster-id', {
                     credentials: undefined,
                     method: 'delete',
-                }
-            );
+                });
+            });
+
+            it('deletes the tablet with allow_master=true if primary', async () => {
+                const tablet = makePrimaryTablet();
+                renderHelper(
+                    <Advanced
+                        alias={formatAlias(tablet.tablet?.alias) as string}
+                        clusterID={tablet.cluster?.id as string}
+                        tablet={tablet}
+                    />
+                );
+
+                const container = screen.getByTitle('Delete Tablet');
+                const button = within(container).getByRole('button');
+                const input = within(container).getByRole('textbox');
+
+                expect(button).toHaveAttribute('disabled');
+
+                fireEvent.change(input, { target: { value: 'zone1-101' } });
+                expect(button).not.toHaveAttribute('disabled');
+
+                fireEvent.click(button);
+
+                await waitFor(() => {
+                    expect(global.fetch).toHaveBeenCalledTimes(1);
+                });
+
+                expect(global.fetch).toHaveBeenCalledWith(
+                    '/api/tablet/zone1-101?cluster=some-cluster-id&allow_primary=true',
+                    {
+                        credentials: undefined,
+                        method: 'delete',
+                    }
+                );
+            });
         });
     });
 });

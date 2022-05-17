@@ -110,7 +110,7 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
             <div className="my-8">
                 <h3 className="mb-4">Replication</h3>
                 <div className="w-full border rounded-lg border-gray-400">
-                    <div className="p-8 border-b border-gray-400">
+                    <div title="Start Replication" className="p-8 border-b border-gray-400">
                         <div className="flex justify-between items-center">
                             <p className="text-base font-bold m-0 text-gray-900">Start Replication</p>
                             <a
@@ -145,7 +145,7 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                             Start replication
                         </button>
                     </div>
-                    <div className="p-8">
+                    <div title="Stop Replication" className="p-8">
                         <div className="flex justify-between items-center">
                             <p className="text-base font-bold m-0 text-gray-900">Stop Replication</p>
                             <a
@@ -185,7 +185,7 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
             <div className="my-8">
                 <h3 className="mb-4">Reparent</h3>
                 <div className="w-full border rounded-lg border-gray-400">
-                    <div className="p-8 border-b border-gray-400">
+                    <div title="Reparent" className="p-8 border-b border-gray-400">
                         <div className="flex justify-between items-center">
                             <p className="text-base font-bold m-0 text-gray-900">Reparent Tablet</p>
                             <a
