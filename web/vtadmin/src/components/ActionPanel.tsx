@@ -25,8 +25,9 @@ type Mutation = UseMutationResult & {
 };
 
 export interface ActionPanelProps {
-    confirmationValue: string;
+    confirmationValue?: string;
     description: React.ReactNode;
+    disabled?: boolean;
     documentationLink: string;
     loadingText: string;
     loadedText: string;
@@ -42,6 +43,7 @@ export interface ActionPanelProps {
  */
 const ActionPanel: React.FC<ActionPanelProps> = ({
     confirmationValue,
+    disabled,
     title,
     description,
     documentationLink,
@@ -51,6 +53,10 @@ const ActionPanel: React.FC<ActionPanelProps> = ({
     warnings = [],
 }) => {
     const [typedAlias, setTypedAlias] = useState('');
+
+    const requiresConfirmation = typeof confirmationValue === 'string' && !!confirmationValue;
+
+    const isDisabled = !!disabled || mutation.isLoading || (requiresConfirmation && typedAlias !== confirmationValue);
 
     return (
         <div
@@ -81,15 +87,20 @@ const ActionPanel: React.FC<ActionPanelProps> = ({
                     )
             )}
 
-            <p className="text-base">
-                Please type <span className="font-bold">{confirmationValue}</span> confirm.
-            </p>
-            <div className="w-1/3">
-                <TextInput value={typedAlias} onChange={(e) => setTypedAlias(e.target.value)} />
-            </div>
+            {requiresConfirmation && (
+                <>
+                    <p className="text-base">
+                        Please type <span className="font-bold">{confirmationValue}</span> confirm.
+                    </p>
+                    <div className="w-1/3">
+                        <TextInput value={typedAlias} onChange={(e) => setTypedAlias(e.target.value)} />
+                    </div>
+                </>
+            )}
+
             <button
                 className="btn btn-secondary btn-danger mt-4"
-                disabled={typedAlias !== confirmationValue || mutation.isLoading}
+                disabled={isDisabled}
                 onClick={() => {
                     (mutation as Mutation).mutate();
                     setTypedAlias('');
