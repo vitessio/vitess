@@ -1322,12 +1322,12 @@ func (c *Conn) execQuery(query string, handler Handler, multiStatements bool) (s
 	return remainder, nil
 }
 
-func (c *Conn) execPrepareStatement(stmtID uint32, handler Handler) (err error) {
+func (c *Conn) execPrepareStatement(stmtID uint32, handler Handler) error {
 	fieldSent := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
 	prepare := c.PrepareData[stmtID]
-	err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
+	err := handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
 		if sendFinished {
 			// Failsafe: Unreachable if server is well-behaved.
 			return io.EOF
@@ -1378,7 +1378,8 @@ func (c *Conn) execPrepareStatement(stmtID uint32, handler Handler) (err error) 
 			}
 		}
 	}
-	return
+
+	return nil
 }
 
 //
