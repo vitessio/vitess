@@ -206,6 +206,24 @@ func TestInsightsErrors(t *testing.T) {
 		})
 }
 
+func TestInsightsSafeErrors(t *testing.T) {
+	insightsTestHelper(t, true, setupOptions{},
+		[]insightsQuery{
+			{sql: "select :vtg1", error: "target: commerce.0.primary: vttablet: rpc error: code = Canceled desc = (errno 2013) due to context deadline exceeded, elapsed time: 29.998788288s, killing query ID 58 (CallerID: userData1)"},
+			{sql: "select :vtg1", error: `target: commerce.0.primary: vttablet: rpc error: code = Aborted desc = Row count exceeded 10000 (errno 10001) (sqlstate HY000) (CallerID: userData1): Sql: "select * from foo as f1 join foo as f2 join foo as f3 join foo as f4 join foo as f5 join foo as f6 where f1.id > :vtg1", BindVars: {#maxLimit: "type:INT64 value:\"10001\""vtg1: "type:INT64 value:\"0\"`},
+			{sql: "select :vtg1", error: "target: commerce.0.primary: vttablet: rpc error: code = ResourceExhausted desc = grpc: trying to send message larger than max (18345369 vs. 16777216)"},
+			{sql: "select :vtg1", error: `target: commerce.0.primary: vttablet: rpc error: code = Canceled desc = EOF (errno 2013) (sqlstate HY000) (CallerID: userData1): Sql: "select :vtg1 from foo", BindVars: {#maxLimit: "type:INT64 value:\"10001\""vtg1: "type:INT64 value:\"1\"`},
+			{sql: "select :vtg1", error: `target: sharded.-40.primary: vttablet: rpc error: code = Unavailable desc = error reading from server: EOF`},
+		},
+		[]insightsKafkaExpectation{
+			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = Canceled`).butNot("foo", "BindVars", "Sql").count(2),
+			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = Aborted`).butNot("foo", "BindVars", "Sql"),
+			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = ResourceExhausted`),
+			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = Unavailable`),
+			expect(queryStatsBundleTopic, `normalized_sql:{value:\"<error>\"}`, `statement_type:\"ERROR\"`, "query_count:5", "error_count:5").butNot("foo", "BindVars", ":vtg1"),
+		})
+}
+
 func TestInsightsSavepoints(t *testing.T) {
 	insightsTestHelper(t, true, setupOptions{},
 		[]insightsQuery{
@@ -379,18 +397,24 @@ type insightsKafkaExpectation struct {
 	patterns     []string
 	antipatterns []string
 	topic        string
-	found        int
+	want, found  int
 }
 
 func expect(topic string, patterns ...string) insightsKafkaExpectation {
 	return insightsKafkaExpectation{
 		patterns: patterns,
 		topic:    topic,
+		want:     1,
 	}
 }
 
 func (ike insightsKafkaExpectation) butNot(anti ...string) insightsKafkaExpectation {
 	ike.antipatterns = append(ike.antipatterns, anti...)
+	return ike
+}
+
+func (ike insightsKafkaExpectation) count(n int) insightsKafkaExpectation {
+	ike.want = n
 	return ike
 }
 
@@ -443,7 +467,7 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 	}
 	require.True(t, insights.Drain(), "did not drain")
 	for _, ex := range expect {
-		assert.Equal(t, 1, ex.found, "count for %+v was wrong", ex)
+		assert.Equal(t, ex.want, ex.found, "count for %+v was wrong", ex)
 	}
 }
 

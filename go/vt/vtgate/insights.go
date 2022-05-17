@@ -329,6 +329,9 @@ func (ii *Insights) handleMessage(record interface{}) {
 		// comments with -- markers get stripped when newExecute calls getPlan around plan_execute.go:63.
 		sql, comments = splitComments(ls.SQL)
 		sql, ls.Error = normalizeSQL(sql)
+	} else if isSafeError(ls.Error) {
+		sql, comments = splitComments(ls.SQL)
+		sql, _ = normalizeSQL(sql)
 	} else {
 		sql = "<error>"
 	}
@@ -355,6 +358,12 @@ func (ii *Insights) handleMessage(record interface{}) {
 		}
 		ii.reserveAndSend(buf, queryTopic, kafkaKey)
 	}
+}
+
+const rpcErrorString = `vttablet: rpc error: code = `
+
+func isSafeError(err error) bool {
+	return strings.Contains(err.Error(), rpcErrorString)
 }
 
 func (ii *Insights) makeKafkaKey(sql string) string {
