@@ -500,6 +500,11 @@ func TestDeleteShards(t *testing.T) {
 	}
 }
 
+func TestDeleteTablets(t *testing.T) {
+	t.Parallel()
+	// TODO
+}
+
 func TestFindTablet(t *testing.T) {
 	t.Parallel()
 
@@ -3364,4 +3369,90 @@ func TestGetWorkflows(t *testing.T) {
 			testutil.AssertClusterWorkflowsEqual(t, tt.expected, workflows)
 		})
 	}
+}
+
+func TestRefreshState(t *testing.T) {
+	t.Parallel()
+	// TODO
+}
+
+func TestReparentTablet(t *testing.T) {
+	t.Parallel()
+
+	// TODO
+}
+
+func TestSetWritable(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name              string
+		cfg               testutil.TestClusterConfig
+		req               *vtctldatapb.SetWritableRequest
+		assertion         func(t assert.TestingT, err error, msgAndArgs ...any) bool
+		assertionMsgExtra []any
+	}{
+		{
+			name: "ok",
+			cfg: testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "test",
+					Name: "test",
+				},
+				VtctldClient: &fakevtctldclient.VtctldClient{
+					SetWritableResults: map[string]error{
+						"zone1-0000000100": nil,
+					},
+				},
+			},
+			req: &vtctldatapb.SetWritableRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Writable: true,
+			},
+			assertion: assert.NoError,
+		},
+		{
+			name: "error",
+			cfg: testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "test",
+					Name: "test",
+				},
+				VtctldClient: &fakevtctldclient.VtctldClient{
+					SetWritableResults: map[string]error{
+						"zone1-0000000100": fmt.Errorf("some error"),
+					},
+				},
+			},
+			req: &vtctldatapb.SetWritableRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Writable: true,
+			},
+			assertion: assert.Error,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			c := testutil.BuildCluster(t, tt.cfg)
+			err := c.SetWritable(ctx, tt.req)
+			tt.assertion(t, err, tt.assertionMsgExtra...)
+		})
+	}
+}
+
+func TestToggleTabletReplication(t *testing.T) {
+	t.Parallel()
+	// TODO
 }

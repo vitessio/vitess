@@ -85,6 +85,7 @@ type VtctldClient struct {
 		Response *vtctldatapb.ReloadSchemaShardResponse
 		Error    error
 	}
+	SetWritableResults               map[string]error
 	ShardReplicationPositionsResults map[string]struct {
 		Response *vtctldatapb.ShardReplicationPositionsResponse
 		Error    error
@@ -276,6 +277,24 @@ func (fake *VtctldClient) ReloadSchemaShard(ctx context.Context, req *vtctldatap
 	key := fmt.Sprintf("%s/%s", req.Keyspace, req.Shard)
 	if result, ok := fake.ReloadSchemaShardResults[key]; ok {
 		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// SetWritable is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) SetWritable(ctx context.Context, req *vtctldatapb.SetWritableRequest, opts ...grpc.CallOption) (*vtctldatapb.SetWritableResponse, error) {
+	if fake.SetWritableResults == nil {
+		return nil, fmt.Errorf("%w: SetWritableResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(req.TabletAlias)
+	if err, ok := fake.SetWritableResults[key]; ok {
+		if err != nil {
+			return nil, err
+		}
+
+		return &vtctldatapb.SetWritableResponse{}, nil
 	}
 
 	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
