@@ -2542,6 +2542,8 @@ type (
 		JSONValue Expr
 	}
 
+	// RegexpInstrExpr represents REGEXP_INSTR()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
 	RegexpInstrExpr struct {
 		Expr         Expr
 		Pattern      Expr
@@ -2551,12 +2553,16 @@ type (
 		MatchType    Expr
 	}
 
+	// RegexpLikeExpr represents REGEXP_LIKE()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
 	RegexpLikeExpr struct {
 		Expr      Expr
 		Pattern   Expr
 		MatchType Expr
 	}
 
+	// RegexpReplaceExpr represents REGEXP_REPLACE()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace
 	RegexpReplaceExpr struct {
 		Expr       Expr
 		Pattern    Expr
@@ -2566,6 +2572,8 @@ type (
 		MatchType  Expr
 	}
 
+	// RegexpSubstrExpr represents REGEXP_SUBSTR()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
 	RegexpSubstrExpr struct {
 		Expr       Expr
 		Pattern    Expr
@@ -2574,6 +2582,8 @@ type (
 		MatchType  Expr
 	}
 
+	// RLikeExpr represents RLIKE
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#operator_regexp
 	RLikeExpr struct {
 		Expr    Expr
 		Pattern Expr
