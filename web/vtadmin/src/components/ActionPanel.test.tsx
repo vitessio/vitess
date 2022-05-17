@@ -147,8 +147,6 @@ describe('ActionPanel', () => {
             </QueryClientProvider>
         );
 
-        const user = userEvent.setup();
-
         const button = screen.getByRole('button');
         const input = screen.queryByRole('textbox');
 
