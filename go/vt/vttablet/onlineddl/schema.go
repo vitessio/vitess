@@ -514,6 +514,7 @@ const (
 	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
 	sqlShowTableStatus   = "SHOW TABLE STATUS LIKE '%a'"
 	sqlShowCreateTable   = "SHOW CREATE TABLE `%a`"
+	sqlReadOneRow        = "SELECT 1 FROM `%a` LIMIT 1"
 	sqlGetAutoIncrement  = `
 		SELECT
 			AUTO_INCREMENT

@@ -537,6 +537,9 @@ func (e *Executor) dropOnlineDDLUser(ctx context.Context) error {
 
 // tableExists checks if a given table exists.
 func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, error) {
+	if tableName == "" {
+		return false, nil
+	}
 	tableName = strings.ReplaceAll(tableName, `_`, `\_`)
 	parsed := sqlparser.BuildParsedQuery(sqlShowTablesLike, tableName)
 	rs, err := e.execQuery(ctx, parsed.Query)
@@ -545,6 +548,16 @@ func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, err
 	}
 	row := rs.Named().Row()
 	return (row != nil), nil
+}
+
+// tableIsEmpty checks if a given table is empty, or if it has any rows.
+func (e *Executor) tableIsEmpty(ctx context.Context, tableName string) (bool, error) {
+	parsed := sqlparser.BuildParsedQuery(sqlReadOneRow, tableName)
+	rs, err := e.execQuery(ctx, parsed.Query)
+	if err != nil {
+		return false, err
+	}
+	return len(rs.Rows) == 0, nil
 }
 
 // showCreateTable returns the SHOW CREATE statement for a table or a view
@@ -2432,14 +2445,14 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 }
 
 // executeSpecialAlterDDLActionMigration executed a special plan migration
-func (e *Executor) executeSpecialAlterDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, specialPlan *SpecialAlterPlan) (specialMigrationExecuted bool, err error) {
-	switch specialPlan.operation {
+func (e *Executor) executeSpecialAlterDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, plan *SpecialAlterPlan) (specialMigrationExecuted bool, err error) {
+	fmt.Printf("=========== ZZZ execute special alter plan: %v, artifact: %s\n", plan.operation, plan.Detail("artifact"))
+
+	switch plan.operation {
 	case dropRangePartitionSpecialOperation:
 		dropPartition := func() error {
-			artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
-			if err != nil {
-				return err
-			}
+			artifactTableName := plan.Detail("artifact")
+			// artifact is a new table
 			if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTableName); err != nil {
 				return err
 			}
@@ -2460,7 +2473,7 @@ func (e *Executor) executeSpecialAlterDDLActionMigration(ctx context.Context, on
 				return err
 			}
 			// Exchange with partition
-			partitionName := specialPlan.Detail("partition_name")
+			partitionName := plan.Detail("partition_name")
 			parsed = sqlparser.BuildParsedQuery(sqlAlterTableExchangePartition, onlineDDL.Table, partitionName, artifactTableName)
 			if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
 				return err
@@ -2476,16 +2489,63 @@ func (e *Executor) executeSpecialAlterDDLActionMigration(ctx context.Context, on
 			return false, err
 		}
 	case addRangePartitionSpecialOperation:
-		partitionDefinition := specialPlan.Detail("partition_definition")
-		parsed := sqlparser.BuildParsedQuery(sqlAlterTableAddPartition, onlineDDL.Table, partitionDefinition)
-		onlineDDL.SQL = parsed.Query
-		if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
+		addPartition := func() error {
+			// This is a multi step operation, described in https://github.com/vitessio/vitess/issues/10317
+			// Because the operation is not atomic, it is possible that a tablet fails mid-operation.
+			// The next steps ensure idempotency.
+			artifactTableName := plan.Detail("artifact")
+			artifactExists, err := e.tableExists(ctx, artifactTableName)
+			if err != nil {
+				return err
+			}
+			if !plan.changesFoundInTable {
+				// Idempotency.
+				// changesFoundInTable will have only been set by a REVERT operation (see analyzeSpecialRevertAlterPlan())
+				// If the table already has this exact partition, then a previous invocation of this revert migration has started and crashed midway.
+				// In that case, this is fine and we can silently skip re-creation of same migration
+				partitionDefinition := plan.Detail("partition_definition")
+				parsed := sqlparser.BuildParsedQuery(sqlAlterTableAddPartition, onlineDDL.Table, partitionDefinition)
+				onlineDDL.SQL = parsed.Query
+				if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
+					return err
+				}
+			}
+			if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTableName); err != nil {
+				return err
+			}
+			if artifactExists {
+				// this means we're reverting a DROP. The artifact is the DROPped partition,
+				// populated with data.
+
+				// Idempotency: it is possible that a previous iteration of made the swap, but crashed before marking as 'complete'.
+				// In that scenario, the swapped-out partition is empty, and the swapped-in partition may contain data. We mustn't swap again!
+				artifactIsEmpty, err := e.tableIsEmpty(ctx, artifactTableName)
+				if err != nil {
+					return err
+				}
+				if !artifactIsEmpty {
+					// Exchange with partition
+					conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+					if err != nil {
+						return err
+					}
+					defer conn.Close()
+					partitionName := plan.Detail("partition_name")
+					parsed := sqlparser.BuildParsedQuery(sqlAlterTableExchangePartition, onlineDDL.Table, partitionName, artifactTableName)
+					if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		}
+		if err := addPartition(); err != nil {
 			return false, err
 		}
 	default:
-		return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot execute special plan: %v", specialPlan.operation)
+		return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot execute special plan: %v", plan.operation)
 	}
-	if err := e.updateMigrationSpecialPlan(ctx, onlineDDL.UUID, specialPlan.String()); err != nil {
+	if err := e.updateMigrationSpecialPlan(ctx, onlineDDL.UUID, plan.String()); err != nil {
 		return true, err
 	}
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)

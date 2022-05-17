@@ -34,13 +34,14 @@ const (
 )
 
 type SpecialAlterPlan struct {
-	operation   specialAlterOperation
-	details     map[string]string
-	alterTable  *sqlparser.AlterTable
-	createTable *sqlparser.CreateTable
+	operation           specialAlterOperation
+	details             map[string]string
+	changesFoundInTable bool
+	alterTable          *sqlparser.AlterTable
+	createTable         *sqlparser.CreateTable
 }
 
-func NewSpecialAlterOperation(operation specialAlterOperation, alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable) *SpecialAlterPlan {
+func NewSpecialAlterPlan(operation specialAlterOperation, alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable) *SpecialAlterPlan {
 	return &SpecialAlterPlan{
 		operation:   operation,
 		details:     map[string]string{"operation": string(operation)},
@@ -103,8 +104,6 @@ func (e *Executor) analyzeDropRangePartition(alterTable *sqlparser.AlterTable, c
 	}
 	partitionName := spec.Names[0].String()
 	// OK then!
-
-	// Now, is this query dropping the first parititon in a RANGE partitioned table?
 	part := createTable.TableSpec.PartitionOption
 	if part.Type != sqlparser.RangeType {
 		return nil, nil
@@ -127,31 +126,37 @@ func (e *Executor) analyzeDropRangePartition(alterTable *sqlparser.AlterTable, c
 		// dropping a nonexistent partition. We'll let the "standard" migration execution flow deal with that.
 		return nil, nil
 	}
-	op := NewSpecialAlterOperation(dropRangePartitionSpecialOperation, alterTable, createTable)
-	op.SetDetail("partition_name", partitionName)
-	op.SetDetail("partition_definition", sqlparser.CanonicalString(partitionDefinition))
-	op.SetDetail("next_partition_name", nextPartitionName)
-	return op, nil
+	artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+	if err != nil {
+		return nil, err
+	}
+
+	plan := NewSpecialAlterPlan(dropRangePartitionSpecialOperation, alterTable, createTable)
+	plan.SetDetail("partition_name", partitionName)
+	plan.SetDetail("partition_definition", sqlparser.CanonicalString(partitionDefinition))
+	plan.SetDetail("next_partition_name", nextPartitionName)
+	plan.SetDetail("artifact", artifactTableName)
+	return plan, nil
 }
 
 // analyzeAddRangePartition sees if the online DDL adds a partition in a range partitioned table
-func (e *Executor) analyzeAddRangePartition(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable) *SpecialAlterPlan {
+func (e *Executor) analyzeAddRangePartition(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable) (*SpecialAlterPlan, error) {
 	// we are looking for a `ALTER TABLE <table> ADD PARTITION (PARTITION ...)` statement with nothing else
 	if len(alterTable.AlterOptions) > 0 {
-		return nil
+		return nil, nil
 	}
 	if alterTable.PartitionOption != nil {
-		return nil
+		return nil, nil
 	}
 	spec := alterTable.PartitionSpec
 	if spec == nil {
-		return nil
+		return nil, nil
 	}
 	if spec.Action != sqlparser.AddAction {
-		return nil
+		return nil, nil
 	}
 	if len(spec.Definitions) != 1 {
-		return nil
+		return nil, nil
 	}
 	partitionDefinition := spec.Definitions[0]
 	partitionName := partitionDefinition.Name.String()
@@ -160,15 +165,20 @@ func (e *Executor) analyzeAddRangePartition(alterTable *sqlparser.AlterTable, cr
 	// Now, is this query adding a partition in a RANGE partitioned table?
 	part := createTable.TableSpec.PartitionOption
 	if part.Type != sqlparser.RangeType {
-		return nil
+		return nil, nil
 	}
 	if len(part.Definitions) == 0 {
-		return nil
+		return nil, nil
 	}
-	op := NewSpecialAlterOperation(addRangePartitionSpecialOperation, alterTable, createTable)
-	op.SetDetail("partition_name", partitionName)
-	op.SetDetail("partition_definition", sqlparser.CanonicalString(partitionDefinition))
-	return op
+	// artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+	// if err != nil {
+	// 	return nil, err
+	// }
+	plan := NewSpecialAlterPlan(addRangePartitionSpecialOperation, alterTable, createTable)
+	plan.SetDetail("partition_name", partitionName)
+	plan.SetDetail("partition_definition", sqlparser.CanonicalString(partitionDefinition))
+	// plan.SetDetail("artifact", artifactTableName)
+	return plan, nil
 }
 
 // analyzeSpecialAlterPlan checks if the given ALTER onlineDDL, and for the current state of affected table,
@@ -190,15 +200,23 @@ func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schem
 	}
 
 	// special plans which support reverts are trivially desired:
-	op, err := e.analyzeDropRangePartition(alterTable, createTable)
-	if err != nil {
-		return nil, err
+	{
+		op, err := e.analyzeDropRangePartition(alterTable, createTable)
+		if err != nil {
+			return nil, err
+		}
+		if op != nil {
+			return op, nil
+		}
 	}
-	if op != nil {
-		return op, nil
-	}
-	if op := e.analyzeAddRangePartition(alterTable, createTable); op != nil {
-		return op, nil
+	{
+		op, err := e.analyzeAddRangePartition(alterTable, createTable)
+		if err != nil {
+			return nil, err
+		}
+		if op != nil {
+			return op, nil
+		}
 	}
 	// special plans which do not support reverts are flag protected:
 	if onlineDDL.StrategySetting().IsFastOverRevertibleFlag() {
@@ -218,22 +236,55 @@ func (e *Executor) analyzeSpecialRevertAlterPlan(ctx context.Context, revertOnli
 		return nil, err
 	}
 	specialOperation := specialAlterOperation(details["operation"])
+
 	switch specialOperation {
 	case addRangePartitionSpecialOperation:
-		op := NewSpecialAlterOperation(dropRangePartitionSpecialOperation, nil, nil)
-		op.SetDetail("partition_name", details["partition_name"])
-		op.SetDetail("partition_definition", details["partition_definition"])
-		op.SetDetail("next_partition_name", "")
-		return op, nil
+		artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+		if err != nil {
+			return nil, err
+		}
+		plan := NewSpecialAlterPlan(dropRangePartitionSpecialOperation, nil, nil)
+		plan.SetDetail("partition_name", details["partition_name"])
+		plan.SetDetail("partition_definition", details["partition_definition"])
+		plan.SetDetail("next_partition_name", "")
+		plan.SetDetail("artifact", artifactTableName)
+		return plan, nil
 	case dropRangePartitionSpecialOperation:
 		if details["next_partition_name"] != "" {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot revert this partition yet")
 		}
-		op := NewSpecialAlterOperation(addRangePartitionSpecialOperation, nil, nil)
-		op.SetDetail("partition_name", details["partition_name"])
-		op.SetDetail("partition_definition", details["partition_definition"])
-		return op, nil
+		createTable, err := e.getCreateTableStatement(ctx, revertOnlineDDL.Table)
+		if err != nil {
+			return nil, err
+		}
+		plan := NewSpecialAlterPlan(addRangePartitionSpecialOperation, nil, nil)
+		plan.SetDetail("artifact", details["artifact"])
+		plan.SetDetail("partition_name", details["partition_name"])
+		partitionDefinition := details["partition_definition"]
+		plan.SetDetail("partition_definition", partitionDefinition)
+		plan.changesFoundInTable = hasPartitionDefinition(createTable, partitionDefinition)
+		return plan, nil
 	default:
 		return nil, nil
 	}
+}
+
+func hasPartitionDefinition(createTable *sqlparser.CreateTable, canonicalPartitionDefinition string) bool {
+	if createTable == nil {
+		return false
+	}
+	if createTable.TableSpec == nil {
+		return false
+	}
+	partitionOption := createTable.GetTableSpec().PartitionOption
+	if partitionOption == nil {
+		return false
+	}
+	for _, p := range partitionOption.Definitions {
+		canonicalDefinition := sqlparser.CanonicalString(p)
+		if canonicalPartitionDefinition == canonicalDefinition {
+			return true
+		}
+	}
+	return false
 }
