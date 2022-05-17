@@ -1349,10 +1349,13 @@ func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("Error pinging cluster: %w", err)
+		return nil, err
 	}
 
-	return &vtadminpb.PingTabletResponse{Status: "ok"}, nil
+	return &vtadminpb.PingTabletResponse{
+		Status:  "ok",
+		Cluster: c.ToProto(),
+	}, nil
 }
 
 // RefreshState is part of the vtadminpb.VTAdminServer interface.
@@ -1374,7 +1377,10 @@ func (api *API) RefreshState(ctx context.Context, req *vtadminpb.RefreshStateReq
 		return nil, err
 	}
 
-	return &vtadminpb.RefreshStateResponse{Status: "ok"}, nil
+	return &vtadminpb.RefreshStateResponse{
+		Status:  "ok",
+		Cluster: c.ToProto(),
+	}, nil
 }
 
 // ReloadSchemas is part of the vtadminpb.VTAdminServer interface.
@@ -1463,10 +1469,13 @@ func (api *API) RunHealthCheck(ctx context.Context, req *vtadminpb.RunHealthChec
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("Error running health check on tablet: %w", err)
+		return nil, err
 	}
 
-	return &vtadminpb.RunHealthCheckResponse{Status: "ok"}, nil
+	return &vtadminpb.RunHealthCheckResponse{
+		Status:  "ok",
+		Cluster: c.ToProto(),
+	}, nil
 }
 
 // SetReadOnly is part of the vtadminpb.VTAdminServer interface.
