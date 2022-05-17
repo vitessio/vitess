@@ -75,6 +75,7 @@ const (
 	/* tablet-specific actions */
 
 	ManageTabletReplicationAction Action = "manage_tablet_replication" // Start/Stop Replication
+	ManageTabletWritabilityAction Action = "manage_tablet_writability" // SetRead{Only,Write}
 	ReparentTabletAction          Action = "reparent_tablet"
 )
 

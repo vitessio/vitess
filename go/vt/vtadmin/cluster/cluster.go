@@ -2037,6 +2037,20 @@ func (c *Cluster) ReparentTablet(ctx context.Context, tablet *vtadminpb.Tablet) 
 	}, nil
 }
 
+// SetWritable toggles the writability of a tablet, setting it to either
+// read-write or read-only.
+func (c *Cluster) SetWritable(ctx context.Context, req *vtctldatapb.SetWritableRequest) error {
+	span, ctx := trace.NewSpan(ctx, "Cluster.SetWritable")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("writable", req.Writable)
+
+	_, err := c.Vtctld.SetWritable(ctx, req)
+	return err
+}
+
 // ToggleTabletReplication either starts or stops replication on the specified
 // tablet.
 func (c *Cluster) ToggleTabletReplication(ctx context.Context, tablet *vtadminpb.Tablet, start bool) (err error) {

@@ -1483,7 +1483,7 @@ func (api *API) SetReadOnly(ctx context.Context, req *vtadminpb.SetReadOnlyReque
 	span, ctx := trace.NewSpan(ctx, "API.SetReadOnly")
 	defer span.Finish()
 
-	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
+	tablet, err := api.getTabletForAction(ctx, span, rbac.ManageTabletWritabilityAction, req.Alias, req.ClusterIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1493,13 +1493,10 @@ func (api *API) SetReadOnly(ctx context.Context, req *vtadminpb.SetReadOnlyReque
 		return nil, err
 	}
 
-	cluster.AnnotateSpan(c, span)
-
-	_, err = c.Vtctld.SetWritable(ctx, &vtctldatapb.SetWritableRequest{
+	err = c.SetWritable(ctx, &vtctldatapb.SetWritableRequest{
 		TabletAlias: tablet.Tablet.Alias,
 		Writable:    false,
 	})
-
 	if err != nil {
 		return nil, fmt.Errorf("Error setting tablet to read-only: %w", err)
 	}
@@ -1512,7 +1509,7 @@ func (api *API) SetReadWrite(ctx context.Context, req *vtadminpb.SetReadWriteReq
 	span, ctx := trace.NewSpan(ctx, "API.SetReadWrite")
 	defer span.Finish()
 
-	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
+	tablet, err := api.getTabletForAction(ctx, span, rbac.ManageTabletWritabilityAction, req.Alias, req.ClusterIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1522,13 +1519,10 @@ func (api *API) SetReadWrite(ctx context.Context, req *vtadminpb.SetReadWriteReq
 		return nil, err
 	}
 
-	cluster.AnnotateSpan(c, span)
-
-	_, err = c.Vtctld.SetWritable(ctx, &vtctldatapb.SetWritableRequest{
+	err = c.SetWritable(ctx, &vtctldatapb.SetWritableRequest{
 		TabletAlias: tablet.Tablet.Alias,
 		Writable:    true,
 	})
-
 	if err != nil {
 		return nil, fmt.Errorf("Error setting tablet to read-write: %w", err)
 	}
