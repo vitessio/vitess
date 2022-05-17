@@ -24,9 +24,11 @@ type Mutation = UseMutationResult & {
     mutate: () => void;
 };
 
-export interface DangerActionProps {
-    confirmationValue: string;
+export interface ActionPanelProps {
+    confirmationValue?: string;
+    danger?: boolean;
     description: React.ReactNode;
+    disabled?: boolean;
     documentationLink: string;
     loadingText: string;
     loadedText: string;
@@ -36,12 +38,14 @@ export interface DangerActionProps {
 }
 
 /**
- * DangerAction is a panel used for initiating mutations on entity pages.
- * When rendering multiple DangerAction components, ensure they are in
+ * ActionPanel is a panel used for initiating mutations on entity pages.
+ * When rendering multiple ActionPanel components, ensure they are in
  * a surrounding <div> to ensure the first: and last: CSS selectors work.
  */
-const DangerAction: React.FC<DangerActionProps> = ({
+const ActionPanel: React.FC<ActionPanelProps> = ({
     confirmationValue,
+    danger,
+    disabled,
     title,
     description,
     documentationLink,
@@ -50,11 +54,18 @@ const DangerAction: React.FC<DangerActionProps> = ({
     loadedText,
     warnings = [],
 }) => {
-    const [typedAlias, setTypedAlias] = useState('');
+    const [typedConfirmation, setTypedConfirmation] = useState('');
+
+    const requiresConfirmation = typeof confirmationValue === 'string' && !!confirmationValue;
+
+    const isDisabled =
+        !!disabled || mutation.isLoading || (requiresConfirmation && typedConfirmation !== confirmationValue);
 
     return (
         <div
-            className="p-9 pb-12 last:border-b border border-red-400 border-b-0 first:rounded-t-lg last:rounded-b-lg"
+            className={`p-9 pb-12 last:border-b border ${
+                danger ? 'border-red-400' : 'border-gray-400'
+            } border-b-0 first:rounded-t-lg last:rounded-b-lg`}
             title={title}
         >
             <div className="flex justify-between items-center">
@@ -81,18 +92,24 @@ const DangerAction: React.FC<DangerActionProps> = ({
                     )
             )}
 
-            <p className="text-base">
-                Please type <span className="font-bold">{confirmationValue}</span> confirm.
-            </p>
-            <div className="w-1/3">
-                <TextInput value={typedAlias} onChange={(e) => setTypedAlias(e.target.value)} />
-            </div>
+            {/* Don't render the confirmation input if "disabled" prop is set */}
+            {requiresConfirmation && !disabled && (
+                <>
+                    <p className="text-base">
+                        Please type <span className="font-bold">{confirmationValue}</span> confirm.
+                    </p>
+                    <div className="w-1/3">
+                        <TextInput value={typedConfirmation} onChange={(e) => setTypedConfirmation(e.target.value)} />
+                    </div>
+                </>
+            )}
+
             <button
-                className="btn btn-secondary btn-danger mt-4"
-                disabled={typedAlias !== confirmationValue || mutation.isLoading}
+                className={`btn btn-secondary ${danger && 'btn-danger'} mt-4`}
+                disabled={isDisabled}
                 onClick={() => {
                     (mutation as Mutation).mutate();
-                    setTypedAlias('');
+                    setTypedConfirmation('');
                 }}
             >
                 {mutation.isLoading ? loadingText : loadedText}
@@ -101,4 +118,4 @@ const DangerAction: React.FC<DangerActionProps> = ({
     );
 };
 
-export default DangerAction;
+export default ActionPanel;
