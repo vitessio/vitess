@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package sharded_vtgate_first
+package shardedvtgatefirst
 
 import (
 	"context"
@@ -127,14 +127,14 @@ func TestMain(m *testing.M) {
 		clusterInstance = cluster.NewCluster(Cell, "localhost")
 		defer clusterInstance.Teardown()
 
+		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--schema_change_signal_user", "userData1"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "5", "--queryserver-config-strict-table-acl", "--queryserver-config-acl-exempt-acl", "userData1", "--table-acl-config", "dummy.json"}
+
 		// Start topo server
 		err := clusterInstance.StartTopo()
 		if err != nil {
 			return 1
 		}
-
-		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--vschema_ddl_authorized_users", "%", "--schema_change_signal_user", "userData1"}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1", "--queryserver-config-strict-table-acl", "--queryserver-config-acl-exempt-acl", "userData1", "--table-acl-config", "dummy.json"}
 
 		// Start vtgate
 		err = clusterInstance.StartVtgate()

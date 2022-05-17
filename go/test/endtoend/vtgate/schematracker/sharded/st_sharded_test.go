@@ -139,7 +139,7 @@ func TestMain(m *testing.M) {
 			VSchema:   VSchema,
 		}
 		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--vschema_ddl_authorized_users", "%", "--schema_change_signal_user", "userData1"}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1", "--queryserver-config-strict-table-acl", "--queryserver-config-acl-exempt-acl", "userData1", "--table-acl-config", "dummy.json"}
+		clusterInstance.VtTabletExtraArgs = []string{"--health_check_interval=5s", "--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "5", "--queryserver-config-strict-table-acl", "--queryserver-config-acl-exempt-acl", "userData1", "--table-acl-config", "dummy.json"}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
 		if err != nil {
 			return 1

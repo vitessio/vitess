@@ -183,6 +183,38 @@ func (cluster *LocalProcessCluster) CtrlCHandler() {
 	}
 }
 
+// StartOnlyTopo starts topology server without vtctld
+func (cluster *LocalProcessCluster) StartOnlyTopo() (err error) {
+	if cluster.Cell == "" {
+		cluster.Cell = DefaultCell
+	}
+
+	topoFlavor = cluster.TopoFlavorString()
+	cluster.TopoPort = cluster.GetAndReservePort()
+	cluster.TmpDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/tmp_%d", cluster.GetAndReservePort()))
+	cluster.TopoProcess = *TopoProcessInstance(cluster.TopoPort, cluster.GetAndReservePort(), cluster.Hostname, *topoFlavor, "global")
+
+	log.Infof("Starting topo server %v on port: %d", *topoFlavor, cluster.TopoPort)
+	if err = cluster.TopoProcess.Setup(*topoFlavor, cluster); err != nil {
+		log.Error(err.Error())
+		return
+	}
+
+	if *topoFlavor == "etcd2" {
+		log.Info("Creating global and cell topo dirs")
+		if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/global"); err != nil {
+			log.Error(err.Error())
+			return
+		}
+
+		if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cluster.Cell); err != nil {
+			log.Error(err.Error())
+			return
+		}
+	}
+	return
+}
+
 // StartTopo starts topology server
 func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	if cluster.Cell == "" {
@@ -213,11 +245,15 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		}
 	}
 
+	return cluster.StartVtctld()
+}
+
+func (cluster *LocalProcessCluster) StartVtctld() (err error) {
 	if !cluster.ReusingVTDATAROOT {
 		cluster.VtctlProcess = *VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
 		if err = cluster.VtctlProcess.AddCellInfo(cluster.Cell); err != nil {
 			log.Error(err)
-			return
+			return err
 		}
 		cluster.VtctlProcess.LogDir = cluster.TmpDirectory
 	}
@@ -228,11 +264,11 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	cluster.VtctldHTTPPort = cluster.VtctldProcess.Port
 	if err = cluster.VtctldProcess.Setup(cluster.Cell, cluster.VtctldExtraArgs...); err != nil {
 		log.Error(err.Error())
-		return
+		return err
 	}
 
 	cluster.VtctlclientProcess = *VtctlClientProcessInstance("localhost", cluster.VtctldProcess.GrpcPort, cluster.TmpDirectory)
-	return
+	return nil
 }
 
 // StartUnshardedKeyspace starts unshared keyspace with shard name as "0"

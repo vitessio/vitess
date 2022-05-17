@@ -18,9 +18,10 @@ package schema
 
 import (
 	"context"
-	"go.uber.org/atomic"
 	"sync"
 	"time"
+
+	"go.uber.org/atomic"
 
 	"vitess.io/vitess/go/vt/callerid"
 

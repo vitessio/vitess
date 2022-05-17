@@ -129,11 +129,11 @@ func (u *updateController) add(th *discovery.TabletHealth) {
 	}
 
 	// For non-primary tablet health, there is no schema tracking.
-	if th.Tablet.Type != topodatapb.TabletType_PRIMARY {
+	if th.Target.TabletType != topodatapb.TabletType_PRIMARY {
 		if th.Stats != nil {
-			log.Info("ks: ", u.ksName, ", id:", u.ID, " | add: exit th.Tablet.Type != topodatapb.TabletType_PRIMARY, has schema changed: ", th.Stats.TableSchemaChanged)
+			log.Info("ks: ", u.ksName, ", id:", u.ID, " | add: exit th.Target.TabletType != topodatapb.TabletType_PRIMARY, has schema changed: ", th.Stats.TableSchemaChanged, " tablet type: ", th.Target.TabletType)
 		} else {
-			log.Info("ks: ", u.ksName, ", id:", u.ID, " | add: exit th.Tablet.Type != topodatapb.TabletType_PRIMARY, has no th.Stats")
+			log.Info("ks: ", u.ksName, ", id:", u.ID, " | add: exit th.Target.TabletType != topodatapb.TabletType_PRIMARY, has no th.Stats")
 		}
 		return
 	}

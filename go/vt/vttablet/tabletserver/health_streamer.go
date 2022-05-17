@@ -386,7 +386,7 @@ func (hs *healthStreamer) reload() error {
 
 	hs.state.RealtimeStats.TableSchemaChanged = tables
 	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
-	log.Info("reload(): StreamHealthResponse: changed tables: ", shr.RealtimeStats.TableSchemaChanged)
+	log.Info("reload(): StreamHealthResponse: changed tables: ", shr.RealtimeStats.TableSchemaChanged, "; tablet: ", shr.TabletAlias.String(), ", type: ", shr.Target.TabletType)
 	hs.broadCastToClients(shr)
 	hs.state.RealtimeStats.TableSchemaChanged = nil
 
