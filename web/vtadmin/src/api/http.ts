@@ -518,3 +518,46 @@ export const fetchShardReplicationPositions = async ({
 
     return pb.GetShardReplicationPositionsResponse.create(result);
 };
+
+export interface ReloadSchemaParams {
+    clusterIDs?: (string | null | undefined)[];
+    concurrency?: number;
+    includePrimary?: boolean;
+    keyspaces?: (string | null | undefined)[];
+
+    // e.g., ["commerce/0"]
+    keyspaceShards?: (string | null | undefined)[];
+
+    // A list of tablet aliases; e.g., ["zone1-101", "zone1-102"]
+    tablets?: (string | null | undefined)[];
+
+    waitPosition?: string;
+}
+
+export const reloadSchema = async (params: ReloadSchemaParams) => {
+    const req = new URLSearchParams();
+
+    (params.clusterIDs || []).forEach((c) => c && req.append('cluster', c));
+    (params.keyspaces || []).forEach((k) => k && req.append('keyspace', k));
+    (params.keyspaceShards || []).forEach((k) => k && req.append('keyspaceShard', k));
+    (params.tablets || []).forEach((t) => t && req.append('tablet', t));
+
+    if (typeof params.concurrency === 'number') {
+        req.append('concurrency', params.concurrency.toString());
+    }
+
+    if (typeof params.includePrimary === 'boolean') {
+        req.append('include_primary', params.includePrimary.toString());
+    }
+
+    if (typeof params.waitPosition === 'string') {
+        req.append('wait_position', params.waitPosition);
+    }
+
+    const { result } = await vtfetch(`/api/schemas/reload?${req}`, { method: 'put' });
+
+    const err = pb.ReloadSchemasResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.ReloadSchemasResponse.create(result);
+};
