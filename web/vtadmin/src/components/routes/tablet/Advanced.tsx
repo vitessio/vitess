@@ -155,9 +155,9 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                         confirmationValue=""
                         description={
                             <>
-                                This will run the underlying database command to start replication on tablet{' '}
-                                <span className="font-bold">{alias}</span>. For example, in mysql 8, this will be{' '}
-                                <span className="font-mono text-sm p-1 bg-gray-100">start replication</span>.
+                                Reconnect replication for tablet <span className="font-bold">{alias}</span> to the
+                                current primary tablet. This only works if the current replication position matches the
+                                last known reparent action.
                             </>
                         }
                         disabled={primary}
@@ -178,45 +178,54 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                             <ActionPanel
                                 confirmationValue={alias}
                                 danger
-                                title="Set Read-Only"
-                                documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadonly"
-                                warnings={[
-                                    `This will disable writing on the primary tablet ${alias}. Use with caution.`,
-                                ]}
                                 description={
                                     <>
                                         Set tablet <span className="font-bold">{alias}</span> to read-only.
                                     </>
                                 }
-                                mutation={setReadOnlyMutation as UseMutationResult}
+                                documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadonly"
                                 loadingText="Setting..."
                                 loadedText="Set to read-only"
+                                mutation={setReadOnlyMutation as UseMutationResult}
+                                title="Set Read-Only"
+                                warnings={[
+                                    `This will disable writing on the primary tablet ${alias}. Use with caution.`,
+                                ]}
                             />
 
                             <ActionPanel
                                 confirmationValue={alias}
                                 danger
-                                title="Set Read-Write"
-                                documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadwrite"
-                                warnings={[
-                                    `This will re-enable writing on the primary tablet ${alias}. Use with caution.`,
-                                ]}
                                 description={
                                     <>
                                         Set tablet <span className="font-bold">{alias}</span> to read-write.
                                     </>
                                 }
+                                documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadwrite"
                                 mutation={setReadWriteMutation as UseMutationResult}
                                 loadingText="Setting..."
                                 loadedText="Set to read-write"
+                                title="Set Read-Write"
+                                warnings={[
+                                    `This will re-enable writing on the primary tablet ${alias}. Use with caution.`,
+                                ]}
                             />
                         </>
                     )}
                     <ActionPanel
                         confirmationValue={alias}
                         danger
-                        title="Delete Tablet"
+                        description={
+                            <>
+                                Delete tablet <span className="font-bold">{alias}</span>. Doing so will remove it from
+                                the topology, but vttablet and MySQL won't be touched.
+                            </>
+                        }
                         documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#deletetablet"
+                        loadingText="Deleting..."
+                        loadedText="Delete"
+                        mutation={deleteTabletMutation as UseMutationResult}
+                        title="Delete Tablet"
                         warnings={[
                             primary && (
                                 <>
@@ -226,15 +235,6 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                                 </>
                             ),
                         ]}
-                        description={
-                            <>
-                                Delete tablet <span className="font-bold">{alias}</span>. Doing so will remove it from
-                                the topology, but vttablet and MySQL won't be touched.
-                            </>
-                        }
-                        mutation={deleteTabletMutation as UseMutationResult}
-                        loadingText="Deleting..."
-                        loadedText="Delete"
                     />
                 </div>
             </div>
