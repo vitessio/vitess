@@ -2446,11 +2446,14 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 
 // executeSpecialAlterDDLActionMigration executed a special plan migration
 func (e *Executor) executeSpecialAlterDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, plan *SpecialAlterPlan) (specialMigrationExecuted bool, err error) {
-	fmt.Printf("=========== ZZZ execute special alter plan: %v, artifact: %s\n", plan.operation, plan.Detail("artifact"))
+	markAsRunning := func() {
+		_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown, emptyHint)
+	}
 
 	switch plan.operation {
 	case dropRangePartitionSpecialOperation:
 		dropPartition := func() error {
+			markAsRunning()
 			artifactTableName := plan.Detail("artifact")
 			// artifact is a new table
 			if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTableName); err != nil {
@@ -2490,6 +2493,7 @@ func (e *Executor) executeSpecialAlterDDLActionMigration(ctx context.Context, on
 		}
 	case addRangePartitionSpecialOperation:
 		addPartition := func() error {
+			markAsRunning()
 			// This is a multi step operation, described in https://github.com/vitessio/vitess/issues/10317
 			// Because the operation is not atomic, it is possible that a tablet fails mid-operation.
 			// The next steps ensure idempotency.
@@ -2498,18 +2502,70 @@ func (e *Executor) executeSpecialAlterDDLActionMigration(ctx context.Context, on
 			if err != nil {
 				return err
 			}
+
+			conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+			if err != nil {
+				return err
+			}
+			defer conn.Close()
+
+			nextPartitionArtifactTableName := plan.Detail("next_partition_artifact")
+			nextPartitionName := plan.Detail("next_partition_name")
 			if !plan.changesFoundInTable {
 				// Idempotency.
 				// changesFoundInTable will have only been set by a REVERT operation (see analyzeSpecialRevertAlterPlan())
 				// If the table already has this exact partition, then a previous invocation of this revert migration has started and crashed midway.
 				// In that case, this is fine and we can silently skip re-creation of same migration
 				partitionDefinition := plan.Detail("partition_definition")
-				parsed := sqlparser.BuildParsedQuery(sqlAlterTableAddPartition, onlineDDL.Table, partitionDefinition)
-				onlineDDL.SQL = parsed.Query
-				if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
-					return err
+				if nextPartitionName == "" {
+					// we're adding this partition as the last partition
+					parsed := sqlparser.BuildParsedQuery(sqlAlterTableAddPartition, onlineDDL.Table, partitionDefinition)
+					onlineDDL.SQL = parsed.Query
+					if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
+						return err
+					}
+				} else {
+					// non last partition
+
+					// Apply CREATE TABLE for artifact table
+					parsed := sqlparser.BuildParsedQuery(sqlCreateTableLike, nextPartitionArtifactTableName, onlineDDL.Table)
+					if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+						return err
+					}
+					// Remove partitioning
+					parsed = sqlparser.BuildParsedQuery(sqlAlterTableRemovePartitioning, nextPartitionArtifactTableName)
+					if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+						return err
+					}
+					// Exchange with next partition, so that the next partition is empty in the table
+					parsed = sqlparser.BuildParsedQuery(sqlAlterTableExchangePartition, onlineDDL.Table, nextPartitionName, nextPartitionArtifactTableName)
+					if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+						return err
+					}
+
+					// reorganize the (empty) next partition into two
+					nextPartitionDefinition := plan.Detail("next_partition_definition")
+					parsed = sqlparser.BuildParsedQuery(sqlAlterTableReorganizePartition, onlineDDL.Table, nextPartitionName, partitionDefinition, nextPartitionDefinition)
+					if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+						return err
+					}
+					// the next steps will restore data into our newly created partitions
 				}
 			}
+			if nextPartitionArtifactTableName != "" {
+				artifactIsEmpty, err := e.tableIsEmpty(ctx, nextPartitionArtifactTableName)
+				if err != nil {
+					return err
+				}
+				if !artifactIsEmpty {
+					// exchange next partition back into place
+					parsed := sqlparser.BuildParsedQuery(sqlAlterTableExchangePartition, onlineDDL.Table, nextPartitionName, nextPartitionArtifactTableName)
+					if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+						return err
+					}
+				}
+			}
+
 			if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTableName); err != nil {
 				return err
 			}
@@ -2525,11 +2581,6 @@ func (e *Executor) executeSpecialAlterDDLActionMigration(ctx context.Context, on
 				}
 				if !artifactIsEmpty {
 					// Exchange with partition
-					conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
-					if err != nil {
-						return err
-					}
-					defer conn.Close()
 					partitionName := plan.Detail("partition_name")
 					parsed := sqlparser.BuildParsedQuery(sqlAlterTableExchangePartition, onlineDDL.Table, partitionName, artifactTableName)
 					if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
@@ -3107,6 +3158,12 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 			if err := e.updateMigrationStowawayTable(ctx, uuid, ""); err != nil {
 				return countRunnning, cancellable, err
 			}
+		}
+		if specialPlanDetails := row.AsString("special_plan", ""); specialPlanDetails != "" {
+			// special plan execution is protected under mutex, as are we. So at this point in time,
+			// we cannot possibly interrupt a working special plan migration.
+			// Therefore, if we find a special plan migration to be "running", that means it was interrupted by
+			// tablet crash. We will now take steps to recover it.
 		}
 
 		uuidsFoundRunning[uuid] = true

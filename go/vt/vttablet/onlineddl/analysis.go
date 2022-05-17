@@ -112,12 +112,12 @@ func (e *Executor) analyzeDropRangePartition(alterTable *sqlparser.AlterTable, c
 		return nil, nil
 	}
 	var partitionDefinition *sqlparser.PartitionDefinition
-	var nextPartitionName string
+	var nextPartitionDefinition *sqlparser.PartitionDefinition
 	for i, p := range part.Definitions {
 		if p.Name.String() == partitionName {
 			partitionDefinition = p
 			if i+1 < len(part.Definitions) {
-				nextPartitionName = part.Definitions[i+1].Name.String()
+				nextPartitionDefinition = part.Definitions[i+1]
 			}
 			break
 		}
@@ -132,10 +132,13 @@ func (e *Executor) analyzeDropRangePartition(alterTable *sqlparser.AlterTable, c
 	}
 
 	plan := NewSpecialAlterPlan(dropRangePartitionSpecialOperation, alterTable, createTable)
+	plan.SetDetail("artifact", artifactTableName)
 	plan.SetDetail("partition_name", partitionName)
 	plan.SetDetail("partition_definition", sqlparser.CanonicalString(partitionDefinition))
-	plan.SetDetail("next_partition_name", nextPartitionName)
-	plan.SetDetail("artifact", artifactTableName)
+	if nextPartitionDefinition != nil {
+		plan.SetDetail("next_partition_name", nextPartitionDefinition.Name.String())
+		plan.SetDetail("next_partition_definition", sqlparser.CanonicalString(nextPartitionDefinition))
+	}
 	return plan, nil
 }
 
@@ -246,13 +249,11 @@ func (e *Executor) analyzeSpecialRevertAlterPlan(ctx context.Context, revertOnli
 		plan := NewSpecialAlterPlan(dropRangePartitionSpecialOperation, nil, nil)
 		plan.SetDetail("partition_name", details["partition_name"])
 		plan.SetDetail("partition_definition", details["partition_definition"])
-		plan.SetDetail("next_partition_name", "")
+		plan.SetDetail("next_partition_name", details["next_partition_name"])
+		plan.SetDetail("next_partition_definition", details["next_partition_definition"])
 		plan.SetDetail("artifact", artifactTableName)
 		return plan, nil
 	case dropRangePartitionSpecialOperation:
-		if details["next_partition_name"] != "" {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot revert this partition yet")
-		}
 		createTable, err := e.getCreateTableStatement(ctx, revertOnlineDDL.Table)
 		if err != nil {
 			return nil, err
@@ -263,6 +264,16 @@ func (e *Executor) analyzeSpecialRevertAlterPlan(ctx context.Context, revertOnli
 		partitionDefinition := details["partition_definition"]
 		plan.SetDetail("partition_definition", partitionDefinition)
 		plan.changesFoundInTable = hasPartitionDefinition(createTable, partitionDefinition)
+		nextPartitionName := details["next_partition_name"]
+		if nextPartitionName != "" {
+			plan.SetDetail("next_partition_name", nextPartitionName)
+			plan.SetDetail("next_partition_definition", details["next_partition_definition"])
+			artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+			if err != nil {
+				return nil, err
+			}
+			plan.SetDetail("next_partition_artifact", artifactTableName)
+		}
 		return plan, nil
 	default:
 		return nil, nil
