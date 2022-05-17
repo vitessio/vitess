@@ -477,7 +477,10 @@ func (api *API) DeleteTablet(ctx context.Context, req *vtadminpb.DeleteTabletReq
 		return nil, fmt.Errorf("failed to delete tablet: %w", err)
 	}
 
-	return &vtadminpb.DeleteTabletResponse{Status: "ok"}, nil
+	return &vtadminpb.DeleteTabletResponse{
+		Status:  "ok",
+		Cluster: c.ToProto(),
+	}, nil
 }
 
 // FindSchema is part of the vtadminpb.VTAdminServer interface.

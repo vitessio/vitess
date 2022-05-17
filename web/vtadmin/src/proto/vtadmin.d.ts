@@ -3152,6 +3152,9 @@ export namespace vtadmin {
 
         /** DeleteTabletResponse status */
         status?: (string|null);
+
+        /** DeleteTabletResponse cluster */
+        cluster?: (vtadmin.ICluster|null);
     }
 
     /** Represents a DeleteTabletResponse. */
@@ -3165,6 +3168,9 @@ export namespace vtadmin {
 
         /** DeleteTabletResponse status. */
         public status: string;
+
+        /** DeleteTabletResponse cluster. */
+        public cluster?: (vtadmin.ICluster|null);
 
         /**
          * Creates a new DeleteTabletResponse instance using the specified properties.
@@ -6542,6 +6548,9 @@ export namespace vtadmin {
 
         /** PingTabletResponse status */
         status?: (string|null);
+
+        /** PingTabletResponse cluster */
+        cluster?: (vtadmin.ICluster|null);
     }
 
     /** Represents a PingTabletResponse. */
@@ -6555,6 +6564,9 @@ export namespace vtadmin {
 
         /** PingTabletResponse status. */
         public status: string;
+
+        /** PingTabletResponse cluster. */
+        public cluster?: (vtadmin.ICluster|null);
 
         /**
          * Creates a new PingTabletResponse instance using the specified properties.
@@ -6728,6 +6740,9 @@ export namespace vtadmin {
 
         /** RefreshStateResponse status */
         status?: (string|null);
+
+        /** RefreshStateResponse cluster */
+        cluster?: (vtadmin.ICluster|null);
     }
 
     /** Represents a RefreshStateResponse. */
@@ -6741,6 +6756,9 @@ export namespace vtadmin {
 
         /** RefreshStateResponse status. */
         public status: string;
+
+        /** RefreshStateResponse cluster. */
+        public cluster?: (vtadmin.ICluster|null);
 
         /**
          * Creates a new RefreshStateResponse instance using the specified properties.
