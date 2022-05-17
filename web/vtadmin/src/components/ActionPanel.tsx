@@ -26,6 +26,7 @@ type Mutation = UseMutationResult & {
 
 export interface ActionPanelProps {
     confirmationValue?: string;
+    danger?: boolean;
     description: React.ReactNode;
     disabled?: boolean;
     documentationLink: string;
@@ -43,6 +44,7 @@ export interface ActionPanelProps {
  */
 const ActionPanel: React.FC<ActionPanelProps> = ({
     confirmationValue,
+    danger,
     disabled,
     title,
     description,
@@ -60,7 +62,9 @@ const ActionPanel: React.FC<ActionPanelProps> = ({
 
     return (
         <div
-            className="p-9 pb-12 last:border-b border border-red-400 border-b-0 first:rounded-t-lg last:rounded-b-lg"
+            className={`p-9 pb-12 last:border-b border ${
+                danger ? 'border-red-400' : 'border-gray-400'
+            } border-b-0 first:rounded-t-lg last:rounded-b-lg`}
             title={title}
         >
             <div className="flex justify-between items-center">
@@ -99,7 +103,7 @@ const ActionPanel: React.FC<ActionPanelProps> = ({
             )}
 
             <button
-                className="btn btn-secondary btn-danger mt-4"
+                className={`btn btn-secondary ${danger && 'btn-danger'} mt-4`}
                 disabled={isDisabled}
                 onClick={() => {
                     (mutation as Mutation).mutate();

@@ -177,6 +177,7 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                         <>
                             <ActionPanel
                                 confirmationValue={alias}
+                                danger
                                 title="Set Read-Only"
                                 documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadonly"
                                 warnings={[
@@ -194,6 +195,7 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
 
                             <ActionPanel
                                 confirmationValue={alias}
+                                danger
                                 title="Set Read-Write"
                                 documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadwrite"
                                 warnings={[
@@ -212,6 +214,7 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                     )}
                     <ActionPanel
                         confirmationValue={alias}
+                        danger
                         title="Delete Tablet"
                         documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#deletetablet"
                         warnings={[
