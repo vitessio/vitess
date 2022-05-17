@@ -1752,6 +1752,16 @@ type ColumnType struct {
 	EnumValues []string
 }
 
+// ColumnCharset exists because in the type definition it's possible
+// to add the binary marker for a character set, so we need to track
+// when this happens. We can't at the point of where we parse things
+// backfill this with an existing collation. Firstly because we don't
+// have access to that during parsing, but more importantly because
+// it would generate syntax that is invalid.
+//
+// Not in all cases where a binary marker is allowed, a collation is
+// allowed. See https://dev.mysql.com/doc/refman/8.0/en/cast-functions.html
+// specifically under Character Set Conversions.
 type ColumnCharset struct {
 	Name   string
 	Binary bool
