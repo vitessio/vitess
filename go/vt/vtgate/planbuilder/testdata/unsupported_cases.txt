@@ -78,15 +78,10 @@ Gen4 plan same as above
 "unsupported: '*' expression in cross-shard query"
 Gen4 error: cannot use column offsets in group statement when using `*`
 
-# group by must reference select list
-"select a from user group by b"
-"unsupported: in scatter query: group by column must reference column in SELECT list"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'a' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
-
 # complex group by expression
 "select a from user group by a+1"
 "unsupported: in scatter query: only simple references allowed"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'a' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4 error: unsupported: in scatter query: complex order by expression: a + 1
 
 # Complex aggregate expression on scatter
 "select 1+count(*) from user"
@@ -98,11 +93,6 @@ Gen4 plan same as above
 "unsupported: only one expression allowed inside aggregates: count(a, b)"
 Gen4 error: aggregate functions take a single argument 'count(a, b)'
 
-# scatter aggregate symtab lookup error
-"select id, b as id, count(*) from user order by id"
-"ambiguous symbol reference: id"
-Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'id'; this is incompatible with sql_mode=only_full_group_by
-
 # scatter aggregate complex order by
 "select id from user group by id order by id+1"
 "unsupported: in scatter query: complex order by expression: id + 1"
@@ -111,22 +101,12 @@ Gen4 plan same as above
 # Scatter order by is complex with aggregates in select
 "select col, count(*) from user group by col order by col+1"
 "unsupported: in scatter query: complex order by expression: col + 1"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'col + 1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4 plan same as above
 
 # Aggregate detection (group_concat)
 "select group_concat(user.a) from user join user_extra"
 "unsupported: cross-shard query with aggregates"
 Gen4 error: unsupported: in scatter query: complex aggregate expression
-
-# group by and ',' joins
-"select user.id from user, user_extra group by id"
-"unsupported: cross-shard query with aggregates"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '`user`.id' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
-
-# group by and ',' joins with condition
-"select user.col from user join user_extra on user_extra.col = user.col group by user.id"
-"unsupported: cross-shard query with aggregates"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '`user`.col' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # subqueries not supported in group by
 "select id from user group by id, (select id from user_extra)"
@@ -460,32 +440,6 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
-
-# aggr and non-aggr without group by (with query does not give useful result out)
-"select id, count(*) from user"
-{
-  "QueryType": "SELECT",
-  "Original": "select id, count(*) from user",
-  "Instructions": {
-    "OperatorType": "Aggregate",
-    "Variant": "Ordered",
-    "Aggregates": "count(1)",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select id, count(*) from `user` where 1 != 1",
-        "Query": "select id, count(*) from `user`",
-        "Table": "`user`"
-      }
-    ]
-  }
-}
-Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'id'; this is incompatible with sql_mode=only_full_group_by
 
 # avg function on scatter query
 "select avg(id) from user"

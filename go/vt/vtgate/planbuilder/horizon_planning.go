@@ -54,7 +54,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 		return plan, nil
 	}
 
-	qp, err := abstract.CreateQPFromSelect(hp.sel, ctx.SemTable)
+	qp, err := abstract.CreateQPFromSelect(hp.sel)
 	if err != nil {
 		return nil, err
 	}
@@ -462,9 +462,6 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 	uniqVindex := hasUniqueVindex(ctx.SemTable, hp.qp.GroupByExprs)
 	joinPlan := isJoin(plan)
 	if !uniqVindex || joinPlan {
-		if hp.qp.ProjectionError != nil {
-			return nil, hp.qp.ProjectionError
-		}
 		eaggr := &engine.OrderedAggregate{}
 		oa = &orderedAggregate{
 			resultsBuilder: resultsBuilder{

@@ -23,7 +23,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
@@ -43,7 +42,6 @@ type (
 		OrderExprs         []OrderBy
 		CanPushDownSorting bool
 		HasStar            bool
-		ProjectionError    error
 	}
 
 	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
@@ -87,7 +85,7 @@ func (s SelectExpr) GetAliasedExpr() (*sqlparser.AliasedExpr, error) {
 }
 
 // CreateQPFromSelect creates the QueryProjection for the input *sqlparser.Select
-func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*QueryProjection, error) {
+func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 	qp := &QueryProjection{
 		Distinct: sel.Distinct,
 	}
@@ -97,7 +95,7 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 		return nil, err
 	}
 	for _, group := range sel.GroupBy {
-		expr, weightStrExpr, err := qp.getSimplifiedExpr(group, semTable)
+		expr, weightStrExpr, err := qp.getSimplifiedExpr(group)
 		if err != nil {
 			return nil, err
 		}
@@ -109,21 +107,9 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 		qp.GroupByExprs = append(qp.GroupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr})
 	}
 
-	err = qp.addOrderBy(sel.OrderBy, semTable)
+	err = qp.addOrderBy(sel.OrderBy)
 	if err != nil {
 		return nil, err
-	}
-
-	if qp.HasAggr || len(qp.GroupByExprs) > 0 {
-		expr := qp.getNonAggrExprNotMatchingGroupByExprs()
-		// if we have aggregation functions, non aggregating columns and GROUP BY,
-		// the non-aggregating expressions must all be listed in the GROUP BY list
-		if expr != nil {
-			if len(qp.GroupByExprs) == 0 {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.MixOfGroupFuncAndFields, "In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column '%s'; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
-			}
-			qp.ProjectionError = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongFieldWithGroup, "Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '%s' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
-		}
 	}
 
 	if qp.Distinct && !qp.HasAggr {
@@ -164,7 +150,7 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 }
 
 // CreateQPFromUnion creates the QueryProjection for the input *sqlparser.Union
-func CreateQPFromUnion(union *sqlparser.Union, semTable *semantics.SemTable) (*QueryProjection, error) {
+func CreateQPFromUnion(union *sqlparser.Union) (*QueryProjection, error) {
 	qp := &QueryProjection{}
 
 	sel := sqlparser.GetFirstSelect(union)
@@ -173,7 +159,7 @@ func CreateQPFromUnion(union *sqlparser.Union, semTable *semantics.SemTable) (*Q
 		return nil, err
 	}
 
-	err = qp.addOrderBy(union.OrderBy, semTable)
+	err = qp.addOrderBy(union.OrderBy)
 	if err != nil {
 		return nil, err
 	}
@@ -181,10 +167,10 @@ func CreateQPFromUnion(union *sqlparser.Union, semTable *semantics.SemTable) (*Q
 	return qp, nil
 }
 
-func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy, semTable *semantics.SemTable) error {
+func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy) error {
 	canPushDownSorting := true
 	for _, order := range orderBy {
-		expr, weightStrExpr, err := qp.getSimplifiedExpr(order.Expr, semTable)
+		expr, weightStrExpr, err := qp.getSimplifiedExpr(order.Expr)
 		if err != nil {
 			return err
 		}
@@ -218,34 +204,12 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Sel
 		if expr.Aggr {
 			continue
 		}
-		isGroupByOk := false
-		for _, groupByExpr := range qp.GroupByExprs {
-			exp, err := expr.GetExpr()
-			if err != nil {
-				return expr.Col
-			}
-			if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, exp) {
-				isGroupByOk = true
-				break
-			}
-		}
-		if !isGroupByOk {
+		if !qp.isExprInGroupByExprs(expr) {
 			return expr.Col
 		}
 	}
 	for _, order := range qp.OrderExprs {
-		// ORDER BY NULL or Aggregation functions need not be present in group by
-		if sqlparser.IsNull(order.Inner.Expr) || sqlparser.IsAggregation(order.WeightStrExpr) {
-			continue
-		}
-		isGroupByOk := false
-		for _, groupByExpr := range qp.GroupByExprs {
-			if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, order.WeightStrExpr) {
-				isGroupByOk = true
-				break
-			}
-		}
-		if !isGroupByOk {
+		if !qp.isOrderByExprInGroupBy(order) {
 			return &sqlparser.AliasedExpr{
 				Expr: order.Inner.Expr,
 			}
@@ -254,8 +218,34 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Sel
 	return nil
 }
 
+func (qp *QueryProjection) isOrderByExprInGroupBy(order OrderBy) bool {
+	// ORDER BY NULL or Aggregation functions need not be present in group by
+	if sqlparser.IsNull(order.Inner.Expr) || sqlparser.IsAggregation(order.WeightStrExpr) {
+		return true
+	}
+	for _, groupByExpr := range qp.GroupByExprs {
+		if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, order.WeightStrExpr) {
+			return true
+		}
+	}
+	return false
+}
+
+func (qp *QueryProjection) isExprInGroupByExprs(expr SelectExpr) bool {
+	for _, groupByExpr := range qp.GroupByExprs {
+		exp, err := expr.GetExpr()
+		if err != nil {
+			return false
+		}
+		if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, exp) {
+			return true
+		}
+	}
+	return false
+}
+
 // getSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, and returns an expression that is simpler to evaluate
-func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, semTable *semantics.SemTable) (expr sqlparser.Expr, weightStrExpr sqlparser.Expr, err error) {
+func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr) (expr sqlparser.Expr, weightStrExpr sqlparser.Expr, err error) {
 	// If the ORDER BY is against a column alias, we need to remember the expression
 	// behind the alias. The weightstring(.) calls needs to be done against that expression and not the alias.
 	// Eg - select music.foo as bar, weightstring(music.foo) from music order by bar
@@ -264,26 +254,9 @@ func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, semTable *semanti
 	if !isColName {
 		return e, e, nil
 	}
-
 	if sqlparser.IsNull(e) {
 		return e, nil, nil
 	}
-
-	tblInfo, err := semTable.TableInfoForExpr(e)
-	if err != nil && err != semantics.ErrMultipleTables {
-		// we can live with ErrMultipleTables and just ignore it. anything else should fail this method
-		return nil, nil, err
-	}
-	if tblInfo != nil {
-		if dTablInfo, ok := tblInfo.(*semantics.DerivedTable); ok {
-			weightStrExpr, err = semantics.RewriteDerivedExpression(colExpr, dTablInfo)
-			if err != nil {
-				return nil, nil, err
-			}
-			return e, weightStrExpr, nil
-		}
-	}
-
 	if colExpr.Qualifier.IsEmpty() {
 		for _, selectExpr := range qp.SelectExprs {
 			aliasedExpr, isAliasedExpr := selectExpr.Col.(*sqlparser.AliasedExpr)
@@ -296,7 +269,6 @@ func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, semTable *semanti
 			}
 		}
 	}
-
 	return e, e, nil
 }
 
