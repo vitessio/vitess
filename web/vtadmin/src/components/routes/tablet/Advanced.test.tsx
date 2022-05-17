@@ -252,7 +252,7 @@ describe('Advanced', () => {
                 });
             });
 
-            it('deletes the tablet with allow_master=true if primary', async () => {
+            it('deletes the tablet with allow_primary=true if primary', async () => {
                 const tablet = makePrimaryTablet();
                 renderHelper(
                     <Advanced
