@@ -56,7 +56,7 @@ export const Advanced: React.FC<Props> = ({ clusterID, name }) => {
                         <ActionPanel
                             description={
                                 <>
-                                    Reloads the schema on all the tablets in the{' '}
+                                    Reloads the schema on all the tablets, except the primary tablet, in the{' '}
                                     <span className="font-bold">{name}</span> keyspace.
                                 </>
                             }
