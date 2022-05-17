@@ -16,8 +16,9 @@
 
 import { UseMutationResult } from 'react-query';
 
-import { useReloadSchema } from '../../../hooks/api';
+import { useKeyspace, useReloadSchema } from '../../../hooks/api';
 import ActionPanel from '../../ActionPanel';
+import { QueryLoadingPlaceholder } from '../../placeholders/QueryLoadingPlaceholder';
 import { success, warn } from '../../Snackbar';
 
 interface Props {
@@ -26,6 +27,10 @@ interface Props {
 }
 
 export const Advanced: React.FC<Props> = ({ clusterID, name }) => {
+    const kq = useKeyspace({ clusterID, name });
+
+    const { data: keyspace } = kq;
+
     const reloadSchemaMutation = useReloadSchema(
         {
             clusterIDs: [clusterID],
@@ -43,21 +48,26 @@ export const Advanced: React.FC<Props> = ({ clusterID, name }) => {
         <div className="pt-4">
             <div className="my-8">
                 <h3 className="mb-4">Schemas</h3>
-                <div>
-                    <ActionPanel
-                        description={
-                            <>
-                                Reloads the schema on all the tablets in the <span className="font-bold">{name}</span>{' '}
-                                keyspace.
-                            </>
-                        }
-                        documentationLink="https://vitess.io/docs/13.0/reference/programs/vtctl/schema-version-permissions/#reloadschemakeyspace"
-                        loadedText="Reload Schema"
-                        loadingText="Reloading Schema..."
-                        mutation={reloadSchemaMutation as UseMutationResult}
-                        title="Reload Schema"
-                    />
-                </div>
+
+                <QueryLoadingPlaceholder query={kq} />
+
+                {keyspace && (
+                    <div>
+                        <ActionPanel
+                            description={
+                                <>
+                                    Reloads the schema on all the tablets in the{' '}
+                                    <span className="font-bold">{name}</span> keyspace.
+                                </>
+                            }
+                            documentationLink="https://vitess.io/docs/13.0/reference/programs/vtctl/schema-version-permissions/#reloadschemakeyspace"
+                            loadedText="Reload Schema"
+                            loadingText="Reloading Schema..."
+                            mutation={reloadSchemaMutation as UseMutationResult}
+                            title="Reload Schema"
+                        />
+                    </div>
+                )}
             </div>
         </div>
     );
