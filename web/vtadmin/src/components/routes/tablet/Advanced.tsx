@@ -29,7 +29,6 @@ import {
 import { topodata, vtadmin } from '../../../proto/vtadmin';
 import { isPrimary } from '../../../util/tablets';
 import ActionPanel from '../../ActionPanel';
-import { Icon, Icons } from '../../Icon';
 import { success, warn } from '../../Snackbar';
 
 interface AdvancedProps {
