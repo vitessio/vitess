@@ -261,7 +261,7 @@ type (
 	SelectInto struct {
 		Type         SelectIntoType
 		FileName     string
-		Charset      string
+		Charset      ColumnCharset
 		FormatOption string
 		ExportOption string
 		Manifest     string
@@ -1746,10 +1746,15 @@ type ColumnType struct {
 	Scale    *Literal
 
 	// Text field options
-	Charset string
+	Charset ColumnCharset
 
 	// Enum values
 	EnumValues []string
+}
+
+type ColumnCharset struct {
+	Name   string
+	Binary bool
 }
 
 // ColumnStorage is an enum that defines the type of storage.
@@ -2651,7 +2656,7 @@ type ConvertType struct {
 	Type    string
 	Length  *Literal
 	Scale   *Literal
-	Charset string
+	Charset ColumnCharset
 }
 
 // GroupBy represents a GROUP BY clause.

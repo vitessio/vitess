@@ -402,11 +402,19 @@ func translateUnaryExpr(unary *sqlparser.UnaryExpr, lookup TranslationLookup) (E
 	}
 }
 
-func translateConvertCharset(charset string, lookup TranslationLookup) (collations.ID, error) {
+func binaryCollationForCollation(collation collations.ID) collations.ID {
+	binary := collations.Local().LookupByID(collation)
+	return collations.Local().BinaryCollationForCharset(binary.Charset().Name()).ID()
+}
+
+func translateConvertCharset(charset string, binary bool, lookup TranslationLookup) (collations.ID, error) {
 	if charset == "" {
 		collation := lookup.DefaultCollation()
 		if collation == collations.Unknown {
 			return collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No default character set specified")
+		}
+		if binary {
+			collation = binaryCollationForCollation(collation)
 		}
 		return collation, nil
 	}
@@ -415,7 +423,11 @@ func translateConvertCharset(charset string, lookup TranslationLookup) (collatio
 	if collation == nil {
 		return collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unknown character set: '%s'", charset)
 	}
-	return collation.ID(), nil
+	collationID := collation.ID()
+	if binary {
+		collationID = binaryCollationForCollation(collationID)
+	}
+	return collationID, nil
 }
 
 func translateConvertExpr(expr *sqlparser.ConvertExpr, lookup TranslationLookup) (Expr, error) {
@@ -461,7 +473,7 @@ func translateConvertExpr(expr *sqlparser.ConvertExpr, lookup TranslationLookup)
 	case "NCHAR":
 		convert.Collation = collations.CollationUtf8ID
 	case "CHAR":
-		convert.Collation, err = translateConvertCharset(expr.Type.Charset, lookup)
+		convert.Collation, err = translateConvertCharset(expr.Type.Charset.Name, expr.Type.Charset.Binary, lookup)
 		if err != nil {
 			return nil, err
 		}
@@ -481,7 +493,7 @@ func translateConvertUsingExpr(expr *sqlparser.ConvertUsingExpr, lookup Translat
 		return nil, err
 	}
 
-	using.Collation, err = translateConvertCharset(expr.Type, lookup)
+	using.Collation, err = translateConvertCharset(expr.Type, false, lookup)
 	if err != nil {
 		return nil, err
 	}

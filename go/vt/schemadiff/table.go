@@ -310,7 +310,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 
 		// Map known lowercase fields to always be lowercase
 		col.Type.Type = strings.ToLower(col.Type.Type)
-		col.Type.Charset = strings.ToLower(col.Type.Charset)
+		col.Type.Charset.Name = strings.ToLower(col.Type.Charset.Name)
 		col.Type.Options.Collate = strings.ToLower(col.Type.Options.Collate)
 
 		// See https://dev.mysql.com/doc/refman/8.0/en/create-table.html
@@ -347,8 +347,8 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 
 		// Map any charset aliases to the real charset. This applies mainly right
 		// now to utf8 being an alias for utf8mb3.
-		if charset, ok := collationEnv.CharsetAlias(col.Type.Charset); ok {
-			col.Type.Charset = charset
+		if charset, ok := collationEnv.CharsetAlias(col.Type.Charset.Name); ok {
+			col.Type.Charset.Name = charset
 		}
 
 		// Remove any lengths for integral types since it is deprecated there and
@@ -366,29 +366,29 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 		if _, ok := charsetTypes[col.Type.Type]; ok {
 			// If the charset is explicitly configured and it mismatches, we don't normalize
 			// anything for charsets or collations and move on.
-			if col.Type.Charset != "" && col.Type.Charset != tableCharset {
+			if col.Type.Charset.Name != "" && col.Type.Charset.Name != tableCharset {
 				continue
 			}
 
 			// Alright, first check if both charset and collation are the same as
 			// the table level options, in that case we can remove both since that's equivalent.
-			if col.Type.Charset == tableCharset && col.Type.Options.Collate == tableCollation {
-				col.Type.Charset = ""
+			if col.Type.Charset.Name == tableCharset && col.Type.Options.Collate == tableCollation {
+				col.Type.Charset.Name = ""
 				col.Type.Options.Collate = ""
 			}
 			// If we have no charset or collation defined, we inherit the table defaults
 			// and don't need to do anything here and can continue to the next column.
 			// It doesn't matter if that's because it's not defined, or if it was because
 			// it was explicitly set to the same values.
-			if col.Type.Charset == "" && col.Type.Options.Collate == "" {
+			if col.Type.Charset.Name == "" && col.Type.Options.Collate == "" {
 				continue
 			}
 
 			// We have a matching charset as the default, but it is explicitly set. In that
 			// case we still want to clear it, but set the default collation for the given charset
 			// if no collation is defined yet. We set then the collation to the default collation.
-			if col.Type.Charset != "" {
-				col.Type.Charset = ""
+			if col.Type.Charset.Name != "" {
+				col.Type.Charset.Name = ""
 				if col.Type.Options.Collate == "" {
 					col.Type.Options.Collate = defaultCollation
 				}
@@ -1215,7 +1215,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 			// it is possible that the table charset is changed. the column may be some col1 TEXT NOT NULL, possibly in both varsions 1 and 2,
 			// but implicitly the column has changed its characters set. So we need to explicitly ass a MODIFY COLUMN statement, so that
 			// MySQL rebuilds it.
-			if tableCharsetChanged && t2ColEntity.IsTextual() && t2Col.Type.Charset == "" {
+			if tableCharsetChanged && t2ColEntity.IsTextual() && t2Col.Type.Charset.Name == "" {
 				modifyColumnDiff = NewModifyColumnDiffByDefinition(t2Col)
 			}
 		}

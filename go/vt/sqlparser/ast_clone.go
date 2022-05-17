@@ -721,6 +721,7 @@ func CloneRefOfColumnType(n *ColumnType) *ColumnType {
 	out.Options = CloneRefOfColumnTypeOptions(n.Options)
 	out.Length = CloneRefOfLiteral(n.Length)
 	out.Scale = CloneRefOfLiteral(n.Scale)
+	out.Charset = CloneColumnCharset(n.Charset)
 	out.EnumValues = CloneSliceOfString(n.EnumValues)
 	return &out
 }
@@ -800,6 +801,7 @@ func CloneRefOfConvertType(n *ConvertType) *ConvertType {
 	out := *n
 	out.Length = CloneRefOfLiteral(n.Length)
 	out.Scale = CloneRefOfLiteral(n.Scale)
+	out.Charset = CloneColumnCharset(n.Charset)
 	return &out
 }
 
@@ -1944,6 +1946,7 @@ func CloneRefOfSelectInto(n *SelectInto) *SelectInto {
 		return nil
 	}
 	out := *n
+	out.Charset = CloneColumnCharset(n.Charset)
 	return &out
 }
 
@@ -3278,6 +3281,11 @@ func CloneRefOfColumnTypeOptions(n *ColumnTypeOptions) *ColumnTypeOptions {
 	return &out
 }
 
+// CloneColumnCharset creates a deep clone of the input.
+func CloneColumnCharset(n ColumnCharset) ColumnCharset {
+	return *CloneRefOfColumnCharset(&n)
+}
+
 // CloneSliceOfString creates a deep clone of the input.
 func CloneSliceOfString(n []string) []string {
 	if n == nil {
@@ -3577,6 +3585,15 @@ func CloneSliceOfRefOfCommonTableExpr(n []*CommonTableExpr) []*CommonTableExpr {
 // CloneDatabaseOption creates a deep clone of the input.
 func CloneDatabaseOption(n DatabaseOption) DatabaseOption {
 	return *CloneRefOfDatabaseOption(&n)
+}
+
+// CloneRefOfColumnCharset creates a deep clone of the input.
+func CloneRefOfColumnCharset(n *ColumnCharset) *ColumnCharset {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
 }
 
 // CloneRefOfIndexColumn creates a deep clone of the input.
