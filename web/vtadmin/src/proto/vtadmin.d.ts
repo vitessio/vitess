@@ -3152,6 +3152,9 @@ export namespace vtadmin {
 
         /** DeleteTabletResponse status */
         status?: (string|null);
+
+        /** DeleteTabletResponse cluster */
+        cluster?: (vtadmin.ICluster|null);
     }
 
     /** Represents a DeleteTabletResponse. */
@@ -3165,6 +3168,9 @@ export namespace vtadmin {
 
         /** DeleteTabletResponse status. */
         public status: string;
+
+        /** DeleteTabletResponse cluster. */
+        public cluster?: (vtadmin.ICluster|null);
 
         /**
          * Creates a new DeleteTabletResponse instance using the specified properties.
@@ -6542,6 +6548,9 @@ export namespace vtadmin {
 
         /** PingTabletResponse status */
         status?: (string|null);
+
+        /** PingTabletResponse cluster */
+        cluster?: (vtadmin.ICluster|null);
     }
 
     /** Represents a PingTabletResponse. */
@@ -6555,6 +6564,9 @@ export namespace vtadmin {
 
         /** PingTabletResponse status. */
         public status: string;
+
+        /** PingTabletResponse cluster. */
+        public cluster?: (vtadmin.ICluster|null);
 
         /**
          * Creates a new PingTabletResponse instance using the specified properties.
@@ -6728,6 +6740,9 @@ export namespace vtadmin {
 
         /** RefreshStateResponse status */
         status?: (string|null);
+
+        /** RefreshStateResponse cluster */
+        cluster?: (vtadmin.ICluster|null);
     }
 
     /** Represents a RefreshStateResponse. */
@@ -6741,6 +6756,9 @@ export namespace vtadmin {
 
         /** RefreshStateResponse status. */
         public status: string;
+
+        /** RefreshStateResponse cluster. */
+        public cluster?: (vtadmin.ICluster|null);
 
         /**
          * Creates a new RefreshStateResponse instance using the specified properties.
@@ -7439,6 +7457,9 @@ export namespace vtadmin {
 
         /** ReparentTabletResponse primary */
         primary?: (topodata.ITabletAlias|null);
+
+        /** ReparentTabletResponse cluster */
+        cluster?: (vtadmin.ICluster|null);
     }
 
     /** Represents a ReparentTabletResponse. */
@@ -7458,6 +7479,9 @@ export namespace vtadmin {
 
         /** ReparentTabletResponse primary. */
         public primary?: (topodata.ITabletAlias|null);
+
+        /** ReparentTabletResponse cluster. */
+        public cluster?: (vtadmin.ICluster|null);
 
         /**
          * Creates a new ReparentTabletResponse instance using the specified properties.
@@ -7631,6 +7655,9 @@ export namespace vtadmin {
 
         /** RunHealthCheckResponse status */
         status?: (string|null);
+
+        /** RunHealthCheckResponse cluster */
+        cluster?: (vtadmin.ICluster|null);
     }
 
     /** Represents a RunHealthCheckResponse. */
@@ -7644,6 +7671,9 @@ export namespace vtadmin {
 
         /** RunHealthCheckResponse status. */
         public status: string;
+
+        /** RunHealthCheckResponse cluster. */
+        public cluster?: (vtadmin.ICluster|null);
 
         /**
          * Creates a new RunHealthCheckResponse instance using the specified properties.
@@ -8177,6 +8207,9 @@ export namespace vtadmin {
 
         /** StartReplicationResponse status */
         status?: (string|null);
+
+        /** StartReplicationResponse cluster */
+        cluster?: (vtadmin.ICluster|null);
     }
 
     /** Represents a StartReplicationResponse. */
@@ -8190,6 +8223,9 @@ export namespace vtadmin {
 
         /** StartReplicationResponse status. */
         public status: string;
+
+        /** StartReplicationResponse cluster. */
+        public cluster?: (vtadmin.ICluster|null);
 
         /**
          * Creates a new StartReplicationResponse instance using the specified properties.
@@ -8363,6 +8399,9 @@ export namespace vtadmin {
 
         /** StopReplicationResponse status */
         status?: (string|null);
+
+        /** StopReplicationResponse cluster */
+        cluster?: (vtadmin.ICluster|null);
     }
 
     /** Represents a StopReplicationResponse. */
@@ -8376,6 +8415,9 @@ export namespace vtadmin {
 
         /** StopReplicationResponse status. */
         public status: string;
+
+        /** StopReplicationResponse cluster. */
+        public cluster?: (vtadmin.ICluster|null);
 
         /**
          * Creates a new StopReplicationResponse instance using the specified properties.

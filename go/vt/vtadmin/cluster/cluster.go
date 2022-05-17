@@ -281,6 +281,7 @@ func (c *Cluster) CreateKeyspace(ctx context.Context, req *vtctldatapb.CreateKey
 	if err := c.topoRWPool.Acquire(ctx); err != nil {
 		return nil, fmt.Errorf("CreateKeyspace(%+v) failed to acquire topoRWPool: %w", req, err)
 	}
+	defer c.topoRWPool.Release()
 
 	resp, err := c.Vtctld.CreateKeyspace(ctx, req)
 	if err != nil {
@@ -322,6 +323,7 @@ func (c *Cluster) CreateShard(ctx context.Context, req *vtctldatapb.CreateShardR
 	if err := c.topoRWPool.Acquire(ctx); err != nil {
 		return nil, fmt.Errorf("CreateShard(%+v) failed to acquire topoRWPool: %w", req, err)
 	}
+	defer c.topoRWPool.Release()
 
 	return c.Vtctld.CreateShard(ctx, req)
 }
@@ -347,6 +349,7 @@ func (c *Cluster) DeleteKeyspace(ctx context.Context, req *vtctldatapb.DeleteKey
 	if err := c.topoRWPool.Acquire(ctx); err != nil {
 		return nil, fmt.Errorf("DeleteKeyspace(%+v) failed to acquire topoRWPool: %w", req, err)
 	}
+	defer c.topoRWPool.Release()
 
 	return c.Vtctld.DeleteKeyspace(ctx, req)
 }
@@ -378,8 +381,25 @@ func (c *Cluster) DeleteShards(ctx context.Context, req *vtctldatapb.DeleteShard
 	if err := c.topoRWPool.Acquire(ctx); err != nil {
 		return nil, fmt.Errorf("DeleteShards(%+v) failed to acquire topoRWPool: %w", req, err)
 	}
+	defer c.topoRWPool.Release()
 
 	return c.Vtctld.DeleteShards(ctx, req)
+}
+
+// DeleteTablets deletes one or more tablets in the given cluster.
+func (c *Cluster) DeleteTablets(ctx context.Context, req *vtctldatapb.DeleteTabletsRequest) (*vtctldatapb.DeleteTabletsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.DeleteTablets")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("tablet_aliases", strings.Join(topoproto.TabletAliasList(req.TabletAliases).ToStringSlice(), ","))
+
+	if err := c.topoRWPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("DeleteTablets(%+v) failed to acquire topoRWPool: %w", req, err)
+	}
+	defer c.topoRWPool.Release()
+
+	return c.Vtctld.DeleteTablets(ctx, req)
 }
 
 // FindAllShardsInKeyspaceOptions modify the behavior of a cluster's
@@ -1711,6 +1731,25 @@ func (c *Cluster) GetWorkflows(ctx context.Context, keyspaces []string, opts Get
 	})
 }
 
+// RefreshState reloads the tablet record from a cluster's topo on a tablet.
+func (c *Cluster) RefreshState(ctx context.Context, tablet *vtadminpb.Tablet) error {
+	span, ctx := trace.NewSpan(ctx, "Cluster.RefreshState")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
+
+	if err := c.topoReadPool.Acquire(ctx); err != nil {
+		return fmt.Errorf("RefreshState(%v) failed to acquire topoReadPool: %w", topoproto.TabletAliasString(tablet.Tablet.Alias), err)
+	}
+	defer c.topoReadPool.Release()
+
+	_, err := c.Vtctld.RefreshState(ctx, &vtctldatapb.RefreshStateRequest{
+		TabletAlias: tablet.Tablet.Alias,
+	})
+	return err
+}
+
 // ReloadSchemas reloads schemas in one or more keyspaces, shards, or tablets
 // in the cluster, depending on the request parameters.
 func (c *Cluster) ReloadSchemas(ctx context.Context, req *vtadminpb.ReloadSchemasRequest) (*vtadminpb.ReloadSchemasResponse, error) {
@@ -1968,6 +2007,72 @@ func (c *Cluster) reloadTabletSchemas(ctx context.Context, req *vtadminpb.Reload
 	wg.Wait()
 
 	return results, nil
+}
+
+// ReparentTablet reparents the specified tablet to its shard's current primary.
+// The tablet's current replica position must match the last-known reparent
+// action.
+func (c *Cluster) ReparentTablet(ctx context.Context, tablet *vtadminpb.Tablet) (*vtadminpb.ReparentTabletResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.ReparentTablet")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
+
+	if err := c.topoRWPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("ReparentTablet(%v) failed to acquire topoRWPool: %w", topoproto.TabletAliasString(tablet.Tablet.Alias), err)
+	}
+	defer c.topoRWPool.Release()
+
+	resp, err := c.Vtctld.ReparentTablet(ctx, &vtctldatapb.ReparentTabletRequest{Tablet: tablet.Tablet.Alias})
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.ReparentTabletResponse{
+		Keyspace: resp.Keyspace,
+		Shard:    resp.Shard,
+		Primary:  resp.Primary,
+		Cluster:  c.ToProto(),
+	}, nil
+}
+
+// SetWritable toggles the writability of a tablet, setting it to either
+// read-write or read-only.
+func (c *Cluster) SetWritable(ctx context.Context, req *vtctldatapb.SetWritableRequest) error {
+	span, ctx := trace.NewSpan(ctx, "Cluster.SetWritable")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("writable", req.Writable)
+
+	_, err := c.Vtctld.SetWritable(ctx, req)
+	return err
+}
+
+// ToggleTabletReplication either starts or stops replication on the specified
+// tablet.
+func (c *Cluster) ToggleTabletReplication(ctx context.Context, tablet *vtadminpb.Tablet, start bool) (err error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.ToggleTabletReplication")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
+	span.Annotate("start", start)
+	span.Annotate("stop", !start)
+
+	if start {
+		_, err = c.Vtctld.StartReplication(ctx, &vtctldatapb.StartReplicationRequest{
+			TabletAlias: tablet.Tablet.Alias,
+		})
+	} else {
+		_, err = c.Vtctld.StopReplication(ctx, &vtctldatapb.StopReplicationRequest{
+			TabletAlias: tablet.Tablet.Alias,
+		})
+	}
+
+	return err
 }
 
 // Debug returns a map of debug information for a cluster.

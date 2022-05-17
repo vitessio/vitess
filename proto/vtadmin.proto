@@ -302,6 +302,7 @@ message DeleteTabletRequest {
 
 message DeleteTabletResponse {
     string status = 1;
+    Cluster cluster = 2;
 }
 
 message FindSchemaRequest {
@@ -519,6 +520,7 @@ message PingTabletRequest {
 
 message PingTabletResponse {
     string status = 1;
+    Cluster cluster = 2;
 }
 
 message RefreshStateRequest {
@@ -528,6 +530,7 @@ message RefreshStateRequest {
 
 message RefreshStateResponse {
     string status = 1;
+    Cluster cluster = 2;
 }
 
 message ReloadSchemasRequest {
@@ -632,6 +635,7 @@ message ReparentTabletResponse {
     string keyspace = 1;
     string shard = 2;
     topodata.TabletAlias primary = 3;
+    Cluster cluster = 4;
 }
 
 message RunHealthCheckRequest {
@@ -641,6 +645,7 @@ message RunHealthCheckRequest {
 
 message RunHealthCheckResponse {
     string status = 1;
+    Cluster cluster = 2;
 }
 
 message SetReadOnlyRequest {
@@ -666,6 +671,7 @@ message StartReplicationRequest {
 
 message StartReplicationResponse {
     string status = 1;
+    Cluster cluster = 2;
 }
 
 message StopReplicationRequest {
@@ -675,6 +681,7 @@ message StopReplicationRequest {
 
 message StopReplicationResponse {
     string status = 1;
+    Cluster cluster = 2;
 }
 
 message ValidateKeyspaceRequest {
