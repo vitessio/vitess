@@ -382,6 +382,22 @@ func (c *Cluster) DeleteShards(ctx context.Context, req *vtctldatapb.DeleteShard
 	return c.Vtctld.DeleteShards(ctx, req)
 }
 
+// DeleteTablets deletes one or more tablets in the given cluster.
+func (c *Cluster) DeleteTablets(ctx context.Context, req *vtctldatapb.DeleteTabletsRequest) (*vtctldatapb.DeleteTabletsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.DeleteTablets")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("tablet_aliases", strings.Join(topoproto.TabletAliasList(req.TabletAliases).ToStringSlice(), ","))
+
+	if err := c.topoRWPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("DeleteTablets(%+v) failed to acquire topoRWPool: %w", req, err)
+	}
+	defer c.topoRWPool.Release()
+
+	return c.Vtctld.DeleteTablets(ctx, req)
+}
+
 // FindAllShardsInKeyspaceOptions modify the behavior of a cluster's
 // FindAllShardsInKeyspace method.
 type FindAllShardsInKeyspaceOptions struct {

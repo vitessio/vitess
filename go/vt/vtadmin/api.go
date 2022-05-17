@@ -470,17 +470,11 @@ func (api *API) DeleteTablet(ctx context.Context, req *vtadminpb.DeleteTabletReq
 		return nil, err
 	}
 
-	cluster.AnnotateSpan(c, span)
-
-	_, err = c.Vtctld.DeleteTablets(ctx, &vtctldatapb.DeleteTabletsRequest{
-		AllowPrimary: req.AllowPrimary,
-		TabletAliases: []*topodatapb.TabletAlias{
-			tablet.Tablet.Alias,
-		},
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("Error deleting tablet: %w", err)
+	if _, err := c.DeleteTablets(ctx, &vtctldatapb.DeleteTabletsRequest{
+		AllowPrimary:  req.AllowPrimary,
+		TabletAliases: []*topodatapb.TabletAlias{tablet.Tablet.Alias},
+	}); err != nil {
+		return nil, fmt.Errorf("failed to delete tablet: %w", err)
 	}
 
 	return &vtadminpb.DeleteTabletResponse{Status: "ok"}, nil
