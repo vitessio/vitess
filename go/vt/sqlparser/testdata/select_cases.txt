@@ -6662,7 +6662,7 @@ INPUT
 select 'zвася' rlike '[[:<:]]вася[[:>:]]';
 END
 OUTPUT
-select 'zвася' regexp '[[:<:]]вася[[:>:]]' from dual
+select 'zвася' rlike '[[:<:]]вася[[:>:]]' from dual
 END
 INPUT
 select ST_NUMPOINTS(ST_EXTERIORRING(@buff)) from t1;
@@ -8486,7 +8486,7 @@ INPUT
 select ' вася ' rlike '[[:<:]]вася[[:>:]]';
 END
 OUTPUT
-select ' вася ' regexp '[[:<:]]вася[[:>:]]' from dual
+select ' вася ' rlike '[[:<:]]вася[[:>:]]' from dual
 END
 INPUT
 select max(a3) from t1 where a2 = 2 and 'SEA' > a3;
@@ -11858,7 +11858,7 @@ INPUT
 select ' вася' rlike '[[:<:]]вася[[:>:]]';
 END
 OUTPUT
-select ' вася' regexp '[[:<:]]вася[[:>:]]' from dual
+select ' вася' rlike '[[:<:]]вася[[:>:]]' from dual
 END
 INPUT
 select POSITION(_latin1'B' IN _latin2'abcd');
@@ -13100,7 +13100,7 @@ INPUT
 select c,table_name from v1 inner join information_schema.TABLES v2 on (v1.c=v2.table_name) where v1.c rlike "t[1-5]{1}$" order by c;
 END
 OUTPUT
-select c, table_name from v1 join information_schema.`TABLES` as v2 on v1.c = v2.table_name where v1.c regexp 't[1-5]{1}$' order by c asc
+select c, table_name from v1 join information_schema.`TABLES` as v2 on v1.c = v2.table_name where v1.c rlike 't[1-5]{1}$' order by c asc
 END
 INPUT
 select from t1 natural join t2 where t1.b > 0;
@@ -13448,7 +13448,7 @@ INPUT
 select table_name from information_schema.TABLES where table_schema = "mysqltest" and table_name rlike "t[1-5]{1}$" order by table_name;
 END
 OUTPUT
-select table_name from information_schema.`TABLES` where table_schema = 'mysqltest' and table_name regexp 't[1-5]{1}$' order by table_name asc
+select table_name from information_schema.`TABLES` where table_schema = 'mysqltest' and table_name rlike 't[1-5]{1}$' order by table_name asc
 END
 INPUT
 select count(*) from T1;
@@ -14609,7 +14609,7 @@ OUTPUT
 select std(e1 / e2) from bug22555
 END
 INPUT
-select 'вася' rlike '[[:<:]]вася[[:>:]]';
+select 'вася' regexp '[[:<:]]вася[[:>:]]';
 END
 OUTPUT
 select 'вася' regexp '[[:<:]]вася[[:>:]]' from dual
@@ -15983,7 +15983,7 @@ OUTPUT
 select Fld1, max(Fld2) as q from t1 group by Fld1 having q is not null
 END
 INPUT
-select 'zвасяz' rlike '[[:<:]]вася[[:>:]]';
+select 'zвасяz' regexp '[[:<:]]вася[[:>:]]';
 END
 OUTPUT
 select 'zвасяz' regexp '[[:<:]]вася[[:>:]]' from dual
@@ -17678,7 +17678,7 @@ INPUT
 select c, v2.table_name from v1 right join information_schema.TABLES v2 on (v1.c=v2.table_name) where v1.c rlike "t[1-5]{1}$" order by c;
 END
 OUTPUT
-select c, v2.table_name from v1 right join information_schema.`TABLES` as v2 on v1.c = v2.table_name where v1.c regexp 't[1-5]{1}$' order by c asc
+select c, v2.table_name from v1 right join information_schema.`TABLES` as v2 on v1.c = v2.table_name where v1.c rlike 't[1-5]{1}$' order by c asc
 END
 INPUT
 select t1.i,t2.i,t3.i from t2 right join t3 on (t2.i=t3.i),t1 order by t1.i,t2.i,t3.i;
@@ -20066,7 +20066,7 @@ INPUT
 select 'васяz' rlike '[[:<:]]вася[[:>:]]';
 END
 OUTPUT
-select 'васяz' regexp '[[:<:]]вася[[:>:]]' from dual
+select 'васяz' rlike '[[:<:]]вася[[:>:]]' from dual
 END
 INPUT
 select id, sum(qty) as sqty from t1 group by id having sqty>2;
@@ -21413,7 +21413,7 @@ OUTPUT
 select t1.a, t1.b, t2.c from t1 left join t2 on t1.a = t2.a and t1.b = t2.b and t2.c = 3 where t1.a = 1 and t2.c is null
 END
 INPUT
-select 'вася ' rlike '[[:<:]]вася[[:>:]]';
+select 'вася ' regexp '[[:<:]]вася[[:>:]]';
 END
 OUTPUT
 select 'вася ' regexp '[[:<:]]вася[[:>:]]' from dual
@@ -22226,7 +22226,7 @@ INPUT
 select c,table_name from v1 left join information_schema.TABLES v2 on (v1.c=v2.table_name) where v1.c rlike "t[1-5]{1}$" order by c;
 END
 OUTPUT
-select c, table_name from v1 left join information_schema.`TABLES` as v2 on v1.c = v2.table_name where v1.c regexp 't[1-5]{1}$' order by c asc
+select c, table_name from v1 left join information_schema.`TABLES` as v2 on v1.c = v2.table_name where v1.c rlike 't[1-5]{1}$' order by c asc
 END
 INPUT
 select row_count();

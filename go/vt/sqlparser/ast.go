@@ -2541,6 +2541,43 @@ type (
 	JSONUnquoteExpr struct {
 		JSONValue Expr
 	}
+
+	RegexpInstrExpr struct {
+		Expr         Expr
+		Pattern      Expr
+		Position     Expr
+		Occurrence   Expr
+		ReturnOption Expr
+		MatchType    Expr
+	}
+
+	RegexpLikeExpr struct {
+		Expr      Expr
+		Pattern   Expr
+		MatchType Expr
+	}
+
+	RegexpReplaceExpr struct {
+		Expr       Expr
+		Pattern    Expr
+		Repl       Expr
+		Occurrence Expr
+		Position   Expr
+		MatchType  Expr
+	}
+
+	RegexpSubstrExpr struct {
+		Expr       Expr
+		Pattern    Expr
+		Occurrence Expr
+		Position   Expr
+		MatchType  Expr
+	}
+
+	RLikeExpr struct {
+		Expr    Expr
+		Pattern Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2602,6 +2639,11 @@ func (*JSONValueMergeExpr) iExpr()                 {}
 func (*JSONRemoveExpr) iExpr()                     {}
 func (*JSONUnquoteExpr) iExpr()                    {}
 func (*MemberOfExpr) iExpr()                       {}
+func (*RegexpInstrExpr) iExpr()                    {}
+func (*RegexpLikeExpr) iExpr()                     {}
+func (*RegexpReplaceExpr) iExpr()                  {}
+func (*RegexpSubstrExpr) iExpr()                   {}
+func (*RLikeExpr) iExpr()                          {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -2637,6 +2679,11 @@ func (*JSONValueMergeExpr) iCallable()                 {}
 func (*JSONRemoveExpr) iCallable()                     {}
 func (*JSONUnquoteExpr) iCallable()                    {}
 func (*MemberOfExpr) iCallable()                       {}
+func (*RegexpInstrExpr) iCallable()                    {}
+func (*RegexpLikeExpr) iCallable()                     {}
+func (*RegexpReplaceExpr) iCallable()                  {}
+func (*RegexpSubstrExpr) iCallable()                   {}
+func (*RLikeExpr) iCallable()                          {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

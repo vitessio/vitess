@@ -1779,6 +1779,95 @@ func (node *ExtractFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteByte(')')
 }
 
+// formatFast formats the node
+func (node *RegexpInstrExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("regexp_instr(")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Pattern, true)
+	if node.Position != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Position, true)
+	}
+	if node.Occurrence != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Occurrence, true)
+	}
+	if node.ReturnOption != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.ReturnOption, true)
+	}
+	if node.MatchType != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.MatchType, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *RegexpLikeExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("regexp_like(")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Pattern, true)
+	if node.MatchType != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.MatchType, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *RegexpReplaceExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("regexp_replace(")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Pattern, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Repl, true)
+	if node.Position != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Position, true)
+	}
+	if node.Occurrence != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Occurrence, true)
+	}
+	if node.MatchType != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.MatchType, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *RegexpSubstrExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("regexp_substr(")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Pattern, true)
+	if node.Position != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Position, true)
+	}
+	if node.Occurrence != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Occurrence, true)
+	}
+	if node.MatchType != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.MatchType, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *RLikeExpr) formatFast(buf *TrackedBuffer) {
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteString(" rlike ")
+	buf.printExpr(node, node.Pattern, true)
+}
+
 // formatFast formats the node.
 func (node *TrimFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.TrimFuncType.ToString())
