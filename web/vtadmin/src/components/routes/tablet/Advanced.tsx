@@ -124,7 +124,7 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                         loadingText="Starting Replication..."
                         mutation={startReplicationMutation as UseMutationResult}
                         title="Start Replication"
-                        warnings={[primary && 'Command StartTablet cannot be run on the primary tablet.']}
+                        warnings={[primary && 'Command StartReplication cannot be run on the primary tablet.']}
                     />
 
                     <ActionPanel
@@ -142,7 +142,7 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                         loadingText="Stopping Replication..."
                         mutation={stopReplicationMutation as UseMutationResult}
                         title="Stop Replication"
-                        warnings={[primary && 'Command StopTablet cannot be run on the primary tablet.']}
+                        warnings={[primary && 'Command StopReplication cannot be run on the primary tablet.']}
                     />
                 </div>
             </div>
