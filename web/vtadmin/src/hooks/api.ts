@@ -432,7 +432,6 @@ export const useWorkflow = (
 };
 
 /**
- *
  * useReloadSchema is a mutate hook that reloads schemas in one or more
  * keyspaces, shards, or tablets in the cluster, depending on the request parameters.
  */
