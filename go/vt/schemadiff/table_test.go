@@ -1103,6 +1103,12 @@ func TestValidate(t *testing.T) {
 			alter:     "alter table t add column neg int as (0-i)",
 			expectErr: ErrInvalidColumnInGeneratedColumn,
 		},
+		{
+			name:  "add generated column referencing existent column",
+			from:  "create table t (id int, i int not null default 0, primary key (id))",
+			alter: "alter table t add column neg int as (0-i)",
+			to:    "create table t (id int, i int not null default 0, neg int as (0-i), primary key (id))",
+		},
 	}
 	hints := DiffHints{}
 	for _, ts := range tt {
