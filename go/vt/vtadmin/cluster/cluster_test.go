@@ -500,11 +500,6 @@ func TestDeleteShards(t *testing.T) {
 	}
 }
 
-func TestDeleteTablets(t *testing.T) {
-	t.Parallel()
-	// TODO
-}
-
 func TestFindTablet(t *testing.T) {
 	t.Parallel()
 

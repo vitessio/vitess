@@ -52,6 +52,133 @@ type vtctldProxy struct {
 
 func (fake *vtctldProxy) Dial(ctx context.Context) error { return fake.dialErr }
 
+func TestDeleteTablets(t *testing.T) {
+	t.Parallel()
+
+	testClusterProto := &vtadminpb.Cluster{
+		Id:   "test",
+		Name: "test",
+	}
+
+	tests := []struct {
+		name      string
+		cluster   *Cluster
+		timeout   time.Duration
+		setup     func(t testing.TB, c *Cluster)
+		req       *vtctldatapb.DeleteTabletsRequest
+		expected  *vtctldatapb.DeleteTabletsResponse
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			cluster: &Cluster{
+				Vtctld: &fakevtctldclient.VtctldClient{
+					DeleteTabletsResults: map[string]error{
+						"zone1-0000000100,zone1-0000000101": nil,
+					},
+				},
+				topoRWPool: pools.NewRPCPool(1, time.Millisecond*100, nil),
+			},
+			req: &vtctldatapb.DeleteTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+			expected: &vtctldatapb.DeleteTabletsResponse{},
+		},
+		{
+			name: "error",
+			cluster: &Cluster{
+				Vtctld:     &fakevtctldclient.VtctldClient{},
+				topoRWPool: pools.NewRPCPool(1, time.Millisecond*100, nil),
+			},
+			req: &vtctldatapb.DeleteTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "RPC pool full",
+			cluster: &Cluster{
+				Vtctld:     &fakevtctldclient.VtctldClient{},
+				topoRWPool: pools.NewRPCPool(1, time.Millisecond*10, nil),
+			},
+			timeout: time.Millisecond * 50,
+			setup: func(t testing.TB, c *Cluster) {
+				err := c.topoRWPool.Acquire(context.Background())
+				require.NoError(t, err, "failed to lock RPC pool")
+				t.Cleanup(c.topoRWPool.Release)
+			},
+			req: &vtctldatapb.DeleteTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tt.cluster.ID = testClusterProto.Id
+			tt.cluster.Name = testClusterProto.Name
+
+			if tt.setup != nil {
+				tt.setup(t, tt.cluster)
+			}
+
+			var (
+				ctx    context.Context
+				cancel context.CancelFunc
+			)
+
+			switch tt.timeout {
+			case 0:
+				ctx, cancel = context.WithCancel(context.Background())
+			default:
+				ctx, cancel = context.WithTimeout(context.Background(), tt.timeout)
+			}
+			defer cancel()
+
+			resp, err := tt.cluster.DeleteTablets(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err, "expected error, got %+v", resp)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
 func Test_getShardSets(t *testing.T) {
 	t.Parallel()
 

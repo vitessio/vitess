@@ -19,6 +19,8 @@ package fakevtctldclient
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
@@ -35,8 +37,10 @@ import (
 type VtctldClient struct {
 	vtctldclient.VtctldClient
 
-	CreateKeyspaceShouldErr        bool
-	DeleteKeyspaceShouldErr        bool
+	CreateKeyspaceShouldErr bool
+	DeleteKeyspaceShouldErr bool
+	// Keyed by _sorted_ TabletAlias list string joined by commas.
+	DeleteTabletsResults           map[string]error
 	FindAllShardsInKeyspaceResults map[string]struct {
 		Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 		Error    error
@@ -133,6 +137,27 @@ func (fake *VtctldClient) DeleteKeyspace(ctx context.Context, req *vtctldatapb.D
 	}
 
 	return &vtctldatapb.DeleteKeyspaceResponse{}, nil
+}
+
+// DeleteTablets is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) DeleteTablets(ctx context.Context, req *vtctldatapb.DeleteTabletsRequest, opts ...grpc.CallOption) (*vtctldatapb.DeleteTabletsResponse, error) {
+	if fake.DeleteTabletsResults == nil {
+		return nil, fmt.Errorf("%w: DeleteTabletsResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	aliases := topoproto.TabletAliasList(req.TabletAliases)
+	sort.Sort(aliases)
+	key := strings.Join(aliases.ToStringSlice(), ",")
+
+	if err, ok := fake.DeleteTabletsResults[key]; ok {
+		if err != nil {
+			return nil, err
+		}
+
+		return &vtctldatapb.DeleteTabletsResponse{}, nil
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
 }
 
 // FindAllShardsInKeyspace is part of the vtctldclient.VtctldClient interface.
