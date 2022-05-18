@@ -2446,14 +2446,22 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 
 // executeSpecialAlterDDLActionMigration executed a special plan migration
 func (e *Executor) executeSpecialAlterDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, plan *SpecialAlterPlan) (specialMigrationExecuted bool, err error) {
-	markAsRunning := func() {
-		_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown, emptyHint)
+	markAsRunning := func() error {
+		if err := e.updateMigrationSpecialPlan(ctx, onlineDDL.UUID, plan.String()); err != nil {
+			return err
+		}
+		if err := e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown, emptyHint); err != nil {
+			return err
+		}
+		return nil
 	}
 
 	switch plan.operation {
 	case dropRangePartitionSpecialOperation:
 		dropPartition := func() error {
-			markAsRunning()
+			if err := markAsRunning(); err != nil {
+				return err
+			}
 			artifactTableName := plan.Detail("artifact")
 			// artifact is a new table
 			if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTableName); err != nil {
@@ -2493,7 +2501,9 @@ func (e *Executor) executeSpecialAlterDDLActionMigration(ctx context.Context, on
 		}
 	case addRangePartitionSpecialOperation:
 		addPartition := func() error {
-			markAsRunning()
+			if err := markAsRunning(); err != nil {
+				return err
+			}
 			// This is a multi step operation, described in https://github.com/vitessio/vitess/issues/10317
 			// Because the operation is not atomic, it is possible that a tablet fails mid-operation.
 			// The next steps ensure idempotency.
@@ -2595,9 +2605,6 @@ func (e *Executor) executeSpecialAlterDDLActionMigration(ctx context.Context, on
 		}
 	default:
 		return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot execute special plan: %v", plan.operation)
-	}
-	if err := e.updateMigrationSpecialPlan(ctx, onlineDDL.UUID, plan.String()); err != nil {
-		return true, err
 	}
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 	return true, nil
