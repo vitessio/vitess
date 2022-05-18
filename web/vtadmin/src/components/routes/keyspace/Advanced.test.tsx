@@ -80,6 +80,11 @@ describe('Advanced keyspace actions', () => {
                 expect(screen.queryByText('Loading...')).toBeNull();
             });
 
+            expect(global.fetch).toHaveBeenCalledTimes(1);
+            expect(global.fetch).toHaveBeenCalledWith(`/api/keyspace/some-cluster/some-keyspace`, {
+                credentials: undefined,
+            });
+
             jest.clearAllMocks();
 
             const container = screen.getByTitle('Reload Schema');
