@@ -2462,7 +2462,7 @@ func (e *Executor) executeSpecialAlterDDLActionMigration(ctx context.Context, on
 			if err := markAsRunning(); err != nil {
 				return err
 			}
-			artifactTableName := plan.Detail("artifact")
+			artifactTableName := plan.Detail("partition_artifact")
 			// artifact is a new table
 			if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTableName); err != nil {
 				return err
@@ -2507,7 +2507,7 @@ func (e *Executor) executeSpecialAlterDDLActionMigration(ctx context.Context, on
 			// This is a multi step operation, described in https://github.com/vitessio/vitess/issues/10317
 			// Because the operation is not atomic, it is possible that a tablet fails mid-operation.
 			// The next steps ensure idempotency.
-			artifactTableName := plan.Detail("artifact")
+			artifactTableName := plan.Detail("partition_artifact")
 			artifactExists, err := e.tableExists(ctx, artifactTableName)
 			if err != nil {
 				return err

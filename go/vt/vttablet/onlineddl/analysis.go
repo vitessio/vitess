@@ -60,23 +60,17 @@ func (p *SpecialAlterPlan) InheritDetail(details map[string]string, key string) 
 	return p
 }
 
-func (p *SpecialAlterPlan) InheritDetails(details map[string]string) *SpecialAlterPlan {
-	for key, val := range details {
-		p.details[key] = val
+func (p *SpecialAlterPlan) SetNewArtifact(key string) error {
+	artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+	if err != nil {
+		return err
 	}
-	return p
+	p.SetDetail(key, artifactTableName)
+	return nil
 }
 
 func (p *SpecialAlterPlan) Detail(key string) string {
 	return p.details[key]
-}
-
-func (p *SpecialAlterPlan) SetNewArtifact(key string) (artifactTableName string, err error) {
-	artifactTableName, err = schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
-	if err == nil {
-		p.SetDetail(key, artifactTableName)
-	}
-	return artifactTableName, err
 }
 
 func (p *SpecialAlterPlan) String() string {
@@ -149,7 +143,7 @@ func (e *Executor) analyzeDropRangePartition(alterTable *sqlparser.AlterTable, c
 	}
 
 	plan := NewSpecialAlterPlan(dropRangePartitionSpecialOperation, alterTable, createTable)
-	if _, err := plan.SetNewArtifact("artifact"); err != nil {
+	if err := plan.SetNewArtifact("partition_artifact"); err != nil {
 		return nil, err
 	}
 	plan.SetDetail("partition_name", partitionName)
@@ -157,7 +151,7 @@ func (e *Executor) analyzeDropRangePartition(alterTable *sqlparser.AlterTable, c
 	if nextPartitionDefinition != nil {
 		plan.SetDetail("next_partition_name", nextPartitionDefinition.Name.String())
 		plan.SetDetail("next_partition_definition", sqlparser.CanonicalString(nextPartitionDefinition))
-		if _, err := plan.SetNewArtifact("next_partition_artifact"); err != nil {
+		if err := plan.SetNewArtifact("next_partition_artifact"); err != nil {
 			return nil, err
 		}
 	}
@@ -260,21 +254,19 @@ func (e *Executor) analyzeSpecialRevertAlterPlan(ctx context.Context, revertOnli
 	switch specialOperation {
 	case addRangePartitionSpecialOperation:
 		plan := NewSpecialAlterPlan(dropRangePartitionSpecialOperation, nil, nil)
-		if _, err := plan.SetNewArtifact("artifact"); err != nil {
+		if err := plan.SetNewArtifact("partition_artifact"); err != nil {
 			return nil, err
 		}
-		plan.SetDetail("partition_name", details["partition_name"])
-		plan.SetDetail("partition_definition", details["partition_definition"])
+		plan.InheritDetail(details, "partition_name")
+		plan.InheritDetail(details, "partition_definition")
 
-		nextPartitionName := details["next_partition_name"]
-		if nextPartitionName != "" {
-			plan.SetDetail("next_partition_name", nextPartitionName)
-			plan.SetDetail("next_partition_definition", details["next_partition_definition"])
-			if _, err := plan.SetNewArtifact("next_partition_artifact"); err != nil {
+		if nextPartitionName := details["next_partition_name"]; nextPartitionName != "" {
+			plan.InheritDetail(details, "next_partition_name")
+			plan.InheritDetail(details, "next_partition_definition")
+			if err := plan.SetNewArtifact("next_partition_artifact"); err != nil {
 				return nil, err
 			}
 		}
-
 		return plan, nil
 	case dropRangePartitionSpecialOperation:
 		createTable, err := e.getCreateTableStatement(ctx, revertOnlineDDL.Table)
@@ -282,15 +274,13 @@ func (e *Executor) analyzeSpecialRevertAlterPlan(ctx context.Context, revertOnli
 			return nil, err
 		}
 		plan := NewSpecialAlterPlan(addRangePartitionSpecialOperation, nil, nil)
-		// plan.InheritDetails(details)
-		plan.SetDetail("artifact", details["artifact"])
-		plan.SetDetail("partition_name", details["partition_name"])
-		partitionDefinition := details["partition_definition"]
-		plan.SetDetail("partition_definition", partitionDefinition)
-		plan.changesFoundInTable = hasPartitionDefinition(createTable, partitionDefinition)
-		plan.SetDetail("next_partition_name", details["next_partition_name"])
-		plan.SetDetail("next_partition_definition", details["next_partition_definition"])
-		plan.SetDetail("next_partition_artifact", details["next_partition_artifact"])
+		plan.InheritDetail(details, "partition_name")
+		plan.InheritDetail(details, "partition_definition")
+		plan.InheritDetail(details, "partition_artifact")
+		plan.InheritDetail(details, "next_partition_name")
+		plan.InheritDetail(details, "next_partition_definition")
+		plan.InheritDetail(details, "next_partition_artifact")
+		plan.changesFoundInTable = hasPartitionDefinition(createTable, details["partition_definition"])
 		return plan, nil
 	default:
 		return nil, nil
