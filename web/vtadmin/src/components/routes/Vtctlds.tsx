@@ -28,7 +28,7 @@ import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder
 
 export const Vtctlds = () => {
     const vtctldsQuery = useVtctlds();
-    const { data: vtctlds = [], ...q } = vtctldsQuery;
+    const { data: vtctlds = [] } = vtctldsQuery;
 
     const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
