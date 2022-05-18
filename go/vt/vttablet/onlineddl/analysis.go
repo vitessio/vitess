@@ -55,7 +55,12 @@ func (p *SpecialAlterPlan) SetDetail(key string, val string) *SpecialAlterPlan {
 	return p
 }
 
-func (p *SpecialAlterPlan) AddDetails(details map[string]string) *SpecialAlterPlan {
+func (p *SpecialAlterPlan) InheritDetail(details map[string]string, key string) *SpecialAlterPlan {
+	p.details[key] = details[key]
+	return p
+}
+
+func (p *SpecialAlterPlan) InheritDetails(details map[string]string) *SpecialAlterPlan {
 	for key, val := range details {
 		p.details[key] = val
 	}
@@ -142,23 +147,19 @@ func (e *Executor) analyzeDropRangePartition(alterTable *sqlparser.AlterTable, c
 		// dropping a nonexistent partition. We'll let the "standard" migration execution flow deal with that.
 		return nil, nil
 	}
-	artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
-	if err != nil {
-		return nil, err
-	}
 
 	plan := NewSpecialAlterPlan(dropRangePartitionSpecialOperation, alterTable, createTable)
-	plan.SetDetail("artifact", artifactTableName)
+	if _, err := plan.SetNewArtifact("artifact"); err != nil {
+		return nil, err
+	}
 	plan.SetDetail("partition_name", partitionName)
 	plan.SetDetail("partition_definition", sqlparser.CanonicalString(partitionDefinition))
 	if nextPartitionDefinition != nil {
 		plan.SetDetail("next_partition_name", nextPartitionDefinition.Name.String())
 		plan.SetDetail("next_partition_definition", sqlparser.CanonicalString(nextPartitionDefinition))
-		artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
-		if err != nil {
+		if _, err := plan.SetNewArtifact("next_partition_artifact"); err != nil {
 			return nil, err
 		}
-		plan.SetDetail("next_partition_artifact", artifactTableName)
 	}
 	return plan, nil
 }
@@ -258,24 +259,20 @@ func (e *Executor) analyzeSpecialRevertAlterPlan(ctx context.Context, revertOnli
 
 	switch specialOperation {
 	case addRangePartitionSpecialOperation:
-		artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
-		if err != nil {
+		plan := NewSpecialAlterPlan(dropRangePartitionSpecialOperation, nil, nil)
+		if _, err := plan.SetNewArtifact("artifact"); err != nil {
 			return nil, err
 		}
-		plan := NewSpecialAlterPlan(dropRangePartitionSpecialOperation, nil, nil)
 		plan.SetDetail("partition_name", details["partition_name"])
 		plan.SetDetail("partition_definition", details["partition_definition"])
-		plan.SetDetail("artifact", artifactTableName)
 
 		nextPartitionName := details["next_partition_name"]
 		if nextPartitionName != "" {
 			plan.SetDetail("next_partition_name", nextPartitionName)
 			plan.SetDetail("next_partition_definition", details["next_partition_definition"])
-			artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
-			if err != nil {
+			if _, err := plan.SetNewArtifact("next_partition_artifact"); err != nil {
 				return nil, err
 			}
-			plan.SetDetail("next_partition_artifact", artifactTableName)
 		}
 
 		return plan, nil
@@ -285,6 +282,7 @@ func (e *Executor) analyzeSpecialRevertAlterPlan(ctx context.Context, revertOnli
 			return nil, err
 		}
 		plan := NewSpecialAlterPlan(addRangePartitionSpecialOperation, nil, nil)
+		// plan.InheritDetails(details)
 		plan.SetDetail("artifact", details["artifact"])
 		plan.SetDetail("partition_name", details["partition_name"])
 		partitionDefinition := details["partition_definition"]
@@ -293,16 +291,6 @@ func (e *Executor) analyzeSpecialRevertAlterPlan(ctx context.Context, revertOnli
 		plan.SetDetail("next_partition_name", details["next_partition_name"])
 		plan.SetDetail("next_partition_definition", details["next_partition_definition"])
 		plan.SetDetail("next_partition_artifact", details["next_partition_artifact"])
-		// nextPartitionName := details["next_partition_name"]
-		// if nextPartitionName != "" {
-		// 	plan.SetDetail("next_partition_name", nextPartitionName)
-		// 	plan.SetDetail("next_partition_definition", details["next_partition_definition"])
-		// 	artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
-		// 	if err != nil {
-		// 		return nil, err
-		// 	}
-		// 	plan.SetDetail("next_partition_artifact", artifactTableName)
-		// }
 		return plan, nil
 	default:
 		return nil, nil
