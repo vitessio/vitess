@@ -261,7 +261,7 @@ type (
 	SelectInto struct {
 		Type         SelectIntoType
 		FileName     string
-		Charset      string
+		Charset      ColumnCharset
 		FormatOption string
 		ExportOption string
 		Manifest     string
@@ -1746,10 +1746,25 @@ type ColumnType struct {
 	Scale    *Literal
 
 	// Text field options
-	Charset string
+	Charset ColumnCharset
 
 	// Enum values
 	EnumValues []string
+}
+
+// ColumnCharset exists because in the type definition it's possible
+// to add the binary marker for a character set, so we need to track
+// when this happens. We can't at the point of where we parse things
+// backfill this with an existing collation. Firstly because we don't
+// have access to that during parsing, but more importantly because
+// it would generate syntax that is invalid.
+//
+// Not in all cases where a binary marker is allowed, a collation is
+// allowed. See https://dev.mysql.com/doc/refman/8.0/en/cast-functions.html
+// specifically under Character Set Conversions.
+type ColumnCharset struct {
+	Name   string
+	Binary bool
 }
 
 // ColumnStorage is an enum that defines the type of storage.
@@ -2651,7 +2666,7 @@ type ConvertType struct {
 	Type    string
 	Length  *Literal
 	Scale   *Literal
-	Charset string
+	Charset ColumnCharset
 }
 
 // GroupBy represents a GROUP BY clause.

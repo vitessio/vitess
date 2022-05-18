@@ -3508,6 +3508,9 @@ func TestConvert(t *testing.T) {
 		input:  "select convert('abc', char(4) ascii) from t",
 		output: "select convert('abc', char(4) character set latin1) from t",
 	}, {
+		input:  "select convert('abc', char(4) ascii binary) from t",
+		output: "select convert('abc', char(4) character set latin1 binary) from t",
+	}, {
 		input:  "select convert('abc', char unicode) from t",
 		output: "select convert('abc', char character set ucs2) from t",
 	}, {
@@ -4874,8 +4877,8 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 			output: "create table t (\n\ti bigint\n) charset ascii",
 		},
 		{
-			input:  "create table t (i1 char ascii, i2 char character set ascii)",
-			output: "create table t (\n\ti1 char character set latin1,\n\ti2 char character set ascii\n)",
+			input:  "create table t (i1 char ascii, i2 char character set ascii, i3 char binary, i4 char unicode binary, i5 char binary unicode, i6 char ascii binary, i7 char binary ascii, i8 char byte, i9 char character set latin1 binary)",
+			output: "create table t (\n\ti1 char character set latin1,\n\ti2 char character set ascii,\n\ti3 char binary,\n\ti4 char character set ucs2 binary,\n\ti5 char character set ucs2 binary,\n\ti6 char character set latin1 binary,\n\ti7 char character set latin1 binary,\n\ti8 binary,\n\ti9 char character set latin1 binary\n)",
 		},
 	}
 	for _, test := range createTableQueries {

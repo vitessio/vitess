@@ -143,6 +143,7 @@ var keywords = []keyword{
 	{"boolean", BOOLEAN},
 	{"both", BOTH},
 	{"by", BY},
+	{"byte", BYTE},
 	{"call", CALL},
 	{"cancel", CANCEL},
 	{"cascade", CASCADE},
