@@ -13,10 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+import { rest } from 'msw';
+import { setupServer } from 'msw/node';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { Advanced } from './Advanced';
+import { vtadmin } from '../../../proto/vtadmin';
 
 const ORIGINAL_PROCESS_ENV = process.env;
 const TEST_PROCESS_ENV = {
@@ -25,13 +29,29 @@ const TEST_PROCESS_ENV = {
 };
 
 describe('Advanced keyspace actions', () => {
+    const keyspace: vtadmin.IKeyspace = {
+        cluster: { id: 'some-cluster', name: 'some-cluster' },
+        keyspace: {
+            name: 'some-keyspace',
+        },
+    };
+
+    const server = setupServer(
+        rest.get('/api/keyspace/:clusterID/:keyspace', (req, res, ctx) => {
+            return res(ctx.json({ ok: true, result: keyspace }));
+        }),
+        rest.put('/api/schemas/reload', (req, res, ctx) => {
+            return res(ctx.json({ ok: true }));
+        })
+    );
+
     const queryClient = new QueryClient({
         defaultOptions: { queries: { retry: false } },
     });
 
     beforeAll(() => {
         process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
-        jest.spyOn(global, 'fetch');
+        server.listen();
     });
 
     beforeEach(() => {
@@ -41,23 +61,33 @@ describe('Advanced keyspace actions', () => {
 
     afterAll(() => {
         process.env = { ...ORIGINAL_PROCESS_ENV };
+        server.close();
     });
 
     describe('Reload Schema', () => {
         it('reloads the schema', async () => {
+            jest.spyOn(global, 'fetch');
+
             render(
                 <QueryClientProvider client={queryClient}>
                     <Advanced clusterID="some-cluster" name="some-keyspace" />
                 </QueryClientProvider>
             );
 
+            expect(screen.getByText('Loading...')).not.toBeNull();
+
+            await waitFor(async () => {
+                expect(screen.queryByText('Loading...')).toBeNull();
+            });
+
+            jest.clearAllMocks();
+
             const container = screen.getByTitle('Reload Schema');
             const button = within(container).getByRole('button');
             expect(button).not.toHaveAttribute('disabled');
 
             const user = userEvent.setup();
-            user.click(button);
-
+            await user.click(button);
             await waitFor(() => {
                 expect(global.fetch).toHaveBeenCalledTimes(1);
             });
