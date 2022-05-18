@@ -115,9 +115,8 @@ export const Keyspaces = () => {
                         data={ksRows}
                         renderRows={renderRows}
                     />
+                    <QueryLoadingPlaceholder query={keyspacesQuery} />
                 </div>
-
-                <QueryLoadingPlaceholder query={keyspacesQuery} />
             </ContentContainer>
         </div>
     );
