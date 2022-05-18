@@ -169,6 +169,9 @@ func main() {
 	// HTTP server flags
 	rootCmd.Flags().BoolVar(&httpOpts.DisableCompression, "http-no-compress", false, "whether to disable compression of HTTP API responses")
 	rootCmd.Flags().BoolVar(&httpOpts.DisableDebug, "http-no-debug", false, "whether to disable /debug/pprof/* and /debug/env HTTP endpoints")
+	rootCmd.Flags().StringVar(&opts.MetricsEndpoint, "http-metrics-endpoint", "/metrics",
+		"HTTP endpoint to expose prometheus metrics on. Omit to disable scraping metrics. "+
+			"Using a path used by VTAdmin's http API is unsupported and causes undefined behavior.")
 	rootCmd.Flags().Var(&debug.OmitEnv, "http-debug-omit-env", "name of an environment variable to omit from /debug/env, if http debug endpoints are enabled. specify multiple times to omit multiple env vars")
 	rootCmd.Flags().Var(&debug.SanitizeEnv, "http-debug-sanitize-env", "name of an environment variable to sanitize in /debug/env, if http debug endpoints are enabled. specify multiple times to sanitize multiple env vars")
 	rootCmd.Flags().StringSliceVar(&httpOpts.CORSOrigins, "http-origin", []string{}, "repeated, comma-separated flag of allowed CORS origins. omit to disable CORS")
