@@ -3454,5 +3454,146 @@ func TestSetWritable(t *testing.T) {
 
 func TestToggleTabletReplication(t *testing.T) {
 	t.Parallel()
-	// TODO
+
+	type ReplicationState bool
+	const (
+		Start ReplicationState = true
+		Stop  ReplicationState = false
+	)
+
+	testClusterProto := &vtadminpb.Cluster{
+		Id:   "test",
+		Name: "test",
+	}
+
+	ctx := context.Background()
+	tests := []struct {
+		name              string
+		cfg               testutil.TestClusterConfig
+		tablet            *vtadminpb.Tablet
+		state             ReplicationState
+		assertion         func(t assert.TestingT, err error, msgAndArgs ...any) bool
+		assertionMsgExtra []any
+	}{
+		{
+			name: "start/ok",
+			cfg: testutil.TestClusterConfig{
+				Cluster: testClusterProto,
+				VtctldClient: &fakevtctldclient.VtctldClient{
+					StartReplicationResults: map[string]error{
+						"zone1-0000000100": nil,
+						"zone1-0000000101": fmt.Errorf("some error"),
+					},
+					StopReplicationResults: map[string]error{
+						"zone1-0000000100": fmt.Errorf("some error"),
+						"zone1-0000000101": nil,
+					},
+				},
+			},
+			tablet: &vtadminpb.Tablet{
+				Cluster: testClusterProto,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			state:     Start,
+			assertion: assert.NoError,
+		},
+		{
+			name: "start/error",
+			cfg: testutil.TestClusterConfig{
+				Cluster: testClusterProto,
+				VtctldClient: &fakevtctldclient.VtctldClient{
+					StartReplicationResults: map[string]error{
+						"zone1-0000000100": fmt.Errorf("some error"),
+						"zone1-0000000101": nil,
+					},
+					StopReplicationResults: map[string]error{
+						"zone1-0000000100": fmt.Errorf("some error"),
+						"zone1-0000000101": nil,
+					},
+				},
+			},
+			tablet: &vtadminpb.Tablet{
+				Cluster: testClusterProto,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			state:     Start,
+			assertion: assert.Error,
+		},
+		{
+			name: "stop/ok",
+			cfg: testutil.TestClusterConfig{
+				Cluster: testClusterProto,
+				VtctldClient: &fakevtctldclient.VtctldClient{
+					StartReplicationResults: map[string]error{
+						"zone1-0000000100": fmt.Errorf("some error"),
+						"zone1-0000000101": nil,
+					},
+					StopReplicationResults: map[string]error{
+						"zone1-0000000100": nil,
+						"zone1-0000000101": fmt.Errorf("some error"),
+					},
+				},
+			},
+			tablet: &vtadminpb.Tablet{
+				Cluster: testClusterProto,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			state:     Stop,
+			assertion: assert.NoError,
+		},
+		{
+			name: "stop/error",
+			cfg: testutil.TestClusterConfig{
+				Cluster: testClusterProto,
+				VtctldClient: &fakevtctldclient.VtctldClient{
+					StartReplicationResults: map[string]error{
+						"zone1-0000000100": fmt.Errorf("some error"),
+						"zone1-0000000101": nil,
+					},
+					StopReplicationResults: map[string]error{
+						"zone1-0000000100": fmt.Errorf("some error"),
+						"zone1-0000000101": nil,
+					},
+				},
+			},
+			tablet: &vtadminpb.Tablet{
+				Cluster: testClusterProto,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			state:     Stop,
+			assertion: assert.Error,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			c := testutil.BuildCluster(t, tt.cfg)
+			err := c.ToggleTabletReplication(ctx, tt.tablet, bool(tt.state))
+			tt.assertion(t, err, tt.assertionMsgExtra...)
+		})
+	}
 }

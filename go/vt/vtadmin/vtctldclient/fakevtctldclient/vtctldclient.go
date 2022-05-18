@@ -90,6 +90,8 @@ type VtctldClient struct {
 		Response *vtctldatapb.ShardReplicationPositionsResponse
 		Error    error
 	}
+	StartReplicationResults map[string]error
+	StopReplicationResults  map[string]error
 }
 
 // Compile-time type assertion to make sure we haven't overriden a method
@@ -309,6 +311,42 @@ func (fake *VtctldClient) ShardReplicationPositions(ctx context.Context, req *vt
 	key := fmt.Sprintf("%s/%s", req.Keyspace, req.Shard)
 	if result, ok := fake.ShardReplicationPositionsResults[key]; ok {
 		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// StartReplication is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) StartReplication(ctx context.Context, req *vtctldatapb.StartReplicationRequest, opts ...grpc.CallOption) (*vtctldatapb.StartReplicationResponse, error) {
+	if fake.StartReplicationResults == nil {
+		return nil, fmt.Errorf("%w: StartReplicationResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(req.TabletAlias)
+	if err, ok := fake.StartReplicationResults[key]; ok {
+		if err != nil {
+			return nil, err
+		}
+
+		return &vtctldatapb.StartReplicationResponse{}, nil
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// StopReplication is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) StopReplication(ctx context.Context, req *vtctldatapb.StopReplicationRequest, opts ...grpc.CallOption) (*vtctldatapb.StopReplicationResponse, error) {
+	if fake.StopReplicationResults == nil {
+		return nil, fmt.Errorf("%w: StopReplicationResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(req.TabletAlias)
+	if err, ok := fake.StopReplicationResults[key]; ok {
+		if err != nil {
+			return nil, err
+		}
+
+		return &vtctldatapb.StopReplicationResponse{}, nil
 	}
 
 	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
