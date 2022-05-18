@@ -188,6 +188,10 @@ func TestCanonicalOutput(t *testing.T) {
 			"create table t (p point srid 0, g geometry not null srid 4326)",
 			"CREATE TABLE `t` (\n\t`p` point SRID 0,\n\t`g` geometry NOT NULL SRID 4326\n)",
 		},
+		{
+			input:     "select regexp_replace('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), REGEXP_LIKE('dog cat dog', 'dog'), REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1), REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}',1), 'Michael!' RLIKE '.*' from dual",
+			canonical: "SELECT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), REGEXP_LIKE('dog cat dog', 'dog'), REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1), REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}', 1), 'Michael!' RLIKE '.*' FROM `dual`",
+		},
 	}
 
 	for _, tc := range testcases {
