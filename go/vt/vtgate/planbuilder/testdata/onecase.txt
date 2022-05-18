@@ -1,1 +1,7 @@
 # Add your test case here for debugging and run go test -run=One.
+# having should be able to add new aggregation expressions in having
+"select foo, count(*) from user group by foo having count(*) = 3"
+"unsupported: filtering on results of aggregates"
+{
+
+}

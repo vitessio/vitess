@@ -169,7 +169,48 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 		qp.groupByExprs = nil
 	}
 
+	if sel.Having != nil {
+		rewriter := qp.aggrRewriter()
+		sqlparser.Rewrite(sel.Having.Expr, rewriter.rewrite(), nil)
+		if rewriter.err != nil {
+			return nil, rewriter.err
+		}
+	}
+
 	return qp, nil
+}
+
+func (ar *aggrRewriter) rewrite() func(*sqlparser.Cursor) bool {
+	return func(cursor *sqlparser.Cursor) bool {
+		if ar.err != nil {
+			return false
+		}
+		sqlNode := cursor.Node()
+		if sqlparser.IsAggregation(sqlNode) {
+			fExp := sqlNode.(*sqlparser.FuncExpr)
+			for offset, expr := range ar.qp.SelectExprs {
+				ae, err := expr.GetAliasedExpr()
+				if err != nil {
+					ar.err = err
+					return false
+				}
+				if sqlparser.EqualsExpr(ae.Expr, fExp) {
+					cursor.Replace(sqlparser.Offset(offset))
+				}
+			}
+		}
+
+		return true
+	}
+}
+
+type aggrRewriter struct {
+	qp  *QueryProjection
+	err error
+}
+
+func (qp *QueryProjection) aggrRewriter() *aggrRewriter {
+	return &aggrRewriter{qp: qp}
 }
 
 func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {

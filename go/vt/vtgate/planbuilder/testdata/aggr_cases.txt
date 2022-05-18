@@ -4171,3 +4171,10 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
     ]
   }
 }
+
+# having should be able to add new aggregation expressions in having
+"select foo from user group by foo having count(*) = 3"
+"unsupported: filtering on results of aggregates"
+{
+
+}

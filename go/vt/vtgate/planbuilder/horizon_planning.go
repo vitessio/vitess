@@ -1340,9 +1340,6 @@ func pushHaving(ctx *plancontext.PlanningContext, expr sqlparser.Expr, plan logi
 	case *simpleProjection:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: filtering on results of cross-shard derived table")
 	case *orderedAggregate:
-		if sqlparser.ContainsAggregation(expr) {
-			expr = sqlparser.Rewrite(expr, node.rewriteAggrExpressions(), nil).(sqlparser.Expr)
-		}
 		return newFilter(ctx, plan, expr)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.filtering", plan)
