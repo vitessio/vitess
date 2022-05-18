@@ -195,6 +195,114 @@ func Test_getShardSets(t *testing.T) {
 	}
 }
 
+func TestRefreshState(t *testing.T) {
+	t.Parallel()
+
+	testClusterProto := &vtadminpb.Cluster{
+		Id:   "test",
+		Name: "test",
+	}
+
+	tests := []struct {
+		name              string
+		cluster           *Cluster
+		timeout           time.Duration
+		setup             func(t testing.TB, c *Cluster)
+		tablet            *vtadminpb.Tablet
+		assertion         func(t assert.TestingT, err error, msgAndArgs ...any) bool
+		assertionMsgExtra []any
+	}{
+		{
+			name: "ok",
+			cluster: &Cluster{
+				Vtctld: &fakevtctldclient.VtctldClient{
+					RefreshStateResults: map[string]error{
+						"zone1-0000000100": nil,
+					},
+				},
+				topoReadPool: pools.NewRPCPool(1, time.Millisecond*100, nil),
+			},
+			tablet: &vtadminpb.Tablet{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			assertion: assert.NoError,
+		},
+		{
+			name: "error",
+			cluster: &Cluster{
+				Vtctld: &fakevtctldclient.VtctldClient{
+					RefreshStateResults: map[string]error{
+						"zone1-0000000100": fmt.Errorf("some error"),
+					},
+				},
+				topoReadPool: pools.NewRPCPool(1, time.Millisecond*100, nil),
+			},
+			tablet: &vtadminpb.Tablet{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			assertion: assert.Error,
+		},
+		{
+			name: "RPC pool full",
+			cluster: &Cluster{
+				Vtctld:       &fakevtctldclient.VtctldClient{},
+				topoReadPool: pools.NewRPCPool(1, time.Millisecond*10, nil),
+			},
+			timeout: time.Millisecond * 50,
+			setup: func(t testing.TB, c *Cluster) {
+				err := c.topoReadPool.Acquire(context.Background())
+				require.NoError(t, err, "failed to lock RPC pool")
+				t.Cleanup(c.topoReadPool.Release)
+			},
+			tablet: &vtadminpb.Tablet{
+				Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{}},
+			},
+			assertion: assert.Error,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tt.cluster.ID = testClusterProto.Id
+			tt.cluster.Name = testClusterProto.Name
+
+			if tt.setup != nil {
+				tt.setup(t, tt.cluster)
+			}
+
+			var (
+				ctx    context.Context
+				cancel context.CancelFunc
+			)
+
+			switch tt.timeout {
+			case 0:
+				ctx, cancel = context.WithCancel(context.Background())
+			default:
+				ctx, cancel = context.WithTimeout(context.Background(), tt.timeout)
+			}
+			defer cancel()
+
+			err := tt.cluster.RefreshState(ctx, tt.tablet)
+			tt.assertion(t, err, tt.assertionMsgExtra...)
+		})
+	}
+}
+
 func Test_reloadKeyspaceSchemas(t *testing.T) {
 	t.Parallel()
 

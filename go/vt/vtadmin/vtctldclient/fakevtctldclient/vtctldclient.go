@@ -73,6 +73,7 @@ type VtctldClient struct {
 		Response *vtctldatapb.GetWorkflowsResponse
 		Error    error
 	}
+	RefreshStateResults         map[string]error
 	ReloadSchemaKeyspaceResults map[string]struct {
 		Response *vtctldatapb.ReloadSchemaKeyspaceResponse
 		Error    error
@@ -245,6 +246,24 @@ func (fake *VtctldClient) GetWorkflows(ctx context.Context, req *vtctldatapb.Get
 	}
 
 	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
+}
+
+// RefreshState is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) RefreshState(ctx context.Context, req *vtctldatapb.RefreshStateRequest, opts ...grpc.CallOption) (*vtctldatapb.RefreshStateResponse, error) {
+	if fake.RefreshStateResults == nil {
+		return nil, fmt.Errorf("%w: RefreshStateResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(req.TabletAlias)
+	if err, ok := fake.RefreshStateResults[key]; ok {
+		if err != nil {
+			return nil, err
+		}
+
+		return &vtctldatapb.RefreshStateResponse{}, nil
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
 }
 
 // ReloadSchema is part of the vtctldclient.VtctldClient interface.

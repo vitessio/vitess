@@ -3371,11 +3371,6 @@ func TestGetWorkflows(t *testing.T) {
 	}
 }
 
-func TestRefreshState(t *testing.T) {
-	t.Parallel()
-	// TODO
-}
-
 func TestSetWritable(t *testing.T) {
 	t.Parallel()
 
