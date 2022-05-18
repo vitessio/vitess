@@ -700,6 +700,7 @@ func TestSchemaChange(t *testing.T) {
 	// PARTITIONS
 
 	checkPartitionedTableCountRows := func(t *testing.T, expectRows int64) {
+		time.Sleep(time.Second)
 		rs := onlineddl.VtgateExecQuery(t, &vtParams, "select count(*) as c from part_test", "")
 		require.NotNil(t, rs)
 		row := rs.Named().Row()
@@ -736,6 +737,20 @@ func TestSchemaChange(t *testing.T) {
 
 		checkPartitionedTableCountRows(t, 6)
 	})
+	t.Run("partitions: revert revert add new partition", func(t *testing.T) {
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+
+		checkPartitionedTableCountRows(t, 7)
+	})
+	t.Run("partitions: revert revert revert add new partition", func(t *testing.T) {
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+
+		checkPartitionedTableCountRows(t, 6)
+	})
 	t.Run("partitions: drop last partition", func(t *testing.T) {
 		uuid := testOnlineDDLStatementForTable(t, "alter table part_test drop partition `p6`", ddlStrategy, "vtgate", "")
 		uuids = append(uuids, uuid)
@@ -751,21 +766,49 @@ func TestSchemaChange(t *testing.T) {
 
 		checkPartitionedTableCountRows(t, 6)
 	})
-	// t.Run("partitions: drop first partition", func(t *testing.T) {
-	// 	uuid := testOnlineDDLStatementForTable(t, "alter table part_test drop partition `p1`", ddlStrategy, "vtgate", "")
-	// 	uuids = append(uuids, uuid)
-	// 	onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-	// 	checkTable(t, partitionedTableName, true)
+	t.Run("partitions: revert revert drop last partition", func(t *testing.T) {
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 
-	// 	checkPartitionedTableCountRows(t, 5)
-	// })
-	// t.Run("partitions: revert drop first partition", func(t *testing.T) {
-	// 	uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
-	// 	uuids = append(uuids, uuid)
-	// 	onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkPartitionedTableCountRows(t, 5)
+	})
+	t.Run("partitions: revert revert revert drop last partition", func(t *testing.T) {
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 
-	// 	checkPartitionedTableCountRows(t, 6)
-	// })
+		checkPartitionedTableCountRows(t, 6)
+	})
+	t.Run("partitions: drop first partition", func(t *testing.T) {
+		uuid := testOnlineDDLStatementForTable(t, "alter table part_test drop partition `p1`", ddlStrategy, "vtgate", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, partitionedTableName, true)
+
+		checkPartitionedTableCountRows(t, 5)
+	})
+	t.Run("partitions: revert drop first partition", func(t *testing.T) {
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+
+		checkPartitionedTableCountRows(t, 6)
+	})
+	t.Run("partitions: revert revert drop first partition", func(t *testing.T) {
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+
+		checkPartitionedTableCountRows(t, 5)
+	})
+	t.Run("partitions: revert revert revert drop first partition", func(t *testing.T) {
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+
+		checkPartitionedTableCountRows(t, 6)
+	})
 
 	// FAILURES
 	t.Run("fail online DROP TABLE", func(t *testing.T) {
