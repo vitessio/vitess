@@ -33,14 +33,17 @@ import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { DataFilter } from '../dataTable/DataFilter';
 import { Tooltip } from '../tooltip/Tooltip';
 import { KeyspaceLink } from '../links/KeyspaceLink';
+import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
+import { UseQueryResult } from 'react-query';
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
-    const { data } = useWorkflows();
+    const workflowsQuery = useWorkflows();
+
     const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
     const sortedData = React.useMemo(() => {
-        const mapped = (data || []).map((workflow) => ({
+        const mapped = (workflowsQuery.data || []).map((workflow) => ({
             clusterID: workflow.cluster?.id,
             clusterName: workflow.cluster?.name,
             keyspace: workflow.keyspace,
@@ -54,7 +57,7 @@ export const Workflows = () => {
         }));
         const filtered = filterNouns(filter, mapped);
         return orderBy(filtered, ['name', 'clusterName', 'source', 'target']);
-    }, [data, filter]);
+    }, [workflowsQuery.data, filter]);
 
     const renderRows = (rows: typeof sortedData) =>
         rows.map((row, idx) => {
@@ -150,6 +153,8 @@ export const Workflows = () => {
                     data={sortedData}
                     renderRows={renderRows}
                 />
+
+                <QueryLoadingPlaceholder query={workflowsQuery as UseQueryResult} />
             </ContentContainer>
         </div>
     );
