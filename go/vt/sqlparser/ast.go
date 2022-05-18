@@ -128,11 +128,12 @@ type (
 	// AlgorithmValue is the algorithm specified in the alter table command
 	AlgorithmValue string
 
-	// AlterColumn is used to add or drop defaults to columns in alter table command
+	// AlterColumn is used to add or drop defaults & visibility to columns in alter table command
 	AlterColumn struct {
 		Column      *ColName
 		DropDefault bool
 		DefaultVal  Expr
+		Invisible   *bool
 	}
 
 	// With contains the lists of common table expression and specifies if it is recursive or not
@@ -172,6 +173,12 @@ type (
 	AlterCheck struct {
 		Name     ColIdent
 		Enforced bool
+	}
+
+	// AlterIndex represents the `ALTER INDEX` part in an `ALTER TABLE ALTER INDEX` command.
+	AlterIndex struct {
+		Name      ColIdent
+		Invisible bool
 	}
 
 	// KeyState is used to disable or enable the keys in an alter table statement
@@ -254,7 +261,7 @@ type (
 	SelectInto struct {
 		Type         SelectIntoType
 		FileName     string
-		Charset      string
+		Charset      ColumnCharset
 		FormatOption string
 		ExportOption string
 		Manifest     string
@@ -733,6 +740,7 @@ func (*AddColumns) iAlterOption()              {}
 func (AlgorithmValue) iAlterOption()           {}
 func (*AlterColumn) iAlterOption()             {}
 func (*AlterCheck) iAlterOption()              {}
+func (*AlterIndex) iAlterOption()              {}
 func (*ChangeColumn) iAlterOption()            {}
 func (*ModifyColumn) iAlterOption()            {}
 func (*AlterCharset) iAlterOption()            {}
@@ -1738,10 +1746,25 @@ type ColumnType struct {
 	Scale    *Literal
 
 	// Text field options
-	Charset string
+	Charset ColumnCharset
 
 	// Enum values
 	EnumValues []string
+}
+
+// ColumnCharset exists because in the type definition it's possible
+// to add the binary marker for a character set, so we need to track
+// when this happens. We can't at the point of where we parse things
+// backfill this with an existing collation. Firstly because we don't
+// have access to that during parsing, but more importantly because
+// it would generate syntax that is invalid.
+//
+// Not in all cases where a binary marker is allowed, a collation is
+// allowed. See https://dev.mysql.com/doc/refman/8.0/en/cast-functions.html
+// specifically under Character Set Conversions.
+type ColumnCharset struct {
+	Name   string
+	Binary bool
 }
 
 // ColumnStorage is an enum that defines the type of storage.
@@ -2643,7 +2666,7 @@ type ConvertType struct {
 	Type    string
 	Length  *Literal
 	Scale   *Literal
-	Charset string
+	Charset ColumnCharset
 }
 
 // GroupBy represents a GROUP BY clause.

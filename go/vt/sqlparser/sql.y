@@ -67,6 +67,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   joinCondition *JoinCondition
   databaseOption DatabaseOption
   columnType    ColumnType
+  columnCharset ColumnCharset
   jsonPathParam JSONPathParam
 }
 
@@ -217,7 +218,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> NEXT VALUE SHARE MODE
 %token <str> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
 %left <str> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
-%left <str> ON USING INPLACE COPY ALGORITHM NONE SHARED EXCLUSIVE
+%left <str> ON USING INPLACE COPY INSTANT ALGORITHM NONE SHARED EXCLUSIVE
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
 %token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
@@ -326,7 +327,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
 
 // MySQL reserved words that are unused by this grammar will map to this token.
-%token <str> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD
+%token <str> UNUSED ARRAY BYTE CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD
 %token <str> NTH_VALUE NTILE OF OVER PERCENT_RANK RANK RECURSIVE ROW_NUMBER SYSTEM WINDOW
 %token <str> ACTIVE ADMIN AUTOEXTEND_SIZE BUCKETS CLONE COLUMN_FORMAT COMPONENT DEFINITION ENFORCED ENGINE_ATTRIBUTE EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <str> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
@@ -472,7 +473,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <literal> length_opt partition_comment partition_data_directory partition_index_directory
 %type <expr> func_datetime_precision
-%type <str> charset_opt collate_opt
+%type <columnCharset> charset_opt
+%type <str> collate_opt
+%type <boolean> binary_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolean> unsigned_opt zero_fill_opt without_valid_opt
 %type <strs> enum_values
@@ -1931,6 +1934,12 @@ char_type:
   {
     $$ = ColumnType{Type: string($1), Length: $2, Charset: $3}
   }
+| CHAR length_opt BYTE
+  {
+    // CHAR BYTE is an alias for binary. See also:
+    // https://dev.mysql.com/doc/refman/8.0/en/string-type-syntax.html
+    $$ = ColumnType{Type: "binary", Length: $2}
+  }
 | VARCHAR length_opt charset_opt
   {
     $$ = ColumnType{Type: string($1), Length: $2, Charset: $3}
@@ -2097,29 +2106,53 @@ zero_fill_opt:
 
 charset_opt:
   {
-    $$ = ""
+    $$ = ColumnCharset{}
   }
-| charset_or_character_set sql_id
+| charset_or_character_set sql_id binary_opt
   {
-    $$ = string($2.String())
+    $$ = ColumnCharset{Name: string($2.String()), Binary: $3}
   }
-| charset_or_character_set STRING
+| charset_or_character_set STRING binary_opt
   {
-    $$ = encodeSQLString($2)
+    $$ = ColumnCharset{Name: encodeSQLString($2), Binary: $3}
   }
 | charset_or_character_set BINARY
   {
-    $$ = string($2)
+    $$ = ColumnCharset{Name: string($2)}
   }
-| ASCII
+| ASCII binary_opt
   {
     // ASCII: Shorthand for CHARACTER SET latin1.
-    $$ = "latin1"
+    $$ = ColumnCharset{Name: "latin1", Binary: $2}
   }
-| UNICODE
+| UNICODE binary_opt
   {
     // UNICODE: Shorthand for CHARACTER SET ucs2.
-    $$ = "ucs2"
+    $$ = ColumnCharset{Name: "ucs2", Binary: $2}
+  }
+| BINARY
+  {
+    // BINARY: Shorthand for default CHARACTER SET but with binary collation
+    $$ = ColumnCharset{Name: "", Binary: true}
+  }
+| BINARY ASCII
+  {
+    // BINARY ASCII: Shorthand for CHARACTER SET latin1 with binary collation
+    $$ = ColumnCharset{Name: "latin1", Binary: true}
+  }
+| BINARY UNICODE
+  {
+    // BINARY UNICODE: Shorthand for CHARACTER SET ucs2 with binary collation
+    $$ = ColumnCharset{Name: "ucs2", Binary: true}
+  }
+
+binary_opt:
+  {
+    $$ = false
+  }
+| BINARY
+  {
+    $$ = true
   }
 
 collate_opt:
@@ -2789,9 +2822,27 @@ alter_option:
   {
 	$$ = &AlterColumn{Column: $3, DropDefault:false, DefaultVal:$7}
   }
+| ALTER column_opt column_name SET VISIBLE
+  {
+    val := false
+    $$ = &AlterColumn{Column: $3, Invisible:&val}
+  }
+| ALTER column_opt column_name SET INVISIBLE
+  {
+    val := true
+    $$ = &AlterColumn{Column: $3, Invisible:&val}
+  }
 | ALTER CHECK id_or_var enforced
   {
     $$ = &AlterCheck{Name: $3, Enforced: $4}
+  }
+| ALTER INDEX id_or_var VISIBLE
+  {
+    $$ = &AlterIndex{Name: $3, Invisible: false}
+  }
+| ALTER INDEX id_or_var INVISIBLE
+  {
+    $$ = &AlterIndex{Name: $3, Invisible: true}
   }
 | CHANGE column_opt column_name column_definition first_opt after_opt
   {
@@ -2878,6 +2929,10 @@ alter_commands_modifier:
       $$ = AlgorithmValue(string($3))
     }
   | ALGORITHM equal_opt COPY
+    {
+      $$ = AlgorithmValue(string($3))
+    }
+  | ALGORITHM equal_opt INSTANT
     {
       $$ = AlgorithmValue(string($3))
     }
@@ -5989,6 +6044,10 @@ algorithm_index:
   {
     $$ = AlgorithmValue($3)
   }
+| ALGORITHM equal_opt INSTANT
+  {
+    $$ = AlgorithmValue($3)
+  }
 
 algorithm_view:
   {
@@ -6114,7 +6173,7 @@ $$ = &SelectInto{Type:IntoOutfileS3, FileName:encodeSQLString($4), Charset:$5, F
 }
 | INTO DUMPFILE STRING
 {
-$$ = &SelectInto{Type:IntoDumpfile, FileName:encodeSQLString($3), Charset:"", FormatOption:"", ExportOption:"", Manifest:"", Overwrite:""}
+$$ = &SelectInto{Type:IntoDumpfile, FileName:encodeSQLString($3), Charset:ColumnCharset{}, FormatOption:"", ExportOption:"", Manifest:"", Overwrite:""}
 }
 | INTO OUTFILE STRING charset_opt export_options
 {
@@ -6695,6 +6754,7 @@ non_reserved_keyword:
 | BOOL
 | BOOLEAN
 | BUCKETS
+| BYTE
 | CANCEL
 | CASCADE
 | CASCADED
@@ -6783,6 +6843,7 @@ non_reserved_keyword:
 | INACTIVE
 | INPLACE
 | INSERT_METHOD
+| INSTANT
 | INT
 | INTEGER
 | INVISIBLE

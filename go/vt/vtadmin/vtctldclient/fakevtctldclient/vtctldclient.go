@@ -77,6 +77,18 @@ type VtctldClient struct {
 		Response *vtctldatapb.ShardReplicationPositionsResponse
 		Error    error
 	}
+	ReloadSchemaKeyspaceResults map[string]struct {
+		Response *vtctldatapb.ReloadSchemaKeyspaceResponse
+		Error    error
+	}
+	ReloadSchemaResults map[string]struct {
+		Response *vtctldatapb.ReloadSchemaResponse
+		Error    error
+	}
+	ReloadSchemaShardResults map[string]struct {
+		Response *vtctldatapb.ReloadSchemaShardResponse
+		Error    error
+	}
 }
 
 // Compile-time type assertion to make sure we haven't overriden a method
@@ -236,6 +248,47 @@ func (fake *VtctldClient) ShardReplicationPositions(ctx context.Context, req *vt
 
 	key := fmt.Sprintf("%s/%s", req.Keyspace, req.Shard)
 	if result, ok := fake.ShardReplicationPositionsResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// ReloadSchema is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ReloadSchema(ctx context.Context, req *vtctldatapb.ReloadSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ReloadSchemaResponse, error) {
+	if fake.ReloadSchemaResults == nil {
+		return nil, fmt.Errorf("%w: ReloadSchemaResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(req.TabletAlias)
+	if result, ok := fake.ReloadSchemaResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// ReloadSchemaKeyspace is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ReloadSchemaKeyspace(ctx context.Context, req *vtctldatapb.ReloadSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ReloadSchemaKeyspaceResponse, error) {
+	if fake.ReloadSchemaKeyspaceResults == nil {
+		return nil, fmt.Errorf("%w: ReloadSchemaKeyspaceResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	if result, ok := fake.ReloadSchemaKeyspaceResults[req.Keyspace]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, req.Keyspace)
+}
+
+// ReloadSchemaShard is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ReloadSchemaShard(ctx context.Context, req *vtctldatapb.ReloadSchemaShardRequest, opts ...grpc.CallOption) (*vtctldatapb.ReloadSchemaShardResponse, error) {
+	if fake.ReloadSchemaShardResults == nil {
+		return nil, fmt.Errorf("%w: ReloadSchemaShardResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := fmt.Sprintf("%s/%s", req.Keyspace, req.Shard)
+	if result, ok := fake.ReloadSchemaShardResults[key]; ok {
 		return result.Response, result.Error
 	}
 

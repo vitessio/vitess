@@ -194,6 +194,23 @@ export const fetchKeyspaces = async () =>
         },
     });
 
+export interface CreateKeyspaceParams {
+    clusterID: string;
+    options: vtctldata.ICreateKeyspaceRequest;
+}
+
+export const createKeyspace = async (params: CreateKeyspaceParams) => {
+    const { result } = await vtfetch(`/api/keyspace/${params.clusterID}`, {
+        body: JSON.stringify(params.options),
+        method: 'post',
+    });
+
+    const err = pb.CreateKeyspaceResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.CreateKeyspaceResponse.create(result);
+};
+
 export const fetchSchemas = async () =>
     vtfetchEntities({
         endpoint: '/api/schemas',
@@ -235,12 +252,21 @@ export const fetchTablet = async ({ clusterID, alias }: FetchTabletParams) => {
 };
 
 export interface DeleteTabletParams {
+    allowPrimary?: boolean;
     clusterID: string;
     alias: string;
 }
 
-export const deleteTablet = async ({ clusterID, alias }: DeleteTabletParams) => {
-    const { result } = await vtfetch(`/api/tablet/${alias}?cluster=${clusterID}`, { method: 'delete' });
+export const deleteTablet = async ({ allowPrimary, clusterID, alias }: DeleteTabletParams) => {
+    const req = new URLSearchParams();
+    req.append('cluster', clusterID);
+
+    // Do not append `allow_primary` if undefined in order to fall back to server default
+    if (typeof allowPrimary === 'boolean') {
+        req.append('allow_primary', allowPrimary.toString());
+    }
+
+    const { result } = await vtfetch(`/api/tablet/${alias}?${req}`, { method: 'delete' });
 
     const err = pb.DeleteTabletResponse.verify(result);
     if (err) throw Error(err);

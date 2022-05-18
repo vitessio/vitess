@@ -147,39 +147,69 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 		if err != nil {
 			return err
 		}
-		for _, colVindex := range upd.Table.Owned {
-			// Update columns only if they're being changed.
-			if updColValues, ok := upd.ChangedVindexValues[colVindex.Name]; ok {
-				offset := updColValues.Offset
-				if !row[offset].IsNull() {
-					val, err := evalengine.ToInt64(row[offset])
+
+		for _, colVindex := range upd.Table.ColumnVindexes {
+			// Skip this vindex if no rows are being changed
+			updColValues, ok := upd.ChangedVindexValues[colVindex.Name]
+			if !ok {
+				continue
+			}
+
+			offset := updColValues.Offset
+			if !row[offset].IsNull() {
+				val, err := evalengine.ToInt64(row[offset])
+				if err != nil {
+					return err
+				}
+				if val == int64(1) { // 1 means that the old and new value are same and vindex update is not required.
+					continue
+				}
+			}
+
+			fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
+			var vindexColumnKeys []sqltypes.Value
+			for _, vCol := range colVindex.Columns {
+				// Fetch the column values.
+				origColValue := row[fieldColNumMap[vCol.String()]]
+				fromIds = append(fromIds, origColValue)
+				if colValue, exists := updColValues.PvMap[vCol.String()]; exists {
+					resolvedVal, err := env.Evaluate(colValue)
 					if err != nil {
 						return err
 					}
-					if val == int64(1) { // 1 means that the old and new value are same and vindex update is not required.
-						continue
-					}
+					vindexColumnKeys = append(vindexColumnKeys, resolvedVal.Value())
+				} else {
+					// Set the column value to original as this column in vindex is not updated.
+					vindexColumnKeys = append(vindexColumnKeys, origColValue)
 				}
-				fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
-				var vindexColumnKeys []sqltypes.Value
-				for _, vCol := range colVindex.Columns {
-					// Fetch the column values.
-					origColValue := row[fieldColNumMap[vCol.String()]]
-					fromIds = append(fromIds, origColValue)
-					if colValue, exists := updColValues.PvMap[vCol.String()]; exists {
-						resolvedVal, err := env.Evaluate(colValue)
-						if err != nil {
-							return err
-						}
-						vindexColumnKeys = append(vindexColumnKeys, resolvedVal.Value())
-					} else {
-						// Set the column value to original as this column in vindex is not updated.
-						vindexColumnKeys = append(vindexColumnKeys, origColValue)
+			}
+
+			if colVindex.Owned {
+				if err := colVindex.Vindex.(vindexes.Lookup).Update(vcursor, fromIds, ksid, vindexColumnKeys); err != nil {
+					return err
+				}
+			} else {
+				allNulls := true
+				for _, key := range vindexColumnKeys {
+					allNulls = key.IsNull()
+					if !allNulls {
+						break
 					}
 				}
 
-				if err := colVindex.Vindex.(vindexes.Lookup).Update(vcursor, fromIds, ksid, vindexColumnKeys); err != nil {
+				// All columns for this Vindex are set to null, so we can skip verification
+				if allNulls {
+					continue
+				}
+
+				// If values were supplied, we validate against keyspace id.
+				verified, err := vindexes.Verify(colVindex.Vindex, vcursor, [][]sqltypes.Value{vindexColumnKeys}, [][]byte{ksid})
+				if err != nil {
 					return err
+				}
+
+				if !verified[0] {
+					return fmt.Errorf("values %v for column %v does not map to keyspace ids", vindexColumnKeys, colVindex.Columns)
 				}
 			}
 		}
