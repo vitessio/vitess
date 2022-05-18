@@ -119,7 +119,7 @@ export const App = () => {
                             <Settings />
                         </Route>
 
-                        <Redirect exact from="/" to="/tablets" />
+                        <Redirect exact from="/" to="/schemas" />
 
                         <Route>
                             <Error404 />
