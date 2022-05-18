@@ -85,6 +85,10 @@ type VtctldClient struct {
 		Response *vtctldatapb.ReloadSchemaShardResponse
 		Error    error
 	}
+	ReparentTabletResults map[string]struct {
+		Response *vtctldatapb.ReparentTabletResponse
+		Error    error
+	}
 	SetWritableResults               map[string]error
 	ShardReplicationPositionsResults map[string]struct {
 		Response *vtctldatapb.ShardReplicationPositionsResponse
@@ -278,6 +282,20 @@ func (fake *VtctldClient) ReloadSchemaShard(ctx context.Context, req *vtctldatap
 
 	key := fmt.Sprintf("%s/%s", req.Keyspace, req.Shard)
 	if result, ok := fake.ReloadSchemaShardResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// ReparentTablet is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ReparentTablet(ctx context.Context, req *vtctldatapb.ReparentTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.ReparentTabletResponse, error) {
+	if fake.ReparentTabletResults == nil {
+		return nil, fmt.Errorf("%w: ReparentTabletResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(req.Tablet)
+	if result, ok := fake.ReparentTabletResults[key]; ok {
 		return result.Response, result.Error
 	}
 

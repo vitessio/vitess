@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -993,6 +994,136 @@ func Test_reloadTabletSchemas(t *testing.T) {
 				return topoproto.TabletAliasString(results[i].Tablet.Tablet.Alias) < topoproto.TabletAliasString(results[j].Tablet.Tablet.Alias)
 			})
 			utils.MustMatch(t, tt.expected, results)
+		})
+	}
+}
+
+func TestReparentTablet(t *testing.T) {
+	t.Parallel()
+
+	testClusterProto := &vtadminpb.Cluster{
+		Id:   "test",
+		Name: "test",
+	}
+
+	tests := []struct {
+		name      string
+		cluster   *Cluster
+		timeout   time.Duration
+		setup     func(t testing.TB, c *Cluster)
+		tablet    *vtadminpb.Tablet
+		expected  *vtadminpb.ReparentTabletResponse
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			cluster: &Cluster{
+				Vtctld: &fakevtctldclient.VtctldClient{
+					ReparentTabletResults: map[string]struct {
+						Response *vtctldatapb.ReparentTabletResponse
+						Error    error
+					}{
+						"zone1-0000000100": {
+							Response: &vtctldatapb.ReparentTabletResponse{
+								Keyspace: "testks",
+								Shard:    "-",
+								Primary: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  500,
+								},
+							},
+						},
+					},
+				},
+				topoRWPool: pools.NewRPCPool(1, time.Millisecond*100, nil),
+			},
+			tablet: &vtadminpb.Tablet{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			expected: &vtadminpb.ReparentTabletResponse{
+				Keyspace: "testks",
+				Shard:    "-",
+				Primary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  500,
+				},
+				Cluster: testClusterProto,
+			},
+		},
+		{
+			name: "error",
+			cluster: &Cluster{
+				Vtctld:     &fakevtctldclient.VtctldClient{},
+				topoRWPool: pools.NewRPCPool(1, time.Millisecond*100, nil),
+			},
+			tablet: &vtadminpb.Tablet{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "RPC pool full",
+			cluster: &Cluster{
+				Vtctld:     &fakevtctldclient.VtctldClient{},
+				topoRWPool: pools.NewRPCPool(1, time.Millisecond*10, nil),
+			},
+			timeout: time.Millisecond * 50,
+			setup: func(t testing.TB, c *Cluster) {
+				err := c.topoRWPool.Acquire(context.Background())
+				require.NoError(t, err, "failed to lock RPC pool")
+				t.Cleanup(c.topoRWPool.Release)
+			},
+			tablet: &vtadminpb.Tablet{
+				Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{}},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tt.cluster.ID = testClusterProto.Id
+			tt.cluster.Name = testClusterProto.Name
+
+			if tt.setup != nil {
+				tt.setup(t, tt.cluster)
+			}
+
+			var (
+				ctx    context.Context
+				cancel context.CancelFunc
+			)
+
+			switch tt.timeout {
+			case 0:
+				ctx, cancel = context.WithCancel(context.Background())
+			default:
+				ctx, cancel = context.WithTimeout(context.Background(), tt.timeout)
+			}
+			defer cancel()
+
+			resp, err := tt.cluster.ReparentTablet(ctx, tt.tablet)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }

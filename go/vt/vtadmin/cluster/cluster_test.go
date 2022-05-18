@@ -3376,12 +3376,6 @@ func TestRefreshState(t *testing.T) {
 	// TODO
 }
 
-func TestReparentTablet(t *testing.T) {
-	t.Parallel()
-
-	// TODO
-}
-
 func TestSetWritable(t *testing.T) {
 	t.Parallel()
 
