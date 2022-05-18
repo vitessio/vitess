@@ -1600,10 +1600,10 @@ func EqualsRefOfColumnType(a, b *ColumnType) bool {
 	return a.Type == b.Type &&
 		a.Unsigned == b.Unsigned &&
 		a.Zerofill == b.Zerofill &&
-		a.Charset == b.Charset &&
 		EqualsRefOfColumnTypeOptions(a.Options, b.Options) &&
 		EqualsRefOfLiteral(a.Length, b.Length) &&
 		EqualsRefOfLiteral(a.Scale, b.Scale) &&
+		EqualsColumnCharset(a.Charset, b.Charset) &&
 		EqualsSliceOfString(a.EnumValues, b.EnumValues)
 }
 
@@ -1691,9 +1691,9 @@ func EqualsRefOfConvertType(a, b *ConvertType) bool {
 		return false
 	}
 	return a.Type == b.Type &&
-		a.Charset == b.Charset &&
 		EqualsRefOfLiteral(a.Length, b.Length) &&
-		EqualsRefOfLiteral(a.Scale, b.Scale)
+		EqualsRefOfLiteral(a.Scale, b.Scale) &&
+		EqualsColumnCharset(a.Charset, b.Charset)
 }
 
 // EqualsRefOfConvertUsingExpr does deep equals between the two objects.
@@ -3099,12 +3099,12 @@ func EqualsRefOfSelectInto(a, b *SelectInto) bool {
 		return false
 	}
 	return a.FileName == b.FileName &&
-		a.Charset == b.Charset &&
 		a.FormatOption == b.FormatOption &&
 		a.ExportOption == b.ExportOption &&
 		a.Manifest == b.Manifest &&
 		a.Overwrite == b.Overwrite &&
-		a.Type == b.Type
+		a.Type == b.Type &&
+		EqualsColumnCharset(a.Charset, b.Charset)
 }
 
 // EqualsRefOfSet does deep equals between the two objects.
@@ -5652,10 +5652,10 @@ func EqualsColumnType(a, b ColumnType) bool {
 	return a.Type == b.Type &&
 		a.Unsigned == b.Unsigned &&
 		a.Zerofill == b.Zerofill &&
-		a.Charset == b.Charset &&
 		EqualsRefOfColumnTypeOptions(a.Options, b.Options) &&
 		EqualsRefOfLiteral(a.Length, b.Length) &&
 		EqualsRefOfLiteral(a.Scale, b.Scale) &&
+		EqualsColumnCharset(a.Charset, b.Charset) &&
 		EqualsSliceOfString(a.EnumValues, b.EnumValues)
 }
 
@@ -5682,6 +5682,12 @@ func EqualsRefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
 		EqualsRefOfLiteral(a.EngineAttribute, b.EngineAttribute) &&
 		EqualsRefOfLiteral(a.SecondaryEngineAttribute, b.SecondaryEngineAttribute) &&
 		EqualsRefOfLiteral(a.SRID, b.SRID)
+}
+
+// EqualsColumnCharset does deep equals between the two objects.
+func EqualsColumnCharset(a, b ColumnCharset) bool {
+	return a.Name == b.Name &&
+		a.Binary == b.Binary
 }
 
 // EqualsSliceOfString does deep equals between the two objects.
@@ -6020,6 +6026,18 @@ func EqualsDatabaseOption(a, b DatabaseOption) bool {
 	return a.IsDefault == b.IsDefault &&
 		a.Value == b.Value &&
 		a.Type == b.Type
+}
+
+// EqualsRefOfColumnCharset does deep equals between the two objects.
+func EqualsRefOfColumnCharset(a, b *ColumnCharset) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		a.Binary == b.Binary
 }
 
 // EqualsRefOfIndexColumn does deep equals between the two objects.

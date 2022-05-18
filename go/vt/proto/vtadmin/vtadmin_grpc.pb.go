@@ -94,6 +94,10 @@ type VTAdminClient interface {
 	// This only works if the current replica position matches the last known
 	// reparent action.
 	ReparentTablet(ctx context.Context, in *ReparentTabletRequest, opts ...grpc.CallOption) (*ReparentTabletResponse, error)
+	// ReloadSchemas reloads the schema definition across keyspaces, shards, or
+	// tablets in one or more clusters, depending on the request fields (see
+	// ReloadSchemasRequest for details).
+	ReloadSchemas(ctx context.Context, in *ReloadSchemasRequest, opts ...grpc.CallOption) (*ReloadSchemasResponse, error)
 	// RunHealthCheck runs a healthcheck on the tablet.
 	RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error)
 	// SetReadOnly sets the tablet to read-only mode.
@@ -376,6 +380,15 @@ func (c *vTAdminClient) ReparentTablet(ctx context.Context, in *ReparentTabletRe
 	return out, nil
 }
 
+func (c *vTAdminClient) ReloadSchemas(ctx context.Context, in *ReloadSchemasRequest, opts ...grpc.CallOption) (*ReloadSchemasResponse, error) {
+	out := new(ReloadSchemasResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ReloadSchemas", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error) {
 	out := new(RunHealthCheckResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RunHealthCheck", in, out, opts...)
@@ -532,6 +545,10 @@ type VTAdminServer interface {
 	// This only works if the current replica position matches the last known
 	// reparent action.
 	ReparentTablet(context.Context, *ReparentTabletRequest) (*ReparentTabletResponse, error)
+	// ReloadSchemas reloads the schema definition across keyspaces, shards, or
+	// tablets in one or more clusters, depending on the request fields (see
+	// ReloadSchemasRequest for details).
+	ReloadSchemas(context.Context, *ReloadSchemasRequest) (*ReloadSchemasResponse, error)
 	// RunHealthCheck runs a healthcheck on the tablet.
 	RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error)
 	// SetReadOnly sets the tablet to read-only mode.
@@ -642,6 +659,9 @@ func (UnimplementedVTAdminServer) RefreshState(context.Context, *RefreshStateReq
 }
 func (UnimplementedVTAdminServer) ReparentTablet(context.Context, *ReparentTabletRequest) (*ReparentTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReparentTablet not implemented")
+}
+func (UnimplementedVTAdminServer) ReloadSchemas(context.Context, *ReloadSchemasRequest) (*ReloadSchemasResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReloadSchemas not implemented")
 }
 func (UnimplementedVTAdminServer) RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
@@ -1187,6 +1207,24 @@ func _VTAdmin_ReparentTablet_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_ReloadSchemas_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReloadSchemasRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).ReloadSchemas(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/ReloadSchemas",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).ReloadSchemas(ctx, req.(*ReloadSchemasRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RunHealthCheckRequest)
 	if err := dec(in); err != nil {
@@ -1467,6 +1505,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReparentTablet",
 			Handler:    _VTAdmin_ReparentTablet_Handler,
+		},
+		{
+			MethodName: "ReloadSchemas",
+			Handler:    _VTAdmin_ReloadSchemas_Handler,
 		},
 		{
 			MethodName: "RunHealthCheck",

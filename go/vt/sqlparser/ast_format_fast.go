@@ -904,13 +904,17 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[ZEROFILL])
 	}
-	if ct.Charset != "" {
+	if ct.Charset.Name != "" {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[CHARACTER])
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[SET])
 		buf.WriteByte(' ')
-		buf.WriteString(ct.Charset)
+		buf.WriteString(ct.Charset.Name)
+	}
+	if ct.Charset.Binary {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[BINARY])
 	}
 	if ct.Options != nil {
 		if ct.Options.Collate != "" {
@@ -2048,9 +2052,13 @@ func (node *ConvertType) formatFast(buf *TrackedBuffer) {
 		}
 		buf.WriteByte(')')
 	}
-	if node.Charset != "" {
+	if node.Charset.Name != "" {
 		buf.WriteString(" character set ")
-		buf.WriteString(node.Charset)
+		buf.WriteString(node.Charset.Name)
+	}
+	if node.Charset.Binary {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[BINARY])
 	}
 }
 
@@ -2308,9 +2316,9 @@ func (node *SelectInto) formatFast(buf *TrackedBuffer) {
 	}
 	buf.WriteString(node.Type.ToString())
 	buf.WriteString(node.FileName)
-	if node.Charset != "" {
+	if node.Charset.Name != "" {
 		buf.WriteString(" character set ")
-		buf.WriteString(node.Charset)
+		buf.WriteString(node.Charset.Name)
 	}
 	buf.WriteString(node.FormatOption)
 	buf.WriteString(node.ExportOption)
