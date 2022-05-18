@@ -2444,7 +2444,7 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 	return nil
 }
 
-func (e *Executor) executeSpecialDropPartition(ctx context.Context, onlineDDL *schema.OnlineDDL, plan *SpecialAlterPlan) error {
+func (e *Executor) executeSpecialDropPartitionPlan(ctx context.Context, onlineDDL *schema.OnlineDDL, plan *SpecialAlterPlan) error {
 	artifactTableName := plan.Detail("partition_artifact")
 	// artifact is a new table
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTableName); err != nil {
@@ -2480,7 +2480,7 @@ func (e *Executor) executeSpecialDropPartition(ctx context.Context, onlineDDL *s
 	return nil
 }
 
-func (e *Executor) executeSpecialAddPartition(ctx context.Context, onlineDDL *schema.OnlineDDL, plan *SpecialAlterPlan) error {
+func (e *Executor) executeSpecialAddPartitionPlan(ctx context.Context, onlineDDL *schema.OnlineDDL, plan *SpecialAlterPlan) error {
 	// This is a multi step operation, described in https://github.com/vitessio/vitess/issues/10317
 	// Because the operation is not atomic, it is possible that a tablet fails mid-operation.
 	// The next steps ensure idempotency.
@@ -2602,7 +2602,7 @@ func (e *Executor) executeSpecialAddPartition(ctx context.Context, onlineDDL *sc
 
 // executeSpecialAlterDDLActionMigration executed a special plan migration
 func (e *Executor) executeSpecialAlterDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, plan *SpecialAlterPlan) (specialMigrationExecuted bool, err error) {
-	markAsRunning := func() error {
+	prepareToExecute := func() error {
 		if err := e.updateMigrationSpecialPlan(ctx, onlineDDL.UUID, plan.String()); err != nil {
 			return err
 		}
@@ -2614,17 +2614,17 @@ func (e *Executor) executeSpecialAlterDDLActionMigration(ctx context.Context, on
 
 	switch plan.operation {
 	case dropRangePartitionSpecialOperation:
-		if err := markAsRunning(); err != nil {
+		if err := prepareToExecute(); err != nil {
 			return false, err
 		}
-		if err := e.executeSpecialDropPartition(ctx, onlineDDL, plan); err != nil {
+		if err := e.executeSpecialDropPartitionPlan(ctx, onlineDDL, plan); err != nil {
 			return false, err
 		}
 	case addRangePartitionSpecialOperation:
-		if err := markAsRunning(); err != nil {
+		if err := prepareToExecute(); err != nil {
 			return false, err
 		}
-		if err := e.executeSpecialAddPartition(ctx, onlineDDL, plan); err != nil {
+		if err := e.executeSpecialAddPartitionPlan(ctx, onlineDDL, plan); err != nil {
 			return false, err
 		}
 	default:
