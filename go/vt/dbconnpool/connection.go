@@ -77,10 +77,13 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 	qr := alloc()
 	byteCount := 0
 	for {
-		row, err := dbc.FetchNext(nil)
+		row, result, err := dbc.FetchNext(nil)
 		if err != nil {
 			dbc.handleError(err)
 			return err
+		}
+		if result != nil {
+			qr.Info = result.Info
 		}
 		if row == nil {
 			break

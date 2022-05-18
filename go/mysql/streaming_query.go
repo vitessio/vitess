@@ -107,33 +107,42 @@ func (c *Conn) Fields() ([]*querypb.Field, error) {
 
 // FetchNext returns the next result for an ongoing streaming query.
 // It returns (nil, nil) if there is nothing more to read.
-func (c *Conn) FetchNext(in []sqltypes.Value) ([]sqltypes.Value, error) {
+func (c *Conn) FetchNext(in []sqltypes.Value) ([]sqltypes.Value, *sqltypes.Result, error) {
 	if c.fields == nil {
 		// We are already done, and the result was closed.
-		return nil, NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "no streaming query in progress")
+		return nil, nil, NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "no streaming query in progress")
 	}
 
 	if len(c.fields) == 0 {
 		// We received no fields, so there is no data.
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	data, err := c.ReadPacket()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if isEOFPacket(data, c.Capabilities&CapabilityClientDeprecateEOF != 0) {
 		// Warnings and status flags are ignored.
 		c.fields = nil
-		return nil, nil
+		if c.Capabilities&CapabilityClientDeprecateEOF != 0 && c.enableQueryInfo {
+			if packetOK, err := c.parseOKPacket(data); err == nil {
+				result := sqltypes.Result{
+					Info: packetOK.info,
+				}
+				return nil, &result, nil
+			}
+		}
+		return nil, nil, nil
 	} else if isErrorPacket(data) {
 		// Error packet.
-		return nil, ParseErrorPacket(data)
+		return nil, nil, ParseErrorPacket(data)
 	}
 
 	// Regular row.
-	return c.parseRow(data, c.fields, readLenEncStringAsBytes, in)
+	row, err := c.parseRow(data, c.fields, readLenEncStringAsBytes, in)
+	return row, nil, err
 }
 
 // CloseResult can be used to terminate a streaming query
@@ -141,7 +150,7 @@ func (c *Conn) FetchNext(in []sqltypes.Value) ([]sqltypes.Value, error) {
 func (c *Conn) CloseResult() {
 	row := make([]sqltypes.Value, 0, len(c.fields))
 	for c.fields != nil {
-		rows, err := c.FetchNext(row[:0])
+		rows, _, err := c.FetchNext(row[:0])
 		if err != nil || rows == nil {
 			// We either got an error, or got the last result.
 			c.fields = nil

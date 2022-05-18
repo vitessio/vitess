@@ -326,7 +326,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		if mysqlrow != nil {
 			mysqlrow = mysqlrow[:0]
 		}
-		mysqlrow, err = conn.FetchNext(mysqlrow)
+		mysqlrow, _, err = conn.FetchNext(mysqlrow)
 		if err != nil {
 			return err
 		}

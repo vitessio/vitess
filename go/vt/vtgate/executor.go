@@ -212,6 +212,7 @@ type streaminResultReceiver struct {
 	stmtType     sqlparser.StatementType
 	rowsAffected uint64
 	rowsReturned int
+	rowsRead     uint64
 	insertID     uint64
 	callback     func(*sqltypes.Result) error
 }
@@ -221,6 +222,7 @@ func (s *streaminResultReceiver) storeResultStats(typ sqlparser.StatementType, q
 	defer s.mu.Unlock()
 	s.rowsAffected += qr.RowsAffected
 	s.rowsReturned += len(qr.Rows)
+	s.rowsRead += qr.RowsRead
 	if qr.InsertID != 0 {
 		s.insertID = qr.InsertID
 	}
@@ -334,6 +336,10 @@ func (e *Executor) StreamExecute(
 		}
 		log.Warningf("%q exceeds warning threshold of max memory rows: %v", piiSafeSQL, *warnMemoryRows)
 	}
+
+	logStats.RowsReturned = uint64(srr.rowsReturned)
+	logStats.RowsAffected = srr.rowsAffected
+	logStats.RowsRead = srr.rowsRead
 
 	logStats.Send()
 	return err

@@ -401,11 +401,11 @@ func testVStreamFrom(t *testing.T, table string, expectedRowCount int) {
 		}
 		utils.MustMatch(t, wantFields, gotFields)
 
-		gotRows, err := streamConn.FetchNext(nil)
+		gotRows, _, err := streamConn.FetchNext(nil)
 		require.NoError(t, err)
 		log.Infof("QR1:%v\n", gotRows)
 
-		gotRows, err = streamConn.FetchNext(nil)
+		gotRows, _, err = streamConn.FetchNext(nil)
 		require.NoError(t, err)
 		log.Infof("QR2:%+v\n", gotRows)
 

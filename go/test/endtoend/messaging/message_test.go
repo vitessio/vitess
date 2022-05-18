@@ -121,7 +121,7 @@ func TestMessage(t *testing.T) {
 
 	// Consume first message.
 	start := time.Now().UnixNano()
-	got, err := streamConn.FetchNext(nil)
+	got, _, err := streamConn.FetchNext(nil)
 	require.NoError(t, err)
 
 	want := []sqltypes.Value{
@@ -149,7 +149,7 @@ func TestMessage(t *testing.T) {
 	}
 
 	// Consume the resend.
-	_, err = streamConn.FetchNext(nil)
+	_, _, err = streamConn.FetchNext(nil)
 	require.NoError(t, err)
 	qr = utils.Exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
 	next, epoch = getTimeEpoch(qr)
@@ -257,7 +257,7 @@ func TestThreeColMessage(t *testing.T) {
 
 	utils.Exec(t, conn, fmt.Sprintf("insert into vitess_message3(id, tenant_id, message, msg1, msg2) values(1, 3, '%s', 'hello world', 3)", testMessage))
 
-	got, err := streamConn.FetchNext(nil)
+	got, _, err := streamConn.FetchNext(nil)
 	require.NoError(t, err)
 	want := []sqltypes.Value{
 		sqltypes.NewInt64(1),

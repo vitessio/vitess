@@ -702,7 +702,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 			got.Fields = nil
 		}
 		for {
-			row, err := cConn.FetchNext(nil)
+			row, _, err := cConn.FetchNext(nil)
 			if err != nil {
 				fatalError = fmt.Sprintf("FetchNext(%v) failed: %v", query, err)
 				return
