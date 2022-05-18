@@ -54,8 +54,24 @@ func (p *SpecialAlterPlan) SetDetail(key string, val string) *SpecialAlterPlan {
 	p.details[key] = val
 	return p
 }
+
+func (p *SpecialAlterPlan) AddDetails(details map[string]string) *SpecialAlterPlan {
+	for key, val := range details {
+		p.details[key] = val
+	}
+	return p
+}
+
 func (p *SpecialAlterPlan) Detail(key string) string {
 	return p.details[key]
+}
+
+func (p *SpecialAlterPlan) SetNewArtifact(key string) (artifactTableName string, err error) {
+	artifactTableName, err = schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+	if err == nil {
+		p.SetDetail(key, artifactTableName)
+	}
+	return artifactTableName, err
 }
 
 func (p *SpecialAlterPlan) String() string {
@@ -138,6 +154,11 @@ func (e *Executor) analyzeDropRangePartition(alterTable *sqlparser.AlterTable, c
 	if nextPartitionDefinition != nil {
 		plan.SetDetail("next_partition_name", nextPartitionDefinition.Name.String())
 		plan.SetDetail("next_partition_definition", sqlparser.CanonicalString(nextPartitionDefinition))
+		artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+		if err != nil {
+			return nil, err
+		}
+		plan.SetDetail("next_partition_artifact", artifactTableName)
 	}
 	return plan, nil
 }
@@ -173,14 +194,9 @@ func (e *Executor) analyzeAddRangePartition(alterTable *sqlparser.AlterTable, cr
 	if len(part.Definitions) == 0 {
 		return nil, nil
 	}
-	// artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
-	// if err != nil {
-	// 	return nil, err
-	// }
 	plan := NewSpecialAlterPlan(addRangePartitionSpecialOperation, alterTable, createTable)
 	plan.SetDetail("partition_name", partitionName)
 	plan.SetDetail("partition_definition", sqlparser.CanonicalString(partitionDefinition))
-	// plan.SetDetail("artifact", artifactTableName)
 	return plan, nil
 }
 
@@ -249,9 +265,19 @@ func (e *Executor) analyzeSpecialRevertAlterPlan(ctx context.Context, revertOnli
 		plan := NewSpecialAlterPlan(dropRangePartitionSpecialOperation, nil, nil)
 		plan.SetDetail("partition_name", details["partition_name"])
 		plan.SetDetail("partition_definition", details["partition_definition"])
-		plan.SetDetail("next_partition_name", details["next_partition_name"])
-		plan.SetDetail("next_partition_definition", details["next_partition_definition"])
 		plan.SetDetail("artifact", artifactTableName)
+
+		nextPartitionName := details["next_partition_name"]
+		if nextPartitionName != "" {
+			plan.SetDetail("next_partition_name", nextPartitionName)
+			plan.SetDetail("next_partition_definition", details["next_partition_definition"])
+			artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+			if err != nil {
+				return nil, err
+			}
+			plan.SetDetail("next_partition_artifact", artifactTableName)
+		}
+
 		return plan, nil
 	case dropRangePartitionSpecialOperation:
 		createTable, err := e.getCreateTableStatement(ctx, revertOnlineDDL.Table)
@@ -264,16 +290,19 @@ func (e *Executor) analyzeSpecialRevertAlterPlan(ctx context.Context, revertOnli
 		partitionDefinition := details["partition_definition"]
 		plan.SetDetail("partition_definition", partitionDefinition)
 		plan.changesFoundInTable = hasPartitionDefinition(createTable, partitionDefinition)
-		nextPartitionName := details["next_partition_name"]
-		if nextPartitionName != "" {
-			plan.SetDetail("next_partition_name", nextPartitionName)
-			plan.SetDetail("next_partition_definition", details["next_partition_definition"])
-			artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
-			if err != nil {
-				return nil, err
-			}
-			plan.SetDetail("next_partition_artifact", artifactTableName)
-		}
+		plan.SetDetail("next_partition_name", details["next_partition_name"])
+		plan.SetDetail("next_partition_definition", details["next_partition_definition"])
+		plan.SetDetail("next_partition_artifact", details["next_partition_artifact"])
+		// nextPartitionName := details["next_partition_name"]
+		// if nextPartitionName != "" {
+		// 	plan.SetDetail("next_partition_name", nextPartitionName)
+		// 	plan.SetDetail("next_partition_definition", details["next_partition_definition"])
+		// 	artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+		// 	if err != nil {
+		// 		return nil, err
+		// 	}
+		// 	plan.SetDetail("next_partition_artifact", artifactTableName)
+		// }
 		return plan, nil
 	default:
 		return nil, nil
