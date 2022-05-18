@@ -1744,6 +1744,28 @@ func (c *CreateTableEntity) validate() error {
 			}
 		}
 	}
+	// validate all columns referenced by generated columns do in fact exist
+	for _, col := range c.CreateTable.TableSpec.Columns {
+		if col.Type.Options != nil && col.Type.Options.As != nil {
+			referencedColumns := []string{}
+			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				switch node := node.(type) {
+				case *sqlparser.ColName:
+					referencedColumns = append(referencedColumns, node.Name.String())
+				}
+				return true, nil
+			}, col.Type.Options.As)
+			if err != nil {
+				return err
+			}
+			for _, referencedColName := range referencedColumns {
+				if !columnExists[referencedColName] {
+					return errors.Wrapf(ErrInvalidColumnInGeneratedColumn, "generated column: %v, referenced column: %v", col.Name.String(), referencedColName)
+				}
+			}
+		}
+	}
+
 	if partition := c.CreateTable.TableSpec.PartitionOption; partition != nil {
 		// validate no two partitions have same name
 		partitionExists := map[string]bool{}

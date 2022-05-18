@@ -54,6 +54,7 @@ var (
 	ErrApplyNoPartitions         = errors.New("no partitions found")
 
 	ErrInvalidColumnInKey               = errors.New("invalid column referenced by key")
+	ErrInvalidColumnInGeneratedColumn   = errors.New("invalid column referenced by generated column")
 	ErrInvalidColumnInPartition         = errors.New("invalid column referenced by partition")
 	ErrMissingParitionColumnInUniqueKey = errors.New("unique key must include all columns in a parititioning function")
 )

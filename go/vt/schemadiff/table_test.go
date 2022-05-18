@@ -1091,6 +1091,18 @@ func TestValidate(t *testing.T) {
 			alter: "alter table t alter index i_idx invisible",
 			to:    "create table t (id int primary key, i int, key i_idx(i) invisible)",
 		},
+		{
+			name:      "drop column used by a generated column",
+			from:      "create table t (id int, i int, neg int as (0-i), primary key (id))",
+			alter:     "alter table t drop column i",
+			expectErr: ErrInvalidColumnInGeneratedColumn,
+		},
+		{
+			name:      "add generated column referencing nonexistent column",
+			from:      "create table t (id int, primary key (id))",
+			alter:     "alter table t add column neg int as (0-i)",
+			expectErr: ErrInvalidColumnInGeneratedColumn,
+		},
 	}
 	hints := DiffHints{}
 	for _, ts := range tt {
