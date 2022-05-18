@@ -177,6 +177,12 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 		serving = false
 	}
 
+	ti, err := hc.ts.GetTablet(thc.ctx, thc.Tablet.Alias)
+	if err != nil {
+		return fmt.Errorf("could not get tablet info from topo: %v", err)
+	}
+	thc.Tablet = ti.Tablet
+
 	if shr.TabletAlias != nil && !proto.Equal(shr.TabletAlias, thc.Tablet.Alias) {
 		// TabletAlias change means that the host:port has been taken over by another tablet
 		// We cancel / exit the healthcheck for this tablet right away
