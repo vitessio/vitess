@@ -45,6 +45,9 @@ type (
 		OrderExprs         []OrderBy
 		CanPushDownSorting bool
 		HasStar            bool
+
+		// AddedColumn keeps a counter for expressions added to solve HAVING expressions the user is not selecting
+		AddedColumn int
 	}
 
 	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
@@ -169,20 +172,18 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 		qp.groupByExprs = nil
 	}
 
-	if sel.Having != nil {
-		rewriter := qp.aggrRewriter()
-		sqlparser.Rewrite(sel.Having.Expr, rewriter.rewrite(), nil)
-		if rewriter.err != nil {
-			return nil, rewriter.err
-		}
-	}
-
 	return qp, nil
 }
 
-func (ar *aggrRewriter) rewrite() func(*sqlparser.Cursor) bool {
+type AggrRewriter struct {
+	qp  *QueryProjection
+	Err error
+}
+
+// Rewrite will go through an expression, add aggregations to the QP, and rewrite them to use column offset
+func (ar *AggrRewriter) Rewrite() func(*sqlparser.Cursor) bool {
 	return func(cursor *sqlparser.Cursor) bool {
-		if ar.err != nil {
+		if ar.Err != nil {
 			return false
 		}
 		sqlNode := cursor.Node()
@@ -191,26 +192,33 @@ func (ar *aggrRewriter) rewrite() func(*sqlparser.Cursor) bool {
 			for offset, expr := range ar.qp.SelectExprs {
 				ae, err := expr.GetAliasedExpr()
 				if err != nil {
-					ar.err = err
+					ar.Err = err
 					return false
 				}
 				if sqlparser.EqualsExpr(ae.Expr, fExp) {
 					cursor.Replace(sqlparser.Offset(offset))
+					return false // no need to visit aggregation children
 				}
 			}
+
+			col := SelectExpr{
+				Aggr: true,
+				Col:  &sqlparser.AliasedExpr{Expr: fExp},
+			}
+			ar.qp.HasAggr = true
+
+			cursor.Replace(sqlparser.Offset(len(ar.qp.SelectExprs)))
+			ar.qp.SelectExprs = append(ar.qp.SelectExprs, col)
+			ar.qp.AddedColumn++
 		}
 
 		return true
 	}
 }
 
-type aggrRewriter struct {
-	qp  *QueryProjection
-	err error
-}
-
-func (qp *QueryProjection) aggrRewriter() *aggrRewriter {
-	return &aggrRewriter{qp: qp}
+// AggrRewriter extracts
+func (qp *QueryProjection) AggrRewriter() *AggrRewriter {
+	return &AggrRewriter{qp: qp}
 }
 
 func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
@@ -588,6 +596,10 @@ func (qp *QueryProjection) AlignGroupByAndOrderBy() {
 // AddGroupBy does just that
 func (qp *QueryProjection) AddGroupBy(by GroupBy) {
 	qp.groupByExprs = append(qp.groupByExprs, by)
+}
+
+func (qp *QueryProjection) GetColumnCount() int {
+	return len(qp.SelectExprs) - qp.AddedColumn
 }
 
 func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {

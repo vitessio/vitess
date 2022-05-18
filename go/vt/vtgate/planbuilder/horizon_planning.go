@@ -138,18 +138,18 @@ func pushProjections(ctx *plancontext.PlanningContext, plan logicalPlan, selectE
 }
 
 func (hp *horizonPlanning) truncateColumnsIfNeeded(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
-	if len(plan.OutputColumns()) == hp.sel.GetColumnCount() {
+	if len(plan.OutputColumns()) == hp.qp.GetColumnCount() {
 		return plan, nil
 	}
 	switch p := plan.(type) {
 	case *routeGen4:
-		p.eroute.SetTruncateColumnCount(hp.sel.GetColumnCount())
+		p.eroute.SetTruncateColumnCount(hp.qp.GetColumnCount())
 	case *joinGen4, *semiJoin, *hashJoin:
 		// since this is a join, we can safely add extra columns and not need to truncate them
 	case *orderedAggregate:
-		p.truncateColumnCount = hp.sel.GetColumnCount()
+		p.truncateColumnCount = hp.qp.GetColumnCount()
 	case *memorySort:
-		p.truncater.SetTruncateColumnCount(hp.sel.GetColumnCount())
+		p.truncater.SetTruncateColumnCount(hp.qp.GetColumnCount())
 	case *pulloutSubquery:
 		newUnderlyingPlan, err := hp.truncateColumnsIfNeeded(ctx, p.underlying)
 		if err != nil {
@@ -162,7 +162,8 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(ctx *plancontext.PlanningCont
 			eSimpleProj:       &engine.SimpleProjection{},
 		}
 
-		err := pushProjections(ctx, plan, hp.qp.SelectExprs)
+		exprs := hp.qp.SelectExprs[0:hp.qp.GetColumnCount()]
+		err := pushProjections(ctx, plan, exprs)
 		if err != nil {
 			return nil, err
 		}
@@ -526,6 +527,14 @@ func (hp *horizonPlanning) planAggrUsingOA(
 			FromGroupBy: true,
 			CollationID: ctx.SemTable.CollationForExpr(expr.Inner),
 		})
+	}
+
+	if hp.sel.Having != nil {
+		rewriter := hp.qp.AggrRewriter()
+		sqlparser.Rewrite(hp.sel.Having.Expr, rewriter.Rewrite(), nil)
+		if rewriter.Err != nil {
+			return nil, rewriter.Err
+		}
 	}
 
 	aggregationExprs, err := hp.qp.AggregationExpressions()
