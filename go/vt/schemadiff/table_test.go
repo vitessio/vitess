@@ -912,6 +912,12 @@ func TestValidate(t *testing.T) {
 			to:    "create table t (id int primary key, i int, key i_idx(i))",
 		},
 		{
+			name:  "add key, column case",
+			from:  "create table t (id int primary key, i int)",
+			alter: "alter table t add key i_idx(I)",
+			to:    "create table t (id int primary key, i int, key i_idx(I))",
+		},
+		{
 			name:  "add column and key",
 			from:  "create table t (id int primary key)",
 			alter: "alter table t add column i int, add key i_idx(i)",
@@ -960,6 +966,12 @@ func TestValidate(t *testing.T) {
 			to:    "create table t (id int primary key, i int, key some_key(id, i), key i_idx(i))",
 		},
 		{
+			name:  "drop column, affect keys 4, case",
+			from:  "create table t (id int primary key, i int, i2 int, key some_key(id, i), key i_idx(i, I2))",
+			alter: "alter table t drop column i2",
+			to:    "create table t (id int primary key, i int, key some_key(id, i), key i_idx(i))",
+		},
+		{
 			name:  "drop column, affect keys with expression",
 			from:  "create table t (id int primary key, i int, key id_idx((IF(id, 0, 1))), key i_idx((IF(i,0,1))))",
 			alter: "alter table t drop column i",
@@ -986,6 +998,12 @@ func TestValidate(t *testing.T) {
 		{
 			name:      "drop column used by partitions",
 			from:      "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (i) partitions 4",
+			alter:     "alter table t drop column i",
+			expectErr: ErrInvalidColumnInPartition,
+		},
+		{
+			name:      "drop column used by partitions, case",
+			from:      "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (I) partitions 4",
 			alter:     "alter table t drop column i",
 			expectErr: ErrInvalidColumnInPartition,
 		},
@@ -1095,6 +1113,12 @@ func TestValidate(t *testing.T) {
 			name:      "drop column used by a generated column",
 			from:      "create table t (id int, i int, neg int as (0-i), primary key (id))",
 			alter:     "alter table t drop column i",
+			expectErr: ErrInvalidColumnInGeneratedColumn,
+		},
+		{
+			name:      "drop column used by a generated column, case",
+			from:      "create table t (id int, i int, neg int as (0-I), primary key (id))",
+			alter:     "alter table t drop column I",
 			expectErr: ErrInvalidColumnInGeneratedColumn,
 		},
 		{
