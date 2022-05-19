@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
@@ -322,7 +323,18 @@ func pushProjection(
 				return key.KeyCol, false, nil
 			}
 		}
-		return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot push projections in ordered aggregates")
+		offset, _, err := pushProjection(ctx, expr, node.input, inner, true, hasAggregation)
+		if err != nil {
+			return 0, false, err
+		}
+		node.aggregates = append(node.aggregates, &engine.AggregateParams{
+			Opcode:   engine.AggregateRandom,
+			Col:      offset,
+			Alias:    expr.ColumnName(),
+			Expr:     expr.Expr,
+			Original: expr,
+		})
+		return offset, true, nil
 	case *vindexFunc:
 		colsBefore := len(node.eVindexFunc.Cols)
 		i, err := node.SupplyProjection(expr, reuseCol)
@@ -666,7 +678,7 @@ func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets
 			Opcode:   opcode,
 			Col:      offset,
 			Alias:    aggr.Alias,
-			Expr:     aggr.Func,
+			Expr:     aggr.Original.Expr,
 			Original: aggr.Original,
 		}
 	}
@@ -698,7 +710,11 @@ func addColumnsToOA(
 			o := groupings[count]
 			count++
 			a := aggregationExprs[offset]
-			collID := ctx.SemTable.CollationForExpr(a.Func.Exprs[0].(*sqlparser.AliasedExpr).Expr)
+			collID := collations.Unknown
+			fnc, ok := a.Original.Expr.(*sqlparser.FuncExpr)
+			if ok {
+				collID = ctx.SemTable.CollationForExpr(fnc.Exprs[0].(*sqlparser.AliasedExpr).Expr)
+			}
 			oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
 				Opcode:      a.OpCode,
 				Col:         o.col,
@@ -706,7 +722,6 @@ func addColumnsToOA(
 				WAssigned:   o.wsCol >= 0,
 				WCol:        o.wsCol,
 				Alias:       a.Alias,
-				Expr:        a.Func,
 				Original:    a.Original,
 				CollationID: collID,
 			})
@@ -745,7 +760,8 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 			aggrs = append(aggrs, expr)
 			continue
 		}
-		aliasedExpr, ok := expr.Func.Exprs[0].(*sqlparser.AliasedExpr)
+		funcExpr := expr.Original.Expr.(*sqlparser.FuncExpr) // we wouldn't be in this method if this wasn't a function
+		aliasedExpr, ok := funcExpr.Exprs[0].(*sqlparser.AliasedExpr)
 		if !ok {
 			err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(expr.Original))
 			return
@@ -822,8 +838,9 @@ func (hp *horizonPlanning) createGroupingsForColumns(columns []*sqlparser.ColNam
 	return lhsGrouping, nil
 }
 
-func isCountStar(f *sqlparser.FuncExpr) bool {
-	if f == nil {
+func isCountStar(e sqlparser.Expr) bool {
+	f, ok := e.(*sqlparser.FuncExpr)
+	if !ok || !f.Name.EqualString("count") {
 		return false
 	}
 	_, isStar := f.Exprs[0].(*sqlparser.StarExpr)

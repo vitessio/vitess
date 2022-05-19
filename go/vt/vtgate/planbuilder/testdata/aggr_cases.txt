@@ -2112,7 +2112,35 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 error: [BUG] unable to plan distinct query as the column is not projected: a
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct a, count(*) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "0, 1",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "random(0) AS a, sum(1) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a, count(*) from `user` where 1 != 1",
+            "Query": "select a, count(*) from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # distinct and aggregate functions
 "select distinct a, count(*) from user group by a"
@@ -3243,7 +3271,46 @@ Gen4 plan same as above
     "Vindex": "name_user_map"
   }
 }
-Gen4 error: cannot push projections in ordered aggregates
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from user having count(id) = 10 and name = 'a'",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Filter",
+        "Predicate": "OFFSET(1, 'count(id)') = 10",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "random(0) AS 1, sum(1) AS count(id)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Equal",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1, count(id) from `user` where 1 != 1",
+                "Query": "select 1, count(id) from `user` where `name` = 'a'",
+                "Table": "`user`",
+                "Values": [
+                  "VARCHAR(\"a\")"
+                ],
+                "Vindex": "name_user_map"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # Aggregates and joins
 "select count(*) from user join user_extra"
@@ -3315,7 +3382,42 @@ Gen4 error: cannot push projections in ordered aggregates
     "Table": "`user`"
   }
 }
-Gen4 error: cannot push projections in ordered aggregates
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from user having count(id) = 10",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Filter",
+        "Predicate": "OFFSET(1, 'count(id)') = 10",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "random(0) AS 1, sum(1) AS count(id)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1, count(id) from `user` where 1 != 1",
+                "Query": "select 1, count(id) from `user`",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # Aggregate on join
 "select user.a, count(*) from user join user_extra group by user.a"

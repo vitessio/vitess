@@ -121,7 +121,7 @@ Gen4 error: aggregate functions take a single argument 'count(a, b)'
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "random(0) AS id, random(0) AS id, sum(2) AS count(*)",
+    "Aggregates": "random(0) AS id, random(1) AS id, sum(2) AS count(*)",
     "ResultColumns": 3,
     "Inputs": [
       {
@@ -237,7 +237,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:2,L:3,L:1,R:0",
+            "JoinColumnIndexes": "L:1,L:2,L:0,R:0",
             "JoinVars": {
               "user_col": 0
             },
@@ -250,9 +250,9 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.col, `user`.col, `user`.id, weight_string(`user`.id) from `user` where 1 != 1 group by `user`.col, `user`.id, weight_string(`user`.id)",
-                "OrderBy": "(2|3) ASC",
-                "Query": "select `user`.col, `user`.col, `user`.id, weight_string(`user`.id) from `user` group by `user`.col, `user`.id, weight_string(`user`.id) order by `user`.id asc",
+                "FieldQuery": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` where 1 != 1 group by `user`.col, `user`.id, weight_string(`user`.id)",
+                "OrderBy": "(1|2) ASC",
+                "Query": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` group by `user`.col, `user`.id, weight_string(`user`.id) order by `user`.id asc",
                 "Table": "`user`"
               },
               {
@@ -621,7 +621,62 @@ Gen4 plan same as above
 
 "select (select 1 from user u having count(ue.col) > 10) from user_extra ue"
 "symbol ue.col not found in subquery"
-Gen4 error: cannot push projections in ordered aggregates
+{
+  "QueryType": "SELECT",
+  "Original": "select (select 1 from user u having count(ue.col) \u003e 10) from user_extra ue",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Filter",
+            "Predicate": "OFFSET(1, 'count(ue.col)') \u003e 10",
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "random(0) AS 1, sum(1) AS count(ue.col)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1, count(ue.col) from `user` as u where 1 != 1",
+                    "Query": "select 1, count(ue.col) from `user` as u",
+                    "Table": "`user`"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select :__sq1 from user_extra as ue where 1 != 1",
+        "Query": "select :__sq1 from user_extra as ue",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
 
 # subquery of information_schema with itself and star expression in outer select
 "select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)"

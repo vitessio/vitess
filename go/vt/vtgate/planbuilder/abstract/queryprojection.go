@@ -71,7 +71,6 @@ type (
 	// Aggr encodes all information needed for aggregation functions
 	Aggr struct {
 		Original *sqlparser.AliasedExpr
-		Func     *sqlparser.FuncExpr
 		OpCode   engine.AggregateOpcode
 		Alias    string
 		// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
@@ -495,7 +494,6 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 
 		out = append(out, Aggr{
 			Original: aliasedExpr,
-			Func:     fExpr,
 			OpCode:   opcode,
 			Alias:    aliasedExpr.ColumnName(),
 			Index:    &idxCopy,
