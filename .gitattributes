@@ -1,2 +1,5 @@
 web/vtadmin/src/proto/** linguist-generated=true
+web/vtadmin/src/proto/*/*.pb.go -diff
 go/vt/proto/** linguist-generated=true
+go/vt/proto/*.js -diff
+go/vt/proto/*.ts -diff
