@@ -197,7 +197,7 @@ func (ar *AggrRewriter) Rewrite() func(*sqlparser.Cursor) bool {
 					return false
 				}
 				if sqlparser.EqualsExpr(ae.Expr, fExp) {
-					cursor.Replace(sqlparser.Offset(offset))
+					cursor.Replace(sqlparser.NewOffset(offset, fExp))
 					return false // no need to visit aggregation children
 				}
 			}
@@ -208,7 +208,7 @@ func (ar *AggrRewriter) Rewrite() func(*sqlparser.Cursor) bool {
 			}
 			ar.qp.HasAggr = true
 
-			cursor.Replace(sqlparser.Offset(len(ar.qp.SelectExprs)))
+			cursor.Replace(sqlparser.NewOffset(len(ar.qp.SelectExprs), fExp))
 			ar.qp.SelectExprs = append(ar.qp.SelectExprs, col)
 			ar.qp.AddedColumn++
 		}

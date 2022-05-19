@@ -4056,7 +4056,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
     "Inputs": [
       {
         "OperatorType": "Filter",
-        "Predicate": "[1] = 3",
+        "Predicate": "OFFSET(1, 'count(*)') = 3",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -4100,7 +4100,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
     "Inputs": [
       {
         "OperatorType": "Filter",
-        "Predicate": "[1] + [2] = 42",
+        "Predicate": "OFFSET(1, 'sum(foo)') + OFFSET(2, 'sum(bar)') = 42",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -4144,7 +4144,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
     "Inputs": [
       {
         "OperatorType": "Filter",
-        "Predicate": "fooSum + [2] = 42",
+        "Predicate": "fooSum + OFFSET(2, 'sum(bar)') = 42",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -4186,7 +4186,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
     "Inputs": [
       {
         "OperatorType": "Filter",
-        "Predicate": "[1] = 3",
+        "Predicate": "OFFSET(1, 'count(*)') = 3",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -4227,7 +4227,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
     "Inputs": [
       {
         "OperatorType": "Filter",
-        "Predicate": "[1] = 3",
+        "Predicate": "OFFSET(1, 'count(u.`name`)') = 3",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -4343,7 +4343,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
     "Inputs": [
       {
         "OperatorType": "Filter",
-        "Predicate": "[1] \u003c 3 and [1] \u003e 5",
+        "Predicate": "OFFSET(1, 'count(*)') \u003c 3 and OFFSET(1, 'count(*)') \u003e 5",
         "Inputs": [
           {
             "OperatorType": "Aggregate",

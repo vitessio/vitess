@@ -609,13 +609,13 @@ func passGroupingColumns(proj *projection, groupings []offsets, grouping []abstr
 	for idx, grp := range groupings {
 		origGrp := grouping[idx]
 		var offs offsets
-		alias := origGrp.AsAliasedExpr().ColumnName()
-		offs.col, err = proj.addColumn(origGrp.InnerIndex, sqlparser.Offset(grp.col), alias)
+		expr := origGrp.AsAliasedExpr()
+		offs.col, err = proj.addColumn(origGrp.InnerIndex, sqlparser.NewOffset(grp.col, expr.Expr), expr.ColumnName())
 		if err != nil {
 			return nil, err
 		}
 		if grp.wsCol != -1 {
-			offs.wsCol, err = proj.addColumn(nil, sqlparser.Offset(grp.wsCol), "")
+			offs.wsCol, err = proj.addColumn(nil, sqlparser.NewOffset(grp.wsCol, weightStringFor(expr.Expr)), "")
 			if err != nil {
 				return nil, err
 			}
@@ -634,7 +634,7 @@ func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets
 		if proj != nil {
 			var aggrExpr sqlparser.Expr
 			for _, ofs := range paramOffset {
-				curr := sqlparser.Offset(ofs.col)
+				curr := &sqlparser.Offset{V: ofs.col}
 				if aggrExpr == nil {
 					aggrExpr = curr
 				} else {
