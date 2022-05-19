@@ -478,6 +478,11 @@ func (api *API) DeleteTablet(ctx context.Context, req *vtadminpb.DeleteTabletReq
 	}, nil
 }
 
+// EmergencyReparentShard is part of the vtadminpb.VTAdminServer interface.
+func (api *API) EmergencyReparentShard(ctx context.Context, req *vtadminpb.EmergencyReparentShardRequest) (*vtadminpb.EmergencyReparentShardResponse, error) {
+	panic("unimplemented!")
+}
+
 // FindSchema is part of the vtadminpb.VTAdminServer interface.
 func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest) (*vtadminpb.Schema, error) {
 	span, _ := trace.NewSpan(ctx, "API.FindSchema")
@@ -1349,6 +1354,11 @@ func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest
 	}, nil
 }
 
+// PlannedReparentShard is part of the vtadminpb.VTAdminServer interface.
+func (api *API) PlannedReparentShard(ctx context.Context, req *vtadminpb.PlannedReparentShardRequest) (*vtadminpb.PlannedReparentShardResponse, error) {
+	panic("unimplemented!")
+}
+
 // RefreshState is part of the vtadminpb.VTAdminServer interface.
 func (api *API) RefreshState(ctx context.Context, req *vtadminpb.RefreshStateRequest) (*vtadminpb.RefreshStateResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.RefreshState")
@@ -1536,6 +1546,11 @@ func (api *API) StopReplication(ctx context.Context, req *vtadminpb.StopReplicat
 		Status:  "ok",
 		Cluster: c.ToProto(),
 	}, nil
+}
+
+// TabletExternallyReparented is part of the vtadminpb.VTAdminServer interface.
+func (api *API) TabletExternallyReparented(ctx context.Context, req *vtadminpb.TabletExternallyReparentedRequest) (*vtadminpb.TabletExternallyReparentedResponse, error) {
+	panic("unimplemented!")
 }
 
 // ValidateKeyspace is part of the vtadminpb.VTAdminServer interface.
