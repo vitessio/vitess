@@ -103,7 +103,7 @@ func TestMysqlDownServingChange(t *testing.T) {
 }
 
 func waitForVTGateAndVTTablet() error {
-	timeout := time.After(5 * time.Minute)
+	timeout := time.After(10 * time.Minute)
 	for {
 		select {
 		case <-timeout:
