@@ -68,6 +68,7 @@ type (
 		aliasedExpr *sqlparser.AliasedExpr
 	}
 
+	// Aggr encodes all information needed for aggregation functions
 	Aggr struct {
 		Original *sqlparser.AliasedExpr
 		Func     *sqlparser.FuncExpr
@@ -77,6 +78,15 @@ type (
 		Index    *int
 		Distinct bool
 	}
+
+	Aggrs []Aggr
+
+	AggrRewriter struct {
+		qp  *QueryProjection
+		Err error
+	}
+
+	GroupBys []GroupBy
 )
 
 func (b GroupBy) AsOrderBy() OrderBy {
@@ -173,11 +183,6 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 	}
 
 	return qp, nil
-}
-
-type AggrRewriter struct {
-	qp  *QueryProjection
-	Err error
 }
 
 // Rewrite will go through an expression, add aggregations to the QP, and rewrite them to use column offset
@@ -616,8 +621,6 @@ func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
 	}, expr)
 }
 
-type Aggrs []Aggr
-
 // Len implements the sort.Interface
 func (a Aggrs) Len() int {
 	return len(a)
@@ -644,8 +647,6 @@ func CompareRefInt(a *int, b *int) bool {
 	}
 	return *a < *b
 }
-
-type GroupBys []GroupBy
 
 // Len implements the sort.Interface
 func (gbys GroupBys) Len() int {
