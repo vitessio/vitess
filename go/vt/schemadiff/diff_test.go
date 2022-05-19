@@ -308,6 +308,17 @@ func TestDiffSchemas(t *testing.T) {
 			},
 		},
 		{
+			name: "change of table column int length",
+			from: "create table t(id int primary key, i int(10))",
+			to:   "create table t(id int primary key, i int(11))",
+			diffs: []string{
+				"alter table t modify column i int(11)",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t` MODIFY COLUMN `i` int(11)",
+			},
+		},
+		{
 			name: "change of table columns, added",
 			from: "create table t(id int primary key)",
 			to:   "create table t(id int primary key, i int)",
