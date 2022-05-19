@@ -105,6 +105,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfConvertUsingExpr(in)
 	case *Count:
 		return CloneRefOfCount(in)
+	case *CountStar:
+		return CloneRefOfCountStar(in)
 	case *CreateDatabase:
 		return CloneRefOfCreateDatabase(in)
 	case *CreateTable:
@@ -824,6 +826,16 @@ func CloneRefOfCount(n *Count) *Count {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	return &out
+}
+
+// CloneRefOfCountStar creates a deep clone of the input.
+func CloneRefOfCountStar(n *CountStar) *CountStar {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Star = CloneStarExpr(n.Star)
 	return &out
 }
 
@@ -2757,6 +2769,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfConvertUsingExpr(in)
 	case *Count:
 		return CloneRefOfCount(in)
+	case *CountStar:
+		return CloneRefOfCountStar(in)
 	case *CurTimeFuncExpr:
 		return CloneRefOfCurTimeFuncExpr(in)
 	case *Default:
@@ -2905,6 +2919,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfConvertUsingExpr(in)
 	case *Count:
 		return CloneRefOfCount(in)
+	case *CountStar:
+		return CloneRefOfCountStar(in)
 	case *CurTimeFuncExpr:
 		return CloneRefOfCurTimeFuncExpr(in)
 	case *Default:
@@ -3310,6 +3326,11 @@ func CloneSliceOfString(n []string) []string {
 	res := make([]string, 0, len(n))
 	copy(res, n)
 	return res
+}
+
+// CloneStarExpr creates a deep clone of the input.
+func CloneStarExpr(n StarExpr) StarExpr {
+	return *CloneRefOfStarExpr(&n)
 }
 
 // CloneSliceOfRefOfIndexColumn creates a deep clone of the input.

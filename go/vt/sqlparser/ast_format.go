@@ -2349,5 +2349,10 @@ func (node *Count) Format(buf *TrackedBuffer) {
 		buf.literal(DistinctStr)
 	}
 	buf.astPrintf(node, "%v)", node.Arg)
+}
 
+func (node *CountStar) Format(buf *TrackedBuffer) {
+	buf.WriteString("count(")
+	buf.astPrintf(node, "%v", node.Star)
+	buf.WriteString(")")
 }

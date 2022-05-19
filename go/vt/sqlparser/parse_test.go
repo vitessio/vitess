@@ -44,6 +44,7 @@ var (
 	}{
 		{input: "select /* function with distinct */ count(a) from t"},
 		{input: "select /* function with distinct */ count(distinct a) from t"},
+		{input: "select /* function with distinct */ count(*) from t"},
 	}
 	validSQL = []struct {
 		input                string

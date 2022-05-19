@@ -3064,5 +3064,10 @@ func (node *Count) formatFast(buf *TrackedBuffer) {
 	}
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
+}
 
+func (node *CountStar) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("count(")
+	node.Star.formatFast(buf)
+	buf.WriteString(")")
 }

@@ -104,6 +104,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfConvertUsingExpr(parent, node, replacer)
 	case *Count:
 		return a.rewriteRefOfCount(parent, node, replacer)
+	case *CountStar:
+		return a.rewriteRefOfCountStar(parent, node, replacer)
 	case *CreateDatabase:
 		return a.rewriteRefOfCreateDatabase(parent, node, replacer)
 	case *CreateTable:
@@ -1612,6 +1614,30 @@ func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer re
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfCountStar(parent SQLNode, node *CountStar, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -6815,6 +6841,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfConvertUsingExpr(parent, node, replacer)
 	case *Count:
 		return a.rewriteRefOfCount(parent, node, replacer)
+	case *CountStar:
+		return a.rewriteRefOfCountStar(parent, node, replacer)
 	case *CurTimeFuncExpr:
 		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
 	case *Default:
@@ -6959,6 +6987,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfConvertUsingExpr(parent, node, replacer)
 	case *Count:
 		return a.rewriteRefOfCount(parent, node, replacer)
+	case *CountStar:
+		return a.rewriteRefOfCountStar(parent, node, replacer)
 	case *CurTimeFuncExpr:
 		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
 	case *Default:

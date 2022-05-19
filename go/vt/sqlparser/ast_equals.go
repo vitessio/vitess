@@ -272,6 +272,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfCount(a, b)
+	case *CountStar:
+		b, ok := inB.(*CountStar)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCountStar(a, b)
 	case *CreateDatabase:
 		b, ok := inB.(*CreateDatabase)
 		if !ok {
@@ -1694,6 +1700,17 @@ func EqualsRefOfCount(a, b *Count) bool {
 	}
 	return a.Distinct == b.Distinct &&
 		EqualsExpr(a.Arg, b.Arg)
+}
+
+// EqualsRefOfCountStar does deep equals between the two objects.
+func EqualsRefOfCountStar(a, b *CountStar) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsStarExpr(a.Star, b.Star)
 }
 
 // EqualsRefOfCreateDatabase does deep equals between the two objects.
@@ -4262,6 +4279,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfCount(a, b)
+	case *CountStar:
+		b, ok := inB.(*CountStar)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCountStar(a, b)
 	case *CurTimeFuncExpr:
 		b, ok := inB.(*CurTimeFuncExpr)
 		if !ok {
@@ -4664,6 +4687,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfCount(a, b)
+	case *CountStar:
+		b, ok := inB.(*CountStar)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCountStar(a, b)
 	case *CurTimeFuncExpr:
 		b, ok := inB.(*CurTimeFuncExpr)
 		if !ok {
@@ -5539,6 +5568,11 @@ func EqualsSliceOfString(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// EqualsStarExpr does deep equals between the two objects.
+func EqualsStarExpr(a, b StarExpr) bool {
+	return EqualsTableName(a.TableName, b.TableName)
 }
 
 // EqualsSliceOfRefOfIndexColumn does deep equals between the two objects.

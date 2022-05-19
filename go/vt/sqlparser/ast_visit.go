@@ -104,6 +104,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfConvertUsingExpr(in, f)
 	case *Count:
 		return VisitRefOfCount(in, f)
+	case *CountStar:
+		return VisitRefOfCountStar(in, f)
 	case *CreateDatabase:
 		return VisitRefOfCreateDatabase(in, f)
 	case *CreateTable:
@@ -969,6 +971,15 @@ func VisitRefOfCount(in *Count, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfCountStar(in *CountStar, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
 	return nil
@@ -3449,6 +3460,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfConvertUsingExpr(in, f)
 	case *Count:
 		return VisitRefOfCount(in, f)
+	case *CountStar:
+		return VisitRefOfCountStar(in, f)
 	case *CurTimeFuncExpr:
 		return VisitRefOfCurTimeFuncExpr(in, f)
 	case *Default:
@@ -3593,6 +3606,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfConvertUsingExpr(in, f)
 	case *Count:
 		return VisitRefOfCount(in, f)
+	case *CountStar:
+		return VisitRefOfCountStar(in, f)
 	case *CurTimeFuncExpr:
 		return VisitRefOfCurTimeFuncExpr(in, f)
 	case *Default:

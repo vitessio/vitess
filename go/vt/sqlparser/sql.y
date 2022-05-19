@@ -157,6 +157,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   setExprs      SetExprs
   selectExprs   SelectExprs
   tableOptions     TableOptions
+  starExpr      StarExpr
 
   colKeyOpt     ColumnKeyOption
   referenceAction ReferenceAction
@@ -524,6 +525,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> underscore_charsets
 %type <str> expire_opt
 %type <literal> ratio_opt
+%type <starExpr> star_count
 %start any_command
 
 %%
@@ -4518,6 +4520,12 @@ select_option:
     $$ = AllStr // These are not picked up by NewSelect, and so ALL will be dropped. But this is OK, since it's redundant anyway
   }
 
+star_count:
+  '*'
+  {
+    $$ = StarExpr{}
+  }
+
 select_expression_list:
   select_expression
   {
@@ -5362,6 +5370,10 @@ UTC_DATE func_paren_opt
 | CURRENT_TIME func_datetime_precision
   {
     $$ = &CurTimeFuncExpr{Name:NewColIdent("current_time"), Fsp: $2}
+  }
+| COUNT openb star_count closeb
+  {
+    $$ = &CountStar{Star:$3}
   }
 | COUNT openb distinct_opt expression closeb
   {
