@@ -32,8 +32,8 @@ import (
 func TestMultiply(t *testing.T) {
 	expr := &sqlparser.BinaryExpr{
 		Operator: sqlparser.MultOp,
-		Left:     sqlparser.Offset(0),
-		Right:    sqlparser.Offset(1),
+		Left:     &sqlparser.Offset{V: 0},
+		Right:    &sqlparser.Offset{V: 1},
 	}
 	evalExpr, err := evalengine.Translate(expr, nil)
 	require.NoError(t, err)
