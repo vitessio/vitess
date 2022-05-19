@@ -1195,17 +1195,17 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "removes int sizes",
 			from: "create table t (id int primary key, i int(11) default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int(11)\n)",
 		},
 		{
 			name: "removes zerofill and maps to unsigned",
 			from: "create table t (id int primary key, i int zerofill default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int unsigned\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int zerofill\n)",
 		},
 		{
 			name: "removes int sizes case insensitive",
 			from: "create table t (id int primary key, i INT(11) default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int(11)\n)",
 		},
 		{
 			name: "removes matching charset",
