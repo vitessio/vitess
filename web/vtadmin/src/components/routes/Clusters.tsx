@@ -24,14 +24,15 @@ import { DataCell } from '../dataTable/DataCell';
 import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
+import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 
 export const Clusters = () => {
     useDocumentTitle('Clusters');
-    const { data } = useClusters();
+    const clustersQuery = useClusters();
 
     const rows = React.useMemo(() => {
-        return orderBy(data, ['name']);
-    }, [data]);
+        return orderBy(clustersQuery.data, ['name']);
+    }, [clustersQuery.data]);
 
     const renderRows = (rows: pb.Cluster[]) =>
         rows.map((cluster, idx) => (
@@ -50,6 +51,7 @@ export const Clusters = () => {
             <ContentContainer>
                 <div className="max-w-screen-sm">
                     <DataTable columns={['Name', 'Id']} data={rows} renderRows={renderRows} />
+                    <QueryLoadingPlaceholder query={clustersQuery} />
                 </div>
             </ContentContainer>
         </div>

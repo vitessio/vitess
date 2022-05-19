@@ -172,6 +172,13 @@ func TestAggrOnJoin(t *testing.T) {
 
 	mcmp.AssertMatches(`select /*vt+ PLANNER=gen4 */ a1.val1, count(distinct a1.val2) from aggr_test a1 join aggr_test a2 on a1.val2 = a2.id join t3 t on a2.val2 = t.id7 group by a1.val1`,
 		`[[VARCHAR("a") INT64(1)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(1)]]`)
+
+	// having on aggregation on top of join
+	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ a.val1, count(*) from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1 having count(*) = 4",
+		`[[VARCHAR("a") INT64(4)]]`)
+
+	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ a.val1, count(*) as leCount from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1 having leCount = 4",
+		`[[VARCHAR("a") INT64(4)]]`)
 }
 
 func TestNotEqualFilterOnScatter(t *testing.T) {

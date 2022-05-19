@@ -909,13 +909,17 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[ZEROFILL])
 	}
-	if ct.Charset != "" {
+	if ct.Charset.Name != "" {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[CHARACTER])
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[SET])
 		buf.WriteByte(' ')
-		buf.WriteString(ct.Charset)
+		buf.WriteString(ct.Charset.Name)
+	}
+	if ct.Charset.Binary {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[BINARY])
 	}
 	if ct.Options != nil {
 		if ct.Options.Collate != "" {
@@ -2161,9 +2165,13 @@ func (node *ConvertType) formatFast(buf *TrackedBuffer) {
 		}
 		buf.WriteByte(')')
 	}
-	if node.Charset != "" {
+	if node.Charset.Name != "" {
 		buf.WriteString(" character set ")
-		buf.WriteString(node.Charset)
+		buf.WriteString(node.Charset.Name)
+	}
+	if node.Charset.Binary {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[BINARY])
 	}
 }
 
@@ -2421,9 +2429,9 @@ func (node *SelectInto) formatFast(buf *TrackedBuffer) {
 	}
 	buf.WriteString(node.Type.ToString())
 	buf.WriteString(node.FileName)
-	if node.Charset != "" {
+	if node.Charset.Name != "" {
 		buf.WriteString(" character set ")
-		buf.WriteString(node.Charset)
+		buf.WriteString(node.Charset.Name)
 	}
 	buf.WriteString(node.FormatOption)
 	buf.WriteString(node.ExportOption)
@@ -2712,16 +2720,31 @@ func (node AlgorithmValue) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node
 func (node *AlterColumn) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("alter column ")
+	node.Column.formatFast(buf)
 	if node.DropDefault {
-		buf.WriteString("alter column ")
-		node.Column.formatFast(buf)
 		buf.WriteString(" drop default")
-	} else {
-		buf.WriteString("alter column ")
-		node.Column.formatFast(buf)
-		buf.WriteString(" set default")
-		buf.WriteByte(' ')
+	} else if node.DefaultVal != nil {
+		buf.WriteString(" set default ")
 		node.DefaultVal.formatFast(buf)
+	}
+	if node.Invisible != nil {
+		if *node.Invisible {
+			buf.WriteString(" set invisible")
+		} else {
+			buf.WriteString(" set visible")
+		}
+	}
+}
+
+// formatFast formats the node
+func (node *AlterIndex) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("alter index ")
+	node.Name.formatFast(buf)
+	if node.Invisible {
+		buf.WriteString(" invisible")
+	} else {
+		buf.WriteString(" visible")
 	}
 }
 

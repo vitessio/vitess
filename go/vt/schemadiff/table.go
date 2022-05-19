@@ -239,7 +239,7 @@ func NewCreateTableEntity(c *sqlparser.CreateTable) *CreateTableEntity {
 // - table option case (upper/lower/special)
 // The function returns this receiver as courtesy
 func (c *CreateTableEntity) normalize() *CreateTableEntity {
-	c.normalizeUnnamedKeys()
+	c.normalizeKeys()
 	c.normalizeUnnamedConstraints()
 	c.normalizeTableOptions()
 	c.normalizeColumnOptions()
@@ -310,7 +310,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 
 		// Map known lowercase fields to always be lowercase
 		col.Type.Type = strings.ToLower(col.Type.Type)
-		col.Type.Charset = strings.ToLower(col.Type.Charset)
+		col.Type.Charset.Name = strings.ToLower(col.Type.Charset.Name)
 		col.Type.Options.Collate = strings.ToLower(col.Type.Options.Collate)
 
 		// See https://dev.mysql.com/doc/refman/8.0/en/create-table.html
@@ -340,50 +340,43 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			}
 		}
 
-		// Map any charset aliases to the real charset. This applies mainly right
-		// now to utf8 being an alias for utf8mb3.
-		if charset, ok := collationEnv.CharsetAlias(col.Type.Charset); ok {
-			col.Type.Charset = charset
+		if col.Type.Options.Invisible != nil && !*col.Type.Options.Invisible {
+			// If a column is marked `VISIBLE`, that's the same as the default.
+			col.Type.Options.Invisible = nil
 		}
 
-		// Remove any lengths for integral types since it is deprecated there and
-		// doesn't mean anything anymore.
-		if _, ok := integralTypes[col.Type.Type]; ok {
-			col.Type.Length = nil
-			// Remove zerofill for integral types but keep the behavior that this marks the value
-			// as unsigned
-			if col.Type.Zerofill {
-				col.Type.Zerofill = false
-				col.Type.Unsigned = true
-			}
+		// Map any charset aliases to the real charset. This applies mainly right
+		// now to utf8 being an alias for utf8mb3.
+		if charset, ok := collationEnv.CharsetAlias(col.Type.Charset.Name); ok {
+			col.Type.Charset.Name = charset
 		}
 
 		if _, ok := charsetTypes[col.Type.Type]; ok {
 			// If the charset is explicitly configured and it mismatches, we don't normalize
 			// anything for charsets or collations and move on.
-			if col.Type.Charset != "" && col.Type.Charset != tableCharset {
+			if col.Type.Charset.Name != "" && col.Type.Charset.Name != tableCharset {
 				continue
 			}
 
 			// Alright, first check if both charset and collation are the same as
 			// the table level options, in that case we can remove both since that's equivalent.
-			if col.Type.Charset == tableCharset && col.Type.Options.Collate == tableCollation {
-				col.Type.Charset = ""
+			if col.Type.Charset.Name == tableCharset && col.Type.Options.Collate == tableCollation {
+				col.Type.Charset.Name = ""
 				col.Type.Options.Collate = ""
 			}
 			// If we have no charset or collation defined, we inherit the table defaults
 			// and don't need to do anything here and can continue to the next column.
 			// It doesn't matter if that's because it's not defined, or if it was because
 			// it was explicitly set to the same values.
-			if col.Type.Charset == "" && col.Type.Options.Collate == "" {
+			if col.Type.Charset.Name == "" && col.Type.Options.Collate == "" {
 				continue
 			}
 
 			// We have a matching charset as the default, but it is explicitly set. In that
 			// case we still want to clear it, but set the default collation for the given charset
 			// if no collation is defined yet. We set then the collation to the default collation.
-			if col.Type.Charset != "" {
-				col.Type.Charset = ""
+			if col.Type.Charset.Name != "" {
+				col.Type.Charset.Name = ""
 				if col.Type.Options.Collate == "" {
 					col.Type.Options.Collate = defaultCollation
 				}
@@ -415,7 +408,7 @@ func (c *CreateTableEntity) normalizePartitionOptions() {
 	}
 }
 
-func (c *CreateTableEntity) normalizeUnnamedKeys() {
+func (c *CreateTableEntity) normalizeKeys() {
 	// let's ensure all keys have names
 	keyNameExists := map[string]bool{}
 	// first, we iterate and take note for all keys that do already have names
@@ -424,8 +417,8 @@ func (c *CreateTableEntity) normalizeUnnamedKeys() {
 			keyNameExists[name] = true
 		}
 	}
-	// now, let's look at keys that do not have names, and assign them new names
 	for _, key := range c.CreateTable.TableSpec.Indexes {
+		// now, let's look at keys that do not have names, and assign them new names
 		if name := key.Info.Name.String(); name == "" {
 			// we know there must be at least one column covered by this key
 			var colName string
@@ -453,6 +446,21 @@ func (c *CreateTableEntity) normalizeUnnamedKeys() {
 			key.Info.Name = sqlparser.NewColIdent(suggestedKeyName)
 			keyNameExists[suggestedKeyName] = true
 		}
+
+		// Drop options that are the same as the default.
+		keptOptions := make([]*sqlparser.IndexOption, 0, len(key.Options))
+		for _, option := range key.Options {
+			switch strings.ToUpper(option.Name) {
+			case "USING":
+				if strings.EqualFold(option.String, "BTREE") {
+					continue
+				}
+			case "VISIBLE":
+				continue
+			}
+			keptOptions = append(keptOptions, option)
+		}
+		key.Options = keptOptions
 	}
 }
 
@@ -582,22 +590,11 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 			return nil, err
 		}
 	}
-	if len(alterTable.AlterOptions) == 0 && alterTable.PartitionOption == nil && alterTable.PartitionSpec == nil && len(partitionSpecs) == 0 {
-		// it's possible that the table definitions are different, and still there's no
-		// "real" difference. Reasons could be:
-		// - reordered keys -- we treat that as non-diff
-		return nil, nil
-	}
-	if len(partitionSpecs) == 0 {
-		return &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}, nil
-	}
-	// partitionSpecs has multiple entries
-	if len(alterTable.AlterOptions) > 0 ||
-		alterTable.PartitionOption != nil ||
-		alterTable.PartitionSpec != nil {
-		return nil, ErrMixedPartitionAndNonPartitionChanges
-	}
 	var parentAlterTableEntityDiff *AlterTableEntityDiff
+	tableSpecHasChanged := len(alterTable.AlterOptions) > 0 || alterTable.PartitionOption != nil || alterTable.PartitionSpec != nil
+	if tableSpecHasChanged {
+		parentAlterTableEntityDiff = &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+	}
 	for _, partitionSpec := range partitionSpecs {
 		alterTable := &sqlparser.AlterTable{
 			Table:         otherStmt.Table,
@@ -922,11 +919,7 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 			switch hints.RangeRotationStrategy {
 			case RangeRotationIgnore:
 				return nil, nil
-			case RangeRotationStatements:
-				if len(partitionSpecs) == 1 {
-					alterTable.PartitionSpec = partitionSpecs[0]
-					partitionSpecs = nil
-				}
+			case RangeRotationDistinctStatements:
 				return partitionSpecs, nil
 			case RangeRotationFullSpec:
 				// proceed to return a full rebuild
@@ -1052,8 +1045,16 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 			// key exists in both tables
 			// check diff between before/after columns:
 			if sqlparser.CanonicalString(t2Key) != sqlparser.CanonicalString(t1Key) {
-				// keys with same name have different definition. There is no ALTER INDEX statement,
-				// we're gonna drop and create.
+				indexVisibilityChange, newVisibility := indexOnlyVisibilityChange(t1Key, t2Key)
+				if indexVisibilityChange {
+					alterTable.AlterOptions = append(alterTable.AlterOptions, &sqlparser.AlterIndex{
+						Name:      t2Key.Info.Name,
+						Invisible: newVisibility,
+					})
+					continue
+				}
+
+				// For other changes, we're gonna drop and create.
 				dropKey := dropKeyStatement(t1Key.Info.Name)
 				addKey := &sqlparser.AddIndexDefinition{
 					IndexDefinition: t2Key,
@@ -1069,6 +1070,37 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 			alterTable.AlterOptions = append(alterTable.AlterOptions, addKey)
 		}
 	}
+}
+
+// indexOnlyVisibilityChange checks whether the change on an index is only
+// a visibility change. In that case we can use `ALTER INDEX`.
+// Returns if this is a visibility only change and if true, whether
+// the new visibility is invisible or not.
+func indexOnlyVisibilityChange(t1Key, t2Key *sqlparser.IndexDefinition) (bool, bool) {
+	t1KeyCopy := sqlparser.CloneRefOfIndexDefinition(t1Key)
+	t2KeyCopy := sqlparser.CloneRefOfIndexDefinition(t2Key)
+	t1KeyKeptOptions := make([]*sqlparser.IndexOption, 0, len(t1KeyCopy.Options))
+	t2KeyInvisible := false
+	for _, opt := range t1KeyCopy.Options {
+		if strings.EqualFold(opt.Name, "INVISIBLE") {
+			continue
+		}
+		t1KeyKeptOptions = append(t1KeyKeptOptions, opt)
+	}
+	t1KeyCopy.Options = t1KeyKeptOptions
+	t2KeyKeptOptions := make([]*sqlparser.IndexOption, 0, len(t2KeyCopy.Options))
+	for _, opt := range t2KeyCopy.Options {
+		if strings.EqualFold(opt.Name, "INVISIBLE") {
+			t2KeyInvisible = true
+			continue
+		}
+		t2KeyKeptOptions = append(t2KeyKeptOptions, opt)
+	}
+	t2KeyCopy.Options = t2KeyKeptOptions
+	if sqlparser.CanonicalString(t2KeyCopy) == sqlparser.CanonicalString(t1KeyCopy) {
+		return true, t2KeyInvisible
+	}
+	return false, false
 }
 
 // evaluateColumnReordering produces a minimal reordering set of columns. To elaborate:
@@ -1167,11 +1199,11 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		// check diff between before/after columns:
 		modifyColumnDiff := t1ColEntity.ColumnDiff(t2ColEntity, hints)
 		if modifyColumnDiff == nil {
-			// even if there's no apparent change, there can still be implciit changes
+			// even if there's no apparent change, there can still be implicit changes
 			// it is possible that the table charset is changed. the column may be some col1 TEXT NOT NULL, possibly in both varsions 1 and 2,
 			// but implicitly the column has changed its characters set. So we need to explicitly ass a MODIFY COLUMN statement, so that
 			// MySQL rebuilds it.
-			if tableCharsetChanged && t2ColEntity.IsTextual() && t2Col.Type.Charset == "" {
+			if tableCharsetChanged && t2ColEntity.IsTextual() && t2Col.Type.Charset.Name == "" {
 				modifyColumnDiff = NewModifyColumnDiffByDefinition(t2Col)
 			}
 		}
@@ -1487,6 +1519,48 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			if !found {
 				return errors.Wrap(ErrApplyColumnNotFound, opt.NewColDefinition.Name.String())
 			}
+		case *sqlparser.AlterColumn:
+			// we expect the column to exist
+			found := false
+			for _, col := range c.TableSpec.Columns {
+				if col.Name.String() == opt.Column.Name.String() {
+					found = true
+					if opt.DropDefault {
+						col.Type.Options.Default = nil
+					} else if opt.DefaultVal != nil {
+						col.Type.Options.Default = opt.DefaultVal
+					}
+					col.Type.Options.Invisible = opt.Invisible
+					break
+				}
+			}
+			if !found {
+				return errors.Wrap(ErrApplyColumnNotFound, opt.Column.Name.String())
+			}
+		case *sqlparser.AlterIndex:
+			// we expect the index to exist
+			found := false
+			for _, idx := range c.TableSpec.Indexes {
+				if idx.Info.Name.String() == opt.Name.String() {
+					found = true
+					if opt.Invisible {
+						idx.Options = append(idx.Options, &sqlparser.IndexOption{Name: "INVISIBLE"})
+					} else {
+						keptOptions := make([]*sqlparser.IndexOption, 0, len(idx.Options))
+						for _, idxOpt := range idx.Options {
+							if strings.EqualFold(idxOpt.Name, "INVISIBLE") {
+								continue
+							}
+							keptOptions = append(keptOptions, idxOpt)
+						}
+						idx.Options = keptOptions
+					}
+					break
+				}
+			}
+			if !found {
+				return errors.Wrap(ErrApplyKeyNotFound, opt.Name.String())
+			}
 		case sqlparser.TableOptions:
 			// Apply table options. Options that have their DEFAULT value are actually remvoed.
 			for _, option := range opt {
@@ -1658,6 +1732,28 @@ func (c *CreateTableEntity) validate() error {
 			}
 		}
 	}
+	// validate all columns referenced by generated columns do in fact exist
+	for _, col := range c.CreateTable.TableSpec.Columns {
+		if col.Type.Options != nil && col.Type.Options.As != nil {
+			referencedColumns := []string{}
+			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				switch node := node.(type) {
+				case *sqlparser.ColName:
+					referencedColumns = append(referencedColumns, node.Name.String())
+				}
+				return true, nil
+			}, col.Type.Options.As)
+			if err != nil {
+				return err
+			}
+			for _, referencedColName := range referencedColumns {
+				if !columnExists[referencedColName] {
+					return errors.Wrapf(ErrInvalidColumnInGeneratedColumn, "generated column: %v, referenced column: %v", col.Name.String(), referencedColName)
+				}
+			}
+		}
+	}
+
 	if partition := c.CreateTable.TableSpec.PartitionOption; partition != nil {
 		// validate no two partitions have same name
 		partitionExists := map[string]bool{}

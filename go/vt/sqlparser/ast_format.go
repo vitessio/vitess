@@ -687,8 +687,11 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.Zerofill {
 		buf.astPrintf(ct, " %#s", keywordStrings[ZEROFILL])
 	}
-	if ct.Charset != "" {
-		buf.astPrintf(ct, " %s %s %#s", keywordStrings[CHARACTER], keywordStrings[SET], ct.Charset)
+	if ct.Charset.Name != "" {
+		buf.astPrintf(ct, " %s %s %#s", keywordStrings[CHARACTER], keywordStrings[SET], ct.Charset.Name)
+	}
+	if ct.Charset.Binary {
+		buf.astPrintf(ct, " %#s", keywordStrings[BINARY])
 	}
 	if ct.Options != nil {
 		if ct.Options.Collate != "" {
@@ -1641,8 +1644,11 @@ func (node *ConvertType) Format(buf *TrackedBuffer) {
 		}
 		buf.astPrintf(node, ")")
 	}
-	if node.Charset != "" {
-		buf.astPrintf(node, " character set %s", node.Charset)
+	if node.Charset.Name != "" {
+		buf.astPrintf(node, " character set %#s", node.Charset.Name)
+	}
+	if node.Charset.Binary {
+		buf.astPrintf(node, " %#s", keywordStrings[BINARY])
 	}
 }
 
@@ -1864,8 +1870,8 @@ func (node *SelectInto) Format(buf *TrackedBuffer) {
 		return
 	}
 	buf.astPrintf(node, "%s%s", node.Type.ToString(), node.FileName)
-	if node.Charset != "" {
-		buf.astPrintf(node, " character set %s", node.Charset)
+	if node.Charset.Name != "" {
+		buf.astPrintf(node, " character set %s", node.Charset.Name)
 	}
 	buf.astPrintf(node, "%s%s%s%s", node.FormatOption, node.ExportOption, node.Manifest, node.Overwrite)
 }
@@ -2085,11 +2091,28 @@ func (node AlgorithmValue) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *AlterColumn) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "alter column %v", node.Column)
 	if node.DropDefault {
-		buf.astPrintf(node, "alter column %v drop default", node.Column)
+		buf.astPrintf(node, " drop default")
+	} else if node.DefaultVal != nil {
+		buf.astPrintf(node, " set default %v", node.DefaultVal)
+	}
+	if node.Invisible != nil {
+		if *node.Invisible {
+			buf.astPrintf(node, " set invisible")
+		} else {
+			buf.astPrintf(node, " set visible")
+		}
+	}
+}
+
+// Format formats the node
+func (node *AlterIndex) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "alter index %v", node.Name)
+	if node.Invisible {
+		buf.astPrintf(node, " invisible")
 	} else {
-		buf.astPrintf(node, "alter column %v set default", node.Column)
-		buf.astPrintf(node, " %v", node.DefaultVal)
+		buf.astPrintf(node, " visible")
 	}
 }
 

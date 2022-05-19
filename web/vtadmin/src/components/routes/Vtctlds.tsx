@@ -24,9 +24,12 @@ import { DataTable } from '../dataTable/DataTable';
 import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
+import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 
 export const Vtctlds = () => {
-    const { data: vtctlds = [], ...q } = useVtctlds();
+    const vtctldsQuery = useVtctlds();
+    const { data: vtctlds = [] } = vtctldsQuery;
+
     const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
     const data = useMemo(() => {
@@ -81,9 +84,7 @@ export const Vtctlds = () => {
                     value={filter || ''}
                 />
                 <DataTable columns={['Hostname', 'Cluster']} data={data} renderRows={renderRows} />
-
-                {/* TODO skeleton placeholder */}
-                {!!q.isLoading && <div className="text-center">Loading</div>}
+                <QueryLoadingPlaceholder query={vtctldsQuery} />
             </ContentContainer>
         </div>
     );

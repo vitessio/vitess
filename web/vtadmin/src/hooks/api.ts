@@ -58,6 +58,8 @@ import {
     ValidateVersionKeyspaceParams,
     validateVersionKeyspace,
     fetchShardReplicationPositions,
+    createKeyspace,
+    reloadSchema,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -97,6 +99,18 @@ export const useKeyspace = (
         },
         ...options,
     });
+};
+
+/**
+ * useCreateKeyspace is a mutation query hook that creates a keyspace.
+ */
+export const useCreateKeyspace = (
+    params: Parameters<typeof createKeyspace>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof createKeyspace>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof createKeyspace>>, Error>(() => {
+        return createKeyspace(params);
+    }, options);
 };
 
 /**
@@ -415,4 +429,17 @@ export const useWorkflow = (
         },
         ...options,
     });
+};
+
+/**
+ * useReloadSchema is a mutate hook that reloads schemas in one or more
+ * keyspaces, shards, or tablets in the cluster, depending on the request parameters.
+ */
+export const useReloadSchema = (
+    params: Parameters<typeof reloadSchema>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof reloadSchema>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof reloadSchema>>, Error>(() => {
+        return reloadSchema(params);
+    }, options);
 };
