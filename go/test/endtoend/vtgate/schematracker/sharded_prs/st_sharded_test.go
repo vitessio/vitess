@@ -145,7 +145,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 3, true)
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 2, false)
 		if err != nil {
 			return 1
 		}
