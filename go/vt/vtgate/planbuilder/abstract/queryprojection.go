@@ -79,14 +79,10 @@ type (
 		Distinct bool
 	}
 
-	Aggrs []Aggr
-
 	AggrRewriter struct {
 		qp  *QueryProjection
 		Err error
 	}
-
-	GroupBys []GroupBy
 )
 
 func (b GroupBy) AsOrderBy() OrderBy {
@@ -567,7 +563,7 @@ func (qp *QueryProjection) AlignGroupByAndOrderBy() {
 		// The query didn't ask for any particular order, so we are free to add arbitrary ordering.
 		// We'll align the grouping and ordering by the output columns
 		newGrouping = qp.GetGrouping()
-		sort.Sort(GroupBys(newGrouping))
+		SortGrouping(newGrouping)
 		for _, groupBy := range newGrouping {
 			qp.OrderExprs = append(qp.OrderExprs, groupBy.AsOrderBy())
 		}
@@ -621,19 +617,16 @@ func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
 	}, expr)
 }
 
-// Len implements the sort.Interface
-func (a Aggrs) Len() int {
-	return len(a)
+func SortAggregations(a []Aggr) {
+	sort.Slice(a, func(i, j int) bool {
+		return CompareRefInt(a[i].Index, a[j].Index)
+	})
 }
 
-// Less implements the sort.Interface
-func (a Aggrs) Less(i, j int) bool {
-	return CompareRefInt(a[i].Index, a[j].Index)
-}
-
-// Swap implements the sort.Interface
-func (a Aggrs) Swap(i, j int) {
-	a[i], a[j] = a[j], a[i]
+func SortGrouping(a []GroupBy) {
+	sort.Slice(a, func(i, j int) bool {
+		return CompareRefInt(a[i].InnerIndex, a[j].InnerIndex)
+	})
 }
 
 // CompareRefInt compares two references of integers.
@@ -646,19 +639,4 @@ func CompareRefInt(a *int, b *int) bool {
 		return true
 	}
 	return *a < *b
-}
-
-// Len implements the sort.Interface
-func (gbys GroupBys) Len() int {
-	return len(gbys)
-}
-
-// Less implements the sort.Interface
-func (gbys GroupBys) Less(i, j int) bool {
-	return CompareRefInt(gbys[i].InnerIndex, gbys[j].InnerIndex)
-}
-
-// Swap implements the sort.Interface
-func (gbys GroupBys) Swap(i, j int) {
-	gbys[i], gbys[j] = gbys[j], gbys[i]
 }

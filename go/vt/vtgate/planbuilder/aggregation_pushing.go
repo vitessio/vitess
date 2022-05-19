@@ -17,8 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"sort"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -484,8 +482,8 @@ func sortOffsets(grouping []abstract.GroupBy, aggregations []abstract.Aggr) ([]a
 	originalAggr := make([]abstract.Aggr, len(aggregations))
 	copy(originalAggr, aggregations)
 	copy(originalGrouping, grouping)
-	sort.Sort(abstract.Aggrs(aggregations))
-	sort.Sort(abstract.GroupBys(grouping))
+	abstract.SortAggregations(aggregations)
+	abstract.SortGrouping(grouping)
 
 	reorg := func(groupByOffsets []offsets, aggrOffsets [][]offsets) ([]offsets, [][]offsets) {
 		orderedGroupingOffsets := make([]offsets, 0, len(originalGrouping))
