@@ -21,6 +21,14 @@ var engineCasing = map[string]string{
 	"MYISAM": "MyISAM",
 }
 
+var integralTypes = map[string]bool{
+	"tinyint":   true,
+	"smallint":  true,
+	"mediumint": true,
+	"int":       true,
+	"bigint":    true,
+}
+
 var charsetTypes = map[string]bool{
 	"char":       true,
 	"varchar":    true,

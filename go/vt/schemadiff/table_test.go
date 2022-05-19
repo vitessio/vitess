@@ -1193,19 +1193,34 @@ func TestNormalize(t *testing.T) {
 			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
 		},
 		{
-			name: "removes int sizes",
-			from: "create table t (id int primary key, i int(11) default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int(11)\n)",
+			name: "does not remove tinyint(1) size",
+			from: "create table t (id int primary key, i tinyint(1) default null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` tinyint(1)\n)",
 		},
 		{
-			name: "removes zerofill and maps to unsigned",
+			name: "removes other tinyint size",
+			from: "create table t (id int primary key, i tinyint(2) default null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` tinyint\n)",
+		},
+		{
+			name: "removes int size",
+			from: "create table t (id int primary key, i int(1) default null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+		},
+		{
+			name: "removes bigint size",
+			from: "create table t (id int primary key, i bigint(1) default null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` bigint\n)",
+		},
+		{
+			name: "keeps zerofill",
 			from: "create table t (id int primary key, i int zerofill default null)",
 			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int zerofill\n)",
 		},
 		{
 			name: "removes int sizes case insensitive",
 			from: "create table t (id int primary key, i INT(11) default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int(11)\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
 		},
 		{
 			name: "removes matching charset",
