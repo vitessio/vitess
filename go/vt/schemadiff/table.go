@@ -351,6 +351,16 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			col.Type.Charset.Name = charset
 		}
 
+		// Remove any lengths for integral types since it is deprecated there and
+		// doesn't mean anything anymore.
+		if _, ok := integralTypes[col.Type.Type]; ok {
+			// We can remove the length except when we have a boolean, which is
+			// stored as a tinyint(1) and treated special.
+			if !isBool(col.Type) {
+				col.Type.Length = nil
+			}
+		}
+
 		if _, ok := charsetTypes[col.Type.Type]; ok {
 			// If the charset is explicitly configured and it mismatches, we don't normalize
 			// anything for charsets or collations and move on.
@@ -389,6 +399,10 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			}
 		}
 	}
+}
+
+func isBool(colType sqlparser.ColumnType) bool {
+	return colType.Type == "tinyint" && colType.Length != nil && sqlparser.CanonicalString(colType.Length) == "1"
 }
 
 func (c *CreateTableEntity) normalizePartitionOptions() {
