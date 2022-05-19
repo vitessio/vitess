@@ -60,6 +60,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitArgument(in, f)
 	case *AutoIncSpec:
 		return VisitRefOfAutoIncSpec(in, f)
+	case *Avg:
+		return VisitRefOfAvg(in, f)
 	case *Begin:
 		return VisitRefOfBegin(in, f)
 	case *BetweenExpr:
@@ -676,6 +678,18 @@ func VisitRefOfAutoIncSpec(in *AutoIncSpec, f Visit) error {
 		return err
 	}
 	if err := VisitTableName(in.Sequence, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfAvg(in *Avg, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil
@@ -3440,6 +3454,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfAndExpr(in, f)
 	case Argument:
 		return VisitArgument(in, f)
+	case *Avg:
+		return VisitRefOfAvg(in, f)
 	case *BetweenExpr:
 		return VisitRefOfBetweenExpr(in, f)
 	case *BinaryExpr:
@@ -3586,6 +3602,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfAndExpr(in, f)
 	case Argument:
 		return VisitArgument(in, f)
+	case *Avg:
+		return VisitRefOfAvg(in, f)
 	case *BetweenExpr:
 		return VisitRefOfBetweenExpr(in, f)
 	case *BinaryExpr:

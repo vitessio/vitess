@@ -2565,9 +2565,15 @@ type (
 	CountStar struct {
 		Star StarExpr
 	}
+
+	Avg struct {
+		Arg      Expr
+		Distinct bool
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
+func (*Avg) iExpr()                                {}
 func (*CountStar) iExpr()                          {}
 func (*Count) iExpr()                              {}
 func (*AndExpr) iExpr()                            {}

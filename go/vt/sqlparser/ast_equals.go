@@ -140,6 +140,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfAutoIncSpec(a, b)
+	case *Avg:
+		b, ok := inB.(*Avg)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAvg(a, b)
 	case *Begin:
 		b, ok := inB.(*Begin)
 		if !ok {
@@ -1437,6 +1443,18 @@ func EqualsRefOfAutoIncSpec(a, b *AutoIncSpec) bool {
 	}
 	return EqualsColIdent(a.Column, b.Column) &&
 		EqualsTableName(a.Sequence, b.Sequence)
+}
+
+// EqualsRefOfAvg does deep equals between the two objects.
+func EqualsRefOfAvg(a, b *Avg) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Distinct == b.Distinct &&
+		EqualsExpr(a.Arg, b.Arg)
 }
 
 // EqualsRefOfBegin does deep equals between the two objects.
@@ -4219,6 +4237,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return a == b
+	case *Avg:
+		b, ok := inB.(*Avg)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAvg(a, b)
 	case *BetweenExpr:
 		b, ok := inB.(*BetweenExpr)
 		if !ok {
@@ -4627,6 +4651,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return a == b
+	case *Avg:
+		b, ok := inB.(*Avg)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAvg(a, b)
 	case *BetweenExpr:
 		b, ok := inB.(*BetweenExpr)
 		if !ok {

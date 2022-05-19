@@ -324,6 +324,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> JSON_DEPTH JSON_TYPE JSON_LENGTH JSON_VALID
 %token <str> JSON_ARRAY_APPEND JSON_ARRAY_INSERT JSON_INSERT JSON_MERGE JSON_MERGE_PATCH JSON_MERGE_PRESERVE JSON_REMOVE JSON_REPLACE JSON_SET JSON_UNQUOTE
 %token <str> COUNT // aggregate function
+%token <str> AVG // aggregate function
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -5371,6 +5372,10 @@ UTC_DATE func_paren_opt
   {
     $$ = &CurTimeFuncExpr{Name:NewColIdent("current_time"), Fsp: $2}
   }
+| AVG openb distinct_opt expression closeb
+  {
+    $$ = &Avg{Arg:$4, Distinct:$3}
+  }
 | COUNT openb star_count closeb
   {
     $$ = &CountStar{Star:$3}
@@ -6757,6 +6762,7 @@ non_reserved_keyword:
 | ASCII
 | AUTO_INCREMENT
 | AUTOEXTEND_SIZE
+| AVG
 | AVG_ROW_LENGTH
 | BEGIN
 | BIGINT

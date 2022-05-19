@@ -2356,3 +2356,11 @@ func (node *CountStar) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v", node.Star)
 	buf.WriteString(")")
 }
+
+func (node *Avg) Format(buf *TrackedBuffer) {
+	buf.WriteString("avg(")
+	if node.Distinct {
+		buf.literal(DistinctStr)
+	}
+	buf.astPrintf(node, "%v)", node.Arg)
+}

@@ -60,6 +60,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteArgument(parent, node, replacer)
 	case *AutoIncSpec:
 		return a.rewriteRefOfAutoIncSpec(parent, node, replacer)
+	case *Avg:
+		return a.rewriteRefOfAvg(parent, node, replacer)
 	case *Begin:
 		return a.rewriteRefOfBegin(parent, node, replacer)
 	case *BetweenExpr:
@@ -953,6 +955,33 @@ func (a *application) rewriteRefOfAutoIncSpec(parent SQLNode, node *AutoIncSpec,
 	}
 	if !a.rewriteTableName(node, node.Sequence, func(newNode, parent SQLNode) {
 		parent.(*AutoIncSpec).Sequence = newNode.(TableName)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfAvg(parent SQLNode, node *Avg, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*Avg).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -6821,6 +6850,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfAndExpr(parent, node, replacer)
 	case Argument:
 		return a.rewriteArgument(parent, node, replacer)
+	case *Avg:
+		return a.rewriteRefOfAvg(parent, node, replacer)
 	case *BetweenExpr:
 		return a.rewriteRefOfBetweenExpr(parent, node, replacer)
 	case *BinaryExpr:
@@ -6967,6 +6998,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfAndExpr(parent, node, replacer)
 	case Argument:
 		return a.rewriteArgument(parent, node, replacer)
+	case *Avg:
+		return a.rewriteRefOfAvg(parent, node, replacer)
 	case *BetweenExpr:
 		return a.rewriteRefOfBetweenExpr(parent, node, replacer)
 	case *BinaryExpr:

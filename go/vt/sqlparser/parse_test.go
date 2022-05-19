@@ -45,6 +45,10 @@ var (
 		{input: "select /* function with distinct */ count(a) from t"},
 		{input: "select /* function with distinct */ count(distinct a) from t"},
 		{input: "select /* function with distinct */ count(*) from t"},
+		{input: "select avg(a) from products"},
+		{input: "select avg(distinct(a)) from products"},
+		{input: "select avg(a) 'Avg Price' from products"},
+		{input: "select format(avg(distinct a), 2) from products"},
 	}
 	validSQL = []struct {
 		input                string

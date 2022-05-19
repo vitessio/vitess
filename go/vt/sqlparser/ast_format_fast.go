@@ -3071,3 +3071,12 @@ func (node *CountStar) formatFast(buf *TrackedBuffer) {
 	node.Star.formatFast(buf)
 	buf.WriteString(")")
 }
+
+func (node *Avg) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("avg(")
+	if node.Distinct {
+		buf.WriteString(DistinctStr)
+	}
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}

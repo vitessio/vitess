@@ -131,6 +131,7 @@ var keywords = []keyword{
 	{"asensitive", UNUSED},
 	{"auto_increment", AUTO_INCREMENT},
 	{"autoextend_size", AUTOEXTEND_SIZE},
+	{"avg", AVG},
 	{"avg_row_length", AVG_ROW_LENGTH},
 	{"before", UNUSED},
 	{"begin", BEGIN},

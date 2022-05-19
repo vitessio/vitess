@@ -61,6 +61,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return in
 	case *AutoIncSpec:
 		return CloneRefOfAutoIncSpec(in)
+	case *Avg:
+		return CloneRefOfAvg(in)
 	case *Begin:
 		return CloneRefOfBegin(in)
 	case *BetweenExpr:
@@ -605,6 +607,16 @@ func CloneRefOfAutoIncSpec(n *AutoIncSpec) *AutoIncSpec {
 	out := *n
 	out.Column = CloneColIdent(n.Column)
 	out.Sequence = CloneTableName(n.Sequence)
+	return &out
+}
+
+// CloneRefOfAvg creates a deep clone of the input.
+func CloneRefOfAvg(n *Avg) *Avg {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 
@@ -2749,6 +2761,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfAndExpr(in)
 	case Argument:
 		return in
+	case *Avg:
+		return CloneRefOfAvg(in)
 	case *BetweenExpr:
 		return CloneRefOfBetweenExpr(in)
 	case *BinaryExpr:
@@ -2899,6 +2913,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfAndExpr(in)
 	case Argument:
 		return in
+	case *Avg:
+		return CloneRefOfAvg(in)
 	case *BetweenExpr:
 		return CloneRefOfBetweenExpr(in)
 	case *BinaryExpr:
