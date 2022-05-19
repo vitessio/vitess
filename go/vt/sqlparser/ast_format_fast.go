@@ -3056,3 +3056,13 @@ func (node *JSONUnquoteExpr) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.JSONValue, true)
 	buf.WriteString(")")
 }
+
+func (node *Count) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("count(")
+	if node.Distinct {
+		buf.WriteString(DistinctStr)
+	}
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+
+}

@@ -266,6 +266,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfConvertUsingExpr(a, b)
+	case *Count:
+		b, ok := inB.(*Count)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCount(a, b)
 	case *CreateDatabase:
 		b, ok := inB.(*CreateDatabase)
 		if !ok {
@@ -1676,6 +1682,18 @@ func EqualsRefOfConvertUsingExpr(a, b *ConvertUsingExpr) bool {
 	}
 	return a.Type == b.Type &&
 		EqualsExpr(a.Expr, b.Expr)
+}
+
+// EqualsRefOfCount does deep equals between the two objects.
+func EqualsRefOfCount(a, b *Count) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Distinct == b.Distinct &&
+		EqualsExpr(a.Arg, b.Arg)
 }
 
 // EqualsRefOfCreateDatabase does deep equals between the two objects.
@@ -4238,6 +4256,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfConvertUsingExpr(a, b)
+	case *Count:
+		b, ok := inB.(*Count)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCount(a, b)
 	case *CurTimeFuncExpr:
 		b, ok := inB.(*CurTimeFuncExpr)
 		if !ok {
@@ -4634,6 +4658,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfConvertUsingExpr(a, b)
+	case *Count:
+		b, ok := inB.(*Count)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCount(a, b)
 	case *CurTimeFuncExpr:
 		b, ok := inB.(*CurTimeFuncExpr)
 		if !ok {

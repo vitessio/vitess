@@ -598,6 +598,7 @@ var Aggregates = map[string]bool{
 
 // IsAggregate returns true if the function is an aggregate.
 func (node *FuncExpr) IsAggregate() bool {
+	log.Infof("inside IsAggregate...")
 	return Aggregates[node.Name.Lowered()]
 }
 
@@ -628,6 +629,7 @@ func NewColNameWithQualifier(identifier string, table TableName) *ColName {
 
 // NewSelect is used to create a select statement
 func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, into *SelectInto, from TableExprs, where *Where, groupBy GroupBy, having *Where) *Select {
+	log.Infof("inside NewSelect")
 	var cache *bool
 	var distinct, straightJoinHint, sqlFoundRows bool
 

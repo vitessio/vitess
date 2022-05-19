@@ -2556,9 +2556,15 @@ type (
 	JSONUnquoteExpr struct {
 		JSONValue Expr
 	}
+
+	Count struct {
+		Arg      Expr
+		Distinct bool
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
+func (*Count) iExpr()                              {}
 func (*AndExpr) iExpr()                            {}
 func (*OrExpr) iExpr()                             {}
 func (*XorExpr) iExpr()                            {}

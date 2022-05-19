@@ -2342,3 +2342,12 @@ func (node *JSONUnquoteExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "json_unquote(%v", node.JSONValue)
 	buf.WriteString(")")
 }
+
+func (node *Count) Format(buf *TrackedBuffer) {
+	buf.WriteString("count(")
+	if node.Distinct {
+		buf.literal(DistinctStr)
+	}
+	buf.astPrintf(node, "%v)", node.Arg)
+
+}

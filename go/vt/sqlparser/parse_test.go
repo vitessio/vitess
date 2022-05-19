@@ -36,6 +36,15 @@ import (
 )
 
 var (
+	validSQL1 = []struct {
+		input                string
+		output               string
+		partialDDL           bool
+		ignoreNormalizerTest bool
+	}{
+		{input: "select /* function with distinct */ count(a) from t"},
+		{input: "select /* function with distinct */ count(distinct a) from t"},
+	}
 	validSQL = []struct {
 		input                string
 		output               string
@@ -2947,7 +2956,7 @@ var (
 )
 
 func TestValid(t *testing.T) {
-	for _, tcase := range validSQL {
+	for _, tcase := range validSQL1 {
 		t.Run(tcase.input, func(t *testing.T) {
 			if tcase.output == "" {
 				tcase.output = tcase.input

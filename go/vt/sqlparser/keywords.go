@@ -178,6 +178,7 @@ var keywords = []keyword{
 	{"continue", UNUSED},
 	{"convert", CONVERT},
 	{"copy", COPY},
+	{"count", COUNT},
 	{"cume_dist", UNUSED},
 	{"substr", SUBSTRING},
 	{"subpartition", SUBPARTITION},

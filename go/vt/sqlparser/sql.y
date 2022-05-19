@@ -322,6 +322,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> JSON_ARRAY JSON_OBJECT JSON_QUOTE
 %token <str> JSON_DEPTH JSON_TYPE JSON_LENGTH JSON_VALID
 %token <str> JSON_ARRAY_APPEND JSON_ARRAY_INSERT JSON_INSERT JSON_MERGE JSON_MERGE_PATCH JSON_MERGE_PRESERVE JSON_REMOVE JSON_REPLACE JSON_SET JSON_UNQUOTE
+%token <str> COUNT // aggregate function
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -819,8 +820,6 @@ query_primary:
   {
     $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, NewWhere(WhereClause, $6), GroupBy($7), NewWhere(HavingClause, $8))
   }
-
-
 
 insert_statement:
   insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data on_dup_opt
@@ -1510,7 +1509,6 @@ CURRENT_TIMESTAMP func_datetime_precision
     $$ = &CurTimeFuncExpr{Name:NewColIdent("now"), Fsp: $2}
   }
 
-
 signed_literal_or_null:
 signed_literal
 | null_as_literal
@@ -2168,7 +2166,6 @@ collate_opt:
     $$ = encodeSQLString($2)
   }
 
-
 index_definition:
   index_info '(' index_column_list ')' index_option_list_opt
   {
@@ -2283,7 +2280,6 @@ index_symbols:
   {
     $$ = string($1)
   }
-
 
 from_or_in:
   FROM
@@ -3473,7 +3469,6 @@ without_valid_opt:
     $$ = true
   }
 
-
 partition_definitions:
   partition_definition
   {
@@ -3743,6 +3738,7 @@ truncate_statement:
   {
     $$ = &TruncateTable{Table: $2}
   }
+
 analyze_statement:
   ANALYZE TABLE table_name
   {
@@ -4099,7 +4095,6 @@ savepoint_opt:
   { $$ = struct{}{} }
 | SAVEPOINT
   { $$ = struct{}{} }
-
 
 savepoint_statement:
   SAVEPOINT sql_id
@@ -5367,6 +5362,10 @@ UTC_DATE func_paren_opt
 | CURRENT_TIME func_datetime_precision
   {
     $$ = &CurTimeFuncExpr{Name:NewColIdent("current_time"), Fsp: $2}
+  }
+| COUNT openb distinct_opt expression closeb
+  {
+    $$ = &Count{Arg:$4, Distinct:$3}
   }
 | TIMESTAMPADD openb sql_id ',' expression ',' expression closeb
   {
@@ -6779,6 +6778,7 @@ non_reserved_keyword:
 | COMPRESSION
 | CONNECTION
 | COPY
+| COUNT
 | CSV
 | DATA
 | DATE
