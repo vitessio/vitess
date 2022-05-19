@@ -160,7 +160,7 @@ func TestFilesBackupStorage_StartBackup_sanityCheck(t *testing.T) {
 
 	// make sure that a nonexistent file causes an error
 	fbh := handle.(*filesBackupHandle)
-	fbh.filesAdded["/nonexistent"] = struct{}{}
+	fbh.filesAdded["/nonexistent"] = int64(10)
 	_, err = handle.AddFile(ctx, backupManifestFileName, 10)
 	assert.Error(t, err)
 
@@ -171,6 +171,44 @@ func TestFilesBackupStorage_API(t *testing.T) {
 	fbs := testFilesBackupStorage(t)
 	assert.NoError(t, fbs.RemoveBackup(ctx, "", ""))
 	assert.NoError(t, fbs.Close())
+}
+
+func TestFilesBackupStorage_StartBackup_uploadSizeFile(t *testing.T) {
+	ctx := context.Background()
+
+	backupID := rand.Int63()
+	content := fmt.Sprintf(`%v="%v"`, backupIDLabel, backupID)
+	tmpfile := createTempFile(t, content)
+	t.Cleanup(func() { os.Remove(tmpfile) })
+
+	os.Setenv(annotationsFilePath, tmpfile)
+
+	fbs := testFilesBackupStorage(t)
+
+	handle, err := fbs.StartBackup(ctx, "a", "b")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		handle.(*filesBackupHandle).fs.RemoveAll(ctx, fmt.Sprintf("/%v", backupID))
+	})
+
+	w, err := handle.AddFile(ctx, "ssfile", 10)
+	require.NoError(t, err)
+	w.Write([]byte("test content"))
+	require.NoError(t, err)
+	w.Close()
+
+	w, err = handle.AddFile(ctx, backupManifestFileName, 10)
+	require.NoError(t, err)
+	w.Close()
+
+	input := []byte("20")
+	r, err := handle.ReadFile(ctx, "SIZE")
+	require.NoError(t, err)
+	output, err := ioutil.ReadAll(r)
+	assert.NoError(t, err)
+	assert.Equal(t, input, output)
+	r.Close()
+
 }
 
 func testFilesBackupStorage(t *testing.T) *FilesBackupStorage {
