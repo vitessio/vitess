@@ -432,6 +432,10 @@ func (c *CreateTableEntity) normalizeKeys() {
 		}
 	}
 	for _, key := range c.CreateTable.TableSpec.Indexes {
+		// Normalize to KEY which matches MySQL behavior for the type.
+		if key.Info.Type == sqlparser.KeywordString(sqlparser.INDEX) {
+			key.Info.Type = sqlparser.KeywordString(sqlparser.KEY)
+		}
 		// now, let's look at keys that do not have names, and assign them new names
 		if name := key.Info.Name.String(); name == "" {
 			// we know there must be at least one column covered by this key

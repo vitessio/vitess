@@ -1313,6 +1313,11 @@ func TestNormalize(t *testing.T) {
 			to:   "CREATE TABLE `t1` (\n\t`id` int PRIMARY KEY,\n\t`i` int,\n\tCONSTRAINT `t1_ibfk_1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n)",
 		},
 		{
+			name: "uses KEY for indexes",
+			from: "create table t (id int primary key, i1 int, index i1_idx(i1))",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1_idx` (`i1`)\n)",
+		},
+		{
 			name: "drops default index type",
 			from: "create table t (id int primary key, i1 int, key i1_idx(i1) using btree)",
 			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1_idx` (`i1`)\n)",
