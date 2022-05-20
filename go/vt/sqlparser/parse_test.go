@@ -43,7 +43,9 @@ var (
 		ignoreNormalizerTest bool
 	}{
 		{input: "select /* function with distinct */ count(a) from t"},
+		{input: "select /* function with distinct */ count(a) 'total col' from t"},
 		{input: "select /* function with distinct */ count(distinct a) from t"},
+		{input: "select /* function with distinct */ count(distinct(a)) from t"},
 		{input: "select /* function with distinct */ count(*) from t"},
 		{input: "select avg(a) from products"},
 		{input: "select avg(distinct(a)) from products"},
@@ -51,6 +53,13 @@ var (
 		{input: "select format(avg(distinct a), 2) from products"},
 		{input: "select max(a) from products"},
 		{input: "select min(a) from products"},
+		{input: "select sum(a) from products"},
+		{input: "select sum(distinct(a)) from products",
+			output: "select sum(distinct a) from products"},
+		{input: "select sum(distinct a) from products"},
+		{input: "select sum(a) 'sum Price' from products",
+			output: "select sum(a) as `sum Price` from products"},
+		{input: "select sum(a * b) from products"},
 	}
 	validSQL = []struct {
 		input                string

@@ -369,6 +369,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfSubquery(in)
 	case *SubstrExpr:
 		return CloneRefOfSubstrExpr(in)
+	case *Sum:
+		return CloneRefOfSum(in)
 	case TableExprs:
 		return CloneTableExprs(in)
 	case TableIdent:
@@ -2220,6 +2222,16 @@ func CloneRefOfSubstrExpr(n *SubstrExpr) *SubstrExpr {
 	return &out
 }
 
+// CloneRefOfSum creates a deep clone of the input.
+func CloneRefOfSum(n *Sum) *Sum {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Arg = CloneExpr(n.Arg)
+	return &out
+}
+
 // CloneTableExprs creates a deep clone of the input.
 func CloneTableExprs(n TableExprs) TableExprs {
 	if n == nil {
@@ -2893,6 +2905,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfSubquery(in)
 	case *SubstrExpr:
 		return CloneRefOfSubstrExpr(in)
+	case *Sum:
+		return CloneRefOfSum(in)
 	case *TimestampFuncExpr:
 		return CloneRefOfTimestampFuncExpr(in)
 	case *TrimFuncExpr:
@@ -3049,6 +3063,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfSubquery(in)
 	case *SubstrExpr:
 		return CloneRefOfSubstrExpr(in)
+	case *Sum:
+		return CloneRefOfSum(in)
 	case *TimestampFuncExpr:
 		return CloneRefOfTimestampFuncExpr(in)
 	case *TrimFuncExpr:

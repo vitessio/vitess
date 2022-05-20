@@ -3092,3 +3092,12 @@ func (node *Min) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
 }
+
+func (node *Sum) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("sum(")
+	if node.Distinct {
+		buf.WriteString(DistinctStr)
+	}
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}

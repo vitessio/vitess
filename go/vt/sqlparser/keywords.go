@@ -555,6 +555,7 @@ var keywords = []keyword{
 	{"stored", STORED},
 	{"straight_join", STRAIGHT_JOIN},
 	{"stream", STREAM},
+	{"sum", SUM},
 	{"system", UNUSED},
 	{"table", TABLE},
 	{"tables", TABLES},

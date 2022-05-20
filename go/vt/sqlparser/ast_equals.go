@@ -1064,6 +1064,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfSubstrExpr(a, b)
+	case *Sum:
+		b, ok := inB.(*Sum)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSum(a, b)
 	case TableExprs:
 		b, ok := inB.(TableExprs)
 		if !ok {
@@ -3334,6 +3340,18 @@ func EqualsRefOfSubstrExpr(a, b *SubstrExpr) bool {
 		EqualsExpr(a.To, b.To)
 }
 
+// EqualsRefOfSum does deep equals between the two objects.
+func EqualsRefOfSum(a, b *Sum) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Distinct == b.Distinct &&
+		EqualsExpr(a.Arg, b.Arg)
+}
+
 // EqualsTableExprs does deep equals between the two objects.
 func EqualsTableExprs(a, b TableExprs) bool {
 	if len(a) != len(b) {
@@ -4595,6 +4613,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfSubstrExpr(a, b)
+	case *Sum:
+		b, ok := inB.(*Sum)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSum(a, b)
 	case *TimestampFuncExpr:
 		b, ok := inB.(*TimestampFuncExpr)
 		if !ok {
@@ -5021,6 +5045,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfSubstrExpr(a, b)
+	case *Sum:
+		b, ok := inB.(*Sum)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSum(a, b)
 	case *TimestampFuncExpr:
 		b, ok := inB.(*TimestampFuncExpr)
 		if !ok {

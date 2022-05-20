@@ -2372,3 +2372,11 @@ func (node *Max) Format(buf *TrackedBuffer) {
 func (node *Min) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "min(%v)", node.Arg)
 }
+
+func (node *Sum) Format(buf *TrackedBuffer) {
+	buf.WriteString("sum(")
+	if node.Distinct {
+		buf.literal(DistinctStr)
+	}
+	buf.astPrintf(node, "%v)", node.Arg)
+}

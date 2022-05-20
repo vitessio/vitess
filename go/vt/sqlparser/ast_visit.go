@@ -368,6 +368,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfSubquery(in, f)
 	case *SubstrExpr:
 		return VisitRefOfSubstrExpr(in, f)
+	case *Sum:
+		return VisitRefOfSum(in, f)
 	case TableExprs:
 		return VisitTableExprs(in, f)
 	case TableIdent:
@@ -2822,6 +2824,18 @@ func VisitRefOfSubstrExpr(in *SubstrExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfSum(in *Sum, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitTableExprs(in TableExprs, f Visit) error {
 	if in == nil {
 		return nil
@@ -3590,6 +3604,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfSubquery(in, f)
 	case *SubstrExpr:
 		return VisitRefOfSubstrExpr(in, f)
+	case *Sum:
+		return VisitRefOfSum(in, f)
 	case *TimestampFuncExpr:
 		return VisitRefOfTimestampFuncExpr(in, f)
 	case *TrimFuncExpr:
@@ -3742,6 +3758,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfSubquery(in, f)
 	case *SubstrExpr:
 		return VisitRefOfSubstrExpr(in, f)
+	case *Sum:
+		return VisitRefOfSum(in, f)
 	case *TimestampFuncExpr:
 		return VisitRefOfTimestampFuncExpr(in, f)
 	case *TrimFuncExpr:

@@ -327,6 +327,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> AVG // aggregate function
 %token <str> MAX // aggregate function
 %token <str> MIN // aggregate function
+%token <str> SUM // aggregate function
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -5394,6 +5395,10 @@ UTC_DATE func_paren_opt
   {
     $$ = &Min{Arg:$3}
   }
+| SUM openb distinct_opt expression closeb
+  {
+    $$ = &Sum{Arg:$4, Distinct:$3}
+  }
 | TIMESTAMPADD openb sql_id ',' expression ',' expression closeb
   {
     $$ = &TimestampFuncExpr{Name:string("timestampadd"), Unit:$3.String(), Expr1:$5, Expr2:$7}
@@ -7042,6 +7047,7 @@ non_reserved_keyword:
 | STREAM
 | SUBPARTITION
 | SUBPARTITIONS
+| SUM
 | TABLES
 | TABLESPACE
 | TEMPORARY

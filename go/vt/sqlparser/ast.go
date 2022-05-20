@@ -2578,9 +2578,15 @@ type (
 	Min struct {
 		Arg Expr
 	}
+
+	Sum struct {
+		Arg      Expr
+		Distinct bool
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
+func (*Sum) iExpr()                                {}
 func (*Min) iExpr()                                {}
 func (*Max) iExpr()                                {}
 func (*Avg) iExpr()                                {}
