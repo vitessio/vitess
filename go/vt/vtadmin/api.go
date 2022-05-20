@@ -480,7 +480,19 @@ func (api *API) DeleteTablet(ctx context.Context, req *vtadminpb.DeleteTabletReq
 
 // EmergencyReparentShard is part of the vtadminpb.VTAdminServer interface.
 func (api *API) EmergencyReparentShard(ctx context.Context, req *vtadminpb.EmergencyReparentShardRequest) (*vtadminpb.EmergencyReparentShardResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "API.EmergencyReparentShard")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ShardResource, rbac.EmergencyReparentShardAction) {
+		return nil, nil
+	}
+
+	return c.EmergencyReparentShard(ctx, req.Options)
 }
 
 // FindSchema is part of the vtadminpb.VTAdminServer interface.
@@ -1356,7 +1368,19 @@ func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest
 
 // PlannedReparentShard is part of the vtadminpb.VTAdminServer interface.
 func (api *API) PlannedReparentShard(ctx context.Context, req *vtadminpb.PlannedReparentShardRequest) (*vtadminpb.PlannedReparentShardResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "API.PlannedReparentShard")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ShardResource, rbac.PlannedReparentShardAction) {
+		return nil, nil
+	}
+
+	return c.PlannedReparentShard(ctx, req.Options)
 }
 
 // RefreshState is part of the vtadminpb.VTAdminServer interface.
@@ -1550,7 +1574,15 @@ func (api *API) StopReplication(ctx context.Context, req *vtadminpb.StopReplicat
 
 // TabletExternallyReparented is part of the vtadminpb.VTAdminServer interface.
 func (api *API) TabletExternallyReparented(ctx context.Context, req *vtadminpb.TabletExternallyReparentedRequest) (*vtadminpb.TabletExternallyReparentedResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "API.TabletExternallyReparented")
+	defer span.Finish()
+
+	tablet, c, err := api.getTabletForShardAction(ctx, span, rbac.TabletExternallyReparentedAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.TabletExternallyReparented(ctx, tablet)
 }
 
 // ValidateKeyspace is part of the vtadminpb.VTAdminServer interface.

@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/pools"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -400,6 +401,37 @@ func (c *Cluster) DeleteTablets(ctx context.Context, req *vtctldatapb.DeleteTabl
 	defer c.topoRWPool.Release()
 
 	return c.Vtctld.DeleteTablets(ctx, req)
+}
+
+// EmergencyReparentShard reparents the shard to the new primary. Use this only
+// if the old primary is dead or otherwise unresponsive.
+func (c *Cluster) EmergencyReparentShard(ctx context.Context, req *vtctldatapb.EmergencyReparentShardRequest) (*vtadminpb.EmergencyReparentShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.EmergencyReparentShard")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("new_primary", topoproto.TabletAliasString(req.NewPrimary))
+	span.Annotate("ignore_replicas", strings.Join(topoproto.TabletAliasList(req.IgnoreReplicas).ToStringSlice(), ","))
+	span.Annotate("prevent_cross_cell_promotion", req.PreventCrossCellPromotion)
+
+	if d, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout); ok && err == nil {
+		span.Annotate("wait_replicas_timeout", d.String())
+	}
+
+	resp, err := c.Vtctld.EmergencyReparentShard(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.EmergencyReparentShardResponse{
+		Cluster:         c.ToProto(),
+		Keyspace:        resp.Keyspace,
+		Shard:           resp.Shard,
+		PromotedPrimary: resp.PromotedPrimary,
+		Events:          resp.Events,
+	}, nil
 }
 
 // FindAllShardsInKeyspaceOptions modify the behavior of a cluster's
@@ -1731,6 +1763,37 @@ func (c *Cluster) GetWorkflows(ctx context.Context, keyspaces []string, opts Get
 	})
 }
 
+// PlannedReparentShard reparents the shard either to a new primary or away
+// from an old primary. Both the current and candidate primaries must be
+// reachable and running.
+func (c *Cluster) PlannedReparentShard(ctx context.Context, req *vtctldatapb.PlannedReparentShardRequest) (*vtadminpb.PlannedReparentShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.PlannedReparentShard")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("new_primary", topoproto.TabletAliasString(req.NewPrimary))
+	span.Annotate("avoid_primary", topoproto.TabletAliasString(req.AvoidPrimary))
+
+	if d, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout); ok && err == nil {
+		span.Annotate("wait_replicas_timeout", d.String())
+	}
+
+	resp, err := c.Vtctld.PlannedReparentShard(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.PlannedReparentShardResponse{
+		Cluster:         c.ToProto(),
+		Keyspace:        resp.Keyspace,
+		Shard:           resp.Shard,
+		PromotedPrimary: resp.PromotedPrimary,
+		Events:          resp.Events,
+	}, nil
+}
+
 // RefreshState reloads the tablet record from a cluster's topo on a tablet.
 func (c *Cluster) RefreshState(ctx context.Context, tablet *vtadminpb.Tablet) error {
 	span, ctx := trace.NewSpan(ctx, "Cluster.RefreshState")
@@ -2049,6 +2112,31 @@ func (c *Cluster) SetWritable(ctx context.Context, req *vtctldatapb.SetWritableR
 
 	_, err := c.Vtctld.SetWritable(ctx, req)
 	return err
+}
+
+// TabletExternallyReparented updates the topo record for a shard to reflect a
+// tablet that was promoted to primary external to Vitess (e.g. orchestrator).
+func (c *Cluster) TabletExternallyReparented(ctx context.Context, tablet *vtadminpb.Tablet) (*vtadminpb.TabletExternallyReparentedResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.TabletExternallyReparented")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
+
+	resp, err := c.Vtctld.TabletExternallyReparented(ctx, &vtctldatapb.TabletExternallyReparentedRequest{
+		Tablet: tablet.Tablet.Alias,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.TabletExternallyReparentedResponse{
+		Cluster:    c.ToProto(),
+		Keyspace:   resp.Keyspace,
+		Shard:      resp.Shard,
+		NewPrimary: resp.NewPrimary,
+		OldPrimary: resp.OldPrimary,
+	}, nil
 }
 
 // ToggleTabletReplication either starts or stops replication on the specified
