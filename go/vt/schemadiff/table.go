@@ -402,7 +402,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 }
 
 func isBool(colType sqlparser.ColumnType) bool {
-	return colType.Type == "tinyint" && colType.Length != nil && sqlparser.CanonicalString(colType.Length) == "1"
+	return colType.Type == sqlparser.KeywordString(sqlparser.TINYINT) && colType.Length != nil && sqlparser.CanonicalString(colType.Length) == "1"
 }
 
 func (c *CreateTableEntity) normalizePartitionOptions() {
@@ -1812,7 +1812,7 @@ func (c *CreateTableEntity) validate() error {
 					}
 				}
 				if !colFound {
-					return errors.Wrapf(ErrMissingParitionColumnInUniqueKey, "column: %v not found in key: %v", partitionColName, key.Info.Name.String())
+					return errors.Wrapf(ErrMissingPartitionColumnInUniqueKey, "column: %v not found in key: %v", partitionColName, key.Info.Name.String())
 				}
 			}
 		}
