@@ -396,6 +396,7 @@ var keywords = []keyword{
 	{"manifest", MANIFEST},
 	{"master_bind", UNUSED},
 	{"match", MATCH},
+	{"max", MAX},
 	{"max_rows", MAX_ROWS},
 	{"maxvalue", MAXVALUE},
 	{"mediumblob", MEDIUMBLOB},

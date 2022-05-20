@@ -250,6 +250,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitMatchAction(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
+	case *Max:
+		return VisitRefOfMax(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
 	case *ModifyColumn:
@@ -2009,6 +2011,18 @@ func VisitRefOfMatchExpr(in *MatchExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfMax(in *Max, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfMemberOfExpr(in *MemberOfExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3544,6 +3558,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfLiteral(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
+	case *Max:
+		return VisitRefOfMax(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
 	case *NotExpr:
@@ -3692,6 +3708,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfLiteral(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
+	case *Max:
+		return VisitRefOfMax(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
 	case *NotExpr:

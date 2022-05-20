@@ -710,6 +710,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfMatchExpr(a, b)
+	case *Max:
+		b, ok := inB.(*Max)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMax(a, b)
 	case *MemberOfExpr:
 		b, ok := inB.(*MemberOfExpr)
 		if !ok {
@@ -2600,6 +2606,17 @@ func EqualsRefOfMatchExpr(a, b *MatchExpr) bool {
 	return EqualsSelectExprs(a.Columns, b.Columns) &&
 		EqualsExpr(a.Expr, b.Expr) &&
 		a.Option == b.Option
+}
+
+// EqualsRefOfMax does deep equals between the two objects.
+func EqualsRefOfMax(a, b *Max) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Arg, b.Arg)
 }
 
 // EqualsRefOfMemberOfExpr does deep equals between the two objects.
@@ -4507,6 +4524,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfMatchExpr(a, b)
+	case *Max:
+		b, ok := inB.(*Max)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMax(a, b)
 	case *MemberOfExpr:
 		b, ok := inB.(*MemberOfExpr)
 		if !ok {
@@ -4921,6 +4944,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfMatchExpr(a, b)
+	case *Max:
+		b, ok := inB.(*Max)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMax(a, b)
 	case *MemberOfExpr:
 		b, ok := inB.(*MemberOfExpr)
 		if !ok {

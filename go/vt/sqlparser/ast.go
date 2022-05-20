@@ -2570,9 +2570,14 @@ type (
 		Arg      Expr
 		Distinct bool
 	}
+
+	Max struct {
+		Arg Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
+func (*Max) iExpr()                                {}
 func (*Avg) iExpr()                                {}
 func (*CountStar) iExpr()                          {}
 func (*Count) iExpr()                              {}

@@ -3080,3 +3080,9 @@ func (node *Avg) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
 }
+
+func (node *Max) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("max(")
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}

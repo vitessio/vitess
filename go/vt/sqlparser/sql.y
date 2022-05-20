@@ -325,6 +325,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> JSON_ARRAY_APPEND JSON_ARRAY_INSERT JSON_INSERT JSON_MERGE JSON_MERGE_PATCH JSON_MERGE_PRESERVE JSON_REMOVE JSON_REPLACE JSON_SET JSON_UNQUOTE
 %token <str> COUNT // aggregate function
 %token <str> AVG // aggregate function
+%token <str> MAX // aggregate function
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -5384,6 +5385,10 @@ UTC_DATE func_paren_opt
   {
     $$ = &Count{Arg:$4, Distinct:$3}
   }
+| MAX openb expression closeb
+  {
+    $$ = &Max{Arg:$3}
+  }
 | TIMESTAMPADD openb sql_id ',' expression ',' expression closeb
   {
     $$ = &TimestampFuncExpr{Name:string("timestampadd"), Unit:$3.String(), Expr1:$5, Expr2:$7}
@@ -6920,6 +6925,7 @@ non_reserved_keyword:
 | MASTER_PUBLIC_KEY_PATH
 | MASTER_TLS_CIPHERSUITES
 | MASTER_ZSTD_COMPRESSION_LEVEL
+| MAX
 | MAX_ROWS
 | MEDIUMBLOB
 | MEDIUMINT

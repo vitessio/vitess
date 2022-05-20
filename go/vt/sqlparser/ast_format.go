@@ -2364,3 +2364,7 @@ func (node *Avg) Format(buf *TrackedBuffer) {
 	}
 	buf.astPrintf(node, "%v)", node.Arg)
 }
+
+func (node *Max) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "max(%v)", node.Arg)
+}

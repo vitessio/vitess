@@ -49,6 +49,7 @@ var (
 		{input: "select avg(distinct(a)) from products"},
 		{input: "select avg(a) 'Avg Price' from products"},
 		{input: "select format(avg(distinct a), 2) from products"},
+		{input: "select max(a) from products"},
 	}
 	validSQL = []struct {
 		input                string

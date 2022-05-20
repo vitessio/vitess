@@ -250,6 +250,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteMatchAction(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
+	case *Max:
+		return a.rewriteRefOfMax(parent, node, replacer)
 	case *MemberOfExpr:
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
 	case *ModifyColumn:
@@ -3880,6 +3882,33 @@ func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, rep
 	}
 	return true
 }
+func (a *application) rewriteRefOfMax(parent SQLNode, node *Max, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*Max).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfMemberOfExpr(parent SQLNode, node *MemberOfExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6940,6 +6969,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfLiteral(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
+	case *Max:
+		return a.rewriteRefOfMax(parent, node, replacer)
 	case *MemberOfExpr:
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
 	case *NotExpr:
@@ -7088,6 +7119,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfLiteral(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
+	case *Max:
+		return a.rewriteRefOfMax(parent, node, replacer)
 	case *MemberOfExpr:
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
 	case *NotExpr:
