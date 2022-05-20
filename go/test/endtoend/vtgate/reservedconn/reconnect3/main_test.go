@@ -110,7 +110,7 @@ func waitForVTGateAndVTTablet() error {
 		default:
 			err := clusterInstance.WaitForTabletsToHealthyInVtgate()
 			if err != nil {
-				return err
+				continue
 			}
 			return nil
 		}
