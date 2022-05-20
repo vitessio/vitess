@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -83,10 +85,8 @@ func TestMysqlDownServingChange(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	_, err = conn.ExecuteFetch("set default_week_format = 1", 5, false)
-	require.NoError(t, err)
-	_, err = conn.ExecuteFetch("select /*vt+ PLANNER=gen4 */ * from test", 5, false)
-	require.NoError(t, err)
+	utils.Exec(t, conn, "set default_week_format = 1")
+	_ = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ * from test")
 
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 	require.NoError(t,
@@ -98,8 +98,7 @@ func TestMysqlDownServingChange(t *testing.T) {
 	require.NoError(t, err)
 
 	// This should work without any error.
-	_, err = conn.ExecuteFetch("select /*vt+ PLANNER=gen4 */ * from test", 5, false)
-	require.NoError(t, err)
+	_ = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ * from test")
 }
 
 func waitForVTGateAndVTTablet() error {
