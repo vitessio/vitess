@@ -28,12 +28,12 @@ import (
 // Concatenate Primitive is used to concatenate results from multiple sources.
 var _ Primitive = (*Concatenate)(nil)
 
-//Concatenate specified the parameter for concatenate primitive
+// Concatenate specified the parameter for concatenate primitive
 type Concatenate struct {
 	Sources []Primitive
 }
 
-//RouteType returns a description of the query routing type used by the primitive
+// RouteType returns a description of the query routing type used by the primitive
 func (c *Concatenate) RouteType() string {
 	return "Concatenate"
 }
@@ -120,23 +120,25 @@ func (c *Concatenate) getFields(res []*sqltypes.Result) ([]*querypb.Field, error
 }
 func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
 	results := make([]*sqltypes.Result, len(c.Sources))
-	g, restoreCtx := vcursor.ErrorGroupCancellableContext()
-	defer restoreCtx()
+	var wg sync.WaitGroup
+	var outerErr error
 	for i, source := range c.Sources {
 		currIndex, currSource := i, source
 		vars := copyBindVars(bindVars)
-		g.Go(func() error {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			result, err := vcursor.ExecutePrimitive(currSource, vars, wantfields)
 			if err != nil {
-				return err
+				outerErr = err
+				vcursor.CancelContext()
 			}
 			results[currIndex] = result
-			return nil
-		})
+		}()
 	}
-
-	if err := g.Wait(); err != nil {
-		return nil, err
+	wg.Wait()
+	if outerErr != nil {
+		return nil, outerErr
 	}
 	return results, nil
 }
@@ -144,28 +146,34 @@ func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.
 // TryStreamExecute performs a streaming exec.
 func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var seenFields []*querypb.Field
-	var fieldset sync.WaitGroup
-	var cbMu sync.Mutex
+	var outerErr error
 
-	g, restoreCtx := vcursor.ErrorGroupCancellableContext()
-	defer restoreCtx()
-	fieldsSent := false
-	fieldset.Add(1)
+	var fieldsSent bool
+	var cbMu, fieldsMu sync.Mutex
+	var wg, fieldSendWg sync.WaitGroup
+	fieldSendWg.Add(1)
 
 	for i, source := range c.Sources {
+		wg.Add(1)
 		currIndex, currSource := i, source
 
-		g.Go(func() error {
+		go func() {
+			defer wg.Done()
 			err := vcursor.StreamExecutePrimitive(currSource, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
 				// if we have fields to compare, make sure all the fields are all the same
-				if currIndex == 0 && !fieldsSent {
-					defer fieldset.Done()
-					seenFields = resultChunk.Fields
-					fieldsSent = true
-					// No other call can happen before this call.
-					return callback(resultChunk)
+				if currIndex == 0 {
+					fieldsMu.Lock()
+					if !fieldsSent {
+						defer fieldSendWg.Done()
+						defer fieldsMu.Unlock()
+						seenFields = resultChunk.Fields
+						fieldsSent = true
+						// No other call can happen before this call.
+						return callback(resultChunk)
+					}
+					fieldsMu.Unlock()
 				}
-				fieldset.Wait()
+				fieldSendWg.Wait()
 				if resultChunk.Fields != nil {
 					err := compareFields(seenFields, resultChunk.Fields)
 					if err != nil {
@@ -183,17 +191,23 @@ func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 				}
 			})
 			// This is to ensure other streams complete if the first stream failed to unlock the wait.
-			if currIndex == 0 && !fieldsSent {
-				fieldset.Done()
+			if currIndex == 0 {
+				fieldsMu.Lock()
+				if !fieldsSent {
+					fieldsSent = true
+					fieldSendWg.Done()
+				}
+				fieldsMu.Unlock()
 			}
-			return err
-		})
+			if err != nil {
+				outerErr = err
+				vcursor.CancelContext()
+			}
+		}()
 
 	}
-	if err := g.Wait(); err != nil {
-		return err
-	}
-	return nil
+	wg.Wait()
+	return outerErr
 }
 
 // GetFields fetches the field info.
@@ -216,7 +230,7 @@ func (c *Concatenate) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bi
 	return res, nil
 }
 
-//NeedsTransaction returns whether a transaction is needed for this primitive
+// NeedsTransaction returns whether a transaction is needed for this primitive
 func (c *Concatenate) NeedsTransaction() bool {
 	for _, source := range c.Sources {
 		if source.NeedsTransaction() {
