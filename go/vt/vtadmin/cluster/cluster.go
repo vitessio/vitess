@@ -78,7 +78,7 @@ type Cluster struct {
 	workflowReadPool *pools.RPCPool
 
 	emergencyReparentPool *pools.RPCPool // ERS-only
-	reparentPool          *pools.RPCPool // PRS + TER
+	reparentPool          *pools.RPCPool // PRS-only
 
 	cfg Config
 }
@@ -2139,10 +2139,10 @@ func (c *Cluster) TabletExternallyReparented(ctx context.Context, tablet *vtadmi
 	AnnotateSpan(c, span)
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
 
-	if err := c.reparentPool.Acquire(ctx); err != nil {
-		return nil, fmt.Errorf("TabletExternallyReparented(%s): failed to acquire reparentPool: %w", topoproto.TabletAliasString(tablet.Tablet.Alias), err)
+	if err := c.topoRWPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("TabletExternallyReparented(%s): failed to acquire topoRWPool: %w", topoproto.TabletAliasString(tablet.Tablet.Alias), err)
 	}
-	defer c.reparentPool.Release()
+	defer c.topoRWPool.Release()
 
 	resp, err := c.Vtctld.TabletExternallyReparented(ctx, &vtctldatapb.TabletExternallyReparentedRequest{
 		Tablet: tablet.Tablet.Alias,

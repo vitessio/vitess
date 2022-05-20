@@ -70,8 +70,8 @@ type Config struct {
 	// defaults of an RW RPCPool.
 	EmergencyReparentPoolConfig *RPCPoolConfig
 	// ReparentPoolConfig specifies the config for a pool shared by
-	// PlannedReparentShard and TabletExternallyReparented operations. It has
-	// the semantics and defaults of an RW RPCPool.
+	// PlannedReparentShard operations. It has the semantics and defaults of an
+	// RW RPCPool.
 	ReparentPoolConfig *RPCPoolConfig
 
 	vtctldConfigOpts []vtctldclient.ConfigOption
