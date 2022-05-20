@@ -722,6 +722,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfMemberOfExpr(a, b)
+	case *Min:
+		b, ok := inB.(*Min)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMin(a, b)
 	case *ModifyColumn:
 		b, ok := inB.(*ModifyColumn)
 		if !ok {
@@ -2631,6 +2637,17 @@ func EqualsRefOfMemberOfExpr(a, b *MemberOfExpr) bool {
 		EqualsExpr(a.JSONArr, b.JSONArr)
 }
 
+// EqualsRefOfMin does deep equals between the two objects.
+func EqualsRefOfMin(a, b *Min) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Arg, b.Arg)
+}
+
 // EqualsRefOfModifyColumn does deep equals between the two objects.
 func EqualsRefOfModifyColumn(a, b *ModifyColumn) bool {
 	if a == b {
@@ -4536,6 +4553,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfMemberOfExpr(a, b)
+	case *Min:
+		b, ok := inB.(*Min)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMin(a, b)
 	case *NotExpr:
 		b, ok := inB.(*NotExpr)
 		if !ok {
@@ -4956,6 +4979,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfMemberOfExpr(a, b)
+	case *Min:
+		b, ok := inB.(*Min)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMin(a, b)
 	case *NotExpr:
 		b, ok := inB.(*NotExpr)
 		if !ok {

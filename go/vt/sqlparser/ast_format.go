@@ -2368,3 +2368,7 @@ func (node *Avg) Format(buf *TrackedBuffer) {
 func (node *Max) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "max(%v)", node.Arg)
 }
+
+func (node *Min) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "min(%v)", node.Arg)
+}

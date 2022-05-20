@@ -393,6 +393,7 @@ var keywords = []keyword{
 	{"loop", UNUSED},
 	{"low_priority", LOW_PRIORITY},
 	{"ltrim", LTRIM},
+	{"min", MIN},
 	{"manifest", MANIFEST},
 	{"master_bind", UNUSED},
 	{"match", MATCH},

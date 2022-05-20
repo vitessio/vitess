@@ -3086,3 +3086,9 @@ func (node *Max) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.Arg, true)
 	buf.WriteByte(')')
 }
+
+func (node *Min) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("min(")
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}

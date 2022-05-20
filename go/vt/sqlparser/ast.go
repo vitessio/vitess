@@ -2574,9 +2574,14 @@ type (
 	Max struct {
 		Arg Expr
 	}
+
+	Min struct {
+		Arg Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
+func (*Min) iExpr()                                {}
 func (*Max) iExpr()                                {}
 func (*Avg) iExpr()                                {}
 func (*CountStar) iExpr()                          {}

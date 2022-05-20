@@ -254,6 +254,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfMax(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
+	case *Min:
+		return VisitRefOfMin(in, f)
 	case *ModifyColumn:
 		return VisitRefOfModifyColumn(in, f)
 	case *Nextval:
@@ -2038,6 +2040,18 @@ func VisitRefOfMemberOfExpr(in *MemberOfExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfMin(in *Min, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfModifyColumn(in *ModifyColumn, f Visit) error {
 	if in == nil {
 		return nil
@@ -3562,6 +3576,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfMax(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
+	case *Min:
+		return VisitRefOfMin(in, f)
 	case *NotExpr:
 		return VisitRefOfNotExpr(in, f)
 	case *NullVal:
@@ -3712,6 +3728,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfMax(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
+	case *Min:
+		return VisitRefOfMin(in, f)
 	case *NotExpr:
 		return VisitRefOfNotExpr(in, f)
 	case *NullVal:

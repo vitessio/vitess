@@ -255,6 +255,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfMax(in)
 	case *MemberOfExpr:
 		return CloneRefOfMemberOfExpr(in)
+	case *Min:
+		return CloneRefOfMin(in)
 	case *ModifyColumn:
 		return CloneRefOfModifyColumn(in)
 	case *Nextval:
@@ -1620,6 +1622,16 @@ func CloneRefOfMemberOfExpr(n *MemberOfExpr) *MemberOfExpr {
 	return &out
 }
 
+// CloneRefOfMin creates a deep clone of the input.
+func CloneRefOfMin(n *Min) *Min {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Arg = CloneExpr(n.Arg)
+	return &out
+}
+
 // CloneRefOfModifyColumn creates a deep clone of the input.
 func CloneRefOfModifyColumn(n *ModifyColumn) *ModifyColumn {
 	if n == nil {
@@ -2867,6 +2879,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfMax(in)
 	case *MemberOfExpr:
 		return CloneRefOfMemberOfExpr(in)
+	case *Min:
+		return CloneRefOfMin(in)
 	case *NotExpr:
 		return CloneRefOfNotExpr(in)
 	case *NullVal:
@@ -3021,6 +3035,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfMax(in)
 	case *MemberOfExpr:
 		return CloneRefOfMemberOfExpr(in)
+	case *Min:
+		return CloneRefOfMin(in)
 	case *NotExpr:
 		return CloneRefOfNotExpr(in)
 	case *NullVal:

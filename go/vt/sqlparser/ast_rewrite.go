@@ -254,6 +254,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfMax(parent, node, replacer)
 	case *MemberOfExpr:
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
+	case *Min:
+		return a.rewriteRefOfMin(parent, node, replacer)
 	case *ModifyColumn:
 		return a.rewriteRefOfModifyColumn(parent, node, replacer)
 	case *Nextval:
@@ -3941,6 +3943,33 @@ func (a *application) rewriteRefOfMemberOfExpr(parent SQLNode, node *MemberOfExp
 	}
 	return true
 }
+func (a *application) rewriteRefOfMin(parent SQLNode, node *Min, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*Min).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColumn, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6973,6 +7002,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfMax(parent, node, replacer)
 	case *MemberOfExpr:
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
+	case *Min:
+		return a.rewriteRefOfMin(parent, node, replacer)
 	case *NotExpr:
 		return a.rewriteRefOfNotExpr(parent, node, replacer)
 	case *NullVal:
@@ -7123,6 +7154,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfMax(parent, node, replacer)
 	case *MemberOfExpr:
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
+	case *Min:
+		return a.rewriteRefOfMin(parent, node, replacer)
 	case *NotExpr:
 		return a.rewriteRefOfNotExpr(parent, node, replacer)
 	case *NullVal:
