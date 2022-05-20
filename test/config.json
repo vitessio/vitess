@@ -824,7 +824,7 @@
 		},
 		"vtgate_reserved_conn3": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect3"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect3", "-timeout", "45m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_reservedconn",
