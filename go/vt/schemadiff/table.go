@@ -1671,15 +1671,6 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 	nonEmptyIndexes := []*sqlparser.IndexDefinition{}
 
 	keyHasNonExistentColumns := func(keyCol *sqlparser.IndexColumn) bool {
-		if keyCol.Expression != nil {
-			colNames := getNodeColumns(keyCol.Expression)
-			for colName := range colNames {
-				if !columnExists[colName] {
-					// expression uses a non-existent column
-					return true
-				}
-			}
-		}
 		if keyCol.Column.String() != "" {
 			if !columnExists[keyCol.Column.String()] {
 				return true
@@ -1767,6 +1758,27 @@ func (c *CreateTableEntity) validate() error {
 			for _, referencedColName := range referencedColumns {
 				if !columnExists[referencedColName] {
 					return errors.Wrapf(ErrInvalidColumnInGeneratedColumn, "generated column: %v, referenced column: %v", col.Name.String(), referencedColName)
+				}
+			}
+		}
+	}
+	// validate all columns referenced by functional indexes do in fact exist
+	for _, idx := range c.CreateTable.TableSpec.Indexes {
+		for _, idxCol := range idx.Columns {
+			referencedColumns := []string{}
+			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				switch node := node.(type) {
+				case *sqlparser.ColName:
+					referencedColumns = append(referencedColumns, node.Name.String())
+				}
+				return true, nil
+			}, idxCol.Expression)
+			if err != nil {
+				return err
+			}
+			for _, referencedColName := range referencedColumns {
+				if !columnExists[referencedColName] {
+					return errors.Wrapf(ErrInvalidColumnInKey, "functional index: %v, referenced column: %v", idx.Info.Name.String(), referencedColName)
 				}
 			}
 		}

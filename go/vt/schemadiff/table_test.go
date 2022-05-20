@@ -960,16 +960,16 @@ func TestValidate(t *testing.T) {
 			to:    "create table t (id int primary key, i int, key some_key(id, i), key i_idx(i))",
 		},
 		{
-			name:  "drop column, affect keys with expression",
-			from:  "create table t (id int primary key, i int, key id_idx((IF(id, 0, 1))), key i_idx((IF(i,0,1))))",
-			alter: "alter table t drop column i",
-			to:    "create table t (id int primary key, key id_idx((IF(id, 0, 1))))",
+			name:      "drop column, affect keys with expression",
+			from:      "create table t (id int primary key, i int, key id_idx((IF(id, 0, 1))), key i_idx((IF(i,0,1))))",
+			alter:     "alter table t drop column i",
+			expectErr: ErrInvalidColumnInKey,
 		},
 		{
-			name:  "drop column, affect keys with expression and multi expressions",
-			from:  "create table t (id int primary key, i int, key id_idx((IF(id, 0, 1))), key i_idx((IF(i,0,1)), (IF(id,2,3))))",
-			alter: "alter table t drop column i",
-			to:    "create table t (id int primary key, key id_idx((IF(id, 0, 1))), key i_idx((IF(id,2,3))))",
+			name:      "drop column, affect keys with expression and multi expressions",
+			from:      "create table t (id int primary key, i int, key id_idx((IF(id, 0, 1))), key i_idx((IF(i,0,1)), (IF(id,2,3))))",
+			alter:     "alter table t drop column i",
+			expectErr: ErrInvalidColumnInKey,
 		},
 		{
 			name:  "add multiple keys, multi columns, ok",
@@ -1108,6 +1108,24 @@ func TestValidate(t *testing.T) {
 			from:  "create table t (id int, i int not null default 0, primary key (id))",
 			alter: "alter table t add column neg int as (0-i)",
 			to:    "create table t (id int, i int not null default 0, neg int as (0-i), primary key (id))",
+		},
+		{
+			name:      "drop column used by a functional index",
+			from:      "create table t (id int, d datetime, primary key (id), key m ((month(d))))",
+			alter:     "alter table t drop column d",
+			expectErr: ErrInvalidColumnInKey,
+		},
+		{
+			name:      "add generated column referencing nonexistent column",
+			from:      "create table t (id int, primary key (id))",
+			alter:     "alter table t add index m ((month(d)))",
+			expectErr: ErrInvalidColumnInKey,
+		},
+		{
+			name:  "add functional index referencing existing column",
+			from:  "create table t (id int, d datetime, primary key (id))",
+			alter: "alter table t add index m ((month(d)))",
+			to:    "create table t (id int, d datetime, primary key (id), key m ((month(d))))",
 		},
 	}
 	hints := DiffHints{}
