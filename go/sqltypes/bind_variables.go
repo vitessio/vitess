@@ -345,7 +345,7 @@ func CopyBindVariables(bindVariables map[string]*querypb.BindVariable) map[strin
 func FormatBindVariables(bindVariables map[string]*querypb.BindVariable, full, asJSON bool) string {
 	var out map[string]*querypb.BindVariable
 	if full {
-		out = bindVariables
+		out = CopyBindVariables(bindVariables)
 	} else {
 		// NOTE(szopa): I am getting rid of potentially large bind
 		// variables.
