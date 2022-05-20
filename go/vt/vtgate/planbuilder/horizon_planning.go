@@ -689,7 +689,8 @@ func addColumnsToOA(
 			o := groupings[count]
 			count++
 			a := aggregationExprs[offset]
-			collID := ctx.SemTable.CollationForExpr(a.Func.Exprs[0].(*sqlparser.AliasedExpr).Expr)
+			//collID := ctx.SemTable.CollationForExpr(a.Func.Exprs[0].(*sqlparser.AliasedExpr).Expr)
+			collID := ctx.SemTable.CollationForExpr(a.Func)
 			oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
 				Opcode:      a.OpCode,
 				Col:         o.col,
@@ -736,12 +737,14 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 			aggrs = append(aggrs, expr)
 			continue
 		}
-		aliasedExpr, ok := expr.Func.Exprs[0].(*sqlparser.AliasedExpr)
-		if !ok {
+		//aliasedExpr, ok := expr.Func.Exprs[0].(*sqlparser.AliasedExpr)
+		//aliasedExpr := expr.Alias
+		// TODO: need to resolve this
+		/*if !ok {
 			err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(expr.Original))
 			return
-		}
-		inner, innerWS, err := hp.qp.GetSimplifiedExpr(aliasedExpr.Expr)
+		}*/
+		inner, innerWS, err := hp.qp.GetSimplifiedExpr(expr.Func)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -813,12 +816,21 @@ func (hp *horizonPlanning) createGroupingsForColumns(columns []*sqlparser.ColNam
 	return lhsGrouping, nil
 }
 
-func isCountStar(f *sqlparser.FuncExpr) bool {
+/*func isCountStar(f *sqlparser.FuncExpr) bool {
 	if f == nil {
 		return false
 	}
 	_, isStar := f.Exprs[0].(*sqlparser.StarExpr)
 	return isStar
+}*/
+
+func isCountStar2(expr sqlparser.Expr) bool {
+	switch expr.(type) {
+	case *sqlparser.CountStar:
+		return true
+	default:
+		return false
+	}
 }
 
 func hasUniqueVindex(semTable *semantics.SemTable, groupByExprs []abstract.GroupBy) bool {

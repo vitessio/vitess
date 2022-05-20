@@ -112,8 +112,10 @@ func (ms *memorySort) SetLimit(limit *sqlparser.Limit) error {
 // compare those instead. This is because we currently don't have the
 // ability to mimic mysql's collation behavior.
 func (ms *memorySort) Wireup(plan logicalPlan, jt *jointab) error {
+	fmt.Printf("memory_sort wireup %d \n", len(ms.eMemorySort.OrderBy))
 	for i, orderby := range ms.eMemorySort.OrderBy {
 		rc := ms.resultColumns[orderby.Col]
+		fmt.Printf("memory_sort rc: %v \n", rc)
 		// Add a weight_string column if we know that the column is a textual column or if its type is unknown
 		if sqltypes.IsText(rc.column.typ) || rc.column.typ == sqltypes.Null {
 			weightcolNumber, err := ms.input.SupplyWeightString(orderby.Col, orderby.FromGroupBy)

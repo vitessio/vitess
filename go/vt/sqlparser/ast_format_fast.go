@@ -3067,9 +3067,9 @@ func (node *Count) formatFast(buf *TrackedBuffer) {
 }
 
 func (node *CountStar) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("count(")
-	node.Star.formatFast(buf)
-	buf.WriteString(")")
+	//buf.WriteString("count(")
+	buf.WriteString("count(*)")
+	//buf.WriteString(")")
 }
 
 func (node *Avg) formatFast(buf *TrackedBuffer) {

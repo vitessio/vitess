@@ -257,6 +257,7 @@ func TestOne(t *testing.T) {
 	}
 
 	testFile(t, "onecase.txt", "", vschema)
+	//testFile(t, "aggr_cases.txt", "", vschema)
 }
 
 func TestOneWithMainAsDefault(t *testing.T) {

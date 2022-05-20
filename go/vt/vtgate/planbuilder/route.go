@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"strconv"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -328,6 +329,7 @@ func (rb *route) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weigh
 	if !ok {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query %T", s.SelectExprs[colNumber])
 	}
+	fmt.Printf("supply weight string %v \n", aliasExpr.Expr)
 	weightStringExpr := &sqlparser.FuncExpr{
 		Name: sqlparser.NewColIdent("weight_string"),
 		Exprs: []sqlparser.SelectExpr{

@@ -1717,6 +1717,8 @@ func formatAddress(address string) string {
 func ContainsAggregation(e SQLNode) bool {
 	hasAggregates := false
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+		//fmt.Println(reflect.TypeOf(node))
+		//fmt.Println(reflect.ValueOf(node).Kind())
 		if IsAggregation(node) {
 			hasAggregates = true
 			return false, nil
@@ -1729,10 +1731,66 @@ func ContainsAggregation(e SQLNode) bool {
 // IsAggregation returns true if the node is an aggregation expression
 func IsAggregation(node SQLNode) bool {
 	switch node := node.(type) {
+	case *Count:
+		return true
+	case *CountStar:
+		return true
+	case *Avg:
+		return true
+	case *Max:
+		return true
+	case *Min:
+		return true
+	case *Sum:
+		return true
 	case *FuncExpr:
 		return node.IsAggregate()
 	case *GroupConcatExpr:
 		return true
+	}
+	return false
+}
+
+func IsAggregation2(expr Expr) (bool, string) {
+	switch node := expr.(type) {
+	case *Count:
+		return node.isAggregate()
+	case *CountStar:
+		return node.isAggregate()
+	case *Avg:
+		return node.isAggregate()
+	case *Max:
+		return node.isAggregate()
+	case *Min:
+		return node.isAggregate()
+	case *Sum:
+		return node.isAggregate()
+	case *FuncExpr:
+		return node.isAggregate()
+	case *GroupConcatExpr:
+		return node.isAggregate()
+	}
+	return false, ""
+}
+
+func IsDistinct(expr Expr) bool {
+	switch node := expr.(type) {
+	case *Count:
+		return node.Distinct
+	case *CountStar:
+		return false
+	case *Avg:
+		return node.Distinct
+	case *Max:
+		return false
+	case *Min:
+		return false
+	case *Sum:
+		return node.Distinct
+	case *FuncExpr:
+		return node.Distinct
+	case *GroupConcatExpr:
+		return node.Distinct
 	}
 	return false
 }

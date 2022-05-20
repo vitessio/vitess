@@ -67,9 +67,10 @@ type (
 
 	Aggr struct {
 		Original *sqlparser.AliasedExpr
-		Func     *sqlparser.FuncExpr
-		OpCode   engine.AggregateOpcode
-		Alias    string
+		//Func     *sqlparser.FuncExpr
+		Func   sqlparser.Expr
+		OpCode engine.AggregateOpcode
+		Alias  string
 		// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
 		Index    *int
 		Distinct bool
@@ -253,11 +254,16 @@ func (qp *QueryProjection) GetGrouping() []GroupBy {
 
 func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		fExpr, ok := node.(*sqlparser.FuncExpr)
+		/*fExpr, ok := node.(*sqlparser.FuncExpr)
 		if ok && fExpr.IsAggregate() {
 			if len(fExpr.Exprs) != 1 {
 				return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(fExpr))
 			}
+		}*/
+		if sqlparser.IsAggregation(node) {
+			//return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument")
+			// TODO: for now return true every time but we need a way to detect single argument aggregate functions
+			return true, nil
 		}
 		return true, nil
 	}, exp.Expr)
@@ -423,18 +429,20 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 			continue
 		}
 
-		fExpr, isFunc := aliasedExpr.Expr.(*sqlparser.FuncExpr)
+		isFunc, funcName := sqlparser.IsAggregation2(aliasedExpr.Expr)
+		//fExpr, isFunc := aliasedExpr.Expr.(*sqlparser.FuncExpr)
 		if !isFunc {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
 		}
 
-		funcName := fExpr.Name.Lowered()
+		//funcName := fExpr.Name.Lowered()
 		opcode, found := engine.SupportedAggregates[funcName]
 		if !found {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: aggregation function '%s'", funcName)
 		}
 
-		if fExpr.Distinct {
+		if sqlparser.IsDistinct(aliasedExpr.Expr) {
+			//fExpr.Distinct {
 			switch opcode {
 			case engine.AggregateCount:
 				opcode = engine.AggregateCountDistinct
@@ -445,11 +453,11 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 
 		out = append(out, Aggr{
 			Original: aliasedExpr,
-			Func:     fExpr,
+			Func:     aliasedExpr.Expr,
 			OpCode:   opcode,
 			Alias:    aliasedExpr.ColumnName(),
 			Index:    &idxCopy,
-			Distinct: fExpr.Distinct,
+			Distinct: sqlparser.IsDistinct(aliasedExpr.Expr),
 		})
 	}
 	for i, orderExpr := range qp.OrderExprs {

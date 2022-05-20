@@ -43,9 +43,11 @@ var (
 		ignoreNormalizerTest bool
 	}{
 		{input: "select /* function with distinct */ count(a) from t"},
-		{input: "select /* function with distinct */ count(a) 'total col' from t"},
+		{input: "select /* function with distinct */ count(a) 'total col' from t",
+			output: "select /* function with distinct */ count(a) as 'total col' from t"},
 		{input: "select /* function with distinct */ count(distinct a) from t"},
-		{input: "select /* function with distinct */ count(distinct(a)) from t"},
+		{input: "select /* function with distinct */ count(distinct(a)) from t",
+			output: "select /* function with distinct */ count(distinct a) from t"},
 		{input: "select /* function with distinct */ count(*) from t"},
 		{input: "select avg(a) from products"},
 		{input: "select avg(distinct(a)) from products"},
