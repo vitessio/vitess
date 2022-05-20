@@ -1,3 +1,3 @@
 package servenv
 
-const versionName = "12.0.4"
+const versionName = "12.0.5-SNAPSHOT"
