@@ -426,6 +426,11 @@ func (c *Cluster) EmergencyReparentShard(ctx context.Context, req *vtctldatapb.E
 		span.Annotate("wait_replicas_timeout", d.String())
 	}
 
+	if err := c.emergencyReparentPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("EmergencyReparentShard(%s/%s) failed to acquire emergencyReparentPool: %w", req.Keyspace, req.Shard, err)
+	}
+	defer c.emergencyReparentPool.Release()
+
 	resp, err := c.Vtctld.EmergencyReparentShard(ctx, req)
 	if err != nil {
 		return nil, err
@@ -1786,6 +1791,11 @@ func (c *Cluster) PlannedReparentShard(ctx context.Context, req *vtctldatapb.Pla
 		span.Annotate("wait_replicas_timeout", d.String())
 	}
 
+	if err := c.reparentPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("PlannedReparentShard(%s/%s): failed to acquire reparentPool: %w", req.Keyspace, req.Shard, err)
+	}
+	defer c.reparentPool.Release()
+
 	resp, err := c.Vtctld.PlannedReparentShard(ctx, req)
 	if err != nil {
 		return nil, err
@@ -2128,6 +2138,11 @@ func (c *Cluster) TabletExternallyReparented(ctx context.Context, tablet *vtadmi
 
 	AnnotateSpan(c, span)
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
+
+	if err := c.reparentPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("TabletExternallyReparented(%s): failed to acquire reparentPool: %w", topoproto.TabletAliasString(tablet.Tablet.Alias), err)
+	}
+	defer c.reparentPool.Release()
 
 	resp, err := c.Vtctld.TabletExternallyReparented(ctx, &vtctldatapb.TabletExternallyReparentedRequest{
 		Tablet: tablet.Tablet.Alias,
