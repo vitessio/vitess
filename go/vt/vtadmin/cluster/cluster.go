@@ -77,6 +77,9 @@ type Cluster struct {
 	topoReadPool     *pools.RPCPool
 	workflowReadPool *pools.RPCPool
 
+	emergencyReparentPool *pools.RPCPool // ERS-only
+	reparentPool          *pools.RPCPool // PRS + TER
+
 	cfg Config
 }
 
@@ -143,6 +146,9 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 	cluster.topoRWPool = cfg.TopoRWPoolConfig.NewRWPool()
 	cluster.topoReadPool = cfg.TopoReadPoolConfig.NewReadPool()
 	cluster.workflowReadPool = cfg.WorkflowReadPoolConfig.NewReadPool()
+
+	cluster.emergencyReparentPool = cfg.EmergencyReparentPoolConfig.NewRWPool()
+	cluster.reparentPool = cfg.ReparentPoolConfig.NewRWPool()
 
 	return cluster, nil
 }
@@ -2169,11 +2175,13 @@ func (c *Cluster) Debug() map[string]any {
 		"cluster": c.ToProto(),
 		"config":  c.cfg,
 		"pools": map[string]json.RawMessage{
-			"backup_read_pool":   json.RawMessage(c.backupReadPool.StatsJSON()),
-			"schema_read_pool":   json.RawMessage(c.schemaReadPool.StatsJSON()),
-			"topo_read_pool":     json.RawMessage(c.topoReadPool.StatsJSON()),
-			"topo_rw_pool":       json.RawMessage(c.topoRWPool.StatsJSON()),
-			"workflow_read_pool": json.RawMessage(c.workflowReadPool.StatsJSON()),
+			"backup_read_pool":        json.RawMessage(c.backupReadPool.StatsJSON()),
+			"schema_read_pool":        json.RawMessage(c.schemaReadPool.StatsJSON()),
+			"topo_read_pool":          json.RawMessage(c.topoReadPool.StatsJSON()),
+			"topo_rw_pool":            json.RawMessage(c.topoRWPool.StatsJSON()),
+			"workflow_read_pool":      json.RawMessage(c.workflowReadPool.StatsJSON()),
+			"emergency_reparent_pool": json.RawMessage(c.emergencyReparentPool.StatsJSON()),
+			"reparent_pool":           json.RawMessage(c.reparentPool.StatsJSON()),
 		},
 	}
 
