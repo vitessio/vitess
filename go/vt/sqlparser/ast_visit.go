@@ -276,8 +276,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfNullTreatmentClause(in, f)
 	case *NullVal:
 		return VisitRefOfNullVal(in, f)
-	case Offset:
-		return VisitOffset(in, f)
+	case *Offset:
+		return VisitRefOfOffset(in, f)
 	case OnDup:
 		return VisitOnDup(in, f)
 	case *OptLike:
@@ -2227,6 +2227,15 @@ func VisitRefOfNullVal(in *NullVal, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfOffset(in *Offset, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
 func VisitOnDup(in OnDup, f Visit) error {
 	if in == nil {
 		return nil
@@ -3785,8 +3794,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfNtileExpr(in, f)
 	case *NullVal:
 		return VisitRefOfNullVal(in, f)
-	case Offset:
-		return VisitOffset(in, f)
+	case *Offset:
+		return VisitRefOfOffset(in, f)
 	case *OrExpr:
 		return VisitRefOfOrExpr(in, f)
 	case *Subquery:
@@ -3939,8 +3948,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfNtileExpr(in, f)
 	case *NullVal:
 		return VisitRefOfNullVal(in, f)
-	case Offset:
-		return VisitOffset(in, f)
+	case *Offset:
+		return VisitRefOfOffset(in, f)
 	case *OrExpr:
 		return VisitRefOfOrExpr(in, f)
 	case *Subquery:
@@ -4169,10 +4178,6 @@ func VisitListArg(in ListArg, f Visit) error {
 	return err
 }
 func VisitMatchAction(in MatchAction, f Visit) error {
-	_, err := f(in)
-	return err
-}
-func VisitOffset(in Offset, f Visit) error {
 	_, err := f(in)
 	return err
 }

@@ -2995,10 +2995,19 @@ func (node *JtOnResponse) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node Offset) formatFast(buf *TrackedBuffer) {
-	buf.WriteByte('[')
-	buf.WriteString(fmt.Sprintf("%d", int(node)))
-	buf.WriteByte(']')
+// Using capital letter for this function as an indicator that it's not a normal function call ¯\_(ツ)_/¯
+func (node *Offset) formatFast(buf *TrackedBuffer) {
+	if node.Original == "" {
+		buf.WriteString("OFFSET(")
+		buf.WriteString(fmt.Sprintf("%d", node.V))
+		buf.WriteByte(')')
+	} else {
+		buf.WriteString("OFFSET(")
+		buf.WriteString(fmt.Sprintf("%d", node.V))
+		buf.WriteString(", '")
+		buf.WriteString(node.Original)
+		buf.WriteString("')")
+	}
 }
 
 // formatFast formats the node.
@@ -3021,7 +3030,7 @@ func (node *JSONSchemaValidationReportFuncExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *JSONArrayExpr) formatFast(buf *TrackedBuffer) {
-	//buf.astPrintf(node,"%s(,"node.Name.Lowered())
+	// buf.astPrintf(node,"%s(,"node.Name.Lowered())
 	buf.WriteString("json_array(")
 	if len(node.Params) > 0 {
 		var prefix string
@@ -3036,7 +3045,7 @@ func (node *JSONArrayExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *JSONObjectExpr) formatFast(buf *TrackedBuffer) {
-	//buf.astPrintf(node,"%s(,"node.Name.Lowered())
+	// buf.astPrintf(node,"%s(,"node.Name.Lowered())
 	buf.WriteString("json_object(")
 	if len(node.Params) > 0 {
 		for i, p := range node.Params {

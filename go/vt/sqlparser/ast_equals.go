@@ -788,12 +788,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfNullVal(a, b)
-	case Offset:
-		b, ok := inB.(Offset)
+	case *Offset:
+		b, ok := inB.(*Offset)
 		if !ok {
 			return false
 		}
-		return a == b
+		return EqualsRefOfOffset(a, b)
 	case OnDup:
 		b, ok := inB.(OnDup)
 		if !ok {
@@ -2844,6 +2844,18 @@ func EqualsRefOfNullVal(a, b *NullVal) bool {
 	return true
 }
 
+// EqualsRefOfOffset does deep equals between the two objects.
+func EqualsRefOfOffset(a, b *Offset) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.V == b.V &&
+		a.Original == b.Original
+}
+
 // EqualsOnDup does deep equals between the two objects.
 func EqualsOnDup(a, b OnDup) bool {
 	if len(a) != len(b) {
@@ -4815,12 +4827,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfNullVal(a, b)
-	case Offset:
-		b, ok := inB.(Offset)
+	case *Offset:
+		b, ok := inB.(*Offset)
 		if !ok {
 			return false
 		}
-		return a == b
+		return EqualsRefOfOffset(a, b)
 	case *OrExpr:
 		b, ok := inB.(*OrExpr)
 		if !ok {
@@ -5247,12 +5259,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfNullVal(a, b)
-	case Offset:
-		b, ok := inB.(Offset)
+	case *Offset:
+		b, ok := inB.(*Offset)
 		if !ok {
 			return false
 		}
-		return a == b
+		return EqualsRefOfOffset(a, b)
 	case *OrExpr:
 		b, ok := inB.(*OrExpr)
 		if !ok {

@@ -671,6 +671,10 @@ func NewColIdentWithAt(str string, at AtCount) ColIdent {
 	}
 }
 
+func NewOffset(v int, original Expr) *Offset {
+	return &Offset{V: v, Original: String(original)}
+}
+
 // IsEmpty returns true if the name is empty.
 func (node ColIdent) IsEmpty() bool {
 	return node.val == ""

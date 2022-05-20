@@ -277,8 +277,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfNullTreatmentClause(in)
 	case *NullVal:
 		return CloneRefOfNullVal(in)
-	case Offset:
-		return in
+	case *Offset:
+		return CloneRefOfOffset(in)
 	case OnDup:
 		return CloneOnDup(in)
 	case *OptLike:
@@ -1767,6 +1767,15 @@ func CloneRefOfNullVal(n *NullVal) *NullVal {
 	return &out
 }
 
+// CloneRefOfOffset creates a deep clone of the input.
+func CloneRefOfOffset(n *Offset) *Offset {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
 // CloneOnDup creates a deep clone of the input.
 func CloneOnDup(n OnDup) OnDup {
 	if n == nil {
@@ -3040,8 +3049,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfNtileExpr(in)
 	case *NullVal:
 		return CloneRefOfNullVal(in)
-	case Offset:
-		return in
+	case *Offset:
+		return CloneRefOfOffset(in)
 	case *OrExpr:
 		return CloneRefOfOrExpr(in)
 	case *Subquery:
@@ -3198,8 +3207,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfNtileExpr(in)
 	case *NullVal:
 		return CloneRefOfNullVal(in)
-	case Offset:
-		return in
+	case *Offset:
+		return CloneRefOfOffset(in)
 	case *OrExpr:
 		return CloneRefOfOrExpr(in)
 	case *Subquery:

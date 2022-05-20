@@ -2273,6 +2273,18 @@ func (cached *NullTreatmentClause) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *Offset) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Original string
+	size += hack.RuntimeAllocSize(int64(len(cached.Original)))
+	return size
+}
 func (cached *OptLike) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

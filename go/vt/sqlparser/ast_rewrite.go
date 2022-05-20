@@ -276,8 +276,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfNullTreatmentClause(parent, node, replacer)
 	case *NullVal:
 		return a.rewriteRefOfNullVal(parent, node, replacer)
-	case Offset:
-		return a.rewriteOffset(parent, node, replacer)
+	case *Offset:
+		return a.rewriteRefOfOffset(parent, node, replacer)
 	case OnDup:
 		return a.rewriteOnDup(parent, node, replacer)
 	case *OptLike:
@@ -4329,6 +4329,30 @@ func (a *application) rewriteRefOfNullVal(parent SQLNode, node *NullVal, replace
 	}
 	return true
 }
+func (a *application) rewriteRefOfOffset(parent SQLNode, node *Offset, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7409,8 +7433,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfNtileExpr(parent, node, replacer)
 	case *NullVal:
 		return a.rewriteRefOfNullVal(parent, node, replacer)
-	case Offset:
-		return a.rewriteOffset(parent, node, replacer)
+	case *Offset:
+		return a.rewriteRefOfOffset(parent, node, replacer)
 	case *OrExpr:
 		return a.rewriteRefOfOrExpr(parent, node, replacer)
 	case *Subquery:
@@ -7563,8 +7587,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfNtileExpr(parent, node, replacer)
 	case *NullVal:
 		return a.rewriteRefOfNullVal(parent, node, replacer)
-	case Offset:
-		return a.rewriteOffset(parent, node, replacer)
+	case *Offset:
+		return a.rewriteRefOfOffset(parent, node, replacer)
 	case *OrExpr:
 		return a.rewriteRefOfOrExpr(parent, node, replacer)
 	case *Subquery:
@@ -7895,27 +7919,6 @@ func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer repl
 	return true
 }
 func (a *application) rewriteMatchAction(parent SQLNode, node MatchAction, replacer replacerFunc) bool {
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteOffset(parent SQLNode, node Offset, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
