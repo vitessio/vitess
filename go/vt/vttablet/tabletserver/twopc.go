@@ -192,7 +192,7 @@ func (tpc *TwoPC) Open(dbconfigs *dbconfigs.DBConfigs) error {
 		fmt.Sprintf(sqlCreateTableDTParticipant, dbname),
 	}
 	for _, s := range statements {
-		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
+		if _, err := conn.ExecuteFetchWithReadOnlyHandling(s, 0, false); err != nil {
 			return err
 		}
 	}

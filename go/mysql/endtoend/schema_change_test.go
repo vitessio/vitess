@@ -42,9 +42,9 @@ func TestChangeSchemaIsNoticed(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	_, err = conn.ExecuteFetch(createDb, 1000, true)
+	_, err = conn.ExecuteFetchWithReadOnlyHandling(createDb, 1000, true)
 	require.NoError(t, err)
-	_, err = conn.ExecuteFetch(mysql.CreateSchemaCopyTable, 1000, true)
+	_, err = conn.ExecuteFetchWithReadOnlyHandling(mysql.CreateSchemaCopyTable, 1000, true)
 	require.NoError(t, err)
 
 	tests := []struct {

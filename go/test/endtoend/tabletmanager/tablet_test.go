@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -42,17 +41,11 @@ func TestEnsureDB(t *testing.T) {
 	err = clusterInstance.StartVttablet(tablet, "NOT_SERVING", false, cell, "dbtest", hostname, "0")
 	require.NoError(t, err)
 
-	// Make it the primary.
+	// Make it the primary, which should create the DB
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", tablet.Alias)
-	require.EqualError(t, err, "exit status 1")
+	require.NoError(t, err)
 
-	// It is still NOT_SERVING because the db is read-only.
-	assert.Equal(t, "NOT_SERVING", tablet.VttabletProcess.GetTabletStatus())
-	status := tablet.VttabletProcess.GetStatusDetails()
-	assert.Contains(t, status, "read-only")
-
-	// Switch to read-write and verify that that we go serving.
-	_ = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", tablet.Alias)
+	// verify that that we are serving
 	err = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
 	killTablets(t, tablet)

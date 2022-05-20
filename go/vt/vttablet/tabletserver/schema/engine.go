@@ -129,7 +129,9 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 // This function can be called before opening the Engine.
 func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error {
 	ctx := tabletenv.LocalContext()
-	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AppWithDB())
+	// We need the SUPER privilege in order to ensure we can create the sidecar
+	// DB even when super_read_only is enabled
+	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaWithDB())
 	if err == nil {
 		conn.Close()
 		se.dbCreationFailed = false
@@ -144,14 +146,15 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 
 	// We are primary and db is not found. Let's create it.
 	// We use allprivs instead of DBA because we want db create to fail if we're read-only.
-	conn, err = dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AllPrivsConnector())
+	// We need the SUPER privilege in order to manage super_read_only when enabled.
+	conn, err = dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaConnector())
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
 
 	dbname := se.env.Config().DB.DBName
-	_, err = conn.ExecuteFetch(fmt.Sprintf("create database if not exists `%s`", dbname), 1, false)
+	_, err = conn.ExecuteFetchWithReadOnlyHandling(fmt.Sprintf("create database if not exists `%s`", dbname), 1, false)
 	if err != nil {
 		if !se.dbCreationFailed {
 			// This is the first failure.

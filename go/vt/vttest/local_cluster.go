@@ -516,13 +516,13 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 
 	for _, cmd := range sql {
 		log.Infof("Execute(%s): \"%s\"", dbname, cmd)
-		_, err := conn.ExecuteFetch(cmd, 0, false)
+		_, err := conn.ExecuteFetchWithReadOnlyHandling(cmd, 0, false)
 		if err != nil {
 			return err
 		}
 	}
 
-	_, err = conn.ExecuteFetch("COMMIT", 0, false)
+	_, err = conn.ExecuteFetchWithReadOnlyHandling("COMMIT", 0, false)
 	return err
 }
 
@@ -537,7 +537,7 @@ func (db *LocalCluster) Query(sql, dbname string, limit int) (*sqltypes.Result, 
 	}
 	defer conn.Close()
 
-	return conn.ExecuteFetch(sql, limit, false)
+	return conn.ExecuteFetchWithReadOnlyHandling(sql, limit, false)
 }
 
 // JSONConfig returns a key/value object with the configuration

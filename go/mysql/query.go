@@ -300,14 +300,26 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field, reader func([]byte
 // 2. if the server closes the connection when a command is in flight,
 //    readComQueryResponse will fail, and we'll return CRServerLost(2013).
 func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result *sqltypes.Result, err error) {
-	result, _, err = c.ExecuteFetchMulti(query, maxrows, wantfields)
+	result, _, err = c.ExecuteFetchMulti(query, maxrows, wantfields, false)
+	return result, err
+}
+
+// ExecuteFetchWithReadOnlyHandling should be used if you are executing a write query
+// on a tablet that may NOT be a primary and you want to execute it regardless of
+// tablet type. This function will temporarily make the mysql instance read-write and
+// re-enable read-only mode after the query is executed if needed.
+func (c *Conn) ExecuteFetchWithReadOnlyHandling(query string, maxrows int, wantfields bool) (result *sqltypes.Result, err error) {
+	result, _, err = c.ExecuteFetchMulti(query, maxrows, wantfields, true)
 	return result, err
 }
 
 // ExecuteFetchMulti is for fetching multiple results from a multi-statement result.
 // It returns an additional 'more' flag. If it is set, you must fetch the additional
 // results using ReadQueryResult.
-func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (result *sqltypes.Result, more bool, err error) {
+//
+// Pass disableReadOnly as true if you are executing a write on a tablet/connection
+// that may NOT be a primary and you want to execute it regardless of tablet type.
+func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool, disableReadOnly bool) (result *sqltypes.Result, more bool, err error) {
 	defer func() {
 		if err != nil {
 			if sqlerr, ok := err.(*SQLError); ok {
@@ -315,6 +327,24 @@ func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (re
 			}
 		}
 	}()
+
+	// Note: MariaDB does not have super_read_only but support for it is EOL in v14.0+
+	if disableReadOnly && !c.IsMariaDB() {
+		var res *sqltypes.Result
+		if err = c.WriteComQuery("SELECT @@global.super_read_only"); err != nil {
+			return nil, false, err
+		}
+		res, _, _, err := c.ReadQueryResult(maxrows, wantfields)
+		if err == nil && len(res.Rows) == 1 {
+			sro := res.Rows[0][0].ToString()
+			if sro == "1" || sro == "ON" {
+				defer c.WriteComQuery("SET @@global.super_read_only='ON'")
+				if err = c.WriteComQuery("SET @@global.super_read_only='OFF'"); err != nil {
+					return nil, false, err
+				}
+			}
+		}
+	}
 
 	// Send the query as a COM_QUERY packet.
 	if err = c.WriteComQuery(query); err != nil {

@@ -48,6 +48,12 @@ func (mysqld *Mysqld) executeSchemaCommands(sql string) error {
 		return err
 	}
 
+	if !mysqld.capabilities.isMariaDB() {
+		srosql := "SET @original_super_read_only=IF(@@global.super_read_only=1, 'ON', 'OFF');\n"
+		srosql += "SET GLOBAL super_read_only='OFF';\n"
+		sql = srosql + sql + "\n;SET GLOBAL super_read_only=IFNULL(@original_super_read_only, 'OFF');\n"
+	}
+
 	return mysqld.executeMysqlScript(params, strings.NewReader(sql))
 }
 

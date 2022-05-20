@@ -131,7 +131,7 @@ func (m *MetadataManager) UpsertLocalMetadata(mysqld MysqlDaemon, localMetadata 
 }
 
 func createMetadataTables(conn *dbconnpool.DBConnection, dbName string) error {
-	if _, err := conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS _vt", 0, false); err != nil {
+	if _, err := conn.ExecuteFetchWithReadOnlyHandling("CREATE DATABASE IF NOT EXISTS _vt", 0, false); err != nil {
 		return err
 	}
 
@@ -147,12 +147,12 @@ func createMetadataTables(conn *dbconnpool.DBConnection, dbName string) error {
 }
 
 func createLocalMetadataTable(conn *dbconnpool.DBConnection, dbName string) error {
-	if _, err := conn.ExecuteFetch(sqlCreateLocalMetadataTable, 0, false); err != nil {
+	if _, err := conn.ExecuteFetchWithReadOnlyHandling(sqlCreateLocalMetadataTable, 0, false); err != nil {
 		return err
 	}
 
 	for _, sql := range sqlAlterLocalMetadataTable {
-		if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+		if _, err := conn.ExecuteFetchWithReadOnlyHandling(sql, 0, false); err != nil {
 			// Ignore "Duplicate column name 'db_name'" errors which can happen on every restart.
 			if merr, ok := err.(*mysql.SQLError); !ok || merr.Num != mysql.ERDupFieldName {
 				log.Errorf("Error executing %v: %v", sql, err)
@@ -162,7 +162,7 @@ func createLocalMetadataTable(conn *dbconnpool.DBConnection, dbName string) erro
 	}
 
 	sql := fmt.Sprintf(sqlUpdateLocalMetadataTable, dbName)
-	if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+	if _, err := conn.ExecuteFetchWithReadOnlyHandling(sql, 0, false); err != nil {
 		log.Errorf("Error executing %v: %v, continuing. Please check the data in _vt.local_metadata and take corrective action.", sql, err)
 	}
 
@@ -170,12 +170,12 @@ func createLocalMetadataTable(conn *dbconnpool.DBConnection, dbName string) erro
 }
 
 func createShardMetadataTable(conn *dbconnpool.DBConnection, dbName string) error {
-	if _, err := conn.ExecuteFetch(sqlCreateShardMetadataTable, 0, false); err != nil {
+	if _, err := conn.ExecuteFetchWithReadOnlyHandling(sqlCreateShardMetadataTable, 0, false); err != nil {
 		return err
 	}
 
 	for _, sql := range sqlAlterShardMetadataTable {
-		if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+		if _, err := conn.ExecuteFetchWithReadOnlyHandling(sql, 0, false); err != nil {
 			// Ignore "Duplicate column name 'db_name'" errors which can happen on every restart.
 			if merr, ok := err.(*mysql.SQLError); !ok || merr.Num != mysql.ERDupFieldName {
 				log.Errorf("Error executing %v: %v", sql, err)
@@ -185,7 +185,7 @@ func createShardMetadataTable(conn *dbconnpool.DBConnection, dbName string) erro
 	}
 
 	sql := fmt.Sprintf(sqlUpdateShardMetadataTable, dbName)
-	if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+	if _, err := conn.ExecuteFetchWithReadOnlyHandling(sql, 0, false); err != nil {
 		log.Errorf("Error executing %v: %v, continuing. Please check the data in _vt.shard_metadata and take corrective action.", sql, err)
 	}
 
@@ -221,12 +221,12 @@ func upsertLocalMetadata(conn *dbconnpool.DBConnection, localMetadata map[string
 		queryBuf.WriteString(") ON DUPLICATE KEY UPDATE value = ")
 		valValue.EncodeSQL(&queryBuf)
 
-		if _, err := conn.ExecuteFetch(queryBuf.String(), 0, false); err != nil {
+		if _, err := conn.ExecuteFetchWithReadOnlyHandling(queryBuf.String(), 0, false); err != nil {
 			return err
 		}
 	}
 
-	if _, err := conn.ExecuteFetch("COMMIT", 0, false); err != nil {
+	if _, err := conn.ExecuteFetchWithReadOnlyHandling("COMMIT", 0, false); err != nil {
 		return err
 	}
 

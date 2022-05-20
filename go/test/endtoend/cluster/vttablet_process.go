@@ -425,7 +425,7 @@ func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	retryDelay := 1 * time.Second
 	for i := 1; i <= retries; i++ {
 		log.Infof("Executing query %s on %s (attempt %d of %d)", query, i, retries)
-		result, err = dbConn.ExecuteFetch(query, 10000, true)
+		result, err = dbConn.ExecuteFetchWithReadOnlyHandling(query, 10000, true)
 		if err == nil {
 			break
 		}

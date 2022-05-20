@@ -161,7 +161,7 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	expectNoError(t, err)
 	defer conn.Close()
 
-	qr, more, err := conn.ExecuteFetchMulti("select 1 from dual; set autocommit=1; select 1 from dual", 10, true)
+	qr, more, err := conn.ExecuteFetchMulti("select 1 from dual; set autocommit=1; select 1 from dual", 10, true, false)
 	expectNoError(t, err)
 	expectFlag(t, "ExecuteMultiFetch(multi result)", more, true)
 	assert.EqualValues(t, 1, len(qr.Rows))
@@ -176,12 +176,12 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	expectFlag(t, "ReadQueryResult(2)", more, false)
 	assert.EqualValues(t, 1, len(qr.Rows))
 
-	qr, more, err = conn.ExecuteFetchMulti("select 1 from dual", 10, true)
+	qr, more, err = conn.ExecuteFetchMulti("select 1 from dual", 10, true, false)
 	expectNoError(t, err)
 	expectFlag(t, "ExecuteMultiFetch(single result)", more, false)
 	assert.EqualValues(t, 1, len(qr.Rows))
 
-	qr, more, err = conn.ExecuteFetchMulti("set autocommit=1", 10, true)
+	qr, more, err = conn.ExecuteFetchMulti("set autocommit=1", 10, true, false)
 	expectNoError(t, err)
 	expectFlag(t, "ExecuteMultiFetch(no result)", more, false)
 	assert.EqualValues(t, 0, len(qr.Rows))
@@ -208,7 +208,7 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 		assert.EqualValues(t, 1, result.RowsAffected, "insert into returned RowsAffected")
 	}
 
-	qr, more, err = conn.ExecuteFetchMulti("update a set name = concat(name, ' updated'); select * from a; select count(*) from a", 300, true)
+	qr, more, err = conn.ExecuteFetchMulti("update a set name = concat(name, ' updated'); select * from a; select count(*) from a", 300, true, true)
 	expectNoError(t, err)
 	expectFlag(t, "ExecuteMultiFetch(multi result)", more, true)
 	assert.EqualValues(t, 255, qr.RowsAffected)

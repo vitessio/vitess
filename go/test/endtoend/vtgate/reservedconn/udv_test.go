@@ -159,7 +159,7 @@ func TestMysqlDumpInitialLog(t *testing.T) {
 
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
-			_, more, err := conn.ExecuteFetchMulti(query, 1000, true)
+			_, more, err := conn.ExecuteFetchMulti(query, 1000, true, true)
 			require.NoError(t, err)
 			require.False(t, more)
 		})

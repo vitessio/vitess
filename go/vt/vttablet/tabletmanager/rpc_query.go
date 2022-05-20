@@ -63,7 +63,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte, db
 		}
 	}
 	// run the query
-	result, err := conn.ExecuteFetch(string(query), maxrows, true /*wantFields*/)
+	result, err := conn.ExecuteFetchWithReadOnlyHandling(string(query), maxrows, true /*wantFields*/)
 
 	// re-enable binlogs if necessary
 	if disableBinlogs && !conn.IsClosed() {
