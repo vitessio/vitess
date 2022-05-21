@@ -66,6 +66,15 @@ type Config struct {
 	TopoReadPoolConfig     *RPCPoolConfig
 	WorkflowReadPoolConfig *RPCPoolConfig
 
+	// EmergencyReparentPoolConfig specifies the config for a pool dedicated
+	// solely to EmergencyReparentShard operations. It has the semantics and
+	// defaults of an RW RPCPool.
+	EmergencyReparentPoolConfig *RPCPoolConfig
+	// ReparentPoolConfig specifies the config for a pool shared by
+	// PlannedReparentShard operations. It has the semantics and defaults of an
+	// RW RPCPool.
+	ReparentPoolConfig *RPCPoolConfig
+
 	SchemaCacheConfig *cache.Config
 
 	vtctldConfigOpts []vtctldclient.ConfigOption
@@ -200,20 +209,25 @@ func (cfg *Config) MarshalJSON() ([]byte, error) {
 		TopoReadPoolConfig     *RPCPoolConfig `json:"topo_read_pool_config"`
 		WorkflowReadPoolConfig *RPCPoolConfig `json:"workflow_read_pool_config"`
 
+		EmergencyReparentPoolConfig *RPCPoolConfig `json:"emergency_reparent_pool_config"`
+		ReparentPoolConfig          *RPCPoolConfig `json:"reparent_pool_config"`
+
 		SchemaCacheConfig *cache.Config `json:"schema_cache_config"`
 	}{
-		ID:                     cfg.ID,
-		Name:                   cfg.Name,
-		DiscoveryImpl:          cfg.DiscoveryImpl,
-		DiscoveryFlagsByImpl:   cfg.DiscoveryFlagsByImpl,
-		VtSQLFlags:             cfg.VtSQLFlags,
-		VtctldFlags:            cfg.VtctldFlags,
-		BackupReadPoolConfig:   defaultReadPoolConfig.merge(cfg.BackupReadPoolConfig),
-		SchemaReadPoolConfig:   defaultReadPoolConfig.merge(cfg.SchemaReadPoolConfig),
-		TopoRWPoolConfig:       defaultRWPoolConfig.merge(cfg.TopoRWPoolConfig),
-		TopoReadPoolConfig:     defaultReadPoolConfig.merge(cfg.TopoReadPoolConfig),
-		WorkflowReadPoolConfig: defaultReadPoolConfig.merge(cfg.WorkflowReadPoolConfig),
-		SchemaCacheConfig:      mergeCacheConfigs(defaultCacheConfig, cfg.SchemaCacheConfig),
+		ID:                          cfg.ID,
+		Name:                        cfg.Name,
+		DiscoveryImpl:               cfg.DiscoveryImpl,
+		DiscoveryFlagsByImpl:        cfg.DiscoveryFlagsByImpl,
+		VtSQLFlags:                  cfg.VtSQLFlags,
+		VtctldFlags:                 cfg.VtctldFlags,
+		BackupReadPoolConfig:        defaultReadPoolConfig.merge(cfg.BackupReadPoolConfig),
+		SchemaReadPoolConfig:        defaultReadPoolConfig.merge(cfg.SchemaReadPoolConfig),
+		TopoRWPoolConfig:            defaultRWPoolConfig.merge(cfg.TopoRWPoolConfig),
+		TopoReadPoolConfig:          defaultReadPoolConfig.merge(cfg.TopoReadPoolConfig),
+		WorkflowReadPoolConfig:      defaultReadPoolConfig.merge(cfg.WorkflowReadPoolConfig),
+		EmergencyReparentPoolConfig: defaultRWPoolConfig.merge(cfg.EmergencyReparentPoolConfig),
+		ReparentPoolConfig:          defaultRWPoolConfig.merge(cfg.ReparentPoolConfig),
+		SchemaCacheConfig:           mergeCacheConfigs(defaultCacheConfig, cfg.SchemaCacheConfig),
 	}
 
 	return json.Marshal(&tmp)
@@ -223,19 +237,21 @@ func (cfg *Config) MarshalJSON() ([]byte, error) {
 // config. Neither the caller or the argument are modified in any way.
 func (cfg Config) Merge(override Config) Config {
 	merged := Config{
-		ID:                     cfg.ID,
-		Name:                   cfg.Name,
-		DiscoveryImpl:          cfg.DiscoveryImpl,
-		DiscoveryFlagsByImpl:   map[string]map[string]string{},
-		TabletFQDNTmplStr:      cfg.TabletFQDNTmplStr,
-		VtSQLFlags:             map[string]string{},
-		VtctldFlags:            map[string]string{},
-		BackupReadPoolConfig:   cfg.BackupReadPoolConfig.merge(override.BackupReadPoolConfig),
-		SchemaReadPoolConfig:   cfg.SchemaReadPoolConfig.merge(override.SchemaReadPoolConfig),
-		TopoReadPoolConfig:     cfg.TopoReadPoolConfig.merge(override.TopoReadPoolConfig),
-		TopoRWPoolConfig:       cfg.TopoRWPoolConfig.merge(override.TopoRWPoolConfig),
-		WorkflowReadPoolConfig: cfg.WorkflowReadPoolConfig.merge(override.WorkflowReadPoolConfig),
-		SchemaCacheConfig:      mergeCacheConfigs(cfg.SchemaCacheConfig, override.SchemaCacheConfig),
+		ID:                          cfg.ID,
+		Name:                        cfg.Name,
+		DiscoveryImpl:               cfg.DiscoveryImpl,
+		DiscoveryFlagsByImpl:        map[string]map[string]string{},
+		TabletFQDNTmplStr:           cfg.TabletFQDNTmplStr,
+		VtSQLFlags:                  map[string]string{},
+		VtctldFlags:                 map[string]string{},
+		BackupReadPoolConfig:        cfg.BackupReadPoolConfig.merge(override.BackupReadPoolConfig),
+		SchemaReadPoolConfig:        cfg.SchemaReadPoolConfig.merge(override.SchemaReadPoolConfig),
+		TopoReadPoolConfig:          cfg.TopoReadPoolConfig.merge(override.TopoReadPoolConfig),
+		TopoRWPoolConfig:            cfg.TopoRWPoolConfig.merge(override.TopoRWPoolConfig),
+		WorkflowReadPoolConfig:      cfg.WorkflowReadPoolConfig.merge(override.WorkflowReadPoolConfig),
+		EmergencyReparentPoolConfig: cfg.EmergencyReparentPoolConfig.merge(override.EmergencyReparentPoolConfig),
+		ReparentPoolConfig:          cfg.ReparentPoolConfig.merge(override.ReparentPoolConfig),
+		SchemaCacheConfig:           mergeCacheConfigs(cfg.SchemaCacheConfig, override.SchemaCacheConfig),
 	}
 
 	if override.ID != "" {

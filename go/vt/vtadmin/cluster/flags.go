@@ -216,6 +216,28 @@ func parseOne(cfg *Config, name string, val string) error {
 			if err := cfg.WorkflowReadPoolConfig.parseFlag(strings.TrimPrefix(name, "workflow-read-pool-"), val); err != nil {
 				return fmt.Errorf("error parsing %s: %w", name, err)
 			}
+		case strings.HasPrefix(name, "emergency-reparent-pool-"):
+			if cfg.EmergencyReparentPoolConfig == nil {
+				cfg.EmergencyReparentPoolConfig = &RPCPoolConfig{
+					Size:        -1,
+					WaitTimeout: -1,
+				}
+			}
+
+			if err := cfg.EmergencyReparentPoolConfig.parseFlag(strings.TrimPrefix(name, "emergency-reparent-pool-"), val); err != nil {
+				return fmt.Errorf("error parsing %s: %w", name, err)
+			}
+		case strings.HasPrefix(name, "reparent-pool-"):
+			if cfg.ReparentPoolConfig == nil {
+				cfg.ReparentPoolConfig = &RPCPoolConfig{
+					Size:        -1,
+					WaitTimeout: -1,
+				}
+			}
+
+			if err := cfg.ReparentPoolConfig.parseFlag(strings.TrimPrefix(name, "reparent-pool-"), val); err != nil {
+				return fmt.Errorf("error parsing %s: %w", name, err)
+			}
 		case strings.HasPrefix(name, "schema-cache-"):
 			if cfg.SchemaCacheConfig == nil {
 				cfg.SchemaCacheConfig = &cache.Config{
