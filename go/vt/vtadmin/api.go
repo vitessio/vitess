@@ -320,6 +320,8 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
 	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
 	router.HandleFunc("/schemas/reload", httpAPI.Adapt(vtadminhttp.ReloadSchemas)).Name("API.ReloadSchemas").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/emergency_reparent", httpAPI.Adapt(vtadminhttp.EmergencyReparentShard)).Name("API.EmergencyReparentShard").Methods("POST")
+	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/planned_reparent", httpAPI.Adapt(vtadminhttp.PlannedReparentShard)).Name("API.PlannedReparentShard").Methods("POST")
 	router.HandleFunc("/shard_replication_positions", httpAPI.Adapt(vtadminhttp.GetShardReplicationPositions)).Name("API.GetShardReplicationPositions")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateShard)).Name("API.CreateShard").Methods("POST")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.DeleteShards)).Name("API.DeleteShards").Methods("DELETE")
@@ -337,6 +339,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/tablet/{tablet}/set_read_write", httpAPI.Adapt(vtadminhttp.SetReadWrite)).Name("API.SetReadWrite").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/start_replication", httpAPI.Adapt(vtadminhttp.StartReplication)).Name("API.StartReplication").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/stop_replication", httpAPI.Adapt(vtadminhttp.StopReplication)).Name("API.StopReplication").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/tablet_externally_reparented", httpAPI.Adapt(vtadminhttp.TabletExternallyReparented)).Name("API.TabletExternallyReparented").Methods("POST")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
 	router.HandleFunc("/vtctlds", httpAPI.Adapt(vtadminhttp.GetVtctlds)).Name("API.GetVtctlds")
@@ -476,6 +479,23 @@ func (api *API) DeleteTablet(ctx context.Context, req *vtadminpb.DeleteTabletReq
 		Status:  "ok",
 		Cluster: c.ToProto(),
 	}, nil
+}
+
+// EmergencyReparentShard is part of the vtadminpb.VTAdminServer interface.
+func (api *API) EmergencyReparentShard(ctx context.Context, req *vtadminpb.EmergencyReparentShardRequest) (*vtadminpb.EmergencyReparentShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.EmergencyReparentShard")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ShardResource, rbac.EmergencyReparentShardAction) {
+		return nil, nil
+	}
+
+	return c.EmergencyReparentShard(ctx, req.Options)
 }
 
 // FindSchema is part of the vtadminpb.VTAdminServer interface.
@@ -1349,6 +1369,23 @@ func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest
 	}, nil
 }
 
+// PlannedReparentShard is part of the vtadminpb.VTAdminServer interface.
+func (api *API) PlannedReparentShard(ctx context.Context, req *vtadminpb.PlannedReparentShardRequest) (*vtadminpb.PlannedReparentShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.PlannedReparentShard")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ShardResource, rbac.PlannedReparentShardAction) {
+		return nil, nil
+	}
+
+	return c.PlannedReparentShard(ctx, req.Options)
+}
+
 // RefreshState is part of the vtadminpb.VTAdminServer interface.
 func (api *API) RefreshState(ctx context.Context, req *vtadminpb.RefreshStateRequest) (*vtadminpb.RefreshStateResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.RefreshState")
@@ -1536,6 +1573,19 @@ func (api *API) StopReplication(ctx context.Context, req *vtadminpb.StopReplicat
 		Status:  "ok",
 		Cluster: c.ToProto(),
 	}, nil
+}
+
+// TabletExternallyReparented is part of the vtadminpb.VTAdminServer interface.
+func (api *API) TabletExternallyReparented(ctx context.Context, req *vtadminpb.TabletExternallyReparentedRequest) (*vtadminpb.TabletExternallyReparentedResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.TabletExternallyReparented")
+	defer span.Finish()
+
+	tablet, c, err := api.getTabletForShardAction(ctx, span, rbac.TabletExternallyReparentedAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.TabletExternallyReparented(ctx, tablet)
 }
 
 // ValidateKeyspace is part of the vtadminpb.VTAdminServer interface.

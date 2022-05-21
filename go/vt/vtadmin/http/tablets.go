@@ -207,3 +207,24 @@ func StopReplication(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	return NewJSONResponse(result, err)
 }
+
+// TabletExternallyReparented implements the http wrapper for POST /tablet/{tablet}/tablet_externally_reparented.
+//
+// Query params:
+// - `cluster`: repeated list of clusterIDs to limit the request to.
+//
+// POST body is unused; this endpoint takes no additional options.
+func TabletExternallyReparented(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+
+	alias, err := vars.GetTabletAlias("tablet")
+	if err != nil {
+		return NewJSONResponse(nil, err)
+	}
+
+	result, err := api.server.TabletExternallyReparented(ctx, &vtadminpb.TabletExternallyReparentedRequest{
+		Alias:      alias,
+		ClusterIds: r.URL.Query()["cluster"],
+	})
+	return NewJSONResponse(result, err)
+}
