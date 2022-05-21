@@ -1308,6 +1308,8 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 		return nil, err
 	}
 
+	// Ensure that any keyspaces excluded from caching never make it to the
+	// cache.
 	if !c.schemaCacheExcludeKeyspaces.Has(schema.Keyspace) {
 		go schemacache.AddOrBackfill(c.schemaCache, []*vtadminpb.Schema{schema}, key, cache.DefaultExpiration, schemacache.LoadOptions{
 			BaseRequest:    opts.BaseRequest,
@@ -1356,9 +1358,61 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 		})
 
 		span.Annotate("cache_hit", ok)
-		if ok {
-			return schemas, err
+
+		// Per the comment in schemacache.LoadAll, if we encountered an error,
+		// then we're only going to get an error later on the remote side of
+		// the GetSchema RPCs, so we just bail now.
+		if err != nil {
+			return nil, err
 		}
+
+		if ok {
+			if c.schemaCacheExcludeKeyspaces.Len() == 0 {
+				// Cluster config doesn't exclude any keyspaces from caching,
+				// so if we had something in the cache, we have everything we
+				// need.
+				span.Annotate("partial_cache", false)
+				return schemas, nil
+			}
+
+			// Some keyspaces are excluded from caching, so we now have to
+			// get them via RPC. We do not (back)fill the cache with any of
+			// these, so keyspaces we don't want cached never end up in the
+			// cache.
+
+			span.Annotate("partial_cache", true)
+
+			tablets, err := c.GetTablets(ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			// Build a list of excluded keyspaces as vtadminpb.Keyspace objects
+			// for use in collectSchemas (which only cares about .Keyspace.Name).
+			//
+			// Note that later methods will skip over keyspaces with no serving
+			// tablets, which also ensures we don't try to fetch a schema for a
+			// keyspace that does not exist, saving us a GetKeyspaces RPC.
+			keyspaces := make([]*vtadminpb.Keyspace, c.schemaCacheExcludeKeyspaces.Len())
+			for i, name := range c.schemaCacheExcludeKeyspaces.UnsortedList() {
+				keyspaces[i] = &vtadminpb.Keyspace{
+					Keyspace: &vtctldatapb.Keyspace{
+						Name: name,
+					},
+				}
+			}
+
+			excludedKeyspaceSchemas, err := c.collectSchemas(ctx, keyspaces, tablets, opts)
+			if err != nil {
+				return nil, err
+			}
+
+			return append(schemas, excludedKeyspaceSchemas...), nil
+		}
+
+		// If we're here, there was nothing in the cache, so fallthrough to
+		// loading everything from the cluster and then (back)fill the cache
+		// for later use.
 	}
 
 	var (
@@ -1428,6 +1482,8 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 	go func(schemas []*vtadminpb.Schema, key schemacache.Key, opts GetSchemaOptions) {
 		var cacheableSchemas []*vtadminpb.Schema
 		for _, schema := range schemas {
+			// Ensure that any keyspaces excluded from caching never make it
+			// to the cache.
 			if !c.schemaCacheExcludeKeyspaces.Has(schema.Keyspace) {
 				cacheableSchemas = append(cacheableSchemas, schema)
 			}
