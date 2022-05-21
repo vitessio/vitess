@@ -26,20 +26,26 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vitessdriver"
+	"vitess.io/vitess/go/vt/vtadmin/cache"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/internal/caches/schemacache"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
+	vtadminvtctldclient "vitess.io/vitess/go/vt/vtadmin/vtctldclient"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql/fakevtsql"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -1937,4 +1943,269 @@ func TestTabletExternallyReparented(t *testing.T) {
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
+}
+
+func TestSchemaCacheExcludeKeyspaces(t *testing.T) {
+	t.Parallel()
+
+	vtctld := &fakevtctldclient.VtctldClient{
+		FindAllShardsInKeyspaceResults: map[string]struct {
+			Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+			Error    error
+		}{
+			"ks1": {
+				Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+					Shards: map[string]*vtctldatapb.Shard{
+						"-": {
+							Name: "-",
+							Shard: &topodatapb.Shard{
+								IsPrimaryServing: true,
+								PrimaryAlias: &topodatapb.TabletAlias{
+									Cell: "ks1",
+									Uid:  100,
+								},
+							},
+						},
+					},
+				},
+			},
+			"ks2": {
+				Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+					Shards: map[string]*vtctldatapb.Shard{
+						"-": {
+							Name: "-",
+							Shard: &topodatapb.Shard{
+								IsPrimaryServing: true,
+								PrimaryAlias: &topodatapb.TabletAlias{
+									Cell: "ks2",
+									Uid:  100,
+								},
+							},
+						},
+					},
+				},
+			},
+			"nocache": {
+				Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+					Shards: map[string]*vtctldatapb.Shard{
+						"-": {
+							Name: "-",
+							Shard: &topodatapb.Shard{
+								IsPrimaryServing: true,
+								PrimaryAlias: &topodatapb.TabletAlias{
+									Cell: "nocache",
+									Uid:  100,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		GetKeyspacesResults: struct {
+			Keyspaces []*vtctldatapb.Keyspace
+			Error     error
+		}{
+			Keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name: "ks1",
+				},
+				{
+					Name: "ks2",
+				},
+				{
+					Name: "nocache",
+				},
+			},
+		},
+		GetSchemaResults: map[string]struct {
+			Response *vtctldatapb.GetSchemaResponse
+			Error    error
+		}{
+			"ks1-0000000100": {
+				Response: &vtctldatapb.GetSchemaResponse{
+					Schema: &tabletmanagerdatapb.SchemaDefinition{
+						TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+							{},
+						},
+					},
+				},
+			},
+			"ks2-0000000100": {
+				Response: &vtctldatapb.GetSchemaResponse{
+					Schema: &tabletmanagerdatapb.SchemaDefinition{
+						TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+							{},
+						},
+					},
+				},
+			},
+			"nocache-0000000100": {
+				Response: &vtctldatapb.GetSchemaResponse{
+					Schema: &tabletmanagerdatapb.SchemaDefinition{
+						TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+							{},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	cfg := Config{
+		ID:            "test",
+		Name:          "test",
+		DiscoveryImpl: "dynamic",
+		DiscoveryFlagsByImpl: map[string]map[string]string{
+			"dynamic": {
+				"discovery": `{}`,
+			},
+		},
+		vtctldConfigOpts: []vtadminvtctldclient.ConfigOption{
+			vtadminvtctldclient.WithDialFunc(func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
+				return vtctld, nil
+			}),
+		},
+		vtsqlConfigOpts: []vtsql.ConfigOption{
+			vtsql.WithDialFunc(func(c vitessdriver.Configuration) (*sql.DB, error) {
+				return sql.OpenDB(&fakevtsql.Connector{
+					Tablets: []*vtadminpb.Tablet{
+						{
+							Tablet: &topodatapb.Tablet{
+								Keyspace: "ks1",
+								Shard:    "-",
+								Type:     topodatapb.TabletType_PRIMARY,
+								Alias: &topodatapb.TabletAlias{
+									Cell: "ks1",
+									Uid:  100,
+								},
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+						{
+							Tablet: &topodatapb.Tablet{
+								Keyspace: "ks2",
+								Shard:    "-",
+								Type:     topodatapb.TabletType_PRIMARY,
+								Alias: &topodatapb.TabletAlias{
+									Cell: "ks2",
+									Uid:  100,
+								},
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+						{
+							Tablet: &topodatapb.Tablet{
+								Keyspace: "nocache",
+								Shard:    "-",
+								Type:     topodatapb.TabletType_PRIMARY,
+								Alias: &topodatapb.TabletAlias{
+									Cell: "nocache",
+									Uid:  100,
+								},
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+					},
+				}), nil
+			}),
+		},
+		SchemaCacheConfig: &cache.Config{
+			DefaultExpiration:       cache.NoExpiration,
+			CleanupInterval:         cache.NoExpiration,
+			BackfillEnqueueWaitTime: time.Hour,
+		},
+		SchemaCacheExcludeKeyspaces: []string{"nocache"},
+	}
+
+	ctx := context.Background()
+	opts := GetSchemaOptions{
+		BaseRequest: &vtctldatapb.GetSchemaRequest{
+			IncludeViews: true,
+		},
+		TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
+			AggregateSizes: true,
+		},
+	}
+
+	t.Run("GetSchema", func(t *testing.T) {
+		t.Parallel()
+
+		c, err := New(ctx, cfg)
+		require.NoError(t, err, "failed to create test cluster from config: %+v", cfg)
+
+		t.Cleanup(func() {
+			c.DB.Close()
+			c.Vtctld.Close()
+			c.schemaCache.Close()
+		})
+
+		_, err = c.GetSchema(ctx, "ks1", opts)
+		require.NoError(t, err, "failed to GetSchema for ks1")
+
+		time.Sleep(time.Millisecond * 100) // wait for background fill to finish
+		_, ok, err := schemacache.LoadOne(c.schemaCache, schemacache.Key{
+			ClusterID: "test",
+			Keyspace:  "ks1",
+		}, schemacache.LoadOptions{
+			BaseRequest: opts.BaseRequest,
+		})
+		require.NoError(t, err, "schemacache.LoadOne(ks1) failed")
+
+		assert.True(t, ok, "calling GetSchema(ks1) should fill the cache, but did not")
+
+		_, err = c.GetSchema(ctx, "nocache", opts)
+		require.NoError(t, err, "failed to GetSchema for nocache")
+
+		time.Sleep(time.Millisecond * 100) // wait for background fill (which is not happening) to "finish"
+		_, ok, err = schemacache.LoadOne(c.schemaCache, schemacache.Key{
+			ClusterID: "test",
+			Keyspace:  "nocache",
+		}, schemacache.LoadOptions{
+			BaseRequest: opts.BaseRequest,
+		})
+		require.NoError(t, err, "schemacache.LoadOne(nocache) failed")
+
+		assert.False(t, ok, "calling GetSchema(nocache) should not fill the cache, but did")
+	})
+
+	t.Run("GetSchemas", func(t *testing.T) {
+		t.Parallel()
+
+		c, err := New(ctx, cfg)
+		require.NoError(t, err, "failed to create test cluster from config: %+v", cfg)
+
+		t.Cleanup(func() {
+			c.DB.Close()
+			c.Vtctld.Close()
+			c.schemaCache.Close()
+		})
+
+		schemas, err := c.GetSchemas(ctx, opts)
+		require.NoError(t, err, "failed to GetSchemas for cluster")
+		assert.Len(t, schemas, 3, "all 3 keyspaces should have schemas returned")
+
+		time.Sleep(time.Millisecond * 100) // wait for background fill to finish
+		schemas, ok, err := schemacache.LoadAll(c.schemaCache, schemacache.Key{
+			ClusterID: "test",
+		}, schemacache.LoadOptions{
+			BaseRequest: opts.BaseRequest,
+		})
+		require.NoError(t, err, "schemacache.LoadAll() failed")
+
+		assert.True(t, ok, "calling GetSchemas() should fill the cache, but did not")
+		assert.Len(t, schemas, 2, "GetSchemas() should cache 2 keyspaces (ks1, ks2) not 3 (+nocache)")
+
+		for _, s := range schemas {
+			if s.Keyspace == "nocache" {
+				assert.Failf(t, "nocache should not be in cache", "GetSchemas() should not cache schema for `nocache` but did")
+			}
+		}
+
+		// Then, even though it's not cached, GetSchemas still includes it in
+		// the final response.
+		schemas, err = c.GetSchemas(ctx, opts)
+		require.NoError(t, err, "failed to GetSchemas for cluster")
+		assert.Len(t, schemas, 3, "all 3 keyspaces should have schemas returned")
+	})
 }
