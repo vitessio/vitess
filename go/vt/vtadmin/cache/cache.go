@@ -150,10 +150,10 @@ func (c *Cache[Key, Value]) Add(key Key, val Value, d time.Duration) error {
 
 func (c *Cache[Key, Value]) add(key string, val Value, d time.Duration) error {
 	c.m.Lock()
-	defer c.m.Unlock()
-
 	// Record the time we last cached this key, to check against
 	c.lastFill[key] = time.Now().UTC()
+	c.m.Unlock()
+
 	// Then cache the actual value.
 	return c.cache.Add(key, val, d)
 }
@@ -227,6 +227,14 @@ func (c *Cache[Key, Value]) backfill() {
 				c.m.Unlock()
 				continue
 			}
+
+			// NOTE: In the strictest sense, we would `delete(lastFill, key)`
+			// here. However, we're about to fill that key again, so we'd be
+			// immediately re-adding the key we just deleted from `lastFill`.
+			//
+			// We do *not* apply the same treatment to the actual Value cache,
+			// because go-cache is running a background thread to periodically
+			// clean up expired entries.
 		}
 		c.m.Unlock()
 
