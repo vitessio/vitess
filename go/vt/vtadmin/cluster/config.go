@@ -75,7 +75,8 @@ type Config struct {
 	// RW RPCPool.
 	ReparentPoolConfig *RPCPoolConfig
 
-	SchemaCacheConfig *cache.Config
+	SchemaCacheConfig           *cache.Config
+	SchemaCacheExcludeKeyspaces []string
 
 	vtctldConfigOpts []vtctldclient.ConfigOption
 	vtsqlConfigOpts  []vtsql.ConfigOption
@@ -212,7 +213,8 @@ func (cfg *Config) MarshalJSON() ([]byte, error) {
 		EmergencyReparentPoolConfig *RPCPoolConfig `json:"emergency_reparent_pool_config"`
 		ReparentPoolConfig          *RPCPoolConfig `json:"reparent_pool_config"`
 
-		SchemaCacheConfig *cache.Config `json:"schema_cache_config"`
+		SchemaCacheConfig           *cache.Config `json:"schema_cache_config"`
+		SchemaCacheExcludeKeyspaces []string      `json:"schema_cache_exclude_keyspaces"`
 	}{
 		ID:                          cfg.ID,
 		Name:                        cfg.Name,
@@ -228,6 +230,7 @@ func (cfg *Config) MarshalJSON() ([]byte, error) {
 		EmergencyReparentPoolConfig: defaultRWPoolConfig.merge(cfg.EmergencyReparentPoolConfig),
 		ReparentPoolConfig:          defaultRWPoolConfig.merge(cfg.ReparentPoolConfig),
 		SchemaCacheConfig:           mergeCacheConfigs(defaultCacheConfig, cfg.SchemaCacheConfig),
+		SchemaCacheExcludeKeyspaces: cfg.SchemaCacheExcludeKeyspaces,
 	}
 
 	return json.Marshal(&tmp)
@@ -252,6 +255,7 @@ func (cfg Config) Merge(override Config) Config {
 		EmergencyReparentPoolConfig: cfg.EmergencyReparentPoolConfig.merge(override.EmergencyReparentPoolConfig),
 		ReparentPoolConfig:          cfg.ReparentPoolConfig.merge(override.ReparentPoolConfig),
 		SchemaCacheConfig:           mergeCacheConfigs(cfg.SchemaCacheConfig, override.SchemaCacheConfig),
+		SchemaCacheExcludeKeyspaces: append(cfg.SchemaCacheExcludeKeyspaces, override.SchemaCacheExcludeKeyspaces...),
 	}
 
 	if override.ID != "" {

@@ -238,6 +238,8 @@ func parseOne(cfg *Config, name string, val string) error {
 			if err := cfg.ReparentPoolConfig.parseFlag(strings.TrimPrefix(name, "reparent-pool-"), val); err != nil {
 				return fmt.Errorf("error parsing %s: %w", name, err)
 			}
+		case name == "schema-cache-exclude-keyspaces":
+			cfg.SchemaCacheExcludeKeyspaces = append(cfg.SchemaCacheExcludeKeyspaces, val)
 		case strings.HasPrefix(name, "schema-cache-"):
 			if cfg.SchemaCacheConfig == nil {
 				cfg.SchemaCacheConfig = &cache.Config{

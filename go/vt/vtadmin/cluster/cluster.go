@@ -91,7 +91,8 @@ type Cluster struct {
 	// schemas slice will contain one element per keyspace* in the cluster
 	// 	*: at the time it was cached; if keyspaces were created/destroyed in
 	//  the interim, we won't pick that up until something refreshes the cache.
-	schemaCache *cache.Cache[schemacache.Key, []*vtadminpb.Schema]
+	schemaCache                 *cache.Cache[schemacache.Key, []*vtadminpb.Schema]
+	schemaCacheExcludeKeyspaces sets.String
 
 	cfg Config
 }
@@ -166,6 +167,11 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 	if cluster.cfg.SchemaCacheConfig == nil {
 		cluster.cfg.SchemaCacheConfig = &cache.Config{}
 	}
+
+	cluster.schemaCacheExcludeKeyspaces = sets.NewString(cluster.cfg.SchemaCacheExcludeKeyspaces...)
+	// De-dupe configured keyspace list (Debug marshals this, so it's nicer for the end-user)
+	cfg.SchemaCacheExcludeKeyspaces = cluster.schemaCacheExcludeKeyspaces.List()
+
 	cluster.schemaCache = cache.New(func(ctx context.Context, key schemacache.Key) ([]*vtadminpb.Schema, error) {
 		// TODO: make a private method to separate the fetching bits from the cache bits
 		if key.Keyspace == "" {
