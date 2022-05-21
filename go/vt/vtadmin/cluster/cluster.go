@@ -1308,10 +1308,12 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 		return nil, err
 	}
 
-	go schemacache.AddOrBackfill(c.schemaCache, []*vtadminpb.Schema{schema}, key, cache.DefaultExpiration, schemacache.LoadOptions{
-		BaseRequest:    opts.BaseRequest,
-		AggregateSizes: opts.TableSizeOptions.AggregateSizes,
-	})
+	if !c.schemaCacheExcludeKeyspaces.Has(schema.Keyspace) {
+		go schemacache.AddOrBackfill(c.schemaCache, []*vtadminpb.Schema{schema}, key, cache.DefaultExpiration, schemacache.LoadOptions{
+			BaseRequest:    opts.BaseRequest,
+			AggregateSizes: opts.TableSizeOptions.AggregateSizes,
+		})
+	}
 
 	return schema, nil
 }
@@ -1466,10 +1468,19 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 		return nil, rec.Error()
 	}
 
-	go schemacache.AddOrBackfill(c.schemaCache, schemas, key, cache.DefaultExpiration, schemacache.LoadOptions{
-		BaseRequest:    opts.BaseRequest,
-		AggregateSizes: opts.TableSizeOptions.AggregateSizes,
-	})
+	go func(schemas []*vtadminpb.Schema, key schemacache.Key, opts GetSchemaOptions) {
+		var cacheableSchemas []*vtadminpb.Schema
+		for _, schema := range schemas {
+			if !c.schemaCacheExcludeKeyspaces.Has(schema.Keyspace) {
+				cacheableSchemas = append(cacheableSchemas, schema)
+			}
+		}
+
+		schemacache.AddOrBackfill(c.schemaCache, cacheableSchemas, key, cache.DefaultExpiration, schemacache.LoadOptions{
+			BaseRequest:    opts.BaseRequest,
+			AggregateSizes: opts.TableSizeOptions.AggregateSizes,
+		})
+	}(schemas, key, opts)
 
 	return schemas, nil
 }
