@@ -1362,14 +1362,11 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 	}
 
 	var (
-		m   sync.Mutex
 		wg  sync.WaitGroup
 		rec concurrency.AllErrorRecorder
 
 		tablets   []*vtadminpb.Tablet
 		keyspaces []*vtadminpb.Keyspace
-
-		schemas []*vtadminpb.Schema
 	)
 
 	// Start by collecting the tablets and keyspace names concurrently.
@@ -1423,6 +1420,35 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 	}
 
 	// Now, fan out to collect the schemas.
+	schemas, err := c.collectSchemas(ctx, keyspaces, tablets, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	go func(schemas []*vtadminpb.Schema, key schemacache.Key, opts GetSchemaOptions) {
+		var cacheableSchemas []*vtadminpb.Schema
+		for _, schema := range schemas {
+			if !c.schemaCacheExcludeKeyspaces.Has(schema.Keyspace) {
+				cacheableSchemas = append(cacheableSchemas, schema)
+			}
+		}
+
+		schemacache.AddOrBackfill(c.schemaCache, cacheableSchemas, key, cache.DefaultExpiration, schemacache.LoadOptions{
+			BaseRequest:    opts.BaseRequest,
+			AggregateSizes: opts.TableSizeOptions.AggregateSizes,
+		})
+	}(schemas, key, opts)
+
+	return schemas, nil
+}
+
+func (c *Cluster) collectSchemas(ctx context.Context, keyspaces []*vtadminpb.Keyspace, tablets []*vtadminpb.Tablet, opts GetSchemaOptions) (schemas []*vtadminpb.Schema, err error) {
+	var (
+		m   sync.Mutex
+		wg  sync.WaitGroup
+		rec concurrency.AllErrorRecorder
+	)
+
 	for _, ks := range keyspaces {
 		wg.Add(1)
 		go func(ctx context.Context, ks *vtadminpb.Keyspace) {
@@ -1467,20 +1493,6 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 	if rec.HasErrors() {
 		return nil, rec.Error()
 	}
-
-	go func(schemas []*vtadminpb.Schema, key schemacache.Key, opts GetSchemaOptions) {
-		var cacheableSchemas []*vtadminpb.Schema
-		for _, schema := range schemas {
-			if !c.schemaCacheExcludeKeyspaces.Has(schema.Keyspace) {
-				cacheableSchemas = append(cacheableSchemas, schema)
-			}
-		}
-
-		schemacache.AddOrBackfill(c.schemaCache, cacheableSchemas, key, cache.DefaultExpiration, schemacache.LoadOptions{
-			BaseRequest:    opts.BaseRequest,
-			AggregateSizes: opts.TableSizeOptions.AggregateSizes,
-		})
-	}(schemas, key, opts)
 
 	return schemas, nil
 }
