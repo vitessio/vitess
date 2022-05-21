@@ -53,6 +53,8 @@ const (
 	// MultiEqual is used for routing queries with IN with tuple clause
 	// Requires: A Vindex, and a multi Tuple Values.
 	MultiEqual
+	// SubShard is for when we are missing one or more columns from a composite vindex
+	SubShard
 	// Scatter is for routing a scattered statement.
 	Scatter
 	// Next is for fetching from a sequence.
@@ -68,8 +70,6 @@ const (
 	// Is used when the query explicitly sets a target destination:
 	// in the clause e.g: UPDATE `keyspace[-]`.x1 SET foo=1
 	ByDestination
-	// NumOpcodes is the number of opcodes
-	NumOpcodes
 )
 
 var opName = map[Opcode]string{
@@ -84,6 +84,7 @@ var opName = map[Opcode]string{
 	Reference:     "Reference",
 	None:          "None",
 	ByDestination: "ByDestination",
+	SubShard:      "SubShard",
 }
 
 // MarshalJSON serializes the Opcode as a JSON string.
@@ -119,6 +120,14 @@ type RoutingParameters struct {
 	Values []evalengine.Expr
 }
 
+func (code Opcode) IsSingleShard() bool {
+	switch code {
+	case Unsharded, DBA, Next, EqualUnique, Reference:
+		return true
+	}
+	return false
+}
+
 func (rp *RoutingParameters) findRoute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	switch rp.Opcode {
 	case None:
@@ -133,7 +142,7 @@ func (rp *RoutingParameters) findRoute(vcursor VCursor, bindVars map[string]*que
 		return rp.byDestination(vcursor, bindVars, key.DestinationAllShards{})
 	case ByDestination:
 		return rp.byDestination(vcursor, bindVars, rp.TargetDestination)
-	case Equal, EqualUnique:
+	case Equal, EqualUnique, SubShard:
 		switch rp.Vindex.(type) {
 		case vindexes.MultiColumn:
 			return rp.equalMultiCol(vcursor, bindVars)

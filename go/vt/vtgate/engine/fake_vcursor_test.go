@@ -51,7 +51,18 @@ var _ SessionActions = (*noopVCursor)(nil)
 
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
-	ctx context.Context
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+func newNoopVCursor(ctx context.Context) *noopVCursor {
+	n := &noopVCursor{}
+	n.ctx, n.cancel = context.WithCancel(ctx)
+	return n
+}
+
+func (t *noopVCursor) CancelContext() {
+	t.cancel()
 }
 
 func (t *noopVCursor) SetExec(name string, value string) error {
@@ -128,7 +139,7 @@ func (t *noopVCursor) GetSessionEnableSystemSettings() bool {
 	panic("implement me")
 }
 
-func (t *noopVCursor) GetEnableSetVar() bool {
+func (t *noopVCursor) CanUseSetVar() bool {
 	panic("implement me")
 }
 
@@ -689,9 +700,12 @@ func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {
 	return r, nil
 }
 
-func (f *loggingVCursor) GetEnableSetVar() bool {
-	f.log = append(f.log, fmt.Sprintf("SET_VAR enabled: %v", !f.disableSetVar))
-	return !f.disableSetVar
+func (f *loggingVCursor) CanUseSetVar() bool {
+	useSetVar := sqlparser.IsMySQL80AndAbove() && !f.disableSetVar
+	if useSetVar {
+		f.log = append(f.log, "SET_VAR can be used")
+	}
+	return useSetVar
 }
 
 func expectResult(t *testing.T, msg string, result, want *sqltypes.Result) {

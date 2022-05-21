@@ -63,11 +63,20 @@ type Action string
 
 // Action definitions.
 const (
+	/* generic actions */
+
 	CreateAction Action = "create"
 	DeleteAction Action = "delete"
 	GetAction    Action = "get"
 	PingAction   Action = "ping"
 	PutAction    Action = "put"
+	ReloadAction Action = "reload"
+
+	/* tablet-specific actions */
+
+	ManageTabletReplicationAction Action = "manage_tablet_replication" // Start/Stop Replication
+	ManageTabletWritabilityAction Action = "manage_tablet_writability" // SetRead{Only,Write}
+	ReparentTabletAction          Action = "reparent_tablet"
 )
 
 // Resource is an enum representing all resources managed by vtadmin.
@@ -79,11 +88,13 @@ const (
 
 	/* generic topo resources */
 
-	KeyspaceResource Resource = "Keyspace"
-	ShardResource    Resource = "Shard"
-	TabletResource   Resource = "Tablet"
-	VTGateResource   Resource = "VTGate"
-	VtctldResource   Resource = "Vtctld"
+	CellInfoResource   Resource = "CellInfo"
+	CellsAliasResource Resource = "CellsAlias"
+	KeyspaceResource   Resource = "Keyspace"
+	ShardResource      Resource = "Shard"
+	TabletResource     Resource = "Tablet"
+	VTGateResource     Resource = "VTGate"
+	VtctldResource     Resource = "Vtctld"
 
 	/* vschema resources */
 

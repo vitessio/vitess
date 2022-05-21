@@ -74,6 +74,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfAlterCharset(a, b)
+	case *AlterCheck:
+		b, ok := inB.(*AlterCheck)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterCheck(a, b)
 	case *AlterColumn:
 		b, ok := inB.(*AlterColumn)
 		if !ok {
@@ -86,6 +92,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfAlterDatabase(a, b)
+	case *AlterIndex:
+		b, ok := inB.(*AlterIndex)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterIndex(a, b)
 	case *AlterMigration:
 		b, ok := inB.(*AlterMigration)
 		if !ok {
@@ -668,6 +680,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfLockTables(a, b)
+	case MatchAction:
+		b, ok := inB.(MatchAction)
+		if !ok {
+			return false
+		}
+		return a == b
 	case *MatchExpr:
 		b, ok := inB.(*MatchExpr)
 		if !ok {
@@ -704,12 +722,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfNullVal(a, b)
-	case Offset:
-		b, ok := inB.(Offset)
+	case *Offset:
+		b, ok := inB.(*Offset)
 		if !ok {
 			return false
 		}
-		return a == b
+		return EqualsRefOfOffset(a, b)
 	case OnDup:
 		b, ok := inB.(OnDup)
 		if !ok {
@@ -776,6 +794,18 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfPartitionDefinition(a, b)
+	case *PartitionDefinitionOptions:
+		b, ok := inB.(*PartitionDefinitionOptions)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPartitionDefinitionOptions(a, b)
+	case *PartitionEngine:
+		b, ok := inB.(*PartitionEngine)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPartitionEngine(a, b)
 	case *PartitionOption:
 		b, ok := inB.(*PartitionOption)
 		if !ok {
@@ -950,6 +980,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfShowOther(a, b)
+	case *ShowThrottledApps:
+		b, ok := inB.(*ShowThrottledApps)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowThrottledApps(a, b)
 	case *StarExpr:
 		b, ok := inB.(*StarExpr)
 		if !ok {
@@ -968,6 +1004,24 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfSubPartition(a, b)
+	case *SubPartitionDefinition:
+		b, ok := inB.(*SubPartitionDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubPartitionDefinition(a, b)
+	case *SubPartitionDefinitionOptions:
+		b, ok := inB.(*SubPartitionDefinitionOptions)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubPartitionDefinitionOptions(a, b)
+	case SubPartitionDefinitions:
+		b, ok := inB.(SubPartitionDefinitions)
+		if !ok {
+			return false
+		}
+		return EqualsSubPartitionDefinitions(a, b)
 	case *Subquery:
 		b, ok := inB.(*Subquery)
 		if !ok {
@@ -1234,6 +1288,18 @@ func EqualsRefOfAlterCharset(a, b *AlterCharset) bool {
 		a.Collate == b.Collate
 }
 
+// EqualsRefOfAlterCheck does deep equals between the two objects.
+func EqualsRefOfAlterCheck(a, b *AlterCheck) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Enforced == b.Enforced &&
+		EqualsColIdent(a.Name, b.Name)
+}
+
 // EqualsRefOfAlterColumn does deep equals between the two objects.
 func EqualsRefOfAlterColumn(a, b *AlterColumn) bool {
 	if a == b {
@@ -1244,7 +1310,8 @@ func EqualsRefOfAlterColumn(a, b *AlterColumn) bool {
 	}
 	return a.DropDefault == b.DropDefault &&
 		EqualsRefOfColName(a.Column, b.Column) &&
-		EqualsExpr(a.DefaultVal, b.DefaultVal)
+		EqualsExpr(a.DefaultVal, b.DefaultVal) &&
+		EqualsRefOfBool(a.Invisible, b.Invisible)
 }
 
 // EqualsRefOfAlterDatabase does deep equals between the two objects.
@@ -1258,7 +1325,19 @@ func EqualsRefOfAlterDatabase(a, b *AlterDatabase) bool {
 	return a.UpdateDataDirectory == b.UpdateDataDirectory &&
 		a.FullyParsed == b.FullyParsed &&
 		EqualsTableIdent(a.DBName, b.DBName) &&
-		EqualsSliceOfCollateAndCharset(a.AlterOptions, b.AlterOptions)
+		EqualsSliceOfDatabaseOption(a.AlterOptions, b.AlterOptions)
+}
+
+// EqualsRefOfAlterIndex does deep equals between the two objects.
+func EqualsRefOfAlterIndex(a, b *AlterIndex) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Invisible == b.Invisible &&
+		EqualsColIdent(a.Name, b.Name)
 }
 
 // EqualsRefOfAlterMigration does deep equals between the two objects.
@@ -1270,7 +1349,9 @@ func EqualsRefOfAlterMigration(a, b *AlterMigration) bool {
 		return false
 	}
 	return a.UUID == b.UUID &&
-		a.Type == b.Type
+		a.Expire == b.Expire &&
+		a.Type == b.Type &&
+		EqualsRefOfLiteral(a.Ratio, b.Ratio)
 }
 
 // EqualsRefOfAlterTable does deep equals between the two objects.
@@ -1489,10 +1570,10 @@ func EqualsRefOfColumnType(a, b *ColumnType) bool {
 	return a.Type == b.Type &&
 		a.Unsigned == b.Unsigned &&
 		a.Zerofill == b.Zerofill &&
-		a.Charset == b.Charset &&
 		EqualsRefOfColumnTypeOptions(a.Options, b.Options) &&
 		EqualsRefOfLiteral(a.Length, b.Length) &&
 		EqualsRefOfLiteral(a.Scale, b.Scale) &&
+		EqualsColumnCharset(a.Charset, b.Charset) &&
 		EqualsSliceOfString(a.EnumValues, b.EnumValues)
 }
 
@@ -1580,9 +1661,9 @@ func EqualsRefOfConvertType(a, b *ConvertType) bool {
 		return false
 	}
 	return a.Type == b.Type &&
-		a.Charset == b.Charset &&
 		EqualsRefOfLiteral(a.Length, b.Length) &&
-		EqualsRefOfLiteral(a.Scale, b.Scale)
+		EqualsRefOfLiteral(a.Scale, b.Scale) &&
+		EqualsColumnCharset(a.Charset, b.Charset)
 }
 
 // EqualsRefOfConvertUsingExpr does deep equals between the two objects.
@@ -1609,7 +1690,7 @@ func EqualsRefOfCreateDatabase(a, b *CreateDatabase) bool {
 		a.FullyParsed == b.FullyParsed &&
 		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsTableIdent(a.DBName, b.DBName) &&
-		EqualsSliceOfCollateAndCharset(a.CreateOptions, b.CreateOptions)
+		EqualsSliceOfDatabaseOption(a.CreateOptions, b.CreateOptions)
 }
 
 // EqualsRefOfCreateTable does deep equals between the two objects.
@@ -2304,7 +2385,10 @@ func EqualsRefOfJSONValueExpr(a, b *JSONValueExpr) bool {
 		return false
 	}
 	return EqualsExpr(a.JSONDoc, b.JSONDoc) &&
-		EqualsJSONPathParam(a.Path, b.Path)
+		EqualsJSONPathParam(a.Path, b.Path) &&
+		EqualsRefOfConvertType(a.ReturningType, b.ReturningType) &&
+		EqualsRefOfJtOnResponse(a.EmptyOnResponse, b.EmptyOnResponse) &&
+		EqualsRefOfJtOnResponse(a.ErrorOnResponse, b.ErrorOnResponse)
 }
 
 // EqualsRefOfJSONValueMergeExpr does deep equals between the two objects.
@@ -2523,6 +2607,18 @@ func EqualsRefOfNullVal(a, b *NullVal) bool {
 	return true
 }
 
+// EqualsRefOfOffset does deep equals between the two objects.
+func EqualsRefOfOffset(a, b *Offset) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.V == b.V &&
+		a.Original == b.Original
+}
+
 // EqualsOnDup does deep equals between the two objects.
 func EqualsOnDup(a, b OnDup) bool {
 	if len(a) != len(b) {
@@ -2648,7 +2744,38 @@ func EqualsRefOfPartitionDefinition(a, b *PartitionDefinition) bool {
 		return false
 	}
 	return EqualsColIdent(a.Name, b.Name) &&
-		EqualsRefOfPartitionValueRange(a.ValueRange, b.ValueRange)
+		EqualsRefOfPartitionDefinitionOptions(a.Options, b.Options)
+}
+
+// EqualsRefOfPartitionDefinitionOptions does deep equals between the two objects.
+func EqualsRefOfPartitionDefinitionOptions(a, b *PartitionDefinitionOptions) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.TableSpace == b.TableSpace &&
+		EqualsRefOfPartitionValueRange(a.ValueRange, b.ValueRange) &&
+		EqualsRefOfLiteral(a.Comment, b.Comment) &&
+		EqualsRefOfPartitionEngine(a.Engine, b.Engine) &&
+		EqualsRefOfLiteral(a.DataDirectory, b.DataDirectory) &&
+		EqualsRefOfLiteral(a.IndexDirectory, b.IndexDirectory) &&
+		EqualsRefOfInt(a.MaxRows, b.MaxRows) &&
+		EqualsRefOfInt(a.MinRows, b.MinRows) &&
+		EqualsSubPartitionDefinitions(a.SubPartitionDefinitions, b.SubPartitionDefinitions)
+}
+
+// EqualsRefOfPartitionEngine does deep equals between the two objects.
+func EqualsRefOfPartitionEngine(a, b *PartitionEngine) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Storage == b.Storage &&
+		a.Name == b.Name
 }
 
 // EqualsRefOfPartitionOption does deep equals between the two objects.
@@ -2735,6 +2862,7 @@ func EqualsRefOfReferenceDefinition(a, b *ReferenceDefinition) bool {
 	}
 	return EqualsTableName(a.ReferencedTable, b.ReferencedTable) &&
 		EqualsColumns(a.ReferencedColumns, b.ReferencedColumns) &&
+		a.Match == b.Match &&
 		a.OnDelete == b.OnDelete &&
 		a.OnUpdate == b.OnUpdate
 }
@@ -2881,12 +3009,12 @@ func EqualsRefOfSelectInto(a, b *SelectInto) bool {
 		return false
 	}
 	return a.FileName == b.FileName &&
-		a.Charset == b.Charset &&
 		a.FormatOption == b.FormatOption &&
 		a.ExportOption == b.ExportOption &&
 		a.Manifest == b.Manifest &&
 		a.Overwrite == b.Overwrite &&
-		a.Type == b.Type
+		a.Type == b.Type &&
+		EqualsColumnCharset(a.Charset, b.Charset)
 }
 
 // EqualsRefOfSet does deep equals between the two objects.
@@ -3014,6 +3142,17 @@ func EqualsRefOfShowOther(a, b *ShowOther) bool {
 	return a.Command == b.Command
 }
 
+// EqualsRefOfShowThrottledApps does deep equals between the two objects.
+func EqualsRefOfShowThrottledApps(a, b *ShowThrottledApps) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsComments(a.Comments, b.Comments)
+}
+
 // EqualsRefOfStarExpr does deep equals between the two objects.
 func EqualsRefOfStarExpr(a, b *StarExpr) bool {
 	if a == b {
@@ -3052,6 +3191,48 @@ func EqualsRefOfSubPartition(a, b *SubPartition) bool {
 		a.Type == b.Type &&
 		EqualsColumns(a.ColList, b.ColList) &&
 		EqualsExpr(a.Expr, b.Expr)
+}
+
+// EqualsRefOfSubPartitionDefinition does deep equals between the two objects.
+func EqualsRefOfSubPartitionDefinition(a, b *SubPartitionDefinition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsRefOfSubPartitionDefinitionOptions(a.Options, b.Options)
+}
+
+// EqualsRefOfSubPartitionDefinitionOptions does deep equals between the two objects.
+func EqualsRefOfSubPartitionDefinitionOptions(a, b *SubPartitionDefinitionOptions) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.TableSpace == b.TableSpace &&
+		EqualsRefOfLiteral(a.Comment, b.Comment) &&
+		EqualsRefOfPartitionEngine(a.Engine, b.Engine) &&
+		EqualsRefOfLiteral(a.DataDirectory, b.DataDirectory) &&
+		EqualsRefOfLiteral(a.IndexDirectory, b.IndexDirectory) &&
+		EqualsRefOfInt(a.MaxRows, b.MaxRows) &&
+		EqualsRefOfInt(a.MinRows, b.MinRows)
+}
+
+// EqualsSubPartitionDefinitions does deep equals between the two objects.
+func EqualsSubPartitionDefinitions(a, b SubPartitionDefinitions) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfSubPartitionDefinition(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // EqualsRefOfSubquery does deep equals between the two objects.
@@ -3469,12 +3650,24 @@ func EqualsAlterOption(inA, inB AlterOption) bool {
 			return false
 		}
 		return EqualsRefOfAlterCharset(a, b)
+	case *AlterCheck:
+		b, ok := inB.(*AlterCheck)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterCheck(a, b)
 	case *AlterColumn:
 		b, ok := inB.(*AlterColumn)
 		if !ok {
 			return false
 		}
 		return EqualsRefOfAlterColumn(a, b)
+	case *AlterIndex:
+		b, ok := inB.(*AlterIndex)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterIndex(a, b)
 	case *ChangeColumn:
 		b, ok := inB.(*ChangeColumn)
 		if !ok {
@@ -4273,12 +4466,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfNullVal(a, b)
-	case Offset:
-		b, ok := inB.(Offset)
+	case *Offset:
+		b, ok := inB.(*Offset)
 		if !ok {
 			return false
 		}
-		return a == b
+		return EqualsRefOfOffset(a, b)
 	case *OrExpr:
 		b, ok := inB.(*OrExpr)
 		if !ok {
@@ -4669,12 +4862,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfNullVal(a, b)
-	case Offset:
-		b, ok := inB.(Offset)
+	case *Offset:
+		b, ok := inB.(*Offset)
 		if !ok {
 			return false
 		}
-		return a == b
+		return EqualsRefOfOffset(a, b)
 	case *OrExpr:
 		b, ok := inB.(*OrExpr)
 		if !ok {
@@ -5092,6 +5285,12 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfShowMigrationLogs(a, b)
+	case *ShowThrottledApps:
+		b, ok := inB.(*ShowThrottledApps)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowThrottledApps(a, b)
 	case *Stream:
 		b, ok := inB.(*Stream)
 		if !ok {
@@ -5192,13 +5391,24 @@ func EqualsSliceOfRefOfColumnDefinition(a, b []*ColumnDefinition) bool {
 	return true
 }
 
-// EqualsSliceOfCollateAndCharset does deep equals between the two objects.
-func EqualsSliceOfCollateAndCharset(a, b []CollateAndCharset) bool {
+// EqualsRefOfBool does deep equals between the two objects.
+func EqualsRefOfBool(a, b *bool) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+// EqualsSliceOfDatabaseOption does deep equals between the two objects.
+func EqualsSliceOfDatabaseOption(a, b []DatabaseOption) bool {
 	if len(a) != len(b) {
 		return false
 	}
 	for i := 0; i < len(a); i++ {
-		if !EqualsCollateAndCharset(a[i], b[i]) {
+		if !EqualsDatabaseOption(a[i], b[i]) {
 			return false
 		}
 	}
@@ -5262,10 +5472,10 @@ func EqualsColumnType(a, b ColumnType) bool {
 	return a.Type == b.Type &&
 		a.Unsigned == b.Unsigned &&
 		a.Zerofill == b.Zerofill &&
-		a.Charset == b.Charset &&
 		EqualsRefOfColumnTypeOptions(a.Options, b.Options) &&
 		EqualsRefOfLiteral(a.Length, b.Length) &&
 		EqualsRefOfLiteral(a.Scale, b.Scale) &&
+		EqualsColumnCharset(a.Charset, b.Charset) &&
 		EqualsSliceOfString(a.EnumValues, b.EnumValues)
 }
 
@@ -5286,7 +5496,18 @@ func EqualsRefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
 		EqualsRefOfLiteral(a.Comment, b.Comment) &&
 		a.Storage == b.Storage &&
 		EqualsRefOfReferenceDefinition(a.Reference, b.Reference) &&
-		a.KeyOpt == b.KeyOpt
+		a.KeyOpt == b.KeyOpt &&
+		EqualsRefOfBool(a.Invisible, b.Invisible) &&
+		a.Format == b.Format &&
+		EqualsRefOfLiteral(a.EngineAttribute, b.EngineAttribute) &&
+		EqualsRefOfLiteral(a.SecondaryEngineAttribute, b.SecondaryEngineAttribute) &&
+		EqualsRefOfLiteral(a.SRID, b.SRID)
+}
+
+// EqualsColumnCharset does deep equals between the two objects.
+func EqualsColumnCharset(a, b ColumnCharset) bool {
+	return a.Name == b.Name &&
+		a.Binary == b.Binary
 }
 
 // EqualsSliceOfString does deep equals between the two objects.
@@ -5444,6 +5665,17 @@ func EqualsComments(a, b Comments) bool {
 	return true
 }
 
+// EqualsRefOfInt does deep equals between the two objects.
+func EqualsRefOfInt(a, b *int) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
 // EqualsSliceOfRefOfPartitionDefinition does deep equals between the two objects.
 func EqualsSliceOfRefOfPartitionDefinition(a, b []*PartitionDefinition) bool {
 	if len(a) != len(b) {
@@ -5479,17 +5711,6 @@ func EqualsRefOfRootNode(a, b *RootNode) bool {
 		return false
 	}
 	return EqualsSQLNode(a.SQLNode, b.SQLNode)
-}
-
-// EqualsRefOfBool does deep equals between the two objects.
-func EqualsRefOfBool(a, b *bool) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return *a == *b
 }
 
 // EqualsSliceOfTableExpr does deep equals between the two objects.
@@ -5620,11 +5841,23 @@ func EqualsSliceOfRefOfCommonTableExpr(a, b []*CommonTableExpr) bool {
 	return true
 }
 
-// EqualsCollateAndCharset does deep equals between the two objects.
-func EqualsCollateAndCharset(a, b CollateAndCharset) bool {
+// EqualsDatabaseOption does deep equals between the two objects.
+func EqualsDatabaseOption(a, b DatabaseOption) bool {
 	return a.IsDefault == b.IsDefault &&
 		a.Value == b.Value &&
 		a.Type == b.Type
+}
+
+// EqualsRefOfColumnCharset does deep equals between the two objects.
+func EqualsRefOfColumnCharset(a, b *ColumnCharset) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		a.Binary == b.Binary
 }
 
 // EqualsRefOfIndexColumn does deep equals between the two objects.
@@ -5637,6 +5870,7 @@ func EqualsRefOfIndexColumn(a, b *IndexColumn) bool {
 	}
 	return EqualsColIdent(a.Column, b.Column) &&
 		EqualsRefOfLiteral(a.Length, b.Length) &&
+		EqualsExpr(a.Expression, b.Expression) &&
 		a.Direction == b.Direction
 }
 
@@ -5677,8 +5911,8 @@ func EqualsRefOfRenameTablePair(a, b *RenameTablePair) bool {
 		EqualsTableName(a.ToTable, b.ToTable)
 }
 
-// EqualsRefOfCollateAndCharset does deep equals between the two objects.
-func EqualsRefOfCollateAndCharset(a, b *CollateAndCharset) bool {
+// EqualsRefOfDatabaseOption does deep equals between the two objects.
+func EqualsRefOfDatabaseOption(a, b *DatabaseOption) bool {
 	if a == b {
 		return true
 	}

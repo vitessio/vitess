@@ -362,12 +362,11 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
 		return nil, err
 	}
 	// sql uses column name aliases to guarantee lower case sensitivity.
-	sql := `SELECT table_name as table_name, ordinal_position as ordinal_position, COLUMN_NAME as column_name
-		FROM INFORMATION_SCHEMA.COLUMNS
-		WHERE TABLE_SCHEMA = '%s'
-		AND TABLE_NAME IN %s
-		AND COLUMN_KEY = 'PRI'
-		ORDER BY table_name, ordinal_position;`
+	sql := `
+            SELECT TABLE_NAME as table_name, COLUMN_NAME as column_name
+            FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME IN %s AND LOWER(INDEX_NAME) = 'primary'
+            ORDER BY table_name, SEQ_IN_INDEX`
 	sql = fmt.Sprintf(sql, dbName, tableList)
 	qr, err := conn.ExecuteFetch(sql, len(tables)*100, true)
 	if err != nil {
@@ -531,6 +530,79 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 	}
 
 	return &tabletmanagerdatapb.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
+}
+
+// GetPrimaryKeyEquivalentColumns can be used if the table has
+// no defined PRIMARY KEY. It will return the columns in a
+// viable PRIMARY KEY equivalent (PKE) -- a NON-NULL UNIQUE
+// KEY -- in the specified table. When multiple PKE indexes
+// are available it will attempt to choose the most efficient
+// one based on the column data types and the number of columns
+// in the index. See here for the data type storage sizes:
+//   https://dev.mysql.com/doc/refman/en/storage-requirements.html
+// If this function is used on a table that DOES have a
+// defined PRIMARY KEY then it may return the columns for
+// that index if it is likely the most efficient one amongst
+// the available PKE indexes on the table.
+func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+
+	// We use column name aliases to guarantee lower case for our named results.
+	sql := `
+            SELECT COLUMN_NAME AS column_name FROM information_schema.STATISTICS AS index_cols INNER JOIN
+            (
+                SELECT stats.INDEX_NAME, SUM(
+                                              CASE LOWER(cols.DATA_TYPE)
+                                                WHEN 'enum' THEN 0
+                                                WHEN 'tinyint' THEN 1
+                                                WHEN 'year' THEN 2
+                                                WHEN 'smallint' THEN 3
+                                                WHEN 'date' THEN 4
+                                                WHEN 'mediumint' THEN 5
+                                                WHEN 'time' THEN 6
+                                                WHEN 'int' THEN 7
+                                                WHEN 'set' THEN 8
+                                                WHEN 'timestamp' THEN 9
+                                                WHEN 'bigint' THEN 10
+                                                WHEN 'float' THEN 11
+                                                WHEN 'double' THEN 12
+                                                WHEN 'decimal' THEN 13
+                                                WHEN 'datetime' THEN 14
+                                                WHEN 'binary' THEN 30
+                                                WHEN 'char' THEN 31
+                                                WHEN 'varbinary' THEN 60
+                                                WHEN 'varchar' THEN 61
+                                                WHEN 'tinyblob' THEN 80
+                                                WHEN 'tinytext' THEN 81
+                                                ELSE 1000
+                                              END
+                                            ) AS type_cost, COUNT(stats.COLUMN_NAME) AS col_count FROM information_schema.STATISTICS AS stats INNER JOIN
+                  information_schema.COLUMNS AS cols ON stats.TABLE_SCHEMA = cols.TABLE_SCHEMA AND stats.TABLE_NAME = cols.TABLE_NAME AND stats.COLUMN_NAME = cols.COLUMN_NAME
+                WHERE stats.TABLE_SCHEMA = '%s' AND stats.TABLE_NAME = '%s' AND stats.INDEX_NAME NOT IN
+                (
+                    SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS
+                    WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s' AND (NON_UNIQUE = 1 OR NULLABLE = 'YES')
+                )
+                GROUP BY INDEX_NAME ORDER BY type_cost ASC, col_count ASC LIMIT 1
+            ) AS pke ON index_cols.INDEX_NAME = pke.INDEX_NAME
+            WHERE index_cols.TABLE_SCHEMA = '%s' AND index_cols.TABLE_NAME = '%s' AND NON_UNIQUE = 0 AND NULLABLE != 'YES'
+            ORDER BY SEQ_IN_INDEX ASC`
+	sql = fmt.Sprintf(sql, dbName, table, dbName, table, dbName, table)
+	qr, err := conn.ExecuteFetch(sql, 1000, true)
+	if err != nil {
+		return nil, err
+	}
+
+	named := qr.Named()
+	cols := make([]string, len(qr.Rows))
+	for i, row := range named.Rows {
+		cols[i] = row.AsString("column_name", "")
+	}
+	return cols, err
 }
 
 //tableDefinitions is a sortable collection of table definitions

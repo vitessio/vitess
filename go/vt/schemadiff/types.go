@@ -23,19 +23,40 @@ import (
 )
 
 var (
-	ErrEntityTypeMismatch             = errors.New("mismatched entity type")
-	ErrStrictIndexOrderingUnsupported = errors.New("strict index ordering is unsupported")
-	ErrPartitioningUnsupported        = errors.New("partitions are unsupported")
-	ErrUnsupportedTableOption         = errors.New("unsupported table option")
-	ErrUnexpectedDiffAction           = errors.New("unexpected diff action")
-	ErrUnexpectedTableSpec            = errors.New("unexpected table spec")
-	ErrNotFullyParsed                 = errors.New("unable to fully parse statement")
-	ErrExpectedCreateTable            = errors.New("expected a CREATE TABLE statement")
-	ErrExpectedCreateView             = errors.New("expected a CREATE VIEW statement")
-	ErrUnsupportedEntity              = errors.New("Unsupported entity type")
-	ErrUnsupportedStatement           = errors.New("Unsupported statement")
-	ErrDuplicateName                  = errors.New("Duplicate name")
-	ErrViewDependencyUnresolved       = errors.New("Views have unresolved/loop dependencies")
+	ErrEntityTypeMismatch                          = errors.New("mismatched entity type")
+	ErrStrictIndexOrderingUnsupported              = errors.New("strict index ordering is unsupported")
+	ErrRangeRotattionStatementsStrategyUnsupported = errors.New("range rotation statement strategy unsupported")
+	ErrUnsupportedTableOption                      = errors.New("unsupported table option")
+	ErrUnexpectedDiffAction                        = errors.New("unexpected diff action")
+	ErrUnexpectedTableSpec                         = errors.New("unexpected table spec")
+	ErrNotFullyParsed                              = errors.New("unable to fully parse statement")
+	ErrExpectedCreateTable                         = errors.New("expected a CREATE TABLE statement")
+	ErrExpectedCreateView                          = errors.New("expected a CREATE VIEW statement")
+	ErrUnsupportedEntity                           = errors.New("unsupported entity type")
+	ErrUnsupportedStatement                        = errors.New("unsupported statement")
+	ErrDuplicateName                               = errors.New("duplicate name")
+	ErrViewDependencyUnresolved                    = errors.New("views have unresolved/loop dependencies")
+	ErrTooManyPartitionChanges                     = errors.New("too many partition changes")
+	ErrMixedPartitionAndNonPartitionChanges        = errors.New("mixed partition and non-partition changes")
+
+	ErrUnsupportedApplyOperation = errors.New("unsupported Apply operation")
+	ErrApplyTableNotFound        = errors.New("table not found")
+	ErrApplyViewNotFound         = errors.New("view not found")
+	ErrApplyKeyNotFound          = errors.New("key not found")
+	ErrApplyColumnNotFound       = errors.New("column not found")
+	ErrApplyDuplicateTableOrView = errors.New("duplicate table or view")
+	ErrApplyDuplicateKey         = errors.New("duplicate key")
+	ErrApplyDuplicateColumn      = errors.New("duplicate column")
+	ErrApplyConstraintNotFound   = errors.New("constraint not found")
+	ErrApplyDuplicateConstraint  = errors.New("duplicate constraint")
+	ErrApplyPartitionNotFound    = errors.New("partition not found")
+	ErrApplyDuplicatePartition   = errors.New("duplicate partition")
+	ErrApplyNoPartitions         = errors.New("no partitions found")
+
+	ErrInvalidColumnInKey               = errors.New("invalid column referenced by key")
+	ErrInvalidColumnInGeneratedColumn   = errors.New("invalid column referenced by generated column")
+	ErrInvalidColumnInPartition         = errors.New("invalid column referenced by partition")
+	ErrMissingParitionColumnInUniqueKey = errors.New("unique key must include all columns in a parititioning function")
 )
 
 // Entity stands for a database object we can diff:
@@ -56,11 +77,19 @@ type Entity interface {
 type EntityDiff interface {
 	// IsEmpty returns true when the two entities are considered identical
 	IsEmpty() bool
+	// Entities returns the two diffed entitied, aka "from" and "to"
+	Entities() (from Entity, to Entity)
 	// Statement returns a valid SQL statement that applies the diff, e.g. an ALTER TABLE ...
 	// It returns nil if the diff is empty
 	Statement() sqlparser.Statement
 	// StatementString "stringifies" the this diff's Statement(). It returns an empty string if the diff is empty
 	StatementString() string
+	// CanonicalStatementString "stringifies" the this diff's Statement() to a canonical string. It returns an empty string if the diff is empty
+	CanonicalStatementString() string
+	// SubsequentDiff returns a followup diff to this one, if exists
+	SubsequentDiff() EntityDiff
+	// SetSubsequentDiff updates the existing subsequent diff to the given one
+	SetSubsequentDiff(EntityDiff)
 }
 
 const (
@@ -69,8 +98,15 @@ const (
 	AutoIncrementApplyAlways
 )
 
+const (
+	RangeRotationFullSpec = iota
+	RangeRotationDistinctStatements
+	RangeRotationIgnore
+)
+
 // DiffHints is an assortment of rules for diffing entities
 type DiffHints struct {
 	StrictIndexOrdering   bool
 	AutoIncrementStrategy int
+	RangeRotationStrategy int
 }

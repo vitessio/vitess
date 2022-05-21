@@ -12913,8 +12913,8 @@ END
 INPUT
 select collation(cast('a' as char(2))), collation(cast('a' as char(2) binary));
 END
-ERROR
-syntax error at position 77 near 'binary'
+OUTPUT
+select collation(convert('a', char(2))), collation(convert('a', char(2) binary)) from dual
 END
 INPUT
 select from v1d join v2a on v1d.a = v2a.c;
@@ -15019,8 +15019,8 @@ END
 INPUT
 select collation(convert('a', char(2))), collation(convert('a', char(2) binary));
 END
-ERROR
-syntax error at position 79 near 'binary'
+OUTPUT
+select collation(convert('a', char(2))), collation(convert('a', char(2) binary)) from dual
 END
 INPUT
 select a as foo, (select t1_inner.b from t1 as t1_inner where t1_inner.a=t1_outer.a+1) as bar from t1 as t1_outer group by a having bar<30 order by bar+5;
@@ -16837,8 +16837,8 @@ END
 INPUT
 select collation(convert('a',char(2) ascii)), collation(convert('a',char(2) ascii binary));
 END
-ERROR
-syntax error at position 89 near 'binary'
+OUTPUT
+select collation(convert('a', char(2) character set latin1)), collation(convert('a', char(2) character set latin1 binary)) from dual
 END
 INPUT
 select d as e from (select a as d, 2*a as two from t) dt;
@@ -19148,7 +19148,7 @@ INPUT
 select trim(null from 'kate') as "must_be_null";
 END
 OUTPUT
- select trim(null from 'kate') as must_be_null from dual
+select trim(null from 'kate') as must_be_null from dual
 END
 INPUT
 select domain from t1 where concat('@', trim(leading '.' from concat('.', domain))) = '@hello.de';
@@ -21883,8 +21883,8 @@ END
 INPUT
 select hex(cast('a' as char(2) binary));
 END
-ERROR
-syntax error at position 38 near 'binary'
+OUTPUT
+select hex(convert('a', char(2) binary)) from dual
 END
 INPUT
 select i, count(*), round(std(o1/o2), 16) from bug22555 group by i order by i;

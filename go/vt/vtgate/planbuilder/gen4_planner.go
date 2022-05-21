@@ -93,7 +93,17 @@ func gen4SelectStmtPlanner(
 			return primitive, nil
 		}
 	}
-	return plan.Primitive(), nil
+
+	primitive := plan.Primitive()
+	if rb, ok := primitive.(*engine.Route); ok {
+		// this is done because engine.Route doesn't handle the empty result well
+		// if it doesn't find a shard to send the query to.
+		// All other engine primitives can handle this, so we only need it when
+		// Route is the last (and only) instruction before the user sees a result
+		rb.NoRoutesSpecialHandling = true
+	}
+
+	return primitive, nil
 }
 
 func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (engine.Primitive, error) {
@@ -403,7 +413,7 @@ func planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan, in sqlparse
 }
 
 func planOrderByOnUnion(ctx *plancontext.PlanningContext, plan logicalPlan, union *sqlparser.Union) (logicalPlan, error) {
-	qp, err := abstract.CreateQPFromUnion(union, ctx.SemTable)
+	qp, err := abstract.CreateQPFromUnion(union)
 	if err != nil {
 		return nil, err
 	}

@@ -42,6 +42,13 @@ type VTAdminClient interface {
 	FindSchema(ctx context.Context, in *FindSchemaRequest, opts ...grpc.CallOption) (*Schema, error)
 	// GetBackups returns backups grouped by cluster.
 	GetBackups(ctx context.Context, in *GetBackupsRequest, opts ...grpc.CallOption) (*GetBackupsResponse, error)
+	// GetCellInfos returns the CellInfo objects for the specified clusters.
+	//
+	// Callers may optionally restrict the set of CellInfos, or restrict the
+	// response to include only cell names.
+	GetCellInfos(ctx context.Context, in *GetCellInfosRequest, opts ...grpc.CallOption) (*GetCellInfosResponse, error)
+	// GetCellsAliases returns the CellsAliases data for the specified clusters.
+	GetCellsAliases(ctx context.Context, in *GetCellsAliasesRequest, opts ...grpc.CallOption) (*GetCellsAliasesResponse, error)
 	// GetClusters returns all configured clusters.
 	GetClusters(ctx context.Context, in *GetClustersRequest, opts ...grpc.CallOption) (*GetClustersResponse, error)
 	// GetGates returns all gates across all the specified clusters.
@@ -83,21 +90,29 @@ type VTAdminClient interface {
 	PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error)
 	// RefreshState reloads the tablet record on the specified tablet.
 	RefreshState(ctx context.Context, in *RefreshStateRequest, opts ...grpc.CallOption) (*RefreshStateResponse, error)
-	// ReparentTablet
+	// ReparentTablet reparents a tablet to the current primary in the shard.
+	// This only works if the current replica position matches the last known
+	// reparent action.
 	ReparentTablet(ctx context.Context, in *ReparentTabletRequest, opts ...grpc.CallOption) (*ReparentTabletResponse, error)
-	// RunHealthCheck runs a health check on the tablet
+	// ReloadSchemas reloads the schema definition across keyspaces, shards, or
+	// tablets in one or more clusters, depending on the request fields (see
+	// ReloadSchemasRequest for details).
+	ReloadSchemas(ctx context.Context, in *ReloadSchemasRequest, opts ...grpc.CallOption) (*ReloadSchemasResponse, error)
+	// RunHealthCheck runs a healthcheck on the tablet.
 	RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error)
-	// SetReadOnly will set the tablet to read only mode
+	// SetReadOnly sets the tablet to read-only mode.
 	SetReadOnly(ctx context.Context, in *SetReadOnlyRequest, opts ...grpc.CallOption) (*SetReadOnlyResponse, error)
-	// SetReadWrite will set the tablet to read-write mode
+	// SetReadWrite sets the tablet to read-write mode.
 	SetReadWrite(ctx context.Context, in *SetReadWriteRequest, opts ...grpc.CallOption) (*SetReadWriteResponse, error)
-	// StartReplication will run the underlying database command to start replication on a tablet
+	// StartReplication runs the underlying database command to start
+	// replication on a tablet.
 	StartReplication(ctx context.Context, in *StartReplicationRequest, opts ...grpc.CallOption) (*StartReplicationResponse, error)
-	// StopReplication will run th underlying database command to stop replication on a tablet
+	// StopReplication runs the underlying database command to stop replication
+	// on a tablet
 	StopReplication(ctx context.Context, in *StopReplicationRequest, opts ...grpc.CallOption) (*StopReplicationResponse, error)
 	// ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
 	ValidateKeyspace(ctx context.Context, in *ValidateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateKeyspaceResponse, error)
-	// ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace
+	// ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace.
 	ValidateSchemaKeyspace(ctx context.Context, in *ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateSchemaKeyspaceResponse, error)
 	// ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
 	ValidateVersionKeyspace(ctx context.Context, in *ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionKeyspaceResponse, error)
@@ -170,6 +185,24 @@ func (c *vTAdminClient) FindSchema(ctx context.Context, in *FindSchemaRequest, o
 func (c *vTAdminClient) GetBackups(ctx context.Context, in *GetBackupsRequest, opts ...grpc.CallOption) (*GetBackupsResponse, error) {
 	out := new(GetBackupsResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetBackups", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) GetCellInfos(ctx context.Context, in *GetCellInfosRequest, opts ...grpc.CallOption) (*GetCellInfosResponse, error) {
+	out := new(GetCellInfosResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetCellInfos", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) GetCellsAliases(ctx context.Context, in *GetCellsAliasesRequest, opts ...grpc.CallOption) (*GetCellsAliasesResponse, error) {
+	out := new(GetCellsAliasesResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetCellsAliases", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -347,6 +380,15 @@ func (c *vTAdminClient) ReparentTablet(ctx context.Context, in *ReparentTabletRe
 	return out, nil
 }
 
+func (c *vTAdminClient) ReloadSchemas(ctx context.Context, in *ReloadSchemasRequest, opts ...grpc.CallOption) (*ReloadSchemasResponse, error) {
+	out := new(ReloadSchemasResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ReloadSchemas", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error) {
 	out := new(RunHealthCheckResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RunHealthCheck", in, out, opts...)
@@ -451,6 +493,13 @@ type VTAdminServer interface {
 	FindSchema(context.Context, *FindSchemaRequest) (*Schema, error)
 	// GetBackups returns backups grouped by cluster.
 	GetBackups(context.Context, *GetBackupsRequest) (*GetBackupsResponse, error)
+	// GetCellInfos returns the CellInfo objects for the specified clusters.
+	//
+	// Callers may optionally restrict the set of CellInfos, or restrict the
+	// response to include only cell names.
+	GetCellInfos(context.Context, *GetCellInfosRequest) (*GetCellInfosResponse, error)
+	// GetCellsAliases returns the CellsAliases data for the specified clusters.
+	GetCellsAliases(context.Context, *GetCellsAliasesRequest) (*GetCellsAliasesResponse, error)
 	// GetClusters returns all configured clusters.
 	GetClusters(context.Context, *GetClustersRequest) (*GetClustersResponse, error)
 	// GetGates returns all gates across all the specified clusters.
@@ -492,21 +541,29 @@ type VTAdminServer interface {
 	PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error)
 	// RefreshState reloads the tablet record on the specified tablet.
 	RefreshState(context.Context, *RefreshStateRequest) (*RefreshStateResponse, error)
-	// ReparentTablet
+	// ReparentTablet reparents a tablet to the current primary in the shard.
+	// This only works if the current replica position matches the last known
+	// reparent action.
 	ReparentTablet(context.Context, *ReparentTabletRequest) (*ReparentTabletResponse, error)
-	// RunHealthCheck runs a health check on the tablet
+	// ReloadSchemas reloads the schema definition across keyspaces, shards, or
+	// tablets in one or more clusters, depending on the request fields (see
+	// ReloadSchemasRequest for details).
+	ReloadSchemas(context.Context, *ReloadSchemasRequest) (*ReloadSchemasResponse, error)
+	// RunHealthCheck runs a healthcheck on the tablet.
 	RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error)
-	// SetReadOnly will set the tablet to read only mode
+	// SetReadOnly sets the tablet to read-only mode.
 	SetReadOnly(context.Context, *SetReadOnlyRequest) (*SetReadOnlyResponse, error)
-	// SetReadWrite will set the tablet to read-write mode
+	// SetReadWrite sets the tablet to read-write mode.
 	SetReadWrite(context.Context, *SetReadWriteRequest) (*SetReadWriteResponse, error)
-	// StartReplication will run the underlying database command to start replication on a tablet
+	// StartReplication runs the underlying database command to start
+	// replication on a tablet.
 	StartReplication(context.Context, *StartReplicationRequest) (*StartReplicationResponse, error)
-	// StopReplication will run th underlying database command to stop replication on a tablet
+	// StopReplication runs the underlying database command to stop replication
+	// on a tablet
 	StopReplication(context.Context, *StopReplicationRequest) (*StopReplicationResponse, error)
 	// ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
 	ValidateKeyspace(context.Context, *ValidateKeyspaceRequest) (*vtctldata.ValidateKeyspaceResponse, error)
-	// ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace
+	// ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace.
 	ValidateSchemaKeyspace(context.Context, *ValidateSchemaKeyspaceRequest) (*vtctldata.ValidateSchemaKeyspaceResponse, error)
 	// ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
 	ValidateVersionKeyspace(context.Context, *ValidateVersionKeyspaceRequest) (*vtctldata.ValidateVersionKeyspaceResponse, error)
@@ -539,6 +596,12 @@ func (UnimplementedVTAdminServer) FindSchema(context.Context, *FindSchemaRequest
 }
 func (UnimplementedVTAdminServer) GetBackups(context.Context, *GetBackupsRequest) (*GetBackupsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBackups not implemented")
+}
+func (UnimplementedVTAdminServer) GetCellInfos(context.Context, *GetCellInfosRequest) (*GetCellInfosResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCellInfos not implemented")
+}
+func (UnimplementedVTAdminServer) GetCellsAliases(context.Context, *GetCellsAliasesRequest) (*GetCellsAliasesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCellsAliases not implemented")
 }
 func (UnimplementedVTAdminServer) GetClusters(context.Context, *GetClustersRequest) (*GetClustersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetClusters not implemented")
@@ -596,6 +659,9 @@ func (UnimplementedVTAdminServer) RefreshState(context.Context, *RefreshStateReq
 }
 func (UnimplementedVTAdminServer) ReparentTablet(context.Context, *ReparentTabletRequest) (*ReparentTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReparentTablet not implemented")
+}
+func (UnimplementedVTAdminServer) ReloadSchemas(context.Context, *ReloadSchemasRequest) (*ReloadSchemasResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReloadSchemas not implemented")
 }
 func (UnimplementedVTAdminServer) RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
@@ -759,6 +825,42 @@ func _VTAdmin_GetBackups_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).GetBackups(ctx, req.(*GetBackupsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_GetCellInfos_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCellInfosRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetCellInfos(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetCellInfos",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetCellInfos(ctx, req.(*GetCellInfosRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_GetCellsAliases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCellsAliasesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetCellsAliases(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetCellsAliases",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetCellsAliases(ctx, req.(*GetCellsAliasesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1105,6 +1207,24 @@ func _VTAdmin_ReparentTablet_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_ReloadSchemas_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReloadSchemasRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).ReloadSchemas(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/ReloadSchemas",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).ReloadSchemas(ctx, req.(*ReloadSchemasRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RunHealthCheckRequest)
 	if err := dec(in); err != nil {
@@ -1303,6 +1423,14 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_GetBackups_Handler,
 		},
 		{
+			MethodName: "GetCellInfos",
+			Handler:    _VTAdmin_GetCellInfos_Handler,
+		},
+		{
+			MethodName: "GetCellsAliases",
+			Handler:    _VTAdmin_GetCellsAliases_Handler,
+		},
+		{
 			MethodName: "GetClusters",
 			Handler:    _VTAdmin_GetClusters_Handler,
 		},
@@ -1377,6 +1505,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReparentTablet",
 			Handler:    _VTAdmin_ReparentTablet_Handler,
+		},
+		{
+			MethodName: "ReloadSchemas",
+			Handler:    _VTAdmin_ReloadSchemas_Handler,
 		},
 		{
 			MethodName: "RunHealthCheck",

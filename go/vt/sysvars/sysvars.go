@@ -260,5 +260,11 @@ func GetInterestingVariables() []string {
 	res = append(res, Version.Name)
 	res = append(res, VersionComment.Name)
 	res = append(res, Socket.Name)
+
+	for _, variable := range UseReservedConn {
+		if variable.SupportSetVar {
+			res = append(res, variable.Name)
+		}
+	}
 	return res
 }

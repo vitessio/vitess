@@ -160,8 +160,9 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 	executor.normalize = true
 
 	sqlparser.MySQLVersion = "57000"
+	*setVarEnabled = true
 
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSetVar: true, EnableSystemSettings: true, TargetString: "TestExecutor"})
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -195,8 +196,11 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 	executor.normalize = true
 
 	sqlparser.MySQLVersion = "80000"
-
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSetVar: false, EnableSystemSettings: true, TargetString: "TestExecutor"})
+	*setVarEnabled = false
+	defer func() {
+		*setVarEnabled = true
+	}()
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -231,7 +235,7 @@ func TestSetSystemVariablesTx(t *testing.T) {
 
 	sqlparser.MySQLVersion = "80001"
 
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSetVar: true, EnableSystemSettings: true, TargetString: "TestExecutor"})
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
 	_, err := executor.Execute(context.Background(), "TestBegin", session, "begin", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
@@ -279,7 +283,7 @@ func TestSetSystemVariables(t *testing.T) {
 
 	sqlparser.MySQLVersion = "80001"
 
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSetVar: true, EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
 
 	// Set @@sql_mode and execute a select statement. We should have SET_VAR in the select statement
 
@@ -393,6 +397,49 @@ func TestSetSystemVariables(t *testing.T) {
 		return lookup.Queries[i].Sql < lookup.Queries[j].Sql
 	})
 	utils.MustMatch(t, wantQueries, lookup.Queries)
+}
+
+func TestSetSystemVariablesWithReservedConnection(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	executor.normalize = true
+
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, SystemVariables: map[string]string{}})
+
+	sbc1.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "orig", Type: sqltypes.VarChar},
+			{Name: "new", Type: sqltypes.VarChar},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarChar("only_full_group_by"),
+			sqltypes.NewVarChar(""),
+		}},
+	}})
+	_, err := executor.Execute(context.Background(), "TestSetStmt", session, "set @@sql_mode = ''", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+
+	_, err = executor.Execute(context.Background(), "TestSelect", session, "select age, city from user group by age", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	require.True(t, session.InReservedConn())
+	wantQueries := []*querypb.BoundQuery{
+		{Sql: "select @@sql_mode orig, '' new"},
+		{Sql: "set @@sql_mode = ''"},
+		{Sql: "select age, city, weight_string(age) from `user` group by age, weight_string(age) order by age asc"},
+	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+
+	_, err = executor.Execute(context.Background(), "TestSelect", session, "select age, city+1 from user group by age", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	require.True(t, session.InReservedConn())
+	wantQueries = []*querypb.BoundQuery{
+		{Sql: "select @@sql_mode orig, '' new"},
+		{Sql: "set @@sql_mode = ''"},
+		{Sql: "select age, city, weight_string(age) from `user` group by age, weight_string(age) order by age asc"},
+		{Sql: "select age, city + :vtg1, weight_string(age) from `user` group by age, weight_string(age) order by age asc", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	require.Equal(t, "''", session.SystemVariables["sql_mode"])
+	sbc1.Queries = nil
 }
 
 func TestCreateTableValidTimestamp(t *testing.T) {
@@ -2980,6 +3027,11 @@ func TestSelectScatterFails(t *testing.T) {
 	defer QueryLogger.Unsubscribe(logChan)
 
 	_, err := executorExecSession(executor, "select id from user", nil, sess)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scatter")
+
+	// Run the test again, to ensure it behaves the same for a cached query
+	_, err = executorExecSession(executor, "select id from user", nil, sess)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "scatter")
 

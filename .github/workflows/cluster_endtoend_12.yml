@@ -32,6 +32,7 @@ jobs:
               - 'config/**'
               - '.github/docker/**'
               - 'bootstrap.sh'
+              - '.github/workflows/**'
 
       - name: Build Docker Image
         if: steps.changes.outputs.end_to_end == 'true'

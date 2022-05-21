@@ -63,11 +63,14 @@ func Append(buf *strings.Builder, node SQLNode) {
 	node.formatFast(tbuf)
 }
 
-// IndexColumn describes a column in an index definition with optional length
+// IndexColumn describes a column or expression in an index definition with optional length (for column)
 type IndexColumn struct {
-	Column    ColIdent
-	Length    *Literal
-	Direction OrderDirection
+	// Only one of Column or Expression can be specified
+	// Length is an optional field which is only applicable when Column is used
+	Column     ColIdent
+	Length     *Literal
+	Expression Expr
+	Direction  OrderDirection
 }
 
 // LengthScaleOption is used for types that have an optional length
@@ -121,6 +124,18 @@ const (
 	NoAction
 	SetNull
 	SetDefault
+)
+
+// MatchAction indicates the type of match for a referential constraint, so
+// a `MATCH FULL`, `MATCH SIMPLE` or `MATCH PARTIAL`.
+type MatchAction int
+
+const (
+	// DefaultAction indicates no action was explicitly specified.
+	DefaultMatch MatchAction = iota
+	Full
+	Partial
+	Simple
 )
 
 // ShowTablesOpt is show tables option
@@ -653,6 +668,10 @@ func NewColIdentWithAt(str string, at AtCount) ColIdent {
 		val: str,
 		at:  at,
 	}
+}
+
+func NewOffset(v int, original Expr) *Offset {
+	return &Offset{V: v, Original: String(original)}
 }
 
 // IsEmpty returns true if the name is empty.
@@ -1471,14 +1490,16 @@ func (sel SelectIntoType) ToString() string {
 }
 
 // ToString returns the type as a string
-func (node CollateAndCharsetType) ToString() string {
+func (node DatabaseOptionType) ToString() string {
 	switch node {
 	case CharacterSetType:
 		return CharacterSetStr
 	case CollateType:
 		return CollateStr
+	case EncryptionType:
+		return EncryptionStr
 	default:
-		return "Unknown CollateAndCharsetType Type"
+		return "Unknown DatabaseOptionType Type"
 	}
 }
 
@@ -1594,6 +1615,8 @@ func (key DropKeyType) ToString() string {
 		return ForeignKeyTypeStr
 	case NormalKeyType:
 		return NormalKeyTypeStr
+	case CheckKeyType:
+		return CheckKeyTypeStr
 	default:
 		return "Unknown DropKeyType"
 	}
@@ -1612,6 +1635,20 @@ func (lock LockOptionType) ToString() string {
 		return ExclusiveTypeStr
 	default:
 		return "Unknown type LockOptionType"
+	}
+}
+
+// ToString returns the string associated with JoinType
+func (columnFormat ColumnFormat) ToString() string {
+	switch columnFormat {
+	case FixedFormat:
+		return keywordStrings[FIXED]
+	case DynamicFormat:
+		return keywordStrings[DYNAMIC]
+	case DefaultFormat:
+		return keywordStrings[DEFAULT]
+	default:
+		return "Unknown column format type"
 	}
 }
 
@@ -1778,6 +1815,19 @@ func (es *ExtractedSubquery) updateAlternative() {
 		}
 		es.alternative = expr
 	}
+}
+
+// ColumnName returns the alias if one was provided, otherwise prints the AST
+func (ae *AliasedExpr) ColumnName() string {
+	if !ae.As.IsEmpty() {
+		return ae.As.String()
+	}
+
+	if col, ok := ae.Expr.(*ColName); ok {
+		return col.Name.String()
+	}
+
+	return String(ae.Expr)
 }
 
 func isExprLiteral(expr Expr) bool {

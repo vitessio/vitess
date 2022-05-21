@@ -355,7 +355,7 @@ func (r *Route) haveMatchingVindex(
 			}
 			v.Options = append(v.Options, newOption...)
 
-			// multi column vindex - just always add as new option for furince we do not have one already
+			// multi column vindex - just always add as new option
 			option := createOption(v.ColVindex, vfunc)
 			optionReady := option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.ColVindex, opcode)
 			if optionReady {
@@ -635,6 +635,9 @@ func tupleAccess(expr sqlparser.Expr, coordinates []int) sqlparser.Expr {
 }
 
 func equalOrEqualUnique(vindex *vindexes.ColumnVindex) engine.Opcode {
+	if vindex.IsPartialVindex() {
+		return engine.SubShard
+	}
 	if vindex.IsUnique() {
 		return engine.EqualUnique
 	}

@@ -17,6 +17,7 @@ limitations under the License.
 package cluster
 
 import (
+	"context"
 	"encoding/json"
 	stderrors "errors"
 	"fmt"
@@ -30,6 +31,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
+	"vitess.io/vitess/go/vt/vtadmin/vtctldclient"
+	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 )
 
 var (
@@ -64,11 +67,14 @@ type Config struct {
 	WorkflowReadPoolConfig *RPCPoolConfig
 
 	SchemaCacheConfig *cache.Config
+
+	vtctldConfigOpts []vtctldclient.ConfigOption
+	vtsqlConfigOpts  []vtsql.ConfigOption
 }
 
 // Cluster returns a new cluster instance from the given config.
-func (cfg Config) Cluster() (*Cluster, error) {
-	return New(cfg)
+func (cfg Config) Cluster(ctx context.Context) (*Cluster, error) {
+	return New(ctx, cfg)
 }
 
 // String is part of the flag.Value interface.
@@ -441,4 +447,24 @@ func (cfg *RPCPoolConfig) parseFlag(name string, val string) (err error) {
 	}
 
 	return nil
+}
+
+// WithVtctldTestConfigOptions returns a new Config with the given vtctldclient
+// ConfigOptions appended to any existing ConfigOptions in the current Config.
+//
+// It should be used in tests only, and is exported to for use in the
+// vtadmin/testutil package.
+func (cfg Config) WithVtctldTestConfigOptions(opts ...vtctldclient.ConfigOption) Config {
+	cfg.vtctldConfigOpts = append(cfg.vtctldConfigOpts, opts...)
+	return cfg
+}
+
+// WithVtSQLTestConfigOptions returns a new Config with the given vtsql
+// ConfigOptions appended to any existing ConfigOptions in the current Config.
+//
+// It should be used in tests only, and is exported to for use in the
+// vtadmin/testutil package.
+func (cfg Config) WithVtSQLTestConfigOptions(opts ...vtsql.ConfigOption) Config {
+	cfg.vtsqlConfigOpts = append(cfg.vtsqlConfigOpts, opts...)
+	return cfg
 }

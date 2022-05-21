@@ -32,6 +32,7 @@ import { TabContainer } from '../../tabs/TabContainer';
 import Advanced from './Advanced';
 import style from './Tablet.module.scss';
 import { TabletCharts } from './TabletCharts';
+import { TabletReplication } from './TabletReplication';
 
 interface RouteParams {
     alias: string;
@@ -103,6 +104,7 @@ export const Tablet = () => {
             <ContentContainer>
                 <TabContainer>
                     <Tab text="QPS" to={`${url}/qps`} />
+                    <Tab text="Replication Status" to={`${url}/replication`} />
                     <Tab text="JSON" to={`${url}/json`} />
 
                     <ReadOnlyGate>
@@ -113,6 +115,10 @@ export const Tablet = () => {
                 <Switch>
                     <Route path={`${path}/qps`}>
                         <TabletCharts alias={alias} clusterID={clusterID} />
+                    </Route>
+
+                    <Route path={`${path}/replication`}>
+                        <TabletReplication tablet={tablet} />
                     </Route>
 
                     <Route path={`${path}/json`}>
@@ -127,7 +133,7 @@ export const Tablet = () => {
 
                     {!isReadOnlyMode() && (
                         <Route path={`${path}/advanced`}>
-                            <Advanced tablet={tablet} />
+                            <Advanced alias={alias} clusterID={clusterID} tablet={tablet} />
                         </Route>
                     )}
 

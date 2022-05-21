@@ -240,38 +240,35 @@ func demotePrimaryTablet(ts *topo.Server) (err error) {
 	return
 }
 
-// StartVtorc is used to start the orchestrator with the given extra arguments
-func StartVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, orcExtraArgs []string, configFileName string) {
+// StartVtorcs is used to start the orchestrator with the given extra arguments
+func StartVtorcs(t *testing.T, clusterInfo *VtOrcClusterInfo, orcExtraArgs []string, config cluster.VtorcConfiguration, count int) {
 	t.Helper()
-	workingDir := os.Getenv("PWD")
-	idx := strings.Index(workingDir, "vtorc")
-	if idx == -1 {
-		require.Fail(t, "SetupVttabletsAndVtorc should only be used from a package inside the vtorc directory")
-	}
-
-	pathToConfig := path.Join(workingDir[:idx], "vtorc", "utils", configFileName)
 	// Start vtorc
-	clusterInfo.ClusterInstance.VtorcProcess = clusterInfo.ClusterInstance.NewOrcProcess(pathToConfig)
-	clusterInfo.ClusterInstance.VtorcProcess.ExtraArgs = orcExtraArgs
-	err := clusterInfo.ClusterInstance.VtorcProcess.Setup()
-	require.NoError(t, err)
+	for i := 0; i < count; i++ {
+		vtorcProcess := clusterInfo.ClusterInstance.NewOrcProcess(config)
+		vtorcProcess.ExtraArgs = orcExtraArgs
+		err := vtorcProcess.Setup()
+		require.NoError(t, err)
+		clusterInfo.ClusterInstance.VtorcProcesses = append(clusterInfo.ClusterInstance.VtorcProcesses, vtorcProcess)
+	}
 }
 
-// StopVtorc is used to stop the orchestrator
-func StopVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo) {
+// StopVtorcs is used to stop the orchestrator
+func StopVtorcs(t *testing.T, clusterInfo *VtOrcClusterInfo) {
 	t.Helper()
 	// Stop vtorc
-	if clusterInfo.ClusterInstance.VtorcProcess != nil {
-		err := clusterInfo.ClusterInstance.VtorcProcess.TearDown()
-		require.NoError(t, err)
+	for _, vtorcProcess := range clusterInfo.ClusterInstance.VtorcProcesses {
+		if err := vtorcProcess.TearDown(); err != nil {
+			log.Errorf("Error in vtorc teardown: %v", err)
+		}
 	}
-	clusterInfo.ClusterInstance.VtorcProcess = nil
+	clusterInfo.ClusterInstance.VtorcProcesses = nil
 }
 
 // SetupVttabletsAndVtorc is used to setup the vttablets and start the orchestrator
-func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, configFileName string) {
+func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, config cluster.VtorcConfiguration, vtorcCount int) {
 	// stop vtorc if it is running
-	StopVtorc(t, clusterInfo)
+	StopVtorcs(t, clusterInfo)
 
 	// remove all the vttablets so that each test can add the amount that they require
 	err := shutdownVttablets(clusterInfo)
@@ -312,7 +309,7 @@ func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numRepl
 	}
 
 	// start vtorc
-	StartVtorc(t, clusterInfo, orcExtraArgs, configFileName)
+	StartVtorcs(t, clusterInfo, orcExtraArgs, config, vtorcCount)
 }
 
 // cleanAndStartVttablet cleans the MySQL instance underneath for running a new test. It also starts the vttablet.
@@ -727,33 +724,12 @@ func MakeAPICall(t *testing.T, url string) (status int, response string) {
 	return res.StatusCode, body
 }
 
-// MakeAPICallUntilRegistered is used to make an API call and retry if we see a 500 - no successor promoted output. This happens when some other recovery had previously run
-// and the API recovery was unable to be registered due to active timeout period.
-func MakeAPICallUntilRegistered(t *testing.T, url string) (status int, response string) {
-	timeout := time.After(10 * time.Second)
-	for {
-		select {
-		case <-timeout:
-			t.Fatal("timedout waiting for api to register correctly")
-			return
-		default:
-			status, response = MakeAPICall(t, url)
-			if status == 500 && strings.Contains(response, "no successor promoted") {
-				time.Sleep(1 * time.Second)
-				break
-			}
-			return status, response
-		}
-	}
-}
-
 // SetupNewClusterSemiSync is used to setup a new cluster with semi-sync set.
 // It creates a cluster with 4 tablets, one of which is a Replica
 func SetupNewClusterSemiSync(t *testing.T) *VtOrcClusterInfo {
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster(Cell1, Hostname)
 	keyspace := &cluster.Keyspace{Name: keyspaceName}
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 	// Start topo server
 	err := clusterInstance.StartTopo()
 	require.NoError(t, err, "Error starting topo: %v", err)
@@ -834,4 +810,24 @@ func IsPrimarySemiSyncSetupCorrectly(t *testing.T, tablet *cluster.Vttablet, sem
 	dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_master_enabled", "")
 	require.NoError(t, err)
 	return semiSyncVal == dbVar
+}
+
+// WaitForReadOnlyValue waits for the read_only global variable to reach the provided value
+func WaitForReadOnlyValue(t *testing.T, curPrimary *cluster.Vttablet, expectValue int64) (match bool) {
+	timeout := 15 * time.Second
+	startTime := time.Now()
+	for time.Since(startTime) < timeout {
+		qr, err := RunSQL(t, "select @@global.read_only as read_only", curPrimary, "")
+		require.NoError(t, err)
+		require.NotNil(t, qr)
+		row := qr.Named().Row()
+		require.NotNil(t, row)
+		readOnly, err := row.ToInt64("read_only")
+		require.NoError(t, err)
+		if readOnly == expectValue {
+			return true
+		}
+		time.Sleep(time.Second)
+	}
+	return false
 }

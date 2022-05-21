@@ -52,6 +52,9 @@ type (
 		// Context returns the context of the current request.
 		Context() context.Context
 
+		// CancelContext cancels the highest level context and its children.
+		CancelContext()
+
 		GetKeyspace() string
 		// MaxMemoryRows returns the maxMemoryRows flag value.
 		MaxMemoryRows() int
@@ -121,6 +124,9 @@ type (
 		ShowExec(command sqlparser.ShowCommandType, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
 		// SetExec takes in k,v pair and use executor to set them in topo metadata.
 		SetExec(name string, value string) error
+
+		// CanUseSetVar returns true if system_settings can use SET_VAR hint.
+		CanUseSetVar() bool
 	}
 
 	//SessionActions gives primitives ability to interact with the session state
@@ -159,7 +165,6 @@ type (
 
 		SetSessionEnableSystemSettings(bool) error
 		GetSessionEnableSystemSettings() bool
-		GetEnableSetVar() bool
 
 		GetSystemVariables(func(k string, v string))
 		HasSystemVariables() bool

@@ -43,6 +43,8 @@ func (cached *AggregateParams) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Expr.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field Original *vitess.io/vitess/go/vt/sqlparser.AliasedExpr
+	size += cached.Original.CachedSize(true)
 	return size
 }
 func (cached *AlterVSchema) CachedSize(alloc bool) int64 {
@@ -722,7 +724,7 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(128)
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
