@@ -402,7 +402,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 }
 
 func isBool(colType sqlparser.ColumnType) bool {
-	return colType.Type == "tinyint" && colType.Length != nil && sqlparser.CanonicalString(colType.Length) == "1"
+	return colType.Type == sqlparser.KeywordString(sqlparser.TINYINT) && colType.Length != nil && sqlparser.CanonicalString(colType.Length) == "1"
 }
 
 func (c *CreateTableEntity) normalizePartitionOptions() {
@@ -432,6 +432,10 @@ func (c *CreateTableEntity) normalizeKeys() {
 		}
 	}
 	for _, key := range c.CreateTable.TableSpec.Indexes {
+		// Normalize to KEY which matches MySQL behavior for the type.
+		if key.Info.Type == sqlparser.KeywordString(sqlparser.INDEX) {
+			key.Info.Type = sqlparser.KeywordString(sqlparser.KEY)
+		}
 		// now, let's look at keys that do not have names, and assign them new names
 		if name := key.Info.Name.String(); name == "" {
 			// we know there must be at least one column covered by this key
@@ -1667,15 +1671,6 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 	nonEmptyIndexes := []*sqlparser.IndexDefinition{}
 
 	keyHasNonExistentColumns := func(keyCol *sqlparser.IndexColumn) bool {
-		if keyCol.Expression != nil {
-			colNames := getNodeColumns(keyCol.Expression)
-			for colName := range colNames {
-				if !columnExists[colName] {
-					// expression uses a non-existent column
-					return true
-				}
-			}
-		}
 		if keyCol.Column.String() != "" {
 			if !columnExists[keyCol.Column.String()] {
 				return true
@@ -1767,6 +1762,27 @@ func (c *CreateTableEntity) validate() error {
 			}
 		}
 	}
+	// validate all columns referenced by functional indexes do in fact exist
+	for _, idx := range c.CreateTable.TableSpec.Indexes {
+		for _, idxCol := range idx.Columns {
+			referencedColumns := []string{}
+			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				switch node := node.(type) {
+				case *sqlparser.ColName:
+					referencedColumns = append(referencedColumns, node.Name.String())
+				}
+				return true, nil
+			}, idxCol.Expression)
+			if err != nil {
+				return err
+			}
+			for _, referencedColName := range referencedColumns {
+				if !columnExists[referencedColName] {
+					return errors.Wrapf(ErrInvalidColumnInKey, "functional index: %v, referenced column: %v", idx.Info.Name.String(), referencedColName)
+				}
+			}
+		}
+	}
 
 	if partition := c.CreateTable.TableSpec.PartitionOption; partition != nil {
 		// validate no two partitions have same name
@@ -1812,7 +1828,7 @@ func (c *CreateTableEntity) validate() error {
 					}
 				}
 				if !colFound {
-					return errors.Wrapf(ErrMissingParitionColumnInUniqueKey, "column: %v not found in key: %v", partitionColName, key.Info.Name.String())
+					return errors.Wrapf(ErrMissingPartitionColumnInUniqueKey, "column: %v not found in key: %v", partitionColName, key.Info.Name.String())
 				}
 			}
 		}
