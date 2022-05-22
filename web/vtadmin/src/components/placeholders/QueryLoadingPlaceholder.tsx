@@ -18,13 +18,17 @@ import { UseQueryResult } from 'react-query';
 import { Spinner } from '../Spinner';
 
 interface Props {
-    query: UseQueryResult;
+    query?: UseQueryResult;
+    queries?: UseQueryResult[];
 }
 
 /**
  * QueryLoadingPlaceholder is a straightforward component that displays a loading
- * message when given a query from a useQueryHook. To simplify its use, this component
- * takes care of hiding itself when `props.query` is in any state other than "loading".
+ * message when given one or more queries as returned from useQueryHook.
+ *
+ * To simplify its use, this component takes care of hiding itself when all of its
+ * queries have completed loading.
+ *
  * It's perfectly fine to render it this:
  *
  *      <QueryLoadingPlaceholder query={query} ... />
@@ -34,16 +38,22 @@ interface Props {
  *      {query.isLoading && <QueryLoadingPlaceholder query={query} ... />}
  */
 export const QueryLoadingPlaceholder: React.FC<Props> = (props) => {
-    if (!props.query.isLoading) {
+    const queries = props.queries || [];
+    if (props.query) {
+        queries.push(props.query);
+    }
+
+    const anyLoading = queries.some((q) => q.isLoading);
+    if (!anyLoading) {
         return null;
     }
+
+    const maxFailureCount = Math.max(...queries.map((q) => q.failureCount));
 
     return (
         <div aria-busy="true" className="text-center my-12" role="status">
             <Spinner />
-            <div className="my-4 text-secondary">
-                {props.query.failureCount > 2 ? 'Still loading...' : 'Loading...'}
-            </div>
+            <div className="my-4 text-secondary">{maxFailureCount > 2 ? 'Still loading...' : 'Loading...'}</div>
         </div>
     );
 };

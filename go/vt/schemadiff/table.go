@@ -354,12 +354,10 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 		// Remove any lengths for integral types since it is deprecated there and
 		// doesn't mean anything anymore.
 		if _, ok := integralTypes[col.Type.Type]; ok {
-			col.Type.Length = nil
-			// Remove zerofill for integral types but keep the behavior that this marks the value
-			// as unsigned
-			if col.Type.Zerofill {
-				col.Type.Zerofill = false
-				col.Type.Unsigned = true
+			// We can remove the length except when we have a boolean, which is
+			// stored as a tinyint(1) and treated special.
+			if !isBool(col.Type) {
+				col.Type.Length = nil
 			}
 		}
 
@@ -403,6 +401,10 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 	}
 }
 
+func isBool(colType sqlparser.ColumnType) bool {
+	return colType.Type == sqlparser.KeywordString(sqlparser.TINYINT) && colType.Length != nil && sqlparser.CanonicalString(colType.Length) == "1"
+}
+
 func (c *CreateTableEntity) normalizePartitionOptions() {
 	if c.CreateTable.TableSpec.PartitionOption == nil {
 		return
@@ -430,6 +432,10 @@ func (c *CreateTableEntity) normalizeKeys() {
 		}
 	}
 	for _, key := range c.CreateTable.TableSpec.Indexes {
+		// Normalize to KEY which matches MySQL behavior for the type.
+		if key.Info.Type == sqlparser.KeywordString(sqlparser.INDEX) {
+			key.Info.Type = sqlparser.KeywordString(sqlparser.KEY)
+		}
 		// now, let's look at keys that do not have names, and assign them new names
 		if name := key.Info.Name.String(); name == "" {
 			// we know there must be at least one column covered by this key
@@ -1665,15 +1671,6 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 	nonEmptyIndexes := []*sqlparser.IndexDefinition{}
 
 	keyHasNonExistentColumns := func(keyCol *sqlparser.IndexColumn) bool {
-		if keyCol.Expression != nil {
-			colNames := getNodeColumns(keyCol.Expression)
-			for colName := range colNames {
-				if !columnExists[colName] {
-					// expression uses a non-existent column
-					return true
-				}
-			}
-		}
 		if keyCol.Column.String() != "" {
 			if !columnExists[keyCol.Column.String()] {
 				return true
@@ -1761,6 +1758,27 @@ func (c *CreateTableEntity) validate() error {
 			for _, referencedColName := range referencedColumns {
 				if !columnExists[referencedColName] {
 					return errors.Wrapf(ErrInvalidColumnInGeneratedColumn, "generated column: %v, referenced column: %v", col.Name.String(), referencedColName)
+				}
+			}
+		}
+	}
+	// validate all columns referenced by functional indexes do in fact exist
+	for _, idx := range c.CreateTable.TableSpec.Indexes {
+		for _, idxCol := range idx.Columns {
+			referencedColumns := []string{}
+			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				switch node := node.(type) {
+				case *sqlparser.ColName:
+					referencedColumns = append(referencedColumns, node.Name.String())
+				}
+				return true, nil
+			}, idxCol.Expression)
+			if err != nil {
+				return err
+			}
+			for _, referencedColName := range referencedColumns {
+				if !columnExists[referencedColName] {
+					return errors.Wrapf(ErrInvalidColumnInKey, "functional index: %v, referenced column: %v", idx.Info.Name.String(), referencedColName)
 				}
 			}
 		}

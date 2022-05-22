@@ -17,8 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"sort"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -168,7 +166,7 @@ func addAggregationToSelect(sel *sqlparser.Select, aggregation abstract.Aggr) of
 		if !isAliasedExpr {
 			continue
 		}
-		if sqlparser.EqualsExpr(aliasedExpr.Expr, aggregation.Func) {
+		if sqlparser.EqualsExpr(aliasedExpr.Expr, aggregation.Original.Expr) {
 			return newOffset(i)
 		}
 	}
@@ -186,7 +184,6 @@ func countStarAggr() *abstract.Aggr {
 
 	return &abstract.Aggr{
 		Original: &sqlparser.AliasedExpr{Expr: f},
-		Func:     f,
 		OpCode:   engine.AggregateCount,
 		Alias:    "count(*)",
 	}
@@ -377,11 +374,11 @@ func splitAggregationsToLeftAndRight(
 	var lhsAggrs, rhsAggrs []*abstract.Aggr
 	for _, aggr := range aggregations {
 		newAggr := aggr
-		if isCountStar(aggr.Func) {
+		if isCountStar(aggr.Original.Expr) {
 			lhsAggrs = append(lhsAggrs, &newAggr)
 			rhsAggrs = append(rhsAggrs, &newAggr)
 		} else {
-			deps := ctx.SemTable.RecursiveDeps(aggr.Func)
+			deps := ctx.SemTable.RecursiveDeps(aggr.Original.Expr)
 			var other *abstract.Aggr
 			// if we are sending down min/max, we don't have to multiply the results with anything
 			if !isMinOrMax(aggr.OpCode) {
@@ -484,8 +481,8 @@ func sortOffsets(grouping []abstract.GroupBy, aggregations []abstract.Aggr) ([]a
 	originalAggr := make([]abstract.Aggr, len(aggregations))
 	copy(originalAggr, aggregations)
 	copy(originalGrouping, grouping)
-	sort.Sort(abstract.Aggrs(aggregations))
-	sort.Sort(abstract.GroupBys(grouping))
+	abstract.SortAggregations(aggregations)
+	abstract.SortGrouping(grouping)
 
 	reorg := func(groupByOffsets []offsets, aggrOffsets [][]offsets) ([]offsets, [][]offsets) {
 		orderedGroupingOffsets := make([]offsets, 0, len(originalGrouping))
@@ -501,7 +498,7 @@ func sortOffsets(grouping []abstract.GroupBy, aggregations []abstract.Aggr) ([]a
 		orderedAggrs := make([][]offsets, 0, len(originalAggr))
 		for _, og := range originalAggr {
 			for i, g := range aggregations {
-				if og.Func == g.Func {
+				if og.Original.Expr == g.Original.Expr {
 					orderedAggrs = append(orderedAggrs, aggrOffsets[i])
 					break
 				}

@@ -120,8 +120,7 @@ func TestEqualFilterOnScatter(t *testing.T) {
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a = \"5\"", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a = 5.00", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a, val1 from aggr_test group by val1 having a = 1.00", `[[INT64(1) VARCHAR("a")] [INT64(1) VARCHAR("b")] [INT64(1) VARCHAR("c")] [INT64(1) VARCHAR("d")] [INT64(1) VARCHAR("e")]]`)
-
-			utils.AssertContainsError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) = 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
+			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) = 5", `[[INT64(1)]]`)
 		})
 	}
 }
@@ -179,6 +178,9 @@ func TestAggrOnJoin(t *testing.T) {
 
 	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ a.val1, count(*) as leCount from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1 having leCount = 4",
 		`[[VARCHAR("a") INT64(4)]]`)
+
+	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ a.val1 from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1 having count(*) = 4",
+		`[[VARCHAR("a")]]`)
 }
 
 func TestNotEqualFilterOnScatter(t *testing.T) {
@@ -200,8 +202,7 @@ func TestNotEqualFilterOnScatter(t *testing.T) {
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a != \"1\"", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a != \"5\"", `[]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a != 5.00", `[]`)
-
-			utils.AssertContainsError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) != 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
+			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) != 5", `[]`)
 		})
 	}
 }
@@ -224,8 +225,7 @@ func TestLessFilterOnScatter(t *testing.T) {
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a < \"10\"", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a < \"5\"", `[]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a < 6.00", `[[INT64(5)]]`)
-
-			utils.AssertContainsError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) < 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
+			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) < 5", `[]`)
 		})
 	}
 }
@@ -249,8 +249,7 @@ func TestLessEqualFilterOnScatter(t *testing.T) {
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a <= \"10\"", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a <= \"5\"", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a <= 5.00", `[[INT64(5)]]`)
-
-			utils.AssertContainsError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) <= 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
+			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) <= 5", `[[INT64(1)]]`)
 		})
 	}
 }
@@ -274,8 +273,7 @@ func TestGreaterFilterOnScatter(t *testing.T) {
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a > \"1\"", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a > \"5\"", `[]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a > 4.00", `[[INT64(5)]]`)
-
-			utils.AssertContainsError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) > 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
+			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) > 5", `[]`)
 		})
 	}
 }
@@ -299,8 +297,7 @@ func TestGreaterEqualFilterOnScatter(t *testing.T) {
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a >= \"1\"", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a >= \"5\"", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a >= 5.00", `[[INT64(5)]]`)
-
-			utils.AssertContainsError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) >= 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
+			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) >= 5", `[[INT64(1)]]`)
 		})
 	}
 }

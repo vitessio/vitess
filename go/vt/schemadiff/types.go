@@ -56,7 +56,7 @@ var (
 	ErrInvalidColumnInKey                = errors.New("invalid column referenced by key")
 	ErrInvalidColumnInGeneratedColumn    = errors.New("invalid column referenced by generated column")
 	ErrInvalidColumnInPartition          = errors.New("invalid column referenced by partition")
-	ErrMissingPartitionColumnInUniqueKey = errors.New("unique key must include all columns in a parititioning function")
+	ErrMissingPartitionColumnInUniqueKey = errors.New("unique key must include all columns in a partitioning function")
 )
 
 // Entity stands for a database object we can diff:

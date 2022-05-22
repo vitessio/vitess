@@ -93,6 +93,20 @@ export namespace vtadmin {
         public deleteTablet(request: vtadmin.IDeleteTabletRequest): Promise<vtadmin.DeleteTabletResponse>;
 
         /**
+         * Calls EmergencyReparentShard.
+         * @param request EmergencyReparentShardRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and EmergencyReparentShardResponse
+         */
+        public emergencyReparentShard(request: vtadmin.IEmergencyReparentShardRequest, callback: vtadmin.VTAdmin.EmergencyReparentShardCallback): void;
+
+        /**
+         * Calls EmergencyReparentShard.
+         * @param request EmergencyReparentShardRequest message or plain object
+         * @returns Promise
+         */
+        public emergencyReparentShard(request: vtadmin.IEmergencyReparentShardRequest): Promise<vtadmin.EmergencyReparentShardResponse>;
+
+        /**
          * Calls FindSchema.
          * @param request FindSchemaRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and Schema
@@ -387,6 +401,20 @@ export namespace vtadmin {
         public pingTablet(request: vtadmin.IPingTabletRequest): Promise<vtadmin.PingTabletResponse>;
 
         /**
+         * Calls PlannedReparentShard.
+         * @param request PlannedReparentShardRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and PlannedReparentShardResponse
+         */
+        public plannedReparentShard(request: vtadmin.IPlannedReparentShardRequest, callback: vtadmin.VTAdmin.PlannedReparentShardCallback): void;
+
+        /**
+         * Calls PlannedReparentShard.
+         * @param request PlannedReparentShardRequest message or plain object
+         * @returns Promise
+         */
+        public plannedReparentShard(request: vtadmin.IPlannedReparentShardRequest): Promise<vtadmin.PlannedReparentShardResponse>;
+
+        /**
          * Calls RefreshState.
          * @param request RefreshStateRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and RefreshStateResponse
@@ -499,6 +527,20 @@ export namespace vtadmin {
         public stopReplication(request: vtadmin.IStopReplicationRequest): Promise<vtadmin.StopReplicationResponse>;
 
         /**
+         * Calls TabletExternallyReparented.
+         * @param request TabletExternallyReparentedRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and TabletExternallyReparentedResponse
+         */
+        public tabletExternallyReparented(request: vtadmin.ITabletExternallyReparentedRequest, callback: vtadmin.VTAdmin.TabletExternallyReparentedCallback): void;
+
+        /**
+         * Calls TabletExternallyReparented.
+         * @param request TabletExternallyReparentedRequest message or plain object
+         * @returns Promise
+         */
+        public tabletExternallyReparented(request: vtadmin.ITabletExternallyReparentedRequest): Promise<vtadmin.TabletExternallyReparentedResponse>;
+
+        /**
          * Calls ValidateKeyspace.
          * @param request ValidateKeyspaceRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and ValidateKeyspaceResponse
@@ -591,6 +633,13 @@ export namespace vtadmin {
          * @param [response] DeleteTabletResponse
          */
         type DeleteTabletCallback = (error: (Error|null), response?: vtadmin.DeleteTabletResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#emergencyReparentShard}.
+         * @param error Error, if any
+         * @param [response] EmergencyReparentShardResponse
+         */
+        type EmergencyReparentShardCallback = (error: (Error|null), response?: vtadmin.EmergencyReparentShardResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#findSchema}.
@@ -740,6 +789,13 @@ export namespace vtadmin {
         type PingTabletCallback = (error: (Error|null), response?: vtadmin.PingTabletResponse) => void;
 
         /**
+         * Callback as used by {@link vtadmin.VTAdmin#plannedReparentShard}.
+         * @param error Error, if any
+         * @param [response] PlannedReparentShardResponse
+         */
+        type PlannedReparentShardCallback = (error: (Error|null), response?: vtadmin.PlannedReparentShardResponse) => void;
+
+        /**
          * Callback as used by {@link vtadmin.VTAdmin#refreshState}.
          * @param error Error, if any
          * @param [response] RefreshStateResponse
@@ -794,6 +850,13 @@ export namespace vtadmin {
          * @param [response] StopReplicationResponse
          */
         type StopReplicationCallback = (error: (Error|null), response?: vtadmin.StopReplicationResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#tabletExternallyReparented}.
+         * @param error Error, if any
+         * @param [response] TabletExternallyReparentedResponse
+         */
+        type TabletExternallyReparentedCallback = (error: (Error|null), response?: vtadmin.TabletExternallyReparentedResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#validateKeyspace}.
@@ -3238,6 +3301,216 @@ export namespace vtadmin {
 
         /**
          * Converts this DeleteTabletResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an EmergencyReparentShardRequest. */
+    interface IEmergencyReparentShardRequest {
+
+        /** EmergencyReparentShardRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** EmergencyReparentShardRequest options */
+        options?: (vtctldata.IEmergencyReparentShardRequest|null);
+    }
+
+    /** Represents an EmergencyReparentShardRequest. */
+    class EmergencyReparentShardRequest implements IEmergencyReparentShardRequest {
+
+        /**
+         * Constructs a new EmergencyReparentShardRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IEmergencyReparentShardRequest);
+
+        /** EmergencyReparentShardRequest cluster_id. */
+        public cluster_id: string;
+
+        /** EmergencyReparentShardRequest options. */
+        public options?: (vtctldata.IEmergencyReparentShardRequest|null);
+
+        /**
+         * Creates a new EmergencyReparentShardRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns EmergencyReparentShardRequest instance
+         */
+        public static create(properties?: vtadmin.IEmergencyReparentShardRequest): vtadmin.EmergencyReparentShardRequest;
+
+        /**
+         * Encodes the specified EmergencyReparentShardRequest message. Does not implicitly {@link vtadmin.EmergencyReparentShardRequest.verify|verify} messages.
+         * @param message EmergencyReparentShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IEmergencyReparentShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified EmergencyReparentShardRequest message, length delimited. Does not implicitly {@link vtadmin.EmergencyReparentShardRequest.verify|verify} messages.
+         * @param message EmergencyReparentShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IEmergencyReparentShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an EmergencyReparentShardRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns EmergencyReparentShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.EmergencyReparentShardRequest;
+
+        /**
+         * Decodes an EmergencyReparentShardRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns EmergencyReparentShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.EmergencyReparentShardRequest;
+
+        /**
+         * Verifies an EmergencyReparentShardRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an EmergencyReparentShardRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns EmergencyReparentShardRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.EmergencyReparentShardRequest;
+
+        /**
+         * Creates a plain object from an EmergencyReparentShardRequest message. Also converts values to other types if specified.
+         * @param message EmergencyReparentShardRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.EmergencyReparentShardRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this EmergencyReparentShardRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an EmergencyReparentShardResponse. */
+    interface IEmergencyReparentShardResponse {
+
+        /** EmergencyReparentShardResponse cluster */
+        cluster?: (vtadmin.ICluster|null);
+
+        /** EmergencyReparentShardResponse keyspace */
+        keyspace?: (string|null);
+
+        /** EmergencyReparentShardResponse shard */
+        shard?: (string|null);
+
+        /** EmergencyReparentShardResponse promoted_primary */
+        promoted_primary?: (topodata.ITabletAlias|null);
+
+        /** EmergencyReparentShardResponse events */
+        events?: (logutil.IEvent[]|null);
+    }
+
+    /** Represents an EmergencyReparentShardResponse. */
+    class EmergencyReparentShardResponse implements IEmergencyReparentShardResponse {
+
+        /**
+         * Constructs a new EmergencyReparentShardResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IEmergencyReparentShardResponse);
+
+        /** EmergencyReparentShardResponse cluster. */
+        public cluster?: (vtadmin.ICluster|null);
+
+        /** EmergencyReparentShardResponse keyspace. */
+        public keyspace: string;
+
+        /** EmergencyReparentShardResponse shard. */
+        public shard: string;
+
+        /** EmergencyReparentShardResponse promoted_primary. */
+        public promoted_primary?: (topodata.ITabletAlias|null);
+
+        /** EmergencyReparentShardResponse events. */
+        public events: logutil.IEvent[];
+
+        /**
+         * Creates a new EmergencyReparentShardResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns EmergencyReparentShardResponse instance
+         */
+        public static create(properties?: vtadmin.IEmergencyReparentShardResponse): vtadmin.EmergencyReparentShardResponse;
+
+        /**
+         * Encodes the specified EmergencyReparentShardResponse message. Does not implicitly {@link vtadmin.EmergencyReparentShardResponse.verify|verify} messages.
+         * @param message EmergencyReparentShardResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IEmergencyReparentShardResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified EmergencyReparentShardResponse message, length delimited. Does not implicitly {@link vtadmin.EmergencyReparentShardResponse.verify|verify} messages.
+         * @param message EmergencyReparentShardResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IEmergencyReparentShardResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an EmergencyReparentShardResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns EmergencyReparentShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.EmergencyReparentShardResponse;
+
+        /**
+         * Decodes an EmergencyReparentShardResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns EmergencyReparentShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.EmergencyReparentShardResponse;
+
+        /**
+         * Verifies an EmergencyReparentShardResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an EmergencyReparentShardResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns EmergencyReparentShardResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.EmergencyReparentShardResponse;
+
+        /**
+         * Creates a plain object from an EmergencyReparentShardResponse message. Also converts values to other types if specified.
+         * @param message EmergencyReparentShardResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.EmergencyReparentShardResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this EmergencyReparentShardResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -6639,6 +6912,216 @@ export namespace vtadmin {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a PlannedReparentShardRequest. */
+    interface IPlannedReparentShardRequest {
+
+        /** PlannedReparentShardRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** PlannedReparentShardRequest options */
+        options?: (vtctldata.IPlannedReparentShardRequest|null);
+    }
+
+    /** Represents a PlannedReparentShardRequest. */
+    class PlannedReparentShardRequest implements IPlannedReparentShardRequest {
+
+        /**
+         * Constructs a new PlannedReparentShardRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IPlannedReparentShardRequest);
+
+        /** PlannedReparentShardRequest cluster_id. */
+        public cluster_id: string;
+
+        /** PlannedReparentShardRequest options. */
+        public options?: (vtctldata.IPlannedReparentShardRequest|null);
+
+        /**
+         * Creates a new PlannedReparentShardRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PlannedReparentShardRequest instance
+         */
+        public static create(properties?: vtadmin.IPlannedReparentShardRequest): vtadmin.PlannedReparentShardRequest;
+
+        /**
+         * Encodes the specified PlannedReparentShardRequest message. Does not implicitly {@link vtadmin.PlannedReparentShardRequest.verify|verify} messages.
+         * @param message PlannedReparentShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IPlannedReparentShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PlannedReparentShardRequest message, length delimited. Does not implicitly {@link vtadmin.PlannedReparentShardRequest.verify|verify} messages.
+         * @param message PlannedReparentShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IPlannedReparentShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PlannedReparentShardRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns PlannedReparentShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.PlannedReparentShardRequest;
+
+        /**
+         * Decodes a PlannedReparentShardRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns PlannedReparentShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.PlannedReparentShardRequest;
+
+        /**
+         * Verifies a PlannedReparentShardRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PlannedReparentShardRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PlannedReparentShardRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.PlannedReparentShardRequest;
+
+        /**
+         * Creates a plain object from a PlannedReparentShardRequest message. Also converts values to other types if specified.
+         * @param message PlannedReparentShardRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.PlannedReparentShardRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PlannedReparentShardRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a PlannedReparentShardResponse. */
+    interface IPlannedReparentShardResponse {
+
+        /** PlannedReparentShardResponse cluster */
+        cluster?: (vtadmin.ICluster|null);
+
+        /** PlannedReparentShardResponse keyspace */
+        keyspace?: (string|null);
+
+        /** PlannedReparentShardResponse shard */
+        shard?: (string|null);
+
+        /** PlannedReparentShardResponse promoted_primary */
+        promoted_primary?: (topodata.ITabletAlias|null);
+
+        /** PlannedReparentShardResponse events */
+        events?: (logutil.IEvent[]|null);
+    }
+
+    /** Represents a PlannedReparentShardResponse. */
+    class PlannedReparentShardResponse implements IPlannedReparentShardResponse {
+
+        /**
+         * Constructs a new PlannedReparentShardResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IPlannedReparentShardResponse);
+
+        /** PlannedReparentShardResponse cluster. */
+        public cluster?: (vtadmin.ICluster|null);
+
+        /** PlannedReparentShardResponse keyspace. */
+        public keyspace: string;
+
+        /** PlannedReparentShardResponse shard. */
+        public shard: string;
+
+        /** PlannedReparentShardResponse promoted_primary. */
+        public promoted_primary?: (topodata.ITabletAlias|null);
+
+        /** PlannedReparentShardResponse events. */
+        public events: logutil.IEvent[];
+
+        /**
+         * Creates a new PlannedReparentShardResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PlannedReparentShardResponse instance
+         */
+        public static create(properties?: vtadmin.IPlannedReparentShardResponse): vtadmin.PlannedReparentShardResponse;
+
+        /**
+         * Encodes the specified PlannedReparentShardResponse message. Does not implicitly {@link vtadmin.PlannedReparentShardResponse.verify|verify} messages.
+         * @param message PlannedReparentShardResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IPlannedReparentShardResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PlannedReparentShardResponse message, length delimited. Does not implicitly {@link vtadmin.PlannedReparentShardResponse.verify|verify} messages.
+         * @param message PlannedReparentShardResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IPlannedReparentShardResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PlannedReparentShardResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns PlannedReparentShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.PlannedReparentShardResponse;
+
+        /**
+         * Decodes a PlannedReparentShardResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns PlannedReparentShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.PlannedReparentShardResponse;
+
+        /**
+         * Verifies a PlannedReparentShardResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PlannedReparentShardResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PlannedReparentShardResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.PlannedReparentShardResponse;
+
+        /**
+         * Creates a plain object from a PlannedReparentShardResponse message. Also converts values to other types if specified.
+         * @param message PlannedReparentShardResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.PlannedReparentShardResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PlannedReparentShardResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a RefreshStateRequest. */
     interface IRefreshStateRequest {
 
@@ -8485,6 +8968,216 @@ export namespace vtadmin {
 
         /**
          * Converts this StopReplicationResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a TabletExternallyReparentedRequest. */
+    interface ITabletExternallyReparentedRequest {
+
+        /** TabletExternallyReparentedRequest alias */
+        alias?: (topodata.ITabletAlias|null);
+
+        /** TabletExternallyReparentedRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+    }
+
+    /** Represents a TabletExternallyReparentedRequest. */
+    class TabletExternallyReparentedRequest implements ITabletExternallyReparentedRequest {
+
+        /**
+         * Constructs a new TabletExternallyReparentedRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.ITabletExternallyReparentedRequest);
+
+        /** TabletExternallyReparentedRequest alias. */
+        public alias?: (topodata.ITabletAlias|null);
+
+        /** TabletExternallyReparentedRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /**
+         * Creates a new TabletExternallyReparentedRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns TabletExternallyReparentedRequest instance
+         */
+        public static create(properties?: vtadmin.ITabletExternallyReparentedRequest): vtadmin.TabletExternallyReparentedRequest;
+
+        /**
+         * Encodes the specified TabletExternallyReparentedRequest message. Does not implicitly {@link vtadmin.TabletExternallyReparentedRequest.verify|verify} messages.
+         * @param message TabletExternallyReparentedRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.ITabletExternallyReparentedRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified TabletExternallyReparentedRequest message, length delimited. Does not implicitly {@link vtadmin.TabletExternallyReparentedRequest.verify|verify} messages.
+         * @param message TabletExternallyReparentedRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.ITabletExternallyReparentedRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a TabletExternallyReparentedRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns TabletExternallyReparentedRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.TabletExternallyReparentedRequest;
+
+        /**
+         * Decodes a TabletExternallyReparentedRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns TabletExternallyReparentedRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.TabletExternallyReparentedRequest;
+
+        /**
+         * Verifies a TabletExternallyReparentedRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a TabletExternallyReparentedRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns TabletExternallyReparentedRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.TabletExternallyReparentedRequest;
+
+        /**
+         * Creates a plain object from a TabletExternallyReparentedRequest message. Also converts values to other types if specified.
+         * @param message TabletExternallyReparentedRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.TabletExternallyReparentedRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this TabletExternallyReparentedRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a TabletExternallyReparentedResponse. */
+    interface ITabletExternallyReparentedResponse {
+
+        /** TabletExternallyReparentedResponse cluster */
+        cluster?: (vtadmin.ICluster|null);
+
+        /** TabletExternallyReparentedResponse keyspace */
+        keyspace?: (string|null);
+
+        /** TabletExternallyReparentedResponse shard */
+        shard?: (string|null);
+
+        /** TabletExternallyReparentedResponse new_primary */
+        new_primary?: (topodata.ITabletAlias|null);
+
+        /** TabletExternallyReparentedResponse old_primary */
+        old_primary?: (topodata.ITabletAlias|null);
+    }
+
+    /** Represents a TabletExternallyReparentedResponse. */
+    class TabletExternallyReparentedResponse implements ITabletExternallyReparentedResponse {
+
+        /**
+         * Constructs a new TabletExternallyReparentedResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.ITabletExternallyReparentedResponse);
+
+        /** TabletExternallyReparentedResponse cluster. */
+        public cluster?: (vtadmin.ICluster|null);
+
+        /** TabletExternallyReparentedResponse keyspace. */
+        public keyspace: string;
+
+        /** TabletExternallyReparentedResponse shard. */
+        public shard: string;
+
+        /** TabletExternallyReparentedResponse new_primary. */
+        public new_primary?: (topodata.ITabletAlias|null);
+
+        /** TabletExternallyReparentedResponse old_primary. */
+        public old_primary?: (topodata.ITabletAlias|null);
+
+        /**
+         * Creates a new TabletExternallyReparentedResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns TabletExternallyReparentedResponse instance
+         */
+        public static create(properties?: vtadmin.ITabletExternallyReparentedResponse): vtadmin.TabletExternallyReparentedResponse;
+
+        /**
+         * Encodes the specified TabletExternallyReparentedResponse message. Does not implicitly {@link vtadmin.TabletExternallyReparentedResponse.verify|verify} messages.
+         * @param message TabletExternallyReparentedResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.ITabletExternallyReparentedResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified TabletExternallyReparentedResponse message, length delimited. Does not implicitly {@link vtadmin.TabletExternallyReparentedResponse.verify|verify} messages.
+         * @param message TabletExternallyReparentedResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.ITabletExternallyReparentedResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a TabletExternallyReparentedResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns TabletExternallyReparentedResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.TabletExternallyReparentedResponse;
+
+        /**
+         * Decodes a TabletExternallyReparentedResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns TabletExternallyReparentedResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.TabletExternallyReparentedResponse;
+
+        /**
+         * Verifies a TabletExternallyReparentedResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a TabletExternallyReparentedResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns TabletExternallyReparentedResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.TabletExternallyReparentedResponse;
+
+        /**
+         * Creates a plain object from a TabletExternallyReparentedResponse message. Also converts values to other types if specified.
+         * @param message TabletExternallyReparentedResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.TabletExternallyReparentedResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this TabletExternallyReparentedResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
