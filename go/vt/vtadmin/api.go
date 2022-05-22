@@ -207,6 +207,28 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	return api
 }
 
+// Close closes all the clusters in an API concurrently. Its primary function is
+// to gracefully shutdown cache background goroutines to avoid data races in
+// tests, but needs to be exported to be called by those tests. It does not have
+// any production use case.
+func (api *API) Close() error {
+	var (
+		wg  sync.WaitGroup
+		rec concurrency.AllErrorRecorder
+	)
+
+	for _, c := range api.clusters {
+		wg.Add(1)
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+			rec.RecordError(c.Close())
+		}(c)
+	}
+
+	wg.Wait()
+	return rec.Error()
+}
+
 // ListenAndServe starts serving this API on the configured Addr (see
 // grpcserver.Options) until shutdown or irrecoverable error occurs.
 func (api *API) ListenAndServe() error {
