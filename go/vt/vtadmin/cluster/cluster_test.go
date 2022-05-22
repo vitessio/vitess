@@ -27,6 +27,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/mysql"
@@ -2694,6 +2695,9 @@ func TestGetSchema(t *testing.T) {
 
 					return
 				}
+
+				// Clone so our mutation below doesn't trip the race detector.
+				schema = proto.Clone(schema).(*vtadminpb.Schema)
 
 				if schema.TableDefinitions != nil {
 					// For simplicity, we're going to assert only on the state

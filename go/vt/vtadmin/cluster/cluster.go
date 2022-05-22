@@ -40,7 +40,9 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/internal/caches/schemacache"
 	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
@@ -79,6 +81,17 @@ type Cluster struct {
 
 	emergencyReparentPool *pools.RPCPool // ERS-only
 	reparentPool          *pools.RPCPool // PRS-only
+
+	// schemaCache caches schema(s) for different GetSchema(s) requests.
+	//
+	// - if we call GetSchema, then getSchemaCacheRequest.Keyspace will be
+	// non-empty and the cached schemas slice will contain exactly one element,
+	// namely for that keyspace's schema.
+	// - if we call GetSchemas, then getSchemaCacheRequest == "", and the cached
+	// schemas slice will contain one element per keyspace* in the cluster
+	// 	*: at the time it was cached; if keyspaces were created/destroyed in
+	//  the interim, we won't pick that up until something refreshes the cache.
+	schemaCache *cache.Cache[schemacache.Key, []*vtadminpb.Schema]
 
 	cfg Config
 }
@@ -150,7 +163,49 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 	cluster.emergencyReparentPool = cfg.EmergencyReparentPoolConfig.NewRWPool()
 	cluster.reparentPool = cfg.ReparentPoolConfig.NewRWPool()
 
+	if cluster.cfg.SchemaCacheConfig == nil {
+		cluster.cfg.SchemaCacheConfig = &cache.Config{}
+	}
+	cluster.schemaCache = cache.New(func(ctx context.Context, key schemacache.Key) ([]*vtadminpb.Schema, error) {
+		// TODO: make a private method to separate the fetching bits from the cache bits
+		if key.Keyspace == "" {
+			return cluster.GetSchemas(ctx, GetSchemaOptions{
+				BaseRequest: &vtctldatapb.GetSchemaRequest{
+					IncludeViews: true,
+				},
+				TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
+					AggregateSizes:          true,
+					IncludeNonServingShards: key.IncludeNonServingShards,
+				},
+				isBackfill: true,
+			})
+		}
+
+		schema, err := cluster.GetSchema(ctx, key.Keyspace, GetSchemaOptions{
+			BaseRequest: &vtctldatapb.GetSchemaRequest{
+				IncludeViews: true,
+			},
+			TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
+				AggregateSizes:          true,
+				IncludeNonServingShards: key.IncludeNonServingShards,
+			},
+			isBackfill: true,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		return []*vtadminpb.Schema{schema}, nil
+	}, *cluster.cfg.SchemaCacheConfig)
+
 	return cluster, nil
+}
+
+// Close closes a cluster. Its primary function is to gracefully shutdown any
+// background cache goroutines to avoid data races in tests. It does not have
+// any production use case, but needs to be exported.
+func (c *Cluster) Close() error {
+	return c.schemaCache.Close()
 }
 
 // ToProto returns a value-copy protobuf equivalent of the cluster.
@@ -1161,6 +1216,8 @@ type GetSchemaOptions struct {
 	// (described above) to find one SERVING tablet for each shard in the
 	// keyspace, skipping any non-serving shards in the keyspace.
 	TableSizeOptions *vtadminpb.GetSchemaTableSizeOptions
+
+	isBackfill bool
 }
 
 // GetSchema returns the schema for a given keyspace. GetSchema has a few
@@ -1208,6 +1265,24 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 	span.Annotate("keyspace", keyspace)
 	annotateGetSchemaRequest(opts.BaseRequest, span)
 	vtadminproto.AnnotateSpanWithGetSchemaTableSizeOptions(opts.TableSizeOptions, span)
+	span.Annotate("is_backfill", opts.isBackfill)
+
+	key := schemacache.Key{
+		ClusterID:               c.ID,
+		Keyspace:                keyspace,
+		IncludeNonServingShards: opts.TableSizeOptions.IncludeNonServingShards,
+	}
+	if !(opts.isBackfill || cache.ShouldRefreshFromIncomingContext(ctx)) {
+		schema, ok, err := schemacache.LoadOne(c.schemaCache, key, schemacache.LoadOptions{
+			BaseRequest:    opts.BaseRequest,
+			AggregateSizes: opts.TableSizeOptions.AggregateSizes,
+		})
+
+		span.Annotate("cache_hit", ok)
+		if ok {
+			return schema, err
+		}
+	}
 
 	// Fetch all tablets for the keyspace.
 	tablets, err := c.FindTablets(ctx, func(tablet *vtadminpb.Tablet) bool {
@@ -1222,7 +1297,17 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 		return nil, err
 	}
 
-	return c.getSchemaFromTablets(ctx, keyspace, tabletsToQuery, opts)
+	schema, err := c.getSchemaFromTablets(ctx, keyspace, tabletsToQuery, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	go schemacache.AddOrBackfill(c.schemaCache, []*vtadminpb.Schema{schema}, key, cache.DefaultExpiration, schemacache.LoadOptions{
+		BaseRequest:    opts.BaseRequest,
+		AggregateSizes: opts.TableSizeOptions.AggregateSizes,
+	})
+
+	return schema, nil
 }
 
 // GetSchemas returns all of the schemas across all keyspaces in the cluster.
@@ -1249,6 +1334,24 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 	AnnotateSpan(c, span)
 	annotateGetSchemaRequest(opts.BaseRequest, span)
 	vtadminproto.AnnotateSpanWithGetSchemaTableSizeOptions(opts.TableSizeOptions, span)
+	span.Annotate("is_backfill", opts.isBackfill)
+
+	key := schemacache.Key{
+		ClusterID:               c.ID,
+		Keyspace:                "",
+		IncludeNonServingShards: opts.TableSizeOptions.IncludeNonServingShards,
+	}
+	if !(opts.isBackfill || cache.ShouldRefreshFromIncomingContext(ctx)) {
+		schemas, ok, err := schemacache.LoadAll(c.schemaCache, key, schemacache.LoadOptions{
+			BaseRequest:    opts.BaseRequest,
+			AggregateSizes: opts.TableSizeOptions.AggregateSizes,
+		})
+
+		span.Annotate("cache_hit", ok)
+		if ok {
+			return schemas, err
+		}
+	}
 
 	var (
 		m   sync.Mutex
@@ -1356,6 +1459,11 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 	if rec.HasErrors() {
 		return nil, rec.Error()
 	}
+
+	go schemacache.AddOrBackfill(c.schemaCache, schemas, key, cache.DefaultExpiration, schemacache.LoadOptions{
+		BaseRequest:    opts.BaseRequest,
+		AggregateSizes: opts.TableSizeOptions.AggregateSizes,
+	})
 
 	return schemas, nil
 }
@@ -2197,6 +2305,9 @@ func (c *Cluster) Debug() map[string]any {
 			"workflow_read_pool":      json.RawMessage(c.workflowReadPool.StatsJSON()),
 			"emergency_reparent_pool": json.RawMessage(c.emergencyReparentPool.StatsJSON()),
 			"reparent_pool":           json.RawMessage(c.reparentPool.StatsJSON()),
+		},
+		"caches": map[string]any{
+			"schemas": c.schemaCache.Debug(),
 		},
 	}
 

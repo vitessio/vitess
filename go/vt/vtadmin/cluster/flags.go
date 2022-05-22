@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtadmin/cache"
 )
 
 // FlagsByImpl groups a set of flags by discovery implementation. Its mapping is
@@ -235,6 +236,21 @@ func parseOne(cfg *Config, name string, val string) error {
 			}
 
 			if err := cfg.ReparentPoolConfig.parseFlag(strings.TrimPrefix(name, "reparent-pool-"), val); err != nil {
+				return fmt.Errorf("error parsing %s: %w", name, err)
+			}
+		case strings.HasPrefix(name, "schema-cache-"):
+			if cfg.SchemaCacheConfig == nil {
+				cfg.SchemaCacheConfig = &cache.Config{
+					DefaultExpiration:                -1,
+					CleanupInterval:                  -1,
+					BackfillRequestTTL:               -1,
+					BackfillRequestDuplicateInterval: -1,
+					BackfillQueueSize:                -1,
+					BackfillEnqueueWaitTime:          -1,
+				}
+			}
+
+			if err := parseCacheConfigFlag(cfg.SchemaCacheConfig, strings.TrimPrefix(name, "schema-cache-"), val); err != nil {
 				return fmt.Errorf("error parsing %s: %w", name, err)
 			}
 		default:
