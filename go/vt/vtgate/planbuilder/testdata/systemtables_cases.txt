@@ -1431,3 +1431,23 @@ Gen4 plan same as above
     "Table": "information_schema.key_column_usage"
   }
 }
+
+# table_schema OR predicate
+# It is unsupported because we do not route queries to multiple keyspaces right now
+"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' OR TABLE_SCHEMA = 'main'"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' OR TABLE_SCHEMA = 'main'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "DBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = 'ks' or TABLE_SCHEMA = 'main'",
+    "Table": "INFORMATION_SCHEMA.`TABLES`"
+  }
+}
+Gen4 plan same as above

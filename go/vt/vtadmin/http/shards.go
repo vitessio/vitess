@@ -103,3 +103,61 @@ func DeleteShards(ctx context.Context, r Request, api *API) *JSONResponse {
 	})
 	return NewJSONResponse(resp, err)
 }
+
+// EmergencyReparentShard implements the http wrapper for
+// POST /shard/{cluster_id}/{keyspace}/{shard}/emergency_reparent.
+//
+// Query params: none
+//
+// POST body is unmarshalled as vtctldatapb.EmergencyReparentShardRequest, but
+// the Keyspace and Shard fields are ignored (coming instead from the route).
+func EmergencyReparentShard(ctx context.Context, r Request, api *API) *JSONResponse {
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	var options vtctldatapb.EmergencyReparentShardRequest
+	if err := decoder.Decode(&options); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	vars := r.Vars()
+	options.Keyspace = vars["keyspace"]
+	options.Shard = vars["shard"]
+
+	result, err := api.server.EmergencyReparentShard(ctx, &vtadminpb.EmergencyReparentShardRequest{
+		ClusterId: vars["cluster_id"],
+		Options:   &options,
+	})
+	return NewJSONResponse(result, err)
+}
+
+// PlannedReparentShard implements the http wrapper for
+// POST /shard/{cluster_id}/{keyspace}/{shard}/planned_reparent.
+//
+// Query params: none
+//
+// POST body is unmarshalled as vtctldatapb.PlannedReparentShardRequest, but
+// the Keyspace and Shard fields are ignored (coming instead from the route).
+func PlannedReparentShard(ctx context.Context, r Request, api *API) *JSONResponse {
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	var options vtctldatapb.PlannedReparentShardRequest
+	if err := decoder.Decode(&options); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	vars := r.Vars()
+	options.Keyspace = vars["keyspace"]
+	options.Shard = vars["shard"]
+
+	result, err := api.server.PlannedReparentShard(ctx, &vtadminpb.PlannedReparentShardRequest{
+		ClusterId: vars["cluster_id"],
+		Options:   &options,
+	})
+	return NewJSONResponse(result, err)
+}

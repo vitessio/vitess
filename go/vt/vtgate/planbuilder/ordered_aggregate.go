@@ -387,20 +387,3 @@ func (oa *orderedAggregate) OutputColumns() []sqlparser.SelectExpr {
 func (oa *orderedAggregate) SetTruncateColumnCount(count int) {
 	oa.truncateColumnCount = count
 }
-
-// rewriteAggrExpressions is used when our predicate expression contains aggregation.
-// In these cases, we need to rewrite it, so it uses the column output from the ordered aggregate
-func (oa *orderedAggregate) rewriteAggrExpressions() func(*sqlparser.Cursor) bool {
-	return func(cursor *sqlparser.Cursor) bool {
-		sqlNode := cursor.Node()
-		if sqlparser.IsAggregation(sqlNode) {
-			fExp := sqlNode.(*sqlparser.FuncExpr)
-			for _, aggregate := range oa.aggregates {
-				if sqlparser.EqualsExpr(aggregate.Expr, fExp) {
-					cursor.Replace(sqlparser.Offset(aggregate.Col))
-				}
-			}
-		}
-		return true
-	}
-}
