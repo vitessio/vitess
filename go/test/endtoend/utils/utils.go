@@ -101,7 +101,7 @@ func AssertResultIsEmpty(t *testing.T, conn *mysql.Conn, pre string) {
 // The test fails if the query produces an error.
 func Exec(t testing.TB, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
-	qr, err := conn.ExecuteFetchWithReadOnlyHandling(query, 1000, true)
+	qr, err := conn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err, "for query: "+query)
 	return qr
 }

@@ -57,6 +57,25 @@ func (mysqld *Mysqld) ExecuteSuperQuery(ctx context.Context, query string) error
 	return mysqld.ExecuteSuperQueryList(ctx, []string{query})
 }
 
+// ExecuteSuperQueryListWithReadOnlyHandling allows the user to execute queries as a super user
+// even if the instance is in read-only mode. It will temporarily switch the instance to read-write
+// before executing the queries and put the instance back in its original state afterward.
+func (mysqld *Mysqld) ExecuteSuperQueryListWithReadOnlyHandling(ctx context.Context, queryList []string) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	sroql := make([]string, 0, len(queryList)+3)
+	sroql[0] = "SET @original_super_read_only=IF(@@global.super_read_only=1, 'ON', 'OFF')"
+	sroql[1] = "SET GLOBAL super_read_only='OFF'"
+	sroql = append(sroql, queryList...)
+	sroql[len(sroql)-1] = "SET GLOBAL super_read_only=IFNULL(@original_super_read_only, 'OFF')"
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, sroql)
+}
+
 // ExecuteSuperQueryList alows the user to execute queries as a super user.
 func (mysqld *Mysqld) ExecuteSuperQueryList(ctx context.Context, queryList []string) error {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)

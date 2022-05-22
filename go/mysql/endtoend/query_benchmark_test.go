@@ -243,7 +243,7 @@ func BenchmarkSetVarsMultipleSetsInSameStmt(b *testing.B) {
 	for _, sleepDuration := range []time.Duration{0, 1 * time.Millisecond} {
 		b.Run(fmt.Sprintf("Sleep %d ms", sleepDuration/time.Millisecond), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				_, _, err := conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; insert into t(id) values (%d)", i), 1, false, true)
+				_, _, err := conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; insert into t(id) values (%d)", i), 1, false)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -252,7 +252,7 @@ func BenchmarkSetVarsMultipleSetsInSameStmt(b *testing.B) {
 					b.Fatal(err)
 				}
 
-				_, _, err = conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; select * from t where id = %d", i), 1, false, false)
+				_, _, err = conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; select * from t where id = %d", i), 1, false)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -261,7 +261,7 @@ func BenchmarkSetVarsMultipleSetsInSameStmt(b *testing.B) {
 					b.Fatal(err)
 				}
 
-				_, _, err = conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; update t set name = 'foo' where id = %d", i), 1, false, true)
+				_, _, err = conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; update t set name = 'foo' where id = %d", i), 1, false)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -270,7 +270,7 @@ func BenchmarkSetVarsMultipleSetsInSameStmt(b *testing.B) {
 					b.Fatal(err)
 				}
 
-				_, _, err = conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; delete from t where id = %d", i), 1, false, true)
+				_, _, err = conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; delete from t where id = %d", i), 1, false)
 				if err != nil {
 					b.Fatal(err)
 				}

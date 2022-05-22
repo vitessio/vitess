@@ -271,13 +271,13 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		}
 		cmds := mysqlctl.CreateReparentJournal()
 		cmds = append(cmds, fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(dbName)))
-		if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {
+		if err := mysqld.ExecuteSuperQueryListWithReadOnlyHandling(ctx, cmds); err != nil {
 			return fmt.Errorf("can't initialize database: %v", err)
 		}
 
 		// Execute Alter commands on reparent_journal and ignore errors
 		cmds = mysqlctl.AlterReparentJournal()
-		_ = mysqld.ExecuteSuperQueryList(ctx, cmds)
+		_ = mysqld.ExecuteSuperQueryListWithReadOnlyHandling(ctx, cmds)
 
 		backupParams.BackupTime = time.Now()
 		// Now we're ready to take the backup.
