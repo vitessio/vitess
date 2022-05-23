@@ -100,7 +100,7 @@ func TestNewSchemaFromQueriesWithDuplicate(t *testing.T) {
 	)
 	_, err := NewSchemaFromQueries(queries)
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, ErrDuplicateName)
+	assert.EqualError(t, err, (&ApplyDuplicateEntityError{Entity: "v2"}).Error())
 }
 
 func TestNewSchemaFromQueriesUnresolved(t *testing.T) {
