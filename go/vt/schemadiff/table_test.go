@@ -60,6 +60,13 @@ func TestCreateTableDiff(t *testing.T) {
 					)`,
 		},
 		{
+			name:  "column case change",
+			from:  "create table t (id int not null, PRIMARY KEY(id))",
+			to:    "create table t (Id int not null, primary key(id))",
+			diff:  "alter table t modify column Id int not null",
+			cdiff: "ALTER TABLE `t` MODIFY COLUMN `Id` int NOT NULL",
+		},
+		{
 			name: "identical, name change",
 			from: "create table t1 (id int PRIMARY KEY)",
 			to:   "create table t2 (id int primary key)",
@@ -406,6 +413,13 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key, a int) partition by hash (id) partitions 4",
 			diff:  "alter table t1 add column a int",
 			cdiff: "ALTER TABLE `t1` ADD COLUMN `a` int",
+		},
+		{
+			name:  "partitioning, column case",
+			from:  "create table t1 (id int primary key) partition by hash (id) partitions 4",
+			to:    "create table t1 (id int primary key, a int) partition by hash (ID) partitions 4",
+			diff:  "alter table t1 add column a int \npartition by hash (ID) partitions 4",
+			cdiff: "ALTER TABLE `t1` ADD COLUMN `a` int \nPARTITION BY HASH (`ID`) PARTITIONS 4",
 		},
 		{
 			name:  "remove partitioning",
@@ -915,6 +929,12 @@ func TestValidate(t *testing.T) {
 			to:    "create table t (id int primary key, i int, key i_idx(i))",
 		},
 		{
+			name:  "add key, column case",
+			from:  "create table t (id int primary key, i int)",
+			alter: "alter table t add key i_idx(I)",
+			to:    "create table t (id int primary key, i int, key i_idx(I))",
+		},
+		{
 			name:  "add column and key",
 			from:  "create table t (id int primary key)",
 			alter: "alter table t add column i int, add key i_idx(i)",
@@ -963,6 +983,12 @@ func TestValidate(t *testing.T) {
 			to:    "create table t (id int primary key, i int, key some_key(id, i), key i_idx(i))",
 		},
 		{
+			name:  "drop column, affect keys 4, column case",
+			from:  "create table t (id int primary key, i int, i2 int, key some_key(id, i), key i_idx(i, I2))",
+			alter: "alter table t drop column i2",
+			to:    "create table t (id int primary key, i int, key some_key(id, i), key i_idx(i))",
+		},
+		{
 			name:      "drop column, affect keys with expression",
 			from:      "create table t (id int primary key, i int, key id_idx((IF(id, 0, 1))), key i_idx((IF(i,0,1))))",
 			alter:     "alter table t drop column i",
@@ -989,6 +1015,12 @@ func TestValidate(t *testing.T) {
 		{
 			name:      "drop column used by partitions",
 			from:      "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (i) partitions 4",
+			alter:     "alter table t drop column i",
+			expectErr: &InvalidColumnInPartitionError{Table: "t", Column: "i"},
+		},
+		{
+			name:      "drop column used by partitions, column case",
+			from:      "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (I) partitions 4",
 			alter:     "alter table t drop column i",
 			expectErr: &InvalidColumnInPartitionError{Table: "t", Column: "i"},
 		},
@@ -1098,6 +1130,12 @@ func TestValidate(t *testing.T) {
 			name:      "drop column used by a generated column",
 			from:      "create table t (id int, i int, neg int as (0-i), primary key (id))",
 			alter:     "alter table t drop column i",
+			expectErr: &InvalidColumnInGeneratedColumnError{Table: "t", Column: "i", GeneratedColumn: "neg"},
+		},
+		{
+			name:      "drop column used by a generated column, column case",
+			from:      "create table t (id int, i int, neg int as (0-I), primary key (id))",
+			alter:     "alter table t drop column I",
 			expectErr: &InvalidColumnInGeneratedColumnError{Table: "t", Column: "i", GeneratedColumn: "neg"},
 		},
 		{
