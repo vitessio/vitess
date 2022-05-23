@@ -1169,10 +1169,10 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	t1ColumnsMap := map[string]*sqlparser.ColumnDefinition{}
 	t2ColumnsMap := map[string]*sqlparser.ColumnDefinition{}
 	for _, col := range t1Columns {
-		t1ColumnsMap[col.Name.String()] = col
+		t1ColumnsMap[col.Name.Lowered()] = col
 	}
 	for _, col := range t2Columns {
-		t2ColumnsMap[col.Name.String()] = col
+		t2ColumnsMap[col.Name.Lowered()] = col
 	}
 
 	// For purpose of column reordering detection, we maintain a list of
@@ -1182,7 +1182,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	// evaluate dropped columns
 	//
 	for _, t1Col := range t1Columns {
-		if _, ok := t2ColumnsMap[t1Col.Name.String()]; ok {
+		if _, ok := t2ColumnsMap[t1Col.Name.Lowered()]; ok {
 			t1SharedColumns = append(t1SharedColumns, t1Col)
 		} else {
 			// column exists in t1 but not in t2, hence it is dropped
@@ -1197,7 +1197,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	// shared columns, by order of appearance in t2
 	t2SharedColumns := []*sqlparser.ColumnDefinition{}
 	for _, t2Col := range t2Columns {
-		t2ColName := t2Col.Name.String()
+		t2ColName := t2Col.Name.Lowered()
 		if _, ok := t1ColumnsMap[t2ColName]; ok {
 			// column exists in both tables
 			t2SharedColumns = append(t2SharedColumns, t2Col)
@@ -1208,7 +1208,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	//
 	columnReordering := evaluateColumnReordering(t1SharedColumns, t2SharedColumns)
 	for _, t2Col := range t2SharedColumns {
-		t2ColName := t2Col.Name.String()
+		t2ColName := t2Col.Name.Lowered()
 		// we know that column exists in both tables
 		t1Col := t1ColumnsMap[t2ColName]
 		t1ColEntity := NewColumnDefinitionEntity(t1Col)
@@ -1251,7 +1251,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	// end of existing columns list.
 	expectAppendIndex := len(t2SharedColumns)
 	for t2ColIndex, t2Col := range t2Columns {
-		t2ColName := t2Col.Name.String()
+		t2ColName := t2Col.Name.Lowered()
 		if _, ok := t1ColumnsMap[t2ColName]; !ok {
 			// column exists in t2 but not in t1, hence it is added
 			addColumn := &sqlparser.AddColumns{

@@ -60,6 +60,13 @@ func TestCreateTableDiff(t *testing.T) {
 					)`,
 		},
 		{
+			name:  "column case change",
+			from:  "create table t (id int PRIMARY KEY)",
+			to:    "create table t (Id int primary key)",
+			diff:  "alter table t modify column Id int primary key",
+			cdiff: "ALTER TABLE `t` MODIFY COLUMN `Id` int PRIMARY KEY",
+		},
+		{
 			name: "identical, name change",
 			from: "create table t1 (id int PRIMARY KEY)",
 			to:   "create table t2 (id int primary key)",
