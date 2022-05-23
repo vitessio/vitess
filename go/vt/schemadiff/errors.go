@@ -217,3 +217,14 @@ func (e *MissingPartitionColumnInUniqueKeyError) Error() string {
 	return fmt.Sprintf("invalid column %s referenced by unique key %s in table %s",
 		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.UniqueKey), sqlescape.EscapeID(e.Table))
 }
+
+type InvalidColumnInCheckConstraintError struct {
+	Table      string
+	Constraint string
+	Column     string
+}
+
+func (e *InvalidColumnInCheckConstraintError) Error() string {
+	return fmt.Sprintf("invalid column %s referenced by check constraint %s in table %s",
+		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table))
+}

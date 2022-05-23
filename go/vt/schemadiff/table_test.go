@@ -17,7 +17,6 @@ limitations under the License.
 package schemadiff
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -1168,6 +1167,36 @@ func TestValidate(t *testing.T) {
 			alter: "alter table t add index m ((month(d)))",
 			to:    "create table t (id int, d datetime, primary key (id), key m ((month(d))))",
 		},
+		{
+			name:  "constraint check which only uses single drop column",
+			from:  "create table t (id int, d datetime, primary key (id), constraint unix_epoch check (d < '1970-01-01'))",
+			alter: "alter table t drop column d",
+			to:    "create table t (id int, primary key (id))",
+		},
+		{
+			name:      "constraint check which uses multiple dropped columns",
+			from:      "create table t (id int, d datetime, e datetime, primary key (id), constraint unix_epoch check (d < '1970-01-01' and e < '1970-01-01'))",
+			alter:     "alter table t drop column d, drop column e",
+			expectErr: &InvalidColumnInCheckConstraintError{Table: "t", Constraint: "unix_epoch", Column: "d"},
+		},
+		{
+			name:      "constraint check which uses multiple dropped columns",
+			from:      "create table t (id int, d datetime, e datetime, primary key (id), constraint unix_epoch check (d < '1970-01-01' and e < '1970-01-01'))",
+			alter:     "alter table t drop column e",
+			expectErr: &InvalidColumnInCheckConstraintError{Table: "t", Constraint: "unix_epoch", Column: "e"},
+		},
+		{
+			name:  "constraint check added",
+			from:  "create table t (id int, d datetime, e datetime, primary key (id))",
+			alter: "alter table t add constraint unix_epoch check (d < '1970-01-01' and e < '1970-01-01')",
+			to:    "create table t (id int, d datetime, e datetime, primary key (id), constraint unix_epoch check (d < '1970-01-01' and e < '1970-01-01'))",
+		},
+		{
+			name:      "constraint check added with invalid column",
+			from:      "create table t (id int, d datetime, e datetime, primary key (id))",
+			alter:     "alter table t add constraint unix_epoch check (d < '1970-01-01' and f < '1970-01-01')",
+			expectErr: &InvalidColumnInCheckConstraintError{Table: "t", Constraint: "unix_epoch", Column: "f"},
+		},
 	}
 	hints := DiffHints{}
 	for _, ts := range tt {
@@ -1188,11 +1217,7 @@ func TestValidate(t *testing.T) {
 			applied, err := from.Apply(a)
 			if ts.expectErr != nil {
 				assert.Error(t, err)
-				if errors.Is(err, ts.expectErr) {
-					assert.ErrorIsf(t, err, ts.expectErr, "error mismatch. expected: %v, got: %v", ts.expectErr, err)
-				} else {
-					assert.EqualError(t, err, ts.expectErr.Error())
-				}
+				assert.EqualError(t, err, ts.expectErr.Error())
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, applied)
