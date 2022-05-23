@@ -119,9 +119,9 @@ func (d *CreateTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
-// IsEmpty implements EntityDiff
+// Entities implements EntityDiff
 func (d *CreateTableEntityDiff) Entities() (from Entity, to Entity) {
-	return nil, NewCreateTableEntity(d.createTable)
+	return nil, &CreateTableEntity{CreateTable: *d.createTable}
 }
 
 // Statement implements EntityDiff
@@ -227,13 +227,16 @@ type CreateTableEntity struct {
 	sqlparser.CreateTable
 }
 
-func NewCreateTableEntity(c *sqlparser.CreateTable) *CreateTableEntity {
+func NewCreateTableEntity(c *sqlparser.CreateTable) (*CreateTableEntity, error) {
+	if !c.IsFullyParsed() {
+		return nil, &NotFullyParsedError{Entity: c.Table.Name.String(), Statement: sqlparser.CanonicalString(c)}
+	}
 	entity := &CreateTableEntity{CreateTable: *c}
 	entity.normalize()
-	return entity
+	return entity, nil
 }
 
-// normalize normalizes table definition:
+// normalize cleans up the table definition:
 // - setting names to all keys
 // - table option case (upper/lower/special)
 // The function returns this receiver as courtesy

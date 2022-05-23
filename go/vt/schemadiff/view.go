@@ -196,10 +196,13 @@ type CreateViewEntity struct {
 	sqlparser.CreateView
 }
 
-func NewCreateViewEntity(c *sqlparser.CreateView) *CreateViewEntity {
+func NewCreateViewEntity(c *sqlparser.CreateView) (*CreateViewEntity, error) {
+	if !c.IsFullyParsed() {
+		return nil, &NotFullyParsedError{Entity: c.ViewName.Name.String(), Statement: sqlparser.CanonicalString(c)}
+	}
 	entity := &CreateViewEntity{CreateView: *c}
 	entity.normalize()
-	return entity
+	return entity, nil
 }
 
 func (c *CreateViewEntity) normalize() {

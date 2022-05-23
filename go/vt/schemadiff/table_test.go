@@ -802,8 +802,11 @@ func TestCreateTableDiff(t *testing.T) {
 			toCreateTable, ok := toStmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			c := NewCreateTableEntity(fromCreateTable)
-			other := NewCreateTableEntity(toCreateTable)
+			c, err := NewCreateTableEntity(fromCreateTable)
+			require.NoError(t, err)
+			other, err := NewCreateTableEntity(toCreateTable)
+			require.NoError(t, err)
+
 			hints := standardHints
 			hints.AutoIncrementStrategy = ts.autoinc
 			hints.RangeRotationStrategy = ts.rotation
@@ -846,7 +849,7 @@ func TestCreateTableDiff(t *testing.T) {
 						}
 					}
 					// validate we can parse back the statement
-					_, err := sqlparser.Parse(diff)
+					_, err := sqlparser.ParseStrictDDL(diff)
 					assert.NoError(t, err)
 
 					// Validate "from/to" entities
@@ -876,7 +879,7 @@ func TestCreateTableDiff(t *testing.T) {
 				{
 					cdiff := alter.CanonicalStatementString()
 					assert.Equal(t, ts.cdiff, cdiff)
-					_, err := sqlparser.Parse(cdiff)
+					_, err := sqlparser.ParseStrictDDL(cdiff)
 					assert.NoError(t, err)
 				}
 
@@ -1141,7 +1144,8 @@ func TestValidate(t *testing.T) {
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
 
-			from := NewCreateTableEntity(fromCreateTable)
+			from, err := NewCreateTableEntity(fromCreateTable)
+			require.NoError(t, err)
 			a := &AlterTableEntityDiff{from: from, alterTable: alterTable}
 			applied, err := from.Apply(a)
 			if ts.expectErr != nil {
@@ -1164,7 +1168,8 @@ func TestValidate(t *testing.T) {
 				toCreateTable, ok := stmt.(*sqlparser.CreateTable)
 				require.True(t, ok)
 
-				to := NewCreateTableEntity(toCreateTable)
+				to, err := NewCreateTableEntity(toCreateTable)
+				require.NoError(t, err)
 				diff, err := applied.Diff(to, &hints)
 				require.NoError(t, err)
 				assert.Empty(t, diff, "diff found: %v.\napplied: %v\nto: %v", diff.CanonicalStatementString(), applied.Create().CanonicalStatementString(), to.Create().CanonicalStatementString())
@@ -1377,7 +1382,8 @@ func TestNormalize(t *testing.T) {
 			fromCreateTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			from := NewCreateTableEntity(fromCreateTable)
+			from, err := NewCreateTableEntity(fromCreateTable)
+			require.NoError(t, err)
 			assert.Equal(t, ts.to, sqlparser.CanonicalString(from))
 		})
 	}

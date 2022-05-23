@@ -74,9 +74,17 @@ func NewSchemaFromStatements(statements []sqlparser.Statement) (*Schema, error) 
 	for _, s := range statements {
 		switch stmt := s.(type) {
 		case *sqlparser.CreateTable:
-			entities = append(entities, NewCreateTableEntity(stmt))
+			c, err := NewCreateTableEntity(stmt)
+			if err != nil {
+				return nil, err
+			}
+			entities = append(entities, c)
 		case *sqlparser.CreateView:
-			entities = append(entities, NewCreateViewEntity(stmt))
+			v, err := NewCreateViewEntity(stmt)
+			if err != nil {
+				return nil, err
+			}
+			entities = append(entities, v)
 		default:
 			return nil, &UnsupportedStatementError{Statement: sqlparser.CanonicalString(s)}
 		}
