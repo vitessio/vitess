@@ -18,12 +18,11 @@ package schemadiff
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
 	"strings"
-
-	"github.com/pkg/errors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
