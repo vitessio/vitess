@@ -384,7 +384,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 			// We expect the table to not exist
 			name := diff.createTable.Table.Name.String()
 			if _, ok := s.named[name]; ok {
-				return ErrApplyDuplicateTableOrView
+				return &ApplyDuplicateEntityError{Entity: name}
 			}
 			s.tables = append(s.tables, &CreateTableEntity{CreateTable: *diff.createTable})
 			_, s.named[name] = diff.Entities()
@@ -392,7 +392,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 			// We expect the view to not exist
 			name := diff.createView.ViewName.Name.String()
 			if _, ok := s.named[name]; ok {
-				return ErrApplyDuplicateTableOrView
+				return &ApplyDuplicateEntityError{Entity: name}
 			}
 			s.views = append(s.views, &CreateViewEntity{CreateView: *diff.createView})
 			_, s.named[name] = diff.Entities()
@@ -408,7 +408,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 				}
 			}
 			if !found {
-				return ErrApplyTableNotFound
+				return &ApplyTableNotFoundError{Table: diff.from.Table.Name.String()}
 			}
 		case *DropViewEntityDiff:
 			// We expect the view to exist
@@ -422,7 +422,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 				}
 			}
 			if !found {
-				return ErrApplyViewNotFound
+				return &ApplyViewNotFoundError{View: diff.from.ViewName.Name.String()}
 			}
 		case *AlterTableEntityDiff:
 			// We expect the table to exist
@@ -444,7 +444,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 				}
 			}
 			if !found {
-				return ErrApplyTableNotFound
+				return &ApplyTableNotFoundError{Table: diff.from.Table.Name.String()}
 			}
 		case *AlterViewEntityDiff:
 			// We expect the view to exist
@@ -466,10 +466,10 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 				}
 			}
 			if !found {
-				return ErrApplyViewNotFound
+				return &ApplyViewNotFoundError{View: diff.from.ViewName.Name.String()}
 			}
 		default:
-			return ErrUnsupportedApplyOperation
+			return &UnsupportedApplyOperationError{Statement: diff.CanonicalStatementString()}
 		}
 	}
 	if err := s.normalize(); err != nil {

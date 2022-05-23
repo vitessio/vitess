@@ -20,21 +20,130 @@ var (
 	ErrUnsupportedStatement           = errors.New("unsupported statement")
 	ErrDuplicateName                  = errors.New("duplicate name")
 	ErrViewDependencyUnresolved       = errors.New("views have unresolved/loop dependencies")
-
-	ErrUnsupportedApplyOperation = errors.New("unsupported Apply operation")
-	ErrApplyTableNotFound        = errors.New("table not found")
-	ErrApplyViewNotFound         = errors.New("view not found")
-	ErrApplyKeyNotFound          = errors.New("key not found")
-	ErrApplyColumnNotFound       = errors.New("column not found")
-	ErrApplyDuplicateTableOrView = errors.New("duplicate table or view")
-	ErrApplyDuplicateKey         = errors.New("duplicate key")
-	ErrApplyDuplicateColumn      = errors.New("duplicate column")
-	ErrApplyConstraintNotFound   = errors.New("constraint not found")
-	ErrApplyDuplicateConstraint  = errors.New("duplicate constraint")
-	ErrApplyPartitionNotFound    = errors.New("partition not found")
-	ErrApplyDuplicatePartition   = errors.New("duplicate partition")
-	ErrApplyNoPartitions         = errors.New("no partitions found")
 )
+
+type UnsupportedApplyOperationError struct {
+	Statement string
+}
+
+func (e *UnsupportedApplyOperationError) Error() string {
+	return fmt.Sprintf("unsupported operation: %s", e.Statement)
+}
+
+type ApplyTableNotFoundError struct {
+	Table string
+}
+
+func (e *ApplyTableNotFoundError) Error() string {
+	return fmt.Sprintf("table %s not found", sqlescape.EscapeID(e.Table))
+}
+
+type ApplyViewNotFoundError struct {
+	View string
+}
+
+func (e *ApplyViewNotFoundError) Error() string {
+	return fmt.Sprintf("view %s not found", sqlescape.EscapeID(e.View))
+}
+
+type ApplyKeyNotFoundError struct {
+	Table string
+	Key   string
+}
+
+func (e *ApplyKeyNotFoundError) Error() string {
+	return fmt.Sprintf("key %s not found in table %s", sqlescape.EscapeID(e.Key), sqlescape.EscapeID(e.Table))
+}
+
+type ApplyColumnNotFoundError struct {
+	Table  string
+	Column string
+}
+
+func (e *ApplyColumnNotFoundError) Error() string {
+	return fmt.Sprintf("column %s not found in table %s", sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Table))
+}
+
+type ApplyColumnAfterNotFoundError struct {
+	Table       string
+	Column      string
+	AfterColumn string
+}
+
+func (e *ApplyColumnAfterNotFoundError) Error() string {
+	return fmt.Sprintf("column %s can't be after non-existing column %s in table %s",
+		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.AfterColumn), sqlescape.EscapeID(e.Table))
+}
+
+type ApplyDuplicateEntityError struct {
+	Entity string
+}
+
+func (e *ApplyDuplicateEntityError) Error() string {
+	return fmt.Sprintf("duplicate entity %s", sqlescape.EscapeID(e.Entity))
+}
+
+type ApplyDuplicateKeyError struct {
+	Table string
+	Key   string
+}
+
+func (e *ApplyDuplicateKeyError) Error() string {
+	return fmt.Sprintf("duplicate key %s in table %s", sqlescape.EscapeID(e.Key), sqlescape.EscapeID(e.Table))
+}
+
+type ApplyDuplicateColumnError struct {
+	Table  string
+	Column string
+}
+
+func (e *ApplyDuplicateColumnError) Error() string {
+	return fmt.Sprintf("duplicate column %s in table %s", sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Table))
+}
+
+type ApplyConstraintNotFoundError struct {
+	Table      string
+	Constraint string
+}
+
+func (e *ApplyConstraintNotFoundError) Error() string {
+	return fmt.Sprintf("constraint %s not found in table %s", sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table))
+}
+
+type ApplyDuplicateConstraintError struct {
+	Table      string
+	Constraint string
+}
+
+func (e *ApplyDuplicateConstraintError) Error() string {
+	return fmt.Sprintf("duplicate constraint %s in table %s", sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table))
+}
+
+type ApplyPartitionNotFoundError struct {
+	Table     string
+	Partition string
+}
+
+func (e *ApplyPartitionNotFoundError) Error() string {
+	return fmt.Sprintf("partition %s not found in table %s", sqlescape.EscapeID(e.Partition), sqlescape.EscapeID(e.Table))
+}
+
+type ApplyDuplicatePartitionError struct {
+	Table     string
+	Partition string
+}
+
+func (e *ApplyDuplicatePartitionError) Error() string {
+	return fmt.Sprintf("duplicate partition %s in table %s", sqlescape.EscapeID(e.Partition), sqlescape.EscapeID(e.Table))
+}
+
+type ApplyNoPartitionsError struct {
+	Table string
+}
+
+func (e *ApplyNoPartitionsError) Error() string {
+	return fmt.Sprintf("no partitions in table %s", sqlescape.EscapeID(e.Table))
+}
 
 type InvalidColumnInKeyError struct {
 	Table  string

@@ -903,7 +903,7 @@ func TestValidate(t *testing.T) {
 			name:      "duplicate existing column",
 			from:      "create table t (id int primary key, id varchar(10))",
 			alter:     "alter table t add column i int",
-			expectErr: ErrApplyDuplicateColumn,
+			expectErr: &ApplyDuplicateColumnError{Table: "t", Column: "id"},
 		},
 		{
 			name:  "add key",
@@ -1029,13 +1029,13 @@ func TestValidate(t *testing.T) {
 			name:      "add range partition, duplicate",
 			from:      "create table t (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20))",
 			alter:     "alter table t add partition (partition p2 values less than (30))",
-			expectErr: ErrApplyDuplicatePartition,
+			expectErr: &ApplyDuplicatePartitionError{Table: "t", Partition: "p2"},
 		},
 		{
 			name:      "add range partition, no partitioning",
 			from:      "create table t (id int primary key)",
 			alter:     "alter table t add partition (partition p2 values less than (30))",
-			expectErr: ErrApplyNoPartitions,
+			expectErr: &ApplyNoPartitionsError{Table: "t"},
 		},
 		{
 			name:  "drop range partition",
@@ -1047,13 +1047,13 @@ func TestValidate(t *testing.T) {
 			name:      "drop range partition, not found",
 			from:      "create table t (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20))",
 			alter:     "alter table t drop partition p7",
-			expectErr: ErrApplyPartitionNotFound,
+			expectErr: &ApplyPartitionNotFoundError{Table: "t", Partition: "p7"},
 		},
 		{
 			name:      "duplicate existing partition name",
 			from:      "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p2 values less than (30))",
 			alter:     "alter table t add column i int",
-			expectErr: ErrApplyDuplicatePartition,
+			expectErr: &ApplyDuplicatePartitionError{Table: "t1", Partition: "p2"},
 		},
 		{
 			name:  "change to visible with alter column",
