@@ -708,7 +708,6 @@ func TestSchemaChange(t *testing.T) {
 		assert.Equal(t, expectRows, count)
 	}
 	t.Run("partitions: create partitioned table", func(t *testing.T) {
-		// The table exists. A noop.
 		uuid := testOnlineDDLStatementForTable(t, createPartitionedTableStatement, ddlStrategy, "vtgate", "")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
@@ -718,7 +717,6 @@ func TestSchemaChange(t *testing.T) {
 		checkPartitionedTableCountRows(t, 6)
 	})
 	t.Run("partitions: drop first partition", func(t *testing.T) {
-		// The table exists. A noop.
 		uuid := testOnlineDDLStatementForTable(t, "alter table part_test drop partition `p1`", ddlStrategy+" --fast-range-rotation", "vtgate", "")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
@@ -734,7 +732,6 @@ func TestSchemaChange(t *testing.T) {
 		checkPartitionedTableCountRows(t, 5)
 	})
 	t.Run("partitions: add new partition", func(t *testing.T) {
-		// The table exists. A noop.
 		uuid := testOnlineDDLStatementForTable(t, "alter table part_test add partition (PARTITION p7 VALUES LESS THAN (70))", ddlStrategy+" --fast-range-rotation", "vtgate", "")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
