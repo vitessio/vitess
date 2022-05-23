@@ -802,8 +802,11 @@ func TestCreateTableDiff(t *testing.T) {
 			toCreateTable, ok := toStmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			c := NewCreateTableEntity(fromCreateTable)
-			other := NewCreateTableEntity(toCreateTable)
+			c, err := NewCreateTableEntity(fromCreateTable)
+			require.NoError(t, err)
+			other, err := NewCreateTableEntity(toCreateTable)
+			require.NoError(t, err)
+
 			hints := standardHints
 			hints.AutoIncrementStrategy = ts.autoinc
 			hints.RangeRotationStrategy = ts.rotation
@@ -846,7 +849,7 @@ func TestCreateTableDiff(t *testing.T) {
 						}
 					}
 					// validate we can parse back the statement
-					_, err := sqlparser.Parse(diff)
+					_, err := sqlparser.ParseStrictDDL(diff)
 					assert.NoError(t, err)
 
 					// Validate "from/to" entities
@@ -876,7 +879,7 @@ func TestCreateTableDiff(t *testing.T) {
 				{
 					cdiff := alter.CanonicalStatementString()
 					assert.Equal(t, ts.cdiff, cdiff)
-					_, err := sqlparser.Parse(cdiff)
+					_, err := sqlparser.ParseStrictDDL(cdiff)
 					assert.NoError(t, err)
 				}
 
@@ -903,7 +906,7 @@ func TestValidate(t *testing.T) {
 			name:      "duplicate existing column",
 			from:      "create table t (id int primary key, id varchar(10))",
 			alter:     "alter table t add column i int",
-			expectErr: ErrApplyDuplicateColumn,
+			expectErr: &ApplyDuplicateColumnError{Table: "t", Column: "id"},
 		},
 		{
 			name:  "add key",
@@ -921,13 +924,13 @@ func TestValidate(t *testing.T) {
 			name:      "add key, missing column",
 			from:      "create table t (id int primary key, i int)",
 			alter:     "alter table t add key j_idx(j)",
-			expectErr: ErrInvalidColumnInKey,
+			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "j", Key: "j_idx"},
 		},
 		{
 			name:      "add key, missing column 2",
 			from:      "create table t (id int primary key, i int)",
 			alter:     "alter table t add key j_idx(j, i)",
-			expectErr: ErrInvalidColumnInKey,
+			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "j", Key: "j_idx"},
 		},
 		{
 			name:  "drop column, ok",
@@ -963,13 +966,13 @@ func TestValidate(t *testing.T) {
 			name:      "drop column, affect keys with expression",
 			from:      "create table t (id int primary key, i int, key id_idx((IF(id, 0, 1))), key i_idx((IF(i,0,1))))",
 			alter:     "alter table t drop column i",
-			expectErr: ErrInvalidColumnInKey,
+			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "i", Key: "i_idx"},
 		},
 		{
 			name:      "drop column, affect keys with expression and multi expressions",
 			from:      "create table t (id int primary key, i int, key id_idx((IF(id, 0, 1))), key i_idx((IF(i,0,1)), (IF(id,2,3))))",
 			alter:     "alter table t drop column i",
-			expectErr: ErrInvalidColumnInKey,
+			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "i", Key: "i_idx"},
 		},
 		{
 			name:  "add multiple keys, multi columns, ok",
@@ -981,19 +984,19 @@ func TestValidate(t *testing.T) {
 			name:      "add multiple keys, multi columns, missing column",
 			from:      "create table t (id int primary key, i1 int, i2 int, i4 int)",
 			alter:     "alter table t add key i12_idx(i1, i2), add key i32_idx(i3, i2), add key i21_idx(i2, i1)",
-			expectErr: ErrInvalidColumnInKey,
+			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "i3", Key: "i32_idx"},
 		},
 		{
 			name:      "drop column used by partitions",
 			from:      "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (i) partitions 4",
 			alter:     "alter table t drop column i",
-			expectErr: ErrInvalidColumnInPartition,
+			expectErr: &InvalidColumnInPartitionError{Table: "t", Column: "i"},
 		},
 		{
 			name:      "drop column used by partitions, function",
 			from:      "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (abs(i)) partitions 4",
 			alter:     "alter table t drop column i",
-			expectErr: ErrInvalidColumnInPartition,
+			expectErr: &InvalidColumnInPartitionError{Table: "t", Column: "i"},
 		},
 		{
 			name:  "unique key covers all partitioned columns",
@@ -1005,13 +1008,13 @@ func TestValidate(t *testing.T) {
 			name:      "unique key does not all partitioned columns",
 			from:      "create table t (id int, i int, primary key (id, i)) partition by hash (i) partitions 4",
 			alter:     "alter table t add unique key id_idx(id)",
-			expectErr: ErrMissingPartitionColumnInUniqueKey,
+			expectErr: &MissingPartitionColumnInUniqueKeyError{Table: "t", Column: "i", UniqueKey: "id_idx"},
 		},
 		{
 			name:      "add multiple keys, multi columns, missing column",
 			from:      "create table t (id int primary key, i1 int, i2 int, i4 int)",
 			alter:     "alter table t add key i12_idx(i1, i2), add key i32_idx((IF(i3 IS NULL, i2, i3)), i2), add key i21_idx(i2, i1)",
-			expectErr: ErrInvalidColumnInKey,
+			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "i3", Key: "i32_idx"},
 		},
 		{
 			name:  "nullable timestamp",
@@ -1029,13 +1032,13 @@ func TestValidate(t *testing.T) {
 			name:      "add range partition, duplicate",
 			from:      "create table t (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20))",
 			alter:     "alter table t add partition (partition p2 values less than (30))",
-			expectErr: ErrApplyDuplicatePartition,
+			expectErr: &ApplyDuplicatePartitionError{Table: "t", Partition: "p2"},
 		},
 		{
 			name:      "add range partition, no partitioning",
 			from:      "create table t (id int primary key)",
 			alter:     "alter table t add partition (partition p2 values less than (30))",
-			expectErr: ErrApplyNoPartitions,
+			expectErr: &ApplyNoPartitionsError{Table: "t"},
 		},
 		{
 			name:  "drop range partition",
@@ -1047,13 +1050,13 @@ func TestValidate(t *testing.T) {
 			name:      "drop range partition, not found",
 			from:      "create table t (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20))",
 			alter:     "alter table t drop partition p7",
-			expectErr: ErrApplyPartitionNotFound,
+			expectErr: &ApplyPartitionNotFoundError{Table: "t", Partition: "p7"},
 		},
 		{
 			name:      "duplicate existing partition name",
 			from:      "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p2 values less than (30))",
 			alter:     "alter table t add column i int",
-			expectErr: ErrApplyDuplicatePartition,
+			expectErr: &ApplyDuplicatePartitionError{Table: "t1", Partition: "p2"},
 		},
 		{
 			name:  "change to visible with alter column",
@@ -1095,13 +1098,13 @@ func TestValidate(t *testing.T) {
 			name:      "drop column used by a generated column",
 			from:      "create table t (id int, i int, neg int as (0-i), primary key (id))",
 			alter:     "alter table t drop column i",
-			expectErr: ErrInvalidColumnInGeneratedColumn,
+			expectErr: &InvalidColumnInGeneratedColumnError{Table: "t", Column: "i", GeneratedColumn: "neg"},
 		},
 		{
 			name:      "add generated column referencing nonexistent column",
 			from:      "create table t (id int, primary key (id))",
 			alter:     "alter table t add column neg int as (0-i)",
-			expectErr: ErrInvalidColumnInGeneratedColumn,
+			expectErr: &InvalidColumnInGeneratedColumnError{Table: "t", Column: "i", GeneratedColumn: "neg"},
 		},
 		{
 			name:  "add generated column referencing existing column",
@@ -1113,13 +1116,13 @@ func TestValidate(t *testing.T) {
 			name:      "drop column used by a functional index",
 			from:      "create table t (id int, d datetime, primary key (id), key m ((month(d))))",
 			alter:     "alter table t drop column d",
-			expectErr: ErrInvalidColumnInKey,
+			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "d", Key: "m"},
 		},
 		{
 			name:      "add generated column referencing nonexistent column",
 			from:      "create table t (id int, primary key (id))",
 			alter:     "alter table t add index m ((month(d)))",
-			expectErr: ErrInvalidColumnInKey,
+			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "d", Key: "m"},
 		},
 		{
 			name:  "add functional index referencing existing column",
@@ -1141,12 +1144,17 @@ func TestValidate(t *testing.T) {
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
 
-			from := NewCreateTableEntity(fromCreateTable)
+			from, err := NewCreateTableEntity(fromCreateTable)
+			require.NoError(t, err)
 			a := &AlterTableEntityDiff{from: from, alterTable: alterTable}
 			applied, err := from.Apply(a)
 			if ts.expectErr != nil {
 				assert.Error(t, err)
-				assert.True(t, errors.Is(err, ts.expectErr), "error mismatch. expected: %v, got: %v", ts.expectErr, err)
+				if errors.Is(err, ts.expectErr) {
+					assert.ErrorIsf(t, err, ts.expectErr, "error mismatch. expected: %v, got: %v", ts.expectErr, err)
+				} else {
+					assert.EqualError(t, err, ts.expectErr.Error())
+				}
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, applied)
@@ -1160,7 +1168,8 @@ func TestValidate(t *testing.T) {
 				toCreateTable, ok := stmt.(*sqlparser.CreateTable)
 				require.True(t, ok)
 
-				to := NewCreateTableEntity(toCreateTable)
+				to, err := NewCreateTableEntity(toCreateTable)
+				require.NoError(t, err)
 				diff, err := applied.Diff(to, &hints)
 				require.NoError(t, err)
 				assert.Empty(t, diff, "diff found: %v.\napplied: %v\nto: %v", diff.CanonicalStatementString(), applied.Create().CanonicalStatementString(), to.Create().CanonicalStatementString())
@@ -1373,7 +1382,8 @@ func TestNormalize(t *testing.T) {
 			fromCreateTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			from := NewCreateTableEntity(fromCreateTable)
+			from, err := NewCreateTableEntity(fromCreateTable)
+			require.NoError(t, err)
 			assert.Equal(t, ts.to, sqlparser.CanonicalString(from))
 		})
 	}

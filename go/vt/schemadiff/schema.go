@@ -18,11 +18,11 @@ package schemadiff
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"io"
 	"sort"
 	"strings"
-
-	"github.com/pkg/errors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -58,7 +58,7 @@ func NewSchemaFromEntities(entities []Entity) (*Schema, error) {
 		case *CreateViewEntity:
 			schema.views = append(schema.views, c)
 		default:
-			return nil, ErrUnsupportedEntity
+			return nil, &UnsupportedEntityError{Entity: c.Name(), Statement: c.Create().CanonicalStatementString()}
 		}
 	}
 	if err := schema.normalize(); err != nil {
@@ -73,11 +73,19 @@ func NewSchemaFromStatements(statements []sqlparser.Statement) (*Schema, error) 
 	for _, s := range statements {
 		switch stmt := s.(type) {
 		case *sqlparser.CreateTable:
-			entities = append(entities, NewCreateTableEntity(stmt))
+			c, err := NewCreateTableEntity(stmt)
+			if err != nil {
+				return nil, err
+			}
+			entities = append(entities, c)
 		case *sqlparser.CreateView:
-			entities = append(entities, NewCreateViewEntity(stmt))
+			v, err := NewCreateViewEntity(stmt)
+			if err != nil {
+				return nil, err
+			}
+			entities = append(entities, v)
 		default:
-			return nil, errors.Wrap(ErrUnsupportedStatement, sqlparser.CanonicalString(s))
+			return nil, &UnsupportedStatementError{Statement: sqlparser.CanonicalString(s)}
 		}
 	}
 	return NewSchemaFromEntities(entities)
@@ -107,7 +115,7 @@ func NewSchemaFromSQL(sql string) (*Schema, error) {
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			return nil, errors.Wrapf(err, "could not parse statement in SQL: %v", sql)
+			return nil, fmt.Errorf("could not parse statement in SQL: %v: %w", sql, err)
 		}
 		statements = append(statements, stmt)
 	}
@@ -141,14 +149,14 @@ func (s *Schema) normalize() error {
 	for _, t := range s.tables {
 		name := t.Name()
 		if _, ok := s.named[name]; ok {
-			return errors.Wrap(ErrDuplicateName, name)
+			return &ApplyDuplicateEntityError{Entity: name}
 		}
 		s.named[name] = t
 	}
 	for _, v := range s.views {
 		name := v.Name()
 		if _, ok := s.named[name]; ok {
-			return errors.Wrap(ErrDuplicateName, name)
+			return &ApplyDuplicateEntityError{Entity: name}
 		}
 		s.named[name] = v
 	}
@@ -220,7 +228,7 @@ func (s *Schema) normalize() error {
 	}
 	if len(s.sorted) != len(s.tables)+len(s.views) {
 		// We have leftover views. This can happen if the schema definition is invalid:
-		// - a vew depends on a nonexistent table
+		// - a view depends on a nonexistent table
 		// - two views have a circular dependency
 		return ErrViewDependencyUnresolved
 	}
@@ -384,7 +392,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 			// We expect the table to not exist
 			name := diff.createTable.Table.Name.String()
 			if _, ok := s.named[name]; ok {
-				return ErrApplyDuplicateTableOrView
+				return &ApplyDuplicateEntityError{Entity: name}
 			}
 			s.tables = append(s.tables, &CreateTableEntity{CreateTable: *diff.createTable})
 			_, s.named[name] = diff.Entities()
@@ -392,7 +400,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 			// We expect the view to not exist
 			name := diff.createView.ViewName.Name.String()
 			if _, ok := s.named[name]; ok {
-				return ErrApplyDuplicateTableOrView
+				return &ApplyDuplicateEntityError{Entity: name}
 			}
 			s.views = append(s.views, &CreateViewEntity{CreateView: *diff.createView})
 			_, s.named[name] = diff.Entities()
@@ -408,7 +416,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 				}
 			}
 			if !found {
-				return ErrApplyTableNotFound
+				return &ApplyTableNotFoundError{Table: diff.from.Table.Name.String()}
 			}
 		case *DropViewEntityDiff:
 			// We expect the view to exist
@@ -422,7 +430,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 				}
 			}
 			if !found {
-				return ErrApplyViewNotFound
+				return &ApplyViewNotFoundError{View: diff.from.ViewName.Name.String()}
 			}
 		case *AlterTableEntityDiff:
 			// We expect the table to exist
@@ -444,7 +452,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 				}
 			}
 			if !found {
-				return ErrApplyTableNotFound
+				return &ApplyTableNotFoundError{Table: diff.from.Table.Name.String()}
 			}
 		case *AlterViewEntityDiff:
 			// We expect the view to exist
@@ -466,10 +474,10 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 				}
 			}
 			if !found {
-				return ErrApplyViewNotFound
+				return &ApplyViewNotFoundError{View: diff.from.ViewName.Name.String()}
 			}
 		default:
-			return ErrUnsupportedApplyOperation
+			return &UnsupportedApplyOperationError{Statement: diff.CanonicalStatementString()}
 		}
 	}
 	if err := s.normalize(); err != nil {
