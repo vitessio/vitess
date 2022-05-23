@@ -526,7 +526,7 @@ func TestDiffSchemas(t *testing.T) {
 			name:        "unsupported statement",
 			from:        "create table t(id int)",
 			to:          "drop table t",
-			expectError: ErrUnsupportedStatement.Error(),
+			expectError: (&UnsupportedStatementError{Statement: "DROP TABLE `t`"}).Error(),
 		},
 		{
 			name: "create, alter, drop tables and views",

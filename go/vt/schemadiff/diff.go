@@ -59,10 +59,10 @@ func DiffCreateTablesQueries(query1 string, query2 string, hints *DiffHints) (En
 // nil, CreateTable, DropTable or AlterTable
 func DiffTables(create1 *sqlparser.CreateTable, create2 *sqlparser.CreateTable, hints *DiffHints) (EntityDiff, error) {
 	if create1 != nil && !create1.IsFullyParsed() {
-		return nil, ErrNotFullyParsed
+		return nil, &NotFullyParsedError{Entity: create1.Table.Name.String(), Statement: sqlparser.CanonicalString(create1)}
 	}
 	if create2 != nil && !create2.IsFullyParsed() {
-		return nil, ErrNotFullyParsed
+		return nil, &NotFullyParsedError{Entity: create2.Table.Name.String(), Statement: sqlparser.CanonicalString(create2)}
 	}
 	switch {
 	case create1 == nil && create2 == nil:
@@ -113,10 +113,10 @@ func DiffCreateViewsQueries(query1 string, query2 string, hints *DiffHints) (Ent
 // nil, CreateView, DropView or AlterView
 func DiffViews(create1 *sqlparser.CreateView, create2 *sqlparser.CreateView, hints *DiffHints) (EntityDiff, error) {
 	if create1 != nil && !create1.IsFullyParsed() {
-		return nil, ErrNotFullyParsed
+		return nil, &NotFullyParsedError{Entity: create1.ViewName.Name.String(), Statement: sqlparser.CanonicalString(create1)}
 	}
 	if create2 != nil && !create2.IsFullyParsed() {
-		return nil, ErrNotFullyParsed
+		return nil, &NotFullyParsedError{Entity: create2.ViewName.Name.String(), Statement: sqlparser.CanonicalString(create2)}
 	}
 	switch {
 	case create1 == nil && create2 == nil:

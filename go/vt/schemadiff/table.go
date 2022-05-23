@@ -535,7 +535,7 @@ func (c *CreateTableEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, er
 	return d, nil
 }
 
-// Diff compares this table statement with another table statement, and sees what it takes to
+// TableDiff compares this table statement with another table statement, and sees what it takes to
 // change this table to look like the other table.
 // It returns an AlterTable statement if changes are found, or nil if not.
 // the other table may be of different name; its name is ignored.
@@ -544,10 +544,10 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	otherStmt.Table = c.CreateTable.Table
 
 	if !c.CreateTable.IsFullyParsed() {
-		return nil, ErrNotFullyParsed
+		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(&c.CreateTable)}
 	}
 	if !otherStmt.IsFullyParsed() {
-		return nil, ErrNotFullyParsed
+		return nil, &NotFullyParsedError{Entity: other.Name(), Statement: sqlparser.CanonicalString(&otherStmt)}
 	}
 
 	format := sqlparser.CanonicalString(&c.CreateTable)
@@ -709,6 +709,8 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 			switch strings.ToUpper(t1Option.Name) {
 			case "AUTO_INCREMENT":
 				// skip
+			case "AUTOEXTEND_SIZE":
+				// skip
 			case "AVG_ROW_LENGTH":
 				// skip. MyISAM only, not interesting
 			case "CHECKSUM":
@@ -729,6 +731,8 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 				tableOption = &sqlparser.TableOption{Value: sqlparser.NewStrLiteral("N")}
 			case "ENGINE":
 				// skip
+			case "ENGINE_ATTRIBUTE":
+				// skip
 			case "INDEX DIRECTORY":
 				tableOption = &sqlparser.TableOption{Value: sqlparser.NewStrLiteral("")}
 			case "INSERT_METHOD":
@@ -745,6 +749,8 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 				// unused option. skip
 			case "ROW_FORMAT":
 				tableOption = &sqlparser.TableOption{String: "DEFAULT"}
+			case "SECONDARY_ENGINE_ATTRIBUTE":
+				// unused option. skip
 			case "STATS_AUTO_RECALC":
 				tableOption = &sqlparser.TableOption{String: "DEFAULT"}
 			case "STATS_PERSISTENT":
@@ -756,7 +762,7 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 			case "UNION":
 				// MyISAM/MERGE only. Skip
 			default:
-				return ErrUnsupportedTableOption
+				return &UnsupportedTableOptionError{Table: c.Name(), Option: strings.ToUpper(t1Option.Name)}
 			}
 			if tableOption != nil {
 				tableOption.Name = t1Option.Name

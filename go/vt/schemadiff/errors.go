@@ -10,17 +10,47 @@ import (
 var (
 	ErrEntityTypeMismatch             = errors.New("mismatched entity type")
 	ErrStrictIndexOrderingUnsupported = errors.New("strict index ordering is unsupported")
-	ErrUnsupportedTableOption         = errors.New("unsupported table option")
 	ErrUnexpectedDiffAction           = errors.New("unexpected diff action")
 	ErrUnexpectedTableSpec            = errors.New("unexpected table spec")
-	ErrNotFullyParsed                 = errors.New("unable to fully parse statement")
 	ErrExpectedCreateTable            = errors.New("expected a CREATE TABLE statement")
 	ErrExpectedCreateView             = errors.New("expected a CREATE VIEW statement")
-	ErrUnsupportedEntity              = errors.New("unsupported entity type")
-	ErrUnsupportedStatement           = errors.New("unsupported statement")
-	ErrDuplicateName                  = errors.New("duplicate name")
 	ErrViewDependencyUnresolved       = errors.New("views have unresolved/loop dependencies")
 )
+
+type UnsupportedEntityError struct {
+	Entity    string
+	Statement string
+}
+
+func (e *UnsupportedEntityError) Error() string {
+	return fmt.Sprintf("entity %s is not supported: %s", sqlescape.EscapeID(e.Entity), e.Statement)
+}
+
+type NotFullyParsedError struct {
+	Entity    string
+	Statement string
+}
+
+func (e *NotFullyParsedError) Error() string {
+	return fmt.Sprintf("entity %s is not fully parsed: %s", sqlescape.EscapeID(e.Entity), e.Statement)
+}
+
+type UnsupportedTableOptionError struct {
+	Table  string
+	Option string
+}
+
+func (e *UnsupportedTableOptionError) Error() string {
+	return fmt.Sprintf("unsupported option %s on table %s", e.Option, sqlescape.EscapeID(e.Table))
+}
+
+type UnsupportedStatementError struct {
+	Statement string
+}
+
+func (e *UnsupportedStatementError) Error() string {
+	return fmt.Sprintf("unsupported statement: %s", e.Statement)
+}
 
 type UnsupportedApplyOperationError struct {
 	Statement string
