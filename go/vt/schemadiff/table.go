@@ -1669,6 +1669,8 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 // postApplyNormalize runs at the end of apply() and to reorganize/edit things that
 // a MySQL will do implicitly:
 // - edit or remove keys if referenced columns are dropped
+// - drop check constraints for a single specific column if that column
+//   is the only referenced column in that check constraint.
 func (c *CreateTableEntity) postApplyNormalize() error {
 	// reduce or remove keys based on existing column list
 	// (a column may have been removed)postApplyNormalize
@@ -1699,6 +1701,36 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 		}
 	}
 	c.CreateTable.TableSpec.Indexes = nonEmptyIndexes
+
+	keptConstraints := []*sqlparser.ConstraintDefinition{}
+	for _, constraint := range c.CreateTable.TableSpec.Constraints {
+		check, ok := constraint.Details.(*sqlparser.CheckConstraintDefinition)
+		if !ok {
+			keptConstraints = append(keptConstraints, constraint)
+			continue
+		}
+		referencedColumns := []string{}
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node := node.(type) {
+			case *sqlparser.ColName:
+				referencedColumns = append(referencedColumns, node.Name.String())
+			}
+			return true, nil
+		}, check.Expr)
+		if err != nil {
+			return err
+		}
+		if len(referencedColumns) != 1 {
+			keptConstraints = append(keptConstraints, constraint)
+			continue
+		}
+
+		referencedColumn := referencedColumns[0]
+		if columnExists[referencedColumn] {
+			keptConstraints = append(keptConstraints, constraint)
+		}
+	}
+	c.CreateTable.TableSpec.Constraints = keptConstraints
 
 	return nil
 }
@@ -1788,6 +1820,29 @@ func (c *CreateTableEntity) validate() error {
 				if !columnExists[referencedColName] {
 					return &InvalidColumnInKeyError{Table: c.Name(), Column: referencedColName, Key: idx.Info.Name.String()}
 				}
+			}
+		}
+	}
+	// validate all columns referenced by constraint checks do in fact exist
+	for _, cs := range c.CreateTable.TableSpec.Constraints {
+		check, ok := cs.Details.(*sqlparser.CheckConstraintDefinition)
+		if !ok {
+			continue
+		}
+		referencedColumns := []string{}
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node := node.(type) {
+			case *sqlparser.ColName:
+				referencedColumns = append(referencedColumns, node.Name.String())
+			}
+			return true, nil
+		}, check.Expr)
+		if err != nil {
+			return err
+		}
+		for _, referencedColName := range referencedColumns {
+			if !columnExists[referencedColName] {
+				return &InvalidColumnInCheckConstraintError{Table: c.Name(), Constraint: cs.Name.String(), Column: referencedColName}
 			}
 		}
 	}
