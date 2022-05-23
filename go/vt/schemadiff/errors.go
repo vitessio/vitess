@@ -1,6 +1,11 @@
 package schemadiff
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+
+	"vitess.io/vitess/go/sqlescape"
+)
 
 var (
 	ErrEntityTypeMismatch             = errors.New("mismatched entity type")
@@ -29,9 +34,47 @@ var (
 	ErrApplyPartitionNotFound    = errors.New("partition not found")
 	ErrApplyDuplicatePartition   = errors.New("duplicate partition")
 	ErrApplyNoPartitions         = errors.New("no partitions found")
-
-	ErrInvalidColumnInKey                = errors.New("invalid column referenced by key")
-	ErrInvalidColumnInGeneratedColumn    = errors.New("invalid column referenced by generated column")
-	ErrInvalidColumnInPartition          = errors.New("invalid column referenced by partition")
-	ErrMissingPartitionColumnInUniqueKey = errors.New("unique key must include all columns in a partitioning function")
 )
+
+type InvalidColumnInKeyError struct {
+	Table  string
+	Column string
+	Key    string
+}
+
+func (e *InvalidColumnInKeyError) Error() string {
+	return fmt.Sprintf("invalid column %s referenced by key %s in table %s",
+		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Key), sqlescape.EscapeID(e.Table))
+}
+
+type InvalidColumnInGeneratedColumnError struct {
+	Table           string
+	Column          string
+	GeneratedColumn string
+}
+
+func (e *InvalidColumnInGeneratedColumnError) Error() string {
+	return fmt.Sprintf("invalid column %s referenced by generated column %s in table %s",
+		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.GeneratedColumn), sqlescape.EscapeID(e.Table))
+}
+
+type InvalidColumnInPartitionError struct {
+	Table  string
+	Column string
+}
+
+func (e *InvalidColumnInPartitionError) Error() string {
+	return fmt.Sprintf("invalid column %s referenced by partition in table %s",
+		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Table))
+}
+
+type MissingPartitionColumnInUniqueKeyError struct {
+	Table     string
+	Column    string
+	UniqueKey string
+}
+
+func (e *MissingPartitionColumnInUniqueKeyError) Error() string {
+	return fmt.Sprintf("invalid column %s referenced by unique key %s in table %s",
+		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.UniqueKey), sqlescape.EscapeID(e.Table))
+}

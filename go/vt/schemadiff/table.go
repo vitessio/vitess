@@ -1459,7 +1459,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			}
 			for colName := range getKeyColumnNames(opt.IndexDefinition) {
 				if !columnExists[colName] {
-					return errors.Wrapf(ErrInvalidColumnInKey, "key: %v, column: %v", keyName, colName)
+					return &InvalidColumnInKeyError{Table: c.Name(), Column: colName, Key: keyName}
 				}
 			}
 			c.TableSpec.Indexes = append(c.TableSpec.Indexes, opt.IndexDefinition)
@@ -1737,7 +1737,7 @@ func (c *CreateTableEntity) validate() error {
 	for _, key := range c.CreateTable.TableSpec.Indexes {
 		for colName := range getKeyColumnNames(key) {
 			if !columnExists[colName] {
-				return errors.Wrapf(ErrInvalidColumnInKey, "key: %v, column: %v", key.Info.Name.String(), colName)
+				return &InvalidColumnInKeyError{Table: c.Name(), Column: colName, Key: key.Info.Name.String()}
 			}
 		}
 	}
@@ -1757,7 +1757,7 @@ func (c *CreateTableEntity) validate() error {
 			}
 			for _, referencedColName := range referencedColumns {
 				if !columnExists[referencedColName] {
-					return errors.Wrapf(ErrInvalidColumnInGeneratedColumn, "generated column: %v, referenced column: %v", col.Name.String(), referencedColName)
+					return &InvalidColumnInGeneratedColumnError{Table: c.Name(), Column: referencedColName, GeneratedColumn: col.Name.String()}
 				}
 			}
 		}
@@ -1778,7 +1778,7 @@ func (c *CreateTableEntity) validate() error {
 			}
 			for _, referencedColName := range referencedColumns {
 				if !columnExists[referencedColName] {
-					return errors.Wrapf(ErrInvalidColumnInKey, "functional index: %v, referenced column: %v", idx.Info.Name.String(), referencedColName)
+					return &InvalidColumnInKeyError{Table: c.Name(), Column: referencedColName, Key: idx.Info.Name.String()}
 				}
 			}
 		}
@@ -1811,7 +1811,7 @@ func (c *CreateTableEntity) validate() error {
 		for _, partitionColName := range partitionColNames {
 			// Validate columns exists in table:
 			if !columnExists[partitionColName] {
-				return errors.Wrapf(ErrInvalidColumnInPartition, "column: %v", partitionColName)
+				return &InvalidColumnInPartitionError{Table: c.Name(), Column: partitionColName}
 			}
 
 			// Validate all unique keys include this column:
@@ -1828,7 +1828,7 @@ func (c *CreateTableEntity) validate() error {
 					}
 				}
 				if !colFound {
-					return errors.Wrapf(ErrMissingPartitionColumnInUniqueKey, "column: %v not found in key: %v", partitionColName, key.Info.Name.String())
+					return &MissingPartitionColumnInUniqueKeyError{Table: c.Name(), Column: partitionColName, UniqueKey: key.Info.Name.String()}
 				}
 			}
 		}
