@@ -1823,6 +1823,18 @@ func (c *CreateTableEntity) validate() error {
 			}
 		}
 	}
+	// validate all columns referenced by foreign key constraints do in fact exist
+	for _, cs := range c.CreateTable.TableSpec.Constraints {
+		check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
+		if !ok {
+			continue
+		}
+		for _, col := range check.Source {
+			if !columnExists[col.Lowered()] {
+				return &InvalidColumnInForeignKeyConstraintError{Table: c.Name(), Constraint: cs.Name.String(), Column: col.String()}
+			}
+		}
+	}
 	// validate all columns referenced by constraint checks do in fact exist
 	for _, cs := range c.CreateTable.TableSpec.Constraints {
 		check, ok := cs.Details.(*sqlparser.CheckConstraintDefinition)
