@@ -543,6 +543,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 		if err != nil {
 			return nil, fmt.Errorf("could not get tabletStats: %v", err)
 		}
+		tabletStat.Up = true
 		return tabletStat, nil
 	})
 

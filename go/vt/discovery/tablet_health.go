@@ -32,13 +32,16 @@ import (
 // TabletHealth represents simple tablet health data that is returned to users of healthcheck.
 // No synchronization is required because we always return a copy.
 type TabletHealth struct {
-	Conn                 queryservice.QueryService
+	Key                  string
+	Conn                 queryservice.QueryService `json:"-"`
 	Tablet               *topodata.Tablet
+	Name                 string
 	Target               *query.Target
-	Stats                *query.RealtimeStats
-	PrimaryTermStartTime int64
-	LastError            error
+	Up                   bool
 	Serving              bool
+	PrimaryTermStartTime int64 `json:"TabletExternallyReparentedTimestamp"`
+	Stats                *query.RealtimeStats
+	LastError            error
 }
 
 // DeepEqual compares two TabletHealth. Since we include protos, we
