@@ -2083,7 +2083,6 @@ type (
 	Expr interface {
 		iExpr()
 		SQLNode
-		AggrFunc
 	}
 
 	Callable interface {
@@ -2559,7 +2558,7 @@ type (
 	}
 
 	AggrFunc interface {
-		isAggregate() (bool, string)
+		AggrName() string
 	}
 
 	Count struct {
@@ -2591,18 +2590,20 @@ type (
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
-func (*Sum) iExpr()                                                     {}
-func (*Min) iExpr()                                                     {}
-func (*Max) iExpr()                                                     {}
-func (*Avg) iExpr()                                                     {}
-func (*CountStar) iExpr()                                               {}
-func (*Count) iExpr()                                                   {}
-func (*Sum) isAggregate() (bool, string)                                { return true, "sum" }
-func (*Min) isAggregate() (bool, string)                                { return true, "min" }
-func (*Max) isAggregate() (bool, string)                                { return true, "max" }
-func (*Avg) isAggregate() (bool, string)                                { return true, "avg" }
-func (*CountStar) isAggregate() (bool, string)                          { return true, "count" }
-func (*Count) isAggregate() (bool, string)                              { return true, "count" }
+func (*Sum) iExpr()       {}
+func (*Min) iExpr()       {}
+func (*Max) iExpr()       {}
+func (*Avg) iExpr()       {}
+func (*CountStar) iExpr() {}
+func (*Count) iExpr()     {}
+
+func (*Sum) AggrName() string       { return "sum" }
+func (*Min) AggrName() string       { return "min" }
+func (*Max) AggrName() string       { return "max" }
+func (*Avg) AggrName() string       { return "avg" }
+func (*CountStar) AggrName() string { return "count" }
+func (*Count) AggrName() string     { return "count" }
+
 func (*AndExpr) iExpr()                                                 {}
 func (*AndExpr) isAggregate() (bool, string)                            { return false, "" }
 func (*OrExpr) iExpr()                                                  {}

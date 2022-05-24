@@ -1753,22 +1753,8 @@ func IsAggregation(node SQLNode) bool {
 
 func IsAggregation2(expr Expr) (bool, string) {
 	switch node := expr.(type) {
-	case *Count:
-		return node.isAggregate()
-	case *CountStar:
-		return node.isAggregate()
-	case *Avg:
-		return node.isAggregate()
-	case *Max:
-		return node.isAggregate()
-	case *Min:
-		return node.isAggregate()
-	case *Sum:
-		return node.isAggregate()
-	case *FuncExpr:
-		return node.isAggregate()
-	case *GroupConcatExpr:
-		return node.isAggregate()
+	case AggrFunc:
+		return true, node.AggrName()
 	}
 	return false, ""
 }
