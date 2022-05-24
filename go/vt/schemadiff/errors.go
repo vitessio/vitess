@@ -228,3 +228,14 @@ func (e *InvalidColumnInCheckConstraintError) Error() string {
 	return fmt.Sprintf("invalid column %s referenced by check constraint %s in table %s",
 		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table))
 }
+
+type InvalidColumnInForeignKeyConstraintError struct {
+	Table      string
+	Constraint string
+	Column     string
+}
+
+func (e *InvalidColumnInForeignKeyConstraintError) Error() string {
+	return fmt.Sprintf("invalid column %s referenced by foreign key constraint %s in table %s",
+		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table))
+}

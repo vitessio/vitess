@@ -909,6 +909,7 @@ func TestValidate(t *testing.T) {
 		alter     string
 		expectErr error
 	}{
+		// columns
 		{
 			name:  "add column",
 			from:  "create table t (id int primary key)",
@@ -921,6 +922,7 @@ func TestValidate(t *testing.T) {
 			alter:     "alter table t add column i int",
 			expectErr: &ApplyDuplicateColumnError{Table: "t", Column: "id"},
 		},
+		// keys
 		{
 			name:  "add key",
 			from:  "create table t (id int primary key, i int)",
@@ -1011,6 +1013,7 @@ func TestValidate(t *testing.T) {
 			alter:     "alter table t add key i12_idx(i1, i2), add key i32_idx(i3, i2), add key i21_idx(i2, i1)",
 			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "i3", Key: "i32_idx"},
 		},
+		// partitions
 		{
 			name:      "drop column used by partitions",
 			from:      "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (i) partitions 4",
@@ -1036,7 +1039,7 @@ func TestValidate(t *testing.T) {
 			to:    "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (i) partitions 4",
 		},
 		{
-			name:      "unique key does not all partitioned columns",
+			name:      "unique key does not cover all partitioned columns",
 			from:      "create table t (id int, i int, primary key (id, i)) partition by hash (i) partitions 4",
 			alter:     "alter table t add unique key id_idx(id)",
 			expectErr: &MissingPartitionColumnInUniqueKeyError{Table: "t", Column: "i", UniqueKey: "id_idx"},
@@ -1047,6 +1050,7 @@ func TestValidate(t *testing.T) {
 			alter:     "alter table t add key i12_idx(i1, i2), add key i32_idx((IF(i3 IS NULL, i2, i3)), i2), add key i21_idx(i2, i1)",
 			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "i3", Key: "i32_idx"},
 		},
+		// data types
 		{
 			name:  "nullable timestamp",
 			from:  "create table t (id int primary key, t datetime)",
@@ -1196,6 +1200,19 @@ func TestValidate(t *testing.T) {
 			from:      "create table t (id int, d datetime, e datetime, primary key (id))",
 			alter:     "alter table t add constraint unix_epoch check (d < '1970-01-01' and f < '1970-01-01')",
 			expectErr: &InvalidColumnInCheckConstraintError{Table: "t", Constraint: "unix_epoch", Column: "f"},
+		},
+		// Foreign keys
+		{
+			name:      "existing foreign key, no such column",
+			from:      "create table t (id int primary key, i int, constraint f foreign key (z) references parent(id))",
+			alter:     "alter table t engine=innodb",
+			expectErr: &InvalidColumnInForeignKeyConstraintError{Table: "t", Constraint: "f", Column: "z"},
+		},
+		{
+			name:      "add foreign key, no such column",
+			from:      "create table t (id int primary key, i int)",
+			alter:     "alter table t add constraint f foreign key (z) references parent(id)",
+			expectErr: &InvalidColumnInForeignKeyConstraintError{Table: "t", Constraint: "f", Column: "z"},
 		},
 	}
 	hints := DiffHints{}
