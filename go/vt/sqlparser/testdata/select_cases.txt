@@ -1388,7 +1388,7 @@ INPUT
 select "Det här är svenska" regexp "h[[:alpha:]]+r", "aba" regexp "^(a|b)*$";
 END
 OUTPUT
-select 'Det här är svenska' regexp 'h[[:alpha:]]+r', 'aba' regexp '^(a|b)*$' from dual
+select regexp_like('Det här är svenska', 'h[[:alpha:]]+r'), regexp_like('aba', '^(a|b)*$') from dual
 END
 INPUT
 select std(s1/s2) from bug22555 where i=3 group by i;
@@ -3050,7 +3050,7 @@ INPUT
 select _latin1 0xFF regexp _latin1 '[[:lower:]]' COLLATE latin1_bin;
 END
 OUTPUT
-select _latin1 0xFF regexp _latin1 '[[:lower:]]' collate latin1_bin from dual
+select regexp_like(_latin1 0xFF, _latin1 '[[:lower:]]' collate latin1_bin) from dual
 END
 INPUT
 select hex(weight_string('x�' as char(2)));
@@ -4352,7 +4352,7 @@ INPUT
 select _koi8r 0xFF regexp _koi8r '[[:upper:]]' COLLATE koi8r_bin;
 END
 OUTPUT
-select _koi8r 0xFF regexp _koi8r '[[:upper:]]' collate koi8r_bin from dual
+select regexp_like(_koi8r 0xFF, _koi8r '[[:upper:]]' collate koi8r_bin) from dual
 END
 INPUT
 select from t1 left join t2 on (t1.i=t2.i) left join t3 on (t2.i=t3.i);
@@ -6662,7 +6662,7 @@ INPUT
 select 'zвася' rlike '[[:<:]]вася[[:>:]]';
 END
 OUTPUT
-select 'zвася' rlike '[[:<:]]вася[[:>:]]' from dual
+select regexp_like('zвася', '[[:<:]]вася[[:>:]]') from dual
 END
 INPUT
 select ST_NUMPOINTS(ST_EXTERIORRING(@buff)) from t1;
@@ -6710,7 +6710,7 @@ INPUT
 select _koi8r 0xFF regexp _koi8r '[[:lower:]]' COLLATE koi8r_bin;
 END
 OUTPUT
-select _koi8r 0xFF regexp _koi8r '[[:lower:]]' collate koi8r_bin from dual
+select regexp_like(_koi8r 0xFF, _koi8r '[[:lower:]]' collate koi8r_bin) from dual
 END
 INPUT
 select aes_decrypt(aes_encrypt("","a"),"a");
@@ -7904,7 +7904,7 @@ INPUT
 select _koi8r 0xF7 regexp _koi8r '[[:alpha:]]';
 END
 OUTPUT
-select _koi8r 0xF7 regexp _koi8r '[[:alpha:]]' from dual
+select regexp_like(_koi8r 0xF7, _koi8r '[[:alpha:]]') from dual
 END
 INPUT
 select userid,count(*) from t1 group by userid having (count(*)+1) IN (4,3) order by userid desc;
@@ -8342,7 +8342,7 @@ INPUT
 select 'a' regexp 'A' collate latin1_general_ci;
 END
 OUTPUT
-select 'a' regexp 'A' collate latin1_general_ci from dual
+select regexp_like('a', 'A' collate latin1_general_ci) from dual
 END
 INPUT
 select date_sub("1998-01-01 00:00:00.000001",INTERVAL "1.000002" SECOND_MICROSECOND);
@@ -8486,7 +8486,7 @@ INPUT
 select ' вася ' rlike '[[:<:]]вася[[:>:]]';
 END
 OUTPUT
-select ' вася ' rlike '[[:<:]]вася[[:>:]]' from dual
+select regexp_like(' вася ', '[[:<:]]вася[[:>:]]') from dual
 END
 INPUT
 select max(a3) from t1 where a2 = 2 and 'SEA' > a3;
@@ -8642,7 +8642,7 @@ INPUT
 select 'a' regexp 'A' collate latin1_bin;
 END
 OUTPUT
-select 'a' regexp 'A' collate latin1_bin from dual
+select regexp_like('a', 'A' collate latin1_bin) from dual
 END
 INPUT
 select from information_schema.views where table_schema != 'sys' order by table_name;
@@ -8942,7 +8942,7 @@ INPUT
 select a, a regexp '[a]' from t1 order by binary a;
 END
 OUTPUT
-select a, a regexp '[a]' from t1 order by convert(a, binary) asc
+select a, regexp_like(a, '[a]') from t1 order by convert(a, binary) asc
 END
 INPUT
 select -1 -9223372036854775808 as result;
@@ -11666,7 +11666,7 @@ INPUT
 select _latin1'a' regexp _latin1'A' collate latin1_general_ci;
 END
 OUTPUT
-select _latin1 'a' regexp _latin1 'A' collate latin1_general_ci from dual
+select regexp_like(_latin1 'a', _latin1 'A' collate latin1_general_ci) from dual
 END
 INPUT
 select timestamp("2001-12-01", "01:01:01.999999");
@@ -11858,7 +11858,7 @@ INPUT
 select ' вася' rlike '[[:<:]]вася[[:>:]]';
 END
 OUTPUT
-select ' вася' rlike '[[:<:]]вася[[:>:]]' from dual
+select regexp_like(' вася', '[[:<:]]вася[[:>:]]') from dual
 END
 INPUT
 select POSITION(_latin1'B' IN _latin2'abcd');
@@ -12554,7 +12554,7 @@ INPUT
 select _latin1 0xF7 regexp _latin1 '[[:alpha:]]';
 END
 OUTPUT
-select _latin1 0xF7 regexp _latin1 '[[:alpha:]]' from dual
+select regexp_like(_latin1 0xF7, _latin1 '[[:alpha:]]') from dual
 END
 INPUT
 select reverse("");
@@ -13100,7 +13100,7 @@ INPUT
 select c,table_name from v1 inner join information_schema.TABLES v2 on (v1.c=v2.table_name) where v1.c rlike "t[1-5]{1}$" order by c;
 END
 OUTPUT
-select c, table_name from v1 join information_schema.`TABLES` as v2 on v1.c = v2.table_name where v1.c rlike 't[1-5]{1}$' order by c asc
+select c, table_name from v1 join information_schema.`TABLES` as v2 on v1.c = v2.table_name where regexp_like(v1.c, 't[1-5]{1}$') order by c asc
 END
 INPUT
 select from t1 natural join t2 where t1.b > 0;
@@ -13448,7 +13448,7 @@ INPUT
 select table_name from information_schema.TABLES where table_schema = "mysqltest" and table_name rlike "t[1-5]{1}$" order by table_name;
 END
 OUTPUT
-select table_name from information_schema.`TABLES` where table_schema = 'mysqltest' and table_name rlike 't[1-5]{1}$' order by table_name asc
+select table_name from information_schema.`TABLES` where table_schema = 'mysqltest' and regexp_like(table_name, 't[1-5]{1}$') order by table_name asc
 END
 INPUT
 select count(*) from T1;
@@ -14222,7 +14222,7 @@ INPUT
 select _latin1 0xFF regexp _latin1 '[[:upper:]]' COLLATE latin1_bin;
 END
 OUTPUT
-select _latin1 0xFF regexp _latin1 '[[:upper:]]' collate latin1_bin from dual
+select regexp_like(_latin1 0xFF, _latin1 '[[:upper:]]' collate latin1_bin) from dual
 END
 INPUT
 select from ((t1 natural join t2) cross join (t3 natural join t4)) natural join t5;
@@ -14612,7 +14612,7 @@ INPUT
 select 'вася' regexp '[[:<:]]вася[[:>:]]';
 END
 OUTPUT
-select 'вася' regexp '[[:<:]]вася[[:>:]]' from dual
+select regexp_like('вася', '[[:<:]]вася[[:>:]]') from dual
 END
 INPUT
 select insert('hello', -18446744073709551617, -18446744073709551617, 'hi');
@@ -15986,7 +15986,7 @@ INPUT
 select 'zвасяz' regexp '[[:<:]]вася[[:>:]]';
 END
 OUTPUT
-select 'zвасяz' regexp '[[:<:]]вася[[:>:]]' from dual
+select regexp_like('zвасяz', '[[:<:]]вася[[:>:]]') from dual
 END
 INPUT
 select insert('hello', -1, -1, 'hi');
@@ -17465,10 +17465,10 @@ OUTPUT
 select table_type from information_schema.`tables` where table_name = 'v1'
 END
 INPUT
-select _latin1'a' regexp _latin1'A' collate latin1_bin;
+select _latin1'a' rlike _latin1'A' collate latin1_bin;
 END
 OUTPUT
-select _latin1 'a' regexp _latin1 'A' collate latin1_bin from dual
+select regexp_like(_latin1 'a', _latin1 'A' collate latin1_bin) from dual
 END
 INPUT
 select _latin1'B' between _latin2'a' and _latin1'b';
@@ -17648,7 +17648,7 @@ INPUT
 select 'a' regexp 'A' collate latin1_general_cs;
 END
 OUTPUT
-select 'a' regexp 'A' collate latin1_general_cs from dual
+select regexp_like('a', 'A' collate latin1_general_cs) from dual
 END
 INPUT
 select grp,group_concat(c order by c) from t1 group by grp;
@@ -17678,7 +17678,7 @@ INPUT
 select c, v2.table_name from v1 right join information_schema.TABLES v2 on (v1.c=v2.table_name) where v1.c rlike "t[1-5]{1}$" order by c;
 END
 OUTPUT
-select c, v2.table_name from v1 right join information_schema.`TABLES` as v2 on v1.c = v2.table_name where v1.c rlike 't[1-5]{1}$' order by c asc
+select c, v2.table_name from v1 right join information_schema.`TABLES` as v2 on v1.c = v2.table_name where regexp_like(v1.c, 't[1-5]{1}$') order by c asc
 END
 INPUT
 select t1.i,t2.i,t3.i from t2 right join t3 on (t2.i=t3.i),t1 order by t1.i,t2.i,t3.i;
@@ -20066,7 +20066,7 @@ INPUT
 select 'васяz' rlike '[[:<:]]вася[[:>:]]';
 END
 OUTPUT
-select 'васяz' rlike '[[:<:]]вася[[:>:]]' from dual
+select regexp_like('васяz', '[[:<:]]вася[[:>:]]') from dual
 END
 INPUT
 select id, sum(qty) as sqty from t1 group by id having sqty>2;
@@ -20510,7 +20510,7 @@ INPUT
 select strcmp("a",NULL),(1<NULL)+0.0,NULL regexp "a",null like "a%","a%" like null;
 END
 OUTPUT
-select strcmp('a', null), (1 < null) + 0.0, null regexp 'a', null like 'a%', 'a%' like null from dual
+select strcmp('a', null), (1 < null) + 0.0, regexp_like(null, 'a'), null like 'a%', 'a%' like null from dual
 END
 INPUT
 select a,c,sum(a) from t1 where a > 10 group by a;
@@ -21416,7 +21416,7 @@ INPUT
 select 'вася ' regexp '[[:<:]]вася[[:>:]]';
 END
 OUTPUT
-select 'вася ' regexp '[[:<:]]вася[[:>:]]' from dual
+select regexp_like('вася ', '[[:<:]]вася[[:>:]]') from dual
 END
 INPUT
 select group_concat(distinct s1) from t1;
@@ -22226,7 +22226,7 @@ INPUT
 select c,table_name from v1 left join information_schema.TABLES v2 on (v1.c=v2.table_name) where v1.c rlike "t[1-5]{1}$" order by c;
 END
 OUTPUT
-select c, table_name from v1 left join information_schema.`TABLES` as v2 on v1.c = v2.table_name where v1.c rlike 't[1-5]{1}$' order by c asc
+select c, table_name from v1 left join information_schema.`TABLES` as v2 on v1.c = v2.table_name where regexp_like(v1.c, 't[1-5]{1}$') order by c asc
 END
 INPUT
 select row_count();
@@ -22472,7 +22472,7 @@ INPUT
 select "aba" regexp concat("^","a");
 END
 OUTPUT
-select 'aba' regexp concat('^', 'a') from dual
+select regexp_like('aba', concat('^', 'a')) from dual
 END
 INPUT
 select substring('hello', 1, 18446744073709551617);

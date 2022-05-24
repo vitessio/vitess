@@ -2921,7 +2921,8 @@ func EqualsRefOfRegexpLikeExpr(a, b *RegexpLikeExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsExpr(a.Expr, b.Expr) &&
+	return a.IsNot == b.IsNot &&
+		EqualsExpr(a.Expr, b.Expr) &&
 		EqualsExpr(a.Pattern, b.Pattern) &&
 		EqualsExpr(a.MatchType, b.MatchType)
 }

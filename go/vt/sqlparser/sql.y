@@ -440,7 +440,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <limit> limit_opt limit_clause
 %type <selectInto> into_clause
 %type <columnTypeOptions> column_attribute_list_opt generated_column_attribute_list_opt
-%type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
+%type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt regexp_symbol
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> locking_clause
 %type <columns> ins_column_list column_list at_id_list column_list_opt index_list execute_statement_list_opt
@@ -4936,10 +4936,6 @@ expression:
   {
     $$ = &MemberOfExpr{Value: $1, JSONArr:$5 }
   }
-| expression RLIKE expression
-  {
-    $$ = &RLikeExpr{Expr:$1, Pattern:$3}
-  }
 
 bool_pri:
 bool_pri IS NULL %prec IS
@@ -4992,18 +4988,26 @@ bit_expr IN col_tuple
   {
 	$$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4, Escape: $6}
   }
-| bit_expr REGEXP bit_expr
+| bit_expr regexp_symbol bit_expr
   {
-	$$ = &ComparisonExpr{Left: $1, Operator: RegexpOp, Right: $3}
+	$$ = &RegexpLikeExpr{Expr: $1, Pattern: $3}
   }
-| bit_expr NOT REGEXP bit_expr
+| bit_expr NOT regexp_symbol bit_expr
   {
-	 $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpOp, Right: $4}
+	 $$ = &RegexpLikeExpr{Expr: $1, Pattern: $4, IsNot: true}
   }
 | bit_expr %prec EXPRESSION_PREC_SETTER
  {
 	$$ = $1
  }
+
+regexp_symbol:
+  REGEXP
+  {
+  }
+| RLIKE
+  {
+  }
 
 bit_expr:
 bit_expr '|' bit_expr %prec '|'
