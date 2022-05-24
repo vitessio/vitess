@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -713,5 +714,22 @@ func (session *SafeSession) getSessions() []*vtgatepb.Session_ShardSession {
 		return session.PostSessions
 	default:
 		return session.ShardSessions
+	}
+}
+
+func (session *SafeSession) RemoveInternalSavepoint() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.savepointName == "" {
+		return
+	}
+	sCount := len(session.Savepoints)
+	if sCount == 0 {
+		return
+	}
+	sLast := sCount - 1
+	if strings.Contains(session.Savepoints[sLast], session.savepointName) {
+		session.Savepoints = session.Savepoints[0:sLast]
 	}
 }
