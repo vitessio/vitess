@@ -58,54 +58,48 @@ func init() {
 		Content: string("# This file is auto-included when MariaDB 10.4 is detected.\n\n# enable strict mode so it's safe to compare sequence numbers across different server IDs.\ngtid_strict_mode = 1\ninnodb_stats_persistent = 0\n\n# When semi-sync is enabled, don't allow fallback to async\n# if you get no ack, or have no replicas. This is necessary to\n# prevent alternate futures when doing a failover in response to\n# a primary that becomes unresponsive.\nrpl_semi_sync_master_timeout = 1000000000000000000\nrpl_semi_sync_master_wait_no_slave = 1\n\n\ncharacter_set_server = utf8\ncollation_server = utf8_general_ci\n\nexpire_logs_days = 3\n\nsync_binlog = 1\nbinlog_format = ROW\nlog_slave_updates\nexpire_logs_days = 3\n\n# In MariaDB the default charset is latin1\n\ncharacter_set_server = utf8\ncollation_server = utf8_general_ci\n\n\n"),
 	}
 	fileb := &embedded.EmbeddedFile{
-		Filename:    "mycnf/mysql56.cnf",
-		FileModTime: time.Unix(1636429180, 0),
-
-		Content: string("# This file is auto-included when MySQL 5.6 is detected.\n\n# MySQL 5.6 does not enable the binary log by default, and \n# the default for sync_binlog is unsafe. The format is TABLE, and\n# info repositories also default to file.\n\nsync_binlog = 1\ngtid_mode = ON\nbinlog_format = ROW\nlog_slave_updates\nenforce_gtid_consistency\nexpire_logs_days = 3\nmaster_info_repository = TABLE\nrelay_log_info_repository = TABLE\nrelay_log_purge = 1\nrelay_log_recovery = 1\nslave_net_timeout = 60\n\n# In MySQL 5.6 the default charset is latin1\n\ncharacter_set_server = utf8\ncollation_server = utf8_general_ci\n\n# MySQL 5.6 is unstrict by default\nsql_mode = STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION\n\n# Semi-sync replication is required for automated unplanned failover\n# (when the primary goes away). Here we just load the plugin so it's\n# available if desired, but it's disabled at startup.\n#\n# If the -enable_semi_sync flag is used, VTTablet will enable semi-sync\n# at the proper time when replication is set up, or when a primary\n# promoted or demoted.\nplugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so\n\n# When semi-sync is enabled, don't allow fallback to async\n# if you get no ack, or have no replicas. This is necessary to\n# prevent alternate futures when doing a failover in response to\n# a primary that becomes unresponsive.\nrpl_semi_sync_master_timeout = 1000000000000000000\nrpl_semi_sync_master_wait_no_slave = 1\n\n"),
-	}
-	filec := &embedded.EmbeddedFile{
 		Filename:    "mycnf/mysql57.cnf",
 		FileModTime: time.Unix(1653407305, 0),
 
 		Content: string("# This file is auto-included when MySQL 5.7 is detected.\n\n# MySQL 5.7 does not enable the binary log by default, and \n# info repositories default to file\n\ngtid_mode = ON\nlog_slave_updates\nenforce_gtid_consistency\nexpire_logs_days = 3\nmaster_info_repository = TABLE\nrelay_log_info_repository = TABLE\nrelay_log_purge = 1\nrelay_log_recovery = 1\n\n# In MySQL 5.7 the default charset is latin1\n\ncharacter_set_server = utf8\ncollation_server = utf8_general_ci\n\n# Semi-sync replication is required for automated unplanned failover\n# (when the primary goes away). Here we just load the plugin so it's\n# available if desired, but it's disabled at startup.\n#\n# If the -enable_semi_sync flag is used, VTTablet will enable semi-sync\n# at the proper time when replication is set up, or when a primary is\n# promoted or demoted.\nplugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so\n\n# When semi-sync is enabled, don't allow fallback to async\n# if you get no ack, or have no replicas. This is necessary to\n# prevent alternate futures when doing a failover in response to\n# a primary that becomes unresponsive.\nrpl_semi_sync_master_timeout = 1000000000000000000\nrpl_semi_sync_master_wait_no_slave = 1\n\n"),
 	}
-	filed := &embedded.EmbeddedFile{
+	filec := &embedded.EmbeddedFile{
 		Filename:    "mycnf/mysql80.cnf",
 		FileModTime: time.Unix(1653407291, 0),
 
 		Content: string("# This file is auto-included when MySQL 8.0 is detected.\n\n# MySQL 8.0 enables binlog by default with sync_binlog and TABLE info repositories\n# It does not enable GTIDs or enforced GTID consistency\n\ngtid_mode = ON\nenforce_gtid_consistency\nrelay_log_recovery = 1\nbinlog_expire_logs_seconds = 259200\n\n# disable mysqlx\nmysqlx = 0\n\n# 8.0 changes the default auth-plugin to caching_sha2_password\ndefault_authentication_plugin = mysql_native_password\n\n# Semi-sync replication is required for automated unplanned failover\n# (when the primary goes away). Here we just load the plugin so it's\n# available if desired, but it's disabled at startup.\n#\n# If the -enable_semi_sync flag is used, VTTablet will enable semi-sync\n# at the proper time when replication is set up, or when a primary is\n# promoted or demoted.\nplugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so\n\n# MySQL 8.0 will not load plugins during --initialize\n# which makes these options unknown. Prefixing with --loose\n# tells the server it's fine if they are not understood.\nloose_rpl_semi_sync_master_timeout = 1000000000000000000\nloose_rpl_semi_sync_master_wait_no_slave = 1\n\n"),
 	}
-	filee := &embedded.EmbeddedFile{
+	filed := &embedded.EmbeddedFile{
 		Filename:    "mycnf/sbr.cnf",
 		FileModTime: time.Unix(1625867173, 0),
 
 		Content: string("# This file is used to allow legacy tests to pass\n# In theory it should not be required\nbinlog_format=statement\n"),
 	}
-	filef := &embedded.EmbeddedFile{
+	filee := &embedded.EmbeddedFile{
 		Filename:    "mycnf/test-suite.cnf",
 		FileModTime: time.Unix(1636429180, 0),
 
 		Content: string("# This sets some unsafe settings specifically for \n# the test-suite which is currently MySQL 5.7 based\n# In future it should be renamed testsuite.cnf\n\ninnodb_buffer_pool_size = 32M\ninnodb_flush_log_at_trx_commit = 0\ninnodb_log_buffer_size = 1M\ninnodb_log_file_size = 5M\n\n# Native AIO tends to run into aio-max-nr limit during test startup.\ninnodb_use_native_aio = 0\n\nkey_buffer_size = 2M\nsync_binlog=0\ninnodb_doublewrite=0\n\n# These two settings are required for the testsuite to pass, \n# but enabling them does not spark joy. They should be removed\n# in the future. See:\n# https://github.com/vitessio/vitess/issues/5396\n\nsql_mode = STRICT_TRANS_TABLES\n\n# set a short heartbeat interval in order to detect failures quickly\nslave_net_timeout = 4\n"),
 	}
-	fileh := &embedded.EmbeddedFile{
+	fileg := &embedded.EmbeddedFile{
 		Filename:    "orchestrator/default.json",
 		FileModTime: time.Unix(1625867173, 0),
 
 		Content: string("{\n  \"Debug\": true,\n  \"MySQLTopologyUser\": \"orc_client_user\",\n  \"MySQLTopologyPassword\": \"orc_client_user_password\",\n  \"MySQLReplicaUser\": \"vt_repl\",\n  \"MySQLReplicaPassword\": \"\",\n  \"RecoveryPeriodBlockSeconds\": 5\n}\n"),
 	}
-	filej := &embedded.EmbeddedFile{
+	filei := &embedded.EmbeddedFile{
 		Filename:    "tablet/default.yaml",
 		FileModTime: time.Unix(1636429180, 0),
 
 		Content: string("tabletID: zone-1234\n\ninit:\n  dbName:            # init_db_name_override\n  keyspace:          # init_keyspace\n  shard:             # init_shard\n  tabletType:        # init_tablet_type\n  timeoutSeconds: 60 # init_timeout\n\ndb:\n  socket:     # db_socket\n  host:       # db_host\n  port: 0     # db_port\n  charSet:    # db_charset\n  flags: 0    # db_flags\n  flavor:     # db_flavor\n  sslCa:      # db_ssl_ca\n  sslCaPath:  # db_ssl_ca_path\n  sslCert:    # db_ssl_cert\n  sslKey:     # db_ssl_key\n  serverName: # db_server_name\n  connectTimeoutMilliseconds: 0 # db_connect_timeout_ms\n  app:\n    user: vt_app      # db_app_user\n    password:         # db_app_password\n    useSsl: true      # db_app_use_ssl\n    preferTcp: false\n  dba:\n    user: vt_dba      # db_dba_user\n    password:         # db_dba_password\n    useSsl: true      # db_dba_use_ssl\n    preferTcp: false\n  filtered:\n    user: vt_filtered # db_filtered_user\n    password:         # db_filtered_password\n    useSsl: true      # db_filtered_use_ssl\n    preferTcp: false\n  repl:\n    user: vt_repl     # db_repl_user\n    password:         # db_repl_password\n    useSsl: true      # db_repl_use_ssl\n    preferTcp: false\n  appdebug:\n    user: vt_appdebug # db_appdebug_user\n    password:         # db_appdebug_password\n    useSsl: true      # db_appdebug_use_ssl\n    preferTcp: false\n  allprivs:\n    user: vt_allprivs # db_allprivs_user\n    password:         # db_allprivs_password\n    useSsl: true      # db_allprivs_use_ssl\n    preferTcp: false\n\noltpReadPool:\n  size: 16                 # queryserver-config-pool-size\n  timeoutSeconds: 0        # queryserver-config-query-pool-timeout\n  idleTimeoutSeconds: 1800 # queryserver-config-idle-timeout\n  prefillParallelism: 0    # queryserver-config-pool-prefill-parallelism\n  maxWaiters: 50000        # queryserver-config-query-pool-waiter-cap\n\nolapReadPool:\n  size: 200                # queryserver-config-stream-pool-size\n  timeoutSeconds: 0        # queryserver-config-query-pool-timeout\n  idleTimeoutSeconds: 1800 # queryserver-config-idle-timeout\n  prefillParallelism: 0    # queryserver-config-stream-pool-prefill-parallelism\n  maxWaiters: 0\n\ntxPool:\n  size: 20                 # queryserver-config-transaction-cap\n  timeoutSeconds: 1        # queryserver-config-txpool-timeout\n  idleTimeoutSeconds: 1800 # queryserver-config-idle-timeout\n  prefillParallelism: 0    # queryserver-config-transaction-prefill-parallelism\n  maxWaiters: 50000        # queryserver-config-txpool-waiter-cap\n\noltp:\n  queryTimeoutSeconds: 30 # queryserver-config-query-timeout\n  txTimeoutSeconds: 30    # queryserver-config-transaction-timeout\n  maxRows: 10000          # queryserver-config-max-result-size\n  warnRows: 0             # queryserver-config-warn-result-size\n\nhealthcheck:\n  intervalSeconds: 20             # health_check_interval\n  degradedThresholdSeconds: 30    # degraded_threshold\n  unhealthyThresholdSeconds: 7200 # unhealthy_threshold\n\ngracePeriods:\n  shutdownSeconds:   0 # shutdown_grace_period\n  transitionSeconds: 0 # serving_state_grace_period\n\nreplicationTracker:\n  mode: disable                    # enable_replication_reporter\n  heartbeatIntervalMilliseconds: 0 # heartbeat_enable, heartbeat_interval\n\nhotRowProtection:\n  mode: disable|dryRun|enable # enable_hot_row_protection, enable_hot_row_protection_dry_run\n  # Recommended value: same as txPool.size.\n  maxQueueSize: 20            # hot_row_protection_max_queue_size\n  maxGlobalQueueSize: 1000    # hot_row_protection_max_global_queue_size\n  maxConcurrency: 5           # hot_row_protection_concurrent_transactions\n\nconsolidator: enable|disable|notOnPrimary # enable-consolidator, enable-consolidator-replicas\npassthroughDML: false                    # queryserver-config-passthrough-dmls\nstreamBufferSize: 32768                  # queryserver-config-stream-buffer-size\nqueryCacheSize: 5000                     # queryserver-config-query-cache-size\nschemaReloadIntervalSeconds: 1800        # queryserver-config-schema-reload-time\nwatchReplication: false                  # watch_replication_stream\nterseErrors: false                       # queryserver-config-terse-errors\nmessagePostponeParallelism: 4            # queryserver-config-message-postpone-cap\ncacheResultFields: true                  # enable-query-plan-field-caching\n\n\n# The following flags are currently not supported.\n# enforce_strict_trans_tables\n# queryserver-config-strict-table-acl\n# queryserver-config-enable-table-acl-dry-run\n# queryserver-config-acl-exempt-acl\n# enable-tx-throttler\n# tx-throttler-config\n# tx-throttler-healthcheck-cells\n# enable_transaction_limit\n# enable_transaction_limit_dry_run\n# transaction_limit_per_user\n# transaction_limit_by_username\n# transaction_limit_by_principal\n# transaction_limit_by_component\n# transaction_limit_by_subcomponent\n"),
 	}
-	filek := &embedded.EmbeddedFile{
+	filej := &embedded.EmbeddedFile{
 		Filename:    "zk-client-dev.json",
 		FileModTime: time.Unix(1625867173, 0),
 
 		Content: string("{\n  \"local\": \"localhost:3863\",\n  \"global\": \"localhost:3963\"\n}\n"),
 	}
-	filem := &embedded.EmbeddedFile{
+	filel := &embedded.EmbeddedFile{
 		Filename:    "zkcfg/zoo.cfg",
 		FileModTime: time.Unix(1653065346, 0),
 
@@ -119,13 +113,13 @@ func init() {
 		ChildFiles: []*embedded.EmbeddedFile{
 			file2, // "gomysql.pc.tmpl"
 			file3, // "init_db.sql"
-			filek, // "zk-client-dev.json"
+			filej, // "zk-client-dev.json"
 
 		},
 	}
 	dir4 := &embedded.EmbeddedDir{
 		Filename:   "mycnf",
-		DirModTime: time.Unix(1653407305, 0),
+		DirModTime: time.Unix(1653410466, 0),
 		ChildFiles: []*embedded.EmbeddedFile{
 			file5, // "mycnf/default.cnf"
 			file6, // "mycnf/mariadb100.cnf"
@@ -133,35 +127,34 @@ func init() {
 			file8, // "mycnf/mariadb102.cnf"
 			file9, // "mycnf/mariadb103.cnf"
 			filea, // "mycnf/mariadb104.cnf"
-			fileb, // "mycnf/mysql56.cnf"
-			filec, // "mycnf/mysql57.cnf"
-			filed, // "mycnf/mysql80.cnf"
-			filee, // "mycnf/sbr.cnf"
-			filef, // "mycnf/test-suite.cnf"
+			fileb, // "mycnf/mysql57.cnf"
+			filec, // "mycnf/mysql80.cnf"
+			filed, // "mycnf/sbr.cnf"
+			filee, // "mycnf/test-suite.cnf"
 
 		},
 	}
-	dirg := &embedded.EmbeddedDir{
+	dirf := &embedded.EmbeddedDir{
 		Filename:   "orchestrator",
 		DirModTime: time.Unix(1625867173, 0),
 		ChildFiles: []*embedded.EmbeddedFile{
-			fileh, // "orchestrator/default.json"
+			fileg, // "orchestrator/default.json"
 
 		},
 	}
-	diri := &embedded.EmbeddedDir{
+	dirh := &embedded.EmbeddedDir{
 		Filename:   "tablet",
 		DirModTime: time.Unix(1636429180, 0),
 		ChildFiles: []*embedded.EmbeddedFile{
-			filej, // "tablet/default.yaml"
+			filei, // "tablet/default.yaml"
 
 		},
 	}
-	dirl := &embedded.EmbeddedDir{
+	dirk := &embedded.EmbeddedDir{
 		Filename:   "zkcfg",
 		DirModTime: time.Unix(1653065346, 0),
 		ChildFiles: []*embedded.EmbeddedFile{
-			filem, // "zkcfg/zoo.cfg"
+			filel, // "zkcfg/zoo.cfg"
 
 		},
 	}
@@ -169,15 +162,15 @@ func init() {
 	// link ChildDirs
 	dir1.ChildDirs = []*embedded.EmbeddedDir{
 		dir4, // "mycnf"
-		dirg, // "orchestrator"
-		diri, // "tablet"
-		dirl, // "zkcfg"
+		dirf, // "orchestrator"
+		dirh, // "tablet"
+		dirk, // "zkcfg"
 
 	}
 	dir4.ChildDirs = []*embedded.EmbeddedDir{}
-	dirg.ChildDirs = []*embedded.EmbeddedDir{}
-	diri.ChildDirs = []*embedded.EmbeddedDir{}
-	dirl.ChildDirs = []*embedded.EmbeddedDir{}
+	dirf.ChildDirs = []*embedded.EmbeddedDir{}
+	dirh.ChildDirs = []*embedded.EmbeddedDir{}
+	dirk.ChildDirs = []*embedded.EmbeddedDir{}
 
 	// register embeddedBox
 	embedded.RegisterEmbeddedBox(`../../../config`, &embedded.EmbeddedBox{
@@ -186,9 +179,9 @@ func init() {
 		Dirs: map[string]*embedded.EmbeddedDir{
 			"":             dir1,
 			"mycnf":        dir4,
-			"orchestrator": dirg,
-			"tablet":       diri,
-			"zkcfg":        dirl,
+			"orchestrator": dirf,
+			"tablet":       dirh,
+			"zkcfg":        dirk,
 		},
 		Files: map[string]*embedded.EmbeddedFile{
 			"gomysql.pc.tmpl":           file2,
@@ -199,15 +192,14 @@ func init() {
 			"mycnf/mariadb102.cnf":      file8,
 			"mycnf/mariadb103.cnf":      file9,
 			"mycnf/mariadb104.cnf":      filea,
-			"mycnf/mysql56.cnf":         fileb,
-			"mycnf/mysql57.cnf":         filec,
-			"mycnf/mysql80.cnf":         filed,
-			"mycnf/sbr.cnf":             filee,
-			"mycnf/test-suite.cnf":      filef,
-			"orchestrator/default.json": fileh,
-			"tablet/default.yaml":       filej,
-			"zk-client-dev.json":        filek,
-			"zkcfg/zoo.cfg":             filem,
+			"mycnf/mysql57.cnf":         fileb,
+			"mycnf/mysql80.cnf":         filec,
+			"mycnf/sbr.cnf":             filed,
+			"mycnf/test-suite.cnf":      filee,
+			"orchestrator/default.json": fileg,
+			"tablet/default.yaml":       filei,
+			"zk-client-dev.json":        filej,
+			"zkcfg/zoo.cfg":             filel,
 		},
 	})
 }
