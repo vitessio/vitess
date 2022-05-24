@@ -798,7 +798,8 @@ func TestInsertSharded(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	_, err := executorExec(executor, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
+	session := &vtgatepb.Session{}
+	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), "insert into user(id, v, name) values (1, 2, 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
@@ -825,7 +826,7 @@ func TestInsertSharded(t *testing.T) {
 
 	sbc1.Queries = nil
 	sbclookup.Queries = nil
-	_, err = executorExec(executor, "insert into user(id, v, name) values (3, 2, 'myname2')", nil)
+	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), "insert into user(id, v, name) values (3, 2, 'myname2')", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
@@ -850,7 +851,7 @@ func TestInsertSharded(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into user(id, v, name) values (3, 2, 'myname2')", 1)
 
 	sbc1.Queries = nil
-	_, err = executorExec(executor, "insert into user2(id, name, lastname) values (2, 'myname', 'mylastname')", nil)
+	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), "insert into user2(id, name, lastname) values (2, 'myname', 'mylastname')", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into user2(id, `name`, lastname) values (:_id_0, :_name_0, :_lastname_0)",
@@ -870,7 +871,7 @@ func TestInsertSharded(t *testing.T) {
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	sbclookup.Queries = nil
-	_, err = executorExec(executor, "insert into user(id, v, name) values (1, 2, _binary 'myname')", nil)
+	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), "insert into user(id, v, name) values (1, 2, _binary 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, :vtg2, :_name_0)",
