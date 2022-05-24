@@ -519,7 +519,7 @@ var shardedVSchema = `
 		}
 	},
 	"tables": {
-		"user_extra": {
+		"sp_tbl": {
 			"column_vindexes": [
 				{
 					"column": "user_id",
@@ -557,7 +557,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	require.True(t, session.InTransaction)
 
 	// this query goes to multiple shards so internal savepoint will be created.
-	session, _, err = rpcVTGate.Execute(context.Background(), session, "insert into user_extra(user_id) values (1), (3)", nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), session, "insert into sp_tbl(user_id) values (1), (3)", nil)
 	require.NoError(t, err)
 	require.True(t, session.GetAutocommit())
 	require.True(t, session.InTransaction)
@@ -566,7 +566,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 		Sql:           "savepoint x",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "insert into user_extra(user_id) values (:_user_id_0)",
+		Sql: "insert into sp_tbl(user_id) values (:_user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(1),
 			"_user_id_1": sqltypes.Int64BindVariable(3),
@@ -575,7 +575,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 		},
 	}}
 	assertQueriesWithSavepoint(t, sbc1, wantQ)
-	wantQ[1].Sql = "insert into user_extra(user_id) values (:_user_id_1)"
+	wantQ[1].Sql = "insert into sp_tbl(user_id) values (:_user_id_1)"
 	assertQueriesWithSavepoint(t, sbc2, wantQ)
 	assert.Len(t, sbc3.Queries, 0)
 	// internal savepoint should be removed.
@@ -584,13 +584,13 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	sbc2.Queries = nil
 
 	// multi shard so new savepoint will be created.
-	session, _, err = rpcVTGate.Execute(context.Background(), session, "insert into user_extra(user_id) values (2), (4)", nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), session, "insert into sp_tbl(user_id) values (2), (4)", nil)
 	require.NoError(t, err)
 	wantQ = []*querypb.BoundQuery{{
 		Sql:           "savepoint x",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "insert into user_extra(user_id) values (:_user_id_1)",
+		Sql: "insert into sp_tbl(user_id) values (:_user_id_1)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(2),
 			"_user_id_1": sqltypes.Int64BindVariable(4),
@@ -605,10 +605,10 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	sbc3.Queries = nil
 
 	// single shard so no savepoint will be created and neither any old savepoint will be executed
-	session, _, err = rpcVTGate.Execute(context.Background(), session, "insert into user_extra(user_id) values (5)", nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), session, "insert into sp_tbl(user_id) values (5)", nil)
 	require.NoError(t, err)
 	wantQ = []*querypb.BoundQuery{{
-		Sql: "insert into user_extra(user_id) values (:_user_id_0)",
+		Sql: "insert into sp_tbl(user_id) values (:_user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(5),
 			"vtg1":       sqltypes.Int64BindVariable(5),
@@ -618,8 +618,8 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 
 	testQueryLog(t, logChan, "Execute", "BEGIN", "begin", 0)
 	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0)
-	testQueryLog(t, logChan, "Execute", "INSERT", "insert into user_extra(user_id) values (:vtg1), (:vtg2)", 2)
+	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1), (:vtg2)", 2)
 	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint y", 2)
-	testQueryLog(t, logChan, "Execute", "INSERT", "insert into user_extra(user_id) values (:vtg1), (:vtg2)", 2)
-	testQueryLog(t, logChan, "Execute", "INSERT", "insert into user_extra(user_id) values (:vtg1)", 1)
+	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1), (:vtg2)", 2)
+	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1)", 1)
 }
