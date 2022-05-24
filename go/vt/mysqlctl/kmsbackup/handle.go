@@ -31,6 +31,11 @@ type filesBackupHandle struct {
 	fs       files.Files
 	rootPath string
 
+	// unencryptedFs this is only used for the SIZE file so that we can use a file
+	// system that doesn't encrypt it. otherwise we'd have to give singularity
+	// the encryption keys to decrypt it which we don't want to do.
+	unencryptedFs files.Files
+
 	// filesAdded contains all files added so far and their length in bytes.
 	// It's used for sanity checks as well as calculating the total size
 	filesAdded map[string]int64
@@ -41,13 +46,14 @@ type filesBackupHandle struct {
 	name string
 }
 
-func newFilesBackupHandle(fs files.Files, rootPath, dir, name string) *filesBackupHandle {
+func newFilesBackupHandle(fs, unencryptedFs files.Files, rootPath, dir, name string) *filesBackupHandle {
 	return &filesBackupHandle{
-		fs:         fs,
-		rootPath:   rootPath,
-		dir:        dir,
-		name:       name,
-		filesAdded: make(map[string]int64),
+		fs:            fs,
+		rootPath:      rootPath,
+		dir:           dir,
+		name:          name,
+		filesAdded:    make(map[string]int64),
+		unencryptedFs: unencryptedFs,
 	}
 }
 
@@ -167,7 +173,7 @@ func (f *filesBackupHandle) uploadSizeFile(ctx context.Context, size int64) erro
 	filePath := path.Join(f.rootPath, backupSizeFileName)
 	sizeAsString := strconv.FormatInt(size, 10)
 
-	wrcloser, err := f.fs.Create(ctx, filePath, true, files.WithSizeHint(int64(len(sizeAsString))))
+	wrcloser, err := f.unencryptedFs.Create(ctx, filePath, true, files.WithSizeHint(int64(len(sizeAsString))))
 	if err != nil {
 		return err
 	}

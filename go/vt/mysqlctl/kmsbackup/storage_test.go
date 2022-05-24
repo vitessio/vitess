@@ -236,10 +236,11 @@ func testFilesBackupStorage(t *testing.T) *FilesBackupStorage {
 	}
 
 	f := &FilesBackupStorage{
-		region: region,
-		bucket: bucket,
-		arn:    arn,
-		files:  fs,
+		region:           region,
+		bucket:           bucket,
+		arn:              arn,
+		files:            fs,
+		unencryptedFiles: fs,
 	}
 
 	return f

@@ -55,6 +55,11 @@ type FilesBackupStorage struct {
 	// files represents the a file system abstraction. It can be
 	// replaced for testing purposes.
 	files files.Files
+
+	// unencryptedFiles is a file system that doesn't encrypt the
+	// data. It is currencly used for the SIZE file. It can be
+	// replaced for testing purposes.
+	unencryptedFiles files.Files
 }
 
 // ListBackups satisfies backupstorage.BackupStorage.
@@ -153,20 +158,25 @@ func (f *FilesBackupStorage) createHandle(ctx context.Context, backupID, dir, na
 
 	rootPath := path.Join("/", backupID, dir)
 
+	sess, err := session.NewSession()
+	if err != nil {
+		return nil, vterrors.Wrap(err, "failed to initialize aws session")
+	}
+
 	impl := f.files
 	if impl == nil {
-		sess, err := session.NewSession()
-		if err != nil {
-			return nil, vterrors.Wrap(err, "failed to initialize aws session")
-		}
-
 		impl, err = files.NewEncryptedS3Files(sess, f.region, f.bucket, "", f.arn)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "could not create encrypted s3 files")
 		}
 	}
 
-	return newFilesBackupHandle(impl, rootPath, dir, name), nil
+	unencryptedFs := f.unencryptedFiles
+	if unencryptedFs == nil {
+		unencryptedFs = files.NewS3Files(sess, f.region, f.bucket, "")
+	}
+
+	return newFilesBackupHandle(impl, unencryptedFs, rootPath, dir, name), nil
 }
 
 // RemoveBackup satisfies backupstorage.BackupStorage.
