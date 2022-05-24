@@ -19,6 +19,7 @@ package vtctld
 import (
 	"fmt"
 	"sort"
+
 	"vitess.io/vitess/go/vt/discovery"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -179,14 +180,25 @@ func getShardsForKeyspace(healthcheck *discovery.HealthCheckImpl, keyspace strin
 // If all keyspaces is chosen, it returns the cells from every keyspace.
 // This method is used by topologyInfo to send all available options for the cell dropdown
 func cellsInTopology(healthcheck *discovery.HealthCheckImpl, keyspace string) []string {
+	kss := []string{keyspace}
+	if keyspace == "all" {
+		kss = keyspacesLocked(healthcheck, keyspace)
+	}
 	cells := map[string]bool{}
 	cache := healthcheck.CacheStatus()
 	for _, status := range cache {
-		if status.Target.Keyspace != keyspace {
+		found := false
+		for _, ks := range kss {
+			if status.Target.Keyspace == ks {
+				found = true
+				break
+			}
+		}
+		if !found {
 			continue
 		}
-		if _, ok := cells[status.Target.Cell]; !ok {
-			cells[status.Target.Cell] = true
+		if _, ok := cells[status.Cell]; !ok {
+			cells[status.Cell] = true
 		}
 	}
 	var cellList []string

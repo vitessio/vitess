@@ -254,7 +254,7 @@ func (hc *HealthCheckImpl) GetTabletHealthWithCellFitler(ks, shard, cell string,
 
 func (hc *HealthCheckImpl) GetKeyspaces() []string {
 	kss := []string{}
-	for tabletType, _ := range hc.healthData {
+	for tabletType := range hc.healthData {
 		tabletInfos := strings.Split(string(tabletType), ".")
 		if len(tabletInfos) == 0 {
 			continue
@@ -276,24 +276,15 @@ func (hc *HealthCheckImpl) GetKeyspaces() []string {
 
 func (hc *HealthCheckImpl) GetShardInKeyspace(ks string) []string {
 	shards := []string{}
-	for tabletType, _ := range hc.healthData {
-		tabletInfos := strings.Split(string(tabletType), ".")
-		if len(tabletInfos) < 2 {
+	shardsMap := map[string]bool{}
+	cache := hc.CacheStatus()
+	for _, status := range cache {
+		if status.Target.Keyspace != ks {
 			continue
 		}
-		if tabletInfos[0] != ks {
-			continue
-		}
-		newShard := tabletInfos[1]
-		found := false
-		for _, shard := range shards {
-			if shard == newShard {
-				found = true
-				break
-			}
-		}
-		if !found {
-			shards = append(shards, newShard)
+		if ok := shardsMap[status.Target.Shard]; !ok {
+			shardsMap[status.Target.Shard] = true
+			shards = append(shards, status.Target.Shard)
 		}
 	}
 	return shards
@@ -301,35 +292,15 @@ func (hc *HealthCheckImpl) GetShardInKeyspace(ks string) []string {
 
 func (hc *HealthCheckImpl) GetTabletTypesForKeyspaceShardAndCell(ks, shard, cell string) []topodata.TabletType {
 	tabletTypes := []topodata.TabletType{}
-	for tabletType, _ := range hc.healthData {
-		tabletInfos := strings.Split(string(tabletType), ".")
-		if len(tabletInfos) < 3 {
+	tabletTypeMap := map[topodata.TabletType]bool{}
+	cache := hc.CacheStatus()
+	for _, status := range cache {
+		if status.Target.Keyspace != ks || status.Cell != cell || status.Target.Shard != shard {
 			continue
 		}
-		if tabletInfos[0] != ks || tabletInfos[1] != shard {
-			continue
-		}
-		cells := hc.GetCellsForKeyspaceAndShard(ks, shard)
-		found := false
-		for _, curCell := range cells {
-			if curCell == cell {
-				found = true
-				break
-			}
-		}
-		if !found {
-			continue
-		}
-		tabletType, _ := topoproto.ParseTabletType(tabletInfos[2])
-		found = false
-		for _, tt := range tabletTypes {
-			if tt == tabletType {
-				found = true
-				break
-			}
-		}
-		if !found {
-			tabletTypes = append(tabletTypes, tabletType)
+		if ok := tabletTypeMap[status.Target.TabletType]; !ok {
+			tabletTypeMap[status.Target.TabletType] = true
+			tabletTypes = append(tabletTypes, status.Target.TabletType)
 		}
 	}
 	return tabletTypes
