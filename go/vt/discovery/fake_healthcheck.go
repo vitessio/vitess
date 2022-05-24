@@ -18,6 +18,7 @@ package discovery
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 
@@ -219,16 +220,33 @@ func (fhc *FakeHealthCheck) CacheStatus() TabletsCacheStatusList {
 	fhc.mu.Lock()
 	defer fhc.mu.Unlock()
 
-	stats := make(TabletsCacheStatusList, 0, len(fhc.items))
-	for _, item := range fhc.items {
-		stats = append(stats, &TabletsCacheStatus{
-			Cell:         "FakeCell",
-			Target:       item.ts.Target,
-			TabletsStats: TabletStatsList{item.ts},
-		})
+	tcsMap := fhc.CacheStatusMap()
+	tcsl := make(TabletsCacheStatusList, 0, len(tcsMap))
+	for _, tcs := range tcsMap {
+		tcsl = append(tcsl, tcs)
 	}
-	sort.Sort(stats)
-	return stats
+	sort.Sort(tcsl)
+	return tcsl
+}
+
+func (fhc *FakeHealthCheck) CacheStatusMap() map[string]*TabletsCacheStatus {
+	tcsMap := make(map[string]*TabletsCacheStatus)
+	fhc.mu.Lock()
+	defer fhc.mu.Unlock()
+	for _, ths := range fhc.items {
+		key := fmt.Sprintf("%v.%v.%v.%v", ths.ts.Tablet.Alias.Cell, ths.ts.Target.Keyspace, ths.ts.Target.Shard, ths.ts.Target.TabletType.String())
+		var tcs *TabletsCacheStatus
+		var ok bool
+		if tcs, ok = tcsMap[key]; !ok {
+			tcs = &TabletsCacheStatus{
+				Cell:   ths.ts.Tablet.Alias.Cell,
+				Target: ths.ts.Target,
+			}
+			tcsMap[key] = tcs
+		}
+		tcs.TabletsStats = append(tcs.TabletsStats, ths.ts)
+	}
+	return tcsMap
 }
 
 // Close is not implemented.

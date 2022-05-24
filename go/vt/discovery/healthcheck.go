@@ -169,6 +169,9 @@ type HealthCheck interface {
 	// CacheStatus returns a displayable version of the health check cache.
 	CacheStatus() TabletsCacheStatusList
 
+	// CacheStatusMap returns a map of the health check cache.
+	CacheStatusMap() map[string]*TabletsCacheStatus
+
 	// Close stops the healthcheck.
 	Close() error
 

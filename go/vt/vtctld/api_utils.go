@@ -129,7 +129,7 @@ func qps(stat *discovery.TabletHealth) float64 {
 	return stat.Stats.Qps
 }
 
-func getTabletHealthWithCellFilter(hc *discovery.HealthCheckImpl, ks, shard, cell string, tabletType topodatapb.TabletType) []*discovery.TabletHealth {
+func getTabletHealthWithCellFilter(hc discovery.HealthCheck, ks, shard, cell string, tabletType topodatapb.TabletType) []*discovery.TabletHealth {
 	tabletTypeStr := topoproto.TabletTypeLString(tabletType)
 	m := hc.CacheStatusMap()
 	key := fmt.Sprintf("%v.%v.%v.%v", cell, ks, shard, tabletTypeStr)
@@ -139,7 +139,7 @@ func getTabletHealthWithCellFilter(hc *discovery.HealthCheckImpl, ks, shard, cel
 	return m[key].TabletsStats
 }
 
-func getShardInKeyspace(hc *discovery.HealthCheckImpl, ks string) []string {
+func getShardInKeyspace(hc discovery.HealthCheck, ks string) []string {
 	shards := []string{}
 	shardsMap := map[string]bool{}
 	cache := hc.CacheStatus()
@@ -155,7 +155,7 @@ func getShardInKeyspace(hc *discovery.HealthCheckImpl, ks string) []string {
 	return shards
 }
 
-func getTabletTypesForKeyspaceShardAndCell(hc *discovery.HealthCheckImpl, ks, shard, cell string) []topodatapb.TabletType {
+func getTabletTypesForKeyspaceShardAndCell(hc discovery.HealthCheck, ks, shard, cell string) []topodatapb.TabletType {
 	tabletTypes := []topodatapb.TabletType{}
 	tabletTypeMap := map[topodatapb.TabletType]bool{}
 	cache := hc.CacheStatus()
@@ -171,7 +171,7 @@ func getTabletTypesForKeyspaceShardAndCell(hc *discovery.HealthCheckImpl, ks, sh
 	return tabletTypes
 }
 
-func getTopologyInfo(healthcheck *discovery.HealthCheckImpl, selectedKeyspace, selectedCell string) *topologyInfo {
+func getTopologyInfo(healthcheck discovery.HealthCheck, selectedKeyspace, selectedCell string) *topologyInfo {
 	return &topologyInfo{
 		Keyspaces:   keyspacesLocked(healthcheck, "all"),
 		Cells:       cellsInTopology(healthcheck, selectedKeyspace),
@@ -183,7 +183,7 @@ func getTopologyInfo(healthcheck *discovery.HealthCheckImpl, selectedKeyspace, s
 // It returns one keyspace if a specific one was chosen or returns all of them if 'all' is chosen.
 // This method is used by heatmapData to traverse over desired keyspaces and
 // topologyInfo to send all available options for the keyspace dropdown.
-func keyspacesLocked(healthcheck *discovery.HealthCheckImpl, keyspace string) []string {
+func keyspacesLocked(healthcheck discovery.HealthCheck, keyspace string) []string {
 	if keyspace != "all" {
 		return []string{keyspace}
 	}
@@ -200,7 +200,7 @@ func keyspacesLocked(healthcheck *discovery.HealthCheckImpl, keyspace string) []
 	return keyspaces
 }
 
-func getShardsForKeyspace(healthcheck *discovery.HealthCheckImpl, keyspace string) []string {
+func getShardsForKeyspace(healthcheck discovery.HealthCheck, keyspace string) []string {
 	seenShards := map[string]bool{}
 	shards := []string{}
 	cache := healthcheck.CacheStatus()
@@ -220,7 +220,7 @@ func getShardsForKeyspace(healthcheck *discovery.HealthCheckImpl, keyspace strin
 // cellsInTopology returns all the cells in the given keyspace.
 // If all keyspaces is chosen, it returns the cells from every keyspace.
 // This method is used by topologyInfo to send all available options for the cell dropdown
-func cellsInTopology(healthcheck *discovery.HealthCheckImpl, keyspace string) []string {
+func cellsInTopology(healthcheck discovery.HealthCheck, keyspace string) []string {
 	kss := []string{keyspace}
 	if keyspace == "all" {
 		kss = keyspacesLocked(healthcheck, keyspace)
@@ -253,7 +253,7 @@ func cellsInTopology(healthcheck *discovery.HealthCheckImpl, keyspace string) []
 // typesInTopology returns all the types in the given keyspace and cell.
 // If all keyspaces and cells is chosen, it returns the types from every cell in every keyspace.
 // This method is used by topologyInfo to send all available options for the tablet type dropdown
-func typesInTopology(healthcheck *discovery.HealthCheckImpl, keyspace, cell string) []topodatapb.TabletType {
+func typesInTopology(healthcheck discovery.HealthCheck, keyspace, cell string) []topodatapb.TabletType {
 	keyspaces := keyspacesLocked(healthcheck, keyspace)
 	types := make(map[topodatapb.TabletType]bool)
 	// Going through the shards in every cell in every keyspace to get existing tablet types
@@ -279,7 +279,7 @@ func typesInTopology(healthcheck *discovery.HealthCheckImpl, keyspace, cell stri
 // tabletTypesLocked returns the tablet types needed to be displayed in the heatmap based on the dropdown filters.
 // It returns tablet type if a specific one was chosen or returns all of them if 'all' is chosen for keyspace and/or cell.
 // This method is used by heatmapData to traverse over the desired tablet types.
-func tabletTypesLocked(healthcheck *discovery.HealthCheckImpl, keyspace, cell, tabletType string) []topodatapb.TabletType {
+func tabletTypesLocked(healthcheck discovery.HealthCheck, keyspace, cell, tabletType string) []topodatapb.TabletType {
 	if tabletType != "all" {
 		tabletTypeObj, _ := topoproto.ParseTabletType(tabletType)
 		return []topodatapb.TabletType{tabletTypeObj}
@@ -290,7 +290,7 @@ func tabletTypesLocked(healthcheck *discovery.HealthCheckImpl, keyspace, cell, t
 // cellsLocked returns the cells needed to be displayed in the heatmap based on the dropdown filters.
 // returns one cell if a specific one was chosen or returns all of them if 'all' is chosen.
 // This method is used by heatmapData to traverse over the desired cells.
-func cellsLocked(healthcheck *discovery.HealthCheckImpl, keyspace, cell string) []string {
+func cellsLocked(healthcheck discovery.HealthCheck, keyspace, cell string) []string {
 	if cell != "all" {
 		return []string{cell}
 	}
@@ -299,7 +299,7 @@ func cellsLocked(healthcheck *discovery.HealthCheckImpl, keyspace, cell string) 
 
 // aggregatedData gets heatmapData by taking the average of the metric value of all tablets within the keyspace and cell of the
 // specified type (or from all types if 'all' was selected).
-func aggregatedData(healthcheck *discovery.HealthCheckImpl, keyspace, cell, selectedType, selectedMetric string, metricFunc func(stats *discovery.TabletHealth) float64) ([][]float64, [][]*topodatapb.TabletAlias, yLabel) {
+func aggregatedData(healthcheck discovery.HealthCheck, keyspace, cell, selectedType, selectedMetric string, metricFunc func(stats *discovery.TabletHealth) float64) ([][]float64, [][]*topodatapb.TabletAlias, yLabel) {
 	shards := getShardsForKeyspace(healthcheck, keyspace)
 	tabletTypes := tabletTypesLocked(healthcheck, keyspace, cell, selectedType)
 
@@ -348,7 +348,7 @@ func aggregatedData(healthcheck *discovery.HealthCheckImpl, keyspace, cell, sele
 	return cellData, nil, cellLabel
 }
 
-func unaggregatedData(healthcheck *discovery.HealthCheckImpl, keyspace, cell, selectedType string, metricFunc func(stats *discovery.TabletHealth) float64) ([][]float64, [][]*topodatapb.TabletAlias, yLabel) {
+func unaggregatedData(healthcheck discovery.HealthCheck, keyspace, cell, selectedType string, metricFunc func(stats *discovery.TabletHealth) float64) ([][]float64, [][]*topodatapb.TabletAlias, yLabel) {
 	// This loop goes through every nested label (in this case, tablet type).
 	var cellData [][]float64
 	var cellAliases [][]*topodatapb.TabletAlias
@@ -408,7 +408,7 @@ func unaggregatedData(healthcheck *discovery.HealthCheckImpl, keyspace, cell, se
 }
 
 // heatmapData returns a 2D array of data (based on the specified metric) as well as the labels for the heatmap.
-func heatmapData(healthcheck *discovery.HealthCheckImpl, selectedKeyspace, selectedCell, selectedTabletType, selectedMetric string) ([]heatmap, error) {
+func heatmapData(healthcheck discovery.HealthCheck, selectedKeyspace, selectedCell, selectedTabletType, selectedMetric string) ([]heatmap, error) {
 	// Get the metric data.
 	var metricFunc func(stats *discovery.TabletHealth) float64
 	switch selectedMetric {
