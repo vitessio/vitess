@@ -107,7 +107,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(0)",
+    "Aggregates": "sum(0) AS count",
     "GroupBy": "1, 4, 3",
     "ResultColumns": 4,
     "Inputs": [
@@ -161,7 +161,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(0)",
+    "Aggregates": "sum(0) AS count",
     "GroupBy": "1",
     "Inputs": [
       {
@@ -218,7 +218,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(0)",
+        "Aggregates": "sum(0) AS count",
         "GroupBy": "1, 4, 3",
         "ResultColumns": 5,
         "Inputs": [
@@ -281,7 +281,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(0)",
+    "Aggregates": "sum(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -596,7 +596,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "sum(1) AS count",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -676,7 +676,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "sum(1) AS count",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -871,7 +871,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0)",
+        "Aggregates": "sum(0) AS count",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -928,7 +928,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(1)",
+    "Aggregates": "sum(1) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1048,7 +1048,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "sum(1) AS count",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -1434,7 +1434,7 @@ Gen4 error: Can't group on 'count(*)'
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(2)",
+    "Aggregates": "sum(2) AS count",
     "GroupBy": "1, 0",
     "Inputs": [
       {
@@ -1487,7 +1487,7 @@ Gen4 error: Can't group on 'count(*)'
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(2)",
+    "Aggregates": "sum(2) AS count",
     "GroupBy": "1, 0",
     "Inputs": [
       {
@@ -1540,7 +1540,7 @@ Gen4 error: Can't group on 'count(*)'
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(2)",
+    "Aggregates": "sum(2) AS count",
     "GroupBy": "1, 0",
     "Inputs": [
       {
@@ -1647,7 +1647,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(0)",
+    "Aggregates": "sum(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1694,7 +1694,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(4)",
+    "Aggregates": "sum(4) AS count",
     "GroupBy": "0, 1, 2",
     "Inputs": [
       {
@@ -1747,7 +1747,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(4)",
+    "Aggregates": "sum(4) AS count",
     "GroupBy": "0, 1, 2",
     "Inputs": [
       {
@@ -1800,7 +1800,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(4)",
+    "Aggregates": "sum(4) AS count",
     "GroupBy": "0, 1, 2, 3",
     "Inputs": [
       {
@@ -1853,7 +1853,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(4)",
+    "Aggregates": "sum(4) AS count",
     "GroupBy": "2, 1, 0, 3",
     "Inputs": [
       {
@@ -1906,7 +1906,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(3)",
+    "Aggregates": "sum(3) AS count",
     "GroupBy": "2, 1, 0",
     "Inputs": [
       {
@@ -1968,7 +1968,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(1)",
+        "Aggregates": "sum(1) AS count",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -2091,7 +2091,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(1)",
+        "Aggregates": "sum(1) AS count",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -2153,7 +2153,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(1)",
+        "Aggregates": "sum(1) AS count",
         "GroupBy": "0, 0",
         "Inputs": [
           {
@@ -2363,7 +2363,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0)",
+        "Aggregates": "sum(0) AS count",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2537,7 +2537,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "sum(1) AS count",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -2607,7 +2607,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(0)",
+    "Aggregates": "sum(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2673,7 +2673,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "sum(1) AS count",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -2726,7 +2726,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "sum(1) AS count",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -3740,7 +3740,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count_distinct(1) AS count(distinct val1), count(2)",
+    "Aggregates": "count_distinct(1) AS count(distinct val1), sum(2) AS count",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -3793,7 +3793,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "sum(1) AS count",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -4635,7 +4635,6 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
   }
 }
 
-
 # scatter aggregate symtab lookup error
 "select id, b as id, count(*) from user order by id"
 "ambiguous symbol reference: id"
@@ -4672,7 +4671,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(1)",
+    "Aggregates": "sum(1) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",

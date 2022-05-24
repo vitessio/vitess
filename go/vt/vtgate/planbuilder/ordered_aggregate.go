@@ -230,6 +230,15 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 		if key.CollationID != collations.Unknown {
 			colls[key.KeyCol] = key.CollationID
 		}
+
+		switch key.Opcode {
+		case engine.AggregateCount:
+			if key.Alias == "" {
+				key.Alias = key.Opcode.String()
+			}
+			key.Opcode = engine.AggregateSum
+		}
+
 	}
 	for _, key := range oa.groupByKeys {
 		if key.CollationID != collations.Unknown {
