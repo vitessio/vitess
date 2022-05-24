@@ -836,12 +836,6 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfPrepareStmt(a, b)
-	case *RLikeExpr:
-		b, ok := inB.(*RLikeExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfRLikeExpr(a, b)
 	case ReferenceAction:
 		b, ok := inB.(ReferenceAction)
 		if !ok {
@@ -2870,18 +2864,6 @@ func EqualsRefOfPrepareStmt(a, b *PrepareStmt) bool {
 		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
-// EqualsRefOfRLikeExpr does deep equals between the two objects.
-func EqualsRefOfRLikeExpr(a, b *RLikeExpr) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return EqualsExpr(a.Expr, b.Expr) &&
-		EqualsExpr(a.Pattern, b.Pattern)
-}
-
 // EqualsRefOfReferenceDefinition does deep equals between the two objects.
 func EqualsRefOfReferenceDefinition(a, b *ReferenceDefinition) bool {
 	if a == b {
@@ -4020,12 +4002,6 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfMemberOfExpr(a, b)
-	case *RLikeExpr:
-		b, ok := inB.(*RLikeExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfRLikeExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {
@@ -4599,12 +4575,6 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfOrExpr(a, b)
-	case *RLikeExpr:
-		b, ok := inB.(*RLikeExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfRLikeExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {
@@ -5025,12 +4995,6 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfOrExpr(a, b)
-	case *RLikeExpr:
-		b, ok := inB.(*RLikeExpr)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfRLikeExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {

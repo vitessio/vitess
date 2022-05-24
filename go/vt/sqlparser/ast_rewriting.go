@@ -434,10 +434,6 @@ func inverseOp(i ComparisonExprOperator) (bool, ComparisonExprOperator) {
 		return true, NotLikeOp
 	case NotLikeOp:
 		return true, LikeOp
-	case RegexpOp:
-		return true, NotRegexpOp
-	case NotRegexpOp:
-		return true, RegexpOp
 	}
 
 	return false, i

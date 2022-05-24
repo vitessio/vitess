@@ -292,8 +292,6 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitPartitions(in, f)
 	case *PrepareStmt:
 		return VisitRefOfPrepareStmt(in, f)
-	case *RLikeExpr:
-		return VisitRefOfRLikeExpr(in, f)
 	case ReferenceAction:
 		return VisitReferenceAction(in, f)
 	case *ReferenceDefinition:
@@ -2302,21 +2300,6 @@ func VisitRefOfPrepareStmt(in *PrepareStmt, f Visit) error {
 	}
 	return nil
 }
-func VisitRefOfRLikeExpr(in *RLikeExpr, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitExpr(in.Expr, f); err != nil {
-		return err
-	}
-	if err := VisitExpr(in.Pattern, f); err != nil {
-		return err
-	}
-	return nil
-}
 func VisitRefOfReferenceDefinition(in *ReferenceDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -3412,8 +3395,6 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
-	case *RLikeExpr:
-		return VisitRefOfRLikeExpr(in, f)
 	case *RegexpInstrExpr:
 		return VisitRefOfRegexpInstrExpr(in, f)
 	case *RegexpLikeExpr:
@@ -3640,8 +3621,6 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitOffset(in, f)
 	case *OrExpr:
 		return VisitRefOfOrExpr(in, f)
-	case *RLikeExpr:
-		return VisitRefOfRLikeExpr(in, f)
 	case *RegexpInstrExpr:
 		return VisitRefOfRegexpInstrExpr(in, f)
 	case *RegexpLikeExpr:
@@ -3792,8 +3771,6 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitOffset(in, f)
 	case *OrExpr:
 		return VisitRefOfOrExpr(in, f)
-	case *RLikeExpr:
-		return VisitRefOfRLikeExpr(in, f)
 	case *RegexpInstrExpr:
 		return VisitRefOfRegexpInstrExpr(in, f)
 	case *RegexpLikeExpr:

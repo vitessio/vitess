@@ -194,7 +194,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 }
 
 // These precedence rules are there to handle shift-reduce conflicts.
-%nonassoc <str> MEMBER RLIKE
+%nonassoc <str> MEMBER
 // FUNCTION_CALL_NON_KEYWORD is used to resolve shift-reduce conflicts occuring due to function_call_generic symbol and
 // having special parsing for functions whose names are non-reserved keywords. The shift-reduce conflict occurrs because
 // after seeing a non-reserved keyword, if we see '(', then we can either shift to use the special parsing grammar rule or
@@ -247,7 +247,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> AND
 %right <str> NOT '!'
 %left <str> BETWEEN CASE WHEN THEN ELSE END
-%left <str> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
+%left <str> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP RLIKE IN
 %left <str> '&'
 %left <str> SHIFT_LEFT SHIFT_RIGHT
 %left <str> '+' '-'

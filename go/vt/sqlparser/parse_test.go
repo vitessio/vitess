@@ -563,13 +563,13 @@ var (
 		output: "select /* regexp */ 1 from t where regexp_like(a, b)",
 	}, {
 		input:  "select /* not regexp */ 1 from t where a not regexp b",
-		output: "select /* not regexp */ 1 from t where regexp_like(a, b)",
+		output: "select /* not regexp */ 1 from t where not regexp_like(a, b)",
 	}, {
 		input:  "select /* rlike */ 1 from t where a rlike b",
 		output: "select /* rlike */ 1 from t where regexp_like(a, b)",
 	}, {
 		input:  "select /* not rlike */ 1 from t where a not rlike b",
-		output: "select /* not rlike */ 1 from t where regexp_like(a, b)",
+		output: "select /* not rlike */ 1 from t where not regexp_like(a, b)",
 	}, {
 		input: "select /* between */ 1 from t where a between b and c",
 	}, {

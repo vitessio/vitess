@@ -1868,13 +1868,6 @@ func (node *RegexpSubstrExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteByte(')')
 }
 
-// formatFast formats the node
-func (node *RLikeExpr) formatFast(buf *TrackedBuffer) {
-	buf.printExpr(node, node.Expr, true)
-	buf.WriteString(" rlike ")
-	buf.printExpr(node, node.Pattern, true)
-}
-
 // formatFast formats the node.
 func (node *TrimFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.TrimFuncType.ToString())

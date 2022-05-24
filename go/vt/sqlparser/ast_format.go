@@ -1413,11 +1413,6 @@ func (node *RegexpSubstrExpr) Format(buf *TrackedBuffer) {
 	buf.WriteByte(')')
 }
 
-// Format formats the node
-func (node *RLikeExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v rlike %v", node.Expr, node.Pattern)
-}
-
 // Format formats the node.
 func (node *TrimFuncExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%s(", node.TrimFuncType.ToString())

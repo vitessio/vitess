@@ -135,8 +135,6 @@ const (
 	NotInStr         = "not in"
 	LikeStr          = "like"
 	NotLikeStr       = "not like"
-	RegexpStr        = "regexp"
-	NotRegexpStr     = "not regexp"
 
 	// IsExpr.Operator
 	IsNullStr     = "is null"
@@ -485,8 +483,6 @@ const (
 	NotInOp
 	LikeOp
 	NotLikeOp
-	RegexpOp
-	NotRegexpOp
 )
 
 // Constant for Enum Type - IsExprOperator

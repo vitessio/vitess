@@ -293,8 +293,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return ClonePartitions(in)
 	case *PrepareStmt:
 		return CloneRefOfPrepareStmt(in)
-	case *RLikeExpr:
-		return CloneRefOfRLikeExpr(in)
 	case ReferenceAction:
 		return in
 	case *ReferenceDefinition:
@@ -1822,17 +1820,6 @@ func CloneRefOfPrepareStmt(n *PrepareStmt) *PrepareStmt {
 	return &out
 }
 
-// CloneRefOfRLikeExpr creates a deep clone of the input.
-func CloneRefOfRLikeExpr(n *RLikeExpr) *RLikeExpr {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Expr = CloneExpr(n.Expr)
-	out.Pattern = CloneExpr(n.Pattern)
-	return &out
-}
-
 // CloneRefOfReferenceDefinition creates a deep clone of the input.
 func CloneRefOfReferenceDefinition(n *ReferenceDefinition) *ReferenceDefinition {
 	if n == nil {
@@ -2664,8 +2651,6 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfMatchExpr(in)
 	case *MemberOfExpr:
 		return CloneRefOfMemberOfExpr(in)
-	case *RLikeExpr:
-		return CloneRefOfRLikeExpr(in)
 	case *RegexpInstrExpr:
 		return CloneRefOfRegexpInstrExpr(in)
 	case *RegexpLikeExpr:
@@ -2906,8 +2891,6 @@ func CloneExpr(in Expr) Expr {
 		return in
 	case *OrExpr:
 		return CloneRefOfOrExpr(in)
-	case *RLikeExpr:
-		return CloneRefOfRLikeExpr(in)
 	case *RegexpInstrExpr:
 		return CloneRefOfRegexpInstrExpr(in)
 	case *RegexpLikeExpr:
@@ -3062,8 +3045,6 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return in
 	case *OrExpr:
 		return CloneRefOfOrExpr(in)
-	case *RLikeExpr:
-		return CloneRefOfRLikeExpr(in)
 	case *RegexpInstrExpr:
 		return CloneRefOfRegexpInstrExpr(in)
 	case *RegexpLikeExpr:

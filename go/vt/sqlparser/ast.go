@@ -2597,13 +2597,6 @@ type (
 		Position   Expr
 		MatchType  Expr
 	}
-
-	// RLikeExpr represents RLIKE
-	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#operator_regexp
-	RLikeExpr struct {
-		Expr    Expr
-		Pattern Expr
-	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2669,7 +2662,6 @@ func (*RegexpInstrExpr) iExpr()                    {}
 func (*RegexpLikeExpr) iExpr()                     {}
 func (*RegexpReplaceExpr) iExpr()                  {}
 func (*RegexpSubstrExpr) iExpr()                   {}
-func (*RLikeExpr) iExpr()                          {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -2709,7 +2701,6 @@ func (*RegexpInstrExpr) iCallable()                    {}
 func (*RegexpLikeExpr) iCallable()                     {}
 func (*RegexpReplaceExpr) iCallable()                  {}
 func (*RegexpSubstrExpr) iCallable()                   {}
-func (*RLikeExpr) iCallable()                          {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

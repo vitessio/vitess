@@ -1144,10 +1144,6 @@ func (op ComparisonExprOperator) ToString() string {
 		return LikeStr
 	case NotLikeOp:
 		return NotLikeStr
-	case RegexpOp:
-		return RegexpStr
-	case NotRegexpOp:
-		return NotRegexpStr
 	default:
 		return "Unknown ComparisonExpOperator"
 	}
