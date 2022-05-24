@@ -19,7 +19,6 @@ package vtctld
 import (
 	"fmt"
 	"sort"
-
 	"vitess.io/vitess/go/vt/discovery"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -130,6 +129,48 @@ func qps(stat *discovery.TabletHealth) float64 {
 	return stat.Stats.Qps
 }
 
+func getTabletHealthWithCellFilter(hc *discovery.HealthCheckImpl, ks, shard, cell string, tabletType topodatapb.TabletType) []*discovery.TabletHealth {
+	tabletTypeStr := topoproto.TabletTypeLString(tabletType)
+	m := hc.CacheStatusMap()
+	key := fmt.Sprintf("%v.%v.%v.%v", cell, ks, shard, tabletTypeStr)
+	if _, ok := m[key]; !ok {
+		return nil
+	}
+	return m[key].TabletsStats
+}
+
+func getShardInKeyspace(hc *discovery.HealthCheckImpl, ks string) []string {
+	shards := []string{}
+	shardsMap := map[string]bool{}
+	cache := hc.CacheStatus()
+	for _, status := range cache {
+		if status.Target.Keyspace != ks {
+			continue
+		}
+		if ok := shardsMap[status.Target.Shard]; !ok {
+			shardsMap[status.Target.Shard] = true
+			shards = append(shards, status.Target.Shard)
+		}
+	}
+	return shards
+}
+
+func getTabletTypesForKeyspaceShardAndCell(hc *discovery.HealthCheckImpl, ks, shard, cell string) []topodatapb.TabletType {
+	tabletTypes := []topodatapb.TabletType{}
+	tabletTypeMap := map[topodatapb.TabletType]bool{}
+	cache := hc.CacheStatus()
+	for _, status := range cache {
+		if status.Target.Keyspace != ks || status.Cell != cell || status.Target.Shard != shard {
+			continue
+		}
+		if ok := tabletTypeMap[status.Target.TabletType]; !ok {
+			tabletTypeMap[status.Target.TabletType] = true
+			tabletTypes = append(tabletTypes, status.Target.TabletType)
+		}
+	}
+	return tabletTypes
+}
+
 func getTopologyInfo(healthcheck *discovery.HealthCheckImpl, selectedKeyspace, selectedCell string) *topologyInfo {
 	return &topologyInfo{
 		Keyspaces:   keyspacesLocked(healthcheck, "all"),
@@ -219,9 +260,9 @@ func typesInTopology(healthcheck *discovery.HealthCheckImpl, keyspace, cell stri
 	for _, ks := range keyspaces {
 		cellsPerKeyspace := cellsLocked(healthcheck, ks, cell)
 		for _, cl := range cellsPerKeyspace {
-			shardsPerKeyspace := healthcheck.GetShardInKeyspace(ks)
+			shardsPerKeyspace := getShardInKeyspace(healthcheck, ks)
 			for _, s := range shardsPerKeyspace {
-				typesPerShard := healthcheck.GetTabletTypesForKeyspaceShardAndCell(ks, s, cl)
+				typesPerShard := getTabletTypesForKeyspaceShardAndCell(healthcheck, ks, s, cl)
 				for _, t := range typesPerShard {
 					types[t] = true
 					if len(types) == len(availableTabletTypes) {
@@ -271,7 +312,7 @@ func aggregatedData(healthcheck *discovery.HealthCheckImpl, keyspace, cell, sele
 		unhealthyFound := false
 		// Going through all the types of tablets and aggregating their information.
 		for _, tabletType := range tabletTypes {
-			tablets := healthcheck.GetTabletHealthWithCellFitler(keyspace, shard, cell, tabletType)
+			tablets := getTabletHealthWithCellFilter(healthcheck, keyspace, shard, cell, tabletType)
 			if len(tablets) == 0 {
 				continue
 			}
@@ -320,7 +361,7 @@ func unaggregatedData(healthcheck *discovery.HealthCheckImpl, keyspace, cell, se
 
 		// The loop calculates the maximum number of rows needed.
 		for _, shard := range shards {
-			tabletsCount := len(healthcheck.GetTabletHealthWithCellFitler(keyspace, shard, cell, tabletType))
+			tabletsCount := len(getTabletHealthWithCellFilter(healthcheck, keyspace, shard, cell, tabletType))
 			if maxRowLength < tabletsCount {
 				maxRowLength = tabletsCount
 			}
@@ -339,7 +380,7 @@ func unaggregatedData(healthcheck *discovery.HealthCheckImpl, keyspace, cell, se
 		for shardIndex, shard := range shards {
 			for tabletIndex := 0; tabletIndex < maxRowLength; tabletIndex++ {
 				// If the key doesn't exist then the tablet must not exist so that data is set to -1 (tabletMissing).
-				filteredHealthData := healthcheck.GetTabletHealthWithCellFitler(keyspace, shard, cell, tabletType)
+				filteredHealthData := getTabletHealthWithCellFilter(healthcheck, keyspace, shard, cell, tabletType)
 				if tabletIndex < len(filteredHealthData) {
 					dataRowsPerType[tabletIndex][shardIndex] = metricFunc(filteredHealthData[tabletIndex])
 					aliasRowsPerType[tabletIndex][shardIndex] = filteredHealthData[tabletIndex].Tablet.Alias

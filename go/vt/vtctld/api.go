@@ -115,6 +115,7 @@ func newTabletWithStatsAndURL(t *topodatapb.Tablet, healthcheck *discovery.Healt
 			tablet.Stats = &TabletStats{
 				Realtime: health.Stats,
 				Serving:  health.Serving,
+				Up:       true,
 			}
 			if health.LastError != nil {
 				tablet.Stats.LastError = health.LastError.Error()

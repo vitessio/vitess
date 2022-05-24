@@ -242,81 +242,6 @@ type HealthCheckImpl struct {
 	subscribers map[chan *TabletHealth]struct{}
 }
 
-func (hc *HealthCheckImpl) GetTabletHealthWithCellFitler(ks, shard, cell string, tabletType topodata.TabletType) []*TabletHealth {
-	tabletTypeStr := topoproto.TabletTypeLString(tabletType)
-	m := hc.cacheStatusMap()
-	key := fmt.Sprintf("%v.%v.%v.%v", cell, ks, shard, tabletTypeStr)
-	if _, ok := m[key]; !ok {
-		return nil
-	}
-	return m[key].TabletsStats
-}
-
-func (hc *HealthCheckImpl) GetKeyspaces() []string {
-	kss := []string{}
-	for tabletType := range hc.healthData {
-		tabletInfos := strings.Split(string(tabletType), ".")
-		if len(tabletInfos) == 0 {
-			continue
-		}
-		newKs := tabletInfos[0]
-		found := false
-		for _, ks := range kss {
-			if ks == newKs {
-				found = true
-				break
-			}
-		}
-		if !found {
-			kss = append(kss, newKs)
-		}
-	}
-	return kss
-}
-
-func (hc *HealthCheckImpl) GetShardInKeyspace(ks string) []string {
-	shards := []string{}
-	shardsMap := map[string]bool{}
-	cache := hc.CacheStatus()
-	for _, status := range cache {
-		if status.Target.Keyspace != ks {
-			continue
-		}
-		if ok := shardsMap[status.Target.Shard]; !ok {
-			shardsMap[status.Target.Shard] = true
-			shards = append(shards, status.Target.Shard)
-		}
-	}
-	return shards
-}
-
-func (hc *HealthCheckImpl) GetTabletTypesForKeyspaceShardAndCell(ks, shard, cell string) []topodata.TabletType {
-	tabletTypes := []topodata.TabletType{}
-	tabletTypeMap := map[topodata.TabletType]bool{}
-	cache := hc.CacheStatus()
-	for _, status := range cache {
-		if status.Target.Keyspace != ks || status.Cell != cell || status.Target.Shard != shard {
-			continue
-		}
-		if ok := tabletTypeMap[status.Target.TabletType]; !ok {
-			tabletTypeMap[status.Target.TabletType] = true
-			tabletTypes = append(tabletTypes, status.Target.TabletType)
-		}
-	}
-	return tabletTypes
-}
-
-func (hc *HealthCheckImpl) GetCellsForKeyspaceAndShard(ks, shard string) []string {
-	cells := []string{}
-	tablet := &topodata.Tablet{Keyspace: ks, Shard: shard}
-	for _, watcher := range hc.topoWatchers {
-		if watcher.tabletFilter.IsIncluded(tablet) {
-			cells = append(cells, watcher.cell)
-		}
-	}
-	return cells
-}
-
 // NewHealthCheck creates a new HealthCheck object.
 // Parameters:
 // retryDelay.
@@ -645,7 +570,7 @@ func (hc *HealthCheckImpl) broadcast(th *TabletHealth) {
 
 // CacheStatus returns a displayable version of the cache.
 func (hc *HealthCheckImpl) CacheStatus() TabletsCacheStatusList {
-	tcsMap := hc.cacheStatusMap()
+	tcsMap := hc.CacheStatusMap()
 	tcsl := make(TabletsCacheStatusList, 0, len(tcsMap))
 	for _, tcs := range tcsMap {
 		tcsl = append(tcsl, tcs)
@@ -654,7 +579,7 @@ func (hc *HealthCheckImpl) CacheStatus() TabletsCacheStatusList {
 	return tcsl
 }
 
-func (hc *HealthCheckImpl) cacheStatusMap() map[string]*TabletsCacheStatus {
+func (hc *HealthCheckImpl) CacheStatusMap() map[string]*TabletsCacheStatus {
 	tcsMap := make(map[string]*TabletsCacheStatus)
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
