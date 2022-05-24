@@ -260,11 +260,15 @@ func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 				return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(fExpr))
 			}
 		}*/
-		if sqlparser.IsAggregation(node) {
-			//return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument")
-			// TODO: for now return true every time but we need a way to detect single argument aggregate functions
-			return true, nil
+		fExpr, ok := node.(sqlparser.Expr)
+		if ok {
+			if isAggregate, _ := sqlparser.IsAggregation(fExpr); isAggregate {
+				//return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument")
+				// TODO: for now return true every time but we need a way to detect single argument aggregate functions
+				return true, nil
+			}
 		}
+
 		return true, nil
 	}, exp.Expr)
 }
@@ -290,7 +294,8 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Sel
 
 func (qp *QueryProjection) isOrderByExprInGroupBy(order OrderBy) bool {
 	// ORDER BY NULL or Aggregation functions need not be present in group by
-	if sqlparser.IsNull(order.Inner.Expr) || sqlparser.IsAggregation(order.WeightStrExpr) {
+	isAggregate, _ := sqlparser.IsAggregation(order.WeightStrExpr)
+	if sqlparser.IsNull(order.Inner.Expr) || isAggregate {
 		return true
 	}
 	for _, groupByExpr := range qp.groupByExprs {
@@ -429,20 +434,17 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 			continue
 		}
 
-		isFunc, funcName := sqlparser.IsAggregation2(aliasedExpr.Expr)
-		//fExpr, isFunc := aliasedExpr.Expr.(*sqlparser.FuncExpr)
-		if !isFunc {
+		isAggregate, funcName := sqlparser.IsAggregation(aliasedExpr.Expr)
+		if !isAggregate {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
 		}
 
-		//funcName := fExpr.Name.Lowered()
 		opcode, found := engine.SupportedAggregates[funcName]
 		if !found {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: aggregation function '%s'", funcName)
 		}
 
 		if sqlparser.IsDistinct(aliasedExpr.Expr) {
-			//fExpr.Distinct {
 			switch opcode {
 			case engine.AggregateCount:
 				opcode = engine.AggregateCountDistinct
@@ -559,7 +561,7 @@ func (qp *QueryProjection) AddGroupBy(by GroupBy) {
 
 func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		if sqlparser.IsAggregation(node) {
+		if isAggregate, _ := sqlparser.IsAggregation(node); isAggregate {
 			return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongGroupField, "Can't group on '%s'", sqlparser.String(expr))
 		}
 		_, isSubQ := node.(*sqlparser.Subquery)

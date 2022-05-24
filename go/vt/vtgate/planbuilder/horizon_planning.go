@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
@@ -689,8 +690,10 @@ func addColumnsToOA(
 			o := groupings[count]
 			count++
 			a := aggregationExprs[offset]
-			//collID := ctx.SemTable.CollationForExpr(a.Func.Exprs[0].(*sqlparser.AliasedExpr).Expr)
-			collID := ctx.SemTable.CollationForExpr(a.Func)
+			collID := collations.Unknown
+			if aggr, ok := a.Func.(sqlparser.AggrFunc); ok {
+				collID = ctx.SemTable.CollationForExpr(aggr.GetArg())
+			}
 			oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
 				Opcode:      a.OpCode,
 				Col:         o.col,
@@ -744,7 +747,12 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 			err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(expr.Original))
 			return
 		}*/
-		inner, innerWS, err := hp.qp.GetSimplifiedExpr(expr.Func)
+		var agg = expr.Func
+		// if it is aggregator then we need to assign argument of aggregator which is ColName type
+		if tmpAgg, ok := expr.Func.(sqlparser.AggrFunc); ok {
+			agg = tmpAgg.GetArg()
+		}
+		inner, innerWS, err := hp.qp.GetSimplifiedExpr(agg)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -816,15 +824,7 @@ func (hp *horizonPlanning) createGroupingsForColumns(columns []*sqlparser.ColNam
 	return lhsGrouping, nil
 }
 
-/*func isCountStar(f *sqlparser.FuncExpr) bool {
-	if f == nil {
-		return false
-	}
-	_, isStar := f.Exprs[0].(*sqlparser.StarExpr)
-	return isStar
-}*/
-
-func isCountStar2(expr sqlparser.Expr) bool {
+func isCountStar(expr sqlparser.Expr) bool {
 	switch expr.(type) {
 	case *sqlparser.CountStar:
 		return true

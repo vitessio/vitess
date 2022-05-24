@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -131,6 +132,23 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		}
 		b.recursive[node] = ts
 		b.direct[node] = ts
+	case sqlparser.AggrFunc:
+		fmt.Println("here you go")
+		cStar, ok := node.(*sqlparser.CountStar)
+		if !ok {
+			break
+		}
+
+		scope := b.scoper.currentScope()
+		var ts TableSet
+		for _, table := range scope.tables {
+			expr := table.getExpr()
+			if expr != nil {
+				ts.MergeInPlace(b.tc.tableSetFor(expr))
+			}
+		}
+		b.recursive[cStar] = ts
+		b.direct[cStar] = ts
 	}
 	return nil
 }

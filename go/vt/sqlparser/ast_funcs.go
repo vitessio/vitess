@@ -1717,47 +1717,64 @@ func formatAddress(address string) string {
 func ContainsAggregation(e SQLNode) bool {
 	hasAggregates := false
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
-		//fmt.Println(reflect.TypeOf(node))
-		//fmt.Println(reflect.ValueOf(node).Kind())
-		if IsAggregation(node) {
+		//fExpr, ok := node.(Expr)
+		//if ok {
+		if isAggregate, _ := IsAggregation(node); isAggregate {
 			hasAggregates = true
 			return false, nil
 		}
+		//}
 		return true, nil
 	}, e)
 	return hasAggregates
 }
 
-// IsAggregation returns true if the node is an aggregation expression
-func IsAggregation(node SQLNode) bool {
-	switch node := node.(type) {
-	case *Count:
-		return true
+/*func IsAggregateWithColName(aggr AggrFunc) (bool, ColIdent) {
+	switch node := aggr.(type) {
 	case *CountStar:
-		return true
+		return false, ColIdent{}
+	case *Count:
+		if col, ok := node.(*ColName); ok {
+			return true, col.Name
+		}
 	case *Avg:
-		return true
+		if col, ok := node.(*ColName); ok {
+			return true, col.Name
+		}
 	case *Max:
-		return true
+		if col, ok := node.(*ColName); ok {
+			return true, col.Name
+		}
 	case *Min:
-		return true
+		if col, ok := node.(*ColName); ok {
+			return true, col.Name
+		}
 	case *Sum:
-		return true
-	case *FuncExpr:
-		return node.IsAggregate()
-	case *GroupConcatExpr:
-		return true
+		if col, ok := node.(*ColName); ok {
+			return true, col.Name
+		}
 	}
-	return false
+	return false, ColIdent{}
+}*/
+
+func IsAggregation(node SQLNode) (bool, string) {
+	fExpr, ok := node.(Expr)
+	if ok {
+		switch expr := fExpr.(type) {
+		case AggrFunc:
+			return true, expr.AggrName()
+		}
+	}
+	return false, ""
 }
 
-func IsAggregation2(expr Expr) (bool, string) {
+/*func IsAggregation(expr Expr) (bool, string) {
 	switch node := expr.(type) {
 	case AggrFunc:
 		return true, node.AggrName()
 	}
 	return false, ""
-}
+}*/
 
 func IsDistinct(expr Expr) bool {
 	switch node := expr.(type) {
@@ -1772,10 +1789,6 @@ func IsDistinct(expr Expr) bool {
 	case *Min:
 		return false
 	case *Sum:
-		return node.Distinct
-	case *FuncExpr:
-		return node.Distinct
-	case *GroupConcatExpr:
 		return node.Distinct
 	}
 	return false

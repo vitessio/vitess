@@ -1,67 +1,50 @@
-# scatter group by a text column, reuse existing weight_string
-"select count(*) k, a, textcol1, b from user group by a, textcol1, b order by k, textcol1"
+# distinct on text column with collation
+"select col, count(distinct textcol1) from user group by col"
 {
   "QueryType": "SELECT",
-  "Original": "select count(*) k, a, textcol1, b from user group by a, textcol1, b order by k, textcol1",
+  "Original": "select col, count(distinct textcol1) from user group by col",
   "Instructions": {
-    "OperatorType": "Sort",
-    "Variant": "Memory",
-    "OrderBy": "0 ASC, (2|4) ASC",
-    "ResultColumns": 4,
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count_distinct(1) AS count(distinct textcol1)",
+    "GroupBy": "0",
     "Inputs": [
       {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "count(0)",
-        "GroupBy": "1, 4, 3",
-        "ResultColumns": 5,
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b)",
-            "OrderBy": "(2|4) ASC, (1|5) ASC, (3|6) ASC",
-            "Query": "select count(*) as k, a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` group by a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) order by textcol1 asc, a asc, b asc",
-            "ResultColumns": 5,
-            "Table": "`user`"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, textcol1, weight_string(textcol1) from `user` where 1 != 1 group by col, textcol1, weight_string(textcol1)",
+        "OrderBy": "0 ASC, (1|2) ASC",
+        "Query": "select col, textcol1, weight_string(textcol1) from `user` group by col, textcol1, weight_string(textcol1) order by col asc, textcol1 asc",
+        "ResultColumns": 2,
+        "Table": "`user`"
       }
     ]
   }
 }
 {
   "QueryType": "SELECT",
-  "Original": "select count(*) k, a, textcol1, b from user group by a, textcol1, b order by k, textcol1",
+  "Original": "select col, count(distinct textcol1) from user group by col",
   "Instructions": {
-    "OperatorType": "Sort",
-    "Variant": "Memory",
-    "OrderBy": "0 ASC, 2 ASC COLLATE latin1_swedish_ci",
-    "ResultColumns": 4,
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count_distinct(1 COLLATE latin1_swedish_ci) AS count(distinct textcol1)",
+    "GroupBy": "0",
     "Inputs": [
       {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum(0) AS k",
-        "GroupBy": "(1|4), 2 COLLATE latin1_swedish_ci, (3|5)",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, weight_string(a), textcol1, b, weight_string(b)",
-            "OrderBy": "(1|4) ASC, 2 ASC COLLATE latin1_swedish_ci, (3|5) ASC",
-            "Query": "select count(*) as k, a, textcol1, b, weight_string(a), weight_string(b) from `user` group by a, weight_string(a), textcol1, b, weight_string(b) order by a asc, textcol1 asc, b asc",
-            "Table": "`user`"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, textcol1 from `user` where 1 != 1 group by col, textcol1",
+        "OrderBy": "0 ASC, 1 ASC COLLATE latin1_swedish_ci",
+        "Query": "select col, textcol1 from `user` group by col, textcol1 order by col asc, textcol1 asc",
+        "Table": "`user`"
       }
     ]
   }

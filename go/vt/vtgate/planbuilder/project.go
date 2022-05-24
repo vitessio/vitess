@@ -73,26 +73,16 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 		// others. This functionality depends on the PushOrderBy to request that
 		// the rows be correctly ordered.
 	case *orderedAggregate:
-		//iAgg := expr(*sqlparser.AggrFunc)
-		if isAggregate, aggName := sqlparser.IsAggregation2(expr.Expr); isAggregate {
+		if isAggregate, aggName := sqlparser.IsAggregation(expr.Expr); isAggregate {
 			fmt.Printf("we got this %v \n", aggName)
 			if _, ok := engine.SupportedAggregates[aggName]; ok {
-				rc, colNumber, err := node.pushAggr2(pb, expr, origin)
-				if err != nil {
-					return nil, nil, 0, err
-				}
-				return node, rc, colNumber, nil
-			}
-		}
-		/*if inner, ok := expr.Expr.(*sqlparser.FuncExpr); ok {
-			if _, ok := engine.SupportedAggregates[inner.Name.Lowered()]; ok {
 				rc, colNumber, err := node.pushAggr(pb, expr, origin)
 				if err != nil {
 					return nil, nil, 0, err
 				}
 				return node, rc, colNumber, nil
 			}
-		}*/
+		}
 
 		// Ensure that there are no aggregates in the expression.
 		if sqlparser.ContainsAggregation(expr.Expr) {

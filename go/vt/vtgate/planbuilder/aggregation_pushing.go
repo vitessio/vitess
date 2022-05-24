@@ -375,7 +375,7 @@ func splitAggregationsToLeftAndRight(
 	var lhsAggrs, rhsAggrs []*abstract.Aggr
 	for _, aggr := range aggregations {
 		newAggr := aggr
-		if isCountStar2(aggr.Func) {
+		if isCountStar(aggr.Func) {
 			lhsAggrs = append(lhsAggrs, &newAggr)
 			rhsAggrs = append(rhsAggrs, &newAggr)
 		} else {

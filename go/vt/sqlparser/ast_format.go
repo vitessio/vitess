@@ -2352,9 +2352,7 @@ func (node *Count) Format(buf *TrackedBuffer) {
 }
 
 func (node *CountStar) Format(buf *TrackedBuffer) {
-	//buf.WriteString("count(")
 	buf.WriteString("count(*)")
-	//buf.WriteString(")")
 }
 
 func (node *Avg) Format(buf *TrackedBuffer) {

@@ -259,64 +259,7 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 }
 
 func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin logicalPlan) (rc *resultColumn, colNumber int, err error) {
-	funcExpr := expr.Expr.(*sqlparser.FuncExpr)
-	opcode := engine.SupportedAggregates[funcExpr.Name.Lowered()]
-	if len(funcExpr.Exprs) != 1 {
-		return nil, 0, fmt.Errorf("unsupported: only one expression allowed inside aggregates: %s", sqlparser.String(funcExpr))
-	}
-	handleDistinct, innerAliased, err := oa.needDistinctHandling(pb, funcExpr, opcode)
-	if err != nil {
-		return nil, 0, err
-	}
-	if handleDistinct {
-		if oa.extraDistinct != nil {
-			return nil, 0, fmt.Errorf("unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(funcExpr))
-		}
-		// Push the expression that's inside the aggregate.
-		// The column will eventually get added to the group by and order by clauses.
-		newBuilder, _, innerCol, err := planProjection(pb, oa.input, innerAliased, origin)
-		if err != nil {
-			return nil, 0, err
-		}
-		pb.plan = newBuilder
-		col, err := BuildColName(oa.input.ResultColumns(), innerCol)
-		if err != nil {
-			return nil, 0, err
-		}
-		oa.extraDistinct = col
-		oa.preProcess = true
-		switch opcode {
-		case engine.AggregateCount:
-			opcode = engine.AggregateCountDistinct
-		case engine.AggregateSum:
-			opcode = engine.AggregateSumDistinct
-		}
-		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
-			Opcode: opcode,
-			Col:    innerCol,
-			Alias:  expr.ColumnName(),
-		})
-	} else {
-		newBuilder, _, innerCol, err := planProjection(pb, oa.input, expr, origin)
-		if err != nil {
-			return nil, 0, err
-		}
-		pb.plan = newBuilder
-		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
-			Opcode: opcode,
-			Col:    innerCol,
-		})
-	}
-
-	// Build a new rc with oa as origin because it's semantically different
-	// from the expression we pushed down.
-	rc = newResultColumn(expr, oa)
-	oa.resultColumns = append(oa.resultColumns, rc)
-	return rc, len(oa.resultColumns) - 1, nil
-}
-
-func (oa *orderedAggregate) pushAggr2(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin logicalPlan) (rc *resultColumn, colNumber int, err error) {
-	_, aggName := sqlparser.IsAggregation2(expr.Expr)
+	_, aggName := sqlparser.IsAggregation(expr.Expr)
 	opcode := engine.SupportedAggregates[aggName]
 
 	//TODO: how to fix this
@@ -326,7 +269,7 @@ func (oa *orderedAggregate) pushAggr2(pb *primitiveBuilder, expr *sqlparser.Alia
 		return nil, 0, fmt.Errorf("unsupported: only one expression allowed inside aggregates: %s", sqlparser.String(funcExpr))
 	}*/
 
-	handleDistinct, innerAliased, err := oa.needDistinctHandling2(pb, expr, opcode)
+	handleDistinct, innerAliased, err := oa.needDistinctHandling(pb, expr, opcode)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -380,7 +323,7 @@ func (oa *orderedAggregate) pushAggr2(pb *primitiveBuilder, expr *sqlparser.Alia
 // needDistinctHandling returns true if oa needs to handle the distinct clause.
 // If true, it will also return the aliased expression that needs to be pushed
 // down into the underlying route.
-func (oa *orderedAggregate) needDistinctHandling2(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, opcode engine.AggregateOpcode) (bool, *sqlparser.AliasedExpr, error) {
+func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, opcode engine.AggregateOpcode) (bool, *sqlparser.AliasedExpr, error) {
 	if !sqlparser.IsDistinct(expr.Expr) {
 		return false, nil, nil
 	}
@@ -388,7 +331,11 @@ func (oa *orderedAggregate) needDistinctHandling2(pb *primitiveBuilder, expr *sq
 		return false, nil, nil
 	}
 
-	innerAliased := expr
+	var innerAliased *sqlparser.AliasedExpr
+	if aggr, ok := expr.Expr.(sqlparser.AggrFunc); ok {
+		innerAliased = &sqlparser.AliasedExpr{Expr: aggr.GetArg(), As: expr.As}
+	}
+
 	//TODO: how to fix this
 	/*if !ok {
 		return false, nil, fmt.Errorf("syntax error: %s", sqlparser.String(funcExpr))
@@ -408,7 +355,7 @@ func (oa *orderedAggregate) needDistinctHandling2(pb *primitiveBuilder, expr *sq
 // needDistinctHandling returns true if oa needs to handle the distinct clause.
 // If true, it will also return the aliased expression that needs to be pushed
 // down into the underlying route.
-func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr *sqlparser.FuncExpr, opcode engine.AggregateOpcode) (bool, *sqlparser.AliasedExpr, error) {
+/*func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr *sqlparser.FuncExpr, opcode engine.AggregateOpcode) (bool, *sqlparser.AliasedExpr, error) {
 	if !funcExpr.Distinct {
 		return false, nil, nil
 	}
@@ -429,7 +376,7 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 		return false, nil, nil
 	}
 	return true, innerAliased, nil
-}
+}*/
 
 // Wireup implements the logicalPlan interface
 // If text columns are detected in the keys, then the function modifies
@@ -485,8 +432,8 @@ func (oa *orderedAggregate) SetTruncateColumnCount(count int) {
 func (oa *orderedAggregate) rewriteAggrExpressions() func(*sqlparser.Cursor) bool {
 	return func(cursor *sqlparser.Cursor) bool {
 		sqlNode := cursor.Node()
-		if sqlparser.IsAggregation(sqlNode) {
-			fExp := sqlNode.(*sqlparser.FuncExpr)
+		if isAggregate, _ := sqlparser.IsAggregation(sqlNode); isAggregate {
+			fExp := sqlNode.(sqlparser.Expr)
 			for _, aggregate := range oa.aggregates {
 				if sqlparser.EqualsExpr(aggregate.Expr, fExp) {
 					cursor.Replace(sqlparser.Offset(aggregate.Col))

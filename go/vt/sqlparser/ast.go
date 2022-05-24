@@ -2559,6 +2559,7 @@ type (
 
 	AggrFunc interface {
 		AggrName() string
+		GetArg() Expr
 	}
 
 	Count struct {
@@ -2597,6 +2598,13 @@ func (*Avg) iExpr()       {}
 func (*CountStar) iExpr() {}
 func (*Count) iExpr()     {}
 
+func (sum *Sum) GetArg() Expr     { return sum.Arg }
+func (min *Min) GetArg() Expr     { return min.Arg }
+func (max *Max) GetArg() Expr     { return max.Arg }
+func (avg *Avg) GetArg() Expr     { return avg.Arg }
+func (*CountStar) GetArg() Expr   { return nil }
+func (count *Count) GetArg() Expr { return count.Arg }
+
 func (*Sum) AggrName() string       { return "sum" }
 func (*Min) AggrName() string       { return "min" }
 func (*Max) AggrName() string       { return "max" }
@@ -2604,122 +2612,64 @@ func (*Avg) AggrName() string       { return "avg" }
 func (*CountStar) AggrName() string { return "count" }
 func (*Count) AggrName() string     { return "count" }
 
-func (*AndExpr) iExpr()                                                 {}
-func (*AndExpr) isAggregate() (bool, string)                            { return false, "" }
-func (*OrExpr) iExpr()                                                  {}
-func (*OrExpr) isAggregate() (bool, string)                             { return false, "" }
-func (*XorExpr) iExpr()                                                 {}
-func (*XorExpr) isAggregate() (bool, string)                            { return false, "" }
-func (*NotExpr) iExpr()                                                 {}
-func (*NotExpr) isAggregate() (bool, string)                            { return false, "" }
-func (*ComparisonExpr) iExpr()                                          {}
-func (*ComparisonExpr) isAggregate() (bool, string)                     { return false, "" }
-func (*BetweenExpr) iExpr()                                             {}
-func (*BetweenExpr) isAggregate() (bool, string)                        { return false, "" }
-func (*IsExpr) iExpr()                                                  {}
-func (*IsExpr) isAggregate() (bool, string)                             { return false, "" }
-func (*ExistsExpr) iExpr()                                              {}
-func (*ExistsExpr) isAggregate() (bool, string)                         { return false, "" }
-func (*Literal) iExpr()                                                 {}
-func (*Literal) isAggregate() (bool, string)                            { return false, "" }
-func (Argument) iExpr()                                                 {}
-func (Argument) isAggregate() (bool, string)                            { return false, "" }
-func (*NullVal) iExpr()                                                 {}
-func (*NullVal) isAggregate() (bool, string)                            { return false, "" }
-func (BoolVal) iExpr()                                                  {}
-func (BoolVal) isAggregate() (bool, string)                             { return false, "" }
-func (*ColName) iExpr()                                                 {}
-func (*ColName) isAggregate() (bool, string)                            { return false, "" }
-func (ValTuple) iExpr()                                                 {}
-func (ValTuple) isAggregate() (bool, string)                            { return false, "" }
-func (*Subquery) iExpr()                                                {}
-func (*Subquery) isAggregate() (bool, string)                           { return false, "" }
-func (ListArg) iExpr()                                                  {}
-func (ListArg) isAggregate() (bool, string)                             { return false, "" }
-func (*BinaryExpr) iExpr()                                              {}
-func (*BinaryExpr) isAggregate() (bool, string)                         { return false, "" }
-func (*UnaryExpr) iExpr()                                               {}
-func (*UnaryExpr) isAggregate() (bool, string)                          { return false, "" }
-func (*IntroducerExpr) iExpr()                                          {}
-func (*IntroducerExpr) isAggregate() (bool, string)                     { return false, "" }
-func (*IntervalExpr) iExpr()                                            {}
-func (*IntervalExpr) isAggregate() (bool, string)                       { return false, "" }
-func (*CollateExpr) iExpr()                                             {}
-func (*CollateExpr) isAggregate() (bool, string)                        { return false, "" }
-func (*FuncExpr) iExpr()                                                {}
-func (*FuncExpr) isAggregate() (bool, string)                           { return false, "" }
-func (*TimestampFuncExpr) iExpr()                                       {}
-func (*TimestampFuncExpr) isAggregate() (bool, string)                  { return false, "" }
-func (*ExtractFuncExpr) iExpr()                                         {}
-func (*ExtractFuncExpr) isAggregate() (bool, string)                    { return false, "" }
-func (*WeightStringFuncExpr) iExpr()                                    {}
-func (*WeightStringFuncExpr) isAggregate() (bool, string)               { return false, "" }
-func (*CurTimeFuncExpr) iExpr()                                         {}
-func (*CurTimeFuncExpr) isAggregate() (bool, string)                    { return false, "" }
-func (*CaseExpr) iExpr()                                                {}
-func (*CaseExpr) isAggregate() (bool, string)                           { return false, "" }
-func (*ValuesFuncExpr) iExpr()                                          {}
-func (*ValuesFuncExpr) isAggregate() (bool, string)                     { return false, "" }
-func (*ConvertExpr) iExpr()                                             {}
-func (*ConvertExpr) isAggregate() (bool, string)                        { return false, "" }
-func (*SubstrExpr) iExpr()                                              {}
-func (*SubstrExpr) isAggregate() (bool, string)                         { return false, "" }
-func (*ConvertUsingExpr) iExpr()                                        {}
-func (*ConvertUsingExpr) isAggregate() (bool, string)                   { return false, "" }
-func (*MatchExpr) iExpr()                                               {}
-func (*MatchExpr) isAggregate() (bool, string)                          { return false, "" }
-func (*GroupConcatExpr) iExpr()                                         {}
-func (*GroupConcatExpr) isAggregate() (bool, string)                    { return false, "" }
-func (*Default) iExpr()                                                 {}
-func (*Default) isAggregate() (bool, string)                            { return false, "" }
-func (*ExtractedSubquery) iExpr()                                       {}
-func (*ExtractedSubquery) isAggregate() (bool, string)                  { return false, "" }
-func (*TrimFuncExpr) iExpr()                                            {}
-func (*TrimFuncExpr) isAggregate() (bool, string)                       { return false, "" }
-func (*JSONSchemaValidFuncExpr) iExpr()                                 {}
-func (*JSONSchemaValidFuncExpr) isAggregate() (bool, string)            { return false, "" }
-func (*JSONSchemaValidationReportFuncExpr) iExpr()                      {}
-func (*JSONSchemaValidationReportFuncExpr) isAggregate() (bool, string) { return false, "" }
-func (Offset) iExpr()                                                   {}
-func (Offset) isAggregate() (bool, string)                              { return false, "" }
-func (*JSONPrettyExpr) iExpr()                                          {}
-func (*JSONPrettyExpr) isAggregate() (bool, string)                     { return false, "" }
-func (*JSONStorageFreeExpr) iExpr()                                     {}
-func (*JSONStorageFreeExpr) isAggregate() (bool, string)                { return false, "" }
-func (*JSONStorageSizeExpr) iExpr()                                     {}
-func (*JSONStorageSizeExpr) isAggregate() (bool, string)                { return false, "" }
-func (*JSONContainsExpr) iExpr()                                        {}
-func (*JSONContainsExpr) isAggregate() (bool, string)                   { return false, "" }
-func (*JSONContainsPathExpr) iExpr()                                    {}
-func (*JSONContainsPathExpr) isAggregate() (bool, string)               { return false, "" }
-func (*JSONExtractExpr) iExpr()                                         {}
-func (*JSONExtractExpr) isAggregate() (bool, string)                    { return false, "" }
-func (*JSONKeysExpr) iExpr()                                            {}
-func (*JSONKeysExpr) isAggregate() (bool, string)                       { return false, "" }
-func (*JSONOverlapsExpr) iExpr()                                        {}
-func (*JSONOverlapsExpr) isAggregate() (bool, string)                   { return false, "" }
-func (*JSONSearchExpr) iExpr()                                          {}
-func (*JSONSearchExpr) isAggregate() (bool, string)                     { return false, "" }
-func (*JSONValueExpr) iExpr()                                           {}
-func (*JSONValueExpr) isAggregate() (bool, string)                      { return false, "" }
-func (*JSONArrayExpr) iExpr()                                           {}
-func (*JSONArrayExpr) isAggregate() (bool, string)                      { return false, "" }
-func (*JSONObjectExpr) iExpr()                                          {}
-func (*JSONObjectExpr) isAggregate() (bool, string)                     { return false, "" }
-func (*JSONQuoteExpr) iExpr()                                           {}
-func (*JSONQuoteExpr) isAggregate() (bool, string)                      { return false, "" }
-func (*JSONAttributesExpr) iExpr()                                      {}
-func (*JSONAttributesExpr) isAggregate() (bool, string)                 { return false, "" }
-func (*JSONValueModifierExpr) iExpr()                                   {}
-func (*JSONValueModifierExpr) isAggregate() (bool, string)              { return false, "" }
-func (*JSONValueMergeExpr) iExpr()                                      {}
-func (*JSONValueMergeExpr) isAggregate() (bool, string)                 { return false, "" }
-func (*JSONRemoveExpr) iExpr()                                          {}
-func (*JSONRemoveExpr) isAggregate() (bool, string)                     { return false, "" }
-func (*JSONUnquoteExpr) iExpr()                                         {}
-func (*JSONUnquoteExpr) isAggregate() (bool, string)                    { return false, "" }
-func (*MemberOfExpr) iExpr()                                            {}
-func (*MemberOfExpr) isAggregate() (bool, string)                       { return false, "" }
+func (*AndExpr) iExpr()                            {}
+func (*OrExpr) iExpr()                             {}
+func (*XorExpr) iExpr()                            {}
+func (*NotExpr) iExpr()                            {}
+func (*ComparisonExpr) iExpr()                     {}
+func (*BetweenExpr) iExpr()                        {}
+func (*IsExpr) iExpr()                             {}
+func (*ExistsExpr) iExpr()                         {}
+func (*Literal) iExpr()                            {}
+func (Argument) iExpr()                            {}
+func (*NullVal) iExpr()                            {}
+func (BoolVal) iExpr()                             {}
+func (*ColName) iExpr()                            {}
+func (ValTuple) iExpr()                            {}
+func (*Subquery) iExpr()                           {}
+func (ListArg) iExpr()                             {}
+func (*BinaryExpr) iExpr()                         {}
+func (*UnaryExpr) iExpr()                          {}
+func (*IntroducerExpr) iExpr()                     {}
+func (*IntervalExpr) iExpr()                       {}
+func (*CollateExpr) iExpr()                        {}
+func (*FuncExpr) iExpr()                           {}
+func (*TimestampFuncExpr) iExpr()                  {}
+func (*ExtractFuncExpr) iExpr()                    {}
+func (*WeightStringFuncExpr) iExpr()               {}
+func (*CurTimeFuncExpr) iExpr()                    {}
+func (*CaseExpr) iExpr()                           {}
+func (*ValuesFuncExpr) iExpr()                     {}
+func (*ConvertExpr) iExpr()                        {}
+func (*SubstrExpr) iExpr()                         {}
+func (*ConvertUsingExpr) iExpr()                   {}
+func (*MatchExpr) iExpr()                          {}
+func (*GroupConcatExpr) iExpr()                    {}
+func (*Default) iExpr()                            {}
+func (*ExtractedSubquery) iExpr()                  {}
+func (*TrimFuncExpr) iExpr()                       {}
+func (*JSONSchemaValidFuncExpr) iExpr()            {}
+func (*JSONSchemaValidationReportFuncExpr) iExpr() {}
+func (Offset) iExpr()                              {}
+func (*JSONPrettyExpr) iExpr()                     {}
+func (*JSONStorageFreeExpr) iExpr()                {}
+func (*JSONStorageSizeExpr) iExpr()                {}
+func (*JSONContainsExpr) iExpr()                   {}
+func (*JSONContainsPathExpr) iExpr()               {}
+func (*JSONExtractExpr) iExpr()                    {}
+func (*JSONKeysExpr) iExpr()                       {}
+func (*JSONOverlapsExpr) iExpr()                   {}
+func (*JSONSearchExpr) iExpr()                     {}
+func (*JSONValueExpr) iExpr()                      {}
+func (*JSONArrayExpr) iExpr()                      {}
+func (*JSONObjectExpr) iExpr()                     {}
+func (*JSONQuoteExpr) iExpr()                      {}
+func (*JSONAttributesExpr) iExpr()                 {}
+func (*JSONValueModifierExpr) iExpr()              {}
+func (*JSONValueMergeExpr) iExpr()                 {}
+func (*JSONRemoveExpr) iExpr()                     {}
+func (*JSONUnquoteExpr) iExpr()                    {}
+func (*MemberOfExpr) iExpr()                       {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
