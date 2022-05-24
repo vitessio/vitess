@@ -27,8 +27,6 @@ import (
 	"testing"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/vtctl"
-
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -146,7 +144,7 @@ func TestAPI(t *testing.T) {
 			return "TestTabletAction Result", nil
 		})
 
-	healthcheck := discovery.NewHealthCheck(ctx, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout, ts, *localCell, strings.Join(cells, ","))
+	healthcheck := discovery.NewFakeHealthCheck(nil)
 	initAPI(ctx, ts, actionRepo, healthcheck)
 
 	t1, ts1 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 100)
@@ -157,21 +155,21 @@ func TestAPI(t *testing.T) {
 	t5, ts5 := tabletStats("ks2", "cell1", "0", topodatapb.TabletType_REPLICA, 500)
 	t6, ts6 := tabletStats("ks2", "cell2", "0", topodatapb.TabletType_REPLICA, 600)
 
-	healthcheck.AddFakeTablet(t1)
-	healthcheck.AddFakeTablet(t2)
-	healthcheck.AddFakeTablet(t3)
-	healthcheck.AddFakeTablet(t4)
+	healthcheck.AddTablet(t1)
+	healthcheck.AddTablet(t2)
+	healthcheck.AddTablet(t3)
+	healthcheck.AddTablet(t4)
 
-	healthcheck.AddFakeTablet(t5)
-	healthcheck.AddFakeTablet(t6)
+	healthcheck.AddTablet(t5)
+	healthcheck.AddTablet(t6)
 
-	healthcheck.UpdateHealth(ts1, ts1.Target, false, true)
-	healthcheck.UpdateHealth(ts2, ts2.Target, false, true)
-	healthcheck.UpdateHealth(ts3, ts3.Target, false, true)
-	healthcheck.UpdateHealth(ts4, ts4.Target, false, true)
+	healthcheck.UpdateHealth(ts1)
+	healthcheck.UpdateHealth(ts2)
+	healthcheck.UpdateHealth(ts3)
+	healthcheck.UpdateHealth(ts4)
 
-	healthcheck.UpdateHealth(ts5, ts5.Target, false, true)
-	healthcheck.UpdateHealth(ts6, ts6.Target, false, true)
+	healthcheck.UpdateHealth(ts5)
+	healthcheck.UpdateHealth(ts6)
 
 	// all-tablets response for keyspace/ks1/tablets/ endpoints
 	keyspaceKs1AllTablets := `[

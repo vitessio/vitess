@@ -88,7 +88,7 @@ type TabletWithStatsAndURL struct {
 	URL                  string                  `json:"url,omitempty"`
 }
 
-func newTabletWithStatsAndURL(t *topodatapb.Tablet, healthcheck *discovery.HealthCheckImpl) *TabletWithStatsAndURL {
+func newTabletWithStatsAndURL(t *topodatapb.Tablet, healthcheck discovery.HealthCheck) *TabletWithStatsAndURL {
 	tablet := &TabletWithStatsAndURL{
 		Alias:                t.Alias,
 		Hostname:             t.Hostname,
@@ -111,7 +111,7 @@ func newTabletWithStatsAndURL(t *topodatapb.Tablet, healthcheck *discovery.Healt
 	}
 
 	if healthcheck != nil {
-		if health, err := healthcheck.GetTabletHealth(healthcheck.KeyFromTablet(t), tablet.Alias); err == nil {
+		if health, err := healthcheck.GetTabletHealth(discovery.KeyFromTablet(t), tablet.Alias); err == nil {
 			tablet.Stats = &TabletStats{
 				Realtime: health.Stats,
 				Serving:  health.Serving,
@@ -192,7 +192,7 @@ func unmarshalRequest(r *http.Request, v any) error {
 	return json.Unmarshal(data, v)
 }
 
-func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, healthcheck *discovery.HealthCheckImpl) {
+func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, healthcheck discovery.HealthCheck) {
 	tabletHealthCache := newTabletHealthCache(ts)
 	tmClient := tmclient.NewTabletManagerClient()
 
@@ -539,7 +539,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 			Cell: cell,
 			Uid:  uid,
 		}
-		tabletStat, err := healthcheck.GetTabletHealth2(&tabletAlias)
+		tabletStat, err := healthcheck.GetTabletHealthByAlias(&tabletAlias)
 		if err != nil {
 			return nil, fmt.Errorf("could not get tabletStats: %v", err)
 		}
