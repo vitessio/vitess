@@ -513,6 +513,7 @@ var keywords = map[string]int{
 	"sqlexception":             SQLEXCEPTION,
 	"sqlstate":                 SQLSTATE,
 	"sqlwarning":               SQLWARNING,
+	"srid":                     SRID,
 	"ssl":                      SSL,
 	"start":                    START,
 	"starting":                 STARTING,
