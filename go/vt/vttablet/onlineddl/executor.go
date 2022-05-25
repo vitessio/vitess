@@ -919,15 +919,22 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 			return v, err
 		}
 	}
-	alterOptions := e.parseAlterOptions(ctx, onlineDDL)
 	{
+		stmt, err := sqlparser.ParseStrictDDL(onlineDDL.SQL)
+		if err != nil {
+			return nil, err
+		}
+		alterTable, ok := stmt.(*sqlparser.AlterTable)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AlterTable statement, got: %v", sqlparser.CanonicalString(stmt))
+		}
+		alterTable.SetTable(alterTable.GetTable().Qualifier.CompliantName(), vreplTableName)
 		// Apply ALTER TABLE to materialized table
-		parsed := sqlparser.BuildParsedQuery(sqlAlterTableOptions, vreplTableName, alterOptions)
-		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+		if _, err := conn.ExecuteFetch(sqlparser.CanonicalString(alterTable), 0, false); err != nil {
 			return v, err
 		}
 	}
-	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, alterOptions)
+	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, onlineDDL.SQL)
 	return v, nil
 }
 
