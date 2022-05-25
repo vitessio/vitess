@@ -2958,7 +2958,7 @@ func EqualsRefOfOverClause(a, b *OverClause) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.WindowName == b.WindowName &&
+	return EqualsColIdent(a.WindowName, b.WindowName) &&
 		EqualsRefOfWindowSpecification(a.WindowSpec, b.WindowSpec)
 }
 
@@ -3870,7 +3870,7 @@ func EqualsRefOfWindowSpecification(a, b *WindowSpecification) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Name == b.Name &&
+	return EqualsColIdent(a.Name, b.Name) &&
 		EqualsExprs(a.PartitionClause, b.PartitionClause) &&
 		EqualsOrderBy(a.OrderClause, b.OrderClause) &&
 		EqualsRefOfFrameClause(a.FrameClause, b.FrameClause)

@@ -1456,8 +1456,8 @@ func (node *JSONStorageSizeExpr) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *OverClause) Format(buf *TrackedBuffer) {
 	buf.WriteString("over")
-	if node.WindowName != "" {
-		buf.astPrintf(node, " %s", node.WindowName)
+	if !node.WindowName.IsEmpty() {
+		buf.astPrintf(node, " %v", node.WindowName)
 	}
 	if node.WindowSpec != nil {
 		buf.astPrintf(node, " (%v)", node.WindowSpec)
@@ -1466,8 +1466,8 @@ func (node *OverClause) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *WindowSpecification) Format(buf *TrackedBuffer) {
-	if node.Name != "" {
-		buf.astPrintf(node, " %s", node.Name)
+	if !node.Name.IsEmpty() {
+		buf.astPrintf(node, " %v", node.Name)
 	}
 	if node.PartitionClause != nil {
 		buf.astPrintf(node, " partition by %v", node.PartitionClause)

@@ -4600,6 +4600,11 @@ func (a *application) rewriteRefOfOverClause(parent SQLNode, node *OverClause, r
 			return true
 		}
 	}
+	if !a.rewriteColIdent(node, node.WindowName, func(newNode, parent SQLNode) {
+		parent.(*OverClause).WindowName = newNode.(ColIdent)
+	}) {
+		return false
+	}
 	if !a.rewriteRefOfWindowSpecification(node, node.WindowSpec, func(newNode, parent SQLNode) {
 		parent.(*OverClause).WindowSpec = newNode.(*WindowSpecification)
 	}) {
@@ -6993,6 +6998,11 @@ func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *Wind
 		if !a.pre(&a.cur) {
 			return true
 		}
+	}
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*WindowSpecification).Name = newNode.(ColIdent)
+	}) {
+		return false
 	}
 	if !a.rewriteExprs(node, node.PartitionClause, func(newNode, parent SQLNode) {
 		parent.(*WindowSpecification).PartitionClause = newNode.(Exprs)

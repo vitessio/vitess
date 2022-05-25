@@ -1922,9 +1922,9 @@ func (node *JSONStorageSizeExpr) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node
 func (node *OverClause) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("over")
-	if node.WindowName != "" {
+	if !node.WindowName.IsEmpty() {
 		buf.WriteByte(' ')
-		buf.WriteString(node.WindowName)
+		node.WindowName.formatFast(buf)
 	}
 	if node.WindowSpec != nil {
 		buf.WriteString(" (")
@@ -1935,9 +1935,9 @@ func (node *OverClause) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node
 func (node *WindowSpecification) formatFast(buf *TrackedBuffer) {
-	if node.Name != "" {
+	if !node.Name.IsEmpty() {
 		buf.WriteByte(' ')
-		buf.WriteString(node.Name)
+		node.Name.formatFast(buf)
 	}
 	if node.PartitionClause != nil {
 		buf.WriteString(" partition by ")

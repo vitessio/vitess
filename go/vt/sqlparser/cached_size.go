@@ -2352,10 +2352,10 @@ func (cached *OverClause) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(48)
 	}
-	// field WindowName string
-	size += hack.RuntimeAllocSize(int64(len(cached.WindowName)))
+	// field WindowName vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.WindowName.CachedSize(false)
 	// field WindowSpec *vitess.io/vitess/go/vt/sqlparser.WindowSpecification
 	size += cached.WindowSpec.CachedSize(true)
 	return size
@@ -3522,10 +3522,10 @@ func (cached *WindowSpecification) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(96)
 	}
-	// field Name string
-	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
 	// field PartitionClause vitess.io/vitess/go/vt/sqlparser.Exprs
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.PartitionClause)) * int64(16))

@@ -2340,6 +2340,9 @@ func VisitRefOfOverClause(in *OverClause, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitColIdent(in.WindowName, f); err != nil {
+		return err
+	}
 	if err := VisitRefOfWindowSpecification(in.WindowSpec, f); err != nil {
 		return err
 	}
@@ -3401,6 +3404,9 @@ func VisitRefOfWindowSpecification(in *WindowSpecification, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
 	}
 	if err := VisitExprs(in.PartitionClause, f); err != nil {

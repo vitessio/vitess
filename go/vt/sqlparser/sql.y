@@ -262,7 +262,6 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> OR '|'
 %left <str> XOR
 %left <str> AND
-%left <str> WINDOW_EXPR
 %right <str> NOT '!'
 %left <str> BETWEEN CASE WHEN THEN ELSE END
 %left <str> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
@@ -281,6 +280,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %right <str> UNDERSCORE_UTF16LE UNDERSCORE_UTF32 UNDERSCORE_UTF8 UNDERSCORE_UTF8MB4 UNDERSCORE_UTF8MB3
 %right <str> INTERVAL
 %nonassoc <str> '.'
+%left <str> WINDOW_EXPR
 
 // There is no need to define precedence for the JSON
 // operators because the syntax is restricted enough that
@@ -404,7 +404,6 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <explainType> explain_format_opt
 %type <trimType> trim_type
 %type <frameUnitType> frame_units
-%type <framePointType> frame_point_type
 %type <argumentLessWindowExprType> argument_less_window_expr_type
 %type <framePoint> frame_point
 %type <frameClause> frame_clause frame_clause_opt
@@ -500,7 +499,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <boolean> exists_opt not_exists_opt enforced enforced_opt temp_opt full_opt
 %type <empty> to_opt
 %type <str> reserved_keyword non_reserved_keyword
-%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
+%type <colIdent> sql_id sql_id_opt reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt
 %type <empty> as_opt work_opt savepoint_opt
@@ -5225,19 +5224,6 @@ frame_units:
     $$ = FrameRangeType
   }
 
-frame_point_type:
-  CURRENT ROW
-  {
-    $$ = CurrentRowType
-  }
-| UNBOUNDED PRECEDING
-  {
-    $$ = UnboundedPrecedingType
-  }
-| UNBOUNDED FOLLOWING
-  {
-    $$ = UnboundedFollowingType
-  }
 
 argument_less_window_expr_type:
   CUME_DIST
@@ -5262,9 +5248,17 @@ argument_less_window_expr_type:
   }
 
 frame_point:
-  frame_point_type
+  CURRENT ROW
   {
-    $$ = &FramePoint{Type:$1}
+    $$ = &FramePoint{Type:CurrentRowType}
+  }
+| UNBOUNDED PRECEDING
+  {
+    $$ = &FramePoint{Type:UnboundedPrecedingType}
+  }
+| UNBOUNDED FOLLOWING
+  {
+    $$ = &FramePoint{Type:UnboundedFollowingType}
   }
 | frame_expression PRECEDING
   {
@@ -5313,15 +5307,18 @@ window_partition_clause_opt:
     $$ = $3
   }
 
-window_spec:
-sql_id window_partition_clause_opt order_by_opt frame_clause_opt
+sql_id_opt:
+ {
+ }
+| sql_id
   {
-    $$ = &WindowSpecification{ Name: $1.String(), PartitionClause: $2, OrderClause: $3, FrameClause: $4}
+    $$=$1
   }
-|
-window_partition_clause_opt order_by_opt frame_clause_opt
+
+window_spec:
+sql_id_opt window_partition_clause_opt order_by_opt frame_clause_opt
   {
-    $$ = &WindowSpecification{ PartitionClause: $1, OrderClause: $2, FrameClause: $3}
+    $$ = &WindowSpecification{ Name: $1, PartitionClause: $2, OrderClause: $3, FrameClause: $4}
   }
 
 over_clause:
@@ -5331,7 +5328,7 @@ over_clause:
   }
 | OVER sql_id
   {
-    $$ = &OverClause{WindowName: $2.String()}
+    $$ = &OverClause{WindowName: $2}
   }
 
 null_treatment_clause_opt:
@@ -7027,8 +7024,8 @@ reserved_keyword:
 | RENAME
 | REPLACE
 | RIGHT
-| ROW_NUMBER
 | ROW
+| ROW_NUMBER
 | ROWS
 | SCHEMA
 | SCHEMAS

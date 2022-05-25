@@ -2084,7 +2084,7 @@ type (
 	// WindowSpecification represents window_spec
 	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html
 	WindowSpecification struct {
-		Name            string
+		Name            ColIdent
 		PartitionClause Exprs
 		OrderClause     OrderBy
 		FrameClause     *FrameClause
@@ -2122,7 +2122,7 @@ type (
 	// OverClause refers to over_clause
 	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html
 	OverClause struct {
-		WindowName string
+		WindowName ColIdent
 		WindowSpec *WindowSpecification
 	}
 
@@ -2641,6 +2641,7 @@ type (
 	}
 
 	// ArgumentLessWindowExpr stands for the following window_functions: CUME_DIST, DENSE_RANK, PERCENT_RANK, RANK, ROW_NUMBER
+	// These functions do not take any argument.
 	ArgumentLessWindowExpr struct {
 		Type       ArgumentLessWindowExprType
 		OverClause *OverClause

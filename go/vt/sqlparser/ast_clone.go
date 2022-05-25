@@ -1865,6 +1865,7 @@ func CloneRefOfOverClause(n *OverClause) *OverClause {
 		return nil
 	}
 	out := *n
+	out.WindowName = CloneColIdent(n.WindowName)
 	out.WindowSpec = CloneRefOfWindowSpecification(n.WindowSpec)
 	return &out
 }
@@ -2654,6 +2655,7 @@ func CloneRefOfWindowSpecification(n *WindowSpecification) *WindowSpecification 
 		return nil
 	}
 	out := *n
+	out.Name = CloneColIdent(n.Name)
 	out.PartitionClause = CloneExprs(n.PartitionClause)
 	out.OrderClause = CloneOrderBy(n.OrderClause)
 	out.FrameClause = CloneRefOfFrameClause(n.FrameClause)
