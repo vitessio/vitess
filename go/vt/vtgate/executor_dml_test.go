@@ -798,7 +798,8 @@ func TestInsertSharded(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	_, err := executorExec(executor, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
+	session := &vtgatepb.Session{}
+	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), "insert into user(id, v, name) values (1, 2, 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
@@ -819,12 +820,13 @@ func TestInsertSharded(t *testing.T) {
 	}}
 	assertQueries(t, sbclookup, wantQueries)
 
+	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0)
 	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(name, user_id) values(:name_0, :user_id_0)", 1)
 	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into user(id, v, name) values (1, 2, 'myname')", 1)
 
 	sbc1.Queries = nil
 	sbclookup.Queries = nil
-	_, err = executorExec(executor, "insert into user(id, v, name) values (3, 2, 'myname2')", nil)
+	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), "insert into user(id, v, name) values (3, 2, 'myname2')", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
@@ -844,11 +846,12 @@ func TestInsertSharded(t *testing.T) {
 		},
 	}}
 	assertQueries(t, sbclookup, wantQueries)
+	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 2)
 	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(name, user_id) values(:name_0, :user_id_0)", 1)
 	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into user(id, v, name) values (3, 2, 'myname2')", 1)
 
 	sbc1.Queries = nil
-	_, err = executorExec(executor, "insert into user2(id, name, lastname) values (2, 'myname', 'mylastname')", nil)
+	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), "insert into user2(id, name, lastname) values (2, 'myname', 'mylastname')", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into user2(id, `name`, lastname) values (:_id_0, :_name_0, :_lastname_0)",
@@ -859,6 +862,7 @@ func TestInsertSharded(t *testing.T) {
 		},
 	}}
 	assertQueries(t, sbc1, wantQueries)
+	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 3)
 	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_lastname_keyspace_id_map(name, lastname, keyspace_id) values(:name_0, :lastname_0, :keyspace_id_0)", 1)
 	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into user2(id, name, lastname) values (2, 'myname', 'mylastname')", 1)
 
@@ -867,7 +871,7 @@ func TestInsertSharded(t *testing.T) {
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	sbclookup.Queries = nil
-	_, err = executorExec(executor, "insert into user(id, v, name) values (1, 2, _binary 'myname')", nil)
+	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), "insert into user(id, v, name) values (1, 2, _binary 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, :vtg2, :_name_0)",
@@ -891,6 +895,7 @@ func TestInsertSharded(t *testing.T) {
 	}}
 	assertQueries(t, sbclookup, wantQueries)
 
+	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 3)
 	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
 	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into `user`(id, v, `name`) values (:vtg1, :vtg2, _binary :vtg3)", 1)
 }
@@ -1300,6 +1305,9 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 func TestInsertAutoincUnsharded(t *testing.T) {
 	router, _, _, sbclookup := createLegacyExecutorEnv()
 
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
 	// Fake a mysql auto-inc response.
 	query := "insert into simple(val) values ('val')"
 	wantResult := &sqltypes.Result{
@@ -1318,9 +1326,9 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbclookup, wantQueries)
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	assert.Equal(t, result, wantResult)
+
+	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into simple(val) values ('val')", 1)
 }
 
 func TestInsertLookupOwned(t *testing.T) {
@@ -2066,7 +2074,7 @@ func TestStreamingDML(t *testing.T) {
 	}
 }
 
-func TestTestPartialVindexInsertQueryFailure(t *testing.T) {
+func TestPartialVindexInsertQueryFailure(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 
 	logChan := QueryLogger.Subscribe("Test")
@@ -2113,8 +2121,48 @@ func TestTestPartialVindexInsertQueryFailure(t *testing.T) {
 	wantQ[1].Sql = "insert into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_1, :keyspace_id_1)"
 	assertQueriesWithSavepoint(t, sbc2, wantQ)
 
-	testQueryLogWithSavepoint(t, logChan, "TestExecute", "BEGIN", "begin", 0, true)
-	testQueryLogWithSavepoint(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0, true)
-	testQueryLogWithSavepoint(t, logChan, "VindexCreate", "SAVEPOINT_ROLLBACK", "rollback to x", 0, true)
-	testQueryLogWithSavepoint(t, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 1), (2, 3)", 0, true)
+	testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0)
+	testQueryLog(t, logChan, "VindexCreate", "SAVEPOINT_ROLLBACK", "rollback to x", 0)
+	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 1), (2, 3)", 0)
+}
+
+func TestPartialVindexInsertQueryFailureAutoCommit(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	session := NewAutocommitSession(&vtgatepb.Session{})
+	require.True(t, session.GetAutocommit())
+	require.False(t, session.InTransaction())
+
+	// fail the second lookup insert query i.e t1_lkp_idx(3, ksid)
+	sbc2.MustFailExecute[sqlparser.StmtInsert] = 1
+	wantQ := []*querypb.BoundQuery{{
+		Sql: "insert into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_0, :keyspace_id_0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"unq_col_0":     sqltypes.Int64BindVariable(1),
+			"keyspace_id_0": sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6")),
+			"unq_col_1":     sqltypes.Int64BindVariable(3),
+			"keyspace_id_1": sqltypes.BytesBindVariable([]byte("\x06\xe7\xea\"Βp\x8f")),
+			"_unq_col_0":    sqltypes.Int64BindVariable(1),
+			"_unq_col_1":    sqltypes.Int64BindVariable(3),
+		},
+	}}
+
+	_, err := executorExecSession(executor, "insert into t1(id, unq_col) values (1, 1), (2, 3)", nil, session.Session)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "transaction rolled back to reverse changes of partial DML execution")
+	assert.True(t, session.GetAutocommit())
+	assert.False(t, session.InTransaction())
+
+	assertQueriesWithSavepoint(t, sbc1, wantQ)
+
+	// only parameter in expected query changes
+	wantQ[0].Sql = "insert into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_1, :keyspace_id_1)"
+	assertQueriesWithSavepoint(t, sbc2, wantQ)
+
+	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into t1_lkp_idx(unq_col, keyspace_id) values(:unq_col_0, :keyspace_id_0), (:unq_col_1, :keyspace_id_1)", 2)
+	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 1), (2, 3)", 0)
 }
