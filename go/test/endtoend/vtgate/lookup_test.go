@@ -77,6 +77,20 @@ func TestUnownedLookupInsertChecksKeyspaceIdsAreMatching(t *testing.T) {
 	utils.Exec(t, conn, "delete from t9 WHERE parent_id = 1")
 }
 
+func TestUnownedLookupSelectNull(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "select * from t8 WHERE t9_id IS NULL")
+
+	// Cleanup
+	utils.Exec(t, conn, "delete from t9 WHERE parent_id = 1")
+}
+
 func TestConsistentLookup(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
