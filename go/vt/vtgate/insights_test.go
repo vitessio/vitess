@@ -35,7 +35,7 @@ var (
 )
 
 type setupOptions struct {
-	bufSize, patternLimit, rowsReadThreshold, responseTimeThreshold uint
+	bufSize, patternLimit, rowsReadThreshold, responseTimeThreshold, maxPerInterval uint
 }
 
 func setup(t *testing.T, brokers, publicID, username, password string, options setupOptions) (*Insights, error) {
@@ -51,6 +51,7 @@ func setup(t *testing.T, brokers, publicID, username, password string, options s
 		dfl(options.patternLimit, 10000),
 		dfl(options.rowsReadThreshold, 1000),
 		dfl(options.responseTimeThreshold, 1000),
+		dfl(options.maxPerInterval, 100),
 		15*time.Second, true)
 	if insights != nil {
 		t.Cleanup(func() { insights.Drain() })
@@ -143,6 +144,27 @@ func TestInsightsTooManyPatterns(t *testing.T) {
 			expect(queryStatsBundleTopic, "select * from foo1", "query_count:1", "sum_total_duration:{seconds:5}", "max_total_duration:{seconds:5}"),
 			expect(queryStatsBundleTopic, "select * from foo2", "query_count:1", "sum_total_duration:{seconds:5}", "max_total_duration:{seconds:5}"),
 			expect(queryStatsBundleTopic, "select * from foo3", "query_count:1", "sum_total_duration:{seconds:5}", "max_total_duration:{seconds:5}"),
+		})
+}
+
+func TestInsightsTooManyInteresting(t *testing.T) {
+	insightsTestHelper(t, true,
+		setupOptions{maxPerInterval: 4},
+		[]insightsQuery{
+			{sql: "select 1", responseTime: 5 * time.Second},
+			{sql: "select 1", rowsRead: 20000},
+			{sql: "select 1", error: "thou shalt not"},
+			{sql: "select 1", responseTime: 6 * time.Second},
+			{sql: "select 1", rowsRead: 21000},
+			{sql: "select 1", error: "no but seriously"},
+		},
+		[]insightsKafkaExpectation{
+			expect(queryTopic, "select 1", "total_duration:{seconds:5}"),
+			expect(queryTopic, "select 1", "rows_read:20000"),
+			expect(queryTopic, "<error>", "thou shalt not"),
+			expect(queryTopic, "select 1", "total_duration:{seconds:6}"),
+			expect(queryStatsBundleTopic, "select 1", "query_count:4", "sum_total_duration:{seconds:11}", "max_total_duration:{seconds:6}", "sum_rows_read:41000"),
+			expect(queryStatsBundleTopic, "<error>", "query_count:2", "error_count:2"),
 		})
 }
 

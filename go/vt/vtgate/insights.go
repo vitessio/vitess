@@ -99,21 +99,24 @@ type Insights struct {
 	MaxPatterns            uint
 	RowsReadThreshold      uint
 	ResponseTimeThreshold  uint
+	MaxQueriesPerInterval  uint
 	KafkaText              bool // use human-readable pb, for tests and debugging
 
 	// state
-	KafkaWriter     *kafka.Writer
-	Aggregations    map[QueryPatternKey]*QueryPatternAggregation
-	PeriodStart     time.Time
-	InFlightCounter uint64
-	Timer           *time.Ticker
-	LogChan         chan interface{}
-	Workers         sync.WaitGroup
+	KafkaWriter         *kafka.Writer
+	Aggregations        map[QueryPatternKey]*QueryPatternAggregation
+	PeriodStart         time.Time
+	InFlightCounter     uint64
+	Timer               *time.Ticker
+	LogChan             chan interface{}
+	Workers             sync.WaitGroup
+	QueriesThisInterval uint
 
 	// log state: we limit some log messages to once per 15s because they're caused by behavior the
 	// client controls
-	LogPatternsExceeded uint
-	LogBufferExceeded   uint
+	LogPatternsExceeded   uint
+	LogBufferExceeded     uint
+	LogMaxQueriesExceeded uint
 
 	// hooks
 	Sender func([]byte, string, string) error
@@ -137,7 +140,11 @@ var (
 	insightsRTThreshold = flag.Uint("insights_rt_threshold", 1000, "Report individual queries that take at least this many milliseconds")
 
 	// insightsRowsReadThreshold is the threshold on the number of rows read (scanned) above which individual queries are reported
-	insightsRowsReadThreshold = flag.Uint("insights_rows_read_threshold", 1000, "Report individual transactions that read (scan) at least this many rows")
+	insightsRowsReadThreshold = flag.Uint("insights_rows_read_threshold", 10000, "Report individual transactions that read (scan) at least this many rows")
+
+	// insightsMaxQueriesPerInterval is the maximum number of individual queries that can be reported per interval.  Interesting queries above this threshold
+	// will simply not be reported until the next interval begins.
+	insightsMaxQueriesPerInterval = flag.Uint("insights_max_queries_per_interval", 100, "Limit on individual queries reported per flush interval")
 
 	// insightsFlushInterval is how often, in seconds, to send aggregated metrics for query patterns
 	insightsFlushInterval = flag.Uint("insights_flush_interval", 15, "Send aggregated metrics for all query patterns every N seconds")
@@ -163,12 +170,13 @@ func initInsights(logger *streamlog.StreamLogger) (*Insights, error) {
 		*insightsPatternLimit,
 		*insightsRowsReadThreshold,
 		*insightsRTThreshold,
+		*insightsMaxQueriesPerInterval,
 		time.Duration(*insightsFlushInterval)*time.Second,
 		*insightsKafkaText,
 	)
 }
 
-func initInsightsInner(logger *streamlog.StreamLogger, brokers, publicID, username, password string, bufsize, patternLimit, rowsReadThreshold, responseTimeThreshold uint, interval time.Duration, kafkaText bool) (*Insights, error) {
+func initInsightsInner(logger *streamlog.StreamLogger, brokers, publicID, username, password string, bufsize, patternLimit, rowsReadThreshold, responseTimeThreshold, maxQueriesPerInterval uint, interval time.Duration, kafkaText bool) (*Insights, error) {
 	if brokers == "" {
 		return nil, nil
 	}
@@ -187,6 +195,7 @@ func initInsightsInner(logger *streamlog.StreamLogger, brokers, publicID, userna
 		MaxPatterns:            patternLimit,
 		RowsReadThreshold:      rowsReadThreshold,
 		ResponseTimeThreshold:  responseTimeThreshold,
+		MaxQueriesPerInterval:  maxQueriesPerInterval,
 		KafkaText:              kafkaText,
 	}
 	insights.Sender = insights.sendToKafka
@@ -222,6 +231,7 @@ func newPatternAggregation(statementType string, tables []string) *QueryPatternA
 }
 
 func (ii *Insights) startInterval() {
+	ii.QueriesThisInterval = 0
 	ii.Aggregations = make(map[QueryPatternKey]*QueryPatternAggregation)
 	ii.PeriodStart = time.Now()
 }
@@ -345,6 +355,10 @@ func (ii *Insights) handleMessage(record interface{}) {
 	if !ii.shouldSendToInsights(ls) {
 		return
 	}
+	if ii.QueriesThisInterval >= ii.MaxQueriesPerInterval {
+		ii.LogMaxQueriesExceeded++
+		return
+	}
 
 	buf, err := ii.makeQueryMessage(ls, sql, parseCommentTags(comments))
 	if err != nil {
@@ -356,7 +370,9 @@ func (ii *Insights) handleMessage(record interface{}) {
 		} else {
 			kafkaKey = ii.makeKafkaKey(sql)
 		}
-		ii.reserveAndSend(buf, queryTopic, kafkaKey)
+		if ii.reserveAndSend(buf, queryTopic, kafkaKey) {
+			ii.QueriesThisInterval++
+		}
 	}
 }
 
@@ -469,6 +485,10 @@ func (ii *Insights) sendAggregates() {
 	if ii.LogPatternsExceeded > 0 {
 		log.Infof("Too many patterns: reached limit of %v.  %v statements not aggregated.", ii.MaxPatterns, ii.LogPatternsExceeded)
 		ii.LogPatternsExceeded = 0
+	}
+	if ii.LogMaxQueriesExceeded > 0 {
+		log.Infof("Too many queries: reached limit of %v.  %v statements not reported.", ii.MaxQueriesPerInterval, ii.LogMaxQueriesExceeded)
+		ii.LogMaxQueriesExceeded = 0
 	}
 
 	for k, pa := range ii.Aggregations {
