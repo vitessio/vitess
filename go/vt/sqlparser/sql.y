@@ -4990,24 +4990,25 @@ bit_expr IN col_tuple
   }
 | bit_expr regexp_symbol bit_expr
   {
-	$$ = &RegexpLikeExpr{Expr: $1, Pattern: $3}
+	$$ = &ComparisonExpr{Left: $1, Operator: RegexpOp, Right: $3}
   }
 | bit_expr NOT regexp_symbol bit_expr
   {
-	 $$ = &RegexpLikeExpr{Expr: $1, Pattern: $4, IsNot: true}
+	 $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpOp, Right: $4}
   }
 | bit_expr %prec EXPRESSION_PREC_SETTER
  {
 	$$ = $1
  }
 
-regexp_symbol:
-  REGEXP
-  {
-  }
-| RLIKE
-  {
-  }
+ regexp_symbol:
+   REGEXP
+   {
+   }
+ | RLIKE
+   {
+   }
+
 
 bit_expr:
 bit_expr '|' bit_expr %prec '|'

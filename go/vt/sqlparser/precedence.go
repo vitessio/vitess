@@ -59,7 +59,7 @@ func precedenceFor(in Expr) Precendence {
 		return P12
 	case *ComparisonExpr:
 		switch node.Operator {
-		case EqualOp, NotEqualOp, GreaterThanOp, GreaterEqualOp, LessThanOp, LessEqualOp, LikeOp, InOp:
+		case EqualOp, NotEqualOp, GreaterThanOp, GreaterEqualOp, LessThanOp, LessEqualOp, LikeOp, InOp, RegexpOp:
 			return P11
 		}
 	case *IsExpr:

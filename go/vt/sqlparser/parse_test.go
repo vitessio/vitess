@@ -560,16 +560,16 @@ var (
 		input: "select /* not like escape */ 1 from t where a not like b escape '$'",
 	}, {
 		input:  "select /* regexp */ 1 from t where a regexp b",
-		output: "select /* regexp */ 1 from t where regexp_like(a, b)",
+		output: "select /* regexp */ 1 from t where a regexp b",
 	}, {
 		input:  "select /* not regexp */ 1 from t where a not regexp b",
-		output: "select /* not regexp */ 1 from t where not regexp_like(a, b)",
+		output: "select /* not regexp */ 1 from t where a not regexp b",
 	}, {
 		input:  "select /* rlike */ 1 from t where a rlike b",
-		output: "select /* rlike */ 1 from t where regexp_like(a, b)",
+		output: "select /* rlike */ 1 from t where a regexp b",
 	}, {
 		input:  "select /* not rlike */ 1 from t where a not rlike b",
-		output: "select /* not rlike */ 1 from t where not regexp_like(a, b)",
+		output: "select /* not rlike */ 1 from t where a not regexp b",
 	}, {
 		input: "select /* between */ 1 from t where a between b and c",
 	}, {
@@ -2992,10 +2992,10 @@ var (
 		output: "select regexp_substr('abc def ghi', '[a-z]+', 1, 3, trim(' n ')) from dual",
 	}, {
 		input:  "SELECT 'Michael!' RLIKE '.*';",
-		output: "select regexp_like('Michael!', '.*') from dual",
+		output: "select 'Michael!' regexp '.*' from dual",
 	}, {
 		input:  "SELECT TRIM('Michael!') RLIKE @j",
-		output: "select regexp_like(trim('Michael!'), @j) from dual",
+		output: "select trim('Michael!') regexp @j from dual",
 	}}
 )
 

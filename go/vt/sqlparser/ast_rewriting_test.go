@@ -258,7 +258,7 @@ func TestRewrites(in *testing.T) {
 		expected: "SELECT * FROM tbl WHERE id not regexp '%foobar'",
 	}, {
 		in:       "SELECT * FROM tbl WHERE not id not regexp '%foobar'",
-		expected: "select * from tbl where not not regexp_like(id, '%foobar')",
+		expected: "select * from tbl where id regexp '%foobar'",
 	}, {
 		in:       "SELECT * FROM tbl WHERE exists(select col1, col2 from other_table where foo > bar)",
 		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar limit 1)",
