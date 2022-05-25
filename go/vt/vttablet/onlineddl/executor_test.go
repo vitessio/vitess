@@ -33,9 +33,10 @@ import (
 func TestValidateAndEditCreateTableStatement(t *testing.T) {
 	e := Executor{}
 	tt := []struct {
-		name        string
-		query       string
-		expectError bool
+		name             string
+		query            string
+		expectError      bool
+		countConstraints int
 	}{
 		{
 			name: "table with FK",
@@ -46,24 +47,50 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
                 parent_id int not null,
                 primary key(id),
                 constraint test_fk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
-              ) auto_increment=1;
+              )
             `,
-			expectError: true,
+			countConstraints: 1,
+			expectError:      true,
+		},
+		{
+			name: "table with FK",
+			query: `
+            create table onlineddl_test (
+                id int auto_increment,
+                i int not null,
+                primary key(id),
+								constraint check_1 CHECK ((i >= 0)),
+								constraint check_2 CHECK ((i <> 5)),
+								constraint check_3 CHECK ((i >= 0))
+              )
+            `,
+			countConstraints: 3,
 		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			stmt, err := sqlparser.ParseStrictDDL(tc.query)
 			require.NoError(t, err)
-			alterTable, ok := stmt.(*sqlparser.CreateTable)
+			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			err = e.validateAndEditCreateTableStatement(context.Background(), "", alterTable)
+			constraintMap, err := e.validateAndEditCreateTableStatement(context.Background(), "", createTable)
 			if tc.expectError {
 				assert.Error(t, err)
 			} else {
-				require.NoError(t, err)
+				assert.NoError(t, err)
 			}
+			uniqueConstraintNames := map[string]bool{}
+			err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				switch node := node.(type) {
+				case *sqlparser.ConstraintDefinition:
+					uniqueConstraintNames[node.Name.String()] = true
+				}
+				return true, nil
+			}, createTable)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.countConstraints, len(uniqueConstraintNames))
+			assert.Equal(t, tc.countConstraints, len(constraintMap))
 		})
 	}
 }

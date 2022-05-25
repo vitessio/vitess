@@ -888,10 +888,16 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 	return deferFunc, nil
 }
 
-func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, migrationUUID string, createTable *sqlparser.CreateTable) (err error) {
+func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, migrationUUID string, createTable *sqlparser.CreateTable) (constraintMap map[string]string, err error) {
+	constraintMap = map[string]string{}
+	hashExists := map[string]bool{}
 	newConstraintName := func(prefix string, seed string) string {
-		uuidv5 := textutil.UUIDv5(migrationUUID, seed)
-		return prefix + "_" + strings.Replace(uuidv5, "-", "", -1)
+		hash := textutil.UUIDv5(migrationUUID, seed)
+		for i := 1; hashExists[hash]; i++ {
+			hash = textutil.UUIDv5(migrationUUID, seed, fmt.Sprintf("%d", 1))
+		}
+		hashExists[hash] = true
+		return prefix + "_" + strings.Replace(hash, "-", "", -1)
 	}
 	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
@@ -900,15 +906,42 @@ func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, migr
 		case *sqlparser.RenameTableName:
 			return false, schema.ErrRenameTableFound
 		case *sqlparser.ConstraintDefinition:
+			oldName := node.Name.String()
+			var newName string
 			if _, ok := node.Details.(*sqlparser.CheckConstraintDefinition); ok {
-				node.Name = sqlparser.NewColIdent(newConstraintName("chk", sqlparser.CanonicalString(node.Details)))
+				newName = newConstraintName("chk", sqlparser.CanonicalString(node.Details))
 			} else if _, ok := node.Details.(*sqlparser.ForeignKeyDefinition); ok {
-				node.Name = sqlparser.NewColIdent(newConstraintName("fk", sqlparser.CanonicalString(node.Details)))
+				newName = newConstraintName("fk", sqlparser.CanonicalString(node.Details))
+			}
+			if newName != "" {
+				node.Name = sqlparser.NewColIdent(newName)
+				constraintMap[oldName] = newName
 			}
 		}
 		return true, nil
 	}
 	if err := sqlparser.Walk(validateWalk, createTable); err != nil {
+		return constraintMap, err
+	}
+	return constraintMap, nil
+}
+
+func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, alterTable *sqlparser.AlterTable, constraintMap map[string]string) (err error) {
+	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.DropKey:
+			if node.Type == sqlparser.CheckKeyType {
+				// drop a check constraint
+				mappedName, ok := constraintMap[node.Name.String()]
+				if !ok {
+					return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Found DROP CONSTRAINT: %v, but could not find constraint name in map", sqlparser.CanonicalString(node))
+				}
+				node.Name = sqlparser.NewColIdent(mappedName)
+			}
+		}
+		return true, nil
+	}
+	if err := sqlparser.Walk(validateWalk, alterTable); err != nil {
 		return err
 	}
 	return nil
@@ -925,6 +958,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
+	var constraintMap map[string]string
 	{
 		existingShowCreateTable, err := e.showCreateTable(ctx, onlineDDL.Table)
 		if err != nil {
@@ -940,7 +974,8 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		}
 		createTable.SetTable(createTable.GetTable().Qualifier.CompliantName(), vreplTableName)
 
-		if err := e.validateAndEditCreateTableStatement(ctx, onlineDDL.UUID, createTable); err != nil {
+		constraintMap, err = e.validateAndEditCreateTableStatement(ctx, onlineDDL.UUID, createTable)
+		if err != nil {
 			return v, err
 		}
 		// Apply CREATE TABLE for materialized table
@@ -958,6 +993,9 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AlterTable statement, got: %v", sqlparser.CanonicalString(stmt))
 		}
 		alterTable.SetTable(alterTable.GetTable().Qualifier.CompliantName(), vreplTableName)
+		if err := e.validateAndEditAlterTableStatement(ctx, alterTable, constraintMap); err != nil {
+			return v, err
+		}
 		// Apply ALTER TABLE to materialized table
 		if _, err := conn.ExecuteFetch(sqlparser.CanonicalString(alterTable), 0, false); err != nil {
 			return v, err
