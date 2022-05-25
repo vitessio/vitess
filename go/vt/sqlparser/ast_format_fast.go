@@ -1939,6 +1939,10 @@ func (node *ConvertExpr) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteString(", ")
 	node.Type.formatFast(buf)
+	if node.Array {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[ARRAY])
+	}
 	buf.WriteByte(')')
 }
 

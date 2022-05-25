@@ -1648,7 +1648,8 @@ func EqualsRefOfConvertExpr(a, b *ConvertExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsExpr(a.Expr, b.Expr) &&
+	return a.Array == b.Array &&
+		EqualsExpr(a.Expr, b.Expr) &&
 		EqualsRefOfConvertType(a.Type, b.Type)
 }
 
