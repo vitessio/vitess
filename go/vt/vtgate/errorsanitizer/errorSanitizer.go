@@ -33,6 +33,19 @@ var (
 	reTruncateErrorAfter = regexp.MustCompile(`code = \S+|Duplicate entry|syntax error at position \d+`)
 )
 
+/* Error messages often have PII in them. That can come from vttablet or from mysql, so by the time it gets to vtgate,
+it's an opaque string. To avoid leaking PII into, we normalize error messages before sending them out.
+We remove five different sorts of strings:
+*/
+
+// * Anything after /code = \S+/
+// * Anything after /Duplicate entry/
+// * Anything after /syntax error at position \d+/
+// * [,:] BindVars: .*/
+// * [,:] Sql: '.*/'
+
+/* We also truncate the error message at a maximum length of 256 bytes, if it's somehow longer than that after normalizing.*/
+
 func NormalizeError(str string) string {
 	if idx := reTruncateError.FindStringIndex(str); idx != nil {
 		str = str[0:idx[0]]
