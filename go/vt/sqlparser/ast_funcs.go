@@ -1912,3 +1912,14 @@ func convertStringToInt(integer string) int {
 	val, _ := strconv.Atoi(integer)
 	return val
 }
+
+// IsEmpty returns true if the group by is empty
+func (node *GroupBy) IsEmpty() bool {
+	if node == nil {
+		return true
+	}
+	if node.All {
+		return false
+	}
+	return len(node.Exprs) == 0
+}

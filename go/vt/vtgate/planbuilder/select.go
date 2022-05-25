@@ -295,7 +295,7 @@ func buildSQLCalcFoundRowsPlan(
 			Exprs: []sqlparser.SelectExpr{&sqlparser.StarExpr{}},
 		},
 	}}
-	if sel2.GroupBy == nil && sel2.Having == nil {
+	if sel2.GroupBy.IsEmpty() && sel2.Having == nil {
 		// if there is no grouping, we can use the same query and
 		// just replace the SELECT sub-clause to have a single count(*)
 		sel2.SelectExprs = countStartExpr
@@ -379,7 +379,7 @@ func buildLockingPrimitive(sel *sqlparser.Select, vschema plancontext.VSchema) (
 }
 
 func isOnlyDual(sel *sqlparser.Select) bool {
-	if sel.Where != nil || sel.GroupBy != nil || sel.Having != nil || sel.Limit != nil || sel.OrderBy != nil {
+	if sel.Where != nil || !sel.GroupBy.IsEmpty() || sel.Having != nil || sel.Limit != nil || sel.OrderBy != nil {
 		// we can only deal with queries without any other subclauses - just SELECT and FROM, nothing else is allowed
 		return false
 	}
