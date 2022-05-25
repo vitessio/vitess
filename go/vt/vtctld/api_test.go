@@ -299,9 +299,9 @@ func TestAPI(t *testing.T) {
 				"sharding_column_name": "shardcol",
 				"sharding_column_type": 0,
 				"served_froms": [],
-		                        "keyspace_type":0,
-		                        "base_keyspace":"",
-		                        "snapshot_time":null
+				"keyspace_type":0,
+				"base_keyspace":"",
+				"snapshot_time":null
 			}`, http.StatusOK},
 		{"GET", "keyspaces/nonexistent", "", "404 page not found", http.StatusNotFound},
 		{"POST", "keyspaces/ks1?action=TestKeyspaceAction", "", `{

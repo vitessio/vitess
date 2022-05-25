@@ -90,11 +90,13 @@ func (fhc *FakeHealthCheck) GetHealthyTabletStats(target *querypb.Target) []*Tab
 	return result
 }
 
+// GetTabletHealthByAlias results the TabletHealth of the tablet that matches the given alias
 func (fhc *FakeHealthCheck) GetTabletHealthByAlias(alias *topodatapb.TabletAlias) (*TabletHealth, error) {
 	return fhc.GetTabletHealth("", alias)
 }
 
-func (fhc *FakeHealthCheck) GetTabletHealth(kst keyspaceShardTabletType, alias *topodatapb.TabletAlias) (*TabletHealth, error) {
+// GetTabletHealth results the TabletHealth of the tablet that matches the given alias
+func (fhc *FakeHealthCheck) GetTabletHealth(kst KeyspaceShardTabletType, alias *topodatapb.TabletAlias) (*TabletHealth, error) {
 	fhc.mu.Lock()
 	defer fhc.mu.Unlock()
 
@@ -245,6 +247,7 @@ func (fhc *FakeHealthCheck) CacheStatus() TabletsCacheStatusList {
 	return tcsl
 }
 
+// CacheStatusMap returns a map of the health check cache.
 func (fhc *FakeHealthCheck) CacheStatusMap() map[string]*TabletsCacheStatus {
 	tcsMap := make(map[string]*TabletsCacheStatus)
 	fhc.mu.Lock()

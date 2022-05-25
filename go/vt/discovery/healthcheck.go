@@ -161,7 +161,7 @@ type TabletRecorder interface {
 	ReplaceTablet(old, new *topodata.Tablet)
 }
 
-type keyspaceShardTabletType string
+type KeyspaceShardTabletType string
 type tabletAliasString string
 
 // HealthCheck declares what the TabletGateway needs from the HealthCheck
@@ -195,7 +195,10 @@ type HealthCheck interface {
 	// synchronization
 	GetHealthyTabletStats(target *query.Target) []*TabletHealth
 
-	GetTabletHealth(kst keyspaceShardTabletType, alias *topodata.TabletAlias) (*TabletHealth, error)
+	// GetTabletHealth results the TabletHealth of the tablet that matches the given alias
+	GetTabletHealth(kst KeyspaceShardTabletType, alias *topodata.TabletAlias) (*TabletHealth, error)
+
+	// GetTabletHealthByAlias results the TabletHealth of the tablet that matches the given alias
 	GetTabletHealthByAlias(alias *topodata.TabletAlias) (*TabletHealth, error)
 
 	// Subscribe adds a listener. Used by vtgate buffer to learn about primary changes.
@@ -209,12 +212,13 @@ var _ HealthCheck = (*HealthCheckImpl)(nil)
 
 // Target includes cell which we ignore here
 // because tabletStatsCache is intended to be per-cell
-func KeyFromTarget(target *query.Target) keyspaceShardTabletType {
-	return keyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType)))
+func KeyFromTarget(target *query.Target) KeyspaceShardTabletType {
+	return KeyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType)))
 }
 
-func KeyFromTablet(tablet *topodata.Tablet) keyspaceShardTabletType {
-	return keyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", tablet.Keyspace, tablet.Shard, topoproto.TabletTypeLString(tablet.Type)))
+// KeyFromTablet returns the KeyspaceShardTabletType that matches the given topodata.Tablet
+func KeyFromTablet(tablet *topodata.Tablet) KeyspaceShardTabletType {
+	return KeyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", tablet.Keyspace, tablet.Shard, topoproto.TabletTypeLString(tablet.Type)))
 }
 
 // HealthCheckImpl performs health checking and stores the results.
@@ -243,9 +247,9 @@ type HealthCheckImpl struct {
 	// a map keyed by keyspace.shard.tabletType
 	// contains a map of TabletHealth keyed by tablet alias for each tablet relevant to the keyspace.shard.tabletType
 	// has to be kept in sync with healthByAlias
-	healthData map[keyspaceShardTabletType]map[tabletAliasString]*TabletHealth
+	healthData map[KeyspaceShardTabletType]map[tabletAliasString]*TabletHealth
 	// another map keyed by keyspace.shard.tabletType, this one containing a sorted list of TabletHealth
-	healthy map[keyspaceShardTabletType][]*TabletHealth
+	healthy map[KeyspaceShardTabletType][]*TabletHealth
 	// connsWG keeps track of all launched Go routines that monitor tablet connections.
 	connsWG sync.WaitGroup
 	// topology watchers that inform healthcheck of tablets being added and deleted
@@ -282,8 +286,8 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		retryDelay:         retryDelay,
 		healthCheckTimeout: healthCheckTimeout,
 		healthByAlias:      make(map[tabletAliasString]*tabletHealthCheck),
-		healthData:         make(map[keyspaceShardTabletType]map[tabletAliasString]*TabletHealth),
-		healthy:            make(map[keyspaceShardTabletType][]*TabletHealth),
+		healthData:         make(map[KeyspaceShardTabletType]map[tabletAliasString]*TabletHealth),
+		healthy:            make(map[KeyspaceShardTabletType][]*TabletHealth),
 		subscribers:        make(map[chan *TabletHealth]struct{}),
 		cellAliases:        make(map[string]string),
 	}
@@ -507,7 +511,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 	hc.broadcast(th)
 }
 
-func (hc *HealthCheckImpl) recomputeHealthy(key keyspaceShardTabletType) {
+func (hc *HealthCheckImpl) recomputeHealthy(key KeyspaceShardTabletType) {
 	all := hc.healthData[key]
 	allArray := make([]*TabletHealth, 0, len(all))
 	for _, s := range all {
@@ -724,6 +728,7 @@ func (hc *HealthCheckImpl) waitForTablets(ctx context.Context, targets []*query.
 	}
 }
 
+// GetTabletHealthByAlias results the TabletHealth of the tablet that matches the given alias
 func (hc *HealthCheckImpl) GetTabletHealthByAlias(alias *topodata.TabletAlias) (*TabletHealth, error) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
@@ -734,7 +739,9 @@ func (hc *HealthCheckImpl) GetTabletHealthByAlias(alias *topodata.TabletAlias) (
 	return nil, fmt.Errorf("could not find tablet: %s", alias.String())
 }
 
-func (hc *HealthCheckImpl) GetTabletHealth(kst keyspaceShardTabletType, alias *topodata.TabletAlias) (*TabletHealth, error) {
+// GetTabletHealth results the TabletHealth of the tablet that matches the given alias and KeyspaceShardTabletType
+// The data is retrieved from the healthData map.
+func (hc *HealthCheckImpl) GetTabletHealth(kst KeyspaceShardTabletType, alias *topodata.TabletAlias) (*TabletHealth, error) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
