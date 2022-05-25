@@ -507,6 +507,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> charset
 %type <scope> set_session_or_global
 %type <convertType> convert_type returning_type_opt convert_type_weight_string
+%type <boolean> array_opt
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <literal> length_opt partition_comment partition_data_directory partition_index_directory
@@ -5153,13 +5154,13 @@ function_call_keyword
   {
   $$ = &MatchExpr{Columns: $3, Expr: $7, Option: $8}
   }
-| CAST openb expression AS convert_type closeb
+| CAST openb expression AS convert_type array_opt closeb
   {
-    $$ = &ConvertExpr{Expr: $3, Type: $5}
+    $$ = &ConvertExpr{Expr: $3, Type: $5, Array: $6}
   }
-| CONVERT openb expression ',' convert_type closeb
+| CONVERT openb expression ',' convert_type array_opt closeb
   {
-    $$ = &ConvertExpr{Expr: $3, Type: $5}
+    $$ = &ConvertExpr{Expr: $3, Type: $5, Array: $6}
   }
 | CONVERT openb expression USING charset closeb
   {
@@ -5308,11 +5309,11 @@ window_partition_clause_opt:
   }
 
 sql_id_opt:
- {
- }
+  {
+  }
 | sql_id
   {
-    $$=$1
+    $$ = $1
   }
 
 window_spec:
@@ -6131,6 +6132,15 @@ convert_type:
     $$ = &ConvertType{Type: string($1)}
   }
 
+array_opt:
+  /* empty */
+  {
+    $$ = false
+  }
+| ARRAY
+  {
+    $$ = true
+  }
 
 expression_opt:
   {
@@ -6914,7 +6924,6 @@ reserved_table_id:
 reserved_keyword:
   ADD
 | ALL
-| ARRAY
 | AND
 | AS
 | ASC
@@ -7077,6 +7086,7 @@ non_reserved_keyword:
 | AFTER
 | ALGORITHM
 | ALWAYS
+| ARRAY
 | ASCII
 | AUTO_INCREMENT
 | AUTOEXTEND_SIZE

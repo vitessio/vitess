@@ -2354,8 +2354,9 @@ type (
 	// ConvertExpr represents a call to CONVERT(expr, type)
 	// or it's equivalent CAST(expr AS type). Both are rewritten to the former.
 	ConvertExpr struct {
-		Expr Expr
-		Type *ConvertType
+		Expr  Expr
+		Type  *ConvertType
+		Array bool
 	}
 
 	// ConvertUsingExpr represents a call to CONVERT(expr USING charset).

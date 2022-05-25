@@ -1626,7 +1626,11 @@ func (node WindowDefinitions) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ConvertExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "convert(%v, %v)", node.Expr, node.Type)
+	buf.astPrintf(node, "convert(%v, %v", node.Expr, node.Type)
+	if node.Array {
+		buf.astPrintf(node, " %s", keywordStrings[ARRAY])
+	}
+	buf.astPrintf(node, ")")
 }
 
 // Format formats the node.
