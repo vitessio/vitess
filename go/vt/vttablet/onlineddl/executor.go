@@ -900,9 +900,22 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		return v, err
 	}
 	{
+
+		existingShowCreateTable, err := e.showCreateTable(ctx, onlineDDL.Table)
+		if err != nil {
+			return nil, err
+		}
+		stmt, err := sqlparser.ParseStrictDDL(existingShowCreateTable)
+		if err != nil {
+			return nil, err
+		}
+		createTable, ok := stmt.(*sqlparser.CreateTable)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CreateTable statement, got: %v", sqlparser.CanonicalString(stmt))
+		}
+		createTable.SetTable(createTable.GetTable().Qualifier.CompliantName(), vreplTableName)
 		// Apply CREATE TABLE for materialized table
-		parsed := sqlparser.BuildParsedQuery(sqlCreateTableLike, vreplTableName, onlineDDL.Table)
-		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+		if _, err := conn.ExecuteFetch(sqlparser.CanonicalString(createTable), 0, false); err != nil {
 			return v, err
 		}
 	}
