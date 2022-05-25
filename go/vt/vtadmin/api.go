@@ -298,6 +298,19 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 			shouldAddCluster = shouldAddCluster || !isEqual
 		}
 		if shouldAddCluster {
+			if existingCluster != nil {
+				if err := existingCluster.Close(); err != nil {
+					log.Errorf("%s; some connections and goroutines may linger", err.Error())
+				}
+
+				idx := stdsort.Search(len(api.clusters), func(i int) bool {
+					return api.clusters[i].ID == existingCluster.ID
+				})
+				if idx >= 0 && idx < len(api.clusters) {
+					api.clusters = append(api.clusters[:idx], api.clusters[idx+1:]...)
+				}
+			}
+
 			api.clusterMap[id] = c
 			api.clusters = append(api.clusters, c)
 			sort.ClustersBy(func(c1, c2 *cluster.Cluster) bool {
@@ -381,9 +394,12 @@ func (api *API) EjectDynamicCluster(key string, value any) {
 	defer api.clusterMu.Unlock()
 
 	// Delete dynamic clusters from clusterMap when they are expired from clusterCache
-	_, ok := api.clusterMap[key]
+	c, ok := api.clusterMap[key]
 	if ok {
 		delete(api.clusterMap, key)
+		if err := c.Close(); err != nil {
+			log.Errorf("%s; some connections and goroutines may linger", err.Error())
+		}
 	}
 
 	// Maintain order of clusters when removing dynamic cluster
@@ -392,9 +408,7 @@ func (api *API) EjectDynamicCluster(key string, value any) {
 		log.Errorf("Cannot remove cluster %s from api.clusters. Cluster index %d is out of range for clusters slice of %d length.", key, clusterIndex, len(api.clusters))
 	}
 
-	api.clusters[0] = api.clusters[clusterIndex]
-
-	api.clusters = api.clusters[1:]
+	api.clusters = append(api.clusters[:clusterIndex], api.clusters[clusterIndex+1:]...)
 }
 
 // CreateKeyspace is part of the vtadminpb.VTAdminServer interface.
