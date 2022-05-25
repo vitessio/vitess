@@ -175,7 +175,7 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 	cluster.schemaCache = cache.New(func(ctx context.Context, key schemacache.Key) ([]*vtadminpb.Schema, error) {
 		// TODO: make a private method to separate the fetching bits from the cache bits
 		if key.Keyspace == "" {
-			return cluster.GetSchemas(ctx, GetSchemaOptions{
+			schemas, err := cluster.GetSchemas(ctx, GetSchemaOptions{
 				BaseRequest: &vtctldatapb.GetSchemaRequest{
 					IncludeViews: true,
 				},
@@ -185,6 +185,19 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 				},
 				isBackfill: true,
 			})
+
+			if err != nil {
+				return nil, err
+			}
+
+			cacheableSchemas := make([]*vtadminpb.Schema, 0, len(schemas))
+			for _, schema := range schemas {
+				if !cluster.schemaCacheExcludeKeyspaces.Has(schema.Keyspace) {
+					cacheableSchemas = append(cacheableSchemas, schema)
+				}
+			}
+
+			return cacheableSchemas, nil
 		}
 
 		schema, err := cluster.GetSchema(ctx, key.Keyspace, GetSchemaOptions{
