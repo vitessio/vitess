@@ -41,29 +41,29 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 		{
 			name: "table with FK",
 			query: `
-            create table onlineddl_test (
-                id int auto_increment,
-                i int not null,
-                parent_id int not null,
-                primary key(id),
-                constraint test_fk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
-              )
-            `,
+				create table onlineddl_test (
+						id int auto_increment,
+						i int not null,
+						parent_id int not null,
+						primary key(id),
+						constraint test_fk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
+					)
+				`,
 			countConstraints: 1,
 			expectError:      true,
 		},
 		{
 			name: "table with FK",
 			query: `
-            create table onlineddl_test (
-                id int auto_increment,
-                i int not null,
-                primary key(id),
-								constraint check_1 CHECK ((i >= 0)),
-								constraint check_2 CHECK ((i <> 5)),
-								constraint check_3 CHECK ((i >= 0))
-              )
-            `,
+				create table onlineddl_test (
+						id int auto_increment,
+						i int not null,
+						primary key(id),
+						constraint check_1 CHECK ((i >= 0)),
+						constraint check_2 CHECK ((i <> 5)),
+						constraint check_3 CHECK ((i >= 0))
+					)
+				`,
 			countConstraints: 3,
 		},
 	}
@@ -74,7 +74,7 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			constraintMap, err := e.validateAndEditCreateTableStatement(context.Background(), "", createTable)
+			constraintMap, err := e.validateAndEditCreateTableStatement(context.Background(), "a5a563da_dc1a_11ec_a416_0a43f95f28a3", createTable)
 			if tc.expectError {
 				assert.Error(t, err)
 			} else {
