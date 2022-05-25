@@ -888,13 +888,23 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 	return deferFunc, nil
 }
 
-func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, createTable *sqlparser.CreateTable) (err error) {
+func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, migrationUUID string, createTable *sqlparser.CreateTable) (err error) {
+	newConstraintName := func(prefix string, seed string) string {
+		uuidv5 := textutil.UUIDv5(migrationUUID, seed)
+		return prefix + "_" + strings.Replace(uuidv5, "-", "", -1)
+	}
 	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node.(type) {
+		switch node := node.(type) {
 		case *sqlparser.ForeignKeyDefinition:
 			return false, schema.ErrForeignKeyFound
 		case *sqlparser.RenameTableName:
 			return false, schema.ErrRenameTableFound
+		case *sqlparser.ConstraintDefinition:
+			if _, ok := node.Details.(*sqlparser.CheckConstraintDefinition); ok {
+				node.Name = sqlparser.NewColIdent(newConstraintName("chk", sqlparser.CanonicalString(node.Details)))
+			} else if _, ok := node.Details.(*sqlparser.ForeignKeyDefinition); ok {
+				node.Name = sqlparser.NewColIdent(newConstraintName("fk", sqlparser.CanonicalString(node.Details)))
+			}
 		}
 		return true, nil
 	}
@@ -930,7 +940,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		}
 		createTable.SetTable(createTable.GetTable().Qualifier.CompliantName(), vreplTableName)
 
-		if err := e.validateAndEditCreateTableStatement(ctx, createTable); err != nil {
+		if err := e.validateAndEditCreateTableStatement(ctx, onlineDDL.UUID, createTable); err != nil {
 			return v, err
 		}
 		// Apply CREATE TABLE for materialized table

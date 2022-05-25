@@ -58,7 +58,7 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 			alterTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			err = e.validateAndEditCreateTableStatement(context.Background(), alterTable)
+			err = e.validateAndEditCreateTableStatement(context.Background(), "", alterTable)
 			if tc.expectError {
 				assert.Error(t, err)
 			} else {
