@@ -1830,6 +1830,16 @@ func (ae *AliasedExpr) ColumnName() string {
 	return String(ae.Expr)
 }
 
+// AllAggregation returns true if all the expressions contain aggregation
+func (s SelectExprs) AllAggregation() bool {
+	for _, k := range s {
+		if !ContainsAggregation(k) {
+			return false
+		}
+	}
+	return true
+}
+
 func isExprLiteral(expr Expr) bool {
 	switch expr := expr.(type) {
 	case *Literal:
