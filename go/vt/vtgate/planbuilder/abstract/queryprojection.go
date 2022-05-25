@@ -505,6 +505,10 @@ orderBy:
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: aggregation function '%s'", funcName)
 		}
 
+		if _, isStar := fExpr.Exprs[0].(*sqlparser.StarExpr); isStar && opcode == engine.AggregateCount {
+			opcode = engine.AggregateCountStar
+		}
+
 		if fExpr.Distinct {
 			switch opcode {
 			case engine.AggregateCount:

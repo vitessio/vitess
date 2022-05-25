@@ -176,7 +176,8 @@ func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
 	switch opcode {
 	case
 		AggregateCountDistinct,
-		AggregateCount:
+		AggregateCount,
+		AggregateCountStar:
 		return countZero, nil
 	case
 		AggregateSumDistinct,

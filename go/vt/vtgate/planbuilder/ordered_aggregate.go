@@ -230,15 +230,6 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 		if key.CollationID != collations.Unknown {
 			colls[key.KeyCol] = key.CollationID
 		}
-
-		switch key.Opcode {
-		case engine.AggregateCount:
-			if key.Alias == "" {
-				key.Alias = key.Opcode.String()
-			}
-			key.Opcode = engine.AggregateSum
-		}
-
 	}
 	for _, key := range oa.groupByKeys {
 		if key.CollationID != collations.Unknown {
@@ -331,7 +322,7 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 	if !funcExpr.Distinct {
 		return false, nil, nil
 	}
-	if opcode != engine.AggregateCount && opcode != engine.AggregateSum {
+	if opcode != engine.AggregateCount && opcode != engine.AggregateSum && opcode != engine.AggregateCountStar {
 		return false, nil, nil
 	}
 	innerAliased, ok := funcExpr.Exprs[0].(*sqlparser.AliasedExpr)
@@ -373,6 +364,16 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 			oa.truncateColumnCount = len(oa.resultColumns)
 		}
 	}
+	for _, key := range oa.aggregates {
+		switch key.Opcode {
+		case engine.AggregateCount:
+			if key.Alias == "" {
+				key.Alias = key.Opcode.String()
+			}
+			key.Opcode = engine.AggregateSum
+		}
+	}
+
 	return oa.input.Wireup(plan, jt)
 }
 

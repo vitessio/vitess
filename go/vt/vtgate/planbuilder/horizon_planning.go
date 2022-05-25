@@ -307,7 +307,7 @@ func (hp *horizonPlanning) planAggrUsingOA(
 		oa.preProcess = true
 	}
 
-	newPlan, groupingOffsets, aggrParamOffsets, _, err := hp.pushAggregation(ctx, plan, grouping, aggrs, false)
+	newPlan, groupingOffsets, aggrParamOffsets, pushed, err := hp.pushAggregation(ctx, plan, grouping, aggrs, false)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +328,7 @@ func (hp *horizonPlanning) planAggrUsingOA(
 		aggPlan = proj
 	}
 
-	aggrParams, err := generateAggregateParams(aggrs, aggrParamOffsets, proj)
+	aggrParams, err := generateAggregateParams(aggrs, aggrParamOffsets, proj, pushed)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +376,7 @@ func passGroupingColumns(proj *projection, groupings []offsets, grouping []abstr
 	return projGrpOffsets, nil
 }
 
-func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets, proj *projection) ([]*engine.AggregateParams, error) {
+func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets, proj *projection, pushed bool) ([]*engine.AggregateParams, error) {
 	aggrParams := make([]*engine.AggregateParams, len(aggrs))
 	for idx, paramOffset := range aggrParamOffsets {
 		aggr := aggrs[idx]
@@ -407,10 +407,13 @@ func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets
 		}
 
 		opcode := engine.AggregateSum
-		if aggr.OpCode == engine.AggregateMin ||
-			aggr.OpCode == engine.AggregateMax ||
-			aggr.OpCode == engine.AggregateRandom {
+		switch aggr.OpCode {
+		case engine.AggregateMin, engine.AggregateMax, engine.AggregateRandom:
 			opcode = aggr.OpCode
+		case engine.AggregateCount, engine.AggregateCountStar, engine.AggregateCountDistinct, engine.AggregateSumDistinct:
+			if !pushed {
+				opcode = aggr.OpCode
+			}
 		}
 
 		aggrParams[idx] = &engine.AggregateParams{
@@ -1067,7 +1070,7 @@ func (hp *horizonPlanning) needDistinctHandling(
 	if !funcExpr.Distinct {
 		return false, nil, nil
 	}
-	if opcode != engine.AggregateCount && opcode != engine.AggregateSum {
+	if opcode != engine.AggregateCount && opcode != engine.AggregateSum && opcode != engine.AggregateCountStar {
 		return false, nil, nil
 	}
 	innerAliased, ok := funcExpr.Exprs[0].(*sqlparser.AliasedExpr)

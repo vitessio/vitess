@@ -26,17 +26,21 @@ import (
 )
 
 // pushAggregation pushes grouping and aggregation as far down in the tree as possible
+// the output `outputAggrsOffset` needs a little explaining: this is the offsets for aggregation - remember
+// that aggregation can be broken down into multiple expressions that are later combined.
+// this is why this output is a slice of slices
 func (hp *horizonPlanning) pushAggregation(
 	ctx *plancontext.PlanningContext,
 	plan logicalPlan,
 	grouping []abstract.GroupBy,
 	aggregations []abstract.Aggr,
 	ignoreOutputOrder bool,
-) (output logicalPlan, // this will contain the new logical plan that the ordered aggregate can get it's input from
-	groupingOffsets []offsets, // the offsets (col and weighstring(col)) for grouping
-	outputAggrsOffset [][]offsets, // aggregation offsets -
-	pushed []bool,
+) (output logicalPlan,
+	groupingOffsets []offsets,
+	outputAggrsOffset [][]offsets,
+	pushed bool,
 	err error) {
+	pushed = true
 	switch plan := plan.(type) {
 	case *routeGen4:
 		output = plan
@@ -57,6 +61,45 @@ func (hp *horizonPlanning) pushAggregation(
 		// we just remove the simpleProjection. We are doing an OA on top anyway, so no need to clean up the output columns
 		return hp.pushAggregation(ctx, plan.input, grouping, aggregations, ignoreOutputOrder)
 
+	case *limit:
+		// if we are seeing a limit, it's because we are building on top of a derived table.
+		output = plan
+		pushed = false
+
+		for _, grp := range grouping {
+			offset, wOffset, err := wrapAndPushExpr(ctx, grp.Inner, grp.WeightStrExpr, plan.input)
+			if err != nil {
+				return nil, nil, nil, false, err
+			}
+			groupingOffsets = append(groupingOffsets, offsets{
+				col:   offset,
+				wsCol: wOffset,
+			})
+		}
+
+		for _, aggr := range aggregations {
+			var offset int
+			fExpr, ok := aggr.Original.Expr.(*sqlparser.FuncExpr)
+			if !ok {
+				return nil, nil, nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: unexpected expression: %v", aggr.Original)
+			}
+			if len(fExpr.Exprs) != 1 {
+				return nil, nil, nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: unexpected expression: %v", fExpr)
+			}
+			switch e := fExpr.Exprs[0].(type) {
+			case *sqlparser.StarExpr:
+				offset = 0
+			case *sqlparser.AliasedExpr:
+				offset, _, err = pushProjection(ctx, e, plan.input, true, true, false)
+			}
+			if err != nil {
+				return nil, nil, nil, false, err
+			}
+
+			outputAggrsOffset = append(outputAggrsOffset, []offsets{newOffset(offset)})
+		}
+
+		return
 	default:
 		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "using aggregation on top of a %T plan is not yet supported", plan)
 		return
@@ -188,7 +231,7 @@ func countStarAggr() *abstract.Aggr {
 
 	return &abstract.Aggr{
 		Original: &sqlparser.AliasedExpr{Expr: f},
-		OpCode:   engine.AggregateCount,
+		OpCode:   engine.AggregateCountStar,
 		Alias:    "count(*)",
 	}
 }
@@ -300,18 +343,18 @@ func (hp *horizonPlanning) pushAggrOnSemiJoin(
 	grouping []abstract.GroupBy,
 	aggregations []abstract.Aggr,
 	ignoreOutputOrder bool,
-) ([]offsets, [][]offsets, []bool, error) {
+) ([]offsets, [][]offsets, bool, error) {
 	// We need to group by the columns used in the join condition.
 	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
 	lhsCols, err := hp.createGroupingsForColumns(join.LHSColumns)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, false, err
 	}
 
 	totalGrouping := append(grouping, lhsCols...)
 	newLeft, groupingOffsets, aggrParams, pushed, err := hp.pushAggregation(ctx, join.lhs, totalGrouping, aggregations, ignoreOutputOrder)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, false, err
 	}
 	join.lhs = newLeft
 
@@ -329,7 +372,13 @@ func (hp *horizonPlanning) pushAggrOnSemiJoin(
 // the incoming aggregations correspond to what is sent to the LHS and RHS.
 // Some aggregations only need to be sent to one of the sides of the join, and in that case,
 // the other side will have a nil in this offset of the aggregations
-func (hp *horizonPlanning) filteredPushAggregation(ctx *plancontext.PlanningContext, plan logicalPlan, grouping []abstract.GroupBy, aggregations []*abstract.Aggr, ignoreOutputOrder bool) (out logicalPlan, groupingOffsets []offsets, outputAggrs [][]offsets, pushed []bool, err error) {
+func (hp *horizonPlanning) filteredPushAggregation(
+	ctx *plancontext.PlanningContext,
+	plan logicalPlan,
+	grouping []abstract.GroupBy,
+	aggregations []*abstract.Aggr,
+	ignoreOutputOrder bool,
+) (out logicalPlan, groupingOffsets []offsets, outputAggrs [][]offsets, pushed bool, err error) {
 	used := make([]bool, len(aggregations))
 	var aggrs []abstract.Aggr
 

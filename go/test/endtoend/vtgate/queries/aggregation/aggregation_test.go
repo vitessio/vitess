@@ -17,13 +17,11 @@ limitations under the License.
 package aggregation
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
@@ -303,18 +301,23 @@ func TestGreaterEqualFilterOnScatter(t *testing.T) {
 }
 
 func TestGroupByOnlyFullGroupByOff(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
-	conn, err := mysql.Connect(context.Background(), &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
+	mcmp, closer := start(t)
+	defer closer()
 
-	utils.Exec(t, conn, "insert into t9(id1, id2, id3) values(1,'a', '1'), (2,'Abc','2'), (3,'b', '3'), (4,'c', '4'), (5,'test', '5')")
-	utils.Exec(t, conn, "insert into t9(id1, id2, id3) values(6,'a', '11'), (7,'Abc','22'), (8,'b', '33'), (9,'c', '44'), (10,'test', '55')")
-	utils.Exec(t, conn, "set @@sql_mode = ' '")
+	mcmp.Exec("insert into t9(id1, id2, id3) values(1,'a', '1'), (2,'Abc','2'), (3,'b', '3'), (4,'c', '4'), (5,'test', '5')")
+	mcmp.Exec("insert into t9(id1, id2, id3) values(6,'a', '11'), (7,'Abc','22'), (8,'b', '33'), (9,'c', '44'), (10,'test', '55')")
+	mcmp.Exec("set @@sql_mode = ' '")
 
 	// We do not use AssertMatches here because the results for the second column are random
-	utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ id2, id3 from t9 group by id2")
+	_, err := mcmp.ExecAndIgnore("select /*vt+ PLANNER=gen4 */ id2, id3 from t9 group by id2")
+	require.NoError(t, err)
+}
+
+func TestAggregationOnTopOfShardedLimit(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',6), (2,'a',1), (3,'b',1), (4,'c',3), (5,'c',4)")
+
+	_, err := mcmp.ExecAndIgnore(" select /*vt+ PLANNER=gen4 */ count(*) from (select id, val1 from aggr_test where val2 < 4 limit 2) as x;")
+	require.NoError(t, err)
 }

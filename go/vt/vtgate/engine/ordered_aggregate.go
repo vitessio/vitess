@@ -143,6 +143,7 @@ const (
 	AggregateSumDistinct
 	AggregateGtid
 	AggregateRandom
+	AggregateCountStar
 )
 
 var (
@@ -150,6 +151,7 @@ var (
 	OpcodeType = map[AggregateOpcode]querypb.Type{
 		AggregateCountDistinct: sqltypes.Int64,
 		AggregateCount:         sqltypes.Int64,
+		AggregateCountStar:     sqltypes.Int64,
 		AggregateSumDistinct:   sqltypes.Decimal,
 		AggregateSum:           sqltypes.Decimal,
 		AggregateGtid:          sqltypes.VarChar,
@@ -172,6 +174,8 @@ var SupportedAggregates = map[string]AggregateOpcode{
 	"count_distinct": AggregateCountDistinct,
 	"sum_distinct":   AggregateSumDistinct,
 	"vgtid":          AggregateGtid,
+	"count_star":     AggregateCountStar,
+	"random":         AggregateRandom,
 }
 
 func (code AggregateOpcode) String() string {
@@ -180,7 +184,7 @@ func (code AggregateOpcode) String() string {
 			return k
 		}
 	}
-	return "random"
+	return "ERROR"
 }
 
 // MarshalJSON serializes the AggregateOpcode as a JSON string.
@@ -343,6 +347,14 @@ func convertRow(row []sqltypes.Value, preProcess bool, aggregates []*AggregatePa
 	curDistincts = make([]sqltypes.Value, len(aggregates))
 	for index, aggr := range aggregates {
 		switch aggr.Opcode {
+		case AggregateCountStar:
+			newRow[aggr.Col] = countOne
+		case AggregateCount:
+			if row[aggr.KeyCol].IsNull() {
+				newRow[aggr.Col] = countZero
+			} else {
+				newRow[aggr.Col] = countOne
+			}
 		case AggregateCountDistinct:
 			curDistincts[index] = findComparableCurrentDistinct(row, aggr)
 			// Type is int64. Ok to call MakeTrusted.
@@ -448,7 +460,17 @@ func merge(
 		}
 		var err error
 		switch aggr.Opcode {
-		case AggregateCount, AggregateSum:
+		case AggregateCountStar:
+			value := row1[aggr.Col]
+			result[aggr.Col], err = evalengine.NullSafeAdd(value, countOne, fields[aggr.Col].Type)
+		case AggregateCount:
+			if row2[aggr.KeyCol].IsNull() {
+				result[aggr.Col] = row1[aggr.Col]
+			} else {
+				value := row1[aggr.Col]
+				result[aggr.Col], err = evalengine.NullSafeAdd(value, countOne, fields[aggr.Col].Type)
+			}
+		case AggregateSum:
 			value := row1[aggr.Col]
 			v2 := row2[aggr.Col]
 			result[aggr.Col], err = evalengine.NullSafeAdd(value, v2, fields[aggr.Col].Type)
