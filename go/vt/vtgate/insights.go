@@ -333,19 +333,17 @@ func (ii *Insights) handleMessage(record interface{}) {
 
 	var sql string
 	var comments []string
-	// If there was an error, there's no point in parsing ls.SQL, because we're not going to use it.
-	if ls.Error == nil {
-		// comments with /**/ markers are present in the normalized ls.SQL, and we need to split them off.
-		// comments with -- markers get stripped when newExecute calls getPlan around plan_execute.go:63.
+	if ls.IsNormalized {
+		var renormalizeError error
 		sql, comments = splitComments(ls.SQL)
-		sql, ls.Error = normalizeSQL(sql)
-	} else if isSafeError(ls.Error) {
-		sql, comments = splitComments(ls.SQL)
-		sql, _ = normalizeSQL(sql)
+		sql, renormalizeError = normalizeSQL(sql)
+		if ls.Error == nil && renormalizeError != nil {
+			ls.Error = renormalizeError
+		}
 	} else {
 		sql = "<error>"
+		ls.Table = ""
 	}
-
 	if ls.Error != nil && ls.StmtType == "" {
 		ls.StmtType = "ERROR"
 	}
@@ -374,12 +372,6 @@ func (ii *Insights) handleMessage(record interface{}) {
 			ii.QueriesThisInterval++
 		}
 	}
-}
-
-const rpcErrorString = `vttablet: rpc error: code = `
-
-func isSafeError(err error) bool {
-	return strings.Contains(err.Error(), rpcErrorString)
 }
 
 func (ii *Insights) makeKafkaKey(sql string) string {

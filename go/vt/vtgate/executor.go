@@ -1064,6 +1064,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	if err != nil {
 		return nil, err
 	}
+	isNormalized := false
 	// Normalize if possible and retry.
 	if e.canNormalizeStatement(stmt, qo, setVarComment) {
 		parameterize := e.normalize // the public flag is called normalize
@@ -1083,10 +1084,12 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		statement = result.AST
 		bindVarNeeds = result.BindVarNeeds
 		query = sqlparser.String(statement)
+		isNormalized = true
 	}
 
 	if logStats != nil {
 		logStats.SQL = comments.Leading + query + comments.Trailing
+		logStats.IsNormalized = isNormalized
 		logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 	}
 

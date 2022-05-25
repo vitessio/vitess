@@ -98,7 +98,7 @@ func TestInsightsSlowQuery(t *testing.T) {
 	messages := 0
 	insights.Sender = func(buf []byte, topic, key string) error {
 		messages++
-		assert.Contains(t, string(buf), "select sleep(5)")
+		assert.Contains(t, string(buf), "select sleep(:vtg1)")
 		assert.Contains(t, key, "mumblefoo/")
 		assert.Equal(t, queryTopic, topic)
 		return nil
@@ -231,11 +231,11 @@ func TestInsightsErrors(t *testing.T) {
 func TestInsightsSafeErrors(t *testing.T) {
 	insightsTestHelper(t, true, setupOptions{},
 		[]insightsQuery{
-			{sql: "select :vtg1", error: "target: commerce.0.primary: vttablet: rpc error: code = Canceled desc = (errno 2013) due to context deadline exceeded, elapsed time: 29.998788288s, killing query ID 58 (CallerID: userData1)"},
-			{sql: "select :vtg1", error: `target: commerce.0.primary: vttablet: rpc error: code = Aborted desc = Row count exceeded 10000 (errno 10001) (sqlstate HY000) (CallerID: userData1): Sql: "select * from foo as f1 join foo as f2 join foo as f3 join foo as f4 join foo as f5 join foo as f6 where f1.id > :vtg1", BindVars: {#maxLimit: "type:INT64 value:\"10001\""vtg1: "type:INT64 value:\"0\"`},
-			{sql: "select :vtg1", error: "target: commerce.0.primary: vttablet: rpc error: code = ResourceExhausted desc = grpc: trying to send message larger than max (18345369 vs. 16777216)"},
-			{sql: "select :vtg1", error: `target: commerce.0.primary: vttablet: rpc error: code = Canceled desc = EOF (errno 2013) (sqlstate HY000) (CallerID: userData1): Sql: "select :vtg1 from foo", BindVars: {#maxLimit: "type:INT64 value:\"10001\""vtg1: "type:INT64 value:\"1\"`},
-			{sql: "select :vtg1", error: `target: sharded.-40.primary: vttablet: rpc error: code = Unavailable desc = error reading from server: EOF`},
+			{sql: "select :vtg1", normalizedError: true, error: "target: commerce.0.primary: vttablet: rpc error: code = Canceled desc = (errno 2013) due to context deadline exceeded, elapsed time: 29.998788288s, killing query ID 58 (CallerID: userData1)"},
+			{sql: "select :vtg1", normalizedError: true, error: `target: commerce.0.primary: vttablet: rpc error: code = Aborted desc = Row count exceeded 10000 (errno 10001) (sqlstate HY000) (CallerID: userData1): Sql: "select * from foo as f1 join foo as f2 join foo as f3 join foo as f4 join foo as f5 join foo as f6 where f1.id > :vtg1", BindVars: {#maxLimit: "type:INT64 value:\"10001\""vtg1: "type:INT64 value:\"0\"`},
+			{sql: "select :vtg1", normalizedError: true, error: "target: commerce.0.primary: vttablet: rpc error: code = ResourceExhausted desc = grpc: trying to send message larger than max (18345369 vs. 16777216)"},
+			{sql: "select :vtg1", normalizedError: true, error: `target: commerce.0.primary: vttablet: rpc error: code = Canceled desc = EOF (errno 2013) (sqlstate HY000) (CallerID: userData1): Sql: "select :vtg1 from foo", BindVars: {#maxLimit: "type:INT64 value:\"10001\""vtg1: "type:INT64 value:\"1\"`},
+			{sql: "select :vtg1", normalizedError: true, error: `target: sharded.-40.primary: vttablet: rpc error: code = Unavailable desc = error reading from server: EOF`},
 		},
 		[]insightsKafkaExpectation{
 			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = Canceled`).butNot("foo", "BindVars", "Sql").count(2),
@@ -413,6 +413,10 @@ type insightsQuery struct {
 	sql, error   string
 	responseTime time.Duration
 	rowsRead     int
+
+	// insightsTestHelper sets ls.IsNormalized to false.  Set normalizedError=true to override this, e.g., to
+	// simulate an error that occurs after query parsing has succeeded.
+	normalizedError bool
 }
 
 type insightsKafkaExpectation struct {
@@ -471,11 +475,12 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 	now := time.Now()
 	for _, q := range queries {
 		ls := &LogStats{
-			SQL:       q.sql,
-			StartTime: now.Add(-q.responseTime),
-			EndTime:   now,
-			RowsRead:  uint64(q.rowsRead),
-			Ctx:       context.Background(),
+			SQL:          q.sql,
+			IsNormalized: q.error == "" || q.normalizedError,
+			StartTime:    now.Add(-q.responseTime),
+			EndTime:      now,
+			RowsRead:     uint64(q.rowsRead),
+			Ctx:          context.Background(),
 		}
 		if q.error != "" {
 			ls.Error = errors.New(q.error)
@@ -495,9 +500,10 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 
 var (
 	lsSlowQuery = &LogStats{
-		SQL:       "select sleep(5)",
-		StartTime: time.Now().Add(-5 * time.Second),
-		EndTime:   time.Now(),
-		Ctx:       context.Background(),
+		SQL:          "select sleep(:vtg1)",
+		IsNormalized: true,
+		StartTime:    time.Now().Add(-5 * time.Second),
+		EndTime:      time.Now(),
+		Ctx:          context.Background(),
 	}
 )
