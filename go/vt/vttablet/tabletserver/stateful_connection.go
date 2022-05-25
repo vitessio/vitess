@@ -154,7 +154,7 @@ func (sc *StatefulConnection) Release(reason tx.ReleaseReason) {
 
 // Releasef is used when the connection will not be used ever again.
 // The underlying dbConn is removed so that this connection cannot be used by mistake.
-func (sc *StatefulConnection) Releasef(reasonFormat string, a ...interface{}) {
+func (sc *StatefulConnection) Releasef(reasonFormat string, a ...any) {
 	if sc.dbConn == nil {
 		return
 	}

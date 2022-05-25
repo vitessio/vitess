@@ -402,9 +402,24 @@ func translateUnaryExpr(unary *sqlparser.UnaryExpr, lookup TranslationLookup) (E
 	}
 }
 
-func translateConvertCharset(charset string, lookup TranslationLookup) (collations.ID, error) {
+func binaryCollationForCollation(collation collations.ID) collations.ID {
+	binary := collations.Local().LookupByID(collation)
+	if binary == nil {
+		return collations.Unknown
+	}
+	binaryCollation := collations.Local().BinaryCollationForCharset(binary.Charset().Name())
+	if binaryCollation == nil {
+		return collations.Unknown
+	}
+	return binaryCollation.ID()
+}
+
+func translateConvertCharset(charset string, binary bool, lookup TranslationLookup) (collations.ID, error) {
 	if charset == "" {
 		collation := lookup.DefaultCollation()
+		if binary {
+			collation = binaryCollationForCollation(collation)
+		}
 		if collation == collations.Unknown {
 			return collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No default character set specified")
 		}
@@ -415,7 +430,14 @@ func translateConvertCharset(charset string, lookup TranslationLookup) (collatio
 	if collation == nil {
 		return collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unknown character set: '%s'", charset)
 	}
-	return collation.ID(), nil
+	collationID := collation.ID()
+	if binary {
+		collationID = binaryCollationForCollation(collationID)
+		if collationID == collations.Unknown {
+			return collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No binary collation found for character set: %s ", charset)
+		}
+	}
+	return collationID, nil
 }
 
 func translateConvertExpr(expr *sqlparser.ConvertExpr, lookup TranslationLookup) (Expr, error) {
@@ -461,7 +483,7 @@ func translateConvertExpr(expr *sqlparser.ConvertExpr, lookup TranslationLookup)
 	case "NCHAR":
 		convert.Collation = collations.CollationUtf8ID
 	case "CHAR":
-		convert.Collation, err = translateConvertCharset(expr.Type.Charset, lookup)
+		convert.Collation, err = translateConvertCharset(expr.Type.Charset.Name, expr.Type.Charset.Binary, lookup)
 		if err != nil {
 			return nil, err
 		}
@@ -481,12 +503,60 @@ func translateConvertUsingExpr(expr *sqlparser.ConvertUsingExpr, lookup Translat
 		return nil, err
 	}
 
-	using.Collation, err = translateConvertCharset(expr.Type, lookup)
+	using.Collation, err = translateConvertCharset(expr.Type, false, lookup)
 	if err != nil {
 		return nil, err
 	}
 
 	return &using, nil
+}
+
+func translateCaseExpr(node *sqlparser.CaseExpr, lookup TranslationLookup) (Expr, error) {
+	var err error
+	var result CaseExpr
+
+	if node.Else != nil {
+		result.Else, err = translateExpr(node.Else, lookup)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var cmpbase Expr
+	if node.Expr != nil {
+		cmpbase, err = translateExpr(node.Expr, lookup)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for _, when := range node.Whens {
+		var cond, val Expr
+
+		cond, err = translateExpr(when.Cond, lookup)
+		if err != nil {
+			return nil, err
+		}
+
+		val, err = translateExpr(when.Val, lookup)
+		if err != nil {
+			return nil, err
+		}
+
+		if cmpbase != nil {
+			cond, err = translateComparisonExpr2(sqlparser.EqualOp, cmpbase, cond)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		result.cases = append(result.cases, WhenThen{
+			when: cond,
+			then: val,
+		})
+	}
+
+	return &result, nil
 }
 
 func translateExprNotSupported(e sqlparser.Expr) error {
@@ -502,6 +572,8 @@ func translateExpr(e sqlparser.Expr, lookup TranslationLookup) (Expr, error) {
 		return NewLiteralInt(0), nil
 	case *sqlparser.ColName:
 		return translateColName(node, lookup)
+	case *sqlparser.Offset:
+		return NewColumn(node.V, getCollation(node, lookup)), nil
 	case *sqlparser.ComparisonExpr:
 		return translateComparisonExpr(node.Operator, node.Left, node.Right, lookup)
 	case sqlparser.Argument:
@@ -542,6 +614,8 @@ func translateExpr(e sqlparser.Expr, lookup TranslationLookup) (Expr, error) {
 		return translateConvertExpr(node, lookup)
 	case *sqlparser.ConvertUsingExpr:
 		return translateConvertUsingExpr(node, lookup)
+	case *sqlparser.CaseExpr:
+		return translateCaseExpr(node, lookup)
 	default:
 		return nil, translateExprNotSupported(e)
 	}

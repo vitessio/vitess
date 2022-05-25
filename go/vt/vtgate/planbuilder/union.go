@@ -31,7 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildUnionPlan(string) selectPlanner {
+func buildUnionPlan(string) stmtPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
 		union := stmt.(*sqlparser.Union)
 		if union.With != nil {
@@ -78,7 +78,7 @@ func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, reservedVars *s
 		}
 
 		if union.Distinct {
-			pb.plan = newDistinct(pb.plan, nil)
+			pb.plan = newDistinctV3(pb.plan)
 		}
 	}
 	pb.st.Outer = outer

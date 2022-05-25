@@ -75,6 +75,12 @@ type Route struct {
 	// RoutingParameters parameters required for query routing.
 	*RoutingParameters
 
+	// NoRoutesSpecialHandling will make the route send a query to arbitrary shard if the routing logic can't find
+	// the correct shard. This is important for queries where no matches does not mean empty result - examples would be:
+	// select count(*) from tbl where lookupColumn = 'not there'
+	// select exists(<subq>)
+	NoRoutesSpecialHandling bool
+
 	// Route does not take inputs
 	noInputs
 
@@ -177,18 +183,40 @@ func (route *Route) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
+const IgnoreReserveTxn = "IGNORE_EXISTING_CONNECTION"
+
 func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	rss, bvs, err := route.findRoute(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
 
+	// Select Next - sequence query does not need to be executed in a dedicated connection (reserved or transaction)
+	if route.Opcode == Next {
+		restoreCtx := vcursor.SetContextWithValue(IgnoreReserveTxn, true)
+		defer restoreCtx()
+	}
+
 	// No route.
 	if len(rss) == 0 {
-		if wantfields {
-			return route.GetFields(vcursor, bindVars)
+		if !route.NoRoutesSpecialHandling {
+			if wantfields {
+				return route.GetFields(vcursor, bindVars)
+			}
+			return &sqltypes.Result{}, nil
 		}
-		return &sqltypes.Result{}, nil
+		// Here we were earlier returning no rows back.
+		// But this was incorrect for queries like select count(*) from user where name='x'
+		// If the lookup_vindex for name, returns no shards, we still want a result from here
+		// with a single row with 0 as the output.
+		// However, at this level it is hard to distinguish between the cases that need a result
+		// and the ones that don't. So, we are sending the query to any shard! This is safe because
+		// the query contains a predicate that make it not match any rows on that shard. (If they did,
+		// we should have gotten that shard back already from findRoute)
+		rss, bvs, err = route.anyShard(vcursor, bindVars)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	queries := getQueries(route.Query, bvs)
@@ -238,14 +266,28 @@ func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 
 	// No route.
 	if len(rss) == 0 {
-		if wantfields {
-			r, err := route.GetFields(vcursor, bindVars)
-			if err != nil {
-				return err
+		if !route.NoRoutesSpecialHandling {
+			if wantfields {
+				r, err := route.GetFields(vcursor, bindVars)
+				if err != nil {
+					return err
+				}
+				return callback(r)
 			}
-			return callback(r)
+			return nil
 		}
-		return nil
+		// Here we were earlier returning no rows back.
+		// But this was incorrect for queries like select count(*) from user where name='x'
+		// If the lookup_vindex for name, returns no shards, we still want a result from here
+		// with a single row with 0 as the output.
+		// However, at this level it is hard to distinguish between the cases that need a result
+		// and the ones that don't. So, we are sending the query to any shard! This is safe because
+		// the query contains a predicate that make it not match any rows on that shard. (If they did,
+		// we should have gotten that shard back already from findRoute)
+		rss, bvs, err = route.anyShard(vcursor, bindVars)
+		if err != nil {
+			return err
+		}
 	}
 
 	if len(route.OrderBy) == 0 {
@@ -346,7 +388,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 }
 
 func (route *Route) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Query":      route.Query,
 		"Table":      route.TableName,
 		"FieldQuery": route.FieldQuery,
@@ -424,6 +466,6 @@ func getQueries(query string, bvs []map[string]*querypb.BindVariable) []*querypb
 	return queries
 }
 
-func orderByToString(in interface{}) string {
+func orderByToString(in any) string {
 	return in.(OrderByParams).String()
 }

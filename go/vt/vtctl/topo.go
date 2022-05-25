@@ -260,7 +260,7 @@ func (d PlainTopologyDecoder) decode(ctx context.Context, topoPaths []string, co
 
 func (d JSONTopologyDecoder) decode(ctx context.Context, topoPaths []string, conn topo.Conn, wr *wrangler.Wrangler, long bool) error {
 	hasError := false
-	var jsonData []interface{}
+	var jsonData []any
 	for _, topoPath := range topoPaths {
 		data, version, err := conn.Get(ctx, topoPath)
 		if err != nil {
@@ -276,7 +276,7 @@ func (d JSONTopologyDecoder) decode(ctx context.Context, topoPaths []string, con
 			continue
 		}
 
-		var jsonDatum map[string]interface{}
+		var jsonDatum map[string]any
 		if err = json.Unmarshal([]byte(decoded), &jsonDatum); err != nil {
 			hasError = true
 			wr.Logger().Printf("TopoCat: cannot json Unmarshal %v: %v", topoPath, err)

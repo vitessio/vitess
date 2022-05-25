@@ -6,7 +6,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1,-1,2",
+    "JoinColumnIndexes": "R:0,L:0,R:1",
     "JoinVars": {
       "uid": 0
     },
@@ -43,7 +43,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2,1,-3",
+    "JoinColumnIndexes": "L:1,R:0,L:2",
     "JoinVars": {
       "e_id": 0
     },
@@ -87,7 +87,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1,-1,2",
+    "JoinColumnIndexes": "R:0,L:0,R:1",
     "JoinVars": {
       "uid1": 0
     },
@@ -124,7 +124,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2,1,-3",
+    "JoinColumnIndexes": "L:1,R:0,L:2",
     "JoinVars": {
       "e_id": 0
     },
@@ -168,7 +168,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "JoinVars": {
       "u1_col": 1
     },
@@ -177,7 +177,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2",
+        "JoinColumnIndexes": "L:0,L:1",
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -224,7 +224,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
       {
@@ -241,7 +241,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-2",
+        "JoinColumnIndexes": "L:1",
         "JoinVars": {
           "u1_col": 0
         },
@@ -283,7 +283,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "JoinVars": {
       "u2_col": 1
     },
@@ -292,7 +292,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,1",
+        "JoinColumnIndexes": "L:0,R:0",
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -339,7 +339,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
       {
@@ -397,7 +397,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "JoinVars": {
       "u1_col": 1
     },
@@ -406,7 +406,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2",
+        "JoinColumnIndexes": "L:0,L:1",
         "JoinVars": {
           "u1_col": 1
         },
@@ -456,7 +456,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "u3_col": 0
     },
@@ -476,7 +476,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-2",
+        "JoinColumnIndexes": "L:1",
         "JoinVars": {
           "u1_col": 0
         },
@@ -521,7 +521,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "JoinVars": {
       "u1_col": 1
     },
@@ -530,7 +530,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2",
+        "JoinColumnIndexes": "L:0,L:1",
         "JoinVars": {
           "u1_col": 1
         },
@@ -539,7 +539,7 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
+            "JoinColumnIndexes": "L:0,L:1",
             "TableName": "`user`_`user`",
             "Inputs": [
               {
@@ -603,7 +603,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "TableName": "`user`_`user`_`user`_`user`",
     "Inputs": [
       {
@@ -620,7 +620,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "1",
+        "JoinColumnIndexes": "R:0",
         "JoinVars": {
           "u4_col": 0
         },
@@ -640,7 +640,7 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-2",
+            "JoinColumnIndexes": "L:1",
             "JoinVars": {
               "u1_col": 0
             },
@@ -688,7 +688,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "JoinVars": {
       "u1_col": 1
     },
@@ -751,7 +751,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2",
+    "JoinColumnIndexes": "L:1",
     "JoinVars": {
       "u1_col": 0
     },
@@ -760,7 +760,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2",
+        "JoinColumnIndexes": "L:0,L:1",
         "JoinVars": {
           "u1_col": 0
         },
@@ -821,7 +821,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "JoinVars": {
       "weird_name_a_b_c": 1
     },
@@ -858,7 +858,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1,-2",
+    "JoinColumnIndexes": "R:0,L:1",
     "JoinVars": {
       "unsharded_id": 0
     },
@@ -902,7 +902,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "weird_name_a_b_c": 0
     },
@@ -939,7 +939,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2",
+    "JoinColumnIndexes": "L:1",
     "JoinVars": {
       "unsharded_id": 0
     },
@@ -987,7 +987,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,1",
+        "JoinColumnIndexes": "L:0,R:0",
         "JoinVars": {
           "u_col": 1
         },
@@ -1030,7 +1030,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-2,1",
+        "JoinColumnIndexes": "L:1,R:0",
         "JoinVars": {
           "u_col": 0
         },
@@ -1084,7 +1084,7 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,1",
+            "JoinColumnIndexes": "L:0,R:0",
             "JoinVars": {
               "u_col": 1
             },
@@ -1152,7 +1152,7 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-2,1",
+            "JoinColumnIndexes": "L:1,R:0",
             "JoinVars": {
               "u_col": 0
             },
@@ -1234,7 +1234,7 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,1,-2",
+            "JoinColumnIndexes": "L:0,R:0,L:1",
             "JoinVars": {
               "u_col": 2
             },
@@ -1297,7 +1297,7 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-2,1,-3",
+            "JoinColumnIndexes": "L:1,R:0,L:2",
             "JoinVars": {
               "u_col": 0
             },
@@ -1364,7 +1364,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "TableName": "`user`_`user`",
     "Inputs": [
       {
@@ -1406,7 +1406,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "TableName": "`user`_`user`",
     "Inputs": [
       {
@@ -1476,13 +1476,13 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "TableName": "`user`_unsharded_unsharded",
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1",
+        "JoinColumnIndexes": "L:0",
         "TableName": "`user`_unsharded",
         "Inputs": [
           {

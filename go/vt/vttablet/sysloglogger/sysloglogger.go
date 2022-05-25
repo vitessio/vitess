@@ -37,7 +37,7 @@ type syslogWriter interface {
 var writer syslogWriter
 
 // ch holds the tabletserver.StatsLogger channel to which this plugin subscribes (or a mock when under test).
-var ch chan interface{}
+var ch chan any
 
 // logQueries is the vttablet startup flag that must be set for this plugin to be active.
 var logQueries = flag.Bool("log_queries", false, "Enable query logging to syslog.")

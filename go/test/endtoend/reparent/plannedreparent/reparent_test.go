@@ -22,12 +22,11 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/reparent/utils"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -149,7 +148,7 @@ func TestReparentAvoid(t *testing.T) {
 	// tablets[1 is in the same cell and tablets[3] is in a different cell, so we must land on tablets[1
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
 
-	// If we kill the tablet in the same cell as primary then reparent -avoid_tablet will fail.
+	// If we kill the tablet in the same cell as primary then reparent --avoid_tablet will fail.
 	utils.StopTablet(t, tablets[0], true)
 	out, err := utils.PrsAvoid(t, clusterInstance, tablets[1])
 	require.Error(t, err)
@@ -236,8 +235,8 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 	if downPrimary {
 		err := tablets[0].VttabletProcess.TearDownWithTimeout(30 * time.Second)
 		require.NoError(t, err)
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet",
-			"-allow_primary", tablets[0].Alias)
+		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--",
+			"--allow_primary", tablets[0].Alias)
 		require.NoError(t, err)
 	}
 
@@ -378,4 +377,45 @@ func TestReparentDoesntHangIfPrimaryFails(t *testing.T) {
 	out, err := utils.Prs(t, clusterInstance, tablets[1])
 	require.Error(t, err)
 	assert.Contains(t, out, "primary failed to PopulateReparentJournal")
+}
+
+func TestReplicationStatus(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+
+	// Stop the SQL_THREAD on tablets[1]
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE SQL_THREAD;`)
+	require.NoError(t, err)
+	// Check the replication status on tablets[1] and assert that the IO thread is read to be running and SQL thread is stopped
+	replicationStatus := cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
+	ioThread, sqlThread := utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
+	require.True(t, ioThread)
+	require.False(t, sqlThread)
+
+	// Stop replication on tablets[1] and verify that both the threads are reported as not running
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE;`)
+	require.NoError(t, err)
+	replicationStatus = cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
+	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
+	require.False(t, ioThread)
+	require.False(t, sqlThread)
+
+	// Start replication on tablets[1] and verify that both the threads are reported as running
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `START SLAVE;`)
+	require.NoError(t, err)
+	replicationStatus = cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
+	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
+	require.True(t, ioThread)
+	require.True(t, sqlThread)
+
+	// Stop IO_THREAD on tablets[1] and verify that the IO thread is read to be stopped and SQL thread is running
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE IO_THREAD;`)
+	require.NoError(t, err)
+	replicationStatus = cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
+	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
+	require.False(t, ioThread)
+	require.True(t, sqlThread)
 }

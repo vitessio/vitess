@@ -19,14 +19,12 @@ package unsharded
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -66,14 +64,14 @@ func TestMain(m *testing.M) {
 			Name:      keyspaceName,
 			SchemaSQL: sqlSchema,
 		}
-		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-schema-change-signal", "-queryserver-config-schema-change-signal-interval", "0.1"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
 		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
 		if err != nil {
 			return 1
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal", "-vschema_ddl_authorized_users", "%"}
+		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--vschema_ddl_authorized_users", "%"}
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1
@@ -98,16 +96,18 @@ func TestNewUnshardedTable(t *testing.T) {
 	defer conn.Close()
 
 	// ensuring our initial table "main" is in the schema
-	qr := utils.Exec(t, conn, "SHOW VSCHEMA TABLES")
-	got := fmt.Sprintf("%v", qr.Rows)
-	want := `[[VARCHAR("dual")] [VARCHAR("main")]]`
-	require.Equal(t, want, got)
+	utils.AssertMatchesWithTimeout(t, conn,
+		"SHOW VSCHEMA TABLES",
+		`[[VARCHAR("dual")] [VARCHAR("main")]]`,
+		100*time.Millisecond,
+		3*time.Second,
+		"initial table list not complete")
 
 	// create a new table which is not part of the VSchema
 	utils.Exec(t, conn, `create table new_table_tracked(id bigint, name varchar(100), primary key(id)) Engine=InnoDB`)
 
 	// waiting for the vttablet's schema_reload interval to kick in
-	assertMatchesWithTimeout(t, conn,
+	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
 		`[[VARCHAR("dual")] [VARCHAR("main")] [VARCHAR("new_table_tracked")]]`,
 		100*time.Millisecond,
@@ -126,27 +126,10 @@ func TestNewUnshardedTable(t *testing.T) {
 	utils.Exec(t, conn, `drop table new_table_tracked`)
 
 	// waiting for the vttablet's schema_reload interval to kick in
-	assertMatchesWithTimeout(t, conn,
+	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
 		`[[VARCHAR("dual")] [VARCHAR("main")]]`,
 		100*time.Millisecond,
 		3*time.Second,
 		"new_table_tracked not in vschema tables")
-}
-
-func assertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected string, r time.Duration, d time.Duration, failureMsg string) {
-	t.Helper()
-	timeout := time.After(d)
-	diff := "actual and expectation does not match"
-	for len(diff) > 0 {
-		select {
-		case <-timeout:
-			require.Fail(t, failureMsg, diff)
-		case <-time.After(r):
-			qr := utils.Exec(t, conn, query)
-			diff = cmp.Diff(expected,
-				fmt.Sprintf("%v", qr.Rows))
-		}
-
-	}
 }

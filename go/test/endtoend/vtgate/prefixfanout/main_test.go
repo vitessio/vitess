@@ -140,7 +140,13 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
+		// This waits for the vtgate process to be healthy
 		if err := clusterInstance.StartVtgate(); err != nil {
+			return 1
+		}
+
+		// Wait for the cluster to be running and healthy
+		if err := clusterInstance.WaitForTabletsToHealthyInVtgate(); err != nil {
 			return 1
 		}
 

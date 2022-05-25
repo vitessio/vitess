@@ -106,7 +106,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(0) AS count(*)",
+    "Aggregates": "sum(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -201,7 +201,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(0) AS count(*)",
+    "Aggregates": "sum(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -250,7 +250,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(0) AS count(*)",
+    "Aggregates": "sum(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -520,7 +520,7 @@ Gen4 error: Column 'col' in field list is ambiguous
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -557,11 +557,8 @@ Gen4 plan same as above
   "Original": "select database() from dual",
   "Instructions": {
     "OperatorType": "Projection",
-    "Columns": [
-      "database()"
-    ],
     "Expressions": [
-      ":__vtdbname"
+      ":__vtdbname as database()"
     ],
     "Inputs": [
       {
@@ -660,7 +657,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -698,7 +695,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -736,7 +733,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -774,7 +771,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1,-2",
+    "JoinColumnIndexes": "L:0,R:0,L:1",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -812,7 +809,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -850,7 +847,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -888,7 +885,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "JoinVars": {
       "user_id": 0
     },
@@ -929,7 +926,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -1376,7 +1373,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,1",
+        "JoinColumnIndexes": "L:0,R:0",
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -1660,11 +1657,8 @@ Gen4 plan same as above
   "Original": "select 42",
   "Instructions": {
     "OperatorType": "Projection",
-    "Columns": [
-      "42"
-    ],
     "Expressions": [
-      "INT64(42)"
+      "INT64(42) as 42"
     ],
     "Inputs": [
       {
@@ -1701,11 +1695,8 @@ Gen4 plan same as above
   "Original": "select 42+2",
   "Instructions": {
     "OperatorType": "Projection",
-    "Columns": [
-      "42 + 2"
-    ],
     "Expressions": [
-      "INT64(44)"
+      "INT64(44) as 42 + 2"
     ],
     "Inputs": [
       {
@@ -1811,7 +1802,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0) AS count(*)",
+        "Aggregates": "sum(0) AS count(*)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1949,7 +1940,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0) AS count(*)",
+        "Aggregates": "sum(0) AS count(*)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2080,7 +2071,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,-2",
+    "JoinColumnIndexes": "L:0,L:1",
     "TableName": "`user`, user_extra_unsharded",
     "Inputs": [
       {
@@ -2114,7 +2105,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1,2",
+    "JoinColumnIndexes": "R:0,R:1",
     "TableName": "unsharded_`user`, user_extra",
     "Inputs": [
       {
@@ -2149,11 +2140,8 @@ Gen4 plan same as above
   "Original": "((((select 1))))",
   "Instructions": {
     "OperatorType": "Projection",
-    "Columns": [
-      "1"
-    ],
     "Expressions": [
-      "INT64(1)"
+      "INT64(1) as 1"
     ],
     "Inputs": [
       {
@@ -2172,7 +2160,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "TableName": "dual_`user`",
     "Inputs": [
       {
@@ -2207,8 +2195,8 @@ Gen4 plan same as above
     "OperatorType": "Route",
     "Variant": "Scatter",
     "Keyspace": {
-      "Name": "main",
-      "Sharded": false
+      "Name": "user",
+      "Sharded": true
     },
     "FieldQuery": "select 42, id from dual, `user` where 1 != 1",
     "Query": "select 42, id from dual, `user`",
@@ -2224,7 +2212,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "TableName": "dual_`user`",
     "Inputs": [
       {
@@ -2286,7 +2274,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1",
+        "JoinColumnIndexes": "L:0",
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -2348,7 +2336,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1",
+        "JoinColumnIndexes": "L:0",
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -2418,7 +2406,7 @@ Gen4 plan same as above
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1",
+            "JoinColumnIndexes": "L:0",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -2486,7 +2474,7 @@ Gen4 plan same as above
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1",
+            "JoinColumnIndexes": "L:0",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -2530,11 +2518,8 @@ Gen4 plan same as above
   "Original": "select N'string' from dual",
   "Instructions": {
     "OperatorType": "Projection",
-    "Columns": [
-      "N'string'"
-    ],
     "Expressions": [
-      "VARCHAR(\"string\")"
+      "VARCHAR(\"string\") as N'string'"
     ],
     "Inputs": [
       {
@@ -2553,7 +2538,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_id": 0
     },
@@ -2693,7 +2678,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,1,-2",
+        "JoinColumnIndexes": "L:0,R:0,L:1",
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -2831,7 +2816,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_col": 0,
       "user_id": 1
@@ -2869,7 +2854,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "user_extra_col": 1,
       "user_extra_id": 0
@@ -2943,3 +2928,547 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+"select user.id, trim(leading 'x' from user.name) from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.id, trim(leading 'x' from user.name) from user",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select `user`.id, trim(leading 'x' from `user`.`name`) from `user` where 1 != 1",
+    "Query": "select `user`.id, trim(leading 'x' from `user`.`name`) from `user`",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
+
+# json utility functions
+"select jcol, JSON_STORAGE_SIZE(jcol), JSON_STORAGE_FREE(jcol), JSON_PRETTY(jcol) from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select jcol, JSON_STORAGE_SIZE(jcol), JSON_STORAGE_FREE(jcol), JSON_PRETTY(jcol) from user",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select jcol, json_storage_size(jcol), json_storage_free(jcol), json_pretty(jcol) from `user` where 1 != 1",
+    "Query": "select jcol, json_storage_size(jcol), json_storage_free(jcol), json_pretty(jcol) from `user`",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
+
+# dual query with exists clause
+"select 1 from dual where exists (select 1 from information_schema.TABLES where information_schema.TABLES.TABLE_NAME = 'proc' and information_schema.TABLES.TABLE_SCHEMA = 'mysql')"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from dual where exists (select 1 from information_schema.TABLES where information_schema.TABLES.TABLE_NAME = 'proc' and information_schema.TABLES.TABLE_SCHEMA = 'mysql')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "DBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 1 from dual where 1 != 1",
+    "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where information_schema.`TABLES`.TABLE_NAME = :TABLES_TABLE_NAME and information_schema.`TABLES`.TABLE_SCHEMA = :__vtschemaname limit 1)",
+    "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
+    "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
+    "Table": "dual"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from dual where exists (select 1 from information_schema.TABLES where information_schema.TABLES.TABLE_NAME = 'proc' and information_schema.TABLES.TABLE_SCHEMA = 'mysql')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "DBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 1 from dual where 1 != 1",
+    "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = :TABLES_TABLE_NAME and `TABLES`.TABLE_SCHEMA = :__vtschemaname limit 1)",
+    "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
+    "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
+    "Table": "dual"
+  }
+}
+
+# json_quote, json_object and json_array
+"SELECT JSON_QUOTE('null'), JSON_QUOTE('\"null\"'), JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), JSON_ARRAY(1, \"abc\", NULL, TRUE, CURTIME())"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT JSON_QUOTE('null'), JSON_QUOTE('\"null\"'), JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), JSON_ARRAY(1, \"abc\", NULL, TRUE, CURTIME())",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, CURTIME()) from dual where 1 != 1",
+    "Query": "select json_quote('null'), json_quote('\\\"null\\\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, CURTIME()) from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+
+"select (select id from user order by id limit 1) from user_extra"
+{
+  "QueryType": "SELECT",
+  "Original": "select (select id from user order by id limit 1) from user_extra",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": "INT64(1)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+            "ResultColumns": 1,
+            "Table": "`user`"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select :__sq1 from user_extra where 1 != 1",
+        "Query": "select :__sq1 from user_extra",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select (select id from user order by id limit 1) from user_extra",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": "INT64(1)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+            "ResultColumns": 1,
+            "Table": "`user`"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select :__sq1 from user_extra where 1 != 1",
+        "Query": "select :__sq1 from user_extra",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+
+# yeah, it does not make sense, but it's valid
+"select exists(select 1) from user where id = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "select exists(select 1) from user where id = 5",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from dual where 1 != 1",
+        "Query": "select 1 from dual limit 1",
+        "Table": "dual"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select :__sq_has_values1 from `user` where 1 != 1",
+        "Query": "select :__sq_has_values1 from `user` where id = 5",
+        "Table": "`user`",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select exists(select 1) from user where id = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select exists (select 1 from dual where 1 != 1) from `user` where 1 != 1",
+    "Query": "select exists (select 1 from dual limit 1) from `user` where id = 5",
+    "Table": "`user`",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  }
+}
+
+# json schema validation functions
+"SELECT JSON_SCHEMA_VALID('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), JSON_SCHEMA_VALIDATION_REPORT('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"')"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT JSON_SCHEMA_VALID('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), JSON_SCHEMA_VALIDATION_REPORT('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_schema_valid('{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"(\\\"}', '\\\"abc\\\"'), json_schema_validation_report('{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"(\\\"}', '\\\"abc\\\"') from dual where 1 != 1",
+    "Query": "select json_schema_valid('{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"(\\\"}', '\\\"abc\\\"'), json_schema_validation_report('{\\\"type\\\":\\\"string\\\",\\\"pattern\\\":\\\"(\\\"}', '\\\"abc\\\"') from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+
+# json search functions
+"SELECT JSON_CONTAINS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), JSON_CONTAINS_PATH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), JSON_EXTRACT('[10, 20, [30, 40]]', '$[1]'), JSON_UNQUOTE(JSON_EXTRACT('[\"a\",\"b\"]', '$[1]')), JSON_KEYS('{\"a\": 1, \"b\": {\"c\": 30}}'), JSON_OVERLAPS(\"[1,3,5,7]\", \"[2,5,7]\"), JSON_SEARCH('[\"abc\"]', 'one', 'abc'), JSON_VALUE('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), JSON_ARRAY(4,5) MEMBER OF('[[3,4],[4,5]]')"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT JSON_CONTAINS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), JSON_CONTAINS_PATH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), JSON_EXTRACT('[10, 20, [30, 40]]', '$[1]'), JSON_UNQUOTE(JSON_EXTRACT('[\"a\",\"b\"]', '$[1]')), JSON_KEYS('{\"a\": 1, \"b\": {\"c\": 30}}'), JSON_OVERLAPS(\"[1,3,5,7]\", \"[2,5,7]\"), JSON_SEARCH('[\"abc\"]', 'one', 'abc'), JSON_VALUE('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), JSON_ARRAY(4,5) MEMBER OF('[[3,4],[4,5]]')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_contains('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', '1'), json_contains_path('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), json_unquote(json_extract('[\\\"a\\\",\\\"b\\\"]', '$[1]')), json_keys('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\\\"abc\\\"]', 'one', 'abc'), json_value('{\\\"fname\\\": \\\"Joe\\\", \\\"lname\\\": \\\"Palmer\\\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual where 1 != 1",
+    "Query": "select json_contains('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', '1'), json_contains_path('{\\\"a\\\": 1, \\\"b\\\": 2, \\\"c\\\": {\\\"d\\\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), json_unquote(json_extract('[\\\"a\\\",\\\"b\\\"]', '$[1]')), json_keys('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\\\"abc\\\"]', 'one', 'abc'), json_value('{\\\"fname\\\": \\\"Joe\\\", \\\"lname\\\": \\\"Palmer\\\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+
+# Json extract and json unquote shorthands
+"SELECT a->\"$[4]\", a->>\"$[3]\" FROM user"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT a-\u003e\"$[4]\", a-\u003e\u003e\"$[3]\" FROM user",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select a -\u003e '$[4]', a -\u003e\u003e '$[3]' from `user` where 1 != 1",
+    "Query": "select a -\u003e '$[4]', a -\u003e\u003e '$[3]' from `user`",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
+
+# groupe by with non aggregated columns and table alias
+"select u.id, u.age from user u group by u.id"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id, u.age from user u group by u.id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u.id, u.age from `user` as u where 1 != 1 group by u.id",
+    "Query": "select u.id, u.age from `user` as u group by u.id",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
+
+# Functions that return JSON value attributes
+"select JSON_DEPTH('{}'), JSON_LENGTH('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), JSON_TYPE(JSON_EXTRACT('{\"a\": [10, true]}', '$.a')), JSON_VALID('{\"a\": 1}')"
+{
+  "QueryType": "SELECT",
+  "Original": "select JSON_DEPTH('{}'), JSON_LENGTH('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), JSON_TYPE(JSON_EXTRACT('{\"a\": [10, true]}', '$.a')), JSON_VALID('{\"a\": 1}')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_depth('{}'), json_length('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}', '$.b'), json_type(json_extract('{\\\"a\\\": [10, true]}', '$.a')), json_valid('{\\\"a\\\": 1}') from dual where 1 != 1",
+    "Query": "select json_depth('{}'), json_length('{\\\"a\\\": 1, \\\"b\\\": {\\\"c\\\": 30}}', '$.b'), json_type(json_extract('{\\\"a\\\": [10, true]}', '$.a')), json_valid('{\\\"a\\\": 1}') from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+
+# Json array functions
+"select JSON_ARRAY_APPEND('{\"a\": 1}', '$', 'z'), JSON_ARRAY_INSERT('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), JSON_INSERT('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', CAST('[true, false]' AS JSON))"
+{
+  "QueryType": "SELECT",
+  "Original": "select JSON_ARRAY_APPEND('{\"a\": 1}', '$', 'z'), JSON_ARRAY_INSERT('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), JSON_INSERT('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', CAST('[true, false]' AS JSON))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', convert('[true, false]', JSON)) from dual where 1 != 1",
+    "Query": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', convert('[true, false]', JSON)) from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+
+# Json merge functions
+"select JSON_MERGE('[1, 2]', '[true, false]'), JSON_MERGE_PATCH('{\"name\": \"x\"}', '{\"id\": 47}'), JSON_MERGE_PRESERVE('[1, 2]', '{\"id\": 47}')"
+{
+  "QueryType": "SELECT",
+  "Original": "select JSON_MERGE('[1, 2]', '[true, false]'), JSON_MERGE_PATCH('{\"name\": \"x\"}', '{\"id\": 47}'), JSON_MERGE_PRESERVE('[1, 2]', '{\"id\": 47}')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_merge('[1, 2]', '[true, false]'), json_merge_patch('{\\\"name\\\": \\\"x\\\"}', '{\\\"id\\\": 47}'), json_merge_preserve('[1, 2]', '{\\\"id\\\": 47}') from dual where 1 != 1",
+    "Query": "select json_merge('[1, 2]', '[true, false]'), json_merge_patch('{\\\"name\\\": \\\"x\\\"}', '{\\\"id\\\": 47}'), json_merge_preserve('[1, 2]', '{\\\"id\\\": 47}') from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+
+# JSON modifier functions
+"select JSON_REMOVE('[1, [2, 3], 4]', '$[1]'), JSON_REPLACE('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), JSON_SET('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), JSON_UNQUOTE('\"abc\"')"
+{
+  "QueryType": "SELECT",
+  "Original": "select JSON_REMOVE('[1, [2, 3], 4]', '$[1]'), JSON_REPLACE('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), JSON_SET('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), JSON_UNQUOTE('\"abc\"')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select json_remove('[1, [2, 3], 4]', '$[1]'), json_replace('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_set('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_unquote('\\\"abc\\\"') from dual where 1 != 1",
+    "Query": "select json_remove('[1, [2, 3], 4]', '$[1]'), json_replace('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_set('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_unquote('\\\"abc\\\"') from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+
+# Reference with a subquery which can be merged
+"select exists(select id from user where id = 4)"
+{
+  "QueryType": "SELECT",
+  "Original": "select exists(select id from user where id = 4)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where id = 4 limit 1",
+        "Table": "`user`",
+        "Values": [
+          "INT64(4)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select :__sq_has_values1 from dual where 1 != 1",
+        "Query": "select :__sq_has_values1 from dual",
+        "Table": "dual"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select exists(select id from user where id = 4)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select exists (select 1 from `user` where 1 != 1) from dual where 1 != 1",
+    "Query": "select exists (select 1 from `user` where id = 4 limit 1) from dual",
+    "Table": "dual",
+    "Values": [
+      "INT64(4)"
+    ],
+    "Vindex": "user_index"
+  }
+}
+
+# Reference with a subquery which cannot be merged
+"select exists(select * from user)"
+{
+  "QueryType": "SELECT",
+  "Original": "select exists(select * from user)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": "INT64(1)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` limit :__upper_limit",
+            "Table": "`user`"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select :__sq_has_values1 from dual where 1 != 1",
+        "Query": "select :__sq_has_values1 from dual",
+        "Table": "dual"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select exists(select * from user)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": "INT64(1)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` limit :__upper_limit",
+            "Table": "`user`"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select :__sq_has_values1 from dual where 1 != 1",
+        "Query": "select :__sq_has_values1 from dual",
+        "Table": "dual"
+      }
+    ]
+  }
+}

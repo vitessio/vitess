@@ -21,15 +21,16 @@ $navRailHoverTransition: background-color 0.1s ease-in-out;
     border-right: solid 1px var(--backgroundSecondaryHighlight);
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
     height: 100vh;
     overflow-y: auto;
 }
 
 .logoContainer {
-    display: block;
+    display: flex;
     padding: 24px;
     text-align: center;
+    justify-content: center;
+    align-items: center;
 }
 
 .footerContainer {
@@ -61,6 +62,7 @@ $navRailHoverTransition: background-color 0.1s ease-in-out;
 }
 
 a.navLink {
+    align-items: center;
     border-left: solid 4px transparent;
     color: var(--textColorPrimary);
     display: flex;
@@ -106,7 +108,6 @@ a.navLink:hover .badge {
 .icon {
     fill: var(--colorScaffoldingForeground);
     height: 2rem;
-    margin-right: 1.2rem;
     transition: $navRailHoverTransition;
 }
 
@@ -114,4 +115,25 @@ a.navLinkActive .icon,
 a.navLink:focus .icon,
 a.navLink:hover .icon {
     fill: var(--colorPrimary);
+}
+
+.hotkey::before {
+    @apply block;
+    @apply border;
+    @apply font-mono font-bold;
+    @apply p-0;
+    @apply rounded-sm;
+    @apply text-center;
+    @apply select-none;
+
+    $hotkeySize: 16px;
+
+    border-color: var(--colorScaffoldingForeground);
+    color: var(--colorScaffoldingForeground);
+    content: attr(data-hotkey);
+    font-size: 10px;
+    height: $hotkeySize;
+    line-height: 14px;
+    margin: 0 4px;
+    width: $hotkeySize;
 }

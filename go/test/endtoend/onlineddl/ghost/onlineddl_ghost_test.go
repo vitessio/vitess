@@ -45,7 +45,10 @@ var (
 	cell                  = "zone1"
 	schemaChangeDirectory = ""
 	totalTableCount       = 4
-	createTable           = `
+
+	normalMigrationWait = 20 * time.Second
+
+	createTable = `
 		CREATE TABLE %s (
 			id bigint(20) NOT NULL,
 			msg varchar(64),
@@ -157,21 +160,22 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
-			"-schema_change_dir", schemaChangeDirectory,
-			"-schema_change_controller", "local",
-			"-schema_change_check_interval", "1",
+			"--schema_change_dir", schemaChangeDirectory,
+			"--schema_change_controller", "local",
+			"--schema_change_check_interval", "1",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-enable-lag-throttler",
-			"-throttle_threshold", "1s",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
-			"-migration_check_interval", "5s",
-			"-gh-ost-path", os.Getenv("VITESS_ENDTOEND_GH_OST_PATH"), // leave env variable empty/unset to get the default behavior. Override in Mac.
+			"--enable-lag-throttler",
+			"--throttle_threshold", "1s",
+			"--heartbeat_enable",
+			"--heartbeat_interval", "250ms",
+			"--heartbeat_on_demand_duration", "5s",
+			"--migration_check_interval", "5s",
+			"--gh-ost-path", os.Getenv("VITESS_ENDTOEND_GH_OST_PATH"), // leave env variable empty/unset to get the default behavior. Override in Mac.
 		}
 		clusterInstance.VtGateExtraArgs = []string{
-			"-ddl_strategy", "gh-ost",
+			"--ddl_strategy", "gh-ost",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
@@ -188,8 +192,6 @@ func TestMain(m *testing.M) {
 		}
 
 		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// set the gateway we want to use
-		vtgateInstance.GatewayImplementation = "tabletgateway"
 		// Start vtgate
 		if err := vtgateInstance.Setup(); err != nil {
 			return 1, err
@@ -258,7 +260,7 @@ func TestSchemaChange(t *testing.T) {
 		// Issue a complete and wait for successful completion
 		onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuid, true)
 		// This part may take a while, because we depend on vreplicatoin polling
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 60*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 
@@ -391,7 +393,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, CallerId: callerID})
+		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, CallerID: callerID})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
@@ -402,7 +404,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	assert.NoError(t, err)
 
 	if !strategySetting.Strategy.IsDirect() {
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 

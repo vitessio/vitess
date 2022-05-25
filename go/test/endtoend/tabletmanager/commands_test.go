@@ -61,9 +61,9 @@ func TestTabletCommands(t *testing.T) {
 	// test exclude_field_names to vttablet works as expected
 	sql := "select id, value from t1"
 	args := []string{
-		"VtTabletExecute",
-		"-options", "included_fields:TYPE_ONLY",
-		"-json",
+		"VtTabletExecute", "--",
+		"--options", "included_fields:TYPE_ONLY",
+		"--json",
 		primaryTablet.Alias,
 		sql,
 	}
@@ -73,7 +73,7 @@ func TestTabletCommands(t *testing.T) {
 
 	// make sure direct dba queries work
 	sql = "select * from t1"
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", "-json", primaryTablet.Alias, sql)
+	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", "--", "--json", primaryTablet.Alias, sql)
 	require.Nil(t, err)
 	assertExecuteFetch(t, result)
 
@@ -87,7 +87,7 @@ func TestTabletCommands(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshStateByShard", keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshStateByShard", "--cells="+cell, keyspaceShard)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshStateByShard", "--", "--cells="+cell, keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
 
 	// Check basic actions.
@@ -107,28 +107,28 @@ func TestTabletCommands(t *testing.T) {
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err, "error should be Nil")
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate", "-ping-tablets=true")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate", "--", "--ping-tablets=true")
 	require.Nil(t, err, "error should be Nil")
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateKeyspace", keyspaceName)
 	require.Nil(t, err, "error should be Nil")
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateKeyspace", "-ping-tablets=true", keyspaceName)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateKeyspace", "--", "--ping-tablets=true", keyspaceName)
 	require.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateShard", "-ping-tablets=false", keyspaceShard)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateShard", "--", "--ping-tablets=false", keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateShard", "-ping-tablets=true", keyspaceShard)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateShard", "--", "--ping-tablets=true", keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
 
 }
 
 func assertExcludeFields(t *testing.T, qr string) {
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	err := json.Unmarshal([]byte(qr), &resultMap)
 	require.Nil(t, err)
 
-	rows := resultMap["rows"].([]interface{})
+	rows := resultMap["rows"].([]any)
 	assert.Equal(t, 2, len(rows))
 
 	fields := resultMap["fields"]
@@ -136,7 +136,7 @@ func assertExcludeFields(t *testing.T, qr string) {
 }
 
 func assertExecuteFetch(t *testing.T, qr string) {
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	err := json.Unmarshal([]byte(qr), &resultMap)
 	require.Nil(t, err)
 
@@ -160,7 +160,7 @@ func TestActionAndTimeout(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// try a frontend RefreshState that should timeout as the tablet is busy running the other one
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshState", primaryTablet.Alias, "-wait-time", "2s")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshState", "--", primaryTablet.Alias, "--wait-time", "2s")
 	assert.Error(t, err, "timeout as tablet is in Sleep")
 }
 
@@ -168,24 +168,24 @@ func TestHook(t *testing.T) {
 	// test a regular program works
 	defer cluster.PanicHandler(t)
 	runHookAndAssert(t, []string{
-		"ExecuteHook", primaryTablet.Alias, "test.sh", "--flag1", "--param1=hello"}, "0", false, "")
+		"ExecuteHook", "--", primaryTablet.Alias, "test.sh", "--flag1", "--param1=hello"}, "0", false, "")
 
 	// test stderr output
 	runHookAndAssert(t, []string{
-		"ExecuteHook", primaryTablet.Alias, "test.sh", "--to-stderr"}, "0", false, "ERR: --to-stderr\n")
+		"ExecuteHook", "--", primaryTablet.Alias, "test.sh", "--to-stderr"}, "0", false, "ERR: --to-stderr\n")
 
 	// test commands that fail
 	runHookAndAssert(t, []string{
-		"ExecuteHook", primaryTablet.Alias, "test.sh", "--exit-error"}, "1", false, "ERROR: exit status 1\n")
+		"ExecuteHook", "--", primaryTablet.Alias, "test.sh", "--exit-error"}, "1", false, "ERROR: exit status 1\n")
 
 	// test hook that is not present
 	runHookAndAssert(t, []string{
-		"ExecuteHook", primaryTablet.Alias, "not_here.sh", "--exit-error"}, "-1", false, "missing hook")
+		"ExecuteHook", "--", primaryTablet.Alias, "not_here.sh", "--exit-error"}, "-1", false, "missing hook")
 
 	// test hook with invalid name
 
 	runHookAndAssert(t, []string{
-		"ExecuteHook", primaryTablet.Alias, "/bin/ls"}, "-1", true, "hook name cannot have")
+		"ExecuteHook", "--", primaryTablet.Alias, "/bin/ls"}, "-1", true, "hook name cannot have")
 }
 
 func runHookAndAssert(t *testing.T, params []string, expectedStatus string, expectedError bool, expectedStderr string) {
@@ -196,7 +196,7 @@ func runHookAndAssert(t *testing.T, params []string, expectedStatus string, expe
 	} else {
 		require.Nil(t, err)
 
-		resultMap := make(map[string]interface{})
+		resultMap := make(map[string]any)
 		err = json.Unmarshal([]byte(hr), &resultMap)
 		require.Nil(t, err)
 
@@ -235,8 +235,8 @@ func TestShardReplicationFix(t *testing.T) {
 func TestGetSchema(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	res, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetSchema",
-		"-include-views", "-tables", "t1,v1",
+	res, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetSchema", "--",
+		"--include-views", "--tables", "t1,v1",
 		fmt.Sprintf("%s-%d", clusterInstance.Cell, primaryTablet.TabletUID))
 	require.Nil(t, err)
 
@@ -247,7 +247,7 @@ func TestGetSchema(t *testing.T) {
 }
 
 func assertNodeCount(t *testing.T, result string, want int) {
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	err := json.Unmarshal([]byte(result), &resultMap)
 	require.Nil(t, err)
 

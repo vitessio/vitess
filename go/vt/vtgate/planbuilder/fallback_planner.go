@@ -26,10 +26,10 @@ import (
 )
 
 type fallbackPlanner struct {
-	primary, fallback selectPlanner
+	primary, fallback stmtPlanner
 }
 
-var _ selectPlanner = (*fallbackPlanner)(nil).plan
+var _ stmtPlanner = (*fallbackPlanner)(nil).plan
 
 func (fp *fallbackPlanner) safePrimary(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (res engine.Primitive, err error) {
 	defer func() {

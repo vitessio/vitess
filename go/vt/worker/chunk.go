@@ -125,7 +125,7 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 	}
 
 	// TODO(mberlin): Write a unit test for this part of the function.
-	var interval interface{}
+	var interval any
 	chunks := make([]chunk, chunkCount)
 	switch min := min.(type) {
 	case int64:
@@ -174,7 +174,7 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 	return chunks, nil
 }
 
-func add(start, interval interface{}) interface{} {
+func add(start, interval any) any {
 	switch start := start.(type) {
 	case int64:
 		return start + interval.(int64)
@@ -187,7 +187,7 @@ func add(start, interval interface{}) interface{} {
 	}
 }
 
-func toChunk(start, end interface{}, number, total int) (chunk, error) {
+func toChunk(start, end any, number, total int) (chunk, error) {
 	startValue, err := sqltypes.InterfaceToValue(start)
 	if err != nil {
 		return chunk{}, vterrors.Wrapf(err, "failed to convert calculated start value (%v) into internal sqltypes.Value", start)

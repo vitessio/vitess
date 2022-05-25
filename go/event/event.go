@@ -70,7 +70,7 @@ be called when a value of type MyEvent is dispatched:
 
 In addition, listener functions that accept an interface type will be called
 for any dispatched value that implements the specified interface. A listener
-that accepts interface{} will be called for every event type. Listeners can also
+that accepts `any` will be called for every event type. Listeners can also
 accept pointer types, but they will only be called if the dispatch site calls
 Dispatch() on a pointer.
 */
@@ -84,7 +84,7 @@ import (
 
 var (
 	listenersMutex sync.RWMutex // protects listeners and interfaces
-	listeners      = make(map[reflect.Type][]interface{})
+	listeners      = make(map[reflect.Type][]any)
 	interfaces     = make([]reflect.Type, 0)
 )
 
@@ -99,7 +99,7 @@ func (why BadListenerError) Error() string {
 // AddListener registers a listener function that will be called when a matching
 // event is dispatched. The type of the function's first (and only) argument
 // declares the event type (or interface) to listen for.
-func AddListener(fn interface{}) {
+func AddListener(fn any) {
 	listenersMutex.Lock()
 	defer listenersMutex.Unlock()
 
@@ -129,7 +129,7 @@ func AddListener(fn interface{}) {
 
 // Dispatch sends an event to all registered listeners that were declared
 // to accept values of the event's type, or interfaces that the value implements.
-func Dispatch(ev interface{}) {
+func Dispatch(ev any) {
 	listenersMutex.RLock()
 	defer listenersMutex.RUnlock()
 
@@ -157,12 +157,12 @@ func callListeners(t reflect.Type, vals []reflect.Value) {
 // dispatching into one call.
 type Updater interface {
 	// Update is called by DispatchUpdate() before the event is dispatched.
-	Update(update interface{})
+	Update(update any)
 }
 
 // DispatchUpdate calls Update() on the event and then dispatches it. This is a
 // shortcut for combining updates and dispatches into a single call.
-func DispatchUpdate(ev Updater, update interface{}) {
+func DispatchUpdate(ev Updater, update any) {
 	ev.Update(update)
 	Dispatch(ev)
 }

@@ -162,7 +162,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -171,7 +171,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -180,7 +180,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
@@ -280,7 +280,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -289,7 +289,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -298,7 +298,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
@@ -388,7 +388,8 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		{
 			// Here, all our tablets are tied, so we're going to explicitly pick
 			// zone1-101.
-			name: "success with requested primary-elect",
+			name:       "success with requested primary-elect",
+			durability: "none",
 			emergencyReparentOps: EmergencyReparentOptions{NewPrimaryAlias: &topodatapb.TabletAlias{
 				Cell: "zone1",
 				Uid:  101,
@@ -425,7 +426,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -434,7 +435,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -443,7 +444,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -555,7 +556,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -564,7 +565,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
@@ -710,13 +711,13 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Error      error
 				}{
 					"zone1-0000000100": {
-						StopStatus: &replicationdatapb.StopReplicationStatus{},
+						StopStatus: &replicationdatapb.StopReplicationStatus{Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)}},
 					},
 					"zone1-0000000101": {
-						StopStatus: &replicationdatapb.StopReplicationStatus{},
+						StopStatus: &replicationdatapb.StopReplicationStatus{Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)}},
 					},
 					"zone1-0000000102": {
-						StopStatus: &replicationdatapb.StopReplicationStatus{},
+						StopStatus: &replicationdatapb.StopReplicationStatus{Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)}},
 					},
 				},
 			},
@@ -771,6 +772,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -779,6 +781,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -787,7 +790,8 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							After: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{},
 						},
 					},
 				},
@@ -863,6 +867,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -871,6 +876,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -879,6 +885,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -956,6 +963,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -964,6 +972,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -972,6 +981,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1076,7 +1086,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1085,7 +1095,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-20",
@@ -1094,7 +1104,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-20",
@@ -1190,7 +1200,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1199,7 +1209,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1208,7 +1218,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1314,7 +1324,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1323,7 +1333,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1332,7 +1342,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
@@ -1435,7 +1445,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1444,7 +1454,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1453,7 +1463,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
@@ -1551,7 +1561,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1560,7 +1570,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1569,7 +1579,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
@@ -1685,7 +1695,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1694,7 +1704,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1703,7 +1713,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
@@ -1818,7 +1828,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1827,7 +1837,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -1836,7 +1846,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
@@ -2038,14 +2048,14 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": { // forceStart = false
 					Before: &replicationdatapb.Status{
-						IoThreadRunning:  false,
-						SqlThreadRunning: false,
+						IoState:  int32(mysql.ReplicationStateStopped),
+						SqlState: int32(mysql.ReplicationStateStopped),
 					},
 				},
 				"zone1-0000000102": { // forceStart = true
 					Before: &replicationdatapb.Status{
-						IoThreadRunning:  true,
-						SqlThreadRunning: true,
+						IoState:  int32(mysql.ReplicationStateRunning),
+						SqlState: int32(mysql.ReplicationStateRunning),
 					},
 				},
 			},
@@ -2416,14 +2426,14 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": { // forceStart = false
 					Before: &replicationdatapb.Status{
-						IoThreadRunning:  false,
-						SqlThreadRunning: false,
+						IoState:  int32(mysql.ReplicationStateStopped),
+						SqlState: int32(mysql.ReplicationStateStopped),
 					},
 				},
 				"zone1-0000000102": { // forceStart = true
 					Before: &replicationdatapb.Status{
-						IoThreadRunning:  true,
-						SqlThreadRunning: true,
+						IoState:  int32(mysql.ReplicationStateRunning),
+						SqlState: int32(mysql.ReplicationStateRunning),
 					},
 				},
 			},
@@ -2773,7 +2783,7 @@ func TestEmergencyReparenterCounters(t *testing.T) {
 		}{
 			"zone1-0000000100": {
 				StopStatus: &replicationdatapb.StopReplicationStatus{
-					Before: &replicationdatapb.Status{},
+					Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -2782,7 +2792,7 @@ func TestEmergencyReparenterCounters(t *testing.T) {
 			},
 			"zone1-0000000101": {
 				StopStatus: &replicationdatapb.StopReplicationStatus{
-					Before: &replicationdatapb.Status{},
+					Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
@@ -2791,7 +2801,7 @@ func TestEmergencyReparenterCounters(t *testing.T) {
 			},
 			"zone1-0000000102": {
 				StopStatus: &replicationdatapb.StopReplicationStatus{
-					Before: &replicationdatapb.Status{},
+					Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
@@ -3229,14 +3239,14 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": { // forceStart = false
 					Before: &replicationdatapb.Status{
-						IoThreadRunning:  false,
-						SqlThreadRunning: false,
+						IoState:  int32(mysql.ReplicationStateStopped),
+						SqlState: int32(mysql.ReplicationStateStopped),
 					},
 				},
 				"zone1-0000000102": { // forceStart = true
 					Before: &replicationdatapb.Status{
-						IoThreadRunning:  true,
-						SqlThreadRunning: true,
+						IoState:  int32(mysql.ReplicationStateRunning),
+						SqlState: int32(mysql.ReplicationStateRunning),
 					},
 				},
 			},
@@ -3622,14 +3632,14 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": { // forceStart = false
 					Before: &replicationdatapb.Status{
-						IoThreadRunning:  false,
-						SqlThreadRunning: false,
+						IoState:  int32(mysql.ReplicationStateStopped),
+						SqlState: int32(mysql.ReplicationStateStopped),
 					},
 				},
 				"zone1-0000000102": { // forceStart = true
 					Before: &replicationdatapb.Status{
-						IoThreadRunning:  true,
-						SqlThreadRunning: true,
+						IoState:  int32(mysql.ReplicationStateRunning),
+						SqlState: int32(mysql.ReplicationStateRunning),
 					},
 				},
 			},
@@ -3896,14 +3906,14 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": { // forceStart = false
 					Before: &replicationdatapb.Status{
-						IoThreadRunning:  false,
-						SqlThreadRunning: false,
+						IoState:  int32(mysql.ReplicationStateStopped),
+						SqlState: int32(mysql.ReplicationStateStopped),
 					},
 				},
 				"zone1-0000000102": { // forceStart = true
 					Before: &replicationdatapb.Status{
-						IoThreadRunning:  true,
-						SqlThreadRunning: true,
+						IoState:  int32(mysql.ReplicationStateRunning),
+						SqlState: int32(mysql.ReplicationStateRunning),
 					},
 				},
 			},
@@ -4242,8 +4252,8 @@ func TestParentContextCancelled(t *testing.T) {
 	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
 		"zone1-0000000101": {
 			Before: &replicationdatapb.Status{
-				IoThreadRunning:  true,
-				SqlThreadRunning: true,
+				IoState:  int32(mysql.ReplicationStateRunning),
+				SqlState: int32(mysql.ReplicationStateRunning),
 			},
 		},
 	}

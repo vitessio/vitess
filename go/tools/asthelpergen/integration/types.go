@@ -157,7 +157,7 @@ func (r *SubImpl) String() string {
 func (r *SubImpl) iface() {}
 
 type InterfaceContainer struct {
-	v interface{}
+	v any
 }
 
 func (r InterfaceContainer) String() string {

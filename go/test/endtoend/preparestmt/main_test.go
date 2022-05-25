@@ -25,10 +25,10 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-
 	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 // tableData is a temporary structure to hold selected data.
@@ -199,14 +199,12 @@ func TestMain(m *testing.M) {
 		}
 
 		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// set the gateway and other params we want to use
-		vtgateInstance.GatewayImplementation = "tabletgateway"
 		vtgateInstance.MySQLAuthServerImpl = "static"
 		// add extra arguments
 		vtgateInstance.ExtraArgs = []string{
-			"-mysql_server_query_timeout", "1s",
-			"-mysql_auth_server_static_file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
-			"-mysql_server_version", "8.0.16-7",
+			"--mysql_server_query_timeout", "1s",
+			"--mysql_auth_server_static_file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
+			"--mysql_server_version", "8.0.16-7",
 		}
 
 		// Start vtgate
@@ -261,7 +259,7 @@ func Connect(t *testing.T, params ...string) *sql.DB {
 }
 
 // execWithError executes the prepared query, and validates the error_code.
-func execWithError(t *testing.T, dbo *sql.DB, errorCodes []uint16, stmt string, params ...interface{}) {
+func execWithError(t *testing.T, dbo *sql.DB, errorCodes []uint16, stmt string, params ...any) {
 	_, err := dbo.Exec(stmt, params...)
 	require.NotNilf(t, err, "error expected, got nil")
 	mysqlErr, ok := err.(*mysql.MySQLError)
@@ -270,12 +268,12 @@ func execWithError(t *testing.T, dbo *sql.DB, errorCodes []uint16, stmt string, 
 }
 
 // exec executes the query using the params.
-func exec(t *testing.T, dbo *sql.DB, stmt string, params ...interface{}) {
+func exec(t *testing.T, dbo *sql.DB, stmt string, params ...any) {
 	require.Nil(t, execErr(dbo, stmt, params...))
 }
 
 // execErr executes the query and returns an error if one occurs.
-func execErr(dbo *sql.DB, stmt string, params ...interface{}) *mysql.MySQLError {
+func execErr(dbo *sql.DB, stmt string, params ...any) *mysql.MySQLError {
 	if _, err := dbo.Exec(stmt, params...); err != nil {
 		// TODO : need to handle
 		mysqlErr, _ := err.(*mysql.MySQLError)
@@ -285,7 +283,7 @@ func execErr(dbo *sql.DB, stmt string, params ...interface{}) *mysql.MySQLError 
 }
 
 // selectWhere select the row corresponding to the where condition.
-func selectWhere(t *testing.T, dbo *sql.DB, where string, params ...interface{}) []tableData {
+func selectWhere(t *testing.T, dbo *sql.DB, where string, params ...any) []tableData {
 	var out []tableData
 	// prepare query
 	qry := "SELECT msg, data, text_col, t_datetime, t_datetime_micros FROM " + tableName
@@ -307,7 +305,7 @@ func selectWhere(t *testing.T, dbo *sql.DB, where string, params ...interface{})
 }
 
 // selectWhereWithTx select the row corresponding to the where condition.
-func selectWhereWithTx(t *testing.T, tx *sql.Tx, where string, params ...interface{}) []tableData {
+func selectWhereWithTx(t *testing.T, tx *sql.Tx, where string, params ...any) []tableData {
 	var out []tableData
 	// prepare query
 	qry := "SELECT msg, data, text_col, t_datetime, t_datetime_micros FROM " + tableName

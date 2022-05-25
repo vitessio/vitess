@@ -1341,8 +1341,8 @@ func TestHandleExecUnknownError(t *testing.T) {
 
 type testLogger struct {
 	logs        []string
-	savedInfof  func(format string, args ...interface{})
-	savedErrorf func(format string, args ...interface{})
+	savedInfof  func(format string, args ...any)
+	savedErrorf func(format string, args ...any)
 }
 
 func newTestLogger() *testLogger {
@@ -1360,13 +1360,13 @@ func (tl *testLogger) Close() {
 	log.Errorf = tl.savedErrorf
 }
 
-func (tl *testLogger) recordInfof(format string, args ...interface{}) {
+func (tl *testLogger) recordInfof(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	tl.logs = append(tl.logs, msg)
 	tl.savedInfof(msg)
 }
 
-func (tl *testLogger) recordErrorf(format string, args ...interface{}) {
+func (tl *testLogger) recordErrorf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	tl.logs = append(tl.logs, msg)
 	tl.savedErrorf(msg)
@@ -1775,7 +1775,6 @@ func TestReserveBeginExecute(t *testing.T) {
 	expected := []string{
 		"select 43",
 		"begin",
-		"select 42 from dual where 1 != 1",
 		"select 42 from dual limit 10001",
 	}
 	splitOutput := strings.Split(db.QueryLog(), ";")
@@ -1798,7 +1797,6 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 	assert.NotEqual(t, int64(0), reservedID, "reservedID should not be zero")
 	expected := []string{
 		"select 43",
-		"select 42 from dual where 1 != 1",
 		"select 42 from dual limit 10001",
 	}
 	splitOutput := strings.Split(db.QueryLog(), ";")
@@ -1826,7 +1824,6 @@ func TestReserveExecute_WithTx(t *testing.T) {
 	assert.Equal(t, transactionID, reservedID, "reservedID should be equal to transactionID")
 	expected := []string{
 		"select 43",
-		"select 42 from dual where 1 != 1",
 		"select 42 from dual limit 10001",
 	}
 	splitOutput := strings.Split(db.QueryLog(), ";")

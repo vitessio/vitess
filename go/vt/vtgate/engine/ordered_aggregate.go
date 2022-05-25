@@ -27,8 +27,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -104,8 +102,9 @@ type AggregateParams struct {
 	WAssigned   bool
 	CollationID collations.ID
 
-	Alias string `json:",omitempty"`
-	Expr  sqlparser.Expr
+	Alias    string `json:",omitempty"`
+	Expr     sqlparser.Expr
+	Original *sqlparser.AliasedExpr
 }
 
 func (ap *AggregateParams) isDistinct() bool {
@@ -143,6 +142,7 @@ const (
 	AggregateCountDistinct
 	AggregateSumDistinct
 	AggregateGtid
+	AggregateRandom
 )
 
 var (
@@ -180,7 +180,7 @@ func (code AggregateOpcode) String() string {
 			return k
 		}
 	}
-	panic("unreachable")
+	return "random"
 }
 
 // MarshalJSON serializes the AggregateOpcode as a JSON string.
@@ -478,6 +478,8 @@ func merge(
 			data, _ := proto.Marshal(vgtid)
 			val, _ := sqltypes.NewValue(sqltypes.VarBinary, data)
 			result[aggr.Col] = val
+		case AggregateRandom:
+			// we just grab the first value per grouping. no need to do anything more complicated here
 		default:
 			return nil, nil, fmt.Errorf("BUG: Unexpected opcode: %v", aggr.Opcode)
 		}
@@ -488,35 +490,18 @@ func merge(
 	return result, curDistincts, nil
 }
 
-func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
-	switch opcode {
-	case
-		AggregateCountDistinct,
-		AggregateCount:
-		return countZero, nil
-	case
-		AggregateSumDistinct,
-		AggregateSum,
-		AggregateMin,
-		AggregateMax:
-		return sqltypes.NULL, nil
-
-	}
-	return sqltypes.NULL, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown aggregation %v", opcode)
-}
-
-func aggregateParamsToString(in interface{}) string {
+func aggregateParamsToString(in any) string {
 	return in.(*AggregateParams).String()
 }
 
-func groupByParamsToString(i interface{}) string {
+func groupByParamsToString(i any) string {
 	return i.(*GroupByParams).String()
 }
 
 func (oa *OrderedAggregate) description() PrimitiveDescription {
 	aggregates := GenericJoin(oa.Aggregates, aggregateParamsToString)
 	groupBy := GenericJoin(oa.GroupByKeys, groupByParamsToString)
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Aggregates": aggregates,
 		"GroupBy":    groupBy,
 	}

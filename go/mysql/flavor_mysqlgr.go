@@ -61,6 +61,11 @@ func (mysqlGRFlavor) startReplicationUntilAfter(pos Position) string {
 	return ""
 }
 
+// startSQLThreadUntilAfter is disabled in mysqlGRFlavor
+func (mysqlGRFlavor) startSQLThreadUntilAfter(pos Position) string {
+	return ""
+}
+
 // stopReplicationCommand returns the command to stop the replication.
 // we return empty here since `STOP GROUP_REPLICATION` should be called by
 // the external orchestrator
@@ -70,6 +75,11 @@ func (mysqlGRFlavor) stopReplicationCommand() string {
 
 // stopIOThreadCommand is disabled in mysqlGRFlavor
 func (mysqlGRFlavor) stopIOThreadCommand() string {
+	return ""
+}
+
+// stopSQLThreadCommand is disabled in mysqlGRFlavor
+func (mysqlGRFlavor) stopSQLThreadCommand() string {
 	return ""
 }
 
@@ -141,32 +151,32 @@ func (mysqlGRFlavor) status(c *Conn) (ReplicationStatus, error) {
 		return res, nil
 	}
 
-	// Populate IOThreadRunning from replication_connection_status
+	// Populate IOState from replication_connection_status
 	query = fmt.Sprintf(`SELECT SERVICE_STATE
 		FROM performance_schema.replication_connection_status
 		WHERE CHANNEL_NAME='%s'`, chanel)
-	var ioThreadRunning bool
+	var connectionState ReplicationState
 	err = fetchStatusForGroupReplication(c, query, func(values []sqltypes.Value) error {
-		ioThreadRunning = values[0].ToString() == "ON"
+		connectionState = ReplicationStatusToState(values[0].ToString())
 		return nil
 	})
 	if err != nil {
 		return ReplicationStatus{}, err
 	}
-	res.IOThreadRunning = ioThreadRunning
-	// Populate SQLThreadRunning from replication_connection_status
-	var sqlThreadRunning bool
+	res.IOState = connectionState
+	// Populate SQLState from replication_connection_status
+	var applierState ReplicationState
 	query = fmt.Sprintf(`SELECT SERVICE_STATE
 		FROM performance_schema.replication_applier_status_by_coordinator
 		WHERE CHANNEL_NAME='%s'`, chanel)
 	err = fetchStatusForGroupReplication(c, query, func(values []sqltypes.Value) error {
-		sqlThreadRunning = values[0].ToString() == "ON"
+		applierState = ReplicationStatusToState(values[0].ToString())
 		return nil
 	})
 	if err != nil {
 		return ReplicationStatus{}, err
 	}
-	res.SQLThreadRunning = sqlThreadRunning
+	res.SQLState = applierState
 
 	// Collect lag information
 	// we use the difference between the last processed transaction's commit time

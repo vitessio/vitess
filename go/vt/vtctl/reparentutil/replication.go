@@ -27,14 +27,16 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // FindValidEmergencyReparentCandidates will find candidates for an emergency
@@ -148,7 +150,40 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
 	}
 
-	return stopStatus.Before.IoThreadRunning || stopStatus.Before.SqlThreadRunning, nil
+	replStatus := mysql.ProtoToReplicationStatus(stopStatus.Before)
+	return (replStatus.IOState == mysql.ReplicationStateRunning) ||
+		(replStatus.SQLState == mysql.ReplicationStateRunning), nil
+}
+
+// SQLThreadWasRunning returns true if a StopReplicationStatus indicates that the
+// replica had a running sql thread. It returns an
+// error if the Before state of replication is nil.
+func SQLThreadWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (bool, error) {
+	if stopStatus == nil || stopStatus.Before == nil {
+		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
+	}
+
+	replStatus := mysql.ProtoToReplicationStatus(stopStatus.Before)
+	return replStatus.SQLState == mysql.ReplicationStateRunning, nil
+}
+
+// SetReplicationSource is used to set the replication source on the specified
+// tablet to the current shard primary (if available). It also figures out if
+// the tablet should be sending semi-sync ACKs or not and passes that to the
+// tabletmanager RPC.
+//
+// It does not start the replication forcefully.
+// If we are unable to find the shard primary of the tablet from the topo server
+// we exit out without any error.
+func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, tablet *topodatapb.Tablet) error {
+	shardPrimary, err := topotools.GetShardPrimaryForTablet(ctx, ts, tablet)
+	if err != nil {
+		// If we didn't find the shard primary, we return without any error
+		return nil
+	}
+
+	isSemiSync := IsReplicaSemiSync(shardPrimary.Tablet, tablet)
+	return tmc.SetReplicationSource(ctx, tablet, shardPrimary.Alias, 0, "", false, isSemiSync)
 }
 
 // replicationSnapshot stores the status maps and the tablets that were reachable
@@ -224,10 +259,24 @@ func stopReplicationAndBuildStatusMaps(
 				err = vterrors.Wrapf(err, "error when getting replication status for alias %v: %v", alias, err)
 			}
 		} else {
-			m.Lock()
-			res.statusMap[alias] = stopReplicationStatus
-			res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
-			m.Unlock()
+			var sqlThreadRunning bool
+			// Check if the sql thread was running for the tablet
+			sqlThreadRunning, err = SQLThreadWasRunning(stopReplicationStatus)
+			if err == nil {
+				// If the sql thread was running, then we will add the tablet to the status map and the list of
+				// reachable tablets.
+				if sqlThreadRunning {
+					m.Lock()
+					res.statusMap[alias] = stopReplicationStatus
+					res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
+					m.Unlock()
+				} else {
+					// If the sql thread was stopped, we do not consider the tablet as reachable
+					// The user must either explicitly ignore this tablet or start its replication
+					logger.Warningf("sql thread stopped on tablet - %v", alias)
+					err = vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "sql thread stopped on tablet - "+alias)
+				}
+			}
 		}
 	}
 

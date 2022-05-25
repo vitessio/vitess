@@ -64,7 +64,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-dbddl_plugin", "noop", "-mysql_server_query_timeout", "60s"}
+		clusterInstance.VtGateExtraArgs = []string{"--dbddl_plugin", "noop", "--mysql_server_query_timeout", "60s"}
 		vtgateProcess := clusterInstance.NewVtgateInstance()
 		vtgateProcess.SysVarSetEnabled = true
 		if err := vtgateProcess.Setup(); err != nil {
@@ -164,7 +164,7 @@ func shutdown(t *testing.T, ksName string) {
 	}
 
 	require.NoError(t,
-		clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "-recursive", ksName))
+		clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "--", "--recursive", ksName))
 
 	require.NoError(t,
 		clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildVSchemaGraph"))

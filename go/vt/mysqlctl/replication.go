@@ -47,7 +47,7 @@ func WaitForReplicationStart(mysqld MysqlDaemon, replicaStartDeadline int) error
 			return err
 		}
 
-		if status.ReplicationRunning() {
+		if status.Running() {
 			return nil
 		}
 		time.Sleep(time.Second)
@@ -97,6 +97,19 @@ func (mysqld *Mysqld) StartReplicationUntilAfter(ctx context.Context, targetPos 
 	return mysqld.executeSuperQueryListConn(ctx, conn, queries)
 }
 
+// StartSQLThreadUntilAfter starts replication's SQL thread(s) until replication has come to `targetPos`, then it stops it
+func (mysqld *Mysqld) StartSQLThreadUntilAfter(ctx context.Context, targetPos mysql.Position) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	queries := []string{conn.StartSQLThreadUntilAfterCommand(targetPos)}
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, queries)
+}
+
 // StopReplication stops replication.
 func (mysqld *Mysqld) StopReplication(hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("preflight_stop_slave")
@@ -123,6 +136,17 @@ func (mysqld *Mysqld) StopIOThread(ctx context.Context) error {
 	defer conn.Recycle()
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopIOThreadCommand()})
+}
+
+// StopSQLThread stops a replica's SQL thread(s) only.
+func (mysqld *Mysqld) StopSQLThread(ctx context.Context) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopSQLThreadCommand()})
 }
 
 // RestartReplication stops, resets and starts replication.
@@ -242,14 +266,6 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 		}
 		if mpos.AtLeast(targetPos) {
 			return nil
-		}
-
-		// Start the SQL Thread before waiting for position to be reached, since the replicas
-		// can only make forward progress if the SQL thread is started and we have already verified
-		// that the replica is not already as advanced as we want it to be
-		err = mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StartSQLThreadCommand()})
-		if err != nil {
-			return err
 		}
 
 		// Find the query to run, run it.

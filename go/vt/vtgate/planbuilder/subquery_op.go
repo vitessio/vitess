@@ -25,18 +25,18 @@ import (
 )
 
 func transformSubQueryPlan(ctx *plancontext.PlanningContext, op *physical.SubQueryOp) (logicalPlan, error) {
-	innerPlan, err := transformToLogicalPlan(ctx, op.Inner)
+	innerPlan, err := transformToLogicalPlan(ctx, op.Inner, false)
 	if err != nil {
 		return nil, err
 	}
-	innerPlan, err = planHorizon(ctx, innerPlan, op.Extracted.Subquery.Select)
+	innerPlan, err = planHorizon(ctx, innerPlan, op.Extracted.Subquery.Select, true)
 	if err != nil {
 		return nil, err
 	}
 
 	argName := op.Extracted.GetArgName()
 	hasValuesArg := op.Extracted.GetHasValuesArg()
-	outerPlan, err := transformToLogicalPlan(ctx, op.Outer)
+	outerPlan, err := transformToLogicalPlan(ctx, op.Outer, false)
 
 	merged := mergeSubQueryOpPlan(ctx, innerPlan, outerPlan, op)
 	if merged != nil {
@@ -51,15 +51,15 @@ func transformSubQueryPlan(ctx *plancontext.PlanningContext, op *physical.SubQue
 }
 
 func transformCorrelatedSubQueryPlan(ctx *plancontext.PlanningContext, op *physical.CorrelatedSubQueryOp) (logicalPlan, error) {
-	outer, err := transformToLogicalPlan(ctx, op.Outer)
+	outer, err := transformToLogicalPlan(ctx, op.Outer, false)
 	if err != nil {
 		return nil, err
 	}
-	inner, err := transformToLogicalPlan(ctx, op.Inner)
+	inner, err := transformToLogicalPlan(ctx, op.Inner, false)
 	if err != nil {
 		return nil, err
 	}
-	return newSemiJoin(outer, inner, op.Vars), nil
+	return newSemiJoin(outer, inner, op.Vars, op.LHSColumns), nil
 }
 
 func mergeSubQueryOpPlan(ctx *plancontext.PlanningContext, inner, outer logicalPlan, n *physical.SubQueryOp) logicalPlan {

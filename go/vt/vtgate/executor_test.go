@@ -60,7 +60,7 @@ func TestExecutorResultsExceeded(t *testing.T) {
 	*warnMemoryRows = 3
 	defer func() { *warnMemoryRows = save }()
 
-	executor, _, _, sbclookup := createLegacyExecutorEnv()
+	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	initial := warnings.Counts()["ResultsExceeded"]
@@ -83,7 +83,7 @@ func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
 	*maxMemoryRows = 3
 	defer func() { *maxMemoryRows = save }()
 
-	executor, _, _, sbclookup := createLegacyExecutorEnv()
+	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1", "2", "3", "4")
 	fn := func(r *sqltypes.Result) error {
@@ -115,8 +115,8 @@ func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
 	}
 }
 
-func TestLegacyExecutorTransactionsNoAutoCommit(t *testing.T) {
-	executor, _, _, sbclookup := createLegacyExecutorEnv()
+func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
+	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	logChan := QueryLogger.Subscribe("Test")
@@ -178,19 +178,6 @@ func TestLegacyExecutorTransactionsNoAutoCommit(t *testing.T) {
 		t.Errorf("logstats: expected no record for no-op rollback, got %v", logStats)
 	}
 
-	// Prevent transactions on non-primary.
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "@replica", InTransaction: true})
-	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
-	require.Error(t, err)
-	want := "transaction is supported only for primary tablet type, current type: REPLICA"
-	require.Contains(t, err.Error(), want)
-
-	// Prevent begin on non-primary.
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "@replica"})
-	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), want)
-
 	// Prevent use of non-primary if in_transaction is on.
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@primary", InTransaction: true})
 	_, err = executor.Execute(ctx, "TestExecute", session, "use @replica", nil)
@@ -198,7 +185,7 @@ func TestLegacyExecutorTransactionsNoAutoCommit(t *testing.T) {
 }
 
 func TestDirectTargetRewrites(t *testing.T) {
-	executor, _, _, sbclookup := createLegacyExecutorEnv()
+	executor, _, _, sbclookup := createExecutorEnv()
 	executor.normalize = true
 
 	session := &vtgatepb.Session{
@@ -217,7 +204,7 @@ func TestDirectTargetRewrites(t *testing.T) {
 }
 
 func TestExecutorTransactionsAutoCommit(t *testing.T) {
-	executor, _, _, sbclookup := createLegacyExecutorEnv()
+	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	logChan := QueryLogger.Subscribe("Test")
@@ -327,7 +314,7 @@ func TestExecutorDeleteMetadata(t *testing.T) {
 		*vschemaacl.AuthorizedDDLUsers = ""
 	}()
 
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	set := "set @@vitess_metadata.app_v1= '1'"
@@ -354,7 +341,7 @@ func TestExecutorDeleteMetadata(t *testing.T) {
 }
 
 func TestExecutorAutocommit(t *testing.T) {
-	executor, _, _, sbclookup := createLegacyExecutorEnv()
+	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	logChan := QueryLogger.Subscribe("Test")
@@ -454,7 +441,7 @@ func TestExecutorAutocommit(t *testing.T) {
 }
 
 func TestExecutorShowColumns(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ""})
 
 	queries := []string{
@@ -492,7 +479,7 @@ func TestExecutorShowColumns(t *testing.T) {
 }
 
 func TestExecutorShow(t *testing.T) {
-	executor, _, _, sbclookup := createLegacyExecutorEnv()
+	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 
 	for _, query := range []string{"show vitess_keyspaces", "show keyspaces"} {
@@ -818,8 +805,8 @@ func TestExecutorShow(t *testing.T) {
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "PrimaryTermStartTime"),
 		Rows: [][]sqltypes.Value{
-			buildVarCharRow("FakeCell", "TestExecutor", "-20", "PRIMARY", "SERVING", "aa-0000000000", "-20", "1970-01-01T00:00:01Z"),
-			buildVarCharRow("FakeCell", "TestXBadVSchema", "-20", "PRIMARY", "SERVING", "aa-0000000000", "e0-", "1970-01-01T00:00:01Z"),
+			buildVarCharRow("FakeCell", "TestExecutor", "-20", "PRIMARY", "SERVING", "aa-0000000001", "-20", "1970-01-01T00:00:01Z"),
+			buildVarCharRow("FakeCell", "TestXBadVSchema", "-20", "PRIMARY", "SERVING", "aa-0000000009", "random", "1970-01-01T00:00:01Z"),
 		},
 	}
 	utils.MustMatch(t, wantqr, qr, query)
@@ -839,7 +826,7 @@ func TestExecutorShow(t *testing.T) {
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "PrimaryTermStartTime"),
 		Rows: [][]sqltypes.Value{
-			buildVarCharRow("FakeCell", "TestExecutor", "-20", "PRIMARY", "SERVING", "aa-0000000000", "-20", "1970-01-01T00:00:01Z"),
+			buildVarCharRow("FakeCell", "TestExecutor", "-20", "PRIMARY", "SERVING", "aa-0000000001", "-20", "1970-01-01T00:00:01Z"),
 		},
 	}
 	utils.MustMatch(t, wantqr, qr, query)
@@ -1037,7 +1024,7 @@ func TestExecutorShow(t *testing.T) {
 }
 
 func TestExecutorShowTargeted(t *testing.T) {
-	executor, _, sbc2, _ := createLegacyExecutorEnv()
+	executor, _, sbc2, _ := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor/40-60"})
 
 	queries := []string{
@@ -1063,7 +1050,7 @@ func TestExecutorShowTargeted(t *testing.T) {
 }
 
 func TestExecutorUse(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "@primary"})
 
 	stmts := []string{
@@ -1094,7 +1081,7 @@ func TestExecutorUse(t *testing.T) {
 }
 
 func TestExecutorComment(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 
 	stmts := []string{
 		"/*! SET autocommit=1*/",
@@ -1114,7 +1101,7 @@ func TestExecutorComment(t *testing.T) {
 }
 
 func TestExecutorOther(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
 	type cnts struct {
 		Sbc1Cnt      int64
@@ -1209,7 +1196,7 @@ func TestExecutorDDL(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
 	type cnts struct {
 		Sbc1Cnt      int64
@@ -1360,7 +1347,7 @@ func TestExecutorAlterVSchemaKeyspace(t *testing.T) {
 	defer func() {
 		*vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 2)
@@ -1388,7 +1375,7 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 	defer func() {
 		*vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 	ks := "TestExecutor"
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
@@ -1460,7 +1447,7 @@ func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
 	defer func() {
 		*vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 	ks := KsTestUnsharded
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
@@ -1508,7 +1495,7 @@ func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
 }
 
 func TestExecutorVindexDDLACL(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	ks := "TestExecutor"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
 
@@ -1553,7 +1540,7 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 }
 
 func TestExecutorUnrecognized(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	_, err := executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{}), "invalid statement", nil)
 	require.Error(t, err, "unrecognized statement: invalid statement'")
 }
@@ -1561,7 +1548,7 @@ func TestExecutorUnrecognized(t *testing.T) {
 // TestVSchemaStats makes sure the building and displaying of the
 // VSchemaStats works.
 func TestVSchemaStats(t *testing.T) {
-	r, _, _, _ := createLegacyExecutorEnv()
+	r, _, _, _ := createExecutorEnv()
 
 	stats := r.VSchemaStats()
 
@@ -1582,7 +1569,7 @@ func TestVSchemaStats(t *testing.T) {
 }
 
 func TestGetPlanUnnormalized(t *testing.T) {
-	r, _, _, _ := createLegacyExecutorEnv()
+	r, _, _, _ := createExecutorEnv()
 	emptyvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false)
 	unshardedvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false)
 
@@ -1628,7 +1615,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 func assertCacheSize(t *testing.T, c cache.Cache, expected int) {
 	t.Helper()
 	var size int
-	c.ForEach(func(_ interface{}) bool {
+	c.ForEach(func(_ any) bool {
 		size++
 		return true
 	})
@@ -1659,7 +1646,7 @@ func getPlanCached(t *testing.T, e *Executor, vcursor *vcursorImpl, sql string, 
 }
 
 func TestGetPlanCacheUnnormalized(t *testing.T) {
-	r, _, _, _ := createLegacyExecutorEnv()
+	r, _, _, _ := createExecutorEnv()
 	emptyvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false)
 	query1 := "select * from music_user_map where id = 1"
 
@@ -1680,7 +1667,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	}
 
 	// Skip cache using directive
-	r, _, _, _ = createLegacyExecutorEnv()
+	r, _, _, _ = createExecutorEnv()
 	unshardedvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false)
 
 	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
@@ -1703,7 +1690,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 }
 
 func TestGetPlanCacheNormalized(t *testing.T) {
-	r, _, _, _ := createLegacyExecutorEnv()
+	r, _, _, _ := createExecutorEnv()
 	r.normalize = true
 	emptyvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false)
 
@@ -1722,7 +1709,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	}
 
 	// Skip cache using directive
-	r, _, _, _ = createLegacyExecutorEnv()
+	r, _, _, _ = createExecutorEnv()
 	r.normalize = true
 	unshardedvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false)
 
@@ -1746,7 +1733,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 }
 
 func TestGetPlanNormalized(t *testing.T) {
-	r, _, _, _ := createLegacyExecutorEnv()
+	r, _, _, _ := createExecutorEnv()
 	r.normalize = true
 	emptyvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false)
 	unshardedvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false)
@@ -1822,7 +1809,7 @@ func TestGetPlanNormalized(t *testing.T) {
 }
 
 func TestPassthroughDDL(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 	primarySession.TargetString = "TestExecutor"
 
 	alterDDL := "/* leading */ alter table passthrough_ddl add columne col bigint default 123 /* trailing */"
@@ -1871,7 +1858,7 @@ func TestPassthroughDDL(t *testing.T) {
 }
 
 func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
-	r, _, _, _ := createLegacyExecutorEnv()
+	r, _, _, _ := createExecutorEnv()
 	altVSchema := &vindexes.VSchema{
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
@@ -1893,7 +1880,7 @@ func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
 }
 
 func TestParseEmptyTargetMultiKeyspace(t *testing.T) {
-	r, _, _, _ := createLegacyExecutorEnv()
+	r, _, _, _ := createExecutorEnv()
 	altVSchema := &vindexes.VSchema{
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
@@ -1916,7 +1903,7 @@ func TestParseEmptyTargetMultiKeyspace(t *testing.T) {
 }
 
 func TestParseTargetSingleKeyspace(t *testing.T) {
-	r, _, _, _ := createLegacyExecutorEnv()
+	r, _, _, _ := createExecutorEnv()
 	altVSchema := &vindexes.VSchema{
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
@@ -1941,9 +1928,9 @@ func TestDebugVSchema(t *testing.T) {
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/debug/vschema", nil)
 
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	executor.ServeHTTP(resp, req)
-	v := make(map[string]interface{})
+	v := make(map[string]any)
 	if err := json.Unmarshal(resp.Body.Bytes(), &v); err != nil {
 		t.Fatalf("Unmarshal on %s failed: %v", resp.Body.String(), err)
 	}
@@ -1965,7 +1952,7 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 		*warnPayloadSize = saveWarn
 	}()
 
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 	warningCount := warnings.Counts()["WarnPayloadSizeExceeded"]
 	testMaxPayloadSizeExceeded := []string{
@@ -2002,7 +1989,7 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 }
 
 func TestOlapSelectDatabase(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
 
 	session := &vtgatepb.Session{Autocommit: true}
@@ -2019,7 +2006,7 @@ func TestOlapSelectDatabase(t *testing.T) {
 }
 
 func TestExecutorClearsWarnings(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{
 		Warnings: []*querypb.QueryWarning{{Code: 234, Message: "oh noes"}},
 	})
@@ -2029,7 +2016,7 @@ func TestExecutorClearsWarnings(t *testing.T) {
 }
 
 func TestExecutorOtherRead(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
 	type cnts struct {
 		Sbc1Cnt      int64
@@ -2104,7 +2091,7 @@ func TestExecutorOtherRead(t *testing.T) {
 }
 
 func TestExecutorExplain(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -2130,7 +2117,7 @@ func TestExecutorExplain(t *testing.T) {
 }
 
 func TestExecutorOtherAdmin(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
 	type cnts struct {
 		Sbc1Cnt      int64
@@ -2204,7 +2191,7 @@ func TestExecutorOtherAdmin(t *testing.T) {
 }
 
 func TestExecutorSavepointInTx(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 	logChan := QueryLogger.Subscribe("TestExecutorSavepoint")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -2290,7 +2277,7 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 	logChan := QueryLogger.Subscribe("TestExecutorSavepoint")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	session := NewSafeSession(&vtgatepb.Session{EnableSetVar: true, Autocommit: true, TargetString: "TestExecutor", EnableSystemSettings: true})
+	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "TestExecutor", EnableSystemSettings: true})
 	sbc1.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), "a|"),
 	})
@@ -2352,7 +2339,7 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 }
 
 func TestExecutorSavepointWithoutTx(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 	logChan := QueryLogger.Subscribe("TestExecutorSavepoint")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -2487,6 +2474,15 @@ func TestExecutorShowVitessMigrations(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, sbc1.StringQueries(), "SELECT * FROM _vt.schema_migrations")
 	assert.Contains(t, sbc2.StringQueries(), "SELECT * FROM _vt.schema_migrations")
+}
+
+func TestExecutorDescHash(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	showQuery := "desc hash_index"
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	ctx := context.Background()
+	_, err := executor.Execute(ctx, "", session, showQuery, nil)
+	require.NoError(t, err)
 }
 
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {

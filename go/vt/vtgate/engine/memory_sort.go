@@ -179,7 +179,7 @@ func (ms *MemorySort) fetchCount(vcursor VCursor, bindVars map[string]*querypb.B
 
 func (ms *MemorySort) description() PrimitiveDescription {
 	orderByIndexes := GenericJoin(ms.OrderBy, orderByParamsToString)
-	other := map[string]interface{}{"OrderBy": orderByIndexes}
+	other := map[string]any{"OrderBy": orderByIndexes}
 	if ms.TruncateColumnCount > 0 {
 		other["ResultColumns"] = ms.TruncateColumnCount
 	}
@@ -190,13 +190,13 @@ func (ms *MemorySort) description() PrimitiveDescription {
 	}
 }
 
-func orderByParamsToString(i interface{}) string {
+func orderByParamsToString(i any) string {
 	return i.(OrderByParams).String()
 }
 
 // GenericJoin will iterate over arrays, slices or maps, and executes the f function to get a
 // string representation of each element, and then uses strings.Join() join all the strings into a single one
-func GenericJoin(input interface{}, f func(interface{}) string) string {
+func GenericJoin(input any, f func(any) string) string {
 	sl := reflect.ValueOf(input)
 	var keys []string
 	switch sl.Kind() {
@@ -256,12 +256,12 @@ func (sh *sortHeap) Swap(i, j int) {
 }
 
 // Push satisfies heap.Interface.
-func (sh *sortHeap) Push(x interface{}) {
+func (sh *sortHeap) Push(x any) {
 	sh.rows = append(sh.rows, x.([]sqltypes.Value))
 }
 
 // Pop satisfies heap.Interface.
-func (sh *sortHeap) Pop() interface{} {
+func (sh *sortHeap) Pop() any {
 	n := len(sh.rows)
 	x := sh.rows[n-1]
 	sh.rows = sh.rows[:n-1]

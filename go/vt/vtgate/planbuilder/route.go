@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"strconv"
+
 	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -342,7 +344,7 @@ func (rb *route) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weigh
 		if !isSelect {
 			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot add weight string in %T", rb.Select)
 		}
-		sel.GroupBy = append(sel.GroupBy, weightStringExpr)
+		sel.AddGroupBy(weightStringExpr)
 	}
 
 	if weightcolNumber, ok := rb.weightStrings[rc]; ok {
@@ -380,6 +382,9 @@ func (rb *route) MergeSubquery(pb *primitiveBuilder, inner *route) bool {
 			case engine.DBA, engine.Reference:
 				rb.eroute.SysTableTableSchema = append(rb.eroute.SysTableTableSchema, inner.eroute.SysTableTableSchema...)
 				for k, v := range inner.eroute.SysTableTableName {
+					if rb.eroute.SysTableTableName == nil {
+						rb.eroute.SysTableTableName = map[string]evalengine.Expr{}
+					}
 					rb.eroute.SysTableTableName[k] = v
 				}
 				rb.eroute.Opcode = engine.DBA
@@ -839,18 +844,10 @@ func (rb *route) exprIsValue(expr sqlparser.Expr) bool {
 
 // queryTimeout returns DirectiveQueryTimeout value if set, otherwise returns 0.
 func queryTimeout(d sqlparser.CommentDirectives) int {
-	if d == nil {
-		return 0
-	}
-
-	val, ok := d[sqlparser.DirectiveQueryTimeout]
-	if !ok {
-		return 0
-	}
-
-	intVal, ok := val.(int)
-	if ok {
-		return intVal
+	if val, ok := d[sqlparser.DirectiveQueryTimeout]; ok {
+		if intVal, err := strconv.Atoi(val); err == nil {
+			return intVal
+		}
 	}
 	return 0
 }

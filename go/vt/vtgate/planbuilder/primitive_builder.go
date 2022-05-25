@@ -16,7 +16,9 @@ limitations under the License.
 
 package planbuilder
 
-import "vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+import (
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+)
 
 // primitiveBuilder is the top level type for building plans.
 // It contains the current logicalPlan tree, the symtab and

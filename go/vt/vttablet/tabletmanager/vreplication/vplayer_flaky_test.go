@@ -441,9 +441,7 @@ func TestPlayerSavepoint(t *testing.T) {
 	expectDBClientQueries(t, []string{
 		"begin",
 		"/insert into t1.*2.*",
-		"SAVEPOINT `vrepl_b`",
 		"/insert into t1.*3.*",
-		"SAVEPOINT `vrepl_a`",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	})
@@ -1386,7 +1384,7 @@ func TestPlayerTypes(t *testing.T) {
 	log.Errorf("TestPlayerTypes: flavor is %s", env.Flavor)
 	enableJSONColumnTesting := false
 	flavor := strings.ToLower(env.Flavor)
-	// Disable tests on percona (which identifies as mysql56) and mariadb platforms in CI since they
+	// Disable tests on percona and mariadb platforms in CI since they
 	// either don't support JSON or JSON support is not enabled by default
 	if strings.Contains(flavor, "mysql57") || strings.Contains(flavor, "mysql80") {
 		log.Infof("Running JSON column type tests on flavor %s", flavor)
@@ -1476,7 +1474,7 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b')",
-		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values ('a','b','c','d\\0\\0\\0\\0','e','f','g','h','1','3')",
+		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values ('a','b','c','d\\0\\0\\0\\0','e','f','g','h',1,'3')",
 		table:  "vitess_strings",
 		data: [][]string{
 			{"a", "b", "c", "d\000\000\000\000", "e", "f", "g", "h", "a", "a,b"},

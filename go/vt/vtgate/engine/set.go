@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/vt/sysvars"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -93,7 +91,14 @@ type (
 		Name string
 		Expr evalengine.Expr
 	}
+
+	// VitessMetadata implements the SetOp interface and will write the changes variable into the topo server
+	VitessMetadata struct {
+		Name, Value string
+	}
 )
+
+var unsupportedSQLModes = []string{"ANSI_QUOTES", "NO_BACKSLASH_ESCAPES", "PIPES_AS_CONCAT", "REAL_AS_FLOAT"}
 
 var _ Primitive = (*Set)(nil)
 
@@ -153,7 +158,7 @@ func (s *Set) Inputs() []Primitive {
 }
 
 func (s *Set) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Ops": s.Ops,
 	}
 	return PrimitiveDescription{
@@ -347,7 +352,10 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(vcursor VCursor, res *evalen
 
 	var value sqltypes.Value
 	if svs.Name == "sql_mode" {
-		changed, value = sqlModeChangedValue(qr)
+		changed, value, err = sqlModeChangedValue(qr)
+		if err != nil {
+			return false, err
+		}
 		if !changed {
 			return false, nil
 		}
@@ -361,19 +369,19 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(vcursor VCursor, res *evalen
 
 	// If the condition below is true, we want to use reserved connection instead of SET_VAR query hint.
 	// MySQL supports SET_VAR only in MySQL80 and for a limited set of system variables.
-	if sqlparser.MySQLVersion < "80000" || !vcursor.Session().GetEnableSetVar() || !svs.SupportSetVar || s == "''" {
+	if !svs.SupportSetVar || s == "''" || !vcursor.CanUseSetVar() {
 		vcursor.Session().NeedsReservedConn()
 		return true, nil
 	}
 	return false, nil
 }
 
-func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value) {
+func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value, error) {
 	if len(qr.Fields) != 2 {
-		return false, sqltypes.Value{}
+		return false, sqltypes.Value{}, nil
 	}
 	if len(qr.Rows[0]) != 2 {
-		return false, sqltypes.Value{}
+		return false, sqltypes.Value{}, nil
 	}
 	orig := qr.Rows[0][0].ToString()
 	newVal := qr.Rows[0][1].ToString()
@@ -390,8 +398,15 @@ func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value) {
 
 	changed := false
 	newValArr := strings.Split(newVal, ",")
+	unsupportedMode := ""
 	for _, nVal := range newValArr {
 		nVal = strings.ToUpper(nVal)
+		for _, mode := range unsupportedSQLModes {
+			if mode == nVal {
+				unsupportedMode = nVal
+				break
+			}
+		}
 		notSeen, exists := origMap[nVal]
 		if !exists {
 			changed = true
@@ -406,8 +421,11 @@ func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value) {
 	if !changed && uniqOrigVal != origValSeen {
 		changed = true
 	}
+	if changed && unsupportedMode != "" {
+		return false, sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "setting the %s sql_mode is unsupported", unsupportedMode)
+	}
 
-	return changed, qr.Rows[0][1]
+	return changed, qr.Rows[0][1], nil
 }
 
 var _ SetOp = (*SysVarSetAware)(nil)
@@ -580,4 +598,14 @@ func (svss *SysVarSetAware) setBoolSysVar(env *evalengine.ExpressionEnv, setter 
 // VariableName implements the SetOp interface method
 func (svss *SysVarSetAware) VariableName() string {
 	return svss.Name
+}
+
+var _ SetOp = (*VitessMetadata)(nil)
+
+func (v *VitessMetadata) Execute(vcursor VCursor, env *evalengine.ExpressionEnv) error {
+	return vcursor.SetExec(v.Name, v.Value)
+}
+
+func (v *VitessMetadata) VariableName() string {
+	return v.Name
 }

@@ -247,7 +247,7 @@ func subquerySelectPlan(ins *sqlparser.Insert, vschema plancontext.VSchema, rese
 func getStatementAndPlanner(
 	ins *sqlparser.Insert,
 	vschema plancontext.VSchema,
-) (selectStmt sqlparser.SelectStatement, configuredPlanner selectPlanner, err error) {
+) (selectStmt sqlparser.SelectStatement, configuredPlanner stmtPlanner, err error) {
 	switch stmt := ins.Rows.(type) {
 	case *sqlparser.Select:
 		configuredPlanner, err = getConfiguredPlanner(vschema, buildSelectPlan, stmt, "")
@@ -286,7 +286,7 @@ func checkColumnCounts(ins *sqlparser.Insert, selectStmt sqlparser.SelectStateme
 }
 
 func applyCommentDirectives(ins *sqlparser.Insert, eins *engine.Insert) {
-	directives := sqlparser.ExtractCommentDirectives(ins.Comments)
+	directives := ins.Comments.Directives()
 	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
 		eins.MultiShardAutocommit = true
 	}
@@ -295,7 +295,7 @@ func applyCommentDirectives(ins *sqlparser.Insert, eins *engine.Insert) {
 
 func getColVindexes(allColVindexes []*vindexes.ColumnVindex) (colVindexes []*vindexes.ColumnVindex) {
 	for _, colVindex := range allColVindexes {
-		if colVindex.IgnoreInDML() {
+		if colVindex.IsPartialVindex() {
 			continue
 		}
 		colVindexes = append(colVindexes, colVindex)

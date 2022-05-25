@@ -54,7 +54,7 @@ func TestVtgateProcess(t *testing.T) {
 func verifyVtgateVariables(t *testing.T, url string) {
 	resp, _ := http.Get(url)
 	if resp != nil && resp.StatusCode == 200 {
-		resultMap := make(map[string]interface{})
+		resultMap := make(map[string]any)
 		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
 		require.Nil(t, err)
@@ -90,8 +90,8 @@ func verifyVtgateVariables(t *testing.T, url string) {
 	}
 }
 
-func getMapFromJSON(JSON map[string]interface{}, key string) map[string]interface{} {
-	result := make(map[string]interface{})
+func getMapFromJSON(JSON map[string]any, key string) map[string]any {
+	result := make(map[string]any)
 	object := reflect.ValueOf(JSON[key])
 	if object.Kind() == reflect.Map {
 		for _, key := range object.MapKeys() {
@@ -102,7 +102,7 @@ func getMapFromJSON(JSON map[string]interface{}, key string) map[string]interfac
 	return result
 }
 
-func isPrimaryTabletPresent(tablets map[string]interface{}) bool {
+func isPrimaryTabletPresent(tablets map[string]any) bool {
 	for key := range tablets {
 		if strings.Contains(key, "primary") {
 			return true

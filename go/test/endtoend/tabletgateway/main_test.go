@@ -64,7 +64,7 @@ func TestMain(m *testing.M) {
 
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(cell, "localhost")
-		clusterInstance.VtTabletExtraArgs = []string{"-health_check_interval", "1s"}
+		clusterInstance.VtTabletExtraArgs = []string{"--health_check_interval", "1s"}
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -85,8 +85,6 @@ func TestMain(m *testing.M) {
 		}
 
 		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// set the gateway we want to use
-		vtgateInstance.GatewayImplementation = "tabletgateway"
 		// Start vtgate
 		err = vtgateInstance.Setup()
 		if err != nil {

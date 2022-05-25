@@ -74,6 +74,8 @@ const (
 	alterSchemaMigrationsTableIsView                   = "ALTER TABLE _vt.schema_migrations add column is_view tinyint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableReadyToComplete          = "ALTER TABLE _vt.schema_migrations add column ready_to_complete tinyint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableStowawayTable            = "ALTER TABLE _vt.schema_migrations add column stowaway_table tinytext NOT NULL"
+	alterSchemaMigrationsTableVreplLivenessIndicator   = "ALTER TABLE _vt.schema_migrations add column vitess_liveness_indicator bigint NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableUserThrottleRatio        = "ALTER TABLE _vt.schema_migrations add column user_throttle_ratio float NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -147,6 +149,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateMigrationUserThrottleRatio = `UPDATE _vt.schema_migrations
+			SET user_throttle_ratio=%a
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateMigrationStartedTimestamp = `UPDATE _vt.schema_migrations SET
 			started_timestamp =IFNULL(started_timestamp,  NOW()),
 			liveness_timestamp=IFNULL(liveness_timestamp, NOW())
@@ -155,6 +162,11 @@ const (
 	`
 	sqlUpdateMigrationTimestamp = `UPDATE _vt.schema_migrations
 			SET %s=NOW()
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationVitessLivenessIndicator = `UPDATE _vt.schema_migrations
+			SET vitess_liveness_indicator=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -377,6 +389,10 @@ const (
 			retain_artifacts_seconds,
 			is_view,
 			ready_to_complete,
+			reverted_uuid,
+			stowaway_table,
+			rows_copied,
+			vitess_liveness_indicator,
 			postpone_completion
 		FROM _vt.schema_migrations
 		WHERE
@@ -500,12 +516,11 @@ const (
 			AND TABLES.TABLE_NAME=%a
 			AND AUTO_INCREMENT IS NOT NULL
 		`
-	sqlAlterTableAutoIncrement      = "ALTER TABLE `%s` AUTO_INCREMENT=%a"
-	sqlImpossibleSelectVreplication = "SELECT no_such_column__init_ddl FROM _vt.vreplication LIMIT 1"
-	sqlStartVReplStream             = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
-	sqlStopVReplStream              = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
-	sqlDeleteVReplStream            = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
-	sqlReadVReplStream              = `SELECT
+	sqlAlterTableAutoIncrement = "ALTER TABLE `%s` AUTO_INCREMENT=%a"
+	sqlStartVReplStream        = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
+	sqlStopVReplStream         = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
+	sqlDeleteVReplStream       = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
+	sqlReadVReplStream         = `SELECT
 			id,
 			workflow,
 			source,
@@ -585,4 +600,6 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableIsView,
 	alterSchemaMigrationsTableReadyToComplete,
 	alterSchemaMigrationsTableStowawayTable,
+	alterSchemaMigrationsTableVreplLivenessIndicator,
+	alterSchemaMigrationsTableUserThrottleRatio,
 }

@@ -102,6 +102,8 @@ type vdiff struct {
 	workflow       string
 	targetKeyspace string
 	tables         []string
+	sourceTimeZone string
+	targetTimeZone string
 }
 
 // compareColInfo contains the metadata for a column of the table being diffed
@@ -204,6 +206,8 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		workflow:       workflowName,
 		targetKeyspace: targetKeyspace,
 		tables:         includeTables,
+		sourceTimeZone: ts.sourceTimeZone,
+		targetTimeZone: ts.targetTimeZone,
 	}
 	for shard, source := range ts.Sources() {
 		df.sources[shard] = &shardStreamer{
@@ -456,6 +460,66 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 	return orderby, nil
 }
 
+// If SourceTimeZone is defined in the BinlogSource, the VReplication workflow would have converted the datetime
+// columns expecting the source to have been in the SourceTimeZone and target in TargetTimeZone. We need to do the reverse
+// conversion in VDiff before comparing to the source
+func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs sqlparser.SelectExprs, fields map[string]querypb.Type) sqlparser.SelectExprs {
+	if df.sourceTimeZone == "" {
+		return targetSelectExprs
+	}
+	log.Infof("source time zone specified: %s", df.sourceTimeZone)
+	var newSelectExprs sqlparser.SelectExprs
+	var modified bool
+	for _, expr := range targetSelectExprs {
+		converted := false
+		switch selExpr := expr.(type) {
+		case *sqlparser.AliasedExpr:
+			if colAs, ok := selExpr.Expr.(*sqlparser.ColName); ok {
+				var convertTZFuncExpr *sqlparser.FuncExpr
+				colName := colAs.Name.Lowered()
+				fieldType := fields[colName]
+				if fieldType == querypb.Type_DATETIME {
+					convertTZFuncExpr = &sqlparser.FuncExpr{
+						Name: sqlparser.NewColIdent("convert_tz"),
+						Exprs: sqlparser.SelectExprs{
+							expr,
+							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(df.targetTimeZone)},
+							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(df.sourceTimeZone)},
+						},
+					}
+					log.Infof("converting datetime column %s using convert_tz()", colName)
+					newSelectExprs = append(newSelectExprs, &sqlparser.AliasedExpr{Expr: convertTZFuncExpr, As: colAs.Name})
+					converted = true
+					modified = true
+				}
+			}
+		}
+		if !converted { // not datetime
+			newSelectExprs = append(newSelectExprs, expr)
+		}
+	}
+	if modified { // at least one datetime was found
+		log.Infof("Found datetime columns when SourceTimeZone was set, resetting target SelectExprs after convert_tz()")
+		return newSelectExprs
+	}
+	return targetSelectExprs
+}
+
+func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, error) {
+	aliasedExpr := selectExpression.(*sqlparser.AliasedExpr)
+	expr := aliasedExpr.Expr
+	var colname string
+	switch t := expr.(type) {
+	case *sqlparser.ColName:
+		colname = t.Name.Lowered()
+	case *sqlparser.FuncExpr: // only in case datetime was converted using convert_tz()
+		colname = aliasedExpr.As.Lowered()
+	default:
+		return "", fmt.Errorf("found target SelectExpr which was neither ColName or FuncExpr: %+v", aliasedExpr)
+	}
+	return colname, nil
+}
+
 // buildTablePlan builds one tableDiffer.
 func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, query string) (*tableDiffer, error) {
 	statement, err := sqlparser.Parse(query)
@@ -511,16 +575,21 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 			return nil, fmt.Errorf("unexpected: %v", sqlparser.String(statement))
 		}
 	}
+
 	fields := make(map[string]querypb.Type)
 	for _, field := range table.Fields {
 		fields[strings.ToLower(field.Name)] = field.Type
 	}
 
+	targetSelect.SelectExprs = df.adjustForSourceTimeZone(targetSelect.SelectExprs, fields)
 	// Start with adding all columns for comparison.
 	td.compareCols = make([]compareColInfo, len(sourceSelect.SelectExprs))
 	for i := range td.compareCols {
 		td.compareCols[i].colIndex = i
-		colname := targetSelect.SelectExprs[i].(*sqlparser.AliasedExpr).Expr.(*sqlparser.ColName).Name.Lowered()
+		colname, err := getColumnNameForSelectExpr(targetSelect.SelectExprs[i])
+		if err != nil {
+			return nil, err
+		}
 		_, ok := fields[colname]
 		if !ok {
 			return nil, fmt.Errorf("column %v not found in table %v", colname, table.Name)

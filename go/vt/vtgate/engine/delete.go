@@ -78,7 +78,7 @@ func (del *Delete) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	switch del.Opcode {
 	case Unsharded:
 		return del.execUnsharded(vcursor, bindVars, rss)
-	case Equal, IN, Scatter, ByDestination:
+	case Equal, IN, Scatter, ByDestination, SubShard:
 		return del.execMultiDestination(vcursor, bindVars, rss, del.deleteVindexEntries)
 	default:
 		// Unreachable.
@@ -145,7 +145,7 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 }
 
 func (del *Delete) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Query":                del.Query,
 		"Table":                del.GetTableName(),
 		"OwnedVindexQuery":     del.OwnedVindexQuery,
@@ -164,7 +164,7 @@ func (del *Delete) description() PrimitiveDescription {
 	}
 }
 
-func addFieldsIfNotEmpty(dml *DML, other map[string]interface{}) {
+func addFieldsIfNotEmpty(dml *DML, other map[string]any) {
 	if dml.Vindex != nil {
 		other["Vindex"] = dml.Vindex.String()
 	}

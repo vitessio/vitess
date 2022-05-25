@@ -16,6 +16,7 @@ limitations under the License.
 package tablegc
 
 import (
+	"context"
 	"flag"
 	"os"
 	"strings"
@@ -69,6 +70,11 @@ var (
       }
     }
 	}`
+
+	tableTransitionExpiration = 10 * time.Second
+	gcCheckInterval           = 2 * time.Second
+	gcPurgeCheckInterval      = 2 * time.Second
+	waitForTransitionTimeout  = 30 * time.Second
 )
 
 func TestMain(m *testing.M) {
@@ -87,14 +93,14 @@ func TestMain(m *testing.M) {
 
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-lock_tables_timeout", "5s",
-			"-watch_replication_stream",
-			"-enable_replication_reporter",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
-			"-gc_check_interval", "5s",
-			"-gc_purge_check_interval", "5s",
-			"-table_gc_lifecycle", "hold,purge,evac,drop",
+			"--lock_tables_timeout", "5s",
+			"--watch_replication_stream",
+			"--enable_replication_reporter",
+			"--heartbeat_enable",
+			"--heartbeat_interval", "250ms",
+			"--gc_check_interval", gcCheckInterval.String(),
+			"--gc_purge_check_interval", gcPurgeCheckInterval.String(),
+			"--table_gc_lifecycle", "hold,purge,evac,drop",
 		}
 		// We do not need semiSync for this test case.
 		clusterInstance.EnableSemiSync = false
@@ -162,12 +168,73 @@ func tableExists(tableExpr string) (exists bool, tableName string, err error) {
 	return true, row.AsString("Name", ""), nil
 }
 
-// tableExists sees that a given table exists in MySQL
-func dropTable(tableName string) (err error) {
+func validateTableDoesNotExist(t *testing.T, tableExpr string) {
+	ctx, cancel := context.WithTimeout(context.Background(), waitForTransitionTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	var foundTableName string
+	var exists bool
+	var err error
+	for {
+		select {
+		case <-ticker.C:
+			exists, foundTableName, err = tableExists(tableExpr)
+			require.NoError(t, err)
+			if !exists {
+				return
+			}
+		case <-ctx.Done():
+			assert.NoError(t, ctx.Err(), "validateTableDoesNotExist timed out, table %v still exists (%v)", tableExpr, foundTableName)
+			return
+		}
+	}
+}
+
+func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableGCState) {
+	for _, state := range states {
+		expectTableToExist := true
+		searchExpr := ""
+		switch state {
+		case schema.HoldTableGCState:
+			searchExpr = `\_vt\_HOLD\_%`
+		case schema.PurgeTableGCState:
+			searchExpr = `\_vt\_PURGE\_%`
+		case schema.EvacTableGCState:
+			searchExpr = `\_vt\_EVAC\_%`
+		case schema.DropTableGCState:
+			searchExpr = `\_vt\_DROP\_%`
+		case schema.TableDroppedGCState:
+			searchExpr = `\_vt\_%`
+			expectTableToExist = false
+		default:
+			t.Log("Unknown state")
+			t.Fail()
+		}
+		exists, tableName, err := tableExists(searchExpr)
+		require.NoError(t, err)
+
+		if exists {
+			if expectNumRows >= 0 {
+				checkTableRows(t, tableName, expectNumRows)
+			}
+			// Now that the table is validated, we can drop it
+			dropTable(t, tableName)
+		}
+		if exists == expectTableToExist {
+			// condition met
+			return
+		}
+	}
+	assert.Fail(t, "could not match any of the states: %v", states)
+}
+
+// dropTable drops a table
+func dropTable(t *testing.T, tableName string) {
 	query := `drop table if exists %a`
 	parsed := sqlparser.BuildParsedQuery(query, tableName)
-	_, err = primaryTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
-	return err
+	_, err := primaryTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
+	require.NoError(t, err)
 }
 
 func readMysqlVersion(t *testing.T) string {
@@ -196,33 +263,25 @@ func TestPopulateTable(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, exists)
 	}
-	{
-		exists, _, err := tableExists("no_such_table")
-		assert.NoError(t, err)
-		assert.False(t, exists)
-	}
+	validateTableDoesNotExist(t, "no_such_table")
 }
 
 func TestHold(t *testing.T) {
 	populateTable(t)
-	query, tableName, err := schema.GenerateRenameStatement("t1", schema.HoldTableGCState, time.Now().UTC().Add(10*time.Second))
+	query, tableName, err := schema.GenerateRenameStatement("t1", schema.HoldTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
 	assert.NoError(t, err)
 
 	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	assert.NoError(t, err)
 
-	{
-		exists, _, err := tableExists("t1")
-		assert.NoError(t, err)
-		assert.False(t, exists)
-	}
+	validateTableDoesNotExist(t, "t1")
 	{
 		exists, _, err := tableExists(tableName)
 		assert.NoError(t, err)
 		assert.True(t, exists)
 	}
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(tableTransitionExpiration / 2)
 	{
 		// Table was created with +10s timestamp, so it should still exist
 		exists, _, err := tableExists(tableName)
@@ -232,48 +291,53 @@ func TestHold(t *testing.T) {
 		checkTableRows(t, tableName, 1024)
 	}
 
-	time.Sleep(10 * time.Second)
-	{
-		// We're now both beyond table's timestamp as well as a tableGC interval
-		exists, _, err := tableExists(tableName)
-		assert.NoError(t, err)
-		assert.False(t, exists)
-	}
-	exists, purgeTableName, err := tableExists(`\_vt\_PURGE\_%`)
-	assert.NoError(t, err)
-	if isMySQL8() {
-		// PURGE state is skipped in mysql 8.0.23 and beyond
-		assert.False(t, exists)
+	time.Sleep(tableTransitionExpiration)
+	// 	{
+	// 		// We're now both beyond table's timestamp as well as a tableGC interval
+	// <<<<<<< HEAD
+	// 		exists, _, err := tableExists(tableName)
+	// 		assert.NoError(t, err)
+	// 		assert.False(t, exists)
+	// 	}
+	// 	exists, purgeTableName, err := tableExists(`\_vt\_PURGE\_%`)
+	// 	assert.NoError(t, err)
+	// 	if isMySQL8() {
+	// 		// PURGE state is skipped in mysql 8.0.23 and beyond
+	// 		assert.False(t, exists)
 
-		cleanupDropTable(t)
+	// 		cleanupDropTable(t)
+	// 	} else {
+	// 		// Table should be renamed as _vt_PURGE_...
+	// 		assert.True(t, exists)
+	// 		err = dropTable(purgeTableName)
+	// 		assert.NoError(t, err)
+	// =======
+	// 		validateTableDoesNotExist(t, tableName)
+	// >>>>>>> main
+	// 	}
+	if isMySQL8() {
+		validateAnyState(t, -1, schema.DropTableGCState, schema.TableDroppedGCState)
 	} else {
-		// Table should be renamed as _vt_PURGE_...
-		assert.True(t, exists)
-		err = dropTable(purgeTableName)
-		assert.NoError(t, err)
+		validateAnyState(t, -1, schema.PurgeTableGCState, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
 	}
 }
 
 func TestEvac(t *testing.T) {
 	populateTable(t)
-	query, tableName, err := schema.GenerateRenameStatement("t1", schema.EvacTableGCState, time.Now().UTC().Add(10*time.Second))
+	query, tableName, err := schema.GenerateRenameStatement("t1", schema.EvacTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
 	assert.NoError(t, err)
 
 	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	assert.NoError(t, err)
 
-	{
-		exists, _, err := tableExists("t1")
-		assert.NoError(t, err)
-		assert.False(t, exists)
-	}
+	validateTableDoesNotExist(t, "t1")
 	{
 		exists, _, err := tableExists(tableName)
 		assert.NoError(t, err)
 		assert.True(t, exists)
 	}
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(tableTransitionExpiration / 2)
 	{
 		// Table was created with +10s timestamp, so it should still exist
 		exists, _, err := tableExists(tableName)
@@ -287,48 +351,32 @@ func TestEvac(t *testing.T) {
 		}
 	}
 
-	time.Sleep(10 * time.Second)
-	{
-		// We're now both beyond table's timestamp as well as a tableGC interval
-		exists, _, err := tableExists(tableName)
-		assert.NoError(t, err)
-		assert.False(t, exists)
-	}
-	time.Sleep(5 * time.Second)
-	{
-		// Table should be renamed as _vt_DROP_... and then dropped!
-		exists, _, err := tableExists(`\_vt\_DROP\_%`)
-		assert.NoError(t, err)
-		assert.False(t, exists)
-	}
+	time.Sleep(tableTransitionExpiration)
+	// We're now both beyond table's timestamp as well as a tableGC interval
+	validateTableDoesNotExist(t, tableName)
+	// Table should be renamed as _vt_DROP_... and then dropped!
+	validateAnyState(t, 0, schema.DropTableGCState, schema.TableDroppedGCState)
 }
 
 func TestDrop(t *testing.T) {
 	populateTable(t)
-	query, tableName, err := schema.GenerateRenameStatement("t1", schema.DropTableGCState, time.Now().UTC().Add(10*time.Second))
+	query, tableName, err := schema.GenerateRenameStatement("t1", schema.DropTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
 	assert.NoError(t, err)
 
 	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	assert.NoError(t, err)
 
-	{
-		exists, _, err := tableExists("t1")
-		assert.NoError(t, err)
-		assert.False(t, exists)
-	}
+	validateTableDoesNotExist(t, "t1")
 
-	time.Sleep(20 * time.Second) // 10s for timestamp to pass, then 10s for checkTables and drop of table
-	{
-		// We're now both beyond table's timestamp as well as a tableGC interval
-		exists, _, err := tableExists(tableName)
-		assert.NoError(t, err)
-		assert.False(t, exists)
-	}
+	time.Sleep(tableTransitionExpiration)
+	time.Sleep(2 * gcCheckInterval)
+	// We're now both beyond table's timestamp as well as a tableGC interval
+	validateTableDoesNotExist(t, tableName)
 }
 
 func TestPurge(t *testing.T) {
 	populateTable(t)
-	query, tableName, err := schema.GenerateRenameStatement("t1", schema.PurgeTableGCState, time.Now().UTC().Add(10*time.Second))
+	query, tableName, err := schema.GenerateRenameStatement("t1", schema.PurgeTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
 	require.NoError(t, err)
 
 	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
@@ -345,7 +393,7 @@ func TestPurge(t *testing.T) {
 		require.True(t, exists)
 	}
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(tableTransitionExpiration / 2)
 	{
 		// Table was created with +10s timestamp, so it should still exist
 		exists, _, err := tableExists(tableName)
@@ -355,28 +403,41 @@ func TestPurge(t *testing.T) {
 		checkTableRows(t, tableName, 1024)
 	}
 
-	time.Sleep(15 * time.Second) // purgeReentranceInterval
-	{
-		// We're now both beyond table's timestamp as well as a tableGC interval
-		exists, _, err := tableExists(tableName)
-		require.NoError(t, err)
-		require.False(t, exists)
-	}
-	{
-		// Table should be renamed as _vt_EVAC_...
-		exists, evacTableName, err := tableExists(`\_vt\_EVAC\_%`)
-		require.NoError(t, err)
-		if isMySQL8() {
-			// EVAC state is skipped in mysql 8.0.23 and beyond
-			assert.False(t, exists)
+	// <<<<<<< HEAD
+	// 	time.Sleep(15 * time.Second) // purgeReentranceInterval
+	// 	{
+	// 		// We're now both beyond table's timestamp as well as a tableGC interval
+	// 		exists, _, err := tableExists(tableName)
+	// 		require.NoError(t, err)
+	// 		require.False(t, exists)
+	// 	}
+	// 	{
+	// 		// Table should be renamed as _vt_EVAC_...
+	// 		exists, evacTableName, err := tableExists(`\_vt\_EVAC\_%`)
+	// 		require.NoError(t, err)
+	// 		if isMySQL8() {
+	// 			// EVAC state is skipped in mysql 8.0.23 and beyond
+	// 			assert.False(t, exists)
 
-			cleanupDropTable(t)
-		} else {
-			require.True(t, exists)
-			checkTableRows(t, evacTableName, 0)
-			err = dropTable(evacTableName)
-			require.NoError(t, err)
-		}
+	// 			cleanupDropTable(t)
+	// 		} else {
+	// 			require.True(t, exists)
+	// 			checkTableRows(t, evacTableName, 0)
+	// 			err = dropTable(evacTableName)
+	// 			require.NoError(t, err)
+	// 		}
+	// 	}
+	// =======
+	// 	time.Sleep(5 * gcPurgeCheckInterval) // wwait for table to be purged
+	// 	time.Sleep(2 * gcCheckInterval)      // wait for GC state transition
+	// 	validateAnyState(t, 0, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
+	// >>>>>>> main
+	time.Sleep(5 * gcPurgeCheckInterval) // wwait for table to be purged
+	time.Sleep(2 * gcCheckInterval)      // wait for GC state transition
+	if isMySQL8() {
+		validateAnyState(t, 0, schema.DropTableGCState, schema.TableDroppedGCState)
+	} else {
+		validateAnyState(t, 0, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
 	}
 }
 
@@ -392,7 +453,7 @@ func cleanupDropTable(t *testing.T) {
 
 func TestPurgeView(t *testing.T) {
 	populateTable(t)
-	query, tableName, err := schema.GenerateRenameStatement("v1", schema.PurgeTableGCState, time.Now().UTC().Add(10*time.Second))
+	query, tableName, err := schema.GenerateRenameStatement("v1", schema.PurgeTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
 	require.NoError(t, err)
 
 	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
@@ -415,7 +476,7 @@ func TestPurgeView(t *testing.T) {
 		require.True(t, exists)
 	}
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(tableTransitionExpiration / 2)
 	{
 		// View was created with +10s timestamp, so it should still exist
 		exists, _, err := tableExists(tableName)
@@ -430,7 +491,8 @@ func TestPurgeView(t *testing.T) {
 		}
 	}
 
-	time.Sleep(15 * time.Second) // purgeReentranceInterval
+	time.Sleep(2 * gcPurgeCheckInterval) // wwait for table to be purged
+	time.Sleep(2 * gcCheckInterval)      // wait for GC state transition
 	{
 		// We're now both beyond view's timestamp as well as a tableGC interval
 		exists, _, err := tableExists(tableName)
@@ -443,26 +505,5 @@ func TestPurgeView(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, exists)
 	}
-	{
-		// View should be renamed as _vt_EVAC_ or _vt_DROP: views only spend a fraction of a second in "EVAC"
-		// because evacuation is irrelevant to views. They are immediately renamed to DROP.
-		// Because there might be a race condition, we allow both cases
-		evacTableExists, evacTableName, err := tableExists(`\_vt\_EVAC\_%`)
-		require.NoError(t, err)
-
-		dropTableExists, dropTableName, err := tableExists(`\_vt\_DROP\_%`)
-		require.NoError(t, err)
-
-		require.True(t, evacTableExists || dropTableExists)
-		switch {
-		case evacTableExists:
-			checkTableRows(t, evacTableName, 1024) // the renamed view still points to t1's data
-			err = dropTable(evacTableName)
-			require.NoError(t, err)
-		case dropTableExists:
-			checkTableRows(t, dropTableName, 1024) // the renamed view still points to t1's data
-			err = dropTable(dropTableName)
-			require.NoError(t, err)
-		}
-	}
+	validateAnyState(t, 1024, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
 }

@@ -30,14 +30,14 @@ import (
 )
 
 type testPlanner struct {
-	panic       interface{}
+	panic       any
 	err         error
 	res         engine.Primitive
 	messWithAST func(sqlparser.Statement)
 	called      bool
 }
 
-var _ selectPlanner = (*testPlanner)(nil).plan
+var _ stmtPlanner = (*testPlanner)(nil).plan
 
 func (tp *testPlanner) plan(statement sqlparser.Statement, vars *sqlparser.ReservedVars, schema plancontext.VSchema) (engine.Primitive, error) {
 	tp.called = true

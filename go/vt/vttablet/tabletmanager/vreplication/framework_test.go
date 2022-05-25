@@ -412,7 +412,8 @@ func (dbc *realDBClient) Close() {
 }
 
 func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
-	if strings.HasPrefix(query, "use") {
+	if strings.HasPrefix(query, "use") ||
+		query == withddl.QueryToTriggerWithDDL { // this query breaks unit tests since it errors out
 		return nil, nil
 	}
 	qr, err := dbc.conn.ExecuteFetch(query, 10000, true)
@@ -435,7 +436,7 @@ func expectDeleteQueries(t *testing.T) {
 	})
 }
 
-func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan interface{}) {
+func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan any) {
 	t.Helper()
 	defer vrLogStatsLogger.Unsubscribe(logCh)
 	failed := false
@@ -492,7 +493,6 @@ func shouldIgnoreQuery(query string) bool {
 func expectDBClientQueries(t *testing.T, queries []string, skippableOnce ...string) {
 	extraQueries := withDDL.DDLs()
 	extraQueries = append(extraQueries, withDDLInitialQueries...)
-	extraQueries = append(extraQueries, withddl.QueryToTriggerWithDDL)
 	// Either 'queries' or 'queriesWithDDLs' must match globalDBQueries
 	t.Helper()
 	failed := false

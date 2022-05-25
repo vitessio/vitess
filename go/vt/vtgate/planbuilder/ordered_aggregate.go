@@ -104,7 +104,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 		if hasAggregates {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
 		}
-		pb.plan = newDistinct(pb.plan, nil)
+		pb.plan = newDistinctV3(pb.plan)
 		return nil
 	}
 
@@ -253,6 +253,7 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 		Aggregates:          oa.aggregates,
 		GroupByKeys:         oa.groupByKeys,
 		TruncateColumnCount: oa.truncateColumnCount,
+		Collations:          colls,
 		Input:               input,
 	}
 }
@@ -284,12 +285,6 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 		}
 		oa.extraDistinct = col
 		oa.preProcess = true
-		var alias string
-		if expr.As.IsEmpty() {
-			alias = sqlparser.String(expr.Expr)
-		} else {
-			alias = expr.As.String()
-		}
 		switch opcode {
 		case engine.AggregateCount:
 			opcode = engine.AggregateCountDistinct
@@ -299,7 +294,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
 			Opcode: opcode,
 			Col:    innerCol,
-			Alias:  alias,
+			Alias:  expr.ColumnName(),
 		})
 	} else {
 		newBuilder, _, innerCol, err := planProjection(pb, oa.input, expr, origin)

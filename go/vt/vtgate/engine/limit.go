@@ -88,6 +88,8 @@ func (l *Limit) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.B
 		return err
 	}
 
+	bindVars = copyBindVars(bindVars)
+
 	// When offset is present, we hijack the limit value so we can calculate
 	// the offset in memory from the result of the scatter query with count + offset.
 	bindVars["__upper_limit"] = sqltypes.Int64BindVariable(int64(count + offset))
@@ -197,7 +199,7 @@ func getIntFrom(env *evalengine.ExpressionEnv, expr evalengine.Expr) (int, error
 }
 
 func (l *Limit) description() PrimitiveDescription {
-	other := map[string]interface{}{}
+	other := map[string]any{}
 
 	if l.Count != nil {
 		other["Count"] = evalengine.FormatExpr(l.Count)

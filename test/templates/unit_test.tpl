@@ -9,22 +9,43 @@ jobs:
     runs-on: ubuntu-18.04
 
     steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Check for changes in relevant files
+      uses: frouioui/paths-filter@main
+      id: changes
+      with:
+        token: ''
+        filters: |
+          unit_tests:
+            - 'go/**'
+            - 'test.go'
+            - 'Makefile'
+            - 'build.env'
+            - 'go.[sumod]'
+            - 'proto/*.proto'
+            - 'tools/**'
+            - 'config/**'
+            - 'bootstrap.sh'
+            - '.github/workflows/**'
+
     - name: Set up Go
+      if: steps.changes.outputs.unit_tests == 'true'
       uses: actions/setup-go@v2
       with:
-        go-version: 1.17
+        go-version: 1.18.1
 
     - name: Tune the OS
+      if: steps.changes.outputs.unit_tests == 'true'
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
         # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
         echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
         sudo sysctl -p /etc/sysctl.conf
 
-    - name: Check out code
-      uses: actions/checkout@v2
-
     - name: Get dependencies
+      if: steps.changes.outputs.unit_tests == 'true'
       run: |
         export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
@@ -109,10 +130,12 @@ jobs:
         go install golang.org/x/tools/cmd/goimports@latest
 
     - name: Run make tools
+      if: steps.changes.outputs.unit_tests == 'true'
       run: |
         make tools
 
     - name: Run test
+      if: steps.changes.outputs.unit_tests == 'true'
       timeout-minutes: 30
       run: |
         eatmydata -- make unit_test

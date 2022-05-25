@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 
 	"context"
 
@@ -90,7 +91,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 	defer replica.StopActionLoop(t)
 
 	// run ShardReplicationStatuses
-	ti, rs, err := wr.ShardReplicationStatuses(ctx, "test_keyspace", "0")
+	ti, rs, err := reparentutil.ShardReplicationStatuses(ctx, wr.TopoServer(), wr.TabletManagerClient(), "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("ShardReplicationStatuses failed: %v", err)
 	}

@@ -53,6 +53,8 @@ const (
 	// MultiEqual is used for routing queries with IN with tuple clause
 	// Requires: A Vindex, and a multi Tuple Values.
 	MultiEqual
+	// SubShard is for when we are missing one or more columns from a composite vindex
+	SubShard
 	// Scatter is for routing a scattered statement.
 	Scatter
 	// Next is for fetching from a sequence.
@@ -68,8 +70,6 @@ const (
 	// Is used when the query explicitly sets a target destination:
 	// in the clause e.g: UPDATE `keyspace[-]`.x1 SET foo=1
 	ByDestination
-	// NumOpcodes is the number of opcodes
-	NumOpcodes
 )
 
 var opName = map[Opcode]string{
@@ -84,6 +84,7 @@ var opName = map[Opcode]string{
 	Reference:     "Reference",
 	None:          "None",
 	ByDestination: "ByDestination",
+	SubShard:      "SubShard",
 }
 
 // MarshalJSON serializes the Opcode as a JSON string.
@@ -110,13 +111,21 @@ type RoutingParameters struct {
 
 	// TargetDestination specifies an explicit target destination to send the query to.
 	// This will bypass the routing logic.
-	TargetDestination key.Destination
+	TargetDestination key.Destination // update `user[-]@replica`.user set ....
 
 	// Vindex specifies the vindex to be used.
 	Vindex vindexes.Vindex
 
 	// Values specifies the vindex values to use for routing.
 	Values []evalengine.Expr
+}
+
+func (code Opcode) IsSingleShard() bool {
+	switch code {
+	case Unsharded, DBA, Next, EqualUnique, Reference:
+		return true
+	}
+	return false
 }
 
 func (rp *RoutingParameters) findRoute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
@@ -133,7 +142,7 @@ func (rp *RoutingParameters) findRoute(vcursor VCursor, bindVars map[string]*que
 		return rp.byDestination(vcursor, bindVars, key.DestinationAllShards{})
 	case ByDestination:
 		return rp.byDestination(vcursor, bindVars, rp.TargetDestination)
-	case Equal, EqualUnique:
+	case Equal, EqualUnique, SubShard:
 		switch rp.Vindex.(type) {
 		case vindexes.MultiColumn:
 			return rp.equalMultiCol(vcursor, bindVars)
@@ -493,11 +502,11 @@ func buildMultiColumnVindexValues(shardsValues [][][]sqltypes.Value) [][][]*quer
 		// cols = 2
 		cols := len(shardValues[0])
 		shardIds := make([][]*querypb.Value, cols)
-		colValSeen := make([]map[string]interface{}, cols)
+		colValSeen := make([]map[string]any, cols)
 		for _, values := range shardValues {
 			for colIdx, value := range values {
 				if colValSeen[colIdx] == nil {
-					colValSeen[colIdx] = map[string]interface{}{}
+					colValSeen[colIdx] = map[string]any{}
 				}
 				if _, found := colValSeen[colIdx][value.String()]; found {
 					continue
@@ -527,7 +536,7 @@ func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) 
 	return shardVars
 }
 
-func shardVarsMultiCol(bv map[string]*querypb.BindVariable, mapVals [][][]*querypb.Value, isSingleVal map[int]interface{}) []map[string]*querypb.BindVariable {
+func shardVarsMultiCol(bv map[string]*querypb.BindVariable, mapVals [][][]*querypb.Value, isSingleVal map[int]any) []map[string]*querypb.BindVariable {
 	shardVars := make([]map[string]*querypb.BindVariable, len(mapVals))
 	for i, shardVals := range mapVals {
 		newbv := make(map[string]*querypb.BindVariable, len(bv)+len(shardVals)-len(isSingleVal))
@@ -549,11 +558,11 @@ func shardVarsMultiCol(bv map[string]*querypb.BindVariable, mapVals [][][]*query
 	return shardVars
 }
 
-func generateRowColValues(vcursor VCursor, bindVars map[string]*querypb.BindVariable, values []evalengine.Expr) ([][]sqltypes.Value, map[int]interface{}, error) {
+func generateRowColValues(vcursor VCursor, bindVars map[string]*querypb.BindVariable, values []evalengine.Expr) ([][]sqltypes.Value, map[int]any, error) {
 	// gather values from all the column in the vindex
 	var multiColValues [][]sqltypes.Value
 	var lv []sqltypes.Value
-	isSingleVal := map[int]interface{}{}
+	isSingleVal := map[int]any{}
 	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	for colIdx, rvalue := range values {
 		result, err := env.Evaluate(rvalue)

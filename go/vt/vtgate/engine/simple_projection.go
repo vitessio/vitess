@@ -109,7 +109,7 @@ func (sc *SimpleProjection) buildFields(inner *sqltypes.Result) []*querypb.Field
 }
 
 func (sc *SimpleProjection) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Columns": sc.Cols,
 	}
 	return PrimitiveDescription{

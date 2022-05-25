@@ -19,14 +19,11 @@ package sharded
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
-
-	"github.com/google/go-cmp/cmp"
 
 	"github.com/stretchr/testify/require"
 
@@ -141,8 +138,8 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
-		clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal", "-vschema_ddl_authorized_users", "%", "-schema_change_signal_user", "userData1"}
-		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-schema-change-signal", "-queryserver-config-schema-change-signal-interval", "0.1", "-queryserver-config-strict-table-acl", "-queryserver-config-acl-exempt-acl", "userData1", "-table-acl-config", "dummy.json"}
+		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--vschema_ddl_authorized_users", "%", "--schema_change_signal_user", "userData1"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1", "--queryserver-config-strict-table-acl", "--queryserver-config-acl-exempt-acl", "userData1", "--table-acl-config", "dummy.json"}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
 		if err != nil {
 			return 1
@@ -212,11 +209,16 @@ func TestInitAndUpdate(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`)
+	utils.AssertMatchesWithTimeout(t, conn,
+		"SHOW VSCHEMA TABLES",
+		`[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`,
+		100*time.Millisecond,
+		3*time.Second,
+		"initial table list not complete")
 
 	// Init
 	_ = utils.Exec(t, conn, "create table test_sc (id bigint primary key)")
-	assertMatchesWithTimeout(t, conn,
+	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
 		`[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")]]`,
 		100*time.Millisecond,
@@ -225,7 +227,7 @@ func TestInitAndUpdate(t *testing.T) {
 
 	// Tables Update via health check.
 	_ = utils.Exec(t, conn, "create table test_sc1 (id bigint primary key)")
-	assertMatchesWithTimeout(t, conn,
+	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
 		`[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")] [VARCHAR("test_sc1")]]`,
 		100*time.Millisecond,
@@ -233,7 +235,7 @@ func TestInitAndUpdate(t *testing.T) {
 		"test_sc1 not in vschema tables")
 
 	_ = utils.Exec(t, conn, "drop table test_sc, test_sc1")
-	assertMatchesWithTimeout(t, conn,
+	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
 		`[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`,
 		100*time.Millisecond,
@@ -252,7 +254,7 @@ func TestDMLOnNewTable(t *testing.T) {
 	utils.Exec(t, conn, `create table new_table_tracked(id bigint, name varchar(100), primary key(id)) Engine=InnoDB`)
 
 	// wait for vttablet's schema reload interval to pass
-	assertMatchesWithTimeout(t, conn,
+	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
 		`[[VARCHAR("dual")] [VARCHAR("new_table_tracked")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`,
 		100*time.Millisecond,
@@ -277,21 +279,4 @@ func TestDMLOnNewTable(t *testing.T) {
 	utils.Exec(t, conn, `insert into t8(id8) values(2)`)
 	defer utils.Exec(t, conn, `delete from t8`)
 	utils.AssertMatchesNoOrder(t, conn, `select id from new_table_tracked join t8`, `[[INT64(0)] [INT64(1)]]`)
-}
-
-func assertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected string, r time.Duration, d time.Duration, failureMsg string) {
-	t.Helper()
-	timeout := time.After(d)
-	diff := "actual and expectation does not match"
-	for len(diff) > 0 {
-		select {
-		case <-timeout:
-			require.Fail(t, failureMsg, diff)
-		case <-time.After(r):
-			qr := utils.Exec(t, conn, query)
-			diff = cmp.Diff(expected,
-				fmt.Sprintf("%v", qr.Rows))
-		}
-
-	}
 }

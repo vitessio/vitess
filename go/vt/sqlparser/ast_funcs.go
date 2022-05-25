@@ -25,7 +25,6 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/hack"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -59,15 +58,19 @@ type Visit func(node SQLNode) (kontinue bool, err error)
 func Append(buf *strings.Builder, node SQLNode) {
 	tbuf := &TrackedBuffer{
 		Builder: buf,
+		fast:    true,
 	}
-	node.Format(tbuf)
+	node.formatFast(tbuf)
 }
 
-// IndexColumn describes a column in an index definition with optional length
+// IndexColumn describes a column or expression in an index definition with optional length (for column)
 type IndexColumn struct {
-	Column    ColIdent
-	Length    *Literal
-	Direction OrderDirection
+	// Only one of Column or Expression can be specified
+	// Length is an optional field which is only applicable when Column is used
+	Column     ColIdent
+	Length     *Literal
+	Expression Expr
+	Direction  OrderDirection
 }
 
 // LengthScaleOption is used for types that have an optional length
@@ -86,10 +89,11 @@ type IndexOption struct {
 
 // TableOption is used for create table options like AUTO_INCREMENT, INSERT_METHOD, etc
 type TableOption struct {
-	Name   string
-	Value  *Literal
-	String string
-	Tables TableNames
+	Name          string
+	Value         *Literal
+	String        string
+	Tables        TableNames
+	CaseSensitive bool
 }
 
 // ColumnKeyOption indicates whether or not the given column is defined as an
@@ -120,6 +124,18 @@ const (
 	NoAction
 	SetNull
 	SetDefault
+)
+
+// MatchAction indicates the type of match for a referential constraint, so
+// a `MATCH FULL`, `MATCH SIMPLE` or `MATCH PARTIAL`.
+type MatchAction int
+
+const (
+	// DefaultAction indicates no action was explicitly specified.
+	DefaultMatch MatchAction = iota
+	Full
+	Partial
+	Simple
 )
 
 // ShowTablesOpt is show tables option
@@ -291,37 +307,41 @@ func (ct *ColumnType) SQLType() querypb.Type {
 // If the list is empty, one will be created containing the query hint.
 // If the list already contains a query hint, the given string will be merged with the existing one.
 // This is done because only one query hint is allowed per query.
-func (node Comments) AddQueryHint(queryHint string) (Comments, error) {
+func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 	if queryHint == "" {
-		return node, nil
+		if node == nil {
+			return nil, nil
+		}
+		return node.comments, nil
 	}
-	queryHintCommentStr := fmt.Sprintf("%s %s */", queryOptimizerPrefix, queryHint)
-	if len(node) == 0 {
-		return Comments{queryHintCommentStr}, nil
-	}
+
 	var newComments Comments
 	var hasQueryHint bool
-	for _, comment := range node {
-		if strings.HasPrefix(comment, queryOptimizerPrefix) {
-			if hasQueryHint {
-				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Must have only one query hint")
-			}
-			hasQueryHint = true
-			idx := strings.Index(comment, "*/")
-			if idx == -1 {
-				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Query hint comment is malformed")
-			}
-			if strings.Contains(comment, queryHint) {
-				newComments = append(Comments{comment}, newComments...)
+
+	if node != nil {
+		for _, comment := range node.comments {
+			if strings.HasPrefix(comment, queryOptimizerPrefix) {
+				if hasQueryHint {
+					return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Must have only one query hint")
+				}
+				hasQueryHint = true
+				idx := strings.Index(comment, "*/")
+				if idx == -1 {
+					return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Query hint comment is malformed")
+				}
+				if strings.Contains(comment, queryHint) {
+					newComments = append(Comments{comment}, newComments...)
+					continue
+				}
+				newComment := fmt.Sprintf("%s %s */", strings.TrimSpace(comment[:idx]), queryHint)
+				newComments = append(Comments{newComment}, newComments...)
 				continue
 			}
-			newComment := fmt.Sprintf("%s %s */", strings.TrimSpace(comment[:idx]), queryHint)
-			newComments = append(Comments{newComment}, newComments...)
-			continue
+			newComments = append(newComments, comment)
 		}
-		newComments = append(newComments, comment)
 	}
 	if !hasQueryHint {
+		queryHintCommentStr := fmt.Sprintf("%s %s */", queryOptimizerPrefix, queryHint)
 		newComments = append(Comments{queryHintCommentStr}, newComments...)
 	}
 	return newComments, nil
@@ -350,17 +370,6 @@ var _ ConstraintInfo = &CheckConstraintDefinition{}
 
 func (c *CheckConstraintDefinition) iConstraintInfo() {}
 
-// HasOnTable returns true if the show statement has an "on" clause
-func (node *ShowLegacy) HasOnTable() bool {
-	return node.OnTable.Name.v != ""
-}
-
-// HasTable returns true if the show statement has a parsed table name.
-// Not all show statements parse table names.
-func (node *ShowLegacy) HasTable() bool {
-	return node.Table.Name.v != ""
-}
-
 // FindColumn finds a column in the column list, returning
 // the index if it exists or -1 otherwise
 func (node Columns) FindColumn(col ColIdent) int {
@@ -379,7 +388,7 @@ func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
 	return &noHints
 }
 
-//TableName returns a TableName pointing to this table expr
+// TableName returns a TableName pointing to this table expr
 func (node *AliasedTableExpr) TableName() (TableName, error) {
 	if !node.As.IsEmpty() {
 		return TableName{Name: node.As}, nil
@@ -617,7 +626,7 @@ func NewColNameWithQualifier(identifier string, table TableName) *ColName {
 	}
 }
 
-//NewSelect is used to create a select statement
+// NewSelect is used to create a select statement
 func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, into *SelectInto, from TableExprs, where *Where, groupBy GroupBy, having *Where) *Select {
 	var cache *bool
 	var distinct, straightJoinHint, sqlFoundRows bool
@@ -640,7 +649,7 @@ func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, int
 	}
 	return &Select{
 		Cache:            cache,
-		Comments:         comments,
+		Comments:         comments.Parsed(),
 		Distinct:         distinct,
 		StraightJoinHint: straightJoinHint,
 		SQLCalcFoundRows: sqlFoundRows,
@@ -659,6 +668,10 @@ func NewColIdentWithAt(str string, at AtCount) ColIdent {
 		val: str,
 		at:  at,
 	}
+}
+
+func NewOffset(v int, original Expr) *Offset {
+	return &Offset{V: v, Original: String(original)}
 }
 
 // IsEmpty returns true if the name is empty.
@@ -729,7 +742,7 @@ func NewTableIdent(str string) TableIdent {
 	// underlying query string that has been generated by the parser. This
 	// could lead to a significant increase in memory usage when the table
 	// name comes from a large query.
-	return TableIdent{v: hack.StringClone(str)}
+	return TableIdent{v: strings.Clone(str)}
 }
 
 // IsEmpty returns true if TabIdent is empty.
@@ -786,7 +799,7 @@ func containEscapableChars(s string, at AtCount) bool {
 
 func formatID(buf *TrackedBuffer, original string, at AtCount) {
 	_, isKeyword := keywordLookupTable.LookupString(original)
-	if isKeyword || containEscapableChars(original, at) {
+	if buf.escape || isKeyword || containEscapableChars(original, at) {
 		writeEscapedString(buf, original)
 	} else {
 		buf.WriteString(original)
@@ -828,6 +841,11 @@ func (node *Select) SetOrderBy(orderBy OrderBy) {
 	node.OrderBy = orderBy
 }
 
+// GetOrderBy gets the order by clause
+func (node *Select) GetOrderBy() OrderBy {
+	return node.OrderBy
+}
+
 // SetLimit sets the limit clause
 func (node *Select) SetLimit(limit *Limit) {
 	node.Limit = limit
@@ -860,11 +878,11 @@ func (node *Select) GetColumnCount() int {
 
 // SetComments implements the SelectStatement interface
 func (node *Select) SetComments(comments Comments) {
-	node.Comments = comments
+	node.Comments = comments.Parsed()
 }
 
 // GetComments implements the SelectStatement interface
-func (node *Select) GetComments() Comments {
+func (node *Select) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
@@ -878,10 +896,8 @@ func (node *Select) AddWhere(expr Expr) {
 		}
 		return
 	}
-	node.Where.Expr = &AndExpr{
-		Left:  node.Where.Expr,
-		Right: expr,
-	}
+	exprs := SplitAndExpression(nil, node.Where.Expr)
+	node.Where.Expr = AndExpressions(append(exprs, expr)...)
 }
 
 // AddHaving adds the boolean expression to the
@@ -898,6 +914,17 @@ func (node *Select) AddHaving(expr Expr) {
 		Left:  node.Having.Expr,
 		Right: expr,
 	}
+}
+
+// AddGroupBy adds a grouping expression, unless it's already present
+func (node *Select) AddGroupBy(expr Expr) {
+	for _, gb := range node.GroupBy {
+		if EqualsExpr(gb, expr) {
+			// group by columns are sets - duplicates don't add anything, so we can just skip these
+			return
+		}
+	}
+	node.GroupBy = append(node.GroupBy, expr)
 }
 
 // AddWhere adds the boolean expression to the
@@ -924,6 +951,11 @@ func (node *Union) AddOrder(order *Order) {
 // SetOrderBy sets the order by clause
 func (node *Union) SetOrderBy(orderBy OrderBy) {
 	node.OrderBy = orderBy
+}
+
+// GetOrderBy gets the order by clause
+func (node *Union) GetOrderBy() OrderBy {
+	return node.OrderBy
 }
 
 // SetLimit sets the limit clause
@@ -962,8 +994,8 @@ func (node *Union) SetComments(comments Comments) {
 }
 
 // GetComments implements the SelectStatement interface
-func (node *Union) GetComments() Comments {
-	return node.Left.GetComments()
+func (node *Union) GetParsedComments() *ParsedComments {
+	return node.Left.GetParsedComments()
 }
 
 func requiresParen(stmt SelectStatement) bool {
@@ -1298,6 +1330,84 @@ func (ty IndexHintForType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty TrimFuncType) ToString() string {
+	switch ty {
+	case NormalTrimType:
+		return NormalTrimStr
+	case LTrimType:
+		return LTrimStr
+	case RTrimType:
+		return RTrimStr
+	default:
+		return "Unknown TrimFuncType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty TrimType) ToString() string {
+	switch ty {
+	case NoTrimType:
+		return ""
+	case BothTrimType:
+		return BothTrimStr
+	case LeadingTrimType:
+		return LeadingTrimStr
+	case TrailingTrimType:
+		return TrailingTrimStr
+	default:
+		return "Unknown TrimType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty JSONAttributeType) ToString() string {
+	switch ty {
+	case DepthAttributeType:
+		return DepthAttributeStr
+	case ValidAttributeType:
+		return ValidAttributeStr
+	case TypeAttributeType:
+		return TypeAttributeStr
+	case LengthAttributeType:
+		return LengthAttributeStr
+	default:
+		return "Unknown JSONAttributeType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty JSONValueModifierType) ToString() string {
+	switch ty {
+	case JSONArrayAppendType:
+		return JSONArrayAppendStr
+	case JSONArrayInsertType:
+		return JSONArrayInsertStr
+	case JSONInsertType:
+		return JSONInsertStr
+	case JSONReplaceType:
+		return JSONReplaceStr
+	case JSONSetType:
+		return JSONSetStr
+	default:
+		return "Unknown JSONValueModifierType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty JSONValueMergeType) ToString() string {
+	switch ty {
+	case JSONMergeType:
+		return JSONMergeStr
+	case JSONMergePatchType:
+		return JSONMergePatchStr
+	case JSONMergePreserveType:
+		return JSONMergePreserveStr
+	default:
+		return "Unknown JSONValueMergeType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty ExplainType) ToString() string {
 	switch ty {
 	case EmptyType:
@@ -1380,14 +1490,16 @@ func (sel SelectIntoType) ToString() string {
 }
 
 // ToString returns the type as a string
-func (node CollateAndCharsetType) ToString() string {
+func (node DatabaseOptionType) ToString() string {
 	switch node {
 	case CharacterSetType:
 		return CharacterSetStr
 	case CollateType:
 		return CollateStr
+	case EncryptionType:
+		return EncryptionStr
 	default:
-		return "Unknown CollateAndCharsetType Type"
+		return "Unknown DatabaseOptionType Type"
 	}
 }
 
@@ -1432,6 +1544,8 @@ func (ty ShowCommandType) ToString() string {
 		return CreateVStr
 	case Database:
 		return DatabaseStr
+	case Engines:
+		return EnginesStr
 	case FunctionC:
 		return FunctionCStr
 	case Function:
@@ -1442,6 +1556,8 @@ func (ty ShowCommandType) ToString() string {
 		return IndexStr
 	case OpenTable:
 		return OpenTableStr
+	case Plugins:
+		return PluginsStr
 	case Privilege:
 		return PrivilegeStr
 	case ProcedureC:
@@ -1466,6 +1582,20 @@ func (ty ShowCommandType) ToString() string {
 		return VGtidExecGlobalStr
 	case VitessMigrations:
 		return VitessMigrationsStr
+	case VitessReplicationStatus:
+		return VitessReplicationStatusStr
+	case VitessShards:
+		return VitessShardsStr
+	case VitessTablets:
+		return VitessTabletsStr
+	case VitessTarget:
+		return VitessTargetStr
+	case VitessVariables:
+		return VitessVariablesStr
+	case VschemaTables:
+		return VschemaTablesStr
+	case VschemaVindexes:
+		return VschemaVindexesStr
 	case Warnings:
 		return WarningsStr
 	case Keyspace:
@@ -1485,6 +1615,8 @@ func (key DropKeyType) ToString() string {
 		return ForeignKeyTypeStr
 	case NormalKeyType:
 		return NormalKeyTypeStr
+	case CheckKeyType:
+		return CheckKeyTypeStr
 	default:
 		return "Unknown DropKeyType"
 	}
@@ -1503,6 +1635,20 @@ func (lock LockOptionType) ToString() string {
 		return ExclusiveTypeStr
 	default:
 		return "Unknown type LockOptionType"
+	}
+}
+
+// ToString returns the string associated with JoinType
+func (columnFormat ColumnFormat) ToString() string {
+	switch columnFormat {
+	case FixedFormat:
+		return keywordStrings[FIXED]
+	case DynamicFormat:
+		return keywordStrings[DYNAMIC]
+	case DefaultFormat:
+		return keywordStrings[DEFAULT]
+	default:
+		return "Unknown column format type"
 	}
 }
 
@@ -1644,7 +1790,7 @@ func (es *ExtractedSubquery) GetHasValuesArg() string {
 func (es *ExtractedSubquery) updateAlternative() {
 	switch original := es.Original.(type) {
 	case *ExistsExpr:
-		es.alternative = NewArgument(es.argName)
+		es.alternative = NewArgument(es.hasValuesArg)
 	case *Subquery:
 		es.alternative = NewArgument(es.argName)
 	case *ComparisonExpr:
@@ -1669,6 +1815,29 @@ func (es *ExtractedSubquery) updateAlternative() {
 		}
 		es.alternative = expr
 	}
+}
+
+// ColumnName returns the alias if one was provided, otherwise prints the AST
+func (ae *AliasedExpr) ColumnName() string {
+	if !ae.As.IsEmpty() {
+		return ae.As.String()
+	}
+
+	if col, ok := ae.Expr.(*ColName); ok {
+		return col.Name.String()
+	}
+
+	return String(ae.Expr)
+}
+
+// AllAggregation returns true if all the expressions contain aggregation
+func (s SelectExprs) AllAggregation() bool {
+	for _, k := range s {
+		if !ContainsAggregation(k) {
+			return false
+		}
+	}
+	return true
 }
 
 func isExprLiteral(expr Expr) bool {

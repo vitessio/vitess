@@ -4,6 +4,9 @@ package vreplication
 // We violate the NO_ZERO_DATES and NO_ZERO_IN_DATE sql_modes that are enabled by default in
 // MySQL 5.7+ and MariaDB 10.2+ to ensure that vreplication still works everywhere and the
 // permissive sql_mode now used in vreplication causes no unwanted side effects.
+// The customer table also tests two important things:
+//   1. Composite or multi-column primary keys
+//   2. PKs that contain an ENUM column
 // The Lead and Lead-1 tables also allows us to test several things:
 //   1. Mixed case identifiers
 //   2. Column and table names with special characters in them, namely a dash
@@ -15,7 +18,7 @@ var (
 create table product(pid int, description varbinary(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid)) CHARSET=utf8mb4;
 create table customer(cid int, name varchar(128) collate utf8mb4_bin, meta json default null, typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'),
 	ts timestamp not null default current_timestamp, bits bit(2) default b'11', date1 datetime not null default '0000-00-00 00:00:00', 
-	date2 datetime not null default '2021-00-01 00:00:00', primary key(cid)) CHARSET=utf8mb4;
+	date2 datetime not null default '2021-00-01 00:00:00', primary key(cid,typ)) CHARSET=utf8mb4;
 create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
 create table merchant(mname varchar(128), category varchar(128), primary key(mname)) CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 create table orders(oid int, cid int, pid int, mname varchar(128), price int, qty int, total int as (qty * price), total2 int as (qty * price) stored, primary key(oid)) CHARSET=utf8;
@@ -26,6 +29,7 @@ create table ` + "`Lead`(`Lead-id`" + ` binary(16), name varbinary(16), date1 da
 create table ` + "`Lead-1`(`Lead`" + ` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (` + "`Lead`" + `));
 create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, val varbinary(128), primary key(id));
 create table db_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, dstuff varchar(128), dtstuff text, dbstuff blob, cstuff char(32), primary key (c_uuid,created_at)) CHARSET=utf8mb4;
+create table datze (id int, dt1 datetime not null default current_timestamp, dt2 datetime not null, ts1 timestamp default current_timestamp, primary key (id));
 `
 
 	// These should always be ignored in vreplication
@@ -57,7 +61,8 @@ create table db_order_test (c_uuid varchar(64) not null default '', created_at d
 	},
 	"Lead": {},
 	"Lead-1": {},
-	"db_order_test": {}
+	"db_order_test": {},
+	"datze": {}
   }
 }
 `
@@ -122,6 +127,14 @@ create table db_order_test (c_uuid varchar(64) not null default '', created_at d
         {
           "columns": ["c_uuid", "created_at"],
           "name": "xxhash"
+        }
+      ]
+    },
+    "datze": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
         }
       ]
     }

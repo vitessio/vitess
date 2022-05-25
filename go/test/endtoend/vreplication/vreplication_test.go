@@ -27,21 +27,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buger/jsonparser"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/utils"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/buger/jsonparser"
+	"github.com/tidwall/gjson"
+
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/log"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/wrangler"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 var (
@@ -105,6 +105,43 @@ func throttlerCheckSelf(tablet *cluster.VttabletProcess, app string) (resp *http
 	return resp, respBody, err
 }
 
+func TestVreplicationCopyThrottling(t *testing.T) {
+	workflow := "copy-throttling"
+	cell := "zone1"
+	table := "customer"
+	shard := "0"
+	vc = NewVitessCluster(t, "TestVreplicationCopyThrottling", []string{cell}, mainClusterConfig)
+	defer vc.TearDown(t)
+	defaultCell = vc.Cells[cell]
+	// To test vstreamer source throttling for the MoveTables operation
+	maxSourceTrxHistory := 5
+	extraVTTabletArgs = []string{
+		fmt.Sprintf("--vreplication_copy_phase_max_innodb_history_list_length=%d", maxSourceTrxHistory),
+	}
+
+	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, shard, "", "", 0, 0, 200, nil); err != nil {
+		t.Fatal(err)
+	}
+	vtgate = defaultCell.Vtgates[0]
+	require.NotNil(t, vtgate)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, shard), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, shard), 1)
+
+	// Confirm that the initial copy table phase does not proceed until the source tablet(s)
+	// have an InnoDB History List length that is less than specified in the tablet's config.
+	// We update rows in a table not part of the MoveTables operation so that we're not blocking
+	// on the LOCK TABLE call but rather the InnoDB History List length.
+	trxConn := generateInnoDBRowHistory(t, sourceKs, maxSourceTrxHistory)
+	// We need to force primary tablet types as the history list has been increased on the source primary
+	moveTablesWithTabletTypes(t, defaultCell.Name, workflow, sourceKs, targetKs, table, "primary")
+	verifySourceTabletThrottling(t, targetKs, workflow)
+	releaseInnoDBRowHistory(t, trxConn)
+	trxConn.Close()
+}
+
 func TestBasicVreplicationWorkflow(t *testing.T) {
 	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
 	targetKsOpts["DBTypeVersion"] = "mysql-5.7"
@@ -118,7 +155,9 @@ func testBasicVreplicationWorkflow(t *testing.T) {
 	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", allCells, mainClusterConfig)
 
 	require.NotNil(t, vc)
-	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
+	// Keep the cluster processes minimal to deal with CI resource constraints
+	defaultReplicas = 0
+	defaultRdonly = 0
 	defer func() { defaultReplicas = 1 }()
 
 	defer vc.TearDown(t)
@@ -215,7 +254,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	vc.AddKeyspace(t, []*Cell{cell1, cell2}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
 
 	// Add cell alias containing only zone2
-	result, err := vc.VtctlClient.ExecuteCommandWithOutput("AddCellsAlias", "-cells", "zone2", "alias")
+	result, err := vc.VtctlClient.ExecuteCommandWithOutput("AddCellsAlias", "--", "--cells", "zone2", "alias")
 	require.NoError(t, err, "command failed with output: %v", result)
 
 	vtgate = cell1.Vtgates[0]
@@ -226,6 +265,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
+
 	insertInitialData(t)
 	t.Run("VStreamFrom", func(t *testing.T) {
 		testVStreamFrom(t, "product", 2)
@@ -503,6 +543,40 @@ func validateRollupReplicates(t *testing.T) {
 	})
 }
 
+func verifySourceTabletThrottling(t *testing.T, targetKS, workflow string) {
+	tDuration := time.Duration(15 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
+	timer := time.NewTimer(tDuration)
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKS, workflow)
+	for {
+		select {
+		case <-ticker.C:
+			output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
+			require.NoError(t, err)
+			result := gjson.Get(output, "ShardStatuses")
+			result.ForEach(func(tabletId, tabletStreams gjson.Result) bool { // for each source tablet
+				tabletStreams.ForEach(func(streamId, streamInfos gjson.Result) bool { // for each stream
+					if streamId.String() == "PrimaryReplicationStatuses" {
+						streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
+							state := attributeValue.Get("State").String()
+							if state != "Copying" {
+								require.FailNowf(t, "Unexpected running workflow stream",
+									"Initial copy phase for the MoveTables workflow %s started in less than %d seconds when it should have been waiting. Show output: %s",
+									ksWorkflow, int(tDuration.Seconds()), output)
+							}
+							return true // end attribute loop
+						})
+					}
+					return true // end stream loop
+				})
+				return true // end tablet loop
+			})
+		case <-timer.C:
+			return
+		}
+	}
+}
+
 func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias string) {
 	t.Run("reshardCustomer2to4Split", func(t *testing.T) {
 		ksName := "customer"
@@ -607,7 +681,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 				t.Fatal(err)
 			}
 		}
-		if err := vc.VtctlClient.ExecuteCommand("Reshard", "-v1", "-cells="+sourceCellOrAlias, "-tablet_types=replica,primary", ksWorkflow, sourceShards, targetShards); err != nil {
+		if err := vc.VtctlClient.ExecuteCommand("Reshard", "--", "--v1", "--cells="+sourceCellOrAlias, "--tablet_types=replica,primary", ksWorkflow, sourceShards, targetShards); err != nil {
 			t.Fatalf("Reshard command failed with %+v\n", err)
 		}
 		tablets := vc.getVttabletsInKeyspace(t, defaultCell, ksName, "primary")
@@ -709,7 +783,7 @@ func shardMerchant(t *testing.T) {
 
 func vdiff(t *testing.T, workflow, cells string) {
 	t.Run("vdiff", func(t *testing.T) {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "-tablet_types=primary", "-source_cell="+cells, "-format", "json", workflow)
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--tablet_types=primary", "--source_cell="+cells, "--format", "json", workflow)
 		log.Infof("vdiff err: %+v, output: %+v", err, output)
 		require.Nil(t, err)
 		require.NotNil(t, output)
@@ -986,18 +1060,24 @@ func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info str
 }
 
 func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string) {
-	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-v1", "-cells="+cell, "-workflow="+workflow,
-		"-tablet_types="+"primary,replica,rdonly", sourceKs, targetKs, tables); err != nil {
+	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--v1", "--cells="+cell, "--workflow="+workflow,
+		"--tablet_types="+"primary,replica,rdonly", sourceKs, targetKs, tables); err != nil {
+		t.Fatalf("MoveTables command failed with %+v\n", err)
+	}
+}
+func moveTablesWithTabletTypes(t *testing.T, cell, workflow, sourceKs, targetKs, tables string, tabletTypes string) {
+	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--v1", "--cells="+cell, "--workflow="+workflow,
+		"--tablet_types="+tabletTypes, sourceKs, targetKs, tables); err != nil {
 		t.Fatalf("MoveTables command failed with %+v\n", err)
 	}
 }
 func applyVSchema(t *testing.T, vschema, keyspace string) {
-	err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "-vschema", vschema, keyspace)
+	err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "--", "--vschema", vschema, keyspace)
 	require.NoError(t, err)
 }
 
 func switchReadsDryRun(t *testing.T, cells, ksWorkflow string, dryRunResults []string) {
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+cells, "-tablet_type=replica", "-dry_run", ksWorkflow)
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells, "--tablet_type=replica", "--dry_run", ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("SwitchReads DryRun Error: %s: %s", err, output))
 	validateDryRunResults(t, output, dryRunResults)
 }
@@ -1005,14 +1085,14 @@ func switchReadsDryRun(t *testing.T, cells, ksWorkflow string, dryRunResults []s
 func switchReads(t *testing.T, cells, ksWorkflow string) {
 	var output string
 	var err error
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+cells, "-tablet_type=rdonly", ksWorkflow)
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells, "--tablet_type=rdonly", ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("SwitchReads Error: %s: %s", err, output))
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+cells, "-tablet_type=replica", ksWorkflow)
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells, "--tablet_type=replica", ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("SwitchReads Error: %s: %s", err, output))
 }
 
 func switchWritesDryRun(t *testing.T, ksWorkflow string, dryRunResults []string) {
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "-dry_run", ksWorkflow)
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "--", "--dry_run", ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("SwitchWrites DryRun Error: %s: %s", err, output))
 	validateDryRunResults(t, output, dryRunResults)
 }
@@ -1049,8 +1129,8 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 
 func switchWrites(t *testing.T, ksWorkflow string, reverse bool) {
 	const SwitchWritesTimeout = "91s" // max: 3 tablet picker 30s waits + 1
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites",
-		"-filtered_replication_wait_time="+SwitchWritesTimeout, fmt.Sprintf("-reverse=%t", reverse), ksWorkflow)
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "--",
+		"--filtered_replication_wait_time="+SwitchWritesTimeout, fmt.Sprintf("--reverse=%t", reverse), ksWorkflow)
 	if output != "" {
 		fmt.Printf("Output of SwitchWrites for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
 	}
@@ -1060,9 +1140,9 @@ func switchWrites(t *testing.T, ksWorkflow string, reverse bool) {
 }
 
 func dropSourcesDryRun(t *testing.T, ksWorkflow string, renameTables bool, dryRunResults []string) {
-	args := []string{"DropSources", "-dry_run"}
+	args := []string{"DropSources", "--", "--dry_run"}
 	if renameTables {
-		args = append(args, "-rename_tables")
+		args = append(args, "--rename_tables")
 	}
 	args = append(args, ksWorkflow)
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput(args...)
@@ -1073,4 +1153,38 @@ func dropSourcesDryRun(t *testing.T, ksWorkflow string, renameTables bool, dryRu
 func dropSources(t *testing.T, ksWorkflow string) {
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput("DropSources", ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("DropSources Error: %s: %s", err, output))
+}
+
+// generateInnoDBRowHistory generates at least maxSourceTrxHistory rollback segment entries.
+// This allows us to confirm two behaviors:
+//  1. MoveTables blocks on starting its first copy phase until we rollback
+//  2. All other workflows continue to work w/o issue with this MVCC history in place (not used yet)
+// Returns a db connection used for the transaction which you can use for follow-up
+// work, such as rolling it back directly or using the releaseInnoDBRowHistory call.
+func generateInnoDBRowHistory(t *testing.T, sourceKS string, neededTrxHistory int) *mysql.Conn {
+	dbConn1 := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	dbConn2 := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	execQuery(t, dbConn1, "use "+sourceKS)
+	execQuery(t, dbConn2, "use "+sourceKS)
+	offset := 1000
+	insertStmt := strings.Builder{}
+	for i := offset; i <= (neededTrxHistory*10)+offset; i++ {
+		if i == offset {
+			insertStmt.WriteString(fmt.Sprintf("insert into product (pid, description) values (%d, 'test')", i))
+		} else {
+			insertStmt.WriteString(fmt.Sprintf(", (%d, 'test')", i))
+		}
+	}
+	execQuery(t, dbConn2, "start transaction")
+	execQuery(t, dbConn2, "select count(*) from product")
+	execQuery(t, dbConn1, insertStmt.String())
+	execQuery(t, dbConn2, "rollback")
+	execQuery(t, dbConn2, "start transaction")
+	execQuery(t, dbConn2, "select count(*) from product")
+	execQuery(t, dbConn1, fmt.Sprintf("delete from product where pid >= %d and pid < %d", offset, offset+10000))
+	return dbConn2
+}
+
+func releaseInnoDBRowHistory(t *testing.T, dbConn *mysql.Conn) {
+	execQuery(t, dbConn, "rollback")
 }

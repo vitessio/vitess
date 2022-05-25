@@ -18,15 +18,19 @@
 
 # goversion_min returns true if major.minor go version is at least some value.
 function goversion_min() {
-  [[ "$(go version)" =~ go([0-9]+)\.([0-9]+) ]]
+  [[ "$(go version)" =~ go([0-9]+)\.([0-9]+)\.([0-9]+) ]]
   gotmajor=${BASH_REMATCH[1]}
   gotminor=${BASH_REMATCH[2]}
-  [[ "$1" =~ ([0-9]+)\.([0-9]+) ]]
+  gotpatch=${BASH_REMATCH[3]}
+  [[ "$1" =~ ([0-9]+)\.([0-9]+)\.([0-9]+) ]]
   wantmajor=${BASH_REMATCH[1]}
   wantminor=${BASH_REMATCH[2]}
-  [ "$gotmajor" -lt "$wantmajor" ] && return 1
-  [ "$gotmajor" -gt "$wantmajor" ] && return 0
-  [ "$gotminor" -lt "$wantminor" ] && return 1
+  wantpatch=${BASH_REMATCH[3]}
+  [[ $gotmajor -lt $wantmajor ]] && return 1
+  [[ $gotmajor -gt $wantmajor ]] && return 0
+  [[ $gotminor -lt $wantminor ]] && return 1
+  [[ $gotminor -gt $wantminor ]] && return 0
+  [[ $gotpatch -lt $wantpatch ]] && return 1
   return 0
 }
 

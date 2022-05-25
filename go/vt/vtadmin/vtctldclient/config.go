@@ -20,22 +20,43 @@ import (
 	"fmt"
 
 	"github.com/spf13/pflag"
+	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/credentials"
+	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
 // Config represents the options that modify the behavior of a Proxy.
 type Config struct {
-	Discovery   discovery.Discovery
-	Credentials *grpcclient.StaticAuthClientCreds
-
+	Credentials     *grpcclient.StaticAuthClientCreds
 	CredentialsPath string
 
 	Cluster *vtadminpb.Cluster
+
+	ResolverOptions *resolver.Options
+
+	dialFunc func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)
+}
+
+// ConfigOption is a function that mutates a Config. It should return the same
+// Config structure, in a builder-pattern style.
+type ConfigOption func(cfg *Config) *Config
+
+// WithDialFunc returns a ConfigOption that applies the given dial function to
+// a Config.
+//
+// It is used to support dependency injection in tests, and needs to be exported
+// for higher-level tests (via vtadmin/testutil).
+func WithDialFunc(f func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)) ConfigOption {
+	return func(cfg *Config) *Config {
+		cfg.dialFunc = f
+		return cfg
+	}
 }
 
 // Parse returns a new config with the given cluster and discovery, after
@@ -43,8 +64,10 @@ type Config struct {
 // (*Config).Parse() for more details.
 func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string) (*Config, error) {
 	cfg := &Config{
-		Cluster:   cluster,
-		Discovery: disco,
+		Cluster: cluster,
+		ResolverOptions: &resolver.Options{
+			Discovery: disco,
+		},
 	}
 
 	err := cfg.Parse(args)
@@ -60,6 +83,12 @@ func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string)
 // (*cluster.Cluster).New().
 func (c *Config) Parse(args []string) error {
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
+
+	if c.ResolverOptions == nil {
+		c.ResolverOptions = &resolver.Options{}
+	}
+
+	c.ResolverOptions.InstallFlags(fs)
 
 	credentialsTmplStr := fs.String("credentials-path-tmpl", "",
 		"Go template used to specify a path to a credentials file, which is a json file containing "+

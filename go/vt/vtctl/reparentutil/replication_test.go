@@ -271,8 +271,6 @@ func (fake *stopReplicationAndBuildStatusMapsTestTMClient) StopReplicationAndGet
 }
 
 func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
-	t.Parallel()
-
 	ctx := context.Background()
 	logger := logutil.NewMemoryLogger()
 	tests := []struct {
@@ -298,14 +296,14 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{Position: "100-before"},
-							After:  &replicationdatapb.Status{Position: "100-after"},
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"},
 						},
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{Position: "101-before"},
-							After:  &replicationdatapb.Status{Position: "101-after"},
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
 						},
 					},
 				},
@@ -333,12 +331,12 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			ignoredTablets: sets.NewString(),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000100": {
-					Before: &replicationdatapb.Status{Position: "100-before"},
-					After:  &replicationdatapb.Status{Position: "100-after"},
+					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+					After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"},
 				},
 				"zone1-0000000101": {
-					Before: &replicationdatapb.Status{Position: "101-before"},
-					After:  &replicationdatapb.Status{Position: "101-after"},
+					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+					After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
 				},
 			},
 			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
@@ -367,14 +365,14 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{Position: "100-before"},
-							After:  &replicationdatapb.Status{Position: "100-after"},
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"},
 						},
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{Position: "101-before"},
-							After:  &replicationdatapb.Status{Position: "101-after"},
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
 						},
 					},
 					"zone1-0000000102": {
@@ -426,12 +424,12 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			ignoredTablets: sets.NewString(),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000100": {
-					Before: &replicationdatapb.Status{Position: "100-before"},
-					After:  &replicationdatapb.Status{Position: "100-after"},
+					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+					After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"},
 				},
 				"zone1-0000000101": {
-					Before: &replicationdatapb.Status{Position: "101-before"},
-					After:  &replicationdatapb.Status{Position: "101-after"},
+					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+					After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
 				},
 			},
 			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
@@ -460,14 +458,14 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{Position: "100-before"},
-							After:  &replicationdatapb.Status{Position: "100-after"},
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"},
 						},
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{Position: "101-before"},
-							After:  &replicationdatapb.Status{Position: "101-after"},
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
 						},
 					},
 					"zone1-0000000102": {
@@ -519,12 +517,12 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			ignoredTablets: sets.NewString(),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000100": {
-					Before: &replicationdatapb.Status{Position: "100-before"},
-					After:  &replicationdatapb.Status{Position: "100-after"},
+					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+					After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"},
 				},
 				"zone1-0000000101": {
-					Before: &replicationdatapb.Status{Position: "101-before"},
-					After:  &replicationdatapb.Status{Position: "101-after"},
+					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+					After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
 				},
 			},
 			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
@@ -553,14 +551,14 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{Position: "100-before"},
-							After:  &replicationdatapb.Status{Position: "100-after"},
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"},
 						},
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{Position: "101-before"},
-							After:  &replicationdatapb.Status{Position: "101-after"},
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
 						},
 					},
 				},
@@ -588,8 +586,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			ignoredTablets: sets.NewString("zone1-0000000100"),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": {
-					Before: &replicationdatapb.Status{Position: "101-before"},
-					After:  &replicationdatapb.Status{Position: "101-after"},
+					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+					After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
 				},
 			},
 			expectedTabletsReachable: []*topodatapb.Tablet{{
@@ -627,8 +625,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{Position: "101-before"},
-							After:  &replicationdatapb.Status{Position: "101-after"},
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
 						},
 					},
 				},
@@ -656,8 +654,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			ignoredTablets: sets.NewString(),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": {
-					Before: &replicationdatapb.Status{Position: "101-before"},
-					After:  &replicationdatapb.Status{Position: "101-after"},
+					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+					After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
 				},
 			},
 			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
@@ -701,8 +699,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{Position: "101-before"},
-							After:  &replicationdatapb.Status{Position: "101-after"},
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
 						},
 					},
 				},
@@ -730,8 +728,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			ignoredTablets: sets.NewString(),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": {
-					Before: &replicationdatapb.Status{Position: "101-before"},
-					After:  &replicationdatapb.Status{Position: "101-after"},
+					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+					After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
 				},
 			},
 			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{}, // zone1-0000000100 fails to demote, so does not appear
@@ -810,14 +808,14 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{Position: "100-before"},
-							After:  &replicationdatapb.Status{Position: "100-after"},
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"},
 						},
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{Position: "101-before"},
-							After:  &replicationdatapb.Status{Position: "101-after"},
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
 						},
 					},
 				},
@@ -846,8 +844,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			ignoredTablets:      sets.NewString(),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": {
-					Before: &replicationdatapb.Status{Position: "101-before"},
-					After:  &replicationdatapb.Status{Position: "101-after"},
+					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+					After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
 				},
 			},
 			expectedTabletsReachable: []*topodatapb.Tablet{{
@@ -873,8 +871,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{Position: "101-before"},
-							After:  &replicationdatapb.Status{Position: "101-after"},
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
 						},
 					},
 				},
@@ -902,8 +900,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			ignoredTablets: sets.NewString(),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": {
-					Before: &replicationdatapb.Status{Position: "101-before"},
-					After:  &replicationdatapb.Status{Position: "101-after"},
+					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+					After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
 				},
 			},
 			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
@@ -957,6 +955,50 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			expectedPrimaryStatusMap: nil,
 			expectedTabletsReachable: nil,
 			shouldErr:                true,
+		}, {
+			name:       "1 tablets fail StopReplication and 1 has replication stopped",
+			durability: "none",
+			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
+				stopReplicationAndGetStatusResults: map[string]*struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Err        error
+				}{
+					"zone1-0000000100": {
+						Err: assert.AnError,
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5"},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			ignoredTablets:           sets.NewString(),
+			expectedStatusMap:        nil,
+			expectedPrimaryStatusMap: nil,
+			expectedTabletsReachable: nil,
+			shouldErr:                true,
 		},
 		{
 			name:       "slow tablet is the new primary requested",
@@ -971,20 +1013,20 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{Position: "100-before"},
-							After:  &replicationdatapb.Status{Position: "100-after"},
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"},
 						},
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{Position: "101-before"},
-							After:  &replicationdatapb.Status{Position: "101-after"},
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
 						},
 					},
 					"zone1-0000000102": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{Position: "102-before"},
-							After:  &replicationdatapb.Status{Position: "102-after"},
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429102:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429102:1-9"},
 						},
 					},
 				},
@@ -1025,16 +1067,16 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			ignoredTablets: sets.NewString(),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000100": {
-					Before: &replicationdatapb.Status{Position: "100-before"},
-					After:  &replicationdatapb.Status{Position: "100-after"},
+					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+					After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"},
 				},
 				"zone1-0000000101": {
-					Before: &replicationdatapb.Status{Position: "101-before"},
-					After:  &replicationdatapb.Status{Position: "101-after"},
+					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+					After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
 				},
 				"zone1-0000000102": {
-					Before: &replicationdatapb.Status{Position: "102-before"},
-					After:  &replicationdatapb.Status{Position: "102-after"},
+					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429102:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
+					After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429102:1-9"},
 				},
 			},
 			expectedTabletsReachable: []*topodatapb.Tablet{{
@@ -1098,8 +1140,8 @@ func TestReplicaWasRunning(t *testing.T) {
 			name: "io thread running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
-					IoThreadRunning:  true,
-					SqlThreadRunning: false,
+					IoState:  int32(mysql.ReplicationStateRunning),
+					SqlState: int32(mysql.ReplicationStateStopped),
 				},
 			},
 			expected:  true,
@@ -1109,8 +1151,8 @@ func TestReplicaWasRunning(t *testing.T) {
 			name: "sql thread running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
-					IoThreadRunning:  false,
-					SqlThreadRunning: true,
+					IoState:  int32(mysql.ReplicationStateStopped),
+					SqlState: int32(mysql.ReplicationStateRunning),
 				},
 			},
 			expected:  true,
@@ -1120,8 +1162,8 @@ func TestReplicaWasRunning(t *testing.T) {
 			name: "io and sql threads running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
-					IoThreadRunning:  true,
-					SqlThreadRunning: true,
+					IoState:  int32(mysql.ReplicationStateRunning),
+					SqlState: int32(mysql.ReplicationStateRunning),
 				},
 			},
 			expected:  true,
@@ -1131,8 +1173,8 @@ func TestReplicaWasRunning(t *testing.T) {
 			name: "no replication threads running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
-					IoThreadRunning:  false,
-					SqlThreadRunning: false,
+					IoState:  int32(mysql.ReplicationStateStopped),
+					SqlState: int32(mysql.ReplicationStateStopped),
 				},
 			},
 			expected:  false,
@@ -1161,6 +1203,94 @@ func TestReplicaWasRunning(t *testing.T) {
 			t.Parallel()
 
 			actual, err := ReplicaWasRunning(tt.in)
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func TestSQLThreadWasRunning(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		in        *replicationdatapb.StopReplicationStatus
+		expected  bool
+		shouldErr bool
+	}{
+		{
+			name: "io thread running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(mysql.ReplicationStateRunning),
+					SqlState: int32(mysql.ReplicationStateStopped),
+				},
+			},
+			expected:  false,
+			shouldErr: false,
+		},
+		{
+			name: "sql thread running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(mysql.ReplicationStateStopped),
+					SqlState: int32(mysql.ReplicationStateRunning),
+				},
+			},
+			expected:  true,
+			shouldErr: false,
+		},
+		{
+			name: "io and sql threads running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(mysql.ReplicationStateRunning),
+					SqlState: int32(mysql.ReplicationStateRunning),
+				},
+			},
+			expected:  true,
+			shouldErr: false,
+		},
+		{
+			name: "no replication threads running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(mysql.ReplicationStateStopped),
+					SqlState: int32(mysql.ReplicationStateStopped),
+				},
+			},
+			expected:  false,
+			shouldErr: false,
+		},
+		{
+			name:      "passing nil pointer results in an error",
+			in:        nil,
+			expected:  false,
+			shouldErr: true,
+		},
+		{
+			name: "status.Before is nil results in an error",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: nil,
+			},
+			expected:  false,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			actual, err := SQLThreadWasRunning(tt.in)
 			if tt.shouldErr {
 				assert.Error(t, err)
 

@@ -278,15 +278,44 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 			},
 		},
 		{
-			name: "cannot lock shard",
+			name: "already locked shard",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc:  nil,
+			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "position1",
+						Error:    nil,
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				SetReadWriteResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+			},
 			tablets: []*topodatapb.Tablet{
 				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
 					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 				},
@@ -295,10 +324,33 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 
 			keyspace: "testkeyspace",
 			shard:    "-",
-			opts:     PlannedReparentOptions{},
+			opts: PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
 
-			expectedEvent: nil,
-			shouldErr:     true,
+			shouldErr: false,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
 		},
 		{
 			// The simplest setup required to make an overall ReparentShard call

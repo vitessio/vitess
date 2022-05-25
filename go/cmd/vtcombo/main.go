@@ -132,7 +132,6 @@ func main() {
 		tpb.Cells = append(tpb.Cells, "test")
 	}
 
-	// set discoverygateway flag to default value
 	flag.Set("cells_to_watch", strings.Join(tpb.Cells, ","))
 
 	// vtctld UI requires the cell flag
@@ -246,7 +245,8 @@ func main() {
 	vtgate.QueryLogHandler = "/debug/vtgate/querylog"
 	vtgate.QueryLogzHandler = "/debug/vtgate/querylogz"
 	vtgate.QueryzHandler = "/debug/vtgate/queryz"
-	vtg := vtgate.Init(context.Background(), resilientServer, tpb.Cells[0], tabletTypesToWait)
+	// pass nil for healthcheck, it will get created
+	vtg := vtgate.Init(context.Background(), nil, resilientServer, tpb.Cells[0], tabletTypesToWait)
 
 	// vtctld configuration and init
 	err = vtctld.InitVtctld(ts)

@@ -560,7 +560,7 @@ func TestPlayerCopyBigTable(t *testing.T) {
 	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time shoulw be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multiple times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
@@ -676,7 +676,7 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time shoulw be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multipel times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
@@ -1287,7 +1287,7 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 
 func TestPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 	flavor := strings.ToLower(env.Flavor)
-	// Disable tests on percona (which identifies as mysql56) and mariadb platforms in CI since they
+	// Disable tests on percona and mariadb platforms in CI since
 	// generated columns support was added in 5.7 and mariadb added mysql compatible generated columns in 10.2
 	if !strings.Contains(flavor, "mysql57") && !strings.Contains(flavor, "mysql80") {
 		return

@@ -14,17 +14,19 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"strings"
 
-	"golang.org/x/net/context"
-
 	"vitess.io/vitess/go/vt/vtgr"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 func main() {
 	clustersToWatch := flag.String("clusters_to_watch", "", "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
-	flag.Parse()
+	_flag.Parse()
 
 	// openTabletDiscovery will open up a connection to topo server
 	// and populate the tablets in memory

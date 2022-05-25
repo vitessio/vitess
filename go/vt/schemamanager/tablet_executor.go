@@ -217,6 +217,17 @@ func (exec *TabletExecutor) isOnlineSchemaDDL(stmt sqlparser.Statement) (isOnlin
 //   1. Alter more than 100,000 rows.
 //   2. Change a table with more than 2,000,000 rows (Drops are fine).
 func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDDLs []sqlparser.DDLStatement) (bool, error) {
+	// We want to avoid any overhead if possible. If all DDLs are online schema changes, then we want to
+	// skip GetSchema altogether.
+	foundAnyNonOnlineDDL := false
+	for _, ddl := range parsedDDLs {
+		if !exec.isOnlineSchemaDDL(ddl) {
+			foundAnyNonOnlineDDL = true
+		}
+	}
+	if !foundAnyNonOnlineDDL {
+		return false, nil
+	}
 	// exec.tablets is guaranteed to have at least one element;
 	// Otherwise, Open should fail and executor should fail.
 	primaryTabletInfo := exec.tablets[0]
@@ -430,7 +441,18 @@ func (exec *TabletExecutor) executeOneTablet(
 		result, err = exec.tmc.ExecuteQuery(ctx, tablet, []byte(sql), 10)
 	} else {
 		if exec.ddlStrategySetting != nil && exec.ddlStrategySetting.IsAllowZeroInDateFlag() {
-			sql = fmt.Sprintf("set @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', ''); %s", sql)
+			// --allow-zero-in-date Applies to DDLs
+			stmt, err := sqlparser.Parse(string(sql))
+			if err != nil {
+				errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}
+				return
+			}
+			if ddlStmt, ok := stmt.(sqlparser.DDLStatement); ok {
+				// Add comments directive to allow zero in date
+				const directive = `/*vt+ allowZeroInDate=true */`
+				ddlStmt.SetComments(ddlStmt.GetParsedComments().Prepend(directive))
+				sql = sqlparser.String(ddlStmt)
+			}
 		}
 		result, err = exec.tmc.ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 10, false, true)
 	}

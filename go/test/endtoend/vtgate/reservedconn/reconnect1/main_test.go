@@ -86,7 +86,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-lock_heartbeat_time", "2s", "-enable_system_settings=true"}
+		clusterInstance.VtGateExtraArgs = []string{"--lock_heartbeat_time", "2s", "--enable_system_settings=true"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
 		}

@@ -26,16 +26,15 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/schemadiff"
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/onlineddl"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/onlineddl"
+	"vitess.io/vitess/go/vt/schemadiff"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 var (
@@ -82,17 +81,18 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
-			"-schema_change_dir", schemaChangeDirectory,
-			"-schema_change_controller", "local",
-			"-schema_change_check_interval", "1",
+			"--schema_change_dir", schemaChangeDirectory,
+			"--schema_change_controller", "local",
+			"--schema_change_check_interval", "1",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-enable-lag-throttler",
-			"-throttle_threshold", "1s",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
-			"-migration_check_interval", "5s",
+			"--enable-lag-throttler",
+			"--throttle_threshold", "1s",
+			"--heartbeat_enable",
+			"--heartbeat_interval", "250ms",
+			"--heartbeat_on_demand_duration", "5s",
+			"--migration_check_interval", "5s",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
@@ -110,8 +110,6 @@ func TestMain(m *testing.M) {
 		}
 
 		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// set the gateway we want to use
-		vtgateInstance.GatewayImplementation = "tabletgateway"
 		// Start vtgate
 		if err := vtgateInstance.Setup(); err != nil {
 			return 1, err
@@ -347,7 +345,7 @@ func validateDiff(t *testing.T, fromCreateTable string, toCreateTable string, hi
 	// The diff can be empty or there can be an actual ALTER TABLE statement
 	diffedAlterQuery := ""
 	if diff != nil && !diff.IsEmpty() {
-		diffedAlterQuery = sqlparser.String(diff.Statement())
+		diffedAlterQuery = diff.CanonicalStatementString()
 	}
 
 	// Validate the diff! The way we do it is:

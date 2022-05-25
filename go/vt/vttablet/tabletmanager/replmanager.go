@@ -65,6 +65,8 @@ func newReplManager(ctx context.Context, tm *TabletManager, interval time.Durati
 	}
 }
 
+// SetTabletType starts/stops the replication manager ticks based on the tablet type provided.
+// It stops the ticks if the tablet type is not a replica type, starts the ticks otherwise.
 func (rm *replManager) SetTabletType(tabletType topodatapb.TabletType) {
 	if *mysqlctl.DisableActiveReparents {
 		return
@@ -109,7 +111,7 @@ func (rm *replManager) checkActionLocked() {
 	} else {
 		// If only one of the threads is stopped, it's probably
 		// intentional. So, we don't repair replication.
-		if status.SQLThreadRunning || status.IOThreadRunning {
+		if status.SQLHealthy() || status.IOHealthy() {
 			return
 		}
 	}

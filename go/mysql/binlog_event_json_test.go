@@ -164,7 +164,7 @@ func TestJSONTypes(t *testing.T) {
 				return
 			}
 			if tc.isMap { // map keys sorting order is not guaranteed, so we convert back to golang maps and compare
-				var gotJSON, wantJSON map[string]interface{}
+				var gotJSON, wantJSON map[string]any
 				err = json.Unmarshal([]byte(val), &gotJSON)
 				require.NoError(t, err)
 				err = json.Unmarshal([]byte(tc.expected), &wantJSON)

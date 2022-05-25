@@ -52,6 +52,9 @@ type (
 		// Context returns the context of the current request.
 		Context() context.Context
 
+		// CancelContext cancels the highest level context and its children.
+		CancelContext()
+
 		GetKeyspace() string
 		// MaxMemoryRows returns the maxMemoryRows flag value.
 		MaxMemoryRows() int
@@ -66,6 +69,10 @@ type (
 
 		// ErrorGroupCancellableContext updates context that can be cancelled.
 		ErrorGroupCancellableContext() (*errgroup.Group, func())
+
+		// SetContextWithValue updates context with key and value and
+		// provides back function to move back to original context.
+		SetContextWithValue(key, value interface{}) func()
 
 		// V3 functions.
 		Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
@@ -112,6 +119,14 @@ type (
 		MessageStream(rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error
 
 		VStream(rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
+
+		// ShowExec takes in show command and use executor to execute the query, they are used when topo access is involved.
+		ShowExec(command sqlparser.ShowCommandType, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
+		// SetExec takes in k,v pair and use executor to set them in topo metadata.
+		SetExec(name string, value string) error
+
+		// CanUseSetVar returns true if system_settings can use SET_VAR hint.
+		CanUseSetVar() bool
 	}
 
 	//SessionActions gives primitives ability to interact with the session state
@@ -121,7 +136,7 @@ type (
 
 		SetTarget(target string) error
 
-		SetUDV(key string, value interface{}) error
+		SetUDV(key string, value any) error
 
 		SetSysVar(name string, expr string)
 
@@ -150,7 +165,6 @@ type (
 
 		SetSessionEnableSystemSettings(bool) error
 		GetSessionEnableSystemSettings() bool
-		GetEnableSetVar() bool
 
 		GetSystemVariables(func(k string, v string))
 		HasSystemVariables() bool

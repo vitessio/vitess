@@ -41,11 +41,14 @@ import (
 var (
 	enableRealtimeStats = flag.Bool("enable_realtime_stats", false, "Required for the Realtime Stats view. If set, vtctld will maintain a streaming RPC to each tablet (in all cells) to gather the realtime health stats.")
 	enableUI            = flag.Bool("enable_vtctld_ui", true, "If true, the vtctld web interface will be enabled. Default is true.")
-	durabilityPolicy    = flag.String("durability_policy", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
+	_                   = flag.String("durability_policy", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
 	sanitizeLogMessages = flag.Bool("vtctld_sanitize_log_messages", false, "When true, vtctld sanitizes logging.")
 
 	_ = flag.String("web_dir", "", "NOT USED, here for backward compatibility")
 	_ = flag.String("web_dir2", "", "NOT USED, here for backward compatibility")
+
+	// deprecated, only here for backwards compatibility:
+	deprecatedOnlineDDLCheckInterval = flag.Duration("online_ddl_check_interval", 0, "deprecated. Will be removed in next Vitess version")
 )
 
 const (
@@ -54,7 +57,11 @@ const (
 
 // InitVtctld initializes all the vtctld functionality.
 func InitVtctld(ts *topo.Server) error {
-	err := reparentutil.SetDurabilityPolicy(*durabilityPolicy)
+	if *deprecatedOnlineDDLCheckInterval != 0 {
+		log.Warningf("the flag '--online_ddl_check_interval' is deprecated and will be removed in future versions. It is currently unused.")
+	}
+
+	err := reparentutil.SetDurabilityPolicy("none")
 	if err != nil {
 		log.Errorf("error in setting durability policy: %v", err)
 		return err

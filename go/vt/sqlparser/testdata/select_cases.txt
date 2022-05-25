@@ -697,8 +697,8 @@ END
 INPUT
 select concat(':',trim(' m '),':',trim(BOTH FROM ' y '),':',trim('*' FROM '*s*'),':');
 END
-ERROR
-syntax error at position 49 near 'FROM'
+OUTPUT
+select concat(':', trim(' m '), ':', trim(both from ' y '), ':', trim('*' from '*s*'), ':') from dual
 END
 INPUT
 select ceiling(cast(-2 as unsigned)), ceiling(18446744073709551614), ceiling(-2);
@@ -1333,8 +1333,8 @@ END
 INPUT
 select trim(c1 from '�'),trim('�' from c1) from t1;
 END
-ERROR
-syntax error at position 20 near 'from'
+OUTPUT
+select trim(c1 from '�'), trim('�' from c1) from t1
 END
 INPUT
 select extract(DAY_MICROSECOND FROM "1999-01-02 10:11:12.000123");
@@ -1987,8 +1987,8 @@ END
 INPUT
 select ltrim("a"),rtrim("a"),trim(BOTH "" from "a"),trim(BOTH " " from "a");
 END
-ERROR
-syntax error at position 47 near 'from'
+OUTPUT
+select ltrim('a'), rtrim('a'), trim(both '' from 'a'), trim(both ' ' from 'a') from dual
 END
 INPUT
 select repeat("a",0),repeat("ab",5+5),repeat("ab",-1),reverse(NULL);
@@ -2797,8 +2797,8 @@ END
 INPUT
 select collation(trim(BOTH _latin2' ' FROM _latin2'a')), coercibility(trim(BOTH _latin2'a' FROM _latin2'a'));
 END
-ERROR
-syntax error at position 35 near '_latin2'
+OUTPUT
+select collation(trim(both _latin2 ' ' from _latin2 'a')), coercibility(trim(both _latin2 'a' from _latin2 'a')) from dual
 END
 INPUT
 select hex(weight_string(ch)) w, name from t1 order by ch;
@@ -3361,8 +3361,8 @@ END
 INPUT
 select trim(trailing NULL from 'xyz') as "must_be_null";
 END
-ERROR
-syntax error at position 26 near 'NULL'
+OUTPUT
+select trim(trailing null from 'xyz') as must_be_null from dual
 END
 INPUT
 select 0<=>0.0, 0.0<=>0E0, 0E0<=>"0", 10.0<=>1E1, 10<=>10.0, 10<=>1E1;
@@ -4789,8 +4789,8 @@ END
 INPUT
 select trim(leading NULL from 'kate') as "must_be_null";
 END
-ERROR
-syntax error at position 25 near 'NULL'
+OUTPUT
+select trim(leading null from 'kate') as must_be_null from dual
 END
 INPUT
 select min(f4),max(f4) from t1;
@@ -5143,8 +5143,8 @@ END
 INPUT
 select trim(trailing 'foo' from 'foo');
 END
-ERROR
-syntax error at position 32 near 'from'
+OUTPUT
+select trim(trailing 'foo' from 'foo') from dual
 END
 INPUT
 select from (t1 natural join t2) natural left join (t3 natural join t4);
@@ -5551,8 +5551,8 @@ END
 INPUT
 select vq1.b,dt.b from v1 vq1, lateral (select vq1.b) dt;
 END
-ERROR
-syntax error at position 41
+OUTPUT
+select vq1.b, dt.b from v1 as vq1, lateral (select vq1.b from dual) as dt
 END
 INPUT
 select right('hello', -1);
@@ -6253,8 +6253,8 @@ END
 INPUT
 select t1.a, f from t1, lateral (select max(t1.a) as f) as dt;
 END
-ERROR
-syntax error at position 34
+OUTPUT
+select t1.a, f from t1, lateral (select max(t1.a) as f from dual) as dt
 END
 INPUT
 select 2 -9223372036854775808 as result;
@@ -6427,8 +6427,8 @@ END
 INPUT
 select t1.a, dt.a from t1, lateral (select t2.a as a from t2 having t1.a) dt;
 END
-ERROR
-syntax error at position 37
+OUTPUT
+select t1.a, dt.a from t1, lateral (select t2.a as a from t2 having t1.a) as dt
 END
 INPUT
 select distinct t1.project_id as project_id, t1.project_name as project_name, t1.client_ptr as client_ptr, t1.comments as comments, sum( t3.amount_received ) + sum( t3.adjustment ) as total_budget from t2 as client_period , t2 as project_period, t3 left join t1 on (t3.project_ptr = t1.project_id and t3.date_received <= '2001-03-22 14:15:09') left join t4 on t4.client_id = t1.client_ptr where 1 and ( client_period.period_type = 'client_table' and client_period.period_key = t4.client_id and ( client_period.start_date <= '2001-03-22 14:15:09' or isnull( client_period.start_date )) and ( client_period.end_date > '2001-03-21 14:15:09' or isnull( client_period.end_date )) ) and ( project_period.period_type = 'project_table' and project_period.period_key = t1.project_id and ( project_period.start_date <= '2001-03-22 14:15:09' or isnull( project_period.start_date )) and ( project_period.end_date > '2001-03-21 14:15:09' or isnull( project_period.end_date )) ) group by client_id, project_id , client_period.period_id , project_period.period_id order by client_name asc, project_name asc;
@@ -6932,7 +6932,7 @@ INPUT
 select visitor_id,max(ts) as mts from t1 group by visitor_id having DATE_ADD(mts,INTERVAL 3 MONTH) < NOW();
 END
 OUTPUT
-select visitor_id, max(ts) as mts from t1 group by visitor_id having DATE_ADD(mts, interval 3 MONTH) < NOW()
+select visitor_id, max(ts) as mts from t1 group by visitor_id having DATE_ADD(mts, interval 3 MONTH) < now()
 END
 INPUT
 select @category3_id:= 10003;
@@ -9685,8 +9685,8 @@ END
 INPUT
 select b from v1 vq1, lateral (select count(*) from v1 vq2 having vq1.b = 3) dt;
 END
-ERROR
-syntax error at position 32
+OUTPUT
+select b from v1 as vq1, lateral (select count(*) from v1 as vq2 having vq1.b = 3) as dt
 END
 INPUT
 select from t1 where not a between 2 and 3;
@@ -11377,8 +11377,8 @@ END
 INPUT
 select concat(':',trim(LEADING '.*' FROM '.*my'),':',trim(TRAILING '.*' FROM 'sql.*.*'),':');
 END
-ERROR
-syntax error at position 41 near 'FROM'
+OUTPUT
+select concat(':', trim(leading '.*' from '.*my'), ':', trim(trailing '.*' from 'sql.*.*'), ':') from dual
 END
 INPUT
 select max(t1.a2) from t1 left outer join t2 on t1.a1=10;
@@ -12913,8 +12913,8 @@ END
 INPUT
 select collation(cast('a' as char(2))), collation(cast('a' as char(2) binary));
 END
-ERROR
-syntax error at position 77 near 'binary'
+OUTPUT
+select collation(convert('a', char(2))), collation(convert('a', char(2) binary)) from dual
 END
 INPUT
 select from v1d join v2a on v1d.a = v2a.c;
@@ -13075,8 +13075,8 @@ END
 INPUT
 select collation(trim(LEADING _latin2' ' FROM _latin2'a')), coercibility(trim(LEADING _latin2'a' FROM _latin2'a'));
 END
-ERROR
-syntax error at position 38 near '_latin2'
+OUTPUT
+select collation(trim(leading _latin2 ' ' from _latin2 'a')), coercibility(trim(leading _latin2 'a' from _latin2 'a')) from dual
 END
 INPUT
 select from t1 AS m LEFT JOIN t2 AS c1 ON m.c1id = c1.id AND c1.active = 'Yes' LEFT JOIN t3 AS c2 ON m.c2id = c2.id AND c2.active = 'Yes' WHERE m.pid=1 AND (c1.id IS NOT NULL OR c2.id IS NOT NULL);
@@ -14563,8 +14563,8 @@ END
 INPUT
 select concat(':',trim(LEADING FROM ' left'),':',trim(TRAILING FROM ' right '),':');
 END
-ERROR
-syntax error at position 36 near 'FROM'
+OUTPUT
+select concat(':', trim(leading from ' left'), ':', trim(trailing from ' right '), ':') from dual
 END
 INPUT
 select ST_AsText(ST_PolygonFromText('POLYGON((10 10,20 10,20 20,10 20, 10 10))'));
@@ -15019,8 +15019,8 @@ END
 INPUT
 select collation(convert('a', char(2))), collation(convert('a', char(2) binary));
 END
-ERROR
-syntax error at position 79 near 'binary'
+OUTPUT
+select collation(convert('a', char(2))), collation(convert('a', char(2) binary)) from dual
 END
 INPUT
 select a as foo, (select t1_inner.b from t1 as t1_inner where t1_inner.a=t1_outer.a+1) as bar from t1 as t1_outer group by a having bar<30 order by bar+5;
@@ -16094,7 +16094,7 @@ INPUT
 select visitor_id,max(ts) as mts from t1 group by visitor_id having mts < DATE_SUB(NOW(),INTERVAL 3 MONTH);
 END
 OUTPUT
-select visitor_id, max(ts) as mts from t1 group by visitor_id having mts < DATE_SUB(NOW(), interval 3 MONTH)
+select visitor_id, max(ts) as mts from t1 group by visitor_id having mts < DATE_SUB(now(), interval 3 MONTH)
 END
 INPUT
 select f1, f2, if(f1, 40.0, 5.00) from t1 group by f1 order by f2;
@@ -16309,8 +16309,8 @@ END
 INPUT
 select t1.a, dt.a from t1, lateral (select t1.a+t2.a as a from t2) dt;
 END
-ERROR
-syntax error at position 37
+OUTPUT
+select t1.a, dt.a from t1, lateral (select t1.a + t2.a as a from t2) as dt
 END
 INPUT
 select sum(qty) as sqty from t1 group by id having count(id) > 0;
@@ -16681,8 +16681,8 @@ END
 INPUT
 select (select f from lateral (select max(t1.a) as f) as dt) as g from t1;
 END
-ERROR
-syntax error at position 32
+OUTPUT
+select (select f from lateral (select max(t1.a) as f from dual) as dt) as g from t1
 END
 INPUT
 select _latin1'1'=1;
@@ -16837,8 +16837,8 @@ END
 INPUT
 select collation(convert('a',char(2) ascii)), collation(convert('a',char(2) ascii binary));
 END
-ERROR
-syntax error at position 89 near 'binary'
+OUTPUT
+select collation(convert('a', char(2) character set latin1)), collation(convert('a', char(2) character set latin1 binary)) from dual
 END
 INPUT
 select d as e from (select a as d, 2*a as two from t) dt;
@@ -18337,8 +18337,8 @@ END
 INPUT
 select concat(':',trim(BOTH 'ab' FROM 'ababmyabab'),':',trim(BOTH '*' FROM '***sql'),':');
 END
-ERROR
-syntax error at position 38 near 'FROM'
+OUTPUT
+select concat(':', trim(both 'ab' from 'ababmyabab'), ':', trim(both '*' from '***sql'), ':') from dual
 END
 INPUT
 select date_add(date,INTERVAL 1 YEAR) from t1;
@@ -19147,14 +19147,14 @@ END
 INPUT
 select trim(null from 'kate') as "must_be_null";
 END
-ERROR
-syntax error at position 22 near 'from'
+OUTPUT
+select trim(null from 'kate') as must_be_null from dual
 END
 INPUT
 select domain from t1 where concat('@', trim(leading '.' from concat('.', domain))) = '@hello.de';
 END
-ERROR
-syntax error at position 62 near 'from'
+OUTPUT
+select domain from t1 where concat('@', trim(leading '.' from concat('.', domain))) = '@hello.de'
 END
 INPUT
 select @topic4_id:= 10104;
@@ -21007,8 +21007,8 @@ END
 INPUT
 select collation(trim(TRAILING _latin2' ' FROM _latin2'a')), coercibility(trim(TRAILING _latin2'a' FROM _latin2'a'));
 END
-ERROR
-syntax error at position 39 near '_latin2'
+OUTPUT
+select collation(trim(trailing _latin2 ' ' from _latin2 'a')), coercibility(trim(trailing _latin2 'a' from _latin2 'a')) from dual
 END
 INPUT
 select left('hello', -4294967296);
@@ -21091,8 +21091,8 @@ END
 INPUT
 select TRIM("foo" FROM "foo"), TRIM("foo" FROM "foook"), TRIM("foo" FROM "okfoo");
 END
-ERROR
-syntax error at position 23 near 'FROM'
+OUTPUT
+select trim('foo' from 'foo'), trim('foo' from 'foook'), trim('foo' from 'okfoo') from dual
 END
 INPUT
 select var_samp(s) as 'null', var_pop(s) as '0' from bug22555;
@@ -21115,8 +21115,8 @@ END
 INPUT
 select concat(':',trim(leading from ' left '),':',trim(trailing from ' right '),':');
 END
-ERROR
-syntax error at position 36 near 'from'
+OUTPUT
+select concat(':', trim(leading from ' left '), ':', trim(trailing from ' right '), ':') from dual
 END
 INPUT
 select DATE_ADD('20071108', INTERVAL 1 DAY);
@@ -21373,8 +21373,8 @@ END
 INPUT
 select trim(leading 'foo' from 'foo');
 END
-ERROR
-syntax error at position 31 near 'from'
+OUTPUT
+select trim(leading 'foo' from 'foo') from dual
 END
 INPUT
 select distinct id, IFNULL(dsc, '-') from t1;
@@ -21517,8 +21517,8 @@ END
 INPUT
 select trim('xyz' from null) as "must_be_null";
 END
-ERROR
-syntax error at position 23 near 'from'
+OUTPUT
+select trim('xyz' from null) as must_be_null from dual
 END
 INPUT
 select a.*, count(b.id) as c from t2 a left join t3 b on a.id=b.order_id group by a.id, a.description having (a.description is not null) and (c=0);
@@ -21883,8 +21883,8 @@ END
 INPUT
 select hex(cast('a' as char(2) binary));
 END
-ERROR
-syntax error at position 38 near 'binary'
+OUTPUT
+select hex(convert('a', char(2) binary)) from dual
 END
 INPUT
 select i, count(*), round(std(o1/o2), 16) from bug22555 group by i order by i;
@@ -22813,8 +22813,8 @@ END
 INPUT
 select domain from t1 where concat('@', trim(leading '.' from concat('.', domain))) = '@test.de';
 END
-ERROR
-syntax error at position 62 near 'from'
+OUTPUT
+select domain from t1 where concat('@', trim(leading '.' from concat('.', domain))) = '@test.de'
 END
 INPUT
 select from t1 natural left join (t4 natural join t5) where t4.y > 7;

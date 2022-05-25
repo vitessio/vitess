@@ -69,19 +69,17 @@ var (
 	// Clusters 10, 25 are executed on docker, using the docker_test_cluster 10, 25 workflows.
 	// Hence, they are not listed in the list below.
 	clusterList = []string{
-		"11",
-		"12",
+		"vtctlbackup_sharded_clustertest_heavy",
 		"13",
-		"14",
+		"ers_prs_newfeatures_heavy",
 		"15",
-		"16",
-		"17",
-		"18",
+		"shardedrecovery_stress_verticalsplit_heavy",
+		"vtgate_general_heavy",
 		"19",
-		"20",
+		"xb_backup",
 		"21",
 		"22",
-		"23",
+		"worker_vault_heavy",
 		"24",
 		"26",
 		"vstream_failover",
@@ -110,12 +108,13 @@ var (
 		"vtgate_readafterwrite",
 		"vtgate_reservedconn",
 		"vtgate_schema",
+		"vtgate_tablet_healthcheck_cache",
 		"vtgate_topo",
 		"vtgate_topo_consul",
 		"vtgate_topo_etcd",
 		"vtgate_transaction",
 		"vtgate_unsharded",
-		"vtgate_vindex",
+		"vtgate_vindex_heavy",
 		"vtgate_vschema",
 		"vtgate_queries",
 		"vtgate_schema_tracker",
@@ -126,19 +125,23 @@ var (
 		"vreplication_across_db_versions",
 		"vreplication_multicell",
 		"vreplication_cellalias",
+		"vreplication_basic",
+		"vreplication_v2",
 		"vtorc",
+		"vtorc_8.0",
 		"schemadiff_vrepl",
 	}
 
-	clusterSelfHostedList []string
-	clusterDockerList     = []string{
-		"vreplication_basic",
-		"vreplication_v2",
+	clusterSelfHostedList = []string{
+		"12",
+		"18",
 	}
-	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
-	// this by only installing them in the required clusters
-	clustersRequiringXtraBackup = append(clusterList, clusterSelfHostedList...)
-	clustersRequiringMakeTools  = []string{
+	clusterDockerList           = []string{}
+	clustersRequiringXtraBackup = []string{
+		"xb_backup",
+		"xb_recovery",
+	}
+	clustersRequiringMakeTools = []string{
 		"18",
 		"24",
 		"vtgate_topo_consul",
@@ -153,12 +156,13 @@ type unitTest struct {
 type clusterTest struct {
 	Name, Shard, Platform        string
 	MakeTools, InstallXtraBackup bool
-	Ubuntu20                     bool
+	Ubuntu20, Docker             bool
+	LimitResourceUsage           bool
 }
 
 type selfHostedTest struct {
 	Name, Platform, Dockerfile, Shard, ImageName, directoryName string
-	MakeTools, InstallXtraBackup                                bool
+	MakeTools, InstallXtraBackup, Docker                        bool
 }
 
 // clusterMySQLVersions return list of mysql versions (one or more) that this cluster needs to test against
@@ -169,6 +173,8 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 	case clusterName == "tabletmanager_tablegc":
 		return allOracleMySQLVersions
 	case clusterName == "mysql80":
+		return []mysqlVersion{mysql80}
+	case clusterName == "vtorc_8.0":
 		return []mysqlVersion{mysql80}
 	case clusterName == "vreplication_across_db_versions":
 		return []mysqlVersion{mysql80}
@@ -352,6 +358,9 @@ func generateClusterWorkflows(list []string, tpl string) {
 			if err != nil {
 				log.Print(err)
 			}
+			if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
+				test.LimitResourceUsage = true
+			}
 		}
 	}
 }
@@ -393,7 +402,7 @@ func setupTestDockerFile(test *selfHostedTest) error {
 	return nil
 }
 
-func writeFileFromTemplate(templateFile, path string, test interface{}) error {
+func writeFileFromTemplate(templateFile, path string, test any) error {
 	tpl, err := template.ParseFiles(templateFile)
 	if err != nil {
 		return fmt.Errorf("Error: %s\n", err)

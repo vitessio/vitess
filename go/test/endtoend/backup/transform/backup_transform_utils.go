@@ -49,14 +49,14 @@ var (
 	dbCredentialFile string
 	shardName        = "0"
 	commonTabletArg  = []string{
-		"-vreplication_healthcheck_topology_refresh", "1s",
-		"-vreplication_healthcheck_retry_delay", "1s",
-		"-vreplication_retry_delay", "1s",
-		"-degraded_threshold", "5s",
-		"-lock_tables_timeout", "5s",
-		"-watch_replication_stream",
-		"-enable_replication_reporter",
-		"-serving_state_grace_period", "1s"}
+		"--vreplication_healthcheck_topology_refresh", "1s",
+		"--vreplication_healthcheck_retry_delay", "1s",
+		"--vreplication_retry_delay", "1s",
+		"--degraded_threshold", "5s",
+		"--lock_tables_timeout", "5s",
+		"--watch_replication_stream",
+		"--enable_replication_reporter",
+		"--serving_state_grace_period", "1s"}
 )
 
 // TestMainSetup sets up the basic test cluster
@@ -68,7 +68,6 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		localCluster = cluster.NewCluster(cell, hostname)
 		defer localCluster.Teardown()
 
-		localCluster.VtctldExtraArgs = append(localCluster.VtctldExtraArgs, "-durability_policy=semi_sync")
 		// Start topo server
 		err := localCluster.StartTopo()
 		if err != nil {
@@ -95,8 +94,8 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
 		os.WriteFile(newInitDBFile, []byte(sql), 0666)
 
-		extraArgs := []string{"-db-credentials-file", dbCredentialFile}
-		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
+		extraArgs := []string{"--db-credentials-file", dbCredentialFile}
+		commonTabletArg = append(commonTabletArg, "--db-credentials-file", dbCredentialFile)
 
 		// start mysql process for all replicas and primary
 		var mysqlProcs []*exec.Cmd
@@ -193,12 +192,12 @@ func TestBackupTransformImpl(t *testing.T) {
 	// restart the replica with transform hook parameter
 	replica1.VttabletProcess.TearDown()
 	replica1.VttabletProcess.ExtraArgs = []string{
-		"-db-credentials-file", dbCredentialFile,
-		"-backup_storage_hook", "test_backup_transform",
-		"-backup_storage_compress=false",
-		"-restore_from_backup",
-		"-backup_storage_implementation", "file",
-		"-file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
+		"--db-credentials-file", dbCredentialFile,
+		"--backup_storage_hook", "test_backup_transform",
+		"--backup_storage_compress=false",
+		"--restore_from_backup",
+		"--backup_storage_implementation", "file",
+		"--file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
 	replica1.VttabletProcess.ServingStatus = "SERVING"
 	err := replica1.VttabletProcess.Setup()
 	require.Nil(t, err)
@@ -243,10 +242,10 @@ func TestBackupTransformImpl(t *testing.T) {
 	require.Nil(t, err)
 	replica2.VttabletProcess.CreateDB(keyspaceName)
 	replica2.VttabletProcess.ExtraArgs = []string{
-		"-db-credentials-file", dbCredentialFile,
-		"-restore_from_backup",
-		"-backup_storage_implementation", "file",
-		"-file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
+		"--db-credentials-file", dbCredentialFile,
+		"--restore_from_backup",
+		"--backup_storage_implementation", "file",
+		"--file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
 	replica2.VttabletProcess.ServingStatus = ""
 	err = replica2.VttabletProcess.Setup()
 	require.Nil(t, err)
@@ -285,11 +284,11 @@ func TestBackupTransformErrorImpl(t *testing.T) {
 	require.Nil(t, err)
 
 	replica1.VttabletProcess.ExtraArgs = []string{
-		"-db-credentials-file", dbCredentialFile,
-		"-backup_storage_hook", "test_backup_error",
-		"-restore_from_backup",
-		"-backup_storage_implementation", "file",
-		"-file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
+		"--db-credentials-file", dbCredentialFile,
+		"--backup_storage_hook", "test_backup_error",
+		"--restore_from_backup",
+		"--backup_storage_implementation", "file",
+		"--file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
 	replica1.VttabletProcess.ServingStatus = "SERVING"
 	err = replica1.VttabletProcess.Setup()
 	require.Nil(t, err)
@@ -312,7 +311,7 @@ func validateManifestFile(t *testing.T, backupLocation string) {
 	// reading manifest
 	data, err := os.ReadFile(backupLocation + "/MANIFEST")
 	require.Nilf(t, err, "error while reading MANIFEST %v", err)
-	manifest := make(map[string]interface{})
+	manifest := make(map[string]any)
 
 	// parsing manifest
 	err = json.Unmarshal(data, &manifest)
@@ -326,7 +325,7 @@ func validateManifestFile(t *testing.T, backupLocation string) {
 
 	// validate backup files
 	fielEntries := manifest["FileEntries"]
-	fileArr, ok := fielEntries.([]interface{})
+	fileArr, ok := fielEntries.([]any)
 	require.True(t, ok)
 	for i := range fileArr {
 		f, err := os.Open(fmt.Sprintf("%s/%d", backupLocation, i))

@@ -29,11 +29,25 @@ import (
 )
 
 var (
-	EmptyArgs []interface{}
+	EmptyArgs []any
+	Db        DB = (*vtorcDB)(nil)
 )
 
 var mysqlURI string
 var dbMutex sync.Mutex
+
+type DB interface {
+	QueryOrchestrator(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error
+}
+
+type vtorcDB struct {
+}
+
+var _ DB = (*vtorcDB)(nil)
+
+func (m *vtorcDB) QueryOrchestrator(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
+	return QueryOrchestrator(query, argsArray, onRow)
+}
 
 type DummySQLResult struct {
 }
@@ -313,7 +327,7 @@ func initOrchestratorDB(db *sql.DB) error {
 }
 
 // execInternal
-func execInternal(db *sql.DB, query string, args ...interface{}) (sql.Result, error) {
+func execInternal(db *sql.DB, query string, args ...any) (sql.Result, error) {
 	var err error
 	query, err = translateStatement(query)
 	if err != nil {
@@ -324,7 +338,7 @@ func execInternal(db *sql.DB, query string, args ...interface{}) (sql.Result, er
 }
 
 // ExecOrchestrator will execute given query on the orchestrator backend database.
-func ExecOrchestrator(query string, args ...interface{}) (sql.Result, error) {
+func ExecOrchestrator(query string, args ...any) (sql.Result, error) {
 	var err error
 	query, err = translateStatement(query)
 	if err != nil {
@@ -353,7 +367,7 @@ func QueryOrchestratorRowsMap(query string, onRow func(sqlutils.RowMap) error) e
 }
 
 // QueryOrchestrator
-func QueryOrchestrator(query string, argsArray []interface{}, onRow func(sqlutils.RowMap) error) error {
+func QueryOrchestrator(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
 	query, err := translateStatement(query)
 	if err != nil {
 		return log.Fatalf("Cannot query orchestrator: %+v; query=%+v", err, query)
@@ -381,7 +395,7 @@ func QueryOrchestratorRowsMapBuffered(query string, onRow func(sqlutils.RowMap) 
 }
 
 // QueryOrchestratorBuffered
-func QueryOrchestratorBuffered(query string, argsArray []interface{}, onRow func(sqlutils.RowMap) error) error {
+func QueryOrchestratorBuffered(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
 	query, err := translateStatement(query)
 	if err != nil {
 		return log.Fatalf("Cannot query orchestrator: %+v; query=%+v", err, query)

@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
@@ -84,6 +86,15 @@ func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (strin
 	require.Nil(t, err)
 	gtID := strings.SplitAfter(pos, "/")[1]
 	return pos, gtID
+}
+
+// GetReplicationStatus gets the replication status of given vttablet
+func GetReplicationStatus(t *testing.T, vttablet *Vttablet, hostname string) *replicationdatapb.Status {
+	ctx := context.Background()
+	vtablet := getTablet(vttablet.GrpcPort, hostname)
+	pos, err := tmClient.ReplicationStatus(ctx, vtablet)
+	require.NoError(t, err)
+	return pos
 }
 
 // VerifyRowsInTabletForTable verifies the total number of rows in a table.
@@ -264,4 +275,20 @@ func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnPa
 
 	return cp
 
+}
+
+func filterDoubleDashArgs(args []string, version int) (filtered []string) {
+	if version > 13 {
+		return args
+	}
+
+	for _, arg := range args {
+		if arg == "--" {
+			continue
+		}
+
+		filtered = append(filtered, arg)
+	}
+
+	return filtered
 }

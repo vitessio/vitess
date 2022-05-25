@@ -20,6 +20,8 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var _ Primitive = (*ScalarAggregate)(nil)
@@ -170,6 +172,23 @@ func (sa *ScalarAggregate) createEmptyRow() ([]sqltypes.Value, error) {
 	return out, nil
 }
 
+func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
+	switch opcode {
+	case
+		AggregateCountDistinct,
+		AggregateCount:
+		return countZero, nil
+	case
+		AggregateSumDistinct,
+		AggregateSum,
+		AggregateMin,
+		AggregateMax:
+		return sqltypes.NULL, nil
+
+	}
+	return sqltypes.NULL, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown aggregation %v", opcode)
+}
+
 // Inputs implements the Primitive interface
 func (sa *ScalarAggregate) Inputs() []Primitive {
 	return []Primitive{sa.Input}
@@ -178,7 +197,7 @@ func (sa *ScalarAggregate) Inputs() []Primitive {
 // description implements the Primitive interface
 func (sa *ScalarAggregate) description() PrimitiveDescription {
 	aggregates := GenericJoin(sa.Aggregates, aggregateParamsToString)
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Aggregates": aggregates,
 	}
 	if sa.TruncateColumnCount > 0 {

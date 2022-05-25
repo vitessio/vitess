@@ -35,6 +35,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/withddl"
+
 	"google.golang.org/protobuf/proto"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -60,6 +62,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/vexec"
 )
@@ -127,6 +130,7 @@ var (
 	migrationFailureFileName = "migration-failure.log"
 	onlineDDLUser            = "vt-online-ddl-internal"
 	onlineDDLGrant           = fmt.Sprintf("'%s'@'%s'", onlineDDLUser, "%")
+	throttlerOnlineDDLApp    = "online-ddl"
 )
 
 type mysqlVariables struct {
@@ -143,6 +147,7 @@ type Executor struct {
 	pool                  *connpool.Pool
 	tabletTypeFunc        func() topodatapb.TabletType
 	ts                    *topo.Server
+	lagThrottler          *throttle.Throttler
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, bufferQueries bool)
 	tabletAlias           *topodatapb.TabletAlias
 
@@ -202,6 +207,7 @@ func newGCTableRetainTime() time.Time {
 
 // NewExecutor creates a new gh-ost executor.
 func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *topo.Server,
+	lagThrottler *throttle.Throttler,
 	tabletTypeFunc func() topodatapb.TabletType,
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, bufferQueries bool),
 ) *Executor {
@@ -215,6 +221,7 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 		}),
 		tabletTypeFunc:        tabletTypeFunc,
 		ts:                    ts,
+		lagThrottler:          lagThrottler,
 		toggleBufferTableFunc: toggleBufferTableFunc,
 		ticks:                 timer.NewTimer(*migrationCheckInterval),
 	}
@@ -234,6 +241,13 @@ func (e *Executor) execQuery(ctx context.Context, query string) (result *sqltype
 // TabletAliasString returns tablet alias as string (duh)
 func (e *Executor) TabletAliasString() string {
 	return topoproto.TabletAliasString(e.tabletAlias)
+}
+
+// PrepareForQueryExecutor is called by QueryExecutor, possibly before the backing
+// _vt.schema_migrations table has had the chance to be created.
+// This function prepares the schema.
+func (e *Executor) PrepareForQueryExecutor(ctx context.Context) error {
+	return e.initSchema(ctx)
 }
 
 func (e *Executor) initSchema(ctx context.Context) error {
@@ -296,15 +310,20 @@ func (e *Executor) Open() error {
 
 // Close frees resources
 func (e *Executor) Close() {
+	log.Infof("onlineDDL Executor - Acquiring lock - initMutex")
 	e.initMutex.Lock()
+	log.Infof("onlineDDL Executor - Acquired lock - initMutex")
 	defer e.initMutex.Unlock()
 	if !e.isOpen {
 		return
 	}
 
+	log.Infof("onlineDDL Executor - Stopping timer ticks")
 	e.ticks.Stop()
+	log.Infof("onlineDDL Executor - Closing the conpool")
 	e.pool.Close()
 	e.isOpen = false
+	log.Infof("onlineDDL Executor - finished Close execution")
 }
 
 // triggerNextCheckInterval the next tick sooner than normal
@@ -345,7 +364,7 @@ func (e *Executor) allowConcurrentMigration(onlineDDL *schema.OnlineDDL) bool {
 func (e *Executor) isAnyNonConcurrentMigrationRunning() bool {
 	nonConcurrentMigrationFound := false
 
-	e.ownedRunningMigrations.Range(func(_, val interface{}) bool {
+	e.ownedRunningMigrations.Range(func(_, val any) bool {
 		onlineDDL, ok := val.(*schema.OnlineDDL)
 		if !ok {
 			return true
@@ -367,7 +386,7 @@ func (e *Executor) isAnyNonConcurrentMigrationRunning() bool {
 // operating on given table.
 func (e *Executor) isAnyMigrationRunningOnTable(tableName string) bool {
 	sameTableMigrationFound := false
-	e.ownedRunningMigrations.Range(func(_, val interface{}) bool {
+	e.ownedRunningMigrations.Range(func(_, val any) bool {
 		onlineDDL, ok := val.(*schema.OnlineDDL)
 		if !ok {
 			return true
@@ -644,7 +663,7 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) err
 		return err
 	}
 	// silently skip error; stopping the stream is just a graceful act; later deleting it is more important
-	_, _ = tmClient.VReplicationExec(ctx, tablet.Tablet, query)
+	_, _ = e.vreplicationExec(ctx, tmClient, tablet.Tablet, query)
 
 	if err := e.deleteVReplicationEntry(ctx, uuid); err != nil {
 		return err
@@ -786,7 +805,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		return err
 	}
 	// Stop vreplication
-	if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, binlogplayer.StopVReplication(uint32(s.id), "stopped for online DDL cutover")); err != nil {
+	if _, err := e.vreplicationExec(ctx, tmClient, tablet.Tablet, binlogplayer.StopVReplication(uint32(s.id), "stopped for online DDL cutover")); err != nil {
 		return err
 	}
 
@@ -1029,12 +1048,6 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 			return err
 		}
 
-		e.initVreplicationDDLOnce.Do(func() {
-			// Ensure vreplication schema is up-to-date by invoking a query with non-existing columns.
-			// This will make vreplication run through its WithDDL schema changes.
-			_, _ = tmClient.VReplicationExec(ctx, tablet.Tablet, sqlImpossibleSelectVreplication)
-		})
-
 		// reload schema before migration
 		if err := tmClient.ReloadSchema(ctx, tablet.Tablet, ""); err != nil {
 			return err
@@ -1045,15 +1058,24 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		if err != nil {
 			return err
 		}
-		if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, insertVReplicationQuery); err != nil {
+		if _, err := e.vreplicationExec(ctx, tmClient, tablet.Tablet, insertVReplicationQuery); err != nil {
 			return err
+		}
+
+		{
+			// temporary hack. todo: this should be done when inserting any _vt.vreplication record across all workflow types
+			query := fmt.Sprintf("update _vt.vreplication set workflow_type = %d where workflow = '%s'",
+				binlogdatapb.VReplicationWorkflowType_ONLINEDDL, v.workflow)
+			if _, err := e.vreplicationExec(ctx, tmClient, tablet.Tablet, query); err != nil {
+				return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", tablet.Tablet, query)
+			}
 		}
 		// start stream!
 		startVReplicationQuery, err := v.generateStartStatement(ctx)
 		if err != nil {
 			return err
 		}
-		if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, startVReplicationQuery); err != nil {
+		if _, err := e.vreplicationExec(ctx, tmClient, tablet.Tablet, startVReplicationQuery); err != nil {
 			return err
 		}
 	}
@@ -1211,7 +1233,7 @@ exit $exit_code
 			fmt.Sprintf("--serve-socket-file=%s", serveSocketFile),
 			fmt.Sprintf("--hooks-path=%s", tempDir),
 			fmt.Sprintf(`--hooks-hint-token=%s`, onlineDDL.UUID),
-			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check?app=online-ddl:gh-ost:%s&p=low`, *servenv.Port, onlineDDL.UUID),
+			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check?app=%s:gh-ost:%s&p=low`, *servenv.Port, throttlerOnlineDDLApp, onlineDDL.UUID),
 			fmt.Sprintf(`--database=%s`, e.dbName),
 			fmt.Sprintf(`--table=%s`, onlineDDL.Table),
 			fmt.Sprintf(`--alter=%s`, alterOptions),
@@ -1363,7 +1385,7 @@ export MYSQL_PWD
 		my ($self, %args) = @_;
 
 		return sub {
-			if (head("http://localhost:{{VTTABLET_PORT}}/throttler/check?app=online-ddl:pt-osc:{{MIGRATION_UUID}}&p=low")) {
+			if (head("http://localhost:{{VTTABLET_PORT}}/throttler/check?app={{THROTTLER_ONLINE_DDL_APP}}:pt-osc:{{MIGRATION_UUID}}&p=low")) {
 				# Got HTTP 200 OK, means throttler is happy
 				return 0;
 			}	else {
@@ -1377,6 +1399,8 @@ export MYSQL_PWD
 	`
 	pluginCode = strings.ReplaceAll(pluginCode, "{{VTTABLET_PORT}}", fmt.Sprintf("%d", *servenv.Port))
 	pluginCode = strings.ReplaceAll(pluginCode, "{{MIGRATION_UUID}}", onlineDDL.UUID)
+	pluginCode = strings.ReplaceAll(pluginCode, "{{THROTTLER_ONLINE_DDL_APP}}", throttlerOnlineDDLApp)
+
 	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusRunning}}", string(schema.OnlineDDLStatusRunning))
 	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusComplete}}", string(schema.OnlineDDLStatusComplete))
 	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusFailed}}", string(schema.OnlineDDLStatusFailed))
@@ -1559,7 +1583,8 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 	switch onlineDDL.Strategy {
 	case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 		// migration could have started by a different tablet. We need to actively verify if it is running
-		foundRunning, _, _ = e.isVReplMigrationRunning(ctx, onlineDDL.UUID)
+		s, _ := e.readVReplStream(ctx, onlineDDL.UUID, true)
+		foundRunning = (s != nil && s.isRunning())
 		if err := e.terminateVReplMigration(ctx, onlineDDL.UUID); err != nil {
 			return foundRunning, fmt.Errorf("Error terminating migration, vreplication exec error: %+v", err)
 		}
@@ -1676,6 +1701,68 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) 
 		result.AppendResult(res)
 	}
 	return result, nil
+}
+
+func (e *Executor) validateThrottleParams(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal) (duration time.Duration, ratio float64, err error) {
+	duration = time.Hour * 24 * 365 * 100
+	if expireString != "" {
+		duration, err = time.ParseDuration(expireString)
+		if err != nil || duration < 0 {
+			return duration, ratio, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid EXPIRE value: %s. Try '120s', '30m', '1h', etc. Allowed units are (s)ec, (m)in, (h)hour", expireString)
+		}
+	}
+	ratio = 1.0
+	if ratioLiteral != nil {
+		ratio, err = strconv.ParseFloat(ratioLiteral.Val, 64)
+		if err != nil || ratio < 0 || ratio > 1 {
+			return duration, ratio, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid RATIO value: %s. Try any decimal number between '0.0' (no throttle) and `1.0` (fully throttled)", ratioLiteral.Val)
+		}
+	}
+	return duration, ratio, nil
+}
+
+// ThrottleMigration
+func (e *Executor) ThrottleMigration(ctx context.Context, uuid string, expireString string, ratioLiteral *sqlparser.Literal) (result *sqltypes.Result, err error) {
+	duration, ratio, err := e.validateThrottleParams(ctx, expireString, ratioLiteral)
+	if err != nil {
+		return nil, err
+	}
+	if err := e.lagThrottler.CheckIsReady(); err != nil {
+		return nil, err
+	}
+	_ = e.lagThrottler.ThrottleApp(uuid, time.Now().Add(duration), ratio)
+	return emptyResult, nil
+}
+
+// ThrottleAllMigrations
+func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal) (result *sqltypes.Result, err error) {
+	duration, ratio, err := e.validateThrottleParams(ctx, expireString, ratioLiteral)
+	if err != nil {
+		return nil, err
+	}
+	if err := e.lagThrottler.CheckIsReady(); err != nil {
+		return nil, err
+	}
+	_ = e.lagThrottler.ThrottleApp(throttlerOnlineDDLApp, time.Now().Add(duration), ratio)
+	return emptyResult, nil
+}
+
+// UnthrottleMigration
+func (e *Executor) UnthrottleMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
+	if err := e.lagThrottler.CheckIsReady(); err != nil {
+		return nil, err
+	}
+	_ = e.lagThrottler.UnthrottleApp(uuid)
+	return emptyResult, nil
+}
+
+// UnthrottleAllMigrations
+func (e *Executor) UnthrottleAllMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+	if err := e.lagThrottler.CheckIsReady(); err != nil {
+		return nil, err
+	}
+	_ = e.lagThrottler.UnthrottleApp(throttlerOnlineDDLApp)
+	return emptyResult, nil
 }
 
 // scheduleNextMigration attemps to schedule a single migration to run next.
@@ -2507,9 +2594,9 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				} else {
 					// a TABLE
 					ddlAction = sqlparser.AlterDDLAction
-					onlineDDL.SQL = diff.StatementString()
+					onlineDDL.SQL = diff.CanonicalStatementString()
 				}
-				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, diff.StatementString())
+				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, diff.CanonicalStatementString())
 			} else {
 				{
 					// table does not exist, so this declarative CREATE turns out to really be an actual CREATE. No further action is needed here.
@@ -2700,6 +2787,7 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		source:               row.AsString("source", ""),
 		pos:                  row.AsString("pos", ""),
 		timeUpdated:          row.AsInt64("time_updated", 0),
+		timeHeartbeat:        row.AsInt64("time_heartbeat", 0),
 		transactionTimestamp: row.AsInt64("transaction_timestamp", 0),
 		state:                row.AsString("state", ""),
 		message:              row.AsString("message", ""),
@@ -2781,12 +2869,14 @@ func (e *Executor) isVReplMigrationRunning(ctx context.Context, uuid string) (is
 	if s == nil {
 		return false, s, nil
 	}
-	if strings.Contains(strings.ToLower(s.message), "error") {
-		return false, s, nil
-	}
 	switch s.state {
+	case binlogplayer.BlpError:
+		return false, s, nil
 	case binlogplayer.VReplicationInit, binlogplayer.VReplicationCopying, binlogplayer.BlpRunning:
 		return true, s, nil
+	}
+	if strings.Contains(strings.ToLower(s.message), "error") {
+		return false, s, nil
 	}
 	return false, s, nil
 }
@@ -2797,6 +2887,17 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
+	var currentUserThrottleRatio float64
+	if err := e.lagThrottler.CheckIsReady(); err == nil {
+		// No point in reviewing throttler info if it's not enabled&open
+		for _, app := range e.lagThrottler.ThrottledApps() {
+			if app.AppName == throttlerOnlineDDLApp {
+				currentUserThrottleRatio = app.Ratio
+				break
+			}
+		}
+	}
+
 	r, err := e.execQuery(ctx, sqlSelectRunningMigrations)
 	if err != nil {
 		return countRunnning, cancellable, err
@@ -2804,7 +2905,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	uuidsFoundRunning := map[string]bool{}
 	for _, row := range r.Named().Rows {
 		uuid := row["migration_uuid"].ToString()
-		onlineDDL, _, err := e.readMigration(ctx, uuid)
+		onlineDDL, migrationRow, err := e.readMigration(ctx, uuid)
 		if err != nil {
 			return countRunnning, cancellable, err
 		}
@@ -2837,11 +2938,12 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 
 		uuidsFoundRunning[uuid] = true
 
+		_ = e.updateMigrationUserThrottleRatio(ctx, uuid, currentUserThrottleRatio)
 		switch onlineDDL.StrategySetting().Strategy {
 		case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 			{
 				// We check the _vt.vreplication table
-				running, s, err := e.isVReplMigrationRunning(ctx, uuid)
+				s, err := e.readVReplStream(ctx, uuid, true)
 				if err != nil {
 					return countRunnning, cancellable, err
 				}
@@ -2849,13 +2951,19 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				if isVreplicationTestSuite {
 					e.triggerNextCheckInterval()
 				}
-				if running {
+				if s != nil && s.isFailed() {
+					cancellable = append(cancellable, newCancellableMigration(uuid, s.message))
+				}
+				if s != nil && s.isRunning() {
 					// This VRepl migration may have started from outside this tablet, so
 					// this executor may not own the migration _yet_. We make sure to own it.
 					// VReplication migrations are unique in this respect: we are able to complete
 					// a vreplicaiton migration started by another tablet.
 					e.ownedRunningMigrations.Store(uuid, onlineDDL)
-					_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+					if lastVitessLivenessIndicator := migrationRow.AsInt64("vitess_liveness_indicator", 0); lastVitessLivenessIndicator < s.livenessTimeIndicator() {
+						_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+						_ = e.updateVitessLivenessIndicator(ctx, uuid, s.livenessTimeIndicator())
+					}
 					_ = e.updateMigrationTablet(ctx, uuid)
 					_ = e.updateRowsCopied(ctx, uuid, s.rowsCopied)
 					_ = e.updateMigrationProgressByRowsCopied(ctx, uuid, s.rowsCopied)
@@ -2932,7 +3040,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 			uuidsFoundPending[uuid] = true
 		}
 
-		e.ownedRunningMigrations.Range(func(k, _ interface{}) bool {
+		e.ownedRunningMigrations.Range(func(k, _ any) bool {
 			uuid, ok := k.(string)
 			if !ok {
 				return true
@@ -3013,6 +3121,16 @@ func (e *Executor) retryTabletFailureMigrations(ctx context.Context) error {
 	return err
 }
 
+// vreplicationExec runs a vreplication query, and makes sure to initialize vreplication
+func (e *Executor) vreplicationExec(ctx context.Context, tmClient tmclient.TabletManagerClient, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
+	e.initVreplicationDDLOnce.Do(func() {
+		// Ensure vreplication schema is up-to-date by invoking a query with non-existing columns.
+		// This will make vreplication run through its WithDDL schema changes.
+		_, _ = tmClient.VReplicationExec(ctx, tablet, withddl.QueryToTriggerWithDDL)
+	})
+	return tmClient.VReplicationExec(ctx, tablet, query)
+}
+
 // deleteVReplicationEntry cleans up a _vt.vreplication entry; this function is called as part of
 // migration termination and as part of artifact cleanup
 func (e *Executor) deleteVReplicationEntry(ctx context.Context, uuid string) error {
@@ -3029,7 +3147,7 @@ func (e *Executor) deleteVReplicationEntry(ctx context.Context, uuid string) err
 		return err
 	}
 
-	if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, query); err != nil {
+	if _, err := e.vreplicationExec(ctx, tmClient, tablet.Tablet, query); err != nil {
 		return err
 	}
 	return nil
@@ -3422,6 +3540,18 @@ func (e *Executor) updateRowsCopied(ctx context.Context, uuid string, rowsCopied
 	return err
 }
 
+func (e *Executor) updateVitessLivenessIndicator(ctx context.Context, uuid string, livenessIndicator int64) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationVitessLivenessIndicator,
+		sqltypes.Int64BindVariable(livenessIndicator),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
 func (e *Executor) updateMigrationIsView(ctx context.Context, uuid string, isView bool) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationIsView,
 		sqltypes.BoolBindVariable(isView),
@@ -3449,6 +3579,18 @@ func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid stri
 func (e *Executor) updateMigrationStowawayTable(ctx context.Context, uuid string, tableName string) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationStowawayTable,
 		sqltypes.StringBindVariable(tableName),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationUserThrottleRatio(ctx context.Context, uuid string, ratio float64) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationUserThrottleRatio,
+		sqltypes.Float64BindVariable(ratio),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -3544,6 +3686,28 @@ func (e *Executor) CompleteMigration(ctx context.Context, uuid string) (result *
 	return e.execQuery(ctx, query)
 }
 
+func (e *Executor) submittedMigrationConflictsWithPendingMigrationInSingletonContext(
+	ctx context.Context, submittedMigration, pendingOnlineDDL *schema.OnlineDDL,
+) bool {
+	if pendingOnlineDDL.MigrationContext == submittedMigration.MigrationContext {
+		// same migration context. this is obviously allowed
+		return false
+	}
+	// Let's see if the pending migration is a revert:
+	if _, err := pendingOnlineDDL.GetRevertUUID(); err != nil {
+		// Not a revert. So the pending migration definitely conflicts with our migration.
+		return true
+	}
+
+	// The pending migration is a revert
+	if !pendingOnlineDDL.StrategySetting().IsSingletonContext() {
+		// Aha! So, our "conflict" is with a REVERT migration, which does _not_ have a -singleton-context
+		// flag. Because we want to allow REVERT migrations to run as concurrently as possible, we allow this scenario.
+		return false
+	}
+	return true
+}
+
 // SubmitMigration inserts a new migration request
 func (e *Executor) SubmitMigration(
 	ctx context.Context,
@@ -3552,6 +3716,14 @@ func (e *Executor) SubmitMigration(
 	if !e.isOpen {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
 	}
+	if ddlStmt, ok := stmt.(sqlparser.DDLStatement); ok {
+		// This validation should have taken place on submission. However, the query may have mutated
+		// during transfer, and this validation is here to catch any malformed mutation.
+		if !ddlStmt.IsFullyParsed() {
+			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error parsing statement")
+		}
+	}
+
 	onlineDDL, err := schema.OnlineDDLFromCommentedStatement(stmt)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Error submitting migration %s: %v", sqlparser.String(stmt), err)
@@ -3617,9 +3789,10 @@ func (e *Executor) SubmitMigration(
 					if err != nil {
 						return err
 					}
-					if pendingOnlineDDL.MigrationContext != onlineDDL.MigrationContext {
-						return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
+					if e.submittedMigrationConflictsWithPendingMigrationInSingletonContext(ctx, onlineDDL, pendingOnlineDDL) {
+						return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton-context migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
 					}
+					// no conflict? continue looking for other pending migrations
 				}
 			}
 			// OK to go! We can submit the migration:

@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 )
 
 type planExec func(plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
@@ -68,9 +67,6 @@ func (e *Executor) newExecute(
 		safeSession,
 		logStats,
 	)
-	if err == planbuilder.ErrPlanNotSupported {
-		return err
-	}
 	execStart := e.logPlanningFinished(logStats, plan)
 
 	if err != nil {
@@ -224,7 +220,7 @@ func (e *Executor) executePlan(
 
 // rollbackExecIfNeeded rollbacks the partial execution if earlier it was detected that it needs partial query execution to be rolled back.
 func (e *Executor) rollbackExecIfNeeded(ctx context.Context, safeSession *SafeSession, bindVars map[string]*querypb.BindVariable, logStats *LogStats, err error) error {
-	if safeSession.InTransaction() && safeSession.rollbackOnPartialExec != "" {
+	if safeSession.InTransaction() && safeSession.IsRollbackSet() {
 		rErr := e.rollbackPartialExec(ctx, safeSession, bindVars, logStats)
 		return vterrors.Wrap(err, rErr.Error())
 	}
@@ -239,8 +235,8 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *SafeSes
 
 	// needs to rollback only once.
 	rQuery := safeSession.rollbackOnPartialExec
-	safeSession.rollbackOnPartialExec = ""
 	if rQuery != txRollback {
+		safeSession.SavepointRollback()
 		_, _, err := e.execute(ctx, safeSession, rQuery, bindVars, logStats)
 		if err == nil {
 			return vterrors.New(vtrpcpb.Code_ABORTED, "reverted partial DML execution failure")

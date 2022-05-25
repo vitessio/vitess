@@ -129,7 +129,7 @@ func (jn *SemiJoin) NeedsTransaction() bool {
 }
 
 func (jn *SemiJoin) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"TableName":        jn.GetTableName(),
 		"ProjectedIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(jn.Cols)), ","), "[]"),
 	}
