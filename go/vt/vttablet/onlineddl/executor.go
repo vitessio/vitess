@@ -888,6 +888,22 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 	return deferFunc, nil
 }
 
+func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, createTable *sqlparser.CreateTable) (err error) {
+	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node.(type) {
+		case *sqlparser.ForeignKeyDefinition:
+			return false, schema.ErrForeignKeyFound
+		case *sqlparser.RenameTableName:
+			return false, schema.ErrRenameTableFound
+		}
+		return true, nil
+	}
+	if err := sqlparser.Walk(validateWalk, createTable); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (v *VRepl, err error) {
 	restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
 	defer restoreSQLModeFunc()
@@ -900,7 +916,6 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		return v, err
 	}
 	{
-
 		existingShowCreateTable, err := e.showCreateTable(ctx, onlineDDL.Table)
 		if err != nil {
 			return nil, err
@@ -914,6 +929,10 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CreateTable statement, got: %v", sqlparser.CanonicalString(stmt))
 		}
 		createTable.SetTable(createTable.GetTable().Qualifier.CompliantName(), vreplTableName)
+
+		if err := e.validateAndEditCreateTableStatement(ctx, createTable); err != nil {
+			return v, err
+		}
 		// Apply CREATE TABLE for materialized table
 		if _, err := conn.ExecuteFetch(sqlparser.CanonicalString(createTable), 0, false); err != nil {
 			return v, err

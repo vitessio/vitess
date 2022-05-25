@@ -46,13 +46,14 @@ func NewAlterTableParser() *AlterTableParser {
 }
 
 // NewParserFromAlterStatement creates a new parser with a ALTER TABLE statement
-func NewParserFromAlterStatement(alterStatement string) *AlterTableParser {
+func NewParserFromAlterStatement(alterTable *sqlparser.AlterTable) *AlterTableParser {
 	parser := NewAlterTableParser()
-	parser.ParseAlterStatement(alterStatement)
+	parser.analyzeAlter(alterTable)
 	return parser
 }
 
-// when validateWalk returns true, then the child nodes are also visited
+// analyzeAlter looks for specific changes in the AlterTable statement, that are relevant
+// to OnlineDDL/VReplication
 func (p *AlterTableParser) analyzeAlter(alterTable *sqlparser.AlterTable) {
 	for _, opt := range alterTable.AlterOptions {
 		switch opt := opt.(type) {

@@ -19,3 +19,51 @@ Functionality of this Executor is tested in go/test/endtoend/onlineddl/...
 */
 
 package onlineddl
+
+import (
+	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/sqlparser"
+)
+
+func TestValidateAndEditCreateTableStatement(t *testing.T) {
+	e := Executor{}
+	tt := []struct {
+		name        string
+		query       string
+		expectError bool
+	}{
+		{
+			name: "table with FK",
+			query: `
+            create table onlineddl_test (
+                id int auto_increment,
+                i int not null,
+                parent_id int not null,
+                primary key(id),
+                constraint test_fk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
+              ) auto_increment=1;
+            `,
+			expectError: true,
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			stmt, err := sqlparser.ParseStrictDDL(tc.query)
+			require.NoError(t, err)
+			alterTable, ok := stmt.(*sqlparser.CreateTable)
+			require.True(t, ok)
+
+			err = e.validateAndEditCreateTableStatement(context.Background(), alterTable)
+			if tc.expectError {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
