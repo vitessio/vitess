@@ -40,9 +40,6 @@ var (
 	batchInterval = flag.Duration("batch-interval", 10*time.Millisecond, "Interval between logical time slots.")
 )
 
-// ExecutorMode controls the mode of operation for the vtexplain simulator
-type ExecutorMode string
-
 const (
 	vtexplainCell = "explainCell"
 
@@ -53,55 +50,79 @@ const (
 	ModeTwoPC = "twopc"
 )
 
-// Options to control the explain process
-type Options struct {
-	// NumShards indicates the number of shards in the topology
-	NumShards int
+type (
+	// ExecutorMode controls the mode of operation for the vtexplain simulator
+	ExecutorMode string
 
-	// PlannerVersion indicates whether or not we should use the Gen4 planner
-	PlannerVersion querypb.ExecuteOptions_PlannerVersion
+	// Options to control the explain process
+	Options struct {
+		// NumShards indicates the number of shards in the topology
+		NumShards int
 
-	// ReplicationMode must be set to either "ROW" or "STATEMENT" before
-	// initialization
-	ReplicationMode string
+		// PlannerVersion indicates whether or not we should use the Gen4 planner
+		PlannerVersion querypb.ExecuteOptions_PlannerVersion
 
-	// Normalize controls whether or not vtgate does query normalization
-	Normalize bool
+		// ReplicationMode must be set to either "ROW" or "STATEMENT" before
+		// initialization
+		ReplicationMode string
 
-	// ExecutionMode must be set to one of the modes above
-	ExecutionMode string
+		// Normalize controls whether or not vtgate does query normalization
+		Normalize bool
 
-	// StrictDDL is used in unit tests only to verify that the schema
-	// is parsed properly.
-	StrictDDL bool
+		// ExecutionMode must be set to one of the modes above
+		ExecutionMode string
 
-	// Target is used to override the "database" target in the
-	// vtgate session to simulate `USE <target>`
-	Target string
-}
+		// StrictDDL is used in unit tests only to verify that the schema
+		// is parsed properly.
+		StrictDDL bool
 
-// TabletQuery defines a query that was sent to a given tablet and how it was
-// processed in mysql
-type TabletQuery struct {
-	// Logical time of the query
-	Time int
+		// Target is used to override the "database" target in the
+		// vtgate session to simulate `USE <target>`
+		Target string
+	}
 
-	// SQL command sent to the given tablet
-	SQL string
+	// TabletQuery defines a query that was sent to a given tablet and how it was
+	// processed in mysql
+	TabletQuery struct {
+		// Logical time of the query
+		Time int
 
-	// BindVars sent with the command
-	BindVars map[string]*querypb.BindVariable
-}
+		// SQL command sent to the given tablet
+		SQL string
 
-// MysqlQuery defines a query that was sent to a given tablet and how it was
-// processed in mysql
-type MysqlQuery struct {
-	// Sequence number of the query
-	Time int
+		// BindVars sent with the command
+		BindVars map[string]*querypb.BindVariable
+	}
 
-	// SQL command sent to the given tablet
-	SQL string
-}
+	// MysqlQuery defines a query that was sent to a given tablet and how it was
+	// processed in mysql
+	MysqlQuery struct {
+		// Sequence number of the query
+		Time int
+
+		// SQL command sent to the given tablet
+		SQL string
+	}
+
+	// Explain defines how vitess will execute a given sql query, including the vtgate
+	// query plans and all queries run on each tablet.
+	Explain struct {
+		// original sql statement
+		SQL string
+
+		// the vtgate plan(s)
+		Plans []*engine.Plan
+
+		// list of queries / bind vars sent to each tablet
+		TabletActions map[string]*TabletActions
+	}
+
+	outputQuery struct {
+		tablet string
+		Time   int
+		sql    string
+	}
+)
 
 // MarshalJSON renders the json structure
 func (tq *TabletQuery) MarshalJSON() ([]byte, error) {
@@ -131,19 +152,6 @@ type TabletActions struct {
 
 	// Queries that were run on mysql
 	MysqlQueries []*MysqlQuery
-}
-
-// Explain defines how vitess will execute a given sql query, including the vtgate
-// query plans and all queries run on each tablet.
-type Explain struct {
-	// original sql statement
-	SQL string
-
-	// the vtgate plan(s)
-	Plans []*engine.Plan
-
-	// list of queries / bind vars sent to each tablet
-	TabletActions map[string]*TabletActions
 }
 
 // Init sets up the fake execution environment
@@ -291,12 +299,6 @@ func explain(sql string) (*Explain, error) {
 		Plans:         plans,
 		TabletActions: tabletActions,
 	}, nil
-}
-
-type outputQuery struct {
-	tablet string
-	Time   int
-	sql    string
 }
 
 var spMap map[string]string
