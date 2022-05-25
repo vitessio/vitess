@@ -4,8 +4,8 @@ create table onlineddl_test (
   i int not null,
   ts timestamp(6),
   primary key(id),
-  constraint `check_1` CHECK ((`i` >= 0))
-  constraint `check_2` CHECK ((`i` <> 10))
+  constraint `check_1` CHECK ((`i` >= 0)),
+  constraint `check_2` CHECK ((`i` <> 10)),
   constraint `check_3` CHECK ((`i` >= 0))
 ) ;
 
