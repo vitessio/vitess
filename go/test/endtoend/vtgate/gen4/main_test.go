@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	_ "embed"
 	"flag"
 	"fmt"
 	"os"
@@ -33,162 +34,24 @@ import (
 )
 
 var (
-	clusterInstance  *cluster.LocalProcessCluster
-	vtParams         mysql.ConnParams
-	mysqlParams      mysql.ConnParams
-	shardedKs        = "ks"
-	unshardedKs      = "uks"
-	shardedKsShards  = []string{"-19a0", "19a0-20", "20-20c0", "20c0-"}
-	Cell             = "test"
-	shardedSchemaSQL = `create table t1(
-	id bigint,
-	col bigint,
-	primary key(id)
-) Engine=InnoDB;
+	clusterInstance *cluster.LocalProcessCluster
+	vtParams        mysql.ConnParams
+	mysqlParams     mysql.ConnParams
+	shardedKs       = "ks"
+	unshardedKs     = "uks"
+	shardedKsShards = []string{"-19a0", "19a0-20", "20-20c0", "20c0-"}
+	Cell            = "test"
+	//go:embed sharded_schema.sql
+	shardedSchemaSQL string
 
-create table t2(
-	id bigint,
-	tcol1 varchar(50),
-	tcol2 varchar(50),
-	primary key(id)
-) Engine=InnoDB;
+	//go:embed unsharded_schema.sql
+	unshardedSchemaSQL string
 
-create table t3(
-	id bigint,
-	tcol1 varchar(50),
-	tcol2 varchar(50),
-	primary key(id)
-) Engine=InnoDB;
+	//go:embed sharded_vschema.json
+	shardedVSchema string
 
-create table user_region(
-	id bigint,
-	cola bigint,
-	colb bigint,
-	primary key(id)
-) Engine=InnoDB;
-
-create table region_tbl(
-	rg bigint,
-	uid bigint,
-	msg varchar(50),
-	primary key(uid)
-) Engine=InnoDB;
-
-create table multicol_tbl(
-	cola bigint,
-	colb varbinary(50),
-	colc varchar(50),
-	msg varchar(50),
-	primary key(cola, colb, colc)
-) Engine=InnoDB;
-`
-	unshardedSchemaSQL = `create table u_a(
-	id bigint,
-	a bigint,
-	primary key(id)
-) Engine=InnoDB;
-
-create table u_b(
-	id bigint,
-	b varchar(50),
-	primary key(id)
-) Engine=InnoDB;
-`
-
-	shardedVSchema = `
-{
-  "sharded": true,
-  "vindexes": {
-    "xxhash": {
-      "type": "xxhash"
-    },
-    "regional_vdx": {
-	  "type": "region_experimental",
-	  "params": {
-		"region_bytes": "1"
-	  }
-    },
-    "multicol_vdx": {
-	  "type": "multicol",
-	  "params": {
-		"column_count": "3",
-		"column_bytes": "1,3,4",
-		"column_vindex": "hash,binary,unicode_loose_xxhash"
-	  }
-    }
-  },
-  "tables": {
-    "t1": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "xxhash"
-        }
-      ]
-    },
-    "t2": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "xxhash"
-        }
-      ],
-      "columns": [
-        {
-          "name": "tcol1",
-          "type": "VARCHAR"
-        }
-      ]
-    },
-    "t3": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "xxhash"
-        }
-      ],
-      "columns": [
-        {
-          "name": "tcol1",
-          "type": "VARCHAR"
-        }
-      ]
-    },
-    "user_region": {
-	  "column_vindexes": [
-	    {
-          "columns": ["cola","colb"],
-		  "name": "regional_vdx"
-		}
-      ]
-    },
-    "region_tbl": {
-	  "column_vindexes": [
-	    {
-          "columns": ["rg","uid"],
-		  "name": "regional_vdx"
-		}
-      ]
-    },
-    "multicol_tbl": {
-	  "column_vindexes": [
-	    {
-          "columns": ["cola","colb","colc"],
-		  "name": "multicol_vdx"
-		}
-      ]
-	}
-  }
-}`
-
-	unshardedVSchema = `
-{
-  "sharded": false,
-  "tables": {
-    "u_a": {},
-    "u_b": {}
-  }
-}`
+	//go:embed unsharded_vschema.json
+	unshardedVSchema string
 
 	routingRules = `
 {"rules": [
