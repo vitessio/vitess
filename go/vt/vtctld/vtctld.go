@@ -24,15 +24,14 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/vtctl"
 
 	rice "github.com/GeertJohan/go.rice"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/wrangler"
 

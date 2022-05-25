@@ -19,6 +19,8 @@ package vtctld
 import (
 	"fmt"
 	"sort"
+	"strings"
+
 	"vitess.io/vitess/go/vt/discovery"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -132,7 +134,7 @@ func qps(stat *discovery.TabletHealth) float64 {
 func getTabletHealthWithCellFilter(hc discovery.HealthCheck, ks, shard, cell string, tabletType topodatapb.TabletType) []*discovery.TabletHealth {
 	tabletTypeStr := topoproto.TabletTypeLString(tabletType)
 	m := hc.CacheStatusMap()
-	key := fmt.Sprintf("%v.%v.%v.%v", cell, ks, shard, tabletTypeStr)
+	key := fmt.Sprintf("%v.%v.%v.%v", cell, ks, shard, strings.ToUpper(tabletTypeStr))
 	if _, ok := m[key]; !ok {
 		return nil
 	}
@@ -208,8 +210,8 @@ func getShardsForKeyspace(healthcheck discovery.HealthCheck, keyspace string) []
 		if status.Target.Keyspace != keyspace {
 			continue
 		}
-		if _, ok := seenShards[status.Target.Keyspace]; !ok {
-			seenShards[status.Target.Keyspace] = true
+		if _, ok := seenShards[status.Target.Shard]; !ok {
+			seenShards[status.Target.Shard] = true
 			shards = append(shards, status.Target.Shard)
 		}
 	}
