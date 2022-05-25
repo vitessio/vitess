@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	stderrors "errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"sort"
 	"strings"
@@ -201,11 +202,35 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 	return cluster, nil
 }
 
-// Close closes a cluster. Its primary function is to gracefully shutdown any
-// background cache goroutines to avoid data races in tests. It does not have
-// any production use case, but needs to be exported.
+// Close closes a cluster, gracefully closing any open proxy connections to
+// Vtctld(s) or VTGate(s) in the cluster, as well as gracefully shutting-down
+// any background cache goroutines.
+//
+// Its primary functions are to avoid leaking connections and other resources
+// when dynamic clusters are evicted from an API using dynamic clusters, and
+// to avoid data races in tests (the latter of these is caused by the cache
+// goroutines).
+//
+// Sub-components of the cluster are `Close`-d concurrently.
 func (c *Cluster) Close() error {
-	return c.schemaCache.Close()
+	var (
+		wg  sync.WaitGroup
+		rec concurrency.AllErrorRecorder
+	)
+
+	for _, closer := range []io.Closer{c.DB, c.Vtctld, c.schemaCache} {
+		wg.Add(1)
+		go func(closer io.Closer) {
+			defer wg.Done()
+			rec.RecordError(closer.Close())
+		}(closer)
+	}
+
+	if rec.HasErrors() {
+		return fmt.Errorf("failed to cleanly close cluster (id=%s): %w", c.ID, rec.Error())
+	}
+
+	return nil
 }
 
 // ToProto returns a value-copy protobuf equivalent of the cluster.
