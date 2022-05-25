@@ -41,9 +41,6 @@ func buildSelectPlan(query string) stmtPlanner {
 		if sel.With != nil {
 			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in select statement")
 		}
-		if sel.GroupBy != nil && sel.GroupBy.All {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: group by all with v3")
-		}
 
 		p, err := handleDualSelects(sel, vschema)
 		if err != nil {

@@ -70,29 +70,6 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		r.clause = "order clause"
 	case *sqlparser.GroupBy:
 		r.clause = "group statement"
-		if node.All {
-			// Get the current scope and find the select statement from it
-			selStmt, isSelect := r.scoper.currentScope().stmt.(*sqlparser.Select)
-			if !isSelect {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "found a group but the current scope is not a select statement")
-			}
-			// Iterate over all the select expressions and add the non-aggregated ones to group by
-			for _, selExpr := range selStmt.SelectExprs {
-				aliasedExpr, isAliasedExpr := selExpr.(*sqlparser.AliasedExpr)
-				if !isAliasedExpr {
-					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "group by all is only supported with schema tracking or without star expressions")
-				}
-				if !sqlparser.ContainsAggregation(aliasedExpr.Expr) && !sqlparser.IsLiteral(aliasedExpr.Expr) {
-					if aliasedExpr.As.IsEmpty() {
-						node.Exprs = append(node.Exprs, aliasedExpr.Expr)
-					} else {
-						node.Exprs = append(node.Exprs, sqlparser.NewColName(aliasedExpr.As.String()))
-					}
-				}
-			}
-			// Remove the all from group by since we have already added the required expressions
-			node.All = false
-		}
 
 	case *sqlparser.Literal:
 		newNode, err := r.rewriteOrderByExpr(node)

@@ -483,6 +483,44 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 	}
 }
 
+func TestRewriteGroupByAll(t *testing.T) {
+	tcases := []struct {
+		sql    string
+		expSQL string
+		expErr string
+	}{{
+		sql:    "select col1, col2, count(*), sum(id), id from t1 group by all",
+		expSQL: "select col1, col2, count(*), sum(id), id from t1 group by col1, col2, id",
+	}, {
+		sql:    "select col1, col2 x, count(*), sum(id), id from t1 group by all",
+		expSQL: "select col1, col2 as x, count(*), sum(id), id from t1 group by col1, x, id",
+	}, {
+		sql:    "select col1, lower(col2 + col3), count(*), sum(id), id from t1 group by all",
+		expSQL: "select col1, lower(col2 + col3), count(*), sum(id), id from t1 group by col1, lower(col2 + col3), id",
+	}, {
+		sql:    "select exists (select col1, lower(col2 + col3) as x, count(*), sum(id), id from t1 group by all having x = 4)",
+		expSQL: "select exists (select col1, lower(col2 + col3) as x, count(*), sum(id), id from t1 group by col1, x, id having x = 4 limit 1) from dual",
+	}, {
+		sql:    "select col1, lower(col2 + col3), count(*), sum(id), id from t1 group by all union select col1, col2, sum(id), 1, 'x' from t1 group by all",
+		expSQL: "select col1, lower(col2 + col3), count(*), sum(id), id from t1 group by col1, lower(col2 + col3), id union select col1, col2, sum(id), 1, 'x' from t1 group by col1, col2",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := Parse(tcase.sql)
+			require.NoError(t, err)
+			selectStatement := ast.(SelectStatement)
+			result, err := RewriteAST(selectStatement, "", SQLSelectLimitUnset, "", nil)
+			require.NoError(t, err)
+			if tcase.expErr == "" {
+				require.NoError(t, err)
+				assert.Equal(t, tcase.expSQL, String(result.AST))
+			} else {
+				require.EqualError(t, err, tcase.expErr)
+			}
+		})
+	}
+}
+
 func TestRewriteToCNF(in *testing.T) {
 	tests := []struct {
 		in       string

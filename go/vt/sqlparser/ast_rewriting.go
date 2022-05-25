@@ -408,6 +408,32 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 		}
 	case *ExistsExpr:
 		er.existsRewrite(cursor, node)
+	case *GroupBy:
+		if node.All {
+			// Get the current scope and find the select statement from it
+			selStmt, isSelect := cursor.Parent().(*Select)
+			if !isSelect {
+				er.err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "found a group but the parent node is not a select statement")
+				return false
+			}
+			// Iterate over all the select expressions and add the non-aggregated ones to group by
+			for _, selExpr := range selStmt.SelectExprs {
+				aliasedExpr, isAliasedExpr := selExpr.(*AliasedExpr)
+				if !isAliasedExpr {
+					er.err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "group by all is only supported with schema tracking or without star expressions")
+					return false
+				}
+				if !ContainsAggregation(aliasedExpr.Expr) && !IsLiteral(aliasedExpr.Expr) {
+					if aliasedExpr.As.IsEmpty() {
+						node.Exprs = append(node.Exprs, aliasedExpr.Expr)
+					} else {
+						node.Exprs = append(node.Exprs, NewColName(aliasedExpr.As.String()))
+					}
+				}
+			}
+			// Remove the all from group by since we have already added the required expressions
+			node.All = false
+		}
 	}
 	return true
 }
@@ -518,7 +544,7 @@ func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 
 	if len(sel.SelectExprs) != 1 ||
 		len(sel.OrderBy) != 0 ||
-		(sel.GroupBy != nil && len(sel.GroupBy.Exprs) != 0) ||
+		(sel.GroupBy != nil && (len(sel.GroupBy.Exprs) != 0 || sel.GroupBy.All)) ||
 		len(sel.From) != 1 ||
 		sel.Where != nil ||
 		sel.Having != nil ||
@@ -578,7 +604,7 @@ func (er *astRewriter) existsRewrite(cursor *Cursor, node *ExistsExpr) {
 		allAggregation := forAll(node.SelectExprs, func(s SelectExpr) bool {
 			return ContainsAggregation(s)
 		})
-		if allAggregation && len(node.GroupBy.Exprs) == 0 {
+		if allAggregation && (node.GroupBy == nil || (len(node.GroupBy.Exprs) == 0 && !node.GroupBy.All)) {
 			// in these situations, we are guaranteed to always get a non-empty result,
 			// so we can replace the EXISTS with a literal true
 			cursor.Replace(BoolVal(true))

@@ -305,47 +305,6 @@ func TestOrderByGroupByLiteral(t *testing.T) {
 	}
 }
 
-func TestGroupByAll(t *testing.T) {
-	schemaInfo := &FakeSI{
-		Tables: map[string]*vindexes.Table{},
-	}
-	cDB := "db"
-	tcases := []struct {
-		sql    string
-		expSQL string
-		expErr string
-	}{{
-		sql:    "select col1, col2, count(*), sum(id), id from t1 group by all",
-		expSQL: "select col1, col2, count(*), sum(id), id from t1 group by col1, col2, id",
-	}, {
-		sql:    "select col1, col2 x, count(*), sum(id), id from t1 group by all",
-		expSQL: "select col1, col2 as x, count(*), sum(id), id from t1 group by col1, x, id",
-	}, {
-		sql:    "select col1, lower(col2 + col3), count(*), sum(id), id from t1 group by all",
-		expSQL: "select col1, lower(col2 + col3), count(*), sum(id), id from t1 group by col1, lower(col2 + col3), id",
-	}, {
-		sql:    "select exists (select col1, lower(col2 + col3), count(*), sum(id), id from t1 group by all)",
-		expSQL: "select exists (select col1, lower(col2 + col3), count(*), sum(id), id from t1 group by col1, lower(col2 + col3), id) from dual",
-	}, {
-		sql:    "select col1, lower(col2 + col3), count(*), sum(id), id from t1 group by all union select col1, col2, sum(id), 1, 'x' from t1 group by all",
-		expSQL: "select col1, lower(col2 + col3), count(*), sum(id), id from t1 group by col1, lower(col2 + col3), id union select col1, col2, sum(id), 1, 'x' from t1 group by col1, col2",
-	}}
-	for _, tcase := range tcases {
-		t.Run(tcase.sql, func(t *testing.T) {
-			ast, err := sqlparser.Parse(tcase.sql)
-			require.NoError(t, err)
-			selectStatement := ast.(sqlparser.SelectStatement)
-			_, err = Analyze(selectStatement, cDB, schemaInfo)
-			if tcase.expErr == "" {
-				require.NoError(t, err)
-				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
-			} else {
-				require.EqualError(t, err, tcase.expErr)
-			}
-		})
-	}
-}
-
 func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 	schemaInfo := &FakeSI{Tables: map[string]*vindexes.Table{
 		"t1": {
