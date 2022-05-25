@@ -55,7 +55,7 @@ func init() {
 	servenv.RegisterDefaultFlags()
 
 	logger := logutil.NewConsoleLogger()
-	logger.Printf("*** This is a legacy sharding tool that will soon be removed! Please use VReplication instead: https://vitess.io/docs/reference/vreplication/ ***\n")
+	logger.Printf("*** This is a legacy sharding tool that will soon be removed! Please use the MoveTables or Reshard commands instead: https://vitess.io/docs/reference/vreplication/ ***\n")
 	flag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
 	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
 		Preface: func(w io.Writer) {
