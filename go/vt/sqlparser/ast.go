@@ -2275,8 +2275,9 @@ type (
 	// ConvertExpr represents a call to CONVERT(expr, type)
 	// or it's equivalent CAST(expr AS type). Both are rewritten to the former.
 	ConvertExpr struct {
-		Expr Expr
-		Type *ConvertType
+		Expr  Expr
+		Type  *ConvertType
+		Array bool
 	}
 
 	// ConvertUsingExpr represents a call to CONVERT(expr USING charset).
@@ -2353,8 +2354,12 @@ type (
 		JSONVal Expr
 	}
 
-	// Offset is another AST type that is used during planning and never produced by the parser
-	Offset int
+	// Offset is an AST type that is used during planning and never produced by the parser
+	// it is the column offset from the incoming result stream
+	Offset struct {
+		V        int
+		Original string
+	}
 
 	// JSONArrayExpr represents JSON_ARRAY()
 	// More information on https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-array
@@ -2638,7 +2643,7 @@ func (*ExtractedSubquery) iExpr()                  {}
 func (*TrimFuncExpr) iExpr()                       {}
 func (*JSONSchemaValidFuncExpr) iExpr()            {}
 func (*JSONSchemaValidationReportFuncExpr) iExpr() {}
-func (Offset) iExpr()                              {}
+func (*Offset) iExpr()                             {}
 func (*JSONPrettyExpr) iExpr()                     {}
 func (*JSONStorageFreeExpr) iExpr()                {}
 func (*JSONStorageSizeExpr) iExpr()                {}

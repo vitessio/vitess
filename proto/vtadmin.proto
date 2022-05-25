@@ -43,6 +43,9 @@ service VTAdmin {
     rpc DeleteShards(DeleteShardsRequest) returns (vtctldata.DeleteShardsResponse) {};
     // DeleteTablet deletes a tablet from the topology
     rpc DeleteTablet(DeleteTabletRequest) returns (DeleteTabletResponse) {};
+    // EmergencyReparentShard reparents the shard to the new primary. It assumes
+    // the old primary is dead or otherwise not responding.
+    rpc EmergencyReparentShard(EmergencyReparentShardRequest) returns (EmergencyReparentShardResponse) {};
     // FindSchema returns a single Schema that matches the provided table name
     // across all specified clusters IDs. Not specifying a set of cluster IDs
     // causes the search to span all configured clusters.
@@ -98,6 +101,14 @@ service VTAdmin {
     rpc GetWorkflows(GetWorkflowsRequest) returns (GetWorkflowsResponse) {};
     // PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
     rpc PingTablet(PingTabletRequest) returns (PingTabletResponse) {};
+    // PlannedReparentShard reparents the shard to a new primary, or away from
+    // an old primary. Both the old and new primaries must be reachable and
+    // running.
+    //
+    // NOTE: PRS will not consider replicas outside the current shard primary's
+    // cell as promotion candidates unless NewPrimary is explicitly provided in
+    // the request.
+    rpc PlannedReparentShard(PlannedReparentShardRequest) returns (PlannedReparentShardResponse) {};
     // RefreshState reloads the tablet record on the specified tablet.
     rpc RefreshState(RefreshStateRequest) returns (RefreshStateResponse) {};
     // ReparentTablet reparents a tablet to the current primary in the shard.
@@ -120,6 +131,16 @@ service VTAdmin {
     // StopReplication runs the underlying database command to stop replication
     // on a tablet
     rpc StopReplication(StopReplicationRequest) returns (StopReplicationResponse) {};
+    // TabletExternallyReparented updates the metadata in a cluster's topology
+    // to acknowledge a shard primary change performed by an external tool
+    // (e.g. orchestrator*).
+    //
+    // See the Reparenting guide for more information:
+    // https://vitess.io/docs/user-guides/configuration-advanced/reparenting/#external-reparenting.
+    //
+    // * "orchestrator" here refers to external orchestrator, not the newer,
+    // Vitess-aware orchestrator, VTOrc.
+    rpc TabletExternallyReparented(TabletExternallyReparentedRequest) returns (TabletExternallyReparentedResponse) {};
     // ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
     rpc ValidateKeyspace(ValidateKeyspaceRequest) returns (vtctldata.ValidateKeyspaceResponse) {};
     // ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace.
@@ -303,6 +324,23 @@ message DeleteTabletRequest {
 message DeleteTabletResponse {
     string status = 1;
     Cluster cluster = 2;
+}
+
+message EmergencyReparentShardRequest {
+    string cluster_id = 1;
+    vtctldata.EmergencyReparentShardRequest options = 2;
+}
+
+message EmergencyReparentShardResponse {
+    Cluster cluster = 1;
+    string keyspace = 2;
+    string shard = 3;
+    // PromotedPrimary is the tablet alias that was promoted to shard primary.
+    // If NewPrimary was set in the request options, then this will be the
+    // same tablet alias. Otherwise, it will be the alias of the tablet found
+    // to be most up-to-date in the shard.
+    topodata.TabletAlias promoted_primary = 4;
+    repeated logutil.Event events = 5;
 }
 
 message FindSchemaRequest {
@@ -523,6 +561,23 @@ message PingTabletResponse {
     Cluster cluster = 2;
 }
 
+message PlannedReparentShardRequest {
+    string cluster_id = 1;
+    vtctldata.PlannedReparentShardRequest options = 2;
+}
+
+message PlannedReparentShardResponse {
+    Cluster cluster = 1;
+    string keyspace = 2;
+    string shard = 3;
+    // PromotedPrimary is the tablet alias that was promoted to shard primary.
+    // If NewPrimary was set in the request options, then this will be the
+    // same tablet alias. Otherwise, it will be the alias of the tablet found
+    // to be most up-to-date in the shard.
+    topodata.TabletAlias promoted_primary = 4;
+    repeated logutil.Event events = 5;
+}
+
 message RefreshStateRequest {
     topodata.TabletAlias alias = 1;
     repeated string cluster_ids = 2;
@@ -682,6 +737,21 @@ message StopReplicationRequest {
 message StopReplicationResponse {
     string status = 1;
     Cluster cluster = 2;
+}
+
+message TabletExternallyReparentedRequest {
+    // Tablet is the alias of the tablet that was promoted externally and should
+    // be updated to the shard primary in the topo.
+    topodata.TabletAlias alias = 1;
+    repeated string cluster_ids = 2;
+}
+  
+message TabletExternallyReparentedResponse {
+    Cluster cluster = 1;
+    string keyspace = 2;
+    string shard = 3;
+    topodata.TabletAlias new_primary = 4;
+    topodata.TabletAlias old_primary = 5;
 }
 
 message ValidateKeyspaceRequest {

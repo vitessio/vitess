@@ -18,15 +18,15 @@
 #
 # First build the `common` image, then any flavors you want. For example:
 # $ docker/bootstrap/build.sh common
-# $ docker/bootstrap/build.sh mysql56
+# $ docker/bootstrap/build.sh mysql80
 #
 # Is it also possible to specify the resulting image name:
 # $ docker/bootstrap/build.sh common --image my-common-image
 #
 # If custom image names are specified, you might need to set the base image name when building flavors:
-# $ docker/bootstrap/build.sh mysql56 --base_image my-common-image
+# $ docker/bootstrap/build.sh mysql80 --base_image my-common-image
 # Both arguments can be combined. For example:
-# $ docker/bootstrap/build.sh mysql56 --base_image my-common-image --image my-mysql-image
+# $ docker/bootstrap/build.sh mysql80 --base_image my-common-image --image my-mysql-image
 
 
 flavor=$1

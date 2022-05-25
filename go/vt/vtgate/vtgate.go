@@ -377,17 +377,17 @@ func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
-		goto handleError
+	} else {
+		safeSession := NewSafeSession(session)
+		qr, err = vtg.executor.Execute(ctx, "Execute", safeSession, sql, bindVariables)
+		safeSession.RemoveInternalSavepoint()
 	}
-
-	qr, err = vtg.executor.Execute(ctx, "Execute", NewSafeSession(session), sql, bindVariables)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		vtg.rowsAffected.Add(statsKey, int64(qr.RowsAffected))
 		return session, qr, nil
 	}
 
-handleError:
 	query := map[string]any{
 		"Sql":           sql,
 		"BindVariables": bindVariables,
@@ -439,10 +439,11 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 	} else {
+		safeSession := NewSafeSession(session)
 		err = vtg.executor.StreamExecute(
 			ctx,
 			"StreamExecute",
-			NewSafeSession(session),
+			safeSession,
 			sql,
 			bindVariables,
 			func(reply *sqltypes.Result) error {
@@ -450,6 +451,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 				vtg.rowsAffected.Add(statsKey, int64(reply.RowsAffected))
 				return callback(reply)
 			})
+		safeSession.RemoveInternalSavepoint()
 	}
 	if err != nil {
 		query := map[string]any{

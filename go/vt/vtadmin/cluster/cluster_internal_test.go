@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,6 +51,321 @@ type vtctldProxy struct {
 }
 
 func (fake *vtctldProxy) Dial(ctx context.Context) error { return fake.dialErr }
+
+func TestDeleteTablets(t *testing.T) {
+	t.Parallel()
+
+	testClusterProto := &vtadminpb.Cluster{
+		Id:   "test",
+		Name: "test",
+	}
+
+	tests := []struct {
+		name      string
+		cluster   *Cluster
+		timeout   time.Duration
+		setup     func(t testing.TB, c *Cluster)
+		req       *vtctldatapb.DeleteTabletsRequest
+		expected  *vtctldatapb.DeleteTabletsResponse
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			cluster: &Cluster{
+				Vtctld: &fakevtctldclient.VtctldClient{
+					DeleteTabletsResults: map[string]error{
+						"zone1-0000000100,zone1-0000000101": nil,
+					},
+				},
+				topoRWPool: pools.NewRPCPool(1, time.Millisecond*100, nil),
+			},
+			req: &vtctldatapb.DeleteTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+			expected: &vtctldatapb.DeleteTabletsResponse{},
+		},
+		{
+			name: "error",
+			cluster: &Cluster{
+				Vtctld:     &fakevtctldclient.VtctldClient{},
+				topoRWPool: pools.NewRPCPool(1, time.Millisecond*100, nil),
+			},
+			req: &vtctldatapb.DeleteTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "RPC pool full",
+			cluster: &Cluster{
+				Vtctld:     &fakevtctldclient.VtctldClient{},
+				topoRWPool: pools.NewRPCPool(1, time.Millisecond*10, nil),
+			},
+			timeout: time.Millisecond * 50,
+			setup: func(t testing.TB, c *Cluster) {
+				err := c.topoRWPool.Acquire(context.Background())
+				require.NoError(t, err, "failed to lock RPC pool")
+				t.Cleanup(c.topoRWPool.Release)
+			},
+			req: &vtctldatapb.DeleteTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tt.cluster.ID = testClusterProto.Id
+			tt.cluster.Name = testClusterProto.Name
+
+			if tt.setup != nil {
+				tt.setup(t, tt.cluster)
+			}
+
+			var (
+				ctx    context.Context
+				cancel context.CancelFunc
+			)
+
+			switch tt.timeout {
+			case 0:
+				ctx, cancel = context.WithCancel(context.Background())
+			default:
+				ctx, cancel = context.WithTimeout(context.Background(), tt.timeout)
+			}
+			defer cancel()
+
+			resp, err := tt.cluster.DeleteTablets(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err, "expected error, got %+v", resp)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestEmergencyReparentShard(t *testing.T) {
+	t.Parallel()
+
+	testClusterProto := &vtadminpb.Cluster{
+		Id:   "test",
+		Name: "test",
+	}
+
+	tests := []struct {
+		name      string
+		cluster   *Cluster
+		setup     func(t testing.TB, c *Cluster)
+		timeout   time.Duration
+		req       *vtctldatapb.EmergencyReparentShardRequest
+		expected  *vtadminpb.EmergencyReparentShardResponse
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			cluster: &Cluster{
+				ID:   "test",
+				Name: "test",
+				Vtctld: &fakevtctldclient.VtctldClient{
+					EmergencyReparentShardResults: map[string]struct {
+						Response *vtctldatapb.EmergencyReparentShardResponse
+						Error    error
+					}{
+						"ks1/-": {
+							Response: &vtctldatapb.EmergencyReparentShardResponse{
+								Keyspace: "ks1",
+								Shard:    "-",
+								PromotedPrimary: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+								Events: []*logutilpb.Event{{}, {}, {}},
+							},
+						},
+						"ks2/-80": {
+							Error: fmt.Errorf("some error: %w", assert.AnError),
+						},
+					},
+				},
+				emergencyReparentPool: pools.NewRPCPool(1, time.Second, nil),
+			},
+			req: &vtctldatapb.EmergencyReparentShardRequest{
+				Keyspace: "ks1",
+				Shard:    "-",
+				NewPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expected: &vtadminpb.EmergencyReparentShardResponse{
+				Cluster:  testClusterProto,
+				Keyspace: "ks1",
+				Shard:    "-",
+				PromotedPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Events: []*logutilpb.Event{{}, {}, {}},
+			},
+		},
+		{
+			name: "error",
+			cluster: &Cluster{
+				ID:   "test",
+				Name: "test",
+				Vtctld: &fakevtctldclient.VtctldClient{
+					EmergencyReparentShardResults: map[string]struct {
+						Response *vtctldatapb.EmergencyReparentShardResponse
+						Error    error
+					}{
+						"ks1/-": {
+							Response: &vtctldatapb.EmergencyReparentShardResponse{
+								Keyspace: "ks1",
+								Shard:    "-",
+								PromotedPrimary: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+								Events: []*logutilpb.Event{{}, {}, {}},
+							},
+						},
+						"ks2/-80": {
+							Error: fmt.Errorf("some error: %w", assert.AnError),
+						},
+					},
+				},
+				emergencyReparentPool: pools.NewRPCPool(1, time.Second, nil),
+			},
+			req: &vtctldatapb.EmergencyReparentShardRequest{
+				Keyspace: "ks2",
+				Shard:    "-80",
+				NewPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "pool full",
+			cluster: &Cluster{
+				ID:   "test",
+				Name: "test",
+				Vtctld: &fakevtctldclient.VtctldClient{
+					EmergencyReparentShardResults: map[string]struct {
+						Response *vtctldatapb.EmergencyReparentShardResponse
+						Error    error
+					}{
+						"ks1/-": {
+							Response: &vtctldatapb.EmergencyReparentShardResponse{
+								Keyspace: "ks1",
+								Shard:    "-",
+								PromotedPrimary: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+								Events: []*logutilpb.Event{{}, {}, {}},
+							},
+						},
+						"ks2/-80": {
+							Error: fmt.Errorf("some error: %w", assert.AnError),
+						},
+					},
+				},
+				emergencyReparentPool: pools.NewRPCPool(1, time.Millisecond*25, nil),
+			},
+			setup: func(t testing.TB, c *Cluster) {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*50)
+				defer cancel()
+
+				err := c.emergencyReparentPool.Acquire(ctx)
+				require.NoError(t, err, "could not block ers pool in setup")
+				t.Cleanup(c.emergencyReparentPool.Release)
+			},
+			timeout: time.Millisecond * 50,
+			req: &vtctldatapb.EmergencyReparentShardRequest{
+				Keyspace: "ks1",
+				Shard:    "-",
+				NewPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if tt.setup != nil {
+				func(t *testing.T) {
+					t.Helper()
+					tt.setup(t, tt.cluster)
+				}(t)
+			}
+
+			var (
+				ctx    context.Context
+				cancel context.CancelFunc
+			)
+			switch tt.timeout {
+			case 0:
+				ctx, cancel = context.WithCancel(context.Background())
+			default:
+				ctx, cancel = context.WithTimeout(context.Background(), tt.timeout)
+			}
+			defer cancel()
+
+			resp, err := tt.cluster.EmergencyReparentShard(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
 
 func Test_getShardSets(t *testing.T) {
 	t.Parallel()
@@ -190,6 +506,302 @@ func Test_getShardSets(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.result, result)
+		})
+	}
+}
+
+func TestPlannedReparentShard(t *testing.T) {
+	t.Parallel()
+
+	testClusterProto := &vtadminpb.Cluster{
+		Id:   "test",
+		Name: "test",
+	}
+
+	tests := []struct {
+		name      string
+		cluster   *Cluster
+		setup     func(t testing.TB, c *Cluster)
+		timeout   time.Duration
+		req       *vtctldatapb.PlannedReparentShardRequest
+		expected  *vtadminpb.PlannedReparentShardResponse
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			cluster: &Cluster{
+				ID:   "test",
+				Name: "test",
+				Vtctld: &fakevtctldclient.VtctldClient{
+					PlannedReparentShardResults: map[string]struct {
+						Response *vtctldatapb.PlannedReparentShardResponse
+						Error    error
+					}{
+						"ks1/-": {
+							Response: &vtctldatapb.PlannedReparentShardResponse{
+								Keyspace: "ks1",
+								Shard:    "-",
+								PromotedPrimary: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+								Events: []*logutilpb.Event{{}, {}, {}},
+							},
+						},
+						"ks2/-80": {
+							Error: fmt.Errorf("some error: %w", assert.AnError),
+						},
+					},
+				},
+				reparentPool: pools.NewRPCPool(1, time.Second, nil),
+			},
+			req: &vtctldatapb.PlannedReparentShardRequest{
+				Keyspace: "ks1",
+				Shard:    "-",
+				NewPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expected: &vtadminpb.PlannedReparentShardResponse{
+				Cluster:  testClusterProto,
+				Keyspace: "ks1",
+				Shard:    "-",
+				PromotedPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Events: []*logutilpb.Event{{}, {}, {}},
+			},
+		},
+		{
+			name: "error",
+			cluster: &Cluster{
+				ID:   "test",
+				Name: "test",
+				Vtctld: &fakevtctldclient.VtctldClient{
+					PlannedReparentShardResults: map[string]struct {
+						Response *vtctldatapb.PlannedReparentShardResponse
+						Error    error
+					}{
+						"ks1/-": {
+							Response: &vtctldatapb.PlannedReparentShardResponse{
+								Keyspace: "ks1",
+								Shard:    "-",
+								PromotedPrimary: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+								Events: []*logutilpb.Event{{}, {}, {}},
+							},
+						},
+						"ks2/-80": {
+							Error: fmt.Errorf("some error: %w", assert.AnError),
+						},
+					},
+				},
+				reparentPool: pools.NewRPCPool(1, time.Second, nil),
+			},
+			req: &vtctldatapb.PlannedReparentShardRequest{
+				Keyspace: "ks2",
+				Shard:    "-80",
+				NewPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "pool full",
+			cluster: &Cluster{
+				ID:   "test",
+				Name: "test",
+				Vtctld: &fakevtctldclient.VtctldClient{
+					PlannedReparentShardResults: map[string]struct {
+						Response *vtctldatapb.PlannedReparentShardResponse
+						Error    error
+					}{
+						"ks1/-": {
+							Response: &vtctldatapb.PlannedReparentShardResponse{
+								Keyspace: "ks1",
+								Shard:    "-",
+								PromotedPrimary: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+								Events: []*logutilpb.Event{{}, {}, {}},
+							},
+						},
+						"ks2/-80": {
+							Error: fmt.Errorf("some error: %w", assert.AnError),
+						},
+					},
+				},
+				reparentPool: pools.NewRPCPool(1, time.Millisecond*25, nil),
+			},
+			setup: func(t testing.TB, c *Cluster) {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*50)
+				defer cancel()
+
+				err := c.reparentPool.Acquire(ctx)
+				require.NoError(t, err, "could not block prs pool in setup")
+				t.Cleanup(c.reparentPool.Release)
+			},
+			timeout: time.Millisecond * 50,
+			req: &vtctldatapb.PlannedReparentShardRequest{
+				Keyspace: "ks1",
+				Shard:    "-",
+				NewPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if tt.setup != nil {
+				func(t *testing.T) {
+					t.Helper()
+					tt.setup(t, tt.cluster)
+				}(t)
+			}
+
+			var (
+				ctx    context.Context
+				cancel context.CancelFunc
+			)
+			switch tt.timeout {
+			case 0:
+				ctx, cancel = context.WithCancel(context.Background())
+			default:
+				ctx, cancel = context.WithTimeout(context.Background(), tt.timeout)
+			}
+			defer cancel()
+
+			resp, err := tt.cluster.PlannedReparentShard(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestRefreshState(t *testing.T) {
+	t.Parallel()
+
+	testClusterProto := &vtadminpb.Cluster{
+		Id:   "test",
+		Name: "test",
+	}
+
+	tests := []struct {
+		name              string
+		cluster           *Cluster
+		timeout           time.Duration
+		setup             func(t testing.TB, c *Cluster)
+		tablet            *vtadminpb.Tablet
+		assertion         func(t assert.TestingT, err error, msgAndArgs ...any) bool
+		assertionMsgExtra []any
+	}{
+		{
+			name: "ok",
+			cluster: &Cluster{
+				Vtctld: &fakevtctldclient.VtctldClient{
+					RefreshStateResults: map[string]error{
+						"zone1-0000000100": nil,
+					},
+				},
+				topoReadPool: pools.NewRPCPool(1, time.Millisecond*100, nil),
+			},
+			tablet: &vtadminpb.Tablet{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			assertion: assert.NoError,
+		},
+		{
+			name: "error",
+			cluster: &Cluster{
+				Vtctld: &fakevtctldclient.VtctldClient{
+					RefreshStateResults: map[string]error{
+						"zone1-0000000100": fmt.Errorf("some error"),
+					},
+				},
+				topoReadPool: pools.NewRPCPool(1, time.Millisecond*100, nil),
+			},
+			tablet: &vtadminpb.Tablet{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			assertion: assert.Error,
+		},
+		{
+			name: "RPC pool full",
+			cluster: &Cluster{
+				Vtctld:       &fakevtctldclient.VtctldClient{},
+				topoReadPool: pools.NewRPCPool(1, time.Millisecond*10, nil),
+			},
+			timeout: time.Millisecond * 50,
+			setup: func(t testing.TB, c *Cluster) {
+				err := c.topoReadPool.Acquire(context.Background())
+				require.NoError(t, err, "failed to lock RPC pool")
+				t.Cleanup(c.topoReadPool.Release)
+			},
+			tablet: &vtadminpb.Tablet{
+				Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{}},
+			},
+			assertion: assert.Error,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tt.cluster.ID = testClusterProto.Id
+			tt.cluster.Name = testClusterProto.Name
+
+			if tt.setup != nil {
+				tt.setup(t, tt.cluster)
+			}
+
+			var (
+				ctx    context.Context
+				cancel context.CancelFunc
+			)
+
+			switch tt.timeout {
+			case 0:
+				ctx, cancel = context.WithCancel(context.Background())
+			default:
+				ctx, cancel = context.WithTimeout(context.Background(), tt.timeout)
+			}
+			defer cancel()
+
+			err := tt.cluster.RefreshState(ctx, tt.tablet)
+			tt.assertion(t, err, tt.assertionMsgExtra...)
 		})
 	}
 }
@@ -993,6 +1605,336 @@ func Test_reloadTabletSchemas(t *testing.T) {
 				return topoproto.TabletAliasString(results[i].Tablet.Tablet.Alias) < topoproto.TabletAliasString(results[j].Tablet.Tablet.Alias)
 			})
 			utils.MustMatch(t, tt.expected, results)
+		})
+	}
+}
+
+func TestReparentTablet(t *testing.T) {
+	t.Parallel()
+
+	testClusterProto := &vtadminpb.Cluster{
+		Id:   "test",
+		Name: "test",
+	}
+
+	tests := []struct {
+		name      string
+		cluster   *Cluster
+		timeout   time.Duration
+		setup     func(t testing.TB, c *Cluster)
+		tablet    *vtadminpb.Tablet
+		expected  *vtadminpb.ReparentTabletResponse
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			cluster: &Cluster{
+				Vtctld: &fakevtctldclient.VtctldClient{
+					ReparentTabletResults: map[string]struct {
+						Response *vtctldatapb.ReparentTabletResponse
+						Error    error
+					}{
+						"zone1-0000000100": {
+							Response: &vtctldatapb.ReparentTabletResponse{
+								Keyspace: "testks",
+								Shard:    "-",
+								Primary: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  500,
+								},
+							},
+						},
+					},
+				},
+				topoRWPool: pools.NewRPCPool(1, time.Millisecond*100, nil),
+			},
+			tablet: &vtadminpb.Tablet{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			expected: &vtadminpb.ReparentTabletResponse{
+				Keyspace: "testks",
+				Shard:    "-",
+				Primary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  500,
+				},
+				Cluster: testClusterProto,
+			},
+		},
+		{
+			name: "error",
+			cluster: &Cluster{
+				Vtctld:     &fakevtctldclient.VtctldClient{},
+				topoRWPool: pools.NewRPCPool(1, time.Millisecond*100, nil),
+			},
+			tablet: &vtadminpb.Tablet{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "RPC pool full",
+			cluster: &Cluster{
+				Vtctld:     &fakevtctldclient.VtctldClient{},
+				topoRWPool: pools.NewRPCPool(1, time.Millisecond*10, nil),
+			},
+			timeout: time.Millisecond * 50,
+			setup: func(t testing.TB, c *Cluster) {
+				err := c.topoRWPool.Acquire(context.Background())
+				require.NoError(t, err, "failed to lock RPC pool")
+				t.Cleanup(c.topoRWPool.Release)
+			},
+			tablet: &vtadminpb.Tablet{
+				Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{}},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tt.cluster.ID = testClusterProto.Id
+			tt.cluster.Name = testClusterProto.Name
+
+			if tt.setup != nil {
+				tt.setup(t, tt.cluster)
+			}
+
+			var (
+				ctx    context.Context
+				cancel context.CancelFunc
+			)
+
+			switch tt.timeout {
+			case 0:
+				ctx, cancel = context.WithCancel(context.Background())
+			default:
+				ctx, cancel = context.WithTimeout(context.Background(), tt.timeout)
+			}
+			defer cancel()
+
+			resp, err := tt.cluster.ReparentTablet(ctx, tt.tablet)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestTabletExternallyReparented(t *testing.T) {
+	t.Parallel()
+
+	testClusterProto := &vtadminpb.Cluster{
+		Id:   "test",
+		Name: "test",
+	}
+
+	tests := []struct {
+		name      string
+		cluster   *Cluster
+		setup     func(t testing.TB, c *Cluster)
+		timeout   time.Duration
+		tablet    *vtadminpb.Tablet
+		expected  *vtadminpb.TabletExternallyReparentedResponse
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			cluster: &Cluster{
+				ID:   "test",
+				Name: "test",
+				Vtctld: &fakevtctldclient.VtctldClient{
+					TabletExternallyReparentedResults: map[string]struct {
+						Response *vtctldatapb.TabletExternallyReparentedResponse
+						Error    error
+					}{
+						"zone1-0000000100": {
+							Response: &vtctldatapb.TabletExternallyReparentedResponse{
+								Keyspace: "ks1",
+								Shard:    "-",
+								NewPrimary: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+								OldPrimary: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  200,
+								},
+							},
+						},
+						"zone1-0000000200": {
+							Error: fmt.Errorf("some error: %w", assert.AnError),
+						},
+					},
+				},
+				topoRWPool: pools.NewRPCPool(1, time.Second, nil),
+			},
+			tablet: &vtadminpb.Tablet{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			expected: &vtadminpb.TabletExternallyReparentedResponse{
+				Cluster:  testClusterProto,
+				Keyspace: "ks1",
+				Shard:    "-",
+				NewPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				OldPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+		},
+		{
+			name: "error",
+			cluster: &Cluster{
+				ID:   "test",
+				Name: "test",
+				Vtctld: &fakevtctldclient.VtctldClient{
+					TabletExternallyReparentedResults: map[string]struct {
+						Response *vtctldatapb.TabletExternallyReparentedResponse
+						Error    error
+					}{
+						"zone1-0000000100": {
+							Response: &vtctldatapb.TabletExternallyReparentedResponse{
+								Keyspace: "ks1",
+								Shard:    "-",
+								NewPrimary: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+								OldPrimary: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  200,
+								},
+							},
+						},
+						"zone1-0000000200": {
+							Error: fmt.Errorf("some error: %w", assert.AnError),
+						},
+					},
+				},
+				topoRWPool: pools.NewRPCPool(1, time.Second, nil),
+			},
+			tablet: &vtadminpb.Tablet{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "pool full",
+			cluster: &Cluster{
+				ID:   "test",
+				Name: "test",
+				Vtctld: &fakevtctldclient.VtctldClient{
+					TabletExternallyReparentedResults: map[string]struct {
+						Response *vtctldatapb.TabletExternallyReparentedResponse
+						Error    error
+					}{
+						"zone1-0000000100": {
+							Response: &vtctldatapb.TabletExternallyReparentedResponse{
+								Keyspace: "ks1",
+								Shard:    "-",
+								NewPrimary: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+								OldPrimary: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  200,
+								},
+							},
+						},
+						"zone1-0000000200": {
+							Error: fmt.Errorf("some error: %w", assert.AnError),
+						},
+					},
+				},
+				topoRWPool: pools.NewRPCPool(1, time.Millisecond*25, nil),
+			},
+			setup: func(t testing.TB, c *Cluster) {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*50)
+				defer cancel()
+
+				err := c.topoRWPool.Acquire(ctx)
+				require.NoError(t, err, "could not block topoRW pool in setup")
+				t.Cleanup(c.topoRWPool.Release)
+			},
+			timeout: time.Millisecond * 50,
+			tablet: &vtadminpb.Tablet{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if tt.setup != nil {
+				func(t *testing.T) {
+					t.Helper()
+					tt.setup(t, tt.cluster)
+				}(t)
+			}
+
+			var (
+				ctx    context.Context
+				cancel context.CancelFunc
+			)
+			switch tt.timeout {
+			case 0:
+				ctx, cancel = context.WithCancel(context.Background())
+			default:
+				ctx, cancel = context.WithTimeout(context.Background(), tt.timeout)
+			}
+			defer cancel()
+
+			resp, err := tt.cluster.TabletExternallyReparented(ctx, tt.tablet)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
