@@ -66,9 +66,33 @@ When `--heartbeat_on_demand_duration` has a positive value, then heartbeats are 
 
 The heartbeats are generated according to `--heartbeat_interval`.
 
+#### Deprecation of --online_ddl_check_interval
+
+The flag `--online_ddl_check_interval` is deprecated and will be removed in `v15`. It has been unused in `v13`.
+
 ### Online DDL changes
 
-See new SQL syntax for controlling/viewing throttling fomr Online DDL, down below.
+#### Online DDL is generally available
+
+Online DDL is no longer experimental (with the exception of `pt-osc` strategy). Specifically:
+
+- Managed schema changes, the scheduler, the backing tables
+- Supporting SQL syntax
+- `vitess` strategy (online DDL via VReplication)
+- `gh-ost` strategy (online DDL via 3rd party `gh-ost`)
+- Recoverable migrations
+- Revertible migrations
+- Declarative migrations
+- Postponed migrations
+- and all other functionality
+
+Are all considered production-ready.
+
+`pt-osc` strategy (online DDL via 3rd party `pt-online-schema-change`) remains experimental.
+
+#### Throttling
+
+See new SQL syntax for controlling/viewing throttling for Online DDL, down below.
 
 #### ddl_strategy: 'vitess'
 

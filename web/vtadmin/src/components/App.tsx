@@ -36,6 +36,8 @@ import { Backups } from './routes/Backups';
 import { Shard } from './routes/shard/Shard';
 import { Vtctlds } from './routes/Vtctlds';
 import { SnackbarContainer } from './Snackbar';
+import { isReadOnlyMode } from '../util/env';
+import { CreateKeyspace } from './routes/createKeyspace/CreateKeyspace';
 
 export const App = () => {
     return (
@@ -59,9 +61,15 @@ export const App = () => {
                             <Gates />
                         </Route>
 
-                        <Route path="/keyspaces">
+                        <Route exact path="/keyspaces">
                             <Keyspaces />
                         </Route>
+
+                        {!isReadOnlyMode() && (
+                            <Route exact path="/keyspaces/create">
+                                <CreateKeyspace />
+                            </Route>
+                        )}
 
                         <Route path="/keyspace/:clusterID/:keyspace/shard/:shard">
                             <Shard />
@@ -111,7 +119,7 @@ export const App = () => {
                             <Settings />
                         </Route>
 
-                        <Redirect exact from="/" to="/tablets" />
+                        <Redirect exact from="/" to="/schemas" />
 
                         <Route>
                             <Error404 />

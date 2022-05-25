@@ -1138,6 +1138,10 @@ var (
 		input:  "alter table a alter x set default NULL, alter column x2 set default 's', alter x3 drop default",
 		output: "alter table a alter column x set default null, alter column x2 set default 's', alter column x3 drop default",
 	}, {
+		input: "alter table a alter column x set visible, alter column x2 set invisible",
+	}, {
+		input: "alter table a alter index x visible, alter index x2 invisible",
+	}, {
 		input: "alter table a add spatial key foo (column1)",
 	}, {
 		input: "alter table a add fulltext key foo (column1), order by a, b, c",
@@ -1174,6 +1178,8 @@ var (
 		input: "alter table a convert to character set utf32",
 	}, {
 		input: "alter table `By` add column foo int, algorithm = default",
+	}, {
+		input: "alter table `By` add column foo int, algorithm = instant",
 	}, {
 		input: "alter table a rename b",
 	}, {
@@ -3505,6 +3511,9 @@ func TestConvert(t *testing.T) {
 		input:  "select convert('abc', char(4) ascii) from t",
 		output: "select convert('abc', char(4) character set latin1) from t",
 	}, {
+		input:  "select convert('abc', char(4) ascii binary) from t",
+		output: "select convert('abc', char(4) character set latin1 binary) from t",
+	}, {
 		input:  "select convert('abc', char unicode) from t",
 		output: "select convert('abc', char character set ucs2) from t",
 	}, {
@@ -3543,6 +3552,11 @@ func TestConvert(t *testing.T) {
 		input: "select convert('abc', datetime) from t",
 	}, {
 		input: "select convert('abc', json) from t",
+	}, {
+		input: "select convert(json_keys(c), char(64) array) from t",
+	}, {
+		input:  "select cast(json_keys(c) as char(64) array) from t",
+		output: "select convert(json_keys(c), char(64) array) from t",
 	}}
 
 	for _, tcase := range validSQL {
@@ -3976,6 +3990,9 @@ func TestCreateTable(t *testing.T) {
 			output: `create table t1 (
 	idb varchar(36) character set utf8mb4 collate utf8mb4_0900_ai_ci as (json_unquote(json_extract(jsonobj, _utf8mb4 '$._id'))) stored not null
 )`,
+		},
+		{
+			input: "create table t2 (\n\tid int not null,\n\textra tinyint(1) as (id = 1) stored,\n\tPRIMARY KEY (id)\n)",
 		},
 		// multi-column indexes
 		{
@@ -4871,8 +4888,12 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 			output: "create table t (\n\ti bigint\n) charset ascii",
 		},
 		{
-			input:  "create table t (i1 char ascii, i2 char character set ascii)",
-			output: "create table t (\n\ti1 char character set latin1,\n\ti2 char character set ascii\n)",
+			input:  "create table t (i1 char ascii, i2 char character set ascii, i3 char binary, i4 char unicode binary, i5 char binary unicode, i6 char ascii binary, i7 char binary ascii, i8 char byte, i9 char character set latin1 binary)",
+			output: "create table t (\n\ti1 char character set latin1,\n\ti2 char character set ascii,\n\ti3 char binary,\n\ti4 char character set ucs2 binary,\n\ti5 char character set ucs2 binary,\n\ti6 char character set latin1 binary,\n\ti7 char character set latin1 binary,\n\ti8 binary,\n\ti9 char character set latin1 binary\n)",
+		},
+		{
+			input:  "create table t (id int, info JSON, INDEX zips((CAST(info->'$.field' AS unsigned ARRAY))))",
+			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tINDEX zips ((convert(info -> '$.field', unsigned array)))\n)",
 		},
 	}
 	for _, test := range createTableQueries {

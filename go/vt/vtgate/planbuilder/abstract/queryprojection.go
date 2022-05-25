@@ -45,6 +45,9 @@ type (
 		OrderExprs         []OrderBy
 		CanPushDownSorting bool
 		HasStar            bool
+
+		// AddedColumn keeps a counter for expressions added to solve HAVING expressions the user is not selecting
+		AddedColumn int
 	}
 
 	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
@@ -65,14 +68,19 @@ type (
 		aliasedExpr *sqlparser.AliasedExpr
 	}
 
+	// Aggr encodes all information needed for aggregation functions
 	Aggr struct {
 		Original *sqlparser.AliasedExpr
-		Func     *sqlparser.FuncExpr
 		OpCode   engine.AggregateOpcode
 		Alias    string
 		// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
 		Index    *int
 		Distinct bool
+	}
+
+	AggrRewriter struct {
+		qp  *QueryProjection
+		Err error
 	}
 )
 
@@ -172,6 +180,47 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 	}
 
 	return qp, nil
+}
+
+// Rewrite will go through an expression, add aggregations to the QP, and rewrite them to use column offset
+func (ar *AggrRewriter) Rewrite() func(*sqlparser.Cursor) bool {
+	return func(cursor *sqlparser.Cursor) bool {
+		if ar.Err != nil {
+			return false
+		}
+		sqlNode := cursor.Node()
+		if sqlparser.IsAggregation(sqlNode) {
+			fExp := sqlNode.(*sqlparser.FuncExpr)
+			for offset, expr := range ar.qp.SelectExprs {
+				ae, err := expr.GetAliasedExpr()
+				if err != nil {
+					ar.Err = err
+					return false
+				}
+				if sqlparser.EqualsExpr(ae.Expr, fExp) {
+					cursor.Replace(sqlparser.NewOffset(offset, fExp))
+					return false // no need to visit aggregation children
+				}
+			}
+
+			col := SelectExpr{
+				Aggr: true,
+				Col:  &sqlparser.AliasedExpr{Expr: fExp},
+			}
+			ar.qp.HasAggr = true
+
+			cursor.Replace(sqlparser.NewOffset(len(ar.qp.SelectExprs), fExp))
+			ar.qp.SelectExprs = append(ar.qp.SelectExprs, col)
+			ar.qp.AddedColumn++
+		}
+
+		return true
+	}
+}
+
+// AggrRewriter extracts
+func (qp *QueryProjection) AggrRewriter() *AggrRewriter {
+	return &AggrRewriter{qp: qp}
 }
 
 func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
@@ -447,7 +496,6 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 
 		out = append(out, Aggr{
 			Original: aliasedExpr,
-			Func:     fExpr,
 			OpCode:   opcode,
 			Alias:    aliasedExpr.ColumnName(),
 			Index:    &idxCopy,
@@ -515,7 +563,7 @@ func (qp *QueryProjection) AlignGroupByAndOrderBy() {
 		// The query didn't ask for any particular order, so we are free to add arbitrary ordering.
 		// We'll align the grouping and ordering by the output columns
 		newGrouping = qp.GetGrouping()
-		sort.Sort(GroupBys(newGrouping))
+		SortGrouping(newGrouping)
 		for _, groupBy := range newGrouping {
 			qp.OrderExprs = append(qp.OrderExprs, groupBy.AsOrderBy())
 		}
@@ -551,6 +599,10 @@ func (qp *QueryProjection) AddGroupBy(by GroupBy) {
 	qp.groupByExprs = append(qp.groupByExprs, by)
 }
 
+func (qp *QueryProjection) GetColumnCount() int {
+	return len(qp.SelectExprs) - qp.AddedColumn
+}
+
 func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		if sqlparser.IsAggregation(node) {
@@ -565,21 +617,16 @@ func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
 	}, expr)
 }
 
-type Aggrs []Aggr
-
-// Len implements the sort.Interface
-func (a Aggrs) Len() int {
-	return len(a)
+func SortAggregations(a []Aggr) {
+	sort.Slice(a, func(i, j int) bool {
+		return CompareRefInt(a[i].Index, a[j].Index)
+	})
 }
 
-// Less implements the sort.Interface
-func (a Aggrs) Less(i, j int) bool {
-	return CompareRefInt(a[i].Index, a[j].Index)
-}
-
-// Swap implements the sort.Interface
-func (a Aggrs) Swap(i, j int) {
-	a[i], a[j] = a[j], a[i]
+func SortGrouping(a []GroupBy) {
+	sort.Slice(a, func(i, j int) bool {
+		return CompareRefInt(a[i].InnerIndex, a[j].InnerIndex)
+	})
 }
 
 // CompareRefInt compares two references of integers.
@@ -592,21 +639,4 @@ func CompareRefInt(a *int, b *int) bool {
 		return true
 	}
 	return *a < *b
-}
-
-type GroupBys []GroupBy
-
-// Len implements the sort.Interface
-func (gbys GroupBys) Len() int {
-	return len(gbys)
-}
-
-// Less implements the sort.Interface
-func (gbys GroupBys) Less(i, j int) bool {
-	return CompareRefInt(gbys[i].InnerIndex, gbys[j].InnerIndex)
-}
-
-// Swap implements the sort.Interface
-func (gbys GroupBys) Swap(i, j int) {
-	gbys[i], gbys[j] = gbys[j], gbys[i]
 }

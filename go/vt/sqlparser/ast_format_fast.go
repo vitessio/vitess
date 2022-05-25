@@ -904,13 +904,17 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[ZEROFILL])
 	}
-	if ct.Charset != "" {
+	if ct.Charset.Name != "" {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[CHARACTER])
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[SET])
 		buf.WriteByte(' ')
-		buf.WriteString(ct.Charset)
+		buf.WriteString(ct.Charset.Name)
+	}
+	if ct.Charset.Binary {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[BINARY])
 	}
 	if ct.Options != nil {
 		if ct.Options.Collate != "" {
@@ -1935,6 +1939,10 @@ func (node *ConvertExpr) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteString(", ")
 	node.Type.formatFast(buf)
+	if node.Array {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[ARRAY])
+	}
 	buf.WriteByte(')')
 }
 
@@ -1959,9 +1967,13 @@ func (node *ConvertType) formatFast(buf *TrackedBuffer) {
 		}
 		buf.WriteByte(')')
 	}
-	if node.Charset != "" {
+	if node.Charset.Name != "" {
 		buf.WriteString(" character set ")
-		buf.WriteString(node.Charset)
+		buf.WriteString(node.Charset.Name)
+	}
+	if node.Charset.Binary {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[BINARY])
 	}
 }
 
@@ -2226,9 +2238,9 @@ func (node *SelectInto) formatFast(buf *TrackedBuffer) {
 	}
 	buf.WriteString(node.Type.ToString())
 	buf.WriteString(node.FileName)
-	if node.Charset != "" {
+	if node.Charset.Name != "" {
 		buf.WriteString(" character set ")
-		buf.WriteString(node.Charset)
+		buf.WriteString(node.Charset.Name)
 	}
 	buf.WriteString(node.FormatOption)
 	buf.WriteString(node.ExportOption)
@@ -2517,16 +2529,31 @@ func (node AlgorithmValue) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node
 func (node *AlterColumn) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("alter column ")
+	node.Column.formatFast(buf)
 	if node.DropDefault {
-		buf.WriteString("alter column ")
-		node.Column.formatFast(buf)
 		buf.WriteString(" drop default")
-	} else {
-		buf.WriteString("alter column ")
-		node.Column.formatFast(buf)
-		buf.WriteString(" set default")
-		buf.WriteByte(' ')
+	} else if node.DefaultVal != nil {
+		buf.WriteString(" set default ")
 		node.DefaultVal.formatFast(buf)
+	}
+	if node.Invisible != nil {
+		if *node.Invisible {
+			buf.WriteString(" set invisible")
+		} else {
+			buf.WriteString(" set visible")
+		}
+	}
+}
+
+// formatFast formats the node
+func (node *AlterIndex) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("alter index ")
+	node.Name.formatFast(buf)
+	if node.Invisible {
+		buf.WriteString(" invisible")
+	} else {
+		buf.WriteString(" visible")
 	}
 }
 
@@ -2777,10 +2804,19 @@ func (node *JtOnResponse) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node Offset) formatFast(buf *TrackedBuffer) {
-	buf.WriteByte('[')
-	buf.WriteString(fmt.Sprintf("%d", int(node)))
-	buf.WriteByte(']')
+// Using capital letter for this function as an indicator that it's not a normal function call ¯\_(ツ)_/¯
+func (node *Offset) formatFast(buf *TrackedBuffer) {
+	if node.Original == "" {
+		buf.WriteString("OFFSET(")
+		buf.WriteString(fmt.Sprintf("%d", node.V))
+		buf.WriteByte(')')
+	} else {
+		buf.WriteString("OFFSET(")
+		buf.WriteString(fmt.Sprintf("%d", node.V))
+		buf.WriteString(", '")
+		buf.WriteString(node.Original)
+		buf.WriteString("')")
+	}
 }
 
 // formatFast formats the node.
@@ -2803,7 +2839,7 @@ func (node *JSONSchemaValidationReportFuncExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *JSONArrayExpr) formatFast(buf *TrackedBuffer) {
-	//buf.astPrintf(node,"%s(,"node.Name.Lowered())
+	// buf.astPrintf(node,"%s(,"node.Name.Lowered())
 	buf.WriteString("json_array(")
 	if len(node.Params) > 0 {
 		var prefix string
@@ -2818,7 +2854,7 @@ func (node *JSONArrayExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *JSONObjectExpr) formatFast(buf *TrackedBuffer) {
-	//buf.astPrintf(node,"%s(,"node.Name.Lowered())
+	// buf.astPrintf(node,"%s(,"node.Name.Lowered())
 	buf.WriteString("json_object(")
 	if len(node.Params) > 0 {
 		for i, p := range node.Params {

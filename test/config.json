@@ -777,6 +777,15 @@
 			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving"]
 		},
+		"vtgate_schematracker_sharded_prs": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schematracker/sharded_prs"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_schema_tracker",
+			"RetryMax": 1,
+			"Tags": ["upgrade_downgrade_query_serving"]
+		},
 		"vtgate_schematracker_unsharded": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schematracker/unsharded"],

@@ -44,6 +44,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAlterColumn(in, f)
 	case *AlterDatabase:
 		return VisitRefOfAlterDatabase(in, f)
+	case *AlterIndex:
+		return VisitRefOfAlterIndex(in, f)
 	case *AlterMigration:
 		return VisitRefOfAlterMigration(in, f)
 	case *AlterTable:
@@ -252,8 +254,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfNotExpr(in, f)
 	case *NullVal:
 		return VisitRefOfNullVal(in, f)
-	case Offset:
-		return VisitOffset(in, f)
+	case *Offset:
+		return VisitRefOfOffset(in, f)
 	case OnDup:
 		return VisitOnDup(in, f)
 	case *OptLike:
@@ -543,6 +545,18 @@ func VisitRefOfAlterDatabase(in *AlterDatabase, f Visit) error {
 		return err
 	}
 	if err := VisitTableIdent(in.DBName, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfAlterIndex(in *AlterIndex, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
 	}
 	return nil
@@ -2019,6 +2033,15 @@ func VisitRefOfNullVal(in *NullVal, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfOffset(in *Offset, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
 func VisitOnDup(in OnDup, f Visit) error {
 	if in == nil {
 		return nil
@@ -3183,6 +3206,8 @@ func VisitAlterOption(in AlterOption, f Visit) error {
 		return VisitRefOfAlterCheck(in, f)
 	case *AlterColumn:
 		return VisitRefOfAlterColumn(in, f)
+	case *AlterIndex:
+		return VisitRefOfAlterIndex(in, f)
 	case *ChangeColumn:
 		return VisitRefOfChangeColumn(in, f)
 	case *DropColumn:
@@ -3489,8 +3514,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfNotExpr(in, f)
 	case *NullVal:
 		return VisitRefOfNullVal(in, f)
-	case Offset:
-		return VisitOffset(in, f)
+	case *Offset:
+		return VisitRefOfOffset(in, f)
 	case *OrExpr:
 		return VisitRefOfOrExpr(in, f)
 	case *Subquery:
@@ -3631,8 +3656,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfNotExpr(in, f)
 	case *NullVal:
 		return VisitRefOfNullVal(in, f)
-	case Offset:
-		return VisitOffset(in, f)
+	case *Offset:
+		return VisitRefOfOffset(in, f)
 	case *OrExpr:
 		return VisitRefOfOrExpr(in, f)
 	case *Subquery:
@@ -3861,10 +3886,6 @@ func VisitListArg(in ListArg, f Visit) error {
 	return err
 }
 func VisitMatchAction(in MatchAction, f Visit) error {
-	_, err := f(in)
-	return err
-}
-func VisitOffset(in Offset, f Visit) error {
 	_, err := f(in)
 	return err
 }

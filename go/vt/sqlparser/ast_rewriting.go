@@ -601,10 +601,7 @@ func (er *astRewriter) existsRewrite(cursor *Cursor, node *ExistsExpr) {
 			return
 		}
 
-		allAggregation := forAll(node.SelectExprs, func(s SelectExpr) bool {
-			return ContainsAggregation(s)
-		})
-		if allAggregation && (node.GroupBy == nil || (len(node.GroupBy.Exprs) == 0 && !node.GroupBy.All)) {
+		if (node.GroupBy == nil || (len(node.GroupBy.Exprs) == 0 && !node.GroupBy.All)) && node.SelectExprs.AllAggregation() {
 			// in these situations, we are guaranteed to always get a non-empty result,
 			// so we can replace the EXISTS with a literal true
 			cursor.Replace(BoolVal(true))
@@ -617,15 +614,6 @@ func (er *astRewriter) existsRewrite(cursor *Cursor, node *ExistsExpr) {
 		}
 		node.GroupBy = nil
 	}
-}
-
-func forAll(coll SelectExprs, test func(SelectExpr) bool) bool {
-	for _, k := range coll {
-		if !test(k) {
-			return false
-		}
-	}
-	return true
 }
 
 func bindVarExpression(name string) Expr {

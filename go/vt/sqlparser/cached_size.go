@@ -157,7 +157,7 @@ func (cached *AlterColumn) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(48)
 	}
 	// field Column *vitess.io/vitess/go/vt/sqlparser.ColName
 	size += cached.Column.CachedSize(true)
@@ -165,6 +165,8 @@ func (cached *AlterColumn) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.DefaultVal.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field Invisible *bool
+	size += hack.RuntimeAllocSize(int64(1))
 	return size
 }
 func (cached *AlterDatabase) CachedSize(alloc bool) int64 {
@@ -184,6 +186,18 @@ func (cached *AlterDatabase) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(false)
 		}
 	}
+	return size
+}
+func (cached *AlterIndex) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
 	return size
 }
 func (cached *AlterMigration) CachedSize(alloc bool) int64 {
@@ -508,13 +522,25 @@ func (cached *CollateExpr) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Collation)))
 	return size
 }
+func (cached *ColumnCharset) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Name string
+	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
+	return size
+}
 func (cached *ColumnDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(128)
+		size += int64(144)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
 	size += cached.Name.CachedSize(false)
@@ -538,8 +564,8 @@ func (cached *ColumnType) CachedSize(alloc bool) int64 {
 	size += cached.Length.CachedSize(true)
 	// field Scale *vitess.io/vitess/go/vt/sqlparser.Literal
 	size += cached.Scale.CachedSize(true)
-	// field Charset string
-	size += hack.RuntimeAllocSize(int64(len(cached.Charset)))
+	// field Charset vitess.io/vitess/go/vt/sqlparser.ColumnCharset
+	size += cached.Charset.CachedSize(false)
 	// field EnumValues []string
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.EnumValues)) * int64(16))
@@ -652,7 +678,7 @@ func (cached *ConvertExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(32)
 	}
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expr.(cachedObject); ok {
@@ -668,7 +694,7 @@ func (cached *ConvertType) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field Type string
 	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
@@ -676,8 +702,8 @@ func (cached *ConvertType) CachedSize(alloc bool) int64 {
 	size += cached.Length.CachedSize(true)
 	// field Scale *vitess.io/vitess/go/vt/sqlparser.Literal
 	size += cached.Scale.CachedSize(true)
-	// field Charset string
-	size += hack.RuntimeAllocSize(int64(len(cached.Charset)))
+	// field Charset vitess.io/vitess/go/vt/sqlparser.ColumnCharset
+	size += cached.Charset.CachedSize(false)
 	return size
 }
 func (cached *ConvertUsingExpr) CachedSize(alloc bool) int64 {
@@ -2097,6 +2123,18 @@ func (cached *NotExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *Offset) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Original string
+	size += hack.RuntimeAllocSize(int64(len(cached.Original)))
+	return size
+}
 func (cached *OptLike) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2582,8 +2620,8 @@ func (cached *SelectInto) CachedSize(alloc bool) int64 {
 	}
 	// field FileName string
 	size += hack.RuntimeAllocSize(int64(len(cached.FileName)))
-	// field Charset string
-	size += hack.RuntimeAllocSize(int64(len(cached.Charset)))
+	// field Charset vitess.io/vitess/go/vt/sqlparser.ColumnCharset
+	size += cached.Charset.CachedSize(false)
 	// field FormatOption string
 	size += hack.RuntimeAllocSize(int64(len(cached.FormatOption)))
 	// field ExportOption string

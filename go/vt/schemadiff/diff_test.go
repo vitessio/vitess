@@ -120,7 +120,7 @@ func TestDiffTables(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = sqlparser.Parse(diff)
+					_, err = sqlparser.ParseStrictDDL(diff)
 					assert.NoError(t, err)
 
 					eFrom, eTo := d.Entities()
@@ -139,7 +139,7 @@ func TestDiffTables(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = sqlparser.Parse(canonicalDiff)
+					_, err = sqlparser.ParseStrictDDL(canonicalDiff)
 					assert.NoError(t, err)
 				}
 				// let's also check dq, and also validate that dq's statement is identical to d's
@@ -248,7 +248,7 @@ func TestDiffViews(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = sqlparser.Parse(diff)
+					_, err = sqlparser.ParseStrictDDL(diff)
 					assert.NoError(t, err)
 
 					eFrom, eTo := d.Entities()
@@ -267,7 +267,7 @@ func TestDiffViews(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = sqlparser.Parse(canonicalDiff)
+					_, err = sqlparser.ParseStrictDDL(canonicalDiff)
 					assert.NoError(t, err)
 				}
 
@@ -305,6 +305,28 @@ func TestDiffSchemas(t *testing.T) {
 			},
 			cdiffs: []string{
 				"ALTER TABLE `t` MODIFY COLUMN `v` varchar(20)",
+			},
+		},
+		{
+			name: "change of table column tinyint 1 to longer",
+			from: "create table t(id int primary key, i tinyint(1))",
+			to:   "create table t(id int primary key, i tinyint(2))",
+			diffs: []string{
+				"alter table t modify column i tinyint",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t` MODIFY COLUMN `i` tinyint",
+			},
+		},
+		{
+			name: "change of table column tinyint 2 to 1",
+			from: "create table t(id int primary key, i tinyint(2))",
+			to:   "create table t(id int primary key, i tinyint(1))",
+			diffs: []string{
+				"alter table t modify column i tinyint(1)",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t` MODIFY COLUMN `i` tinyint(1)",
 			},
 		},
 		{
@@ -504,7 +526,7 @@ func TestDiffSchemas(t *testing.T) {
 			name:        "unsupported statement",
 			from:        "create table t(id int)",
 			to:          "drop table t",
-			expectError: ErrUnsupportedStatement.Error(),
+			expectError: (&UnsupportedStatementError{Statement: "DROP TABLE `t`"}).Error(),
 		},
 		{
 			name: "create, alter, drop tables and views",
@@ -555,11 +577,11 @@ func TestDiffSchemas(t *testing.T) {
 
 				// validate we can parse back the diff statements
 				for _, s := range statements {
-					_, err := sqlparser.Parse(s)
+					_, err := sqlparser.ParseStrictDDL(s)
 					assert.NoError(t, err)
 				}
 				for _, s := range cstatements {
-					_, err := sqlparser.Parse(s)
+					_, err := sqlparser.ParseStrictDDL(s)
 					assert.NoError(t, err)
 				}
 

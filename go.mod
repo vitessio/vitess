@@ -29,7 +29,7 @@ require (
 	github.com/golang/snappy v0.0.1
 	github.com/google/go-cmp v0.5.6
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
-	github.com/google/uuid v1.2.0
+	github.com/google/uuid v1.3.0
 	github.com/googleapis/gnostic v0.4.1 // indirect
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
@@ -62,10 +62,9 @@ require (
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/pborman/uuid v1.2.0
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pires/go-proxyproto v0.6.1
-	github.com/pkg/errors v0.9.1
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a
 	github.com/planetscale/vtprotobuf v0.3.0
 	github.com/prometheus/client_golang v1.11.0

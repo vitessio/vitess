@@ -29,7 +29,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -99,6 +101,22 @@ func TestFindSchema(t *testing.T) {
 								},
 							},
 						},
+						FindAllShardsInKeyspaceResults: map[string]struct {
+							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+									Shards: map[string]*vtctldatapb.Shard{
+										"-": {
+											Shard: &topodatapb.Shard{
+												IsPrimaryServing: true,
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 					Tablets: []*vtadminpb.Tablet{
 						{
@@ -108,6 +126,7 @@ func TestFindSchema(t *testing.T) {
 									Uid:  100,
 								},
 								Keyspace: "testkeyspace",
+								Shard:    "-",
 							},
 							State: vtadminpb.Tablet_SERVING,
 						},
@@ -530,6 +549,7 @@ func TestFindSchema(t *testing.T) {
 			}
 
 			api := NewAPI(clusters, Options{})
+			defer api.Close()
 
 			resp, err := api.FindSchema(ctx, tt.req)
 			if tt.shouldErr {
@@ -739,6 +759,8 @@ func TestFindSchema(t *testing.T) {
 		)
 
 		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{})
+		defer api.Close()
+
 		schema, err := api.FindSchema(ctx, &vtadminpb.FindSchemaRequest{
 			Table: "testtable",
 			TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
@@ -773,6 +795,9 @@ func TestFindSchema(t *testing.T) {
 		}
 
 		if schema != nil {
+			// Clone so our mutation below doesn't trip the race detector.
+			schema = proto.Clone(schema).(*vtadminpb.Schema)
+
 			for _, td := range schema.TableDefinitions {
 				// Zero these out because they're non-deterministic and also not
 				// relevant to the final result.
@@ -1378,7 +1403,6 @@ func TestGetSchema(t *testing.T) {
 						Name: "testtable",
 					},
 				},
-				TableSizes: map[string]*vtadminpb.Schema_TableSize{},
 			},
 			shouldErr: false,
 		},
@@ -1528,12 +1552,18 @@ func TestGetSchema(t *testing.T) {
 					Tablets:      tt.tablets,
 				})
 				api := NewAPI([]*cluster.Cluster{c}, Options{})
+				defer api.Close()
 
 				resp, err := api.GetSchema(ctx, tt.req)
 				if tt.shouldErr {
 					assert.Error(t, err)
 
 					return
+				}
+
+				if resp != nil {
+					// Clone so our mutation below doesn't trip the race detector.
+					resp = proto.Clone(resp).(*vtadminpb.Schema)
 				}
 
 				assert.NoError(t, err)
@@ -1654,6 +1684,8 @@ func TestGetSchema(t *testing.T) {
 		)
 
 		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{})
+		defer api.Close()
+
 		schema, err := api.GetSchema(ctx, &vtadminpb.GetSchemaRequest{
 			ClusterId: c1.ID,
 			Keyspace:  "testkeyspace",
@@ -1690,6 +1722,9 @@ func TestGetSchema(t *testing.T) {
 		}
 
 		if schema != nil {
+			// Clone so our mutation below doesn't trip the race detector.
+			schema = proto.Clone(schema).(*vtadminpb.Schema)
+
 			for _, td := range schema.TableDefinitions {
 				// Zero these out because they're non-deterministic and also not
 				// relevant to the final result.
@@ -2204,6 +2239,7 @@ func TestGetSchemas(t *testing.T) {
 				}
 
 				api := NewAPI(clusters, Options{})
+				defer api.Close()
 
 				resp, err := api.GetSchemas(ctx, tt.req)
 				require.NoError(t, err)
@@ -2424,6 +2460,8 @@ func TestGetSchemas(t *testing.T) {
 		)
 
 		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{})
+		defer api.Close()
+
 		resp, err := api.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{
 			TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
 				AggregateSizes: true,
@@ -2491,14 +2529,22 @@ func TestGetSchemas(t *testing.T) {
 		}
 
 		if resp != nil {
-			for _, schema := range resp.Schemas {
+			// Clone schemas so our mutations below don't trip the race detector.
+			schemas := make([]*vtadminpb.Schema, len(resp.Schemas))
+			for i, schema := range resp.Schemas {
+				schema := proto.Clone(schema).(*vtadminpb.Schema)
+
 				for _, td := range schema.TableDefinitions {
 					// Zero these out because they're non-deterministic and also not
 					// relevant to the final result.
 					td.RowCount = 0
 					td.DataLength = 0
 				}
+
+				schemas[i] = schema
 			}
+
+			resp.Schemas = schemas
 		}
 
 		assert.NoError(t, err)
@@ -2996,7 +3042,10 @@ func TestGetTablet(t *testing.T) {
 			},
 			dbconfigs: map[string]vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
-				Alias: "zone1-100",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
 			},
 			expected: &vtadminpb.Tablet{
 				Cluster: &vtadminpb.Cluster{
@@ -3057,7 +3106,10 @@ func TestGetTablet(t *testing.T) {
 				"c1": {ShouldErr: true},
 			},
 			req: &vtadminpb.GetTabletRequest{
-				Alias: "doesn't matter",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "doesntmatter",
+					Uid:  100,
+				},
 			},
 			expected:  nil,
 			shouldErr: true,
@@ -3100,7 +3152,10 @@ func TestGetTablet(t *testing.T) {
 			},
 			dbconfigs: map[string]vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
-				Alias:      "zone1-100",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
 				ClusterIds: []string{"c0"},
 			},
 			expected: &vtadminpb.Tablet{
@@ -3160,7 +3215,10 @@ func TestGetTablet(t *testing.T) {
 			},
 			dbconfigs: map[string]vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
-				Alias: "zone1-100",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
 			},
 			expected:  nil,
 			shouldErr: true,
@@ -3173,7 +3231,10 @@ func TestGetTablet(t *testing.T) {
 			},
 			dbconfigs: map[string]vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
-				Alias: "zone1-100",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
 			},
 			expected:  nil,
 			shouldErr: true,
@@ -3212,7 +3273,7 @@ func TestGetTablet(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
