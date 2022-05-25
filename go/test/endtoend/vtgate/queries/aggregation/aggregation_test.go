@@ -318,6 +318,5 @@ func TestAggregationOnTopOfShardedLimit(t *testing.T) {
 	defer closer()
 	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',6), (2,'a',1), (3,'b',1), (4,'c',3), (5,'c',4)")
 
-	_, err := mcmp.ExecAndIgnore(" select /*vt+ PLANNER=gen4 */ count(*) from (select id, val1 from aggr_test where val2 < 4 limit 2) as x;")
-	require.NoError(t, err)
+	mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(*) from (select id, val1 from aggr_test where val2 < 4 limit 2) as x", "[[INT64(2)]]")
 }

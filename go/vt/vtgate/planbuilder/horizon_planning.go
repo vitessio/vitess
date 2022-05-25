@@ -311,6 +311,9 @@ func (hp *horizonPlanning) planAggrUsingOA(
 	if err != nil {
 		return nil, err
 	}
+	if !pushed {
+		oa.preProcess = true
+	}
 
 	plan = newPlan
 

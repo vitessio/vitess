@@ -4847,3 +4847,65 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
     ]
   }
 }
+
+# count non-null columns incoming from outer joins should work well
+"select count(col) from (select user_extra.col as col from user left join user_extra on user.id = user_extra.id limit 10) as x"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(col) from (select user_extra.col as col from user left join user_extra on user.id = user_extra.id limit 10) as x",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Scalar",
+    "Aggregates": "count(0) AS count(col)",
+    "Inputs": [
+      {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "[COLUMN 0] as count(col)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": "INT64(10)",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "LeftJoin",
+                "JoinColumnIndexes": "R:0",
+                "JoinVars": {
+                  "user_id": 0
+                },
+                "TableName": "`user`_user_extra",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `user`.id from `user` where 1 != 1",
+                    "Query": "select `user`.id from `user`",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select user_extra.col as col from user_extra where 1 != 1",
+                    "Query": "select user_extra.col as col from user_extra where user_extra.id = :user_id",
+                    "Table": "user_extra"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+Gen4 plan same as above
