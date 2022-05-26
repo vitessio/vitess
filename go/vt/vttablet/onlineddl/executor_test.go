@@ -27,9 +27,36 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+func TestConstraintOriginalNameRegexp(t *testing.T) {
+	tt := []struct {
+		name     string
+		original string
+	}{
+		{
+			name:     "check1",
+			original: "check1",
+		},
+		{
+			name:     "chk_7c7de6cb4f9b5842b4d0271f40756883_check1",
+			original: "check1",
+		},
+		{
+			name:     "fk_7c7de6cb4f9b5842b4d0271f40756883_check1",
+			original: "check1",
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			submatch := constraintOriginalNameRegexp.FindStringSubmatch(tc.name)
+			require.NotEmpty(t, submatch)
+			assert.Equal(t, tc.original, submatch[3])
+		})
+	}
+}
 func TestValidateAndEditCreateTableStatement(t *testing.T) {
 	e := Executor{}
 	tt := []struct {
@@ -61,10 +88,11 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 						primary key(id),
 						constraint check_1 CHECK ((i >= 0)),
 						constraint check_2 CHECK ((i <> 5)),
-						constraint check_3 CHECK ((i >= 0))
+						constraint check_3 CHECK ((i >= 0)),
+						constraint chk_1111033c1d2d5908bf1f956ba900b192_check_4 CHECK ((i >= 0))
 					)
 				`,
-			countConstraints: 3,
+			countConstraints: 4,
 		},
 	}
 	for _, tc := range tt {
@@ -74,7 +102,8 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			constraintMap, err := e.validateAndEditCreateTableStatement(context.Background(), "a5a563da_dc1a_11ec_a416_0a43f95f28a3", createTable)
+			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "onlineddl_test"}
+			constraintMap, err := e.validateAndEditCreateTableStatement(context.Background(), onlineDDL, createTable)
 			if tc.expectError {
 				assert.Error(t, err)
 			} else {
