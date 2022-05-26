@@ -364,6 +364,31 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:  "alter table t1 alter index i_idx invisible",
 			cdiff: "ALTER TABLE `t1` ALTER INDEX `i_idx` INVISIBLE",
 		},
+		// CHECK constraints
+		{
+			name: "identical check constraints",
+			from: "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)))",
+			to:   "create table t2 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)))",
+			diff: "",
+		},
+		{
+			name: "check constraints, different name",
+			from: "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)))",
+			to:   "create table t2 (id int primary key, i int, constraint `chk_abc123` CHECK ((`i` < 5)))",
+			diff: "",
+		},
+		{
+			name: "check constraints, different order",
+			from: "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
+			to:   "create table t2 (id int primary key, i int, constraint `check2` CHECK ((`i` > 2)), constraint `check1` CHECK ((`i` < 5)))",
+			diff: "",
+		},
+		{
+			name: "check constraints, different names & order",
+			from: "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
+			to:   "create table t2 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `chk_789def` CHECK ((`i` < 5)))",
+			diff: "",
+		},
 		// foreign keys
 		{
 			name:  "drop foreign key",
