@@ -316,6 +316,10 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 }
 
 func (v *VRepl) analyzeAlter(ctx context.Context) error {
+	if v.alterQuery == "" {
+		// Happens for REVERT
+		return nil
+	}
 	if err := v.parser.ParseAlterStatement(v.alterQuery); err != nil {
 		return err
 	}
