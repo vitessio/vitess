@@ -112,7 +112,7 @@ func (ap *AggregateParams) isDistinct() bool {
 }
 
 func (ap *AggregateParams) preProcess() bool {
-	return ap.Opcode == AggregateCountDistinct || ap.Opcode == AggregateSumDistinct || ap.Opcode == AggregateGtid
+	return ap.Opcode == AggregateCountDistinct || ap.Opcode == AggregateSumDistinct || ap.Opcode == AggregateGtid || ap.Opcode == AggregateCount
 }
 
 func (ap *AggregateParams) String() string {
@@ -350,11 +350,11 @@ func convertRow(row []sqltypes.Value, preProcess bool, aggregates []*AggregatePa
 		case AggregateCountStar:
 			newRow[aggr.Col] = countOne
 		case AggregateCount:
-			if row[aggr.KeyCol].IsNull() {
-				newRow[aggr.Col] = countZero
-			} else {
-				newRow[aggr.Col] = countOne
+			val := countOne
+			if row[aggr.Col].IsNull() {
+				val = countZero
 			}
+			newRow[aggr.Col] = val
 		case AggregateCountDistinct:
 			curDistincts[index] = findComparableCurrentDistinct(row, aggr)
 			// Type is int64. Ok to call MakeTrusted.
@@ -464,12 +464,11 @@ func merge(
 			value := row1[aggr.Col]
 			result[aggr.Col], err = evalengine.NullSafeAdd(value, countOne, fields[aggr.Col].Type)
 		case AggregateCount:
-			if row2[aggr.KeyCol].IsNull() {
-				result[aggr.Col] = row1[aggr.Col]
-			} else {
-				value := row1[aggr.Col]
-				result[aggr.Col], err = evalengine.NullSafeAdd(value, countOne, fields[aggr.Col].Type)
+			val := countOne
+			if row2[aggr.Col].IsNull() {
+				val = countZero
 			}
+			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], val, fields[aggr.Col].Type)
 		case AggregateSum:
 			value := row1[aggr.Col]
 			v2 := row2[aggr.Col]
