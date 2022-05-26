@@ -372,9 +372,10 @@ func TestPurge(t *testing.T) {
 	require.NoError(t, err)
 
 	validateTableDoesNotExist(t, "t1")
-	validateTableExists(t, tableName)
-	checkTableRows(t, tableName, 1024)
-
+	if !isMySQL8() {
+		validateTableExists(t, tableName)
+		checkTableRows(t, tableName, 1024)
+	}
 	time.Sleep(5 * gcPurgeCheckInterval) // wwait for table to be purged
 	time.Sleep(2 * gcCheckInterval)      // wait for GC state transition
 	if isMySQL8() {
@@ -404,7 +405,9 @@ func TestPurgeView(t *testing.T) {
 
 	// table untouched
 	validateTableExists(t, tableName)
-	validateTableExists(t, "t1")
+	if !isMySQL8() {
+		validateTableExists(t, "t1")
+	}
 	validateTableDoesNotExist(t, "v1")
 
 	time.Sleep(tableTransitionExpiration / 2)
