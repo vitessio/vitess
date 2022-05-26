@@ -48,8 +48,8 @@ const (
 
 // TODO(b/26388813): Remove these flags once vtctl WaitForDrain is integrated in the vtctl MigrateServed* commands.
 var (
-	waitForDrainSleepRdonly  = flag.Duration("wait_for_drain_sleep_rdonly", 5*time.Second, "time to wait before shutting the query service on old RDONLY tablets during MigrateServedTypes")
-	waitForDrainSleepReplica = flag.Duration("wait_for_drain_sleep_replica", 15*time.Second, "time to wait before shutting the query service on old REPLICA tablets during MigrateServedTypes")
+	waitForDrainSleepRdonly  = flag.Duration("wait_for_drain_sleep_rdonly", 5*time.Second, "(DEPRECATED) time to wait before shutting the query service on old RDONLY tablets during MigrateServedTypes")
+	waitForDrainSleepReplica = flag.Duration("wait_for_drain_sleep_replica", 15*time.Second, "(DEPRECATED) time to wait before shutting the query service on old REPLICA tablets during MigrateServedTypes")
 )
 
 // keyspace related methods for Wrangler
