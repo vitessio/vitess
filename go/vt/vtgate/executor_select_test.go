@@ -3585,3 +3585,87 @@ func TestSelectAggregationNoData(t *testing.T) {
 		})
 	}
 }
+
+func TestSelectAggregationData(t *testing.T) {
+	// Special setup: Don't use createExecutorEnv.
+	*plannerVersion = "gen4"
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck(nil)
+	createSandbox(KsTestSharded).VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxconn.SandboxConn
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, KsTestSharded, shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+		conns = append(conns, sbc)
+	}
+	executor := createExecutor(serv, cell, resolver)
+
+	tcases := []struct {
+		sql         string
+		sandboxRes  *sqltypes.Result
+		expSandboxQ string
+		expField    string
+		expRow      string
+	}{
+		{
+			sql:         `select count(distinct col) from user`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1", "2", "2", "3"),
+			expSandboxQ: "select col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+			expField:    `[name:"count(distinct col)" type:INT64]`,
+			expRow:      `[[INT64(3)]]`,
+		},
+		{
+			sql:         `select count(*) from user`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "3"),
+			expSandboxQ: "select count(*) from `user`",
+			expField:    `[name:"count(*)" type:INT64]`,
+			expRow:      `[[INT64(24)]]`,
+		},
+		{
+			sql:         `select col, count(*) from user group by col`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)", "int64|int64"), "1|3"),
+			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+			expField:    `[name:"col" type:INT64 name:"count(*)" type:INT64]`,
+			expRow:      `[[INT64(1) INT64(24)]]`,
+		},
+		{
+			sql:         `select col, count(*) from user group by col limit 2`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)", "int64|int64"), "1|2", "2|1", "3|4"),
+			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc limit :__upper_limit",
+			expField:    `[name:"col" type:INT64 name:"count(*)" type:INT64]`,
+			expRow:      `[[INT64(1) INT64(16)] [INT64(2) INT64(8)]]`,
+		},
+		{
+			sql:         `select count(*) from (select col1, col2 from user limit 2) x`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2", "int64|int64"), "1|2", "2|1"),
+			expSandboxQ: "select col1, col2 from `user` limit :__upper_limit",
+			expField:    `[name:"count(*)" type:INT64]`,
+			expRow:      `[[INT64(2)]]`,
+		},
+		{
+			sql:         `select col2, count(*) from (select col1, col2 from user limit 9) x group by col2`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col2)", "int64|int64|varbinary"), "3|1|NULL", "2|2|NULL"),
+			expSandboxQ: "select col1, col2, weight_string(col2) from `user` order by col2 asc limit :__upper_limit",
+			expField:    `[name:"col2" type:INT64 name:"count(*)" type:INT64]`,
+			expRow:      `[[INT64(1) INT64(8)] [INT64(2) INT64(1)]]`,
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			for _, sbc := range conns {
+				sbc.SetResults([]*sqltypes.Result{tc.sandboxRes})
+				sbc.Queries = nil
+			}
+			qr, err := executorExec(executor, tc.sql, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expField, fmt.Sprintf("%v", qr.Fields))
+			assert.Equal(t, tc.expRow, fmt.Sprintf("%v", qr.Rows))
+			require.Len(t, conns[0].Queries, 1)
+			assert.Equal(t, tc.expSandboxQ, conns[0].Queries[0].Sql)
+		})
+	}
+}
