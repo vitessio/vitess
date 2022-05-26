@@ -1,0 +1,62 @@
+/*
+A devcontainer capable of running the local examples (in ../examples/local),
+including vtadmin-api and vtadmin-web.
+
+Note that all paths are relative to the .devcontainer directory, so ".." is the
+repository root.
+
+To run:
+1. In vscode's command palette, select "Remote-Containers: Open Folder in Container"
+2. Select the root vitess checkout from the file finder.
+3. Wait for the container to build. This can take a while.
+   ....... keep waiting
+   At this point vscode will open a new window which is the devcontainer.
+4. Accept the prompt to install go-tools (gopls, staticcheck, and so on).
+   You can also use the command palette from this window to install/update them
+   just like you would in any old vscode instance.
+5. To run the local example:
+   a. cd examples/local
+   b. ./101_initial_cluster.sh
+   c. HOST=127.0.0.1 ./scripts/vtadmin-up.sh
+
+   (N.B.) In 5c, we override HOST because port forwarding happens on 127.0.0.1,
+   *not* localhost, which vtadmin-api and vtadmin-web need to be aware of to
+   accomodate CORS.
+
+   d. Open your browser and behold vtadmin!
+*/
+
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
+// https://github.com/microsoft/vscode-dev-containers/tree/v0.234.0/containers/docker-existing-dockerfile
+{
+	"name": "Vitess - local",
+	"context": "..",
+	"dockerFile": "../docker/local/Dockerfile",
+
+	// Set *default* container specific settings.json values on container create.
+	"settings": {},
+	
+	// Add the IDs of extensions you want installed when the container is created.
+	"extensions": [
+		"golang.go",
+		"zxh404.vscode-proto3",
+	],
+
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [],
+
+	// Note: when postCreateCommand is a single string, it is run with a shell.
+	// When an array of strings, it is run as a single command without a shell
+	// (andrew: I _guess_ joined by &&, or equivalent?).
+	"postCreateCommand": [
+	],
+
+	// Uncomment when using a ptrace-based debugger like C++, Go, and Rust
+	// "runArgs": [ "--cap-add=SYS_PTRACE", "--security-opt", "seccomp=unconfined" ],
+
+	// Uncomment to use the Docker CLI from inside the container. See https://aka.ms/vscode-remote/samples/docker-from-docker.
+	// "mounts": [ "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind" ],
+
+	// Uncomment to connect as a non-root user if you've added one. See https://aka.ms/vscode-remote/containers/non-root.
+	"remoteUser": "vitess"
+}
