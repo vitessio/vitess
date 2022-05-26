@@ -118,18 +118,18 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, storeTyp
 	atomic.StoreInt64(&check.throttler.lastCheckTimeNano, time.Now().UnixNano())
 
 	go func(statusCode int) {
-		metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
-		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.total", appName), nil).Inc(1)
+		metrics.GetOrRegisterCounter("throttler.check.any.total", nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("throttler.check.%s.total", appName), nil).Inc(1)
 
-		metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.total", storeType, storeName), nil).Inc(1)
-		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.total", appName, storeType, storeName), nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("throttler.check.any.%s.%s.total", storeType, storeName), nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("throttler.check.%s.%s.%s.total", appName, storeType, storeName), nil).Inc(1)
 
 		if statusCode != http.StatusOK {
-			metrics.GetOrRegisterCounter("check.any.error", nil).Inc(1)
-			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.error", appName), nil).Inc(1)
+			metrics.GetOrRegisterCounter("throttler.check.any.error", nil).Inc(1)
+			metrics.GetOrRegisterCounter(fmt.Sprintf("throttler.check.%s.error", appName), nil).Inc(1)
 
-			metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.error", storeType, storeName), nil).Inc(1)
-			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.error", appName, storeType, storeName), nil).Inc(1)
+			metrics.GetOrRegisterCounter(fmt.Sprintf("throttler.check.any.%s.%s.error", storeType, storeName), nil).Inc(1)
+			metrics.GetOrRegisterCounter(fmt.Sprintf("throttler.check.%s.%s.%s.error", appName, storeType, storeName), nil).Inc(1)
 		}
 
 		check.throttler.markRecentApp(appName, remoteAddr)
@@ -161,7 +161,7 @@ func (check *ThrottlerCheck) localCheck(ctx context.Context, metricName string) 
 		check.throttler.markMetricHealthy(metricName)
 	}
 	if timeSinceHealthy, found := check.throttler.timeSinceMetricHealthy(metricName); found {
-		metrics.GetOrRegisterGauge(fmt.Sprintf("check.%s.%s.seconds_since_healthy", storeType, storeName), nil).Update(int64(timeSinceHealthy.Seconds()))
+		metrics.GetOrRegisterGauge(fmt.Sprintf("throttler.check.%s.%s.seconds_since_healthy", storeType, storeName), nil).Update(int64(timeSinceHealthy.Seconds()))
 	}
 
 	return checkResult
@@ -173,7 +173,7 @@ func (check *ThrottlerCheck) reportAggregated(metricName string, metricResult ba
 		return
 	}
 	if value, err := metricResult.Get(); err == nil {
-		metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("aggregated.%s.%s", storeType, storeName), nil).Update(value)
+		metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("throttler.aggregated.%s.%s", storeType, storeName), nil).Update(value)
 	}
 }
 
