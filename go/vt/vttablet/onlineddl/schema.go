@@ -75,6 +75,7 @@ const (
 	alterSchemaMigrationsTableReadyToComplete          = "ALTER TABLE _vt.schema_migrations add column ready_to_complete tinyint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableStowawayTable            = "ALTER TABLE _vt.schema_migrations add column stowaway_table tinytext NOT NULL"
 	alterSchemaMigrationsTableVreplLivenessIndicator   = "ALTER TABLE _vt.schema_migrations add column vitess_liveness_indicator bigint NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableUserThrottleRatio        = "ALTER TABLE _vt.schema_migrations add column user_throttle_ratio float NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -145,6 +146,11 @@ const (
 	`
 	sqlUpdateMigrationStowawayTable = `UPDATE _vt.schema_migrations
 			SET stowaway_table=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationUserThrottleRatio = `UPDATE _vt.schema_migrations
+			SET user_throttle_ratio=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -595,4 +601,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableReadyToComplete,
 	alterSchemaMigrationsTableStowawayTable,
 	alterSchemaMigrationsTableVreplLivenessIndicator,
+	alterSchemaMigrationsTableUserThrottleRatio,
 }

@@ -584,10 +584,6 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 		if err != nil {
 			return ColExpr{}, err
 		}
-		as := aliased.As
-		if as.IsEmpty() {
-			as = sqlparser.NewColIdent(sqlparser.String(aliased.Expr))
-		}
 		return ColExpr{
 			ColNum: colnum,
 			Field:  plan.Table.Fields[colnum],

@@ -35,7 +35,7 @@ import (
 
 func columnSize(cs collations.ID, size uint32) uint32 {
 	// utf8_general_ci results in smaller max column sizes because MySQL 5.7 is silly
-	if collations.Local().LookupByID(cs).Charset().Name() == "utf8" {
+	if collations.Local().LookupByID(cs).Charset().Name() == "utf8mb3" {
 		return size * 3 / 4
 	}
 	return size

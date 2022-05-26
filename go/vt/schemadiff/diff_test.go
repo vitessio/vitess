@@ -120,7 +120,7 @@ func TestDiffTables(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = sqlparser.Parse(diff)
+					_, err = sqlparser.ParseStrictDDL(diff)
 					assert.NoError(t, err)
 
 					eFrom, eTo := d.Entities()
@@ -139,7 +139,7 @@ func TestDiffTables(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = sqlparser.Parse(canonicalDiff)
+					_, err = sqlparser.ParseStrictDDL(canonicalDiff)
 					assert.NoError(t, err)
 				}
 				// let's also check dq, and also validate that dq's statement is identical to d's
@@ -248,7 +248,7 @@ func TestDiffViews(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = sqlparser.Parse(diff)
+					_, err = sqlparser.ParseStrictDDL(diff)
 					assert.NoError(t, err)
 
 					eFrom, eTo := d.Entities()
@@ -267,7 +267,7 @@ func TestDiffViews(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = sqlparser.Parse(canonicalDiff)
+					_, err = sqlparser.ParseStrictDDL(canonicalDiff)
 					assert.NoError(t, err)
 				}
 
@@ -308,6 +308,28 @@ func TestDiffSchemas(t *testing.T) {
 			},
 		},
 		{
+			name: "change of table column tinyint 1 to longer",
+			from: "create table t(id int primary key, i tinyint(1))",
+			to:   "create table t(id int primary key, i tinyint(2))",
+			diffs: []string{
+				"alter table t modify column i tinyint",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t` MODIFY COLUMN `i` tinyint",
+			},
+		},
+		{
+			name: "change of table column tinyint 2 to 1",
+			from: "create table t(id int primary key, i tinyint(2))",
+			to:   "create table t(id int primary key, i tinyint(1))",
+			diffs: []string{
+				"alter table t modify column i tinyint(1)",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t` MODIFY COLUMN `i` tinyint(1)",
+			},
+		},
+		{
 			name: "change of table columns, added",
 			from: "create table t(id int primary key)",
 			to:   "create table t(id int primary key, i int)",
@@ -316,6 +338,61 @@ func TestDiffSchemas(t *testing.T) {
 			},
 			cdiffs: []string{
 				"ALTER TABLE `t` ADD COLUMN `i` int",
+			},
+		},
+		{
+			name: "change with function",
+			from: "create table identifiers (id binary(16) NOT NULL DEFAULT (uuid_to_bin(uuid(),true)))",
+			to:   "create table identifiers (company_id mediumint unsigned NOT NULL, id binary(16) NOT NULL DEFAULT (uuid_to_bin(uuid(),true)))",
+			diffs: []string{
+				"alter table identifiers add column company_id mediumint unsigned not null first",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `identifiers` ADD COLUMN `company_id` mediumint unsigned NOT NULL FIRST",
+			},
+		},
+		{
+			name: "change within functional index",
+			from: "create table t1 (id mediumint unsigned NOT NULL, deleted_at timestamp, primary key (id), unique key deleted_check (id, (if((deleted_at is null),0,NULL))))",
+			to:   "create table t1 (id mediumint unsigned NOT NULL, deleted_at timestamp, primary key (id), unique key deleted_check (id, (if((deleted_at is not null),0,NULL))))",
+			diffs: []string{
+				"alter table t1 drop key deleted_check, add unique key deleted_check (id, (if(deleted_at is not null, 0, null)))",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t1` DROP KEY `deleted_check`, ADD UNIQUE KEY `deleted_check` (`id`, (if(`deleted_at` IS NOT NULL, 0, NULL)))",
+			},
+		},
+		{
+			name: "change for a check",
+			from: "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `Check1` CHECK ((`test` >= 0)))",
+			to:   "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `RenamedCheck1` CHECK ((`test` >= 0)))",
+			diffs: []string{
+				"alter table t drop check Check1, add constraint RenamedCheck1 check (test >= 0)",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t` DROP CHECK `Check1`, ADD CONSTRAINT `RenamedCheck1` CHECK (`test` >= 0)",
+			},
+		},
+		{
+			name: "not enforce a check",
+			from: "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `Check1` CHECK ((`test` >= 0)))",
+			to:   "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `Check1` CHECK ((`test` >= 0)) NOT ENFORCED)",
+			diffs: []string{
+				"alter table t alter check Check1 not enforced",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t` ALTER CHECK `Check1` NOT ENFORCED",
+			},
+		},
+		{
+			name: "enforce a check",
+			from: "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `Check1` CHECK ((`test` >= 0)) NOT ENFORCED)",
+			to:   "CREATE TABLE `t` (`id` int NOT NULL, `test` int NOT NULL DEFAULT '0', PRIMARY KEY (`id`), CONSTRAINT `Check1` CHECK ((`test` >= 0)))",
+			diffs: []string{
+				"alter table t alter check Check1 enforced",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t` ALTER CHECK `Check1` ENFORCED",
 			},
 		},
 		{
@@ -449,7 +526,7 @@ func TestDiffSchemas(t *testing.T) {
 			name:        "unsupported statement",
 			from:        "create table t(id int)",
 			to:          "drop table t",
-			expectError: ErrUnsupportedStatement.Error(),
+			expectError: (&UnsupportedStatementError{Statement: "DROP TABLE `t`"}).Error(),
 		},
 		{
 			name: "create, alter, drop tables and views",
@@ -500,11 +577,11 @@ func TestDiffSchemas(t *testing.T) {
 
 				// validate we can parse back the diff statements
 				for _, s := range statements {
-					_, err := sqlparser.Parse(s)
+					_, err := sqlparser.ParseStrictDDL(s)
 					assert.NoError(t, err)
 				}
 				for _, s := range cstatements {
-					_, err := sqlparser.Parse(s)
+					_, err := sqlparser.ParseStrictDDL(s)
 					assert.NoError(t, err)
 				}
 

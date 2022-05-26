@@ -19,7 +19,6 @@ package vtsql
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -69,15 +68,14 @@ type VTGateProxy struct {
 	dialFunc func(cfg vitessdriver.Configuration) (*sql.DB, error)
 	resolver grpcresolver.Builder
 
+	conn *sql.DB
+
 	m        sync.Mutex
-	conn     *sql.DB
+	closed   bool
 	dialedAt time.Time
 }
 
 var _ DB = (*VTGateProxy)(nil)
-
-// ErrConnClosed is returned when attempting to use a closed connection.
-var ErrConnClosed = errors.New("use of closed connection")
 
 // New returns a VTGateProxy to the given cluster. When Dial-ing, it will use
 // the given discovery implementation to find a vtgate to connect to, and the
@@ -128,7 +126,7 @@ func (vtgate *VTGateProxy) getQueryContext(ctx context.Context) context.Context 
 
 // Dial is part of the DB interface. The proxy's DiscoveryTags can be set to
 // narrow the set of possible gates it will connect to.
-func (vtgate *VTGateProxy) dial(ctx context.Context, target string, opts ...grpc.DialOption) error {
+func (vtgate *VTGateProxy) dial(ctx context.Context, target string, opts ...grpc.DialOption) (err error) {
 	span, _ := trace.NewSpan(ctx, "VTGateProxy.Dial")
 	defer span.Finish()
 
@@ -148,7 +146,7 @@ func (vtgate *VTGateProxy) dial(ctx context.Context, target string, opts ...grpc
 		}, conf.GRPCDialOptions...)
 	}
 
-	db, err := vtgate.dialFunc(conf)
+	vtgate.conn, err = vtgate.dialFunc(conf)
 	if err != nil {
 		return fmt.Errorf("error dialing vtgate: %w", err)
 	}
@@ -158,7 +156,7 @@ func (vtgate *VTGateProxy) dial(ctx context.Context, target string, opts ...grpc
 	vtgate.m.Lock()
 	defer vtgate.m.Unlock()
 
-	vtgate.conn = db
+	vtgate.closed = false
 	vtgate.dialedAt = time.Now()
 
 	return nil
@@ -170,10 +168,6 @@ func (vtgate *VTGateProxy) ShowTablets(ctx context.Context) (*sql.Rows, error) {
 	defer span.Finish()
 
 	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
-
-	if vtgate.conn == nil {
-		return nil, ErrConnClosed
-	}
 
 	return vtgate.conn.QueryContext(vtgate.getQueryContext(ctx), "SHOW vitess_tablets")
 }
@@ -194,10 +188,6 @@ func (vtgate *VTGateProxy) PingContext(ctx context.Context) error {
 }
 
 func (vtgate *VTGateProxy) pingContext(ctx context.Context) error {
-	if vtgate.conn == nil {
-		return ErrConnClosed
-	}
-
 	return vtgate.conn.PingContext(vtgate.getQueryContext(ctx))
 }
 
@@ -206,11 +196,11 @@ func (vtgate *VTGateProxy) Close() error {
 	vtgate.m.Lock()
 	defer vtgate.m.Unlock()
 
-	if vtgate.conn == nil {
+	if vtgate.closed {
 		return nil
 	}
 
-	defer func() { vtgate.conn = nil }()
+	defer func() { vtgate.closed = true }()
 	return vtgate.conn.Close()
 }
 
@@ -220,10 +210,10 @@ func (vtgate *VTGateProxy) Debug() map[string]any {
 	defer vtgate.m.Unlock()
 
 	m := map[string]any{
-		"is_connected": (vtgate.conn != nil),
+		"is_connected": (!vtgate.closed),
 	}
 
-	if vtgate.conn != nil {
+	if !vtgate.closed {
 		m["dialed_at"] = debug.TimeToString(vtgate.dialedAt)
 	}
 

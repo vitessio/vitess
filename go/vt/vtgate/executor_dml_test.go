@@ -22,18 +22,15 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/sqlparser"
-
-	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/mysql"
-
-	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/sqltypes"
 	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -1342,7 +1339,7 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 	defer QueryLogger.Unsubscribe(logChan)
 
 	// Fake a mysql auto-inc response.
-	query := "insert into simple(val) values ('val')"
+	query := "insert into `simple`(val) values ('val')"
 	wantResult := &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
@@ -1361,7 +1358,7 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 	assertQueries(t, sbclookup, wantQueries)
 	assert.Equal(t, result, wantResult)
 
-	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into simple(val) values ('val')", 1)
+	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into `simple`(val) values ('val')", 1)
 }
 
 func TestInsertLookupOwned(t *testing.T) {
@@ -1996,8 +1993,8 @@ func TestReservedConnDML(t *testing.T) {
 
 	wantQueries = append(wantQueries,
 		&querypb.BoundQuery{Sql: "set @@default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
-		&querypb.BoundQuery{Sql: "insert into simple values ()", BindVariables: map[string]*querypb.BindVariable{}})
-	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "insert into simple() values ()", nil)
+		&querypb.BoundQuery{Sql: "insert into `simple` values ()", BindVariables: map[string]*querypb.BindVariable{}})
+	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "insert into `simple`() values ()", nil)
 	require.NoError(t, err)
 	assertQueries(t, sbc, wantQueries)
 
@@ -2011,8 +2008,8 @@ func TestReservedConnDML(t *testing.T) {
 	// as the first time the query fails due to connection loss i.e. reserved conn lost. It will be recreated to set statement will be executed again.
 	wantQueries = append(wantQueries,
 		&querypb.BoundQuery{Sql: "set @@default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
-		&querypb.BoundQuery{Sql: "insert into simple values ()", BindVariables: map[string]*querypb.BindVariable{}})
-	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "insert into simple() values ()", nil)
+		&querypb.BoundQuery{Sql: "insert into `simple` values ()", BindVariables: map[string]*querypb.BindVariable{}})
+	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "insert into `simple`() values ()", nil)
 	require.NoError(t, err)
 	assertQueries(t, sbc, wantQueries)
 
@@ -2046,36 +2043,36 @@ func TestStreamingDML(t *testing.T) {
 		inTx:     true,
 		expQuery: []*querypb.BoundQuery{},
 	}, {
-		query:  "insert into simple() values ()",
+		query:  "insert into `simple`() values ()",
 		result: &sqltypes.Result{RowsAffected: 1},
 
 		inTx:        true,
 		openTx:      true,
 		changedRows: 1,
 		expQuery: []*querypb.BoundQuery{{
-			Sql:           "insert into simple values ()",
+			Sql:           "insert into `simple` values ()",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}},
 	}, {
-		query:  "update simple set name = 'V' where col = 2",
+		query:  "update `simple` set name = 'V' where col = 2",
 		result: &sqltypes.Result{RowsAffected: 3},
 
 		inTx:        true,
 		openTx:      true,
 		changedRows: 3,
 		expQuery: []*querypb.BoundQuery{{
-			Sql:           "update simple set `name` = 'V' where col = 2",
+			Sql:           "update `simple` set `name` = 'V' where col = 2",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}},
 	}, {
-		query:  "delete from simple",
+		query:  "delete from `simple`",
 		result: &sqltypes.Result{RowsAffected: 12},
 
 		inTx:        true,
 		openTx:      true,
 		changedRows: 12,
 		expQuery: []*querypb.BoundQuery{{
-			Sql:           "delete from simple",
+			Sql:           "delete from `simple`",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}},
 	}, {
@@ -2198,4 +2195,56 @@ func TestPartialVindexInsertQueryFailureAutoCommit(t *testing.T) {
 
 	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into t1_lkp_idx(unq_col, keyspace_id) values(:unq_col_0, :keyspace_id_0), (:unq_col_1, :keyspace_id_1)", 2)
 	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 1), (2, 3)", 0)
+}
+
+// TestMultiInternalSavepoint shows that the internal savepoint created for rolling back any partial dml changes on a failure is not removed from the savepoint list.
+// Any new transaction opened on a different shard will apply those savepoints as well.
+// The change for it cannot be done as the executor level and will be made at the VTGate entry point.
+// Test TestMultiInternalSavepointVtGate shows that it fixes the behaviour.
+func TestMultiInternalSavepoint(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+
+	session := NewAutocommitSession(&vtgatepb.Session{})
+	_, err := executorExecSession(executor, "begin", nil, session.Session)
+	require.NoError(t, err)
+
+	// this query goes to multiple shards so internal savepoint will be created.
+	_, err = executorExecSession(executor, "insert into user_extra(user_id) values (1), (4)", nil, session.Session)
+	require.NoError(t, err)
+
+	wantQ := []*querypb.BoundQuery{{
+		Sql:           "savepoint x",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql: "insert into user_extra(user_id) values (:_user_id_0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"_user_id_0": sqltypes.Int64BindVariable(1),
+			"_user_id_1": sqltypes.Int64BindVariable(4),
+		},
+	}}
+	assertQueriesWithSavepoint(t, sbc1, wantQ)
+	require.Len(t, sbc2.Queries, 0)
+	sbc1.Queries = nil
+
+	_, err = executorExecSession(executor, "insert into user_extra(user_id) values (3), (6)", nil, session.Session)
+	require.NoError(t, err)
+	wantQ = []*querypb.BoundQuery{{
+		Sql:           "savepoint x",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "savepoint y",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql: "insert into user_extra(user_id) values (:_user_id_0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"_user_id_0": sqltypes.Int64BindVariable(3),
+			"_user_id_1": sqltypes.Int64BindVariable(6),
+		},
+	}}
+	assertQueriesWithSavepoint(t, sbc2, wantQ)
+	wantQ = []*querypb.BoundQuery{{
+		Sql:           "savepoint y",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	assertQueriesWithSavepoint(t, sbc1, wantQ)
 }

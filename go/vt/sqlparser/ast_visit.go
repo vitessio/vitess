@@ -38,10 +38,14 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAliasedTableExpr(in, f)
 	case *AlterCharset:
 		return VisitRefOfAlterCharset(in, f)
+	case *AlterCheck:
+		return VisitRefOfAlterCheck(in, f)
 	case *AlterColumn:
 		return VisitRefOfAlterColumn(in, f)
 	case *AlterDatabase:
 		return VisitRefOfAlterDatabase(in, f)
+	case *AlterIndex:
+		return VisitRefOfAlterIndex(in, f)
 	case *AlterMigration:
 		return VisitRefOfAlterMigration(in, f)
 	case *AlterTable:
@@ -236,6 +240,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfLockOption(in, f)
 	case *LockTables:
 		return VisitRefOfLockTables(in, f)
+	case MatchAction:
+		return VisitMatchAction(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
@@ -248,8 +254,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfNotExpr(in, f)
 	case *NullVal:
 		return VisitRefOfNullVal(in, f)
-	case Offset:
-		return VisitOffset(in, f)
+	case *Offset:
+		return VisitRefOfOffset(in, f)
 	case OnDup:
 		return VisitOnDup(in, f)
 	case *OptLike:
@@ -334,12 +340,20 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfShowMigrationLogs(in, f)
 	case *ShowOther:
 		return VisitRefOfShowOther(in, f)
+	case *ShowThrottledApps:
+		return VisitRefOfShowThrottledApps(in, f)
 	case *StarExpr:
 		return VisitRefOfStarExpr(in, f)
 	case *Stream:
 		return VisitRefOfStream(in, f)
 	case *SubPartition:
 		return VisitRefOfSubPartition(in, f)
+	case *SubPartitionDefinition:
+		return VisitRefOfSubPartitionDefinition(in, f)
+	case *SubPartitionDefinitionOptions:
+		return VisitRefOfSubPartitionDefinitionOptions(in, f)
+	case SubPartitionDefinitions:
+		return VisitSubPartitionDefinitions(in, f)
 	case *Subquery:
 		return VisitRefOfSubquery(in, f)
 	case *SubstrExpr:
@@ -496,6 +510,18 @@ func VisitRefOfAlterCharset(in *AlterCharset, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfAlterCheck(in *AlterCheck, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfAlterColumn(in *AlterColumn, f Visit) error {
 	if in == nil {
 		return nil
@@ -523,11 +549,26 @@ func VisitRefOfAlterDatabase(in *AlterDatabase, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfAlterIndex(in *AlterIndex, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfAlterMigration(in *AlterMigration, f Visit) error {
 	if in == nil {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.Ratio, f); err != nil {
 		return err
 	}
 	return nil
@@ -1992,6 +2033,15 @@ func VisitRefOfNullVal(in *NullVal, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfOffset(in *Offset, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
 func VisitOnDup(in OnDup, f Visit) error {
 	if in == nil {
 		return nil
@@ -2147,6 +2197,9 @@ func VisitRefOfPartitionDefinitionOptions(in *PartitionDefinitionOptions, f Visi
 	if err := VisitRefOfLiteral(in.IndexDirectory, f); err != nil {
 		return err
 	}
+	if err := VisitSubPartitionDefinitions(in.SubPartitionDefinitions, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfPartitionEngine(in *PartitionEngine, f Visit) error {
@@ -2259,6 +2312,9 @@ func VisitRefOfReferenceDefinition(in *ReferenceDefinition, f Visit) error {
 		return err
 	}
 	if err := VisitColumns(in.ReferencedColumns, f); err != nil {
+		return err
+	}
+	if err := VisitMatchAction(in.Match, f); err != nil {
 		return err
 	}
 	if err := VisitReferenceAction(in.OnDelete, f); err != nil {
@@ -2574,6 +2630,15 @@ func VisitRefOfShowOther(in *ShowOther, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfShowThrottledApps(in *ShowThrottledApps, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
 func VisitRefOfStarExpr(in *StarExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2616,6 +2681,56 @@ func VisitRefOfSubPartition(in *SubPartition, f Visit) error {
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
+	}
+	return nil
+}
+func VisitRefOfSubPartitionDefinition(in *SubPartitionDefinition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfSubPartitionDefinitionOptions(in.Options, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfSubPartitionDefinitionOptions(in *SubPartitionDefinitionOptions, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.Comment, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfPartitionEngine(in.Engine, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.DataDirectory, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.IndexDirectory, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitSubPartitionDefinitions(in SubPartitionDefinitions, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitRefOfSubPartitionDefinition(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -3087,8 +3202,12 @@ func VisitAlterOption(in AlterOption, f Visit) error {
 		return VisitAlgorithmValue(in, f)
 	case *AlterCharset:
 		return VisitRefOfAlterCharset(in, f)
+	case *AlterCheck:
+		return VisitRefOfAlterCheck(in, f)
 	case *AlterColumn:
 		return VisitRefOfAlterColumn(in, f)
+	case *AlterIndex:
+		return VisitRefOfAlterIndex(in, f)
 	case *ChangeColumn:
 		return VisitRefOfChangeColumn(in, f)
 	case *DropColumn:
@@ -3395,8 +3514,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfNotExpr(in, f)
 	case *NullVal:
 		return VisitRefOfNullVal(in, f)
-	case Offset:
-		return VisitOffset(in, f)
+	case *Offset:
+		return VisitRefOfOffset(in, f)
 	case *OrExpr:
 		return VisitRefOfOrExpr(in, f)
 	case *Subquery:
@@ -3537,8 +3656,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfNotExpr(in, f)
 	case *NullVal:
 		return VisitRefOfNullVal(in, f)
-	case Offset:
-		return VisitOffset(in, f)
+	case *Offset:
+		return VisitRefOfOffset(in, f)
 	case *OrExpr:
 		return VisitRefOfOrExpr(in, f)
 	case *Subquery:
@@ -3703,6 +3822,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfShow(in, f)
 	case *ShowMigrationLogs:
 		return VisitRefOfShowMigrationLogs(in, f)
+	case *ShowThrottledApps:
+		return VisitRefOfShowThrottledApps(in, f)
 	case *Stream:
 		return VisitRefOfStream(in, f)
 	case *TruncateTable:
@@ -3764,7 +3885,7 @@ func VisitListArg(in ListArg, f Visit) error {
 	_, err := f(in)
 	return err
 }
-func VisitOffset(in Offset, f Visit) error {
+func VisitMatchAction(in MatchAction, f Visit) error {
 	_, err := f(in)
 	return err
 }

@@ -66,7 +66,33 @@ When `--heartbeat_on_demand_duration` has a positive value, then heartbeats are 
 
 The heartbeats are generated according to `--heartbeat_interval`.
 
+#### Deprecation of --online_ddl_check_interval
+
+The flag `--online_ddl_check_interval` is deprecated and will be removed in `v15`. It has been unused in `v13`.
+
 ### Online DDL changes
+
+#### Online DDL is generally available
+
+Online DDL is no longer experimental (with the exception of `pt-osc` strategy). Specifically:
+
+- Managed schema changes, the scheduler, the backing tables
+- Supporting SQL syntax
+- `vitess` strategy (online DDL via VReplication)
+- `gh-ost` strategy (online DDL via 3rd party `gh-ost`)
+- Recoverable migrations
+- Revertible migrations
+- Declarative migrations
+- Postponed migrations
+- and all other functionality
+
+Are all considered production-ready.
+
+`pt-osc` strategy (online DDL via 3rd party `pt-online-schema-change`) remains experimental.
+
+#### Throttling
+
+See new SQL syntax for controlling/viewing throttling for Online DDL, down below.
 
 #### ddl_strategy: 'vitess'
 
@@ -108,7 +134,43 @@ API endpoint `/throttler/throttle-app` now accepts a `ratio` query argument, a f
 - `1` means "always throttle"
 - any numbr in between is allowd. For example, `0.3` means "throttle in 0.3 probability", ie on a per request and based on a dice roll, there's a `30%` change a request is denied. Overall we can expect about `30%` of requests to be denied. Example: `/throttler/throttle-app?app=vreplication&ratio=0.25`
 
-#### Heartbeat
+See new SQL syntax for controlling/viewing throttling, down below.
+
+### New Syntax
+
+#### Control and view Online DDL throttling
+
+We introduce the following syntax, to:
+
+- Start/stop throttling for all Online DDL migrations, in general
+- Start/stop throttling for a particular Online DDL migration
+- View throttler state
+
+
+```sql
+ALTER VITESS_MIGRATION '<uuid>' THROTTLE [EXPIRE '<duration>'] [RATIO <ratio>];
+ALTER VITESS_MIGRATION THROTTLE ALL [EXPIRE '<duration>'] [RATIO <ratio>];
+ALTER VITESS_MIGRATION '<uuid>' UNTHROTTLE;
+ALTER VITESS_MIGRATION UNTHROTTLE ALL;
+SHOW VITESS_THROTTLED_APPS;
+```
+
+default `duration` is "infinite" (set as 100 years)
+
+- allowed units are (s)ec, (m)in, (h)our
+ratio is in the range `[0..1]`.
+- `1` means full throttle - the app will not make any progress
+- `0` means no throttling at all
+- `0.8` means on 8 out of 10 checks the app makes, it gets refused
+
+The syntax `SHOW VITESS_THROTTLED_APPS` is a generic call to the throttler, and returns information about all throttled apps, not specific to migrations
+
+`SHOW VITESS_MIGRATIONS ...` output now includes `user_throttle_ratio`
+
+This column is updated "once in a while", while a migration is running. Normally this is once a minute, but can be more frequent. The migration reports back what was the throttling instruction set by the user while it was/is running.
+This column does not indicate any actual lag-based throttling that takes place per production state. It only reports the explicit throttling value set by the user.
+
+### Heartbeat
 
 The throttler now checks in with the heartbeat writer to request heartbeats, any time it (the throttler) is asked for a check.
 

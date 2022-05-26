@@ -102,6 +102,9 @@ type vreplicator struct {
 
 	originalFKCheckSetting int64
 	originalSQLMode        string
+
+	WorkflowType int64
+	WorkflowName string
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -364,6 +367,8 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 	if err != nil {
 		return settings, numTablesToCopy, err
 	}
+	vr.WorkflowType = settings.WorkflowType
+	vr.WorkflowName = settings.WorkflowName
 	return settings, numTablesToCopy, nil
 }
 
@@ -477,6 +482,22 @@ func (vr *vreplicator) setSQLMode(ctx context.Context) (func(), error) {
 	}
 
 	return resetFunc, nil
+}
+
+// throttlerAppName returns the app name to be used by throttlerClient for this particular workflow
+// example results:
+// - "vreplication" for most flows
+// - "vreplication:online-ddl" for online ddl flows.
+//   Note that with such name, it's possible to throttle
+//   the worflow by either /throttler/throttle-app?app=vreplication and/or /throttler/throttle-app?app=online-ddl
+//   This is useful when we want to throttle all migrations. We throttle "online-ddl" and that applies to both vreplication
+//   migrations as well as gh-ost migrations.
+func (vr *vreplicator) throttlerAppName() string {
+	names := []string{vr.WorkflowName, throttlerVReplicationAppName}
+	if vr.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) {
+		names = append(names, throttlerOnlineDDLAppName)
+	}
+	return strings.Join(names, ":")
 }
 
 func (vr *vreplicator) clearFKCheck() error {
