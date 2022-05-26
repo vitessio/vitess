@@ -533,6 +533,15 @@ func (client *gRPCVtctldClient) RunHealthCheck(ctx context.Context, in *vtctldat
 	return client.c.RunHealthCheck(ctx, in, opts...)
 }
 
+// SetKeyspaceDurabilityPolicy is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) SetKeyspaceDurabilityPolicy(ctx context.Context, in *vtctldatapb.SetKeyspaceDurabilityPolicyRequest, opts ...grpc.CallOption) (*vtctldatapb.SetKeyspaceDurabilityPolicyResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.SetKeyspaceDurabilityPolicy(ctx, in, opts...)
+}
+
 // SetKeyspaceServedFrom is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) SetKeyspaceServedFrom(ctx context.Context, in *vtctldatapb.SetKeyspaceServedFromRequest, opts ...grpc.CallOption) (*vtctldatapb.SetKeyspaceServedFromResponse, error) {
 	if client.c == nil {
