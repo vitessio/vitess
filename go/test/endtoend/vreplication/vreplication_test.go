@@ -261,19 +261,17 @@ func testVStreamCellFlag(t *testing.T) {
 		cells       string
 		expectError bool
 	}
-
+	nonExistingCell := "zone7"
 	vstreamTestCases := []vstreamTestCase{
 		{"zone1,zone2", false},
-		{"zone7", true},
+		{nonExistingCell, true},
 		{"", false},
 	}
 
 	for _, tc := range vstreamTestCases {
 		t.Run("VStreamCellsFlag/"+tc.cells, func(t *testing.T) {
 			conn, err := vtgateconn.Dial(ctx, fmt.Sprintf("localhost:%d", vc.ClusterConfig.vtgateGrpcPort))
-			if err != nil {
-				log.Fatal(err)
-			}
+			require.NoError(t, err)
 			defer conn.Close()
 
 			flags := &vtgatepb.VStreamFlags{}
@@ -313,7 +311,7 @@ func testVStreamCellFlag(t *testing.T) {
 				// if no tablet was found the tablet picker adds a key which includes the cell name to the vtgate TabletPickerNoTabletFoundErrorCount stat
 				pickerErrorStat, err := getDebugVar(t, vc.ClusterConfig.vtgatePort, []string{"TabletPickerNoTabletFoundErrorCount"})
 				require.NoError(t, err)
-				require.Contains(t, pickerErrorStat, "zone7")
+				require.Contains(t, pickerErrorStat, nonExistingCell)
 			} else {
 				require.True(t, rowsReceived)
 			}

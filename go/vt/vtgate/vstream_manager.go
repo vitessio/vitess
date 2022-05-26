@@ -419,9 +419,9 @@ func (vs *vstream) getCells() []string {
 		}
 	}
 
-	vtgateCell := vs.vsm.cell
 	if len(cells) == 0 {
-		cells = append(cells, vtgateCell)
+		// use the vtgate's cell by default
+		cells = append(cells, vs.vsm.cell)
 	}
 	return cells
 }
