@@ -389,6 +389,20 @@ func TestCreateTableDiff(t *testing.T) {
 			to:   "create table t2 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `chk_789def` CHECK ((`i` < 5)))",
 			diff: "",
 		},
+		{
+			name:  "check constraints, add",
+			from:  "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
+			to:    "create table t2 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `check3` CHECK ((`i` != 3)), constraint `chk_789def` CHECK ((`i` < 5)))",
+			diff:  "alter table t1 add constraint check3 check ((`i` != 3))",
+			cdiff: "ALTER TABLE `t1` ADD CONSTRAINT `check3` CHECK ((`i` != 3))",
+		},
+		{
+			name:  "check constraints, remove",
+			from:  "create table t2 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `check3` CHECK ((`i` != 3)), constraint `chk_789def` CHECK ((`i` < 5)))",
+			to:    "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
+			diff:  "alter table t1 drop check check3",
+			cdiff: "ALTER TABLE `t1` DROP CHECK `check3`",
+		},
 		// foreign keys
 		{
 			name:  "drop foreign key",
