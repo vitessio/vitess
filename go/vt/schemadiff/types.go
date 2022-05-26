@@ -65,9 +65,14 @@ const (
 	RangeRotationIgnore
 )
 
+const (
+	CheckConstraintIgnoreNames = iota
+)
+
 // DiffHints is an assortment of rules for diffing entities
 type DiffHints struct {
-	StrictIndexOrdering   bool
-	AutoIncrementStrategy int
-	RangeRotationStrategy int
+	StrictIndexOrdering     bool
+	AutoIncrementStrategy   int
+	RangeRotationStrategy   int
+	CheckConstraintStrategy int
 }
