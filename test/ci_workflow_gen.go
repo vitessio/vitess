@@ -342,6 +342,9 @@ func generateClusterWorkflows(list []string, tpl string) {
 				test.Ubuntu20 = true
 				test.Platform = string(mysql80)
 			}
+			if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
+				test.LimitResourceUsage = true
+			}
 			mysqlVersionIndicator := ""
 			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions(cluster)) > 1 {
 				mysqlVersionIndicator = "_" + string(mysqlVersion)
@@ -357,9 +360,6 @@ func generateClusterWorkflows(list []string, tpl string) {
 			err := writeFileFromTemplate(template, path, test)
 			if err != nil {
 				log.Print(err)
-			}
-			if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
-				test.LimitResourceUsage = true
 			}
 		}
 	}
