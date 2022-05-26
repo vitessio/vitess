@@ -137,6 +137,39 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
+// TestDurabilityPolicyField tests that the DurabilityPolicy field of a keyspace can be set during creation, read and updated later
+// from vtctld server and the vtctl binary
+func TestDurabilityPolicyField(t *testing.T) {
+	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterForKSTest.VtctldProcess.GrpcPort, clusterForKSTest.TmpDirectory)
+
+	out, err := vtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", "ks_durability", "--durability-policy=semi_sync")
+	require.NoError(t, err, out)
+	checkDurabilityPolicy(t, "semi_sync")
+
+	out, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", "ks_durability", "--durability-policy=none")
+	require.NoError(t, err, out)
+	checkDurabilityPolicy(t, "none")
+
+	out, err = vtctldClientProcess.ExecuteCommandWithOutput("DeleteKeyspace", "ks_durability")
+	require.NoError(t, err, out)
+
+	out, err = clusterForKSTest.VtctlProcess.ExecuteCommandWithOutput("CreateKeyspace", "--", "--durability-policy=semi_sync", "ks_durability")
+	require.NoError(t, err, out)
+	checkDurabilityPolicy(t, "semi_sync")
+
+	out, err = clusterForKSTest.VtctlProcess.ExecuteCommandWithOutput("DeleteKeyspace", "ks_durability")
+	require.NoError(t, err, out)
+}
+
+func checkDurabilityPolicy(t *testing.T, durabilityPolicy string) {
+	var keyspace topodata.Keyspace
+	out, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetKeyspace", "ks_durability")
+	require.NoError(t, err, out)
+	err = json.Unmarshal([]byte(out), &keyspace)
+	require.NoError(t, err)
+	require.Equal(t, keyspace.DurabilityPolicy, durabilityPolicy)
+}
+
 func TestGetSrvKeyspaceNames(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspaceNames", cell)

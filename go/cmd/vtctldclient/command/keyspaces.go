@@ -37,7 +37,7 @@ import (
 var (
 	// CreateKeyspace makes a CreateKeyspace gRPC call to a vtctld.
 	CreateKeyspace = &cobra.Command{
-		Use:   "CreateKeyspace <keyspace> [--force|-f] [--sharding-column-name NAME --sharding-column-type TYPE] [--base-keyspace KEYSPACE --snapshot-timestamp TIME] [--served-from DB_TYPE:KEYSPACE ...]",
+		Use:   "CreateKeyspace <keyspace> [--force|-f] [--type KEYSPACE_TYPE] [--sharding-column-name NAME --sharding-column-type TYPE] [--base-keyspace KEYSPACE --snapshot-timestamp TIME] [--served-from DB_TYPE:KEYSPACE ...]  [--durability-policy=policy_name]",
 		Short: "Creates the specified keyspace in the topology.",
 		Long: `Creates the specified keyspace in the topology.
 	
@@ -88,6 +88,20 @@ Otherwise, the keyspace must be empty (have no shards), or returns an error.`,
 		Args:  cobra.ExactArgs(2),
 		RunE:  commandRemoveKeyspaceCell,
 	}
+	// SetKeyspaceDurabilityPolicy makes a SetKeyspaceDurabilityPolicy gRPC call to a vtcltd.
+	SetKeyspaceDurabilityPolicy = &cobra.Command{
+		Use:   "SetKeyspaceDurabilityPolicy [--durability-policy=policy_name] <keyspace name>",
+		Short: "Sets the durability-policy used by the specified keyspace.",
+		Long: `Sets the durability-policy used by the specified keyspace. 
+Durability policy governs the durability of the keyspace by describing which tablets should be sending semi-sync acknowledgements to the primary.
+Possible values include 'semi_sync', 'none' and others as dictated by registered plugins.
+
+To set the durability policy of customer keyspace to semi_sync, you would use the following command:
+SetKeyspaceDurabilityPolicy --durability-policy='semi_sync' customer`,
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandSetKeyspaceDurabilityPolicy,
+	}
 	// SetKeyspaceServedFrom makes a SetKeyspaceServedFrom gRPC call to a vtcltd.
 	SetKeyspaceServedFrom = &cobra.Command{
 		Use:                   "SetKeyspaceServedFrom [--source <keyspace>] [--remove] [--cells=<cells>] <keyspace> <tablet_type>",
@@ -133,6 +147,7 @@ var createKeyspaceOptions = struct {
 	KeyspaceType      cli.KeyspaceTypeFlag
 	BaseKeyspace      string
 	SnapshotTimestamp string
+	DurabilityPolicy  string
 }{
 	KeyspaceType: cli.KeyspaceTypeFlag(topodatapb.KeyspaceType_NORMAL),
 }
@@ -179,6 +194,7 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 		Type:               topodatapb.KeyspaceType(createKeyspaceOptions.KeyspaceType),
 		BaseKeyspace:       createKeyspaceOptions.BaseKeyspace,
 		SnapshotTime:       snapshotTime,
+		DurabilityPolicy:   createKeyspaceOptions.DurabilityPolicy,
 	}
 
 	for n, v := range createKeyspaceOptions.ServedFromsMap.StringMapValue {
@@ -312,6 +328,31 @@ func commandRemoveKeyspaceCell(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Successfully removed keyspace %s from cell %s\n", keyspace, cell)
 
+	return nil
+}
+
+var setKeyspaceDurabilityPolicyOptions = struct {
+	DurabilityPolicy string
+}{}
+
+func commandSetKeyspaceDurabilityPolicy(cmd *cobra.Command, args []string) error {
+	keyspace := cmd.Flags().Arg(0)
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.SetKeyspaceDurabilityPolicy(commandCtx, &vtctldatapb.SetKeyspaceDurabilityPolicyRequest{
+		Keyspace:         keyspace,
+		DurabilityPolicy: setKeyspaceDurabilityPolicyOptions.DurabilityPolicy,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
 	return nil
 }
 
@@ -468,6 +509,7 @@ func init() {
 	CreateKeyspace.Flags().Var(&createKeyspaceOptions.KeyspaceType, "type", "The type of the keyspace")
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.BaseKeyspace, "base-keyspace", "", "The base keyspace for a snapshot keyspace.")
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.SnapshotTimestamp, "snapshot-timestamp", "", "The snapshot time for a snapshot keyspace, as a timestamp in RFC3339 format.")
+	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.DurabilityPolicy, "durability-policy", "none", "Type of durability to enforce for this keyspace. Default is none. Possible values include 'semi_sync' and others as dictated by registered plugins.")
 	Root.AddCommand(CreateKeyspace)
 
 	DeleteKeyspace.Flags().BoolVarP(&deleteKeyspaceOptions.Recursive, "recursive", "r", false, "Recursively delete all shards in the keyspace, and all tablets in those shards.")
@@ -486,6 +528,9 @@ func init() {
 	SetKeyspaceServedFrom.Flags().BoolVarP(&setKeyspaceServedFromOptions.Remove, "remove", "r", false, "If set, remove the ServedFrom record.")
 	SetKeyspaceServedFrom.Flags().StringVar(&setKeyspaceServedFromOptions.SourceKeyspace, "source", "", "Specifies the source keyspace name.")
 	Root.AddCommand(SetKeyspaceServedFrom)
+
+	SetKeyspaceDurabilityPolicy.Flags().StringVar(&setKeyspaceDurabilityPolicyOptions.DurabilityPolicy, "durability-policy", "none", "type of durability to enforce for this keyspace. Default is none. Other values include 'semi_sync' and others as dictated by registered plugins")
+	Root.AddCommand(SetKeyspaceDurabilityPolicy)
 
 	SetKeyspaceShardingInfo.Flags().BoolVarP(&setKeyspaceShardingInfoOptions.Force, "force", "f", false, "Updates fields even if they are already set. Use caution before passing force to this command.")
 	Root.AddCommand(SetKeyspaceShardingInfo)
