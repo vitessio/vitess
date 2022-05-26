@@ -1494,7 +1494,7 @@ func TestSelectScatter(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -1529,7 +1529,7 @@ func TestSelectScatterPartial(t *testing.T) {
 	}
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -1589,7 +1589,7 @@ func TestSelectScatterPartialOLAP(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -1640,7 +1640,7 @@ func TestSelectScatterPartialOLAP2(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -1696,7 +1696,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -1731,7 +1731,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -1797,7 +1797,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -1861,7 +1861,7 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -1919,7 +1919,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -1977,7 +1977,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -2036,7 +2036,7 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -2096,7 +2096,7 @@ func TestSelectScatterLimit(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -2164,7 +2164,7 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -2963,7 +2963,7 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -2997,7 +2997,7 @@ func TestSelectScatterFails(t *testing.T) {
 	sess := &vtgatepb.Session{}
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -3364,15 +3364,12 @@ func TestMultiCol(t *testing.T) {
 	// Special setup: Don't use createLegacyExecutorEnv.
 
 	*plannerVersion = "gen4"
-	defer func() {
-		*plannerVersion = "v3"
-	}()
 	cell := "multicol"
-	ks := "TestExecutor"
+	ks := "TestMultiCol"
 	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox(ks)
 	s.ShardSpec = "-20-20a0-"
-	s.VSchema = executorVSchema
+	s.VSchema = multiColVschema
 	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-20a0", "20a0-"}
@@ -3417,19 +3414,41 @@ func TestMultiCol(t *testing.T) {
 	}
 }
 
+var multiColVschema = `
+{
+	"sharded": true,
+	"vindexes": {
+		"multicol_vdx": {
+			"type": "multicol",
+			"params": {
+				"column_count": "3",
+				"column_bytes": "1,3,4",
+				"column_vindex": "hash,binary,unicode_loose_xxhash"
+			}
+        }
+	},
+	"tables": {
+		"multicoltbl": {
+			"column_vindexes": [
+				{
+					"columns": ["cola","colb","colc"],
+					"name": "multicol_vdx"
+				}
+			]
+		}
+	}
+}
+`
+
 func TestMultiColPartial(t *testing.T) {
 	// Special setup: Don't use createLegacyExecutorEnv.
-
 	*plannerVersion = "gen4"
-	defer func() {
-		*plannerVersion = "v3"
-	}()
 	cell := "multicol"
-	ks := "TestExecutor"
+	ks := "TestMultiCol"
 	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox(ks)
 	s.ShardSpec = "-20-20a0c0-"
-	s.VSchema = executorVSchema
+	s.VSchema = multiColVschema
 	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-20a0c0", "20a0c0-"}
