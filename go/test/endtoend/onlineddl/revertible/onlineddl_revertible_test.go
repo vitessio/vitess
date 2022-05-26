@@ -165,8 +165,8 @@ var testCases = []testCase{
 	},
 	{
 		name:                "expanded: character sets",
-		fromSchema:          `id int primary key, c1 char(3) charset utf8mb3, c2 char(3) charset utf8mb4, c3 char(3) charset ascii, c4 char(3) charset utf8mb4, c5 char(3) charset utf8mb3, c6 char(3) charset latin1`,
-		toSchema:            `id int primary key, c1 char(3) charset utf8mb4, c2 char(3) charset utf8mb3, c3 char(3) charset utf8mb3, c4 char(3) charset ascii, c5 char(3) charset utf8mb3, c6 char(3) charset utf8mb4`,
+		fromSchema:          `id int primary key, c1 char(3) charset utf8, c2 char(3) charset utf8mb4, c3 char(3) charset ascii, c4 char(3) charset utf8mb4, c5 char(3) charset utf8, c6 char(3) charset latin1`,
+		toSchema:            `id int primary key, c1 char(3) charset utf8mb4, c2 char(3) charset utf8, c3 char(3) charset utf8, c4 char(3) charset ascii, c5 char(3) charset utf8, c6 char(3) charset utf8mb4`,
 		expandedColumnNames: `c1,c3,c6`,
 	},
 	{
