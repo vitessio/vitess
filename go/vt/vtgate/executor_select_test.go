@@ -3680,6 +3680,20 @@ func TestSelectAggregationData(t *testing.T) {
 			expField:    `[name:"col1" type:VARCHAR name:"count(col2)" type:INT64]`,
 			expRow:      `[[NULL INT64(8)] [VARCHAR("a") INT64(8)] [VARCHAR("b") INT64(0)]]`,
 		},
+		{
+			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|int64|varbinary"), "a|3|a"),
+			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
+			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:DECIMAL]`,
+			expRow:      `[[VARCHAR("a") DECIMAL(12)]]`,
+		},
+		{
+			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|varchar|varbinary"), "a|2|a"),
+			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
+			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:DECIMAL]`,
+			expRow:      `[[VARCHAR("a") DECIMAL(8)]]`,
+		},
 	}
 
 	for _, tc := range tcases {
