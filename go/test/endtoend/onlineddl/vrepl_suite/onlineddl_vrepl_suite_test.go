@@ -255,7 +255,7 @@ func testSingle(t *testing.T, testName string) {
 		return
 	}
 	// We do not expect failure.
-	require.Equal(t, string(schema.OnlineDDLStatusComplete), migrationStatus)
+	require.Equal(t, string(schema.OnlineDDLStatusComplete), migrationStatus, "message: %s", migrationMessage)
 
 	if content, exists := readTestFile(t, testName, "expect_table_structure"); exists {
 		createStatement := getCreateTableStatement(t, afterTableName)
