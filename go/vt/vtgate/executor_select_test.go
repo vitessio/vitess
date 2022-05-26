@@ -3652,6 +3652,34 @@ func TestSelectAggregationData(t *testing.T) {
 			expField:    `[name:"col2" type:INT64 name:"count(*)" type:INT64]`,
 			expRow:      `[[INT64(1) INT64(8)] [INT64(2) INT64(1)]]`,
 		},
+		{
+			sql:         `select count(col1) from (select id, col1 from user limit 2) x`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1", "int64|varchar"), "3|a", "2|b"),
+			expSandboxQ: "select id, col1 from `user` limit :__upper_limit",
+			expField:    `[name:"count(col1)" type:INT64]`,
+			expRow:      `[[INT64(2)]]`,
+		},
+		{
+			sql:         `select count(col1), col2 from (select col2, col1 from user limit 9) x group by col2`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col2|col1|weight_string(col2)", "int64|varchar|varbinary"), "3|a|NULL", "2|b|NULL"),
+			expSandboxQ: "select col2, col1, weight_string(col2) from `user` order by col2 asc limit :__upper_limit",
+			expField:    `[name:"count(col1)" type:INT64 name:"col2" type:INT64]`,
+			expRow:      `[[INT64(8) INT64(2)] [INT64(1) INT64(3)]]`,
+		},
+		{
+			sql:         `select col1, count(col2) from (select col1, col2 from user limit 9) x group by col1`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|int64|varbinary"), "a|1|a", "b|null|b"),
+			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
+			expField:    `[name:"col1" type:VARCHAR name:"count(col2)" type:INT64]`,
+			expRow:      `[[VARCHAR("a") INT64(8)] [VARCHAR("b") INT64(0)]]`,
+		},
+		{
+			sql:         `select col1, count(col2) from (select col1, col2 from user limit 32) x group by col1`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|int64|varbinary"), "null|1|null", "null|null|null", "a|1|a", "b|null|b"),
+			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
+			expField:    `[name:"col1" type:VARCHAR name:"count(col2)" type:INT64]`,
+			expRow:      `[[NULL INT64(8)] [VARCHAR("a") INT64(8)] [VARCHAR("b") INT64(0)]]`,
+		},
 	}
 
 	for _, tc := range tcases {
