@@ -134,6 +134,30 @@ API endpoint `/throttler/throttle-app` now accepts a `ratio` query argument, a f
 - `1` means "always throttle"
 - any numbr in between is allowd. For example, `0.3` means "throttle in 0.3 probability", ie on a per request and based on a dice roll, there's a `30%` change a request is denied. Overall we can expect about `30%` of requests to be denied. Example: `/throttler/throttle-app?app=vreplication&ratio=0.25`
 
+API endpoint `/throttler/metrics` exposes internal metrics, such as number of hits and errors per app per check type. Example:
+
+```shell
+$ curl -s 'http://127.0.0.1:15100/throttler/metrics' | jq . | grep throttler
+  "throttler.aggregated.mysql.self": 0.123279,
+  "throttler.aggregated.mysql.shard": 0.92436,
+  "throttler.check.8a3b5a56_dce5_11ec_a840_0a43f95f28a3:vreplication:online-ddl.mysql.shard.total": 4,
+  "throttler.check.8a3b5a56_dce5_11ec_a840_0a43f95f28a3:vreplication:online-ddl.total": 4,
+  "throttler.check.any.error": 47,
+  "throttler.check.any.mysql.self.error": 23,
+  "throttler.check.any.mysql.self.total": 307,
+  "throttler.check.any.mysql.shard.error": 24,
+  "throttler.check.any.mysql.shard.total": 311,
+  "throttler.check.any.total": 618,
+  "throttler.check.freno.error": 47,
+  "throttler.check.freno.mysql.self.error": 23,
+  "throttler.check.freno.mysql.self.total": 307,
+  "throttler.check.freno.mysql.shard.error": 24,
+  "throttler.check.freno.mysql.shard.total": 307,
+  "throttler.check.freno.total": 614,
+  "throttler.check.mysql.self.seconds_since_healthy": 0,
+  "throttler.check.mysql.shard.seconds_since_healthy": 0
+```
+
 See new SQL syntax for controlling/viewing throttling, down below.
 
 ### New Syntax
