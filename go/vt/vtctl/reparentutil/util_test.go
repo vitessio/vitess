@@ -1208,10 +1208,10 @@ func Test_getTabletsWithPromotionRules(t *testing.T) {
 			filteredTablets: nil,
 		},
 	}
-	_ = SetDurabilityPolicy("none")
+	durability, _ := GetDurabilityPolicy("none")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res := getTabletsWithPromotionRules(tt.tablets, tt.rule)
+			res := getTabletsWithPromotionRules(durability, tt.tablets, tt.rule)
 			require.EqualValues(t, tt.filteredTablets, res)
 		})
 	}

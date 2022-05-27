@@ -206,6 +206,7 @@ func stopReplicationAndBuildStatusMaps(
 	waitReplicasTimeout time.Duration,
 	ignoredTablets sets.String,
 	tabletToWaitFor *topodatapb.TabletAlias,
+	durability Durabler,
 	logger logutil.Logger,
 ) (*replicationSnapshot, error) {
 	event.DispatchUpdate(ev, "stop replication on all replicas")
@@ -308,7 +309,7 @@ func stopReplicationAndBuildStatusMaps(
 		return res, nil
 	}
 	// check that the tablets we were able to reach are sufficient for us to guarantee that no new write will be accepted by any tablet
-	revokeSuccessful := haveRevoked(res.reachableTablets, allTablets)
+	revokeSuccessful := haveRevoked(durability, res.reachableTablets, allTablets)
 	if !revokeSuccessful {
 		return nil, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety: %v", errRecorder.Error())
 	}

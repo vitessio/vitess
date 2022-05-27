@@ -296,9 +296,9 @@ func findCandidate(
 }
 
 // getTabletsWithPromotionRules gets the tablets with the given promotion rule from the list of tablets
-func getTabletsWithPromotionRules(tablets []*topodatapb.Tablet, rule promotionrule.CandidatePromotionRule) (res []*topodatapb.Tablet) {
+func getTabletsWithPromotionRules(durability Durabler, tablets []*topodatapb.Tablet, rule promotionrule.CandidatePromotionRule) (res []*topodatapb.Tablet) {
 	for _, candidate := range tablets {
-		promotionRule := PromotionRule(nil, candidate)
+		promotionRule := PromotionRule(durability, candidate)
 		if promotionRule == rule {
 			res = append(res, candidate)
 		}
