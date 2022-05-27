@@ -35,7 +35,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-// tabletStats will create a discovery.LegacyTabletStats object.
+// tabletStats will create a discovery.TabletHealth object based on the given tablet configuration.
 func tabletStats(keyspace, cell, shard string, tabletType topodatapb.TabletType, uid uint32) (*topodatapb.Tablet, *discovery.TabletHealth) {
 	target := &querypb.Target{
 		Keyspace:   keyspace,

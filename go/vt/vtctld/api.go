@@ -543,6 +543,8 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 		if err != nil {
 			return nil, fmt.Errorf("could not get tabletStats: %v", err)
 		}
+		// Setting tabletStat to true to ensure backward compatibility
+		// Can be removed in v15
 		tabletStat.Up = true
 		return tabletStat, nil
 	})

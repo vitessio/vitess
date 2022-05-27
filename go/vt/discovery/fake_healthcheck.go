@@ -268,6 +268,7 @@ func (fhc *FakeHealthCheck) CacheStatusMap() map[string]*TabletsCacheStatus {
 	return tcsMap
 }
 
+// UpdateHealth adds a TabletHealth for the tablet defined in th.
 func (fhc *FakeHealthCheck) UpdateHealth(th *TabletHealth) {
 	fhc.mu.Lock()
 	defer fhc.mu.Unlock()
