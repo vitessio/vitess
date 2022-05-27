@@ -31,9 +31,9 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -1931,7 +1931,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 
 			testutil.AddShards(ctx, t, tt.ts, tt.shards...)
 			testutil.AddTablets(ctx, t, tt.ts, nil, tt.tablets...)
-			testutil.SetKeyspaceDurability(ctx, t, tt.ts, tt.keyspace, tt.durability)
+			reparenttestutil.SetKeyspaceDurability(ctx, t, tt.ts, tt.keyspace, tt.durability)
 
 			if !tt.unlockTopo {
 				lctx, unlock, lerr := tt.ts.LockShard(ctx, tt.keyspace, tt.shard, "test lock")
@@ -2751,7 +2751,6 @@ func TestEmergencyReparenterCounters(t *testing.T) {
 	ersCounter.Set(0)
 	ersSuccessCounter.Set(0)
 	ersFailureCounter.Set(0)
-	_ = SetDurabilityPolicy("none")
 
 	emergencyReparentOps := EmergencyReparentOptions{}
 	tmc := &testutil.TabletManagerClient{

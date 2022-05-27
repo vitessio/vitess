@@ -205,25 +205,6 @@ func AddTablets(ctx context.Context, t *testing.T, ts *topo.Server, opts *AddTab
 	}
 }
 
-// SetKeyspaceDurability sets the durability policy of a given keyspace
-func SetKeyspaceDurability(ctx context.Context, t *testing.T, ts *topo.Server, keyspace, durability string) {
-	ctx, unlock, lockErr := ts.LockKeyspace(ctx, keyspace, "testutil.SetKeyspaceDurability")
-	if lockErr != nil {
-		return
-	}
-
-	var err error
-	defer unlock(&err)
-
-	ki, err := ts.GetKeyspace(ctx, keyspace)
-	require.NoError(t, err)
-
-	ki.DurabilityPolicy = durability
-
-	err = ts.UpdateKeyspace(ctx, ki)
-	require.NoError(t, err)
-}
-
 // AddShards adds a list of shards to the topology, failing a test if any of the
 // shard records could not be created. It also ensures that every shard's
 // keyspace exists, or creates an empty keyspace if that shard's keyspace does

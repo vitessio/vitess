@@ -18,12 +18,10 @@ package reparentutil
 
 import (
 	"fmt"
-	"sync"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
@@ -37,10 +35,6 @@ type NewDurabler func() Durabler
 var (
 	// durabilityPolicies is a map that stores the functions needed to create a new Durabler
 	durabilityPolicies = make(map[string]NewDurabler)
-	// curDurabilityPolicy is the current durability policy in use
-	curDurabilityPolicy Durabler
-	// curDurabilityPolicyMutex is the mutex protecting the curDurabilityPolicy variable
-	curDurabilityPolicyMutex sync.Mutex
 )
 
 func init() {
@@ -78,19 +72,6 @@ func RegisterDurability(name string, newDurablerFunc NewDurabler) {
 }
 
 //=======================================================================
-
-// SetDurabilityPolicy is used to set the durability policy from the registered policies
-func SetDurabilityPolicy(name string) error {
-	newDurabilityCreationFunc, found := durabilityPolicies[name]
-	if !found {
-		return fmt.Errorf("durability policy %v not found", name)
-	}
-	log.Infof("Setting durability policy to %v", name)
-	curDurabilityPolicyMutex.Lock()
-	defer curDurabilityPolicyMutex.Unlock()
-	curDurabilityPolicy = newDurabilityCreationFunc()
-	return nil
-}
 
 // GetDurabilityPolicy is used to get a new durability policy from the registered policies
 func GetDurabilityPolicy(name string) (Durabler, error) {

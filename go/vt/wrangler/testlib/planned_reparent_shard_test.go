@@ -22,17 +22,15 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-
-	"vitess.io/vitess/go/vt/discovery"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -640,7 +638,6 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 // is not replicating to start with (IO_Thread is not running) and we
 // simulate an error from the attempt to start replication
 func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
-	_ = reparentutil.SetDurabilityPolicy("semi_sync")
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
@@ -655,6 +652,7 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 	// Create a primary, a couple good replicas
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
 	goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
+	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", "semi_sync")
 
 	// old primary
 	primary.FakeMysqlDaemon.ReadOnly = false
