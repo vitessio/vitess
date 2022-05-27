@@ -46,7 +46,7 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 	}
 
 	wasPrimary, err := wr.isPrimaryTablet(ctx, ti)
-	if err != nil {
+	if err != nil && !topo.IsErrType(err, topo.NoNode) {
 		return err
 	}
 
