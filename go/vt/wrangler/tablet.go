@@ -65,7 +65,7 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 		defer unlock(&err)
 
 		// update the shard record's primary
-		if _, err := wr.ts.UpdateShardFields(ctx, ti.Keyspace, ti.Shard, func(si *topo.ShardInfo) error {
+		_, err := wr.ts.UpdateShardFields(ctx, ti.Keyspace, ti.Shard, func(si *topo.ShardInfo) error {
 			if !topoproto.TabletAliasEqual(si.PrimaryAlias, tabletAlias) {
 				wr.Logger().Warningf("Deleting primary %v from shard %v/%v but primary in Shard object was %v", topoproto.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard, topoproto.TabletAliasString(si.PrimaryAlias))
 				return topo.NewError(topo.NoUpdateNeeded, si.Keyspace()+"/"+si.ShardName())
@@ -73,7 +73,8 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 			si.PrimaryAlias = nil
 			si.SetPrimaryTermStartTime(time.Now())
 			return nil
-		}); err != nil {
+		})
+		if err != nil && !topo.IsErrType(err, topo.NoNode) {
 			return err
 		}
 	}
@@ -107,7 +108,6 @@ func (wr *Wrangler) ChangeTabletType(ctx context.Context, tabletAlias *topodatap
 	expectedTablet := proto.Clone(ti.Tablet).(*topodatapb.Tablet)
 	expectedTablet.Type = tabletType
 	semiSync, err := wr.shouldSendSemiSyncAck(ctx, expectedTablet)
-
 	if err != nil {
 		return err
 	}
