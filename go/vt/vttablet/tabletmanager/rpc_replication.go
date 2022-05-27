@@ -392,6 +392,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	if err != nil {
 		return nil, err
 	}
+	wasSemiSyncSourceEnabled, wasSemiSyncReplicaEnabled := tm.MysqlDaemon.SemiSyncEnabled()
 
 	// If we are a primary tablet and not yet read-only, stop accepting new
 	// queries and wait for in-flight queries to complete. If we are not primary,
@@ -419,8 +420,30 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		if err := tm.QueryServiceControl.SetServingType(tablet.Type, logutil.ProtoToTime(tablet.PrimaryTermStartTime), false, "demotion in progress"); err != nil {
 			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
 		}
+
+		// Note that due to an upstream semi-sync bug the semi-sync ACK request may be lost, causing the
+		// current primary to wait forever for the ACK. See:
+		//   https://bugs.mysql.com/bug.php?id=104015
+		//   https://bugs.mysql.com/bug.php?id=101056
+		// This in turns causes the statement to disable [Super]ReadOnly mode to block on a mutex that
+		// the semi-sync plugin is holding while waiting for the ACK. This then can cause the shard to
+		// be left in an unhealthy state without a serving PRIMARY. So here we need to disable SemiSync
+		// which will ensure that we are unblocked by this scenario (tablet repair should also fix this
+		// as needed via fixSemiSync()).
+		if wasSemiSyncSourceEnabled {
+			log.Infof("DemotePrimary disabling source semi-sync")
+			if err := tm.MysqlDaemon.SetSemiSyncEnabled(false, wasSemiSyncReplicaEnabled); err != nil {
+				return nil, vterrors.Wrapf(err, "SetSemiSyncEnabled(source=false, replica=%v) failed", wasSemiSyncReplicaEnabled)
+			}
+		}
+
 		defer func() {
 			if finalErr != nil && revertPartialFailure && wasServing {
+				if wasSemiSyncSourceEnabled {
+					if err := tm.MysqlDaemon.SetSemiSyncEnabled(true, wasSemiSyncReplicaEnabled); err != nil {
+						log.Warningf("SetSemiSyncEnabled(source=true, replica=%v) failed during revert: %v", wasSemiSyncReplicaEnabled, err)
+					}
+				}
 				if err := tm.QueryServiceControl.SetServingType(tablet.Type, logutil.ProtoToTime(tablet.PrimaryTermStartTime), true, ""); err != nil {
 					log.Warningf("SetServingType(serving=true) failed during revert: %v", err)
 				}
