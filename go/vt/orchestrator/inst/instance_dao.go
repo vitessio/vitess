@@ -50,7 +50,6 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/kv"
 	"vitess.io/vitess/go/vt/orchestrator/metrics/query"
 	"vitess.io/vitess/go/vt/orchestrator/util"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
@@ -686,7 +685,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	// We need to update candidate_database_instance.
 	// We register the rule even if it hasn't changed,
 	// to bump the last_suggested time.
-	instance.PromotionRule = reparentutil.PromotionRule(nil, tablet)
+	instance.PromotionRule = PromotionRule(tablet)
 	err = RegisterCandidateInstance(NewCandidateDatabaseInstance(instanceKey, instance.PromotionRule).WithCurrentTime())
 	logReadTopologyInstanceError(instanceKey, "RegisterCandidateInstance", err)
 
