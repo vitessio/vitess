@@ -55,6 +55,7 @@ func ChooseNewPrimary(
 	tabletMap map[string]*topo.TabletInfo,
 	avoidPrimaryAlias *topodatapb.TabletAlias,
 	waitReplicasTimeout time.Duration,
+	durability Durabler,
 	// (TODO:@ajm188) it's a little gross we need to pass this, maybe embed in the context?
 	logger logutil.Logger,
 ) (*topodatapb.TabletAlias, error) {
@@ -106,7 +107,7 @@ func ChooseNewPrimary(
 	}
 
 	// sort the tablets for finding the best primary
-	err := sortTabletsForReparent(validTablets, tabletPositions)
+	err := sortTabletsForReparent(validTablets, tabletPositions, durability)
 	if err != nil {
 		return nil, err
 	}
