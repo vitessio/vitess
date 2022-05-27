@@ -587,6 +587,13 @@ func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.DurabilityPolicy) > 0 {
+		i -= len(m.DurabilityPolicy)
+		copy(dAtA[i:], m.DurabilityPolicy)
+		i = encodeVarint(dAtA, i, uint64(len(m.DurabilityPolicy)))
+		i--
+		dAtA[i] = 0x42
+	}
 	if m.SnapshotTime != nil {
 		size, err := m.SnapshotTime.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -1567,6 +1574,10 @@ func (m *Keyspace) SizeVT() (n int) {
 	}
 	if m.SnapshotTime != nil {
 		l = m.SnapshotTime.SizeVT()
+		n += 1 + l + sov(uint64(l))
+	}
+	l = len(m.DurabilityPolicy)
+	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -3656,6 +3667,38 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 			if err := m.SnapshotTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DurabilityPolicy", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.DurabilityPolicy = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

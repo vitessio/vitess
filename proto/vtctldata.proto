@@ -312,6 +312,9 @@ message CreateKeyspaceRequest {
   // SnapshotTime specifies the snapshot time for this keyspace. It is required
   // to create a SNAPSHOT keyspace.
   vttime.Time snapshot_time = 9;
+  // DurabilityPolicy is the durability policy to be
+  // used for this keyspace.
+  string durability_policy = 10;
 }
 
 message CreateKeyspaceResponse {
@@ -921,6 +924,16 @@ message RunHealthCheckRequest {
 }
 
 message RunHealthCheckResponse {
+}
+
+message SetKeyspaceDurabilityPolicyRequest {
+  string keyspace = 1;
+  string durability_policy = 2;
+}
+
+message SetKeyspaceDurabilityPolicyResponse {
+  // Keyspace is the updated keyspace record.
+  topodata.Keyspace keyspace = 1;
 }
 
 message SetKeyspaceServedFromRequest {

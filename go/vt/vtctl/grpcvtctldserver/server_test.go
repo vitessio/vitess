@@ -1495,6 +1495,28 @@ func TestCreateKeyspace(t *testing.T) {
 			vschemaShouldExist: false,
 			expectedVSchema:    nil,
 			shouldErr:          false,
+		}, {
+			name: "keyspace with durability policy specified",
+			topo: nil,
+			req: &vtctldatapb.CreateKeyspaceRequest{
+				Name:             "testkeyspace",
+				Type:             topodatapb.KeyspaceType_NORMAL,
+				DurabilityPolicy: "semi_sync",
+			},
+			expected: &vtctldatapb.CreateKeyspaceResponse{
+				Keyspace: &vtctldatapb.Keyspace{
+					Name: "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{
+						KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+						DurabilityPolicy: "semi_sync",
+					},
+				},
+			},
+			vschemaShouldExist: true,
+			expectedVSchema: &vschemapb.Keyspace{
+				Sharded: false,
+			},
+			shouldErr: false,
 		},
 	}
 
@@ -8313,6 +8335,86 @@ func TestRunHealthCheck(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+		})
+	}
+}
+
+func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		keyspaces   []*vtctldatapb.Keyspace
+		req         *vtctldatapb.SetKeyspaceDurabilityPolicyRequest
+		expected    *vtctldatapb.SetKeyspaceDurabilityPolicyResponse
+		expectedErr string
+	}{
+		{
+			name: "ok",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "ks1",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+				{
+					Name:     "ks2",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			req: &vtctldatapb.SetKeyspaceDurabilityPolicyRequest{
+				Keyspace:         "ks1",
+				DurabilityPolicy: "none",
+			},
+			expected: &vtctldatapb.SetKeyspaceDurabilityPolicyResponse{
+				Keyspace: &topodatapb.Keyspace{
+					DurabilityPolicy: "none",
+				},
+			},
+		},
+		{
+			name: "keyspace not found",
+			req: &vtctldatapb.SetKeyspaceDurabilityPolicyRequest{
+				Keyspace: "ks1",
+			},
+			expectedErr: "node doesn't exist: keyspaces/ks1",
+		},
+		{
+			name: "fail to update durability policy",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "ks1",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			req: &vtctldatapb.SetKeyspaceDurabilityPolicyRequest{
+				Keyspace:         "ks1",
+				DurabilityPolicy: "non-existent",
+			},
+			expectedErr: "durability policy <non-existent> is not a valid policy. Please register it as a policy first",
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ts := memorytopo.NewServer("zone1")
+			testutil.AddKeyspaces(ctx, t, ts, tt.keyspaces...)
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			resp, err := vtctld.SetKeyspaceDurabilityPolicy(ctx, tt.req)
+			if tt.expectedErr != "" {
+				assert.EqualError(t, err, tt.expectedErr)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
