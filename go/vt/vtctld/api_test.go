@@ -415,8 +415,8 @@ func TestAPI(t *testing.T) {
 		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "", "can't get tablet_statuses: invalid tablet type: unknown TabletType hello", http.StatusInternalServerError},
 
 		// Tablet Health
-		{"GET", "tablet_health/cell1/100", "", `{ "Key": "", "Tablet": { "alias": { "cell": "cell1", "uid": 100 },"port_map": { "grpc": 101, "vt": 100 }, "keyspace": "ks1", "shard": "-80", "type": 2},
-		  "Name": "", "Target": { "keyspace": "ks1", "shard": "-80", "tablet_type": 2 }, "Up": true, "Serving": true, "PrimaryTermStartTime": 0, "TabletExternallyReparentedTimestamp": 0,
+		{"GET", "tablet_health/cell1/100", "", `{ "Key": ",grpc:101,vt:100", "Tablet": { "alias": { "cell": "cell1", "uid": 100 },"port_map": { "grpc": 101, "vt": 100 }, "keyspace": "ks1", "shard": "-80", "type": 2},
+		  "Name": "cell1-0000000100", "Target": { "keyspace": "ks1", "shard": "-80", "tablet_type": 2 }, "Up": true, "Serving": true, "PrimaryTermStartTime": 0, "TabletExternallyReparentedTimestamp": 0,
 		  "Stats": { "replication_lag_seconds": 100 }, "LastError": null }`, http.StatusOK},
 		{"GET", "tablet_health/cell1", "", "can't get tablet_health: invalid tablet_health path: \"cell1\"  expected path: /tablet_health/<cell>/<uid>", http.StatusInternalServerError},
 		{"GET", "tablet_health/cell1/gh", "", "can't get tablet_health: incorrect uid", http.StatusInternalServerError},

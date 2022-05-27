@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"strings"
 
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	"google.golang.org/protobuf/proto"
@@ -55,11 +57,15 @@ func (th *TabletHealth) MarshalJSON() ([]byte, error) {
 		Stats                               *query.RealtimeStats
 		LastError                           error
 	}{
+		// The Key and Name fields are fields that used to live in the legacy tablet health
+		// TODO: remove Key and Name in v15
+		Key:    TabletToMapKey(th.Tablet),
 		Tablet: th.Tablet,
+		Name:   topoproto.TabletAliasString(th.Tablet.Alias),
 		Target: th.Target,
 
-		// Setting tabletStat to true to ensure backward compatibility
-		// Can be removed in v15
+		// Setting Up to true to ensure backward compatibility
+		// TODO: remove Up in v15
 		Up: true,
 
 		Serving:                             th.Serving,
