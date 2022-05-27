@@ -302,6 +302,8 @@ type VtctldClient interface {
 	RestoreFromBackup(ctx context.Context, in *vtctldata.RestoreFromBackupRequest, opts ...grpc.CallOption) (Vtctld_RestoreFromBackupClient, error)
 	// RunHealthCheck runs a healthcheck on the remote tablet.
 	RunHealthCheck(ctx context.Context, in *vtctldata.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldata.RunHealthCheckResponse, error)
+	// SetKeyspaceDurabilityPolicy updates the DurabilityPolicy for a keyspace.
+	SetKeyspaceDurabilityPolicy(ctx context.Context, in *vtctldata.SetKeyspaceDurabilityPolicyRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceDurabilityPolicyResponse, error)
 	// SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
 	// only for emergency fixes. This does not rebuild the serving graph.
 	//
@@ -974,6 +976,15 @@ func (c *vtctldClient) RunHealthCheck(ctx context.Context, in *vtctldata.RunHeal
 	return out, nil
 }
 
+func (c *vtctldClient) SetKeyspaceDurabilityPolicy(ctx context.Context, in *vtctldata.SetKeyspaceDurabilityPolicyRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceDurabilityPolicyResponse, error) {
+	out := new(vtctldata.SetKeyspaceDurabilityPolicyResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetKeyspaceDurabilityPolicy", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) SetKeyspaceServedFrom(ctx context.Context, in *vtctldata.SetKeyspaceServedFromRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceServedFromResponse, error) {
 	out := new(vtctldata.SetKeyspaceServedFromResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetKeyspaceServedFrom", in, out, opts...)
@@ -1351,6 +1362,8 @@ type VtctldServer interface {
 	RestoreFromBackup(*vtctldata.RestoreFromBackupRequest, Vtctld_RestoreFromBackupServer) error
 	// RunHealthCheck runs a healthcheck on the remote tablet.
 	RunHealthCheck(context.Context, *vtctldata.RunHealthCheckRequest) (*vtctldata.RunHealthCheckResponse, error)
+	// SetKeyspaceDurabilityPolicy updates the DurabilityPolicy for a keyspace.
+	SetKeyspaceDurabilityPolicy(context.Context, *vtctldata.SetKeyspaceDurabilityPolicyRequest) (*vtctldata.SetKeyspaceDurabilityPolicyResponse, error)
 	// SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
 	// only for emergency fixes. This does not rebuild the serving graph.
 	//
@@ -1614,6 +1627,9 @@ func (UnimplementedVtctldServer) RestoreFromBackup(*vtctldata.RestoreFromBackupR
 }
 func (UnimplementedVtctldServer) RunHealthCheck(context.Context, *vtctldata.RunHealthCheckRequest) (*vtctldata.RunHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
+}
+func (UnimplementedVtctldServer) SetKeyspaceDurabilityPolicy(context.Context, *vtctldata.SetKeyspaceDurabilityPolicyRequest) (*vtctldata.SetKeyspaceDurabilityPolicyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetKeyspaceDurabilityPolicy not implemented")
 }
 func (UnimplementedVtctldServer) SetKeyspaceServedFrom(context.Context, *vtctldata.SetKeyspaceServedFromRequest) (*vtctldata.SetKeyspaceServedFromResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetKeyspaceServedFrom not implemented")
@@ -2714,6 +2730,24 @@ func _Vtctld_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_SetKeyspaceDurabilityPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.SetKeyspaceDurabilityPolicyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).SetKeyspaceDurabilityPolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/SetKeyspaceDurabilityPolicy",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).SetKeyspaceDurabilityPolicy(ctx, req.(*vtctldata.SetKeyspaceDurabilityPolicyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_SetKeyspaceServedFrom_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.SetKeyspaceServedFromRequest)
 	if err := dec(in); err != nil {
@@ -3346,6 +3380,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RunHealthCheck",
 			Handler:    _Vtctld_RunHealthCheck_Handler,
+		},
+		{
+			MethodName: "SetKeyspaceDurabilityPolicy",
+			Handler:    _Vtctld_SetKeyspaceDurabilityPolicy_Handler,
 		},
 		{
 			MethodName: "SetKeyspaceServedFrom",
