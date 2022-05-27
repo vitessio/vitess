@@ -182,7 +182,16 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 		return nil
 	}
 
-	isSemiSync := IsReplicaSemiSync(nil, shardPrimary.Tablet, tablet)
+	durabilityName, err := ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	if err != nil {
+		return err
+	}
+	durability, err := GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return err
+	}
+
+	isSemiSync := IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet)
 	return tmc.SetReplicationSource(ctx, tablet, shardPrimary.Alias, 0, "", false, isSemiSync)
 }
 
