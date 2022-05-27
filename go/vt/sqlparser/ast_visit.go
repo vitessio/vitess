@@ -695,7 +695,7 @@ func VisitRefOfAvg(in *Avg, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExpr(in.Arg, f); err != nil {
+	if err := VisitExprs(in.Args, f); err != nil {
 		return err
 	}
 	return nil
@@ -990,7 +990,7 @@ func VisitRefOfCount(in *Count, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExpr(in.Arg, f); err != nil {
+	if err := VisitExprs(in.Args, f); err != nil {
 		return err
 	}
 	return nil
@@ -2022,7 +2022,7 @@ func VisitRefOfMax(in *Max, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExpr(in.Arg, f); err != nil {
+	if err := VisitExprs(in.Args, f); err != nil {
 		return err
 	}
 	return nil
@@ -2049,7 +2049,7 @@ func VisitRefOfMin(in *Min, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExpr(in.Arg, f); err != nil {
+	if err := VisitExprs(in.Args, f); err != nil {
 		return err
 	}
 	return nil
@@ -2831,7 +2831,7 @@ func VisitRefOfSum(in *Sum, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExpr(in.Arg, f); err != nil {
+	if err := VisitExprs(in.Args, f); err != nil {
 		return err
 	}
 	return nil

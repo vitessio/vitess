@@ -1472,7 +1472,7 @@ func EqualsRefOfAvg(a, b *Avg) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
-		EqualsExpr(a.Arg, b.Arg)
+		EqualsExprs(a.Args, b.Args)
 }
 
 // EqualsRefOfBegin does deep equals between the two objects.
@@ -1735,7 +1735,7 @@ func EqualsRefOfCount(a, b *Count) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
-		EqualsExpr(a.Arg, b.Arg)
+		EqualsExprs(a.Args, b.Args)
 }
 
 // EqualsRefOfCountStar does deep equals between the two objects.
@@ -1746,7 +1746,8 @@ func EqualsRefOfCountStar(a, b *CountStar) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsStarExpr(a.Star, b.Star)
+	return a.Distinct == b.Distinct &&
+		EqualsStarExpr(a.Star, b.Star)
 }
 
 // EqualsRefOfCreateDatabase does deep equals between the two objects.
@@ -2628,7 +2629,8 @@ func EqualsRefOfMax(a, b *Max) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsExpr(a.Arg, b.Arg)
+	return a.Distinct == b.Distinct &&
+		EqualsExprs(a.Args, b.Args)
 }
 
 // EqualsRefOfMemberOfExpr does deep equals between the two objects.
@@ -2651,7 +2653,8 @@ func EqualsRefOfMin(a, b *Min) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsExpr(a.Arg, b.Arg)
+	return a.Distinct == b.Distinct &&
+		EqualsExprs(a.Args, b.Args)
 }
 
 // EqualsRefOfModifyColumn does deep equals between the two objects.
@@ -3349,7 +3352,7 @@ func EqualsRefOfSum(a, b *Sum) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
-		EqualsExpr(a.Arg, b.Arg)
+		EqualsExprs(a.Args, b.Args)
 }
 
 // EqualsTableExprs does deep equals between the two objects.

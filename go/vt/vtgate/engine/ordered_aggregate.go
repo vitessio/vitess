@@ -125,7 +125,8 @@ func (ap *AggregateParams) String() string {
 		keyCol += " COLLATE " + collation.Name()
 	}
 	if ap.Alias != "" {
-		return fmt.Sprintf("%s(%s) AS %s", ap.Opcode.String(), keyCol, ap.Alias)
+		s := fmt.Sprintf("%s(%s) AS %s", ap.Opcode.String(), keyCol, ap.Alias)
+		return s
 	}
 	return fmt.Sprintf("%s(%s)", ap.Opcode.String(), keyCol)
 }

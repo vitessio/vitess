@@ -2560,32 +2560,37 @@ type (
 	AggrFunc interface {
 		AggrName() string
 		GetArg() Expr
+		isDistinct() bool
+		GetArgs() Exprs
 	}
 
 	Count struct {
-		Arg      Expr
+		Args     Exprs
 		Distinct bool
 	}
 
 	CountStar struct {
-		Star StarExpr
+		Star     StarExpr
+		Distinct bool
 	}
 
 	Avg struct {
-		Arg      Expr
+		Args     Exprs
 		Distinct bool
 	}
 
 	Max struct {
-		Arg Expr
+		Args     Exprs
+		Distinct bool
 	}
 
 	Min struct {
-		Arg Expr
+		Args     Exprs
+		Distinct bool
 	}
 
 	Sum struct {
-		Arg      Expr
+		Args     Exprs
 		Distinct bool
 	}
 )
@@ -2598,12 +2603,26 @@ func (*Avg) iExpr()       {}
 func (*CountStar) iExpr() {}
 func (*Count) iExpr()     {}
 
-func (sum *Sum) GetArg() Expr     { return sum.Arg }
-func (min *Min) GetArg() Expr     { return min.Arg }
-func (max *Max) GetArg() Expr     { return max.Arg }
-func (avg *Avg) GetArg() Expr     { return avg.Arg }
+func (sum *Sum) GetArg() Expr     { return sum.Args[0] }
+func (min *Min) GetArg() Expr     { return min.Args[0] }
+func (max *Max) GetArg() Expr     { return max.Args[0] }
+func (avg *Avg) GetArg() Expr     { return avg.Args[0] }
 func (*CountStar) GetArg() Expr   { return nil }
-func (count *Count) GetArg() Expr { return count.Arg }
+func (count *Count) GetArg() Expr { return count.Args[0] }
+
+func (sum *Sum) GetArgs() Exprs     { return sum.Args }
+func (min *Min) GetArgs() Exprs     { return min.Args }
+func (max *Max) GetArgs() Exprs     { return max.Args }
+func (avg *Avg) GetArgs() Exprs     { return avg.Args }
+func (*CountStar) GetArgs() Exprs   { return nil }
+func (count *Count) GetArgs() Exprs { return count.Args }
+
+func (sum *Sum) isDistinct() bool         { return sum.Distinct }
+func (min *Min) isDistinct() bool         { return min.Distinct }
+func (max *Max) isDistinct() bool         { return max.Distinct }
+func (avg *Avg) isDistinct() bool         { return avg.Distinct }
+func (cStar *CountStar) isDistinct() bool { return cStar.Distinct }
+func (count *Count) isDistinct() bool     { return count.Distinct }
 
 func (*Sum) AggrName() string       { return "sum" }
 func (*Min) AggrName() string       { return "min" }

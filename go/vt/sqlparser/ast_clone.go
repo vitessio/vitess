@@ -622,7 +622,7 @@ func CloneRefOfAvg(n *Avg) *Avg {
 		return nil
 	}
 	out := *n
-	out.Arg = CloneExpr(n.Arg)
+	out.Args = CloneExprs(n.Args)
 	return &out
 }
 
@@ -843,7 +843,7 @@ func CloneRefOfCount(n *Count) *Count {
 		return nil
 	}
 	out := *n
-	out.Arg = CloneExpr(n.Arg)
+	out.Args = CloneExprs(n.Args)
 	return &out
 }
 
@@ -1609,7 +1609,7 @@ func CloneRefOfMax(n *Max) *Max {
 		return nil
 	}
 	out := *n
-	out.Arg = CloneExpr(n.Arg)
+	out.Args = CloneExprs(n.Args)
 	return &out
 }
 
@@ -1630,7 +1630,7 @@ func CloneRefOfMin(n *Min) *Min {
 		return nil
 	}
 	out := *n
-	out.Arg = CloneExpr(n.Arg)
+	out.Args = CloneExprs(n.Args)
 	return &out
 }
 
@@ -2228,7 +2228,7 @@ func CloneRefOfSum(n *Sum) *Sum {
 		return nil
 	}
 	out := *n
-	out.Arg = CloneExpr(n.Arg)
+	out.Args = CloneExprs(n.Args)
 	return &out
 }
 

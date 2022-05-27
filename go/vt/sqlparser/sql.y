@@ -5375,29 +5375,29 @@ UTC_DATE func_paren_opt
   {
     $$ = &CurTimeFuncExpr{Name:NewColIdent("current_time"), Fsp: $2}
   }
-| AVG openb distinct_opt expression closeb
+| AVG openb distinct_opt expression_list closeb
   {
-    $$ = &Avg{Arg:$4, Distinct:$3}
+    $$ = &Avg{Args:$4, Distinct:$3}
   }
-| COUNT openb star_count closeb
+| COUNT openb distinct_opt star_count closeb
   {
-    $$ = &CountStar{Star:$3}
+    $$ = &CountStar{Star:$4, Distinct:$3}
   }
-| COUNT openb distinct_opt expression closeb
+| COUNT openb distinct_opt expression_list closeb
   {
-    $$ = &Count{Arg:$4, Distinct:$3}
+    $$ = &Count{Args:$4, Distinct:$3}
   }
-| MAX openb expression closeb
+| MAX openb distinct_opt expression_list closeb
   {
-    $$ = &Max{Arg:$3}
+    $$ = &Max{Args:$4, Distinct:$3}
   }
-| MIN openb expression closeb
+| MIN openb distinct_opt expression_list closeb
   {
-    $$ = &Min{Arg:$3}
+    $$ = &Min{Args:$4, Distinct:$3}
   }
-| SUM openb distinct_opt expression closeb
+| SUM openb distinct_opt expression_list closeb
   {
-    $$ = &Sum{Arg:$4, Distinct:$3}
+    $$ = &Sum{Args:$4, Distinct:$3}
   }
 | TIMESTAMPADD openb sql_id ',' expression ',' expression closeb
   {
@@ -7124,6 +7124,8 @@ non_reserved_keyword:
 | SECOND_MICROSECOND
 | YEAR_MONTH
 | WEIGHT_STRING %prec FUNCTION_CALL_NON_KEYWORD
+
+
 
 openb:
   '('

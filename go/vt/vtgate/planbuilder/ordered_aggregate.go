@@ -262,6 +262,12 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 	_, aggName := sqlparser.IsAggregation(expr.Expr)
 	opcode := engine.SupportedAggregates[aggName]
 
+	aggrFunc := expr.Expr.(sqlparser.AggrFunc)
+	if aggrFunc != nil &&
+		aggrFunc.GetArgs() != nil &&
+		len(aggrFunc.GetArgs()) != 1 {
+		return nil, 0, fmt.Errorf("unsupported: only one expression allowed inside aggregates: %s", sqlparser.String(expr))
+	}
 	//TODO: how to fix this
 	/*funcExpr := expr.Expr.(*sqlparser.FuncExpr)
 	opcode := engine.SupportedAggregates[funcExpr.Name.Lowered()]
@@ -275,7 +281,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 	}
 	if handleDistinct {
 		if oa.extraDistinct != nil {
-			return nil, 0, fmt.Errorf("unsupported: only one distinct aggregation allowed in a select")
+			return nil, 0, fmt.Errorf("unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(expr))
 		}
 		// Push the expression that's inside the aggregate.
 		// The column will eventually get added to the group by and order by clauses.
@@ -333,7 +339,13 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, expr *sql
 
 	var innerAliased *sqlparser.AliasedExpr
 	if aggr, ok := expr.Expr.(sqlparser.AggrFunc); ok {
-		innerAliased = &sqlparser.AliasedExpr{Expr: aggr.GetArg(), As: expr.As}
+		// add isDistinct in interface
+		if cStar, ok := aggr.(*sqlparser.CountStar); ok {
+			if cStar.Distinct {
+				return false, nil, fmt.Errorf("syntax error: %s", sqlparser.String(cStar))
+			}
+		}
+		innerAliased = &sqlparser.AliasedExpr{Expr: aggr.GetArg() /*As: expr.As*/}
 	}
 
 	//TODO: how to fix this

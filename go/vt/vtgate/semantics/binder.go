@@ -17,7 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -133,7 +132,6 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		b.recursive[node] = ts
 		b.direct[node] = ts
 	case sqlparser.AggrFunc:
-		fmt.Println("here you go")
 		cStar, ok := node.(*sqlparser.CountStar)
 		if !ok {
 			break

@@ -598,7 +598,6 @@ var Aggregates = map[string]bool{
 
 // IsAggregate returns true if the function is an aggregate.
 func (node *FuncExpr) IsAggregate() bool {
-	log.Infof("inside IsAggregate...")
 	return Aggregates[node.Name.Lowered()]
 }
 
@@ -629,7 +628,6 @@ func NewColNameWithQualifier(identifier string, table TableName) *ColName {
 
 // NewSelect is used to create a select statement
 func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, into *SelectInto, from TableExprs, where *Where, groupBy GroupBy, having *Where) *Select {
-	log.Infof("inside NewSelect")
 	var cache *bool
 	var distinct, straightJoinHint, sqlFoundRows bool
 
@@ -1717,45 +1715,14 @@ func formatAddress(address string) string {
 func ContainsAggregation(e SQLNode) bool {
 	hasAggregates := false
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
-		//fExpr, ok := node.(Expr)
-		//if ok {
 		if isAggregate, _ := IsAggregation(node); isAggregate {
 			hasAggregates = true
 			return false, nil
 		}
-		//}
 		return true, nil
 	}, e)
 	return hasAggregates
 }
-
-/*func IsAggregateWithColName(aggr AggrFunc) (bool, ColIdent) {
-	switch node := aggr.(type) {
-	case *CountStar:
-		return false, ColIdent{}
-	case *Count:
-		if col, ok := node.(*ColName); ok {
-			return true, col.Name
-		}
-	case *Avg:
-		if col, ok := node.(*ColName); ok {
-			return true, col.Name
-		}
-	case *Max:
-		if col, ok := node.(*ColName); ok {
-			return true, col.Name
-		}
-	case *Min:
-		if col, ok := node.(*ColName); ok {
-			return true, col.Name
-		}
-	case *Sum:
-		if col, ok := node.(*ColName); ok {
-			return true, col.Name
-		}
-	}
-	return false, ColIdent{}
-}*/
 
 func IsAggregation(node SQLNode) (bool, string) {
 	fExpr, ok := node.(Expr)
@@ -1768,26 +1735,18 @@ func IsAggregation(node SQLNode) (bool, string) {
 	return false, ""
 }
 
-/*func IsAggregation(expr Expr) (bool, string) {
-	switch node := expr.(type) {
-	case AggrFunc:
-		return true, node.AggrName()
-	}
-	return false, ""
-}*/
-
 func IsDistinct(expr Expr) bool {
 	switch node := expr.(type) {
 	case *Count:
 		return node.Distinct
 	case *CountStar:
-		return false
+		return node.Distinct
 	case *Avg:
 		return node.Distinct
 	case *Max:
-		return false
+		return node.Distinct
 	case *Min:
-		return false
+		return node.Distinct
 	case *Sum:
 		return node.Distinct
 	}

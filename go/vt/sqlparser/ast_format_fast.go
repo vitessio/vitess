@@ -3062,14 +3062,16 @@ func (node *Count) formatFast(buf *TrackedBuffer) {
 	if node.Distinct {
 		buf.WriteString(DistinctStr)
 	}
-	buf.printExpr(node, node.Arg, true)
+	node.Args.formatFast(buf)
 	buf.WriteByte(')')
 }
 
 func (node *CountStar) formatFast(buf *TrackedBuffer) {
-	//buf.WriteString("count(")
-	buf.WriteString("count(*)")
-	//buf.WriteString(")")
+	buf.WriteString("count(")
+	if node.Distinct {
+		buf.WriteString(DistinctStr)
+	}
+	buf.WriteString("*)")
 }
 
 func (node *Avg) formatFast(buf *TrackedBuffer) {
@@ -3077,19 +3079,25 @@ func (node *Avg) formatFast(buf *TrackedBuffer) {
 	if node.Distinct {
 		buf.WriteString(DistinctStr)
 	}
-	buf.printExpr(node, node.Arg, true)
+	node.Args.formatFast(buf)
 	buf.WriteByte(')')
 }
 
 func (node *Max) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("max(")
-	buf.printExpr(node, node.Arg, true)
+	if node.Distinct {
+		buf.WriteString(DistinctStr)
+	}
+	node.Args.formatFast(buf)
 	buf.WriteByte(')')
 }
 
 func (node *Min) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("min(")
-	buf.printExpr(node, node.Arg, true)
+	if node.Distinct {
+		buf.WriteString(DistinctStr)
+	}
+	node.Args.formatFast(buf)
 	buf.WriteByte(')')
 }
 
@@ -3098,6 +3106,6 @@ func (node *Sum) formatFast(buf *TrackedBuffer) {
 	if node.Distinct {
 		buf.WriteString(DistinctStr)
 	}
-	buf.printExpr(node, node.Arg, true)
+	node.Args.formatFast(buf)
 	buf.WriteByte(')')
 }

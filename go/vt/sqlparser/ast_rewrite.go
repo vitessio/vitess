@@ -986,8 +986,8 @@ func (a *application) rewriteRefOfAvg(parent SQLNode, node *Avg, replacer replac
 			return true
 		}
 	}
-	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
-		parent.(*Avg).Arg = newNode.(Expr)
+	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
+		parent.(*Avg).Args = newNode.(Exprs)
 	}) {
 		return false
 	}
@@ -1640,8 +1640,8 @@ func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer re
 			return true
 		}
 	}
-	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
-		parent.(*Count).Arg = newNode.(Expr)
+	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
+		parent.(*Count).Args = newNode.(Exprs)
 	}) {
 		return false
 	}
@@ -3898,8 +3898,8 @@ func (a *application) rewriteRefOfMax(parent SQLNode, node *Max, replacer replac
 			return true
 		}
 	}
-	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
-		parent.(*Max).Arg = newNode.(Expr)
+	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
+		parent.(*Max).Args = newNode.(Exprs)
 	}) {
 		return false
 	}
@@ -3957,8 +3957,8 @@ func (a *application) rewriteRefOfMin(parent SQLNode, node *Min, replacer replac
 			return true
 		}
 	}
-	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
-		parent.(*Min).Arg = newNode.(Expr)
+	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
+		parent.(*Min).Args = newNode.(Exprs)
 	}) {
 		return false
 	}
@@ -5710,8 +5710,8 @@ func (a *application) rewriteRefOfSum(parent SQLNode, node *Sum, replacer replac
 			return true
 		}
 	}
-	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
-		parent.(*Sum).Arg = newNode.(Expr)
+	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
+		parent.(*Sum).Args = newNode.(Exprs)
 	}) {
 		return false
 	}

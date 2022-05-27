@@ -263,8 +263,12 @@ func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 		fExpr, ok := node.(sqlparser.Expr)
 		if ok {
 			if isAggregate, _ := sqlparser.IsAggregation(fExpr); isAggregate {
-				//return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument")
-				// TODO: for now return true every time but we need a way to detect single argument aggregate functions
+				aggrFunc := node.(sqlparser.AggrFunc)
+				if aggrFunc.GetArgs() != nil &&
+					len(aggrFunc.GetArgs()) != 1 {
+					//return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument")
+					return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(fExpr))
+				}
 				return true, nil
 			}
 		}
