@@ -182,7 +182,7 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 		return nil
 	}
 
-	isSemiSync := IsReplicaSemiSync(shardPrimary.Tablet, tablet)
+	isSemiSync := IsReplicaSemiSync(nil, shardPrimary.Tablet, tablet)
 	return tmc.SetReplicationSource(ctx, tablet, shardPrimary.Alias, 0, "", false, isSemiSync)
 }
 

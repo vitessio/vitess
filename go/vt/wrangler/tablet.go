@@ -138,7 +138,7 @@ func (wr *Wrangler) shouldSendSemiSyncAck(ctx context.Context, tablet *topodatap
 	if err != nil {
 		return false, err
 	}
-	return reparentutil.IsReplicaSemiSync(shardPrimary.Tablet, tablet), nil
+	return reparentutil.IsReplicaSemiSync(nil, shardPrimary.Tablet, tablet), nil
 }
 
 func (wr *Wrangler) getShardPrimaryForTablet(ctx context.Context, tablet *topodatapb.Tablet) (*topo.TabletInfo, error) {

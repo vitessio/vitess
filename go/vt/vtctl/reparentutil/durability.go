@@ -109,34 +109,28 @@ func CheckDurabilityPolicyExists(name string) bool {
 }
 
 // PromotionRule returns the promotion rule for the instance.
-func PromotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
+func PromotionRule(durability Durabler, tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
 	// Prevent panics.
 	if tablet == nil || tablet.Alias == nil {
 		return promotionrule.MustNot
 	}
-	curDurabilityPolicyMutex.Lock()
-	defer curDurabilityPolicyMutex.Unlock()
-	return curDurabilityPolicy.promotionRule(tablet)
+	return durability.promotionRule(tablet)
 }
 
 // SemiSyncAckers returns the primary semi-sync setting for the instance.
 // 0 means none. Non-zero specifies the number of required ackers.
-func SemiSyncAckers(tablet *topodatapb.Tablet) int {
-	curDurabilityPolicyMutex.Lock()
-	defer curDurabilityPolicyMutex.Unlock()
-	return curDurabilityPolicy.semiSyncAckers(tablet)
+func SemiSyncAckers(durability Durabler, tablet *topodatapb.Tablet) int {
+	return durability.semiSyncAckers(tablet)
 }
 
 // IsReplicaSemiSync returns the replica semi-sync setting from the tablet record.
 // Prefer using this function if tablet record is available.
-func IsReplicaSemiSync(primary, replica *topodatapb.Tablet) bool {
+func IsReplicaSemiSync(durability Durabler, primary, replica *topodatapb.Tablet) bool {
 	// Prevent panics.
 	if primary == nil || primary.Alias == nil || replica == nil || replica.Alias == nil {
 		return false
 	}
-	curDurabilityPolicyMutex.Lock()
-	defer curDurabilityPolicyMutex.Unlock()
-	return curDurabilityPolicy.isReplicaSemiSync(primary, replica)
+	return durability.isReplicaSemiSync(primary, replica)
 }
 
 //=======================================================================

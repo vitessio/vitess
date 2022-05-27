@@ -75,8 +75,8 @@ func (rs *reparentSorter) Less(i, j int) bool {
 
 	// at this point, both have the same GTIDs
 	// so we check their promotion rules
-	jPromotionRule := PromotionRule(rs.tablets[j])
-	iPromotionRule := PromotionRule(rs.tablets[i])
+	jPromotionRule := PromotionRule(nil, rs.tablets[j])
+	iPromotionRule := PromotionRule(nil, rs.tablets[i])
 	return !jPromotionRule.BetterThan(iPromotionRule)
 }
 

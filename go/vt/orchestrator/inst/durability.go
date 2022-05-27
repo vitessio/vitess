@@ -30,7 +30,7 @@ func IsReplicaSemiSync(primaryKey, replicaKey InstanceKey) bool {
 	if err != nil {
 		return false
 	}
-	return reparentutil.IsReplicaSemiSync(primary, replica)
+	return reparentutil.IsReplicaSemiSync(nil, primary, replica)
 }
 
 // SemiSyncAckers returns the primary semi-sync setting for the instance.
@@ -40,5 +40,5 @@ func SemiSyncAckers(instanceKey InstanceKey) int {
 	if err != nil {
 		return 0
 	}
-	return reparentutil.SemiSyncAckers(primary)
+	return reparentutil.SemiSyncAckers(nil, primary)
 }

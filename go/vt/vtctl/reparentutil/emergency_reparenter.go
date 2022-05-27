@@ -515,7 +515,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			forceStart = fs
 		}
 
-		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, IsReplicaSemiSync(newPrimaryTablet, ti.Tablet))
+		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, IsReplicaSemiSync(nil, newPrimaryTablet, ti.Tablet))
 		if err != nil {
 			err = vterrors.Wrapf(err, "tablet %v SetReplicationSource failed: %v", alias, err)
 			rec.RecordError(err)
@@ -684,11 +684,11 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 	if ev.ShardInfo.PrimaryAlias == nil {
 		erp.logger.Infof("setting up %v as new primary for an uninitialized cluster", newPrimary.Alias)
 		// we call InitPrimary when the PrimaryAlias in the ShardInfo is empty. This happens when we have an uninitialized cluster.
-		_, err = erp.tmc.InitPrimary(ctx, newPrimary, SemiSyncAckers(newPrimary) > 0)
+		_, err = erp.tmc.InitPrimary(ctx, newPrimary, SemiSyncAckers(nil, newPrimary) > 0)
 	} else {
 		erp.logger.Infof("starting promotion for the new primary - %v", newPrimary.Alias)
 		// we call PromoteReplica which changes the tablet type, fixes the semi-sync, set the primary to read-write and flushes the binlogs
-		_, err = erp.tmc.PromoteReplica(ctx, newPrimary, SemiSyncAckers(newPrimary) > 0)
+		_, err = erp.tmc.PromoteReplica(ctx, newPrimary, SemiSyncAckers(nil, newPrimary) > 0)
 	}
 	if err != nil {
 		return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary: %v", newPrimary.Alias, err)
@@ -708,7 +708,7 @@ func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb
 	for _, tablet := range validTablets {
 		tabletAliasStr := topoproto.TabletAliasString(tablet.Alias)
 		// Remove tablets which have MustNot promote rule since they must never be promoted
-		if PromotionRule(tablet) == promotionrule.MustNot {
+		if PromotionRule(nil, tablet) == promotionrule.MustNot {
 			erp.logger.Infof("Removing %s from list of valid candidates for promotion because it has the Must Not promote rule", tabletAliasStr)
 			if opts.NewPrimaryAlias != nil && topoproto.TabletAliasEqual(opts.NewPrimaryAlias, tablet.Alias) {
 				return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "proposed primary %s has a must not promotion rule", topoproto.TabletAliasString(opts.NewPrimaryAlias))

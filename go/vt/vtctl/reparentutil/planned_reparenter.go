@@ -229,7 +229,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	setSourceCtx, setSourceCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer setSourceCancel()
 
-	if err := pr.tmc.SetReplicationSource(setSourceCtx, primaryElect, currentPrimary.Alias, 0, snapshotPos, true, IsReplicaSemiSync(currentPrimary.Tablet, primaryElect)); err != nil {
+	if err := pr.tmc.SetReplicationSource(setSourceCtx, primaryElect, currentPrimary.Alias, 0, snapshotPos, true, IsReplicaSemiSync(nil, currentPrimary.Tablet, primaryElect)); err != nil {
 		return "", vterrors.Wrapf(err, "replication on primary-elect %v did not catch up in time; replication must be healthy to perform PlannedReparent", primaryElectAliasStr)
 	}
 
@@ -277,7 +277,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 		undoCtx, undoCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 		defer undoCancel()
 
-		if undoErr := pr.tmc.UndoDemotePrimary(undoCtx, currentPrimary.Tablet, SemiSyncAckers(currentPrimary.Tablet) > 0); undoErr != nil {
+		if undoErr := pr.tmc.UndoDemotePrimary(undoCtx, currentPrimary.Tablet, SemiSyncAckers(nil, currentPrimary.Tablet) > 0); undoErr != nil {
 			pr.logger.Warningf("encountered error while performing UndoDemotePrimary(%v): %v", currentPrimary.AliasString(), undoErr)
 			finalWaitErr = vterrors.Wrapf(finalWaitErr, "encountered error while performing UndoDemotePrimary(%v): %v", currentPrimary.AliasString(), undoErr)
 		}
@@ -290,7 +290,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	promoteCtx, promoteCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer promoteCancel()
 
-	rp, err := pr.tmc.PromoteReplica(promoteCtx, primaryElect, SemiSyncAckers(primaryElect) > 0)
+	rp, err := pr.tmc.PromoteReplica(promoteCtx, primaryElect, SemiSyncAckers(nil, primaryElect) > 0)
 	if err != nil {
 		return "", vterrors.Wrapf(err, "primary-elect tablet %v failed to be promoted to primary; please try again", primaryElectAliasStr)
 	}
@@ -321,7 +321,7 @@ func (pr *PlannedReparenter) performInitialPromotion(
 	// This is done to guarantee safety, in the sense that the semi-sync is on before we start accepting writes.
 	// However, during initialization, it is likely that the database would not be created in the MySQL instance.
 	// Therefore, we have to first set read-write mode, create the database and then fix semi-sync, otherwise we get blocked.
-	rp, err := pr.tmc.InitPrimary(promoteCtx, primaryElect, SemiSyncAckers(primaryElect) > 0)
+	rp, err := pr.tmc.InitPrimary(promoteCtx, primaryElect, SemiSyncAckers(nil, primaryElect) > 0)
 	if err != nil {
 		return "", vterrors.Wrapf(err, "primary-elect tablet %v failed to be promoted to primary; please try again", primaryElectAliasStr)
 	}
@@ -487,7 +487,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	promoteCtx, promoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer promoteCancel()
 
-	rp, err := pr.tmc.PromoteReplica(promoteCtx, primaryElect, SemiSyncAckers(primaryElect) > 0)
+	rp, err := pr.tmc.PromoteReplica(promoteCtx, primaryElect, SemiSyncAckers(nil, primaryElect) > 0)
 	if err != nil {
 		return "", vterrors.Wrapf(err, "failed to promote %v to primary", primaryElectAliasStr)
 	}
@@ -654,7 +654,7 @@ func (pr *PlannedReparenter) reparentTablets(
 			// that it needs to start replication after transitioning from
 			// PRIMARY => REPLICA.
 			forceStartReplication := false
-			if err := pr.tmc.SetReplicationSource(replCtx, tablet, ev.NewPrimary.Alias, reparentJournalTimestamp, "", forceStartReplication, IsReplicaSemiSync(ev.NewPrimary, tablet)); err != nil {
+			if err := pr.tmc.SetReplicationSource(replCtx, tablet, ev.NewPrimary.Alias, reparentJournalTimestamp, "", forceStartReplication, IsReplicaSemiSync(nil, ev.NewPrimary, tablet)); err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to SetReplicationSource(%v): %v", alias, primaryElectAliasStr, err))
 			}
 		}(alias, tabletInfo.Tablet)
