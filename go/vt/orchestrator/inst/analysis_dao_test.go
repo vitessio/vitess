@@ -438,6 +438,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 			if tt.durability == "" {
 				tt.durability = "none"
 			}
+			SetDurabilityPolicy(tt.durability)
 
 			var rowMaps []sqlutils.RowMap
 			for _, analysis := range tt.info {
