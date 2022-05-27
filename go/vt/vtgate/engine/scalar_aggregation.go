@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"sync"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -131,8 +133,14 @@ func (sa *ScalarAggregate) TryStreamExecute(vcursor VCursor, bindVars map[string
 	var curDistincts []sqltypes.Value
 	var fields []*querypb.Field
 	fieldsSent := false
+	var mu sync.Mutex
 
 	err := vcursor.StreamExecutePrimitive(sa.Input, bindVars, wantfields, func(result *sqltypes.Result) error {
+		// as the underlying primitive call is not sync
+		// and here scalar aggregate is using shared variables we have to sync the callback
+		// for correct aggregation.
+		mu.Lock()
+		defer mu.Unlock()
 		if len(result.Fields) != 0 && !fieldsSent {
 			fields = convertFields(result.Fields, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
 			if err := cb(&sqltypes.Result{Fields: fields}); err != nil {
