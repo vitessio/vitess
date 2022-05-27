@@ -92,6 +92,16 @@ func SetDurabilityPolicy(name string) error {
 	return nil
 }
 
+// GetDurabilityPolicy is used to get a new durability policy from the registered policies
+func GetDurabilityPolicy(name string) (Durabler, error) {
+	newDurabilityCreationFunc, found := durabilityPolicies[name]
+	if !found {
+		return nil, fmt.Errorf("durability policy %v not found", name)
+	}
+	log.Infof("Getting a new durability policy for %v", name)
+	return newDurabilityCreationFunc(), nil
+}
+
 // CheckDurabilityPolicyExists is used to check if the durability policy is part of the registered policies
 func CheckDurabilityPolicyExists(name string) bool {
 	_, found := durabilityPolicies[name]
