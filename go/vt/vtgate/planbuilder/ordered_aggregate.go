@@ -67,6 +67,8 @@ type orderedAggregate struct {
 	// preProcess is true if one of the aggregates needs preprocessing.
 	preProcess bool
 
+	aggrOnEngine bool
+
 	// aggregates specifies the aggregation parameters for each
 	// aggregation function: function opcode and input column number.
 	aggregates []*engine.AggregateParams
@@ -241,6 +243,7 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 	if len(oa.groupByKeys) == 0 {
 		return &engine.ScalarAggregate{
 			PreProcess:          oa.preProcess,
+			AggrOnEngine:        oa.aggrOnEngine,
 			Aggregates:          oa.aggregates,
 			TruncateColumnCount: oa.truncateColumnCount,
 			Collations:          colls,
@@ -250,6 +253,7 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 
 	return &engine.OrderedAggregate{
 		PreProcess:          oa.preProcess,
+		AggrOnEngine:        oa.aggrOnEngine,
 		Aggregates:          oa.aggregates,
 		GroupByKeys:         oa.groupByKeys,
 		TruncateColumnCount: oa.truncateColumnCount,
