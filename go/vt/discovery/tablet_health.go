@@ -18,6 +18,7 @@ package discovery
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -32,16 +33,38 @@ import (
 // TabletHealth represents simple tablet health data that is returned to users of healthcheck.
 // No synchronization is required because we always return a copy.
 type TabletHealth struct {
-	Key                  string
-	Conn                 queryservice.QueryService `json:"-"`
+	Conn                 queryservice.QueryService
 	Tablet               *topodata.Tablet
-	Name                 string
 	Target               *query.Target
 	Up                   bool
 	Serving              bool
-	PrimaryTermStartTime int64 `json:"TabletExternallyReparentedTimestamp"`
+	PrimaryTermStartTime int64
 	Stats                *query.RealtimeStats
 	LastError            error
+}
+
+func (th *TabletHealth) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&struct {
+		Key                                 string
+		Tablet                              *topodata.Tablet
+		Name                                string
+		Target                              *query.Target
+		Up                                  bool
+		Serving                             bool
+		PrimaryTermStartTime                int64
+		TabletExternallyReparentedTimestamp int64
+		Stats                               *query.RealtimeStats
+		LastError                           error
+	}{
+		Tablet:                              th.Tablet,
+		Target:                              th.Target,
+		Up:                                  true,
+		Serving:                             th.Serving,
+		PrimaryTermStartTime:                th.PrimaryTermStartTime,
+		TabletExternallyReparentedTimestamp: th.PrimaryTermStartTime,
+		Stats:                               th.Stats,
+		LastError:                           th.LastError,
+	})
 }
 
 // DeepEqual compares two TabletHealth. Since we include protos, we
