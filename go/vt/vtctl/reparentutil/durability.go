@@ -55,7 +55,7 @@ func init() {
 
 // Durabler is the interface which is used to get the promotion rules for candidates and the semi sync setup
 type Durabler interface {
-	// PromotionRule represents the precedence in which we want to tablets to be promoted.
+	// promotionRule represents the precedence in which we want to tablets to be promoted.
 	// The higher the promotion rule of a tablet, the more we want it to be promoted in case of a failover
 	promotionRule(*topodatapb.Tablet) promotionrule.CandidatePromotionRule
 	// semiSyncAckers represents the number of semi-sync ackers required for a given tablet if it were to become the PRIMARY instance
