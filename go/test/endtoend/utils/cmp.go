@@ -120,6 +120,22 @@ func (mcmp *MySQLCompare) AssertFoundRowsValue(query, workload string, count int
 	assert.Equalf(mcmp.t, want, got, "Workload: %s\nQuery:%s\n", workload, query)
 }
 
+// AssertMatchesNoCompare compares the record of mysql and vitess separately and not with each other.
+func (mcmp *MySQLCompare) AssertMatchesNoCompare(query, mExp string, vExp string) {
+	mcmp.t.Helper()
+	mQr, vQr := mcmp.execNoCompare(query)
+	got := fmt.Sprintf("%v", mQr.Rows)
+	diff := cmp.Diff(mExp, got)
+	if diff != "" {
+		mcmp.t.Errorf("MySQL Query: %s (-want +got):\n%s\nGot:%s", query, diff, got)
+	}
+	got = fmt.Sprintf("%v", vQr.Rows)
+	diff = cmp.Diff(vExp, got)
+	if diff != "" {
+		mcmp.t.Errorf("Vitess Query: %s (-want +got):\n%s\nGot:%s", query, diff, got)
+	}
+}
+
 // Exec executes the given query against both Vitess and MySQL and compares
 // the two result set. If there is a mismatch, the difference will be printed and the
 // test will fail. If the query produces an error in either Vitess or MySQL, the test
@@ -134,6 +150,16 @@ func (mcmp *MySQLCompare) Exec(query string) *sqltypes.Result {
 	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+query)
 	compareVitessAndMySQLResults(mcmp.t, query, vtQr, mysqlQr, false)
 	return vtQr
+}
+
+func (mcmp *MySQLCompare) execNoCompare(query string) (*sqltypes.Result, *sqltypes.Result) {
+	mcmp.t.Helper()
+	vtQr, err := mcmp.VtConn.ExecuteFetch(query, 1000, true)
+	require.NoError(mcmp.t, err, "[Vitess Error] for query: "+query)
+
+	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(query, 1000, true)
+	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+query)
+	return mysqlQr, vtQr
 }
 
 // ExecWithColumnCompare executes the given query against both Vitess and MySQL and compares
