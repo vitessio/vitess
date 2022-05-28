@@ -124,7 +124,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		}
 	case vdiff.ShowAction:
 		switch subCommand {
-		case "all":
+		case "all", "last":
 		default:
 			if !schema.IsOnlineDDLUUID(subCommand) {
 				return fmt.Errorf("can only show specific migration, provide valid uuid")
@@ -168,6 +168,10 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 type vdiffTableSummary struct {
 	TableName, State string
 	RowsCompared     int64
+	MatchingRows     int64
+	MismatchedRows   int64
+	ExtraRowsSource  int64
+	ExtraRowsTarget  int64
 	LastUpdated      string `json:"LastUpdated,omitempty"`
 }
 type vdiffSummary struct {
@@ -185,6 +189,17 @@ const (
 VDiff Summary for {{.Keyspace}}.{{.Workflow}} ({{.UUID}})
 State: {{.State}}
 HasMismatch: {{.HasMismatch}}
+{{ range $table := .TableSummaryMap}} 
+Table {{$table.TableName}}:
+	State:            {{$table.State}}
+	ProcessedRows:    {{$table.RowsCompared}}
+	MatchingRows:     {{$table.MatchingRows}}
+{{ if $table.MismatchedRows}}	MismatchedRows:   {{$table.MismatchedRows}}{{ end }}
+{{ if $table.ExtraRowsSource}}	ExtraRowsSource:  {{$table.ExtraRowsSource}}{{ end }}
+{{ if $table.ExtraRowsTarget}}	ExtraRowsTarget:  {{$table.ExtraRowsTarget}}{{ end }}
+{{ end }}
+ 
+Use "--format=json" for more detailed output
 `
 )
 
@@ -213,6 +228,9 @@ func displayListings(listings []*VDiffListing) string {
 	var strArray []string
 	str := ""
 
+	if len(listings) == 0 {
+		return ""
+	}
 	fields := getStructFieldNames(VDiffListing{})
 	strArray = append(strArray, fields...)
 	strArray2 = append(strArray2, strArray)
@@ -230,14 +248,25 @@ func displayListings(listings []*VDiffListing) string {
 }
 
 func showVDiff2ShowResponse(wr *wrangler.Wrangler, format, keyspace, workflowName, subCommand string, output *wrangler.VDiffOutput) error {
+	var uuid string
 	if schema.IsOnlineDDLUUID(subCommand) {
-		return showVDiff2ShowSingleSummary(wr, format, keyspace, workflowName, subCommand, output)
+		uuid = subCommand
+	}
+	if subCommand == "last" {
+		for _, resp := range output.Responses {
+			uuid = resp.VdiffUuid
+			break
+		}
 	}
 	switch subCommand {
 	case "all":
 		return showVDiff2ShowRecent(wr, format, keyspace, workflowName, subCommand, output)
+	default:
+		if len(output.Responses) == 0 {
+			return fmt.Errorf("no response received for vdiff2 show of %s.%s(%s)", keyspace, workflowName, uuid)
+		}
+		return showVDiff2ShowSingleSummary(wr, format, keyspace, workflowName, uuid, output)
 	}
-	return nil
 }
 
 func showVDiff2ShowRecent(wr *wrangler.Wrangler, format, keyspace, workflowName, subCommand string, output *wrangler.VDiffOutput) error {
@@ -249,7 +278,11 @@ func showVDiff2ShowRecent(wr *wrangler.Wrangler, format, keyspace, workflowName,
 	log.Infof("recent: %+v", recent)
 	log.Flush()
 	if format != "json" {
-		wr.Logger().Printf(displayListings(recent))
+		str = displayListings(recent)
+		if str == "" {
+			str = fmt.Sprintf("No vdiffs found for %s.%s", keyspace, workflowName)
+		}
+		wr.Logger().Printf(str)
 	} else {
 		jsonText, err := json.MarshalIndent(recent, "", "\t")
 		if err != nil {
@@ -281,9 +314,9 @@ func getVDiff2Recent(output *wrangler.VDiffOutput) ([]*VDiffListing, error) {
 	return listings, nil
 }
 
-func showVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, workflowName, subCommand string, output *wrangler.VDiffOutput) error {
+func showVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, workflowName, uuid string, output *wrangler.VDiffOutput) error {
 	str := ""
-	summary, err := getVDiff2SingleSummary(wr, keyspace, workflowName, subCommand, output)
+	summary, err := getVDiff2SingleSummary(wr, keyspace, workflowName, uuid, output)
 	if err != nil {
 		return err
 	}
@@ -298,6 +331,13 @@ func showVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, workfl
 			return err
 		}
 		str = sb.String()
+		for {
+			str2 := strings.Replace(str, "\n\n", "\n", -1)
+			if str == str2 {
+				break
+			}
+			str = str2
+		}
 	} else {
 		jsonText, err := json.MarshalIndent(summary, "", "\t")
 		if err != nil {
@@ -336,11 +376,11 @@ func getVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid stri
 				log.Infof("table row is %+v", row)
 				if first {
 					first = false
-					summary.State, _ = row.ToString("VDiff Status")
+					summary.State, _ = row.ToString("vdiff_state")
 					summary.State = strings.ToLower(summary.State)
-					summary.HasMismatch, _ = row.ToBool("Has Mismatch")
+					summary.HasMismatch, _ = row.ToBool("has_mismatch")
 				}
-				table := row.AsString("Table", "")
+				table := row.AsString("table_name", "")
 				if _, ok := tableSummaryMap[table]; !ok {
 					tableSummaryMap[table] = vdiffTableSummary{
 						TableName: table,
@@ -348,9 +388,8 @@ func getVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid stri
 
 				}
 				ts := tableSummaryMap[table]
-				state := strings.ToLower(row.AsString("Table State", ""))
-				rowsCompared := row.AsInt64("Compared Rows", 0)
-				ts.RowsCompared += rowsCompared
+				state := strings.ToLower(row.AsString("table_state", ""))
+				ts.RowsCompared += row.AsInt64("rows_compared", 0)
 
 				switch state {
 				case "completed":
@@ -366,10 +405,19 @@ func getVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid stri
 				}
 				diffReport := row.AsString("report", "")
 				dr := vdiff.DiffReport{}
+				log.Infof("unmarshalling diff report")
+				log.Flush()
 				err := json.Unmarshal([]byte(diffReport), &dr)
 				if err != nil {
 					return nil, err
 				}
+				log.Infof("DONE unmarshalling diff report")
+				log.Flush()
+				ts.MismatchedRows += dr.MismatchedRows
+				ts.MatchingRows += dr.MatchingRows
+				ts.ExtraRowsTarget += dr.ExtraRowsTarget
+				ts.ExtraRowsSource += dr.ExtraRowsSource
+
 				if _, ok := reports[table]; !ok {
 					reports[table] = make(map[string]vdiff.DiffReport)
 				}
@@ -377,7 +425,6 @@ func getVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid stri
 				tableSummaryMap[table] = ts
 			}
 		}
-
 	}
 	summary.Shards = strings.Join(shards, ",")
 	summary.TableSummaryMap = tableSummaryMap
@@ -393,7 +440,7 @@ func getVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid stri
 
 func showVDiff2CreateResponse(wr *wrangler.Wrangler, format string, uuid string) {
 	if format != "json" {
-		wr.Logger().Printf("VDiff %s scheduled on target shards, use Show to view progress", uuid)
+		wr.Logger().Printf("VDiff %s scheduled on target shards, use Show to view progress\n", uuid)
 	} else {
 		type CreateResponse struct {
 			UUID string
@@ -402,6 +449,6 @@ func showVDiff2CreateResponse(wr *wrangler.Wrangler, format string, uuid string)
 		log.Infof("VDiff scheduled on target shards, use Show to view progress")
 		jsonText, _ := json.MarshalIndent(resp, "", "\t")
 		log.Infof("response is %+v, %s", resp, jsonText)
-		wr.Logger().Printf(string(jsonText))
+		wr.Logger().Printf(string(jsonText) + "\n")
 	}
 }

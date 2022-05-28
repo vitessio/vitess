@@ -54,13 +54,13 @@ type DiffMismatch struct {
 
 // RowDiff is a row that didn't match as part of the comparison.
 type RowDiff struct {
-	Row   map[string]sqltypes.Value
+	Row   map[string]string
 	Query string
 }
 
 func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug, onlyPks bool) (*RowDiff, error) {
 	drp := &RowDiff{}
-	drp.Row = make(map[string]sqltypes.Value)
+	drp.Row = make(map[string]string)
 	statement, err := sqlparser.Parse(queryStmt)
 	if err != nil {
 		return nil, err
@@ -74,21 +74,26 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug,
 		drp.Query = td.genDebugQueryDiff(sel, row, onlyPks)
 	}
 
+	setVal := func(index int) {
+		buf := sqlparser.NewTrackedBuffer(nil)
+		sel.SelectExprs[index].Format(buf)
+		col := buf.String()
+		val := row[index].ToString()
+		if len(val) > 20 {
+			val = val[:20]
+		}
+		drp.Row[col] = val
+	}
+
 	if onlyPks {
 		for _, pkI := range td.tablePlan.selectPks {
-			buf := sqlparser.NewTrackedBuffer(nil)
-			sel.SelectExprs[pkI].Format(buf)
-			col := buf.String()
-			drp.Row[col] = row[pkI]
+			setVal(pkI)
 		}
 		return drp, nil
 	}
 
 	for i := range sel.SelectExprs {
-		buf := sqlparser.NewTrackedBuffer(nil)
-		sel.SelectExprs[i].Format(buf)
-		col := buf.String()
-		drp.Row[col] = row[i]
+		setVal(i)
 	}
 
 	return drp, nil
@@ -133,7 +138,7 @@ func formatSampleRow(logger logutil.Logger, rd *RowDiff, debug bool) { //nolint
 	sort.Strings(keys)
 
 	for _, k := range keys {
-		logger.Printf("\t\t\t %s: %s\n", k, formatValue(rd.Row[k]))
+		logger.Printf("\t\t\t %s: %s\n", k, rd.Row[k])
 	}
 
 	if debug {

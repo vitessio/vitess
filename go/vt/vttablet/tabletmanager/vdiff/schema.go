@@ -66,12 +66,13 @@ const (
 
 	sqlNewVDiff                       = "insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values (%s, %s, '%s', %s, '%s', '%s', '%s')"
 	sqlGetVDiffByKeyspaceWorkflowUUID = "select * from _vt.vdiff where keyspace = %s and workflow = %s and vdiff_uuid = %s"
+	sqlGetMostRecentVDiff             = "select * from _vt.vdiff where keyspace = %s and workflow = %s order by id desc limit 1"
 	sqlGetVDiffByID                   = "select * from _vt.vdiff where id = %d"
-	sqlVDiffSummary                   = `select v.id as 'VDiff ID', v.state as 'VDiff Status', vt.table_name as 'Table', 
+	sqlVDiffSummary                   = `select vt.vdiff_id, v.state as vdiff_state, vt.table_name, 
 										v.vdiff_uuid as 'uuid',
-										vt.state as 'Table State', vt.table_rows as 'Total Rows', 
-										vt.rows_compared as 'Compared Rows', 
-										IF(vt.mismatch = 0, 'false', 'true') as 'Has Mismatch', vt.report
+										vt.state as table_state, vt.table_rows, 
+										vt.rows_compared, 
+										IF(vt.mismatch = 0, 'false', 'true') as has_mismatch, vt.report
 										from _vt.vdiff v, _vt.vdiff_table vt 
 										where v.id = vt.vdiff_id and v.id = %d`
 	sqlUpdateVDiffState     = "update _vt.vdiff set state = %s where id = %d"

@@ -1,5 +1,5 @@
 
-This document describes the implementation of vdiff2.
+Work In Progress document that describes some key components of vdiff2.
 
 Most of the vdiff2 code is a reorganization of vdiff, with a few changes which are due to some key functionality differences in vdiff2 from vdiff. See the RFC at https://github.com/vitessio/vitess/issues/10134 for more info.
 
@@ -94,16 +94,3 @@ VDiff2 can recover from the following issues:
  * Network failures
 
 
-### Pending
-
-Currently this file is just keeping track of low level coding stuff that will be documented:
-
-Role of:
-controller
-workflowDiffer
-tableDiffer
-tablePlan
-shardStreamer
-
-primitive executor
-merge sort: how and why it works

@@ -57,7 +57,9 @@ type Engine struct {
 	wg         sync.WaitGroup
 	thisTablet *topodata.Tablet
 
-	snapshotMu            sync.Mutex // will ensure only one vdiff setup is running at a time
+	// snapshotMu is used to ensure that only one vdiff snapshot cycle is active at a time,
+	// because we stop/start vreplication workflows during this process
+	snapshotMu            sync.Mutex
 	vdiffSchemaCreateOnce sync.Once
 }
 
@@ -105,7 +107,6 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 }
 
 func (vde *Engine) openLocked(ctx context.Context) error {
-
 	rows, err := vde.getPendingVDiffs(ctx)
 	if err != nil {
 		return err
@@ -122,7 +123,7 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 var openRetryInterval = sync2.NewAtomicDuration(1 * time.Second)
 
 func (vde *Engine) retry(ctx context.Context, err error) {
-	log.Errorf("Error starting vreplication engine: %v, will keep retrying.", err)
+	log.Errorf("Error starting vdiff engine: %v, will keep retrying.", err)
 	for {
 		timer := time.NewTimer(openRetryInterval.Get())
 		select {

@@ -85,7 +85,7 @@ func TestVDiff2(t *testing.T) {
 	catchup(t, customerTab1, workflow, "MoveTables")
 	catchup(t, customerTab2, workflow, "MoveTables")
 
-	vdiff(t, ksWorkflow, "") // confirm vdiff gives same results as vdiff2
+	vdiff(t, ksWorkflow, "") // confirm vdiff1 works
 
 	uuid := vdiff2(t, ksWorkflow, "create", "")
 	time.Sleep(5 * time.Second) // wait for vdiffs on tablets to start

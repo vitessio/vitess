@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/schema"
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -44,7 +46,6 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 		Id:     0,
 		Output: nil,
 	}
-
 	dbClient := vde.dbClientFactoryDba()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
@@ -86,11 +87,23 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 		}
 	case ShowAction:
 		uuid := ""
-		if schema.IsOnlineDDLUUID(req.SubCommand) {
-			uuid = req.SubCommand
+		if req.SubCommand == "last" {
+			query := fmt.Sprintf(sqlGetMostRecentVDiff, encodeString(req.Keyspace), encodeString(req.Workflow))
+			if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+				return nil, err
+			}
+			if len(qr.Rows) == 1 {
+				row := qr.Named().Row()
+				uuid = row.AsString("vdiff_uuid", "")
+			}
+		} else {
+			if schema.IsOnlineDDLUUID(req.SubCommand) {
+				uuid = req.SubCommand
+			}
 		}
 		if uuid != "" {
-			query := fmt.Sprintf(sqlGetVDiffByKeyspaceWorkflowUUID, encodeString(req.Keyspace), encodeString(req.Workflow), encodeString(req.VdiffUuid))
+			resp.VdiffUuid = uuid
+			query := fmt.Sprintf(sqlGetVDiffByKeyspaceWorkflowUUID, encodeString(req.Keyspace), encodeString(req.Workflow), encodeString(uuid))
 			if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 				return nil, err
 			}
@@ -100,7 +113,9 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 			case 1:
 				row := qr.Named().Row()
 				vdiffID, _ := row["id"].ToInt64()
+				log.Infof("before summary")
 				summary, err := vde.getVDiffSummary(vdiffID, dbClient)
+				log.Infof("after summary")
 				resp.Output = summary
 				if err != nil {
 					return nil, err
@@ -114,7 +129,11 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 			if qr, err = withDDL.Exec(context.Background(), sqlGetAllVDiffs, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 				return nil, err
 			}
+			if len(qr.Rows) == 0 {
+
+			}
 			resp.Output = sqltypes.ResultToProto3(qr)
+		case "last":
 		default:
 			if !schema.IsOnlineDDLUUID(req.SubCommand) {
 				return nil, fmt.Errorf("subcommand %s not supported", req.SubCommand)
