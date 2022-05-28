@@ -80,33 +80,11 @@ func (p *Projection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 }
 
 // TryStreamExecute implements the Primitive interface
-func (p *Projection) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	result, err := vcursor.ExecutePrimitive(p.Input, bindVars, wantields)
+func (p *Projection) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	result, err := p.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
-
-	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
-	if wantields {
-		err = p.addFields(env, result)
-		if err != nil {
-			return err
-		}
-	}
-	var rows [][]sqltypes.Value
-	env.Fields = result.Fields
-	for _, row := range result.Rows {
-		env.Row = row
-		for _, exp := range p.Exprs {
-			result, err := env.Evaluate(exp)
-			if err != nil {
-				return err
-			}
-			row = append(row, result.Value())
-		}
-		rows = append(rows, row)
-	}
-	result.Rows = rows
 	return callback(result)
 }
 

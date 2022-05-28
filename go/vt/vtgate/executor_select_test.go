@@ -1494,7 +1494,7 @@ func TestSelectScatter(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -1529,7 +1529,7 @@ func TestSelectScatterPartial(t *testing.T) {
 	}
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -1589,7 +1589,7 @@ func TestSelectScatterPartialOLAP(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -1640,7 +1640,7 @@ func TestSelectScatterPartialOLAP2(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -1696,7 +1696,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -1731,7 +1731,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -1797,7 +1797,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -1861,7 +1861,7 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -1919,7 +1919,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -1977,7 +1977,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -2036,7 +2036,7 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -2096,7 +2096,7 @@ func TestSelectScatterLimit(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -2164,7 +2164,7 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -2963,7 +2963,7 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -2997,7 +2997,7 @@ func TestSelectScatterFails(t *testing.T) {
 	sess := &vtgatepb.Session{}
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
@@ -3364,15 +3364,12 @@ func TestMultiCol(t *testing.T) {
 	// Special setup: Don't use createLegacyExecutorEnv.
 
 	*plannerVersion = "gen4"
-	defer func() {
-		*plannerVersion = "v3"
-	}()
 	cell := "multicol"
-	ks := "TestExecutor"
+	ks := "TestMultiCol"
 	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox(ks)
 	s.ShardSpec = "-20-20a0-"
-	s.VSchema = executorVSchema
+	s.VSchema = multiColVschema
 	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-20a0", "20a0-"}
@@ -3417,19 +3414,41 @@ func TestMultiCol(t *testing.T) {
 	}
 }
 
+var multiColVschema = `
+{
+	"sharded": true,
+	"vindexes": {
+		"multicol_vdx": {
+			"type": "multicol",
+			"params": {
+				"column_count": "3",
+				"column_bytes": "1,3,4",
+				"column_vindex": "hash,binary,unicode_loose_xxhash"
+			}
+        }
+	},
+	"tables": {
+		"multicoltbl": {
+			"column_vindexes": [
+				{
+					"columns": ["cola","colb","colc"],
+					"name": "multicol_vdx"
+				}
+			]
+		}
+	}
+}
+`
+
 func TestMultiColPartial(t *testing.T) {
 	// Special setup: Don't use createLegacyExecutorEnv.
-
 	*plannerVersion = "gen4"
-	defer func() {
-		*plannerVersion = "v3"
-	}()
 	cell := "multicol"
-	ks := "TestExecutor"
+	ks := "TestMultiCol"
 	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox(ks)
 	s.ShardSpec = "-20-20a0c0-"
-	s.VSchema = executorVSchema
+	s.VSchema = multiColVschema
 	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-20a0c0", "20a0c0-"}
@@ -3479,6 +3498,230 @@ func TestMultiColPartial(t *testing.T) {
 				}
 			}
 			require.Equal(t, tcase.shards, shards)
+		})
+	}
+}
+
+func TestSelectAggregationNoData(t *testing.T) {
+	// Special setup: Don't use createExecutorEnv.
+	*plannerVersion = "gen4"
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck(nil)
+	createSandbox(KsTestSharded).VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxconn.SandboxConn
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, KsTestSharded, shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+		conns = append(conns, sbc)
+	}
+	executor := createExecutor(serv, cell, resolver)
+
+	tcases := []struct {
+		sql         string
+		sandboxRes  *sqltypes.Result
+		expSandboxQ string
+		expField    string
+		expRow      string
+	}{
+		{
+			sql:         `select count(distinct col) from user`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64")),
+			expSandboxQ: "select col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+			expField:    `[name:"count(distinct col)" type:INT64]`,
+			expRow:      `[[INT64(0)]]`,
+		},
+		{
+			sql:         `select count(*) from user`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "0"),
+			expSandboxQ: "select count(*) from `user`",
+			expField:    `[name:"count(*)" type:INT64]`,
+			expRow:      `[[INT64(0)]]`,
+		},
+		{
+			sql:         `select col, count(*) from user group by col`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)", "int64|int64")),
+			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+			expField:    `[name:"col" type:INT64 name:"count(*)" type:INT64]`,
+			expRow:      `[]`,
+		},
+		{
+			sql:         `select col, count(*) from user group by col limit 2`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)", "int64|int64")),
+			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc limit :__upper_limit",
+			expField:    `[name:"col" type:INT64 name:"count(*)" type:INT64]`,
+			expRow:      `[]`,
+		},
+		{
+			sql:         `select count(*) from (select col1, col2 from user limit 2) x`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2", "int64|int64")),
+			expSandboxQ: "select col1, col2 from `user` limit :__upper_limit",
+			expField:    `[name:"count(*)" type:INT64]`,
+			expRow:      `[[INT64(0)]]`,
+		},
+		{
+			sql:         `select col2, count(*) from (select col1, col2 from user limit 2) x group by col2`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col2)", "int64|int64|varbinary")),
+			expSandboxQ: "select col1, col2, weight_string(col2) from `user` order by col2 asc limit :__upper_limit",
+			expField:    `[name:"col2" type:INT64 name:"count(*)" type:INT64]`,
+			expRow:      `[]`,
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			for _, sbc := range conns {
+				sbc.SetResults([]*sqltypes.Result{tc.sandboxRes})
+				sbc.Queries = nil
+			}
+			qr, err := executorExec(executor, tc.sql, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expField, fmt.Sprintf("%v", qr.Fields))
+			assert.Equal(t, tc.expRow, fmt.Sprintf("%v", qr.Rows))
+			require.Len(t, conns[0].Queries, 1)
+			assert.Equal(t, tc.expSandboxQ, conns[0].Queries[0].Sql)
+		})
+	}
+}
+
+func TestSelectAggregationData(t *testing.T) {
+	// Special setup: Don't use createExecutorEnv.
+	*plannerVersion = "gen4"
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck(nil)
+	createSandbox(KsTestSharded).VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxconn.SandboxConn
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, KsTestSharded, shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+		conns = append(conns, sbc)
+	}
+	executor := createExecutor(serv, cell, resolver)
+
+	tcases := []struct {
+		sql         string
+		sandboxRes  *sqltypes.Result
+		expSandboxQ string
+		expField    string
+		expRow      string
+	}{
+		{
+			sql:         `select count(distinct col) from user`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1", "2", "2", "3"),
+			expSandboxQ: "select col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+			expField:    `[name:"count(distinct col)" type:INT64]`,
+			expRow:      `[[INT64(3)]]`,
+		},
+		{
+			sql:         `select count(*) from user`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "3"),
+			expSandboxQ: "select count(*) from `user`",
+			expField:    `[name:"count(*)" type:INT64]`,
+			expRow:      `[[INT64(24)]]`,
+		},
+		{
+			sql:         `select col, count(*) from user group by col`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)", "int64|int64"), "1|3"),
+			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+			expField:    `[name:"col" type:INT64 name:"count(*)" type:INT64]`,
+			expRow:      `[[INT64(1) INT64(24)]]`,
+		},
+		{
+			sql:         `select col, count(*) from user group by col limit 2`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)", "int64|int64"), "1|2", "2|1", "3|4"),
+			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc limit :__upper_limit",
+			expField:    `[name:"col" type:INT64 name:"count(*)" type:INT64]`,
+			expRow:      `[[INT64(1) INT64(16)] [INT64(2) INT64(8)]]`,
+		},
+		{
+			sql:         `select count(*) from (select col1, col2 from user limit 2) x`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2", "int64|int64"), "1|2", "2|1"),
+			expSandboxQ: "select col1, col2 from `user` limit :__upper_limit",
+			expField:    `[name:"count(*)" type:INT64]`,
+			expRow:      `[[INT64(2)]]`,
+		},
+		{
+			sql:         `select col2, count(*) from (select col1, col2 from user limit 9) x group by col2`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col2)", "int64|int64|varbinary"), "3|1|NULL", "2|2|NULL"),
+			expSandboxQ: "select col1, col2, weight_string(col2) from `user` order by col2 asc limit :__upper_limit",
+			expField:    `[name:"col2" type:INT64 name:"count(*)" type:INT64]`,
+			expRow:      `[[INT64(1) INT64(8)] [INT64(2) INT64(1)]]`,
+		},
+		{
+			sql:         `select count(col1) from (select id, col1 from user limit 2) x`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1", "int64|varchar"), "3|a", "2|b"),
+			expSandboxQ: "select id, col1 from `user` limit :__upper_limit",
+			expField:    `[name:"count(col1)" type:INT64]`,
+			expRow:      `[[INT64(2)]]`,
+		},
+		{
+			sql:         `select count(col1), col2 from (select col2, col1 from user limit 9) x group by col2`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col2|col1|weight_string(col2)", "int64|varchar|varbinary"), "3|a|NULL", "2|b|NULL"),
+			expSandboxQ: "select col2, col1, weight_string(col2) from `user` order by col2 asc limit :__upper_limit",
+			expField:    `[name:"count(col1)" type:INT64 name:"col2" type:INT64]`,
+			expRow:      `[[INT64(8) INT64(2)] [INT64(1) INT64(3)]]`,
+		},
+		{
+			sql:         `select col1, count(col2) from (select col1, col2 from user limit 9) x group by col1`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|int64|varbinary"), "a|1|a", "b|null|b"),
+			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
+			expField:    `[name:"col1" type:VARCHAR name:"count(col2)" type:INT64]`,
+			expRow:      `[[VARCHAR("a") INT64(8)] [VARCHAR("b") INT64(0)]]`,
+		},
+		{
+			sql:         `select col1, count(col2) from (select col1, col2 from user limit 32) x group by col1`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|int64|varbinary"), "null|1|null", "null|null|null", "a|1|a", "b|null|b"),
+			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
+			expField:    `[name:"col1" type:VARCHAR name:"count(col2)" type:INT64]`,
+			expRow:      `[[NULL INT64(8)] [VARCHAR("a") INT64(8)] [VARCHAR("b") INT64(0)]]`,
+		},
+		{
+			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|int64|varbinary"), "a|3|a"),
+			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
+			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:DECIMAL]`,
+			expRow:      `[[VARCHAR("a") DECIMAL(12)]]`,
+		},
+		{
+			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|varchar|varbinary"), "a|2|a"),
+			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
+			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:DECIMAL]`,
+			expRow:      `[[VARCHAR("a") DECIMAL(8)]]`,
+		},
+		{
+			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|varchar|varbinary"), "a|x|a"),
+			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
+			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:DECIMAL]`,
+			expRow:      `[[VARCHAR("a") DECIMAL(0)]]`,
+		},
+		{
+			sql:         `select col1, sum(col2) from (select col1, col2 from user limit 4) x group by col1`,
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col1|col2|weight_string(col1)", "varchar|varchar|varbinary"), "a|null|a"),
+			expSandboxQ: "select col1, col2, weight_string(col1) from `user` order by col1 asc limit :__upper_limit",
+			expField:    `[name:"col1" type:VARCHAR name:"sum(col2)" type:DECIMAL]`,
+			expRow:      `[[VARCHAR("a") NULL]]`,
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			for _, sbc := range conns {
+				sbc.SetResults([]*sqltypes.Result{tc.sandboxRes})
+				sbc.Queries = nil
+			}
+			qr, err := executorExec(executor, tc.sql, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expField, fmt.Sprintf("%v", qr.Fields))
+			assert.Equal(t, tc.expRow, fmt.Sprintf("%v", qr.Rows))
+			require.Len(t, conns[0].Queries, 1)
+			assert.Equal(t, tc.expSandboxQ, conns[0].Queries[0].Sql)
 		})
 	}
 }
