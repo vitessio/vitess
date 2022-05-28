@@ -76,6 +76,7 @@ const (
 	alterSchemaMigrationsTableStowawayTable            = "ALTER TABLE _vt.schema_migrations add column stowaway_table tinytext NOT NULL"
 	alterSchemaMigrationsTableVreplLivenessIndicator   = "ALTER TABLE _vt.schema_migrations add column vitess_liveness_indicator bigint NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableUserThrottleRatio        = "ALTER TABLE _vt.schema_migrations add column user_throttle_ratio float NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableSpecialPlan              = "ALTER TABLE _vt.schema_migrations add column special_plan text NOT NULL"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -182,6 +183,11 @@ const (
 	`
 	sqlClearArtifacts = `UPDATE _vt.schema_migrations
 			SET artifacts=''
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateSpecialPlan = `UPDATE _vt.schema_migrations
+			SET special_plan=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -516,11 +522,14 @@ const (
 			AND TABLES.TABLE_NAME=%a
 			AND AUTO_INCREMENT IS NOT NULL
 		`
-	sqlAlterTableAutoIncrement = "ALTER TABLE `%s` AUTO_INCREMENT=%a"
-	sqlStartVReplStream        = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
-	sqlStopVReplStream         = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
-	sqlDeleteVReplStream       = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
-	sqlReadVReplStream         = `SELECT
+	sqlAlterTableAutoIncrement      = "ALTER TABLE `%s` AUTO_INCREMENT=%a"
+	sqlAlterTableExchangePartition  = "ALTER TABLE `%a` EXCHANGE PARTITION `%a` WITH TABLE `%a`"
+	sqlAlterTableRemovePartitioning = "ALTER TABLE `%a` REMOVE PARTITIONING"
+	sqlAlterTableDropPartition      = "ALTER TABLE `%a` DROP PARTITION `%a`"
+	sqlStartVReplStream             = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
+	sqlStopVReplStream              = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
+	sqlDeleteVReplStream            = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
+	sqlReadVReplStream              = `SELECT
 			id,
 			workflow,
 			source,
@@ -602,4 +611,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableStowawayTable,
 	alterSchemaMigrationsTableVreplLivenessIndicator,
 	alterSchemaMigrationsTableUserThrottleRatio,
+	alterSchemaMigrationsTableSpecialPlan,
 }
