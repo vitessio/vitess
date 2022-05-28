@@ -2418,6 +2418,74 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 	return nil
 }
 
+// executeSpecialAlterDDLActionMigrationIfApplicable sees if the given migration can be executed via special execution path, that isn't a full blown online schema change process.
+func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context.Context, onlineDDL *schema.OnlineDDL) (specialMigrationExecuted bool, err error) {
+	// Before we jump on to strategies... Some ALTERs can be optimized without having to run through
+	// a full online schema change process. Let's find out if this is the case!
+	specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL)
+	if err != nil {
+		return false, err
+	}
+	if specialPlan == nil {
+		return false, nil
+	}
+	switch specialPlan.operation {
+	case dropRangePartitionSpecialOperation:
+		dropPartition := func() error {
+			artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+			if err != nil {
+				return err
+			}
+			if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTableName); err != nil {
+				return err
+			}
+			conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+			if err != nil {
+				return err
+			}
+			defer conn.Close()
+
+			// Apply CREATE TABLE for artifact table
+			parsed := sqlparser.BuildParsedQuery(sqlCreateTableLike, artifactTableName, onlineDDL.Table)
+			if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+				return err
+			}
+			// Remove partitioning
+			parsed = sqlparser.BuildParsedQuery(sqlAlterTableRemovePartitioning, artifactTableName)
+			if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+				return err
+			}
+			// Exchange with partition
+			partitionName := specialPlan.Detail("partition_name")
+			parsed = sqlparser.BuildParsedQuery(sqlAlterTableExchangePartition, onlineDDL.Table, partitionName, artifactTableName)
+			if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+				return err
+			}
+			// Drop table's partition
+			parsed = sqlparser.BuildParsedQuery(sqlAlterTableDropPartition, onlineDDL.Table, partitionName)
+			if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+				return err
+			}
+			return nil
+		}
+		if err := dropPartition(); err != nil {
+			return false, err
+		}
+	case addRangePartitionSpecialOperation:
+		if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
+			return false, err
+		}
+	default:
+		return false, nil
+	}
+	if err := e.updateMigrationSpecialPlan(ctx, onlineDDL.UUID, specialPlan.String()); err != nil {
+		return true, err
+	}
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
+	return true, nil
+}
+
+// executeAlterDDLActionMigration
 func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	failMigration := func(err error) error {
 		return e.failMigration(ctx, onlineDDL, err)
@@ -2445,8 +2513,19 @@ func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL
 		}
 		return nil
 	}
+	// This is a real TABLE and not a VIEW
 
-	// This is a real TABLE
+	// Before we jump on to strategies... Some ALTERs can be optimized without having to run through
+	// a full online schema change process. Let's find out if this is the case!
+	specialMigrationExecuted, err := e.executeSpecialAlterDDLActionMigrationIfApplicable(ctx, onlineDDL)
+	if err != nil {
+		return failMigration(err)
+	}
+	if specialMigrationExecuted {
+		return nil
+	}
+
+	// OK, nothing special about this ALTER. Let's go ahead and execute it.
 	switch onlineDDL.Strategy {
 	case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 		go func() {
@@ -3352,6 +3431,18 @@ func (e *Executor) updateArtifacts(ctx context.Context, uuid string, artifacts .
 
 func (e *Executor) clearArtifacts(ctx context.Context, uuid string) error {
 	query, err := sqlparser.ParseAndBind(sqlClearArtifacts,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationSpecialPlan(ctx context.Context, uuid string, specialPlan string) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateSpecialPlan,
+		sqltypes.StringBindVariable(specialPlan),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {

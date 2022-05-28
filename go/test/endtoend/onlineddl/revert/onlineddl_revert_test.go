@@ -93,6 +93,7 @@ var (
 	tableName             = `stress_test`
 	viewBaseTableName     = `view_base_table_test`
 	viewName              = `view_test`
+	partitionedTableName  = `part_test`
 	createStatement       = `
 		CREATE TABLE stress_test (
 			id bigint(20) not null,
@@ -154,6 +155,24 @@ var (
 	`
 	dropViewIfExistsStatement = `
 		DROP VIEW IF EXISTS view_test
+	`
+	createPartitionedTableStatement = `
+		CREATE TABLE part_test (
+			id INT NOT NULL,
+			ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			primary key (id)
+		)
+		PARTITION BY RANGE (id) (
+				PARTITION p1 VALUES LESS THAN (10),
+				PARTITION p2 VALUES LESS THAN (20),
+				PARTITION p3 VALUES LESS THAN (30),
+				PARTITION p4 VALUES LESS THAN (40),
+				PARTITION p5 VALUES LESS THAN (50),
+				PARTITION p6 VALUES LESS THAN (60)
+		)
+	`
+	populatePartitionedTableStatement = `
+		INSERT INTO part_test (id) VALUES (2),(11),(23),(37),(41),(53)
 	`
 
 	writeMetrics WriteMetrics
@@ -678,6 +697,52 @@ func TestSchemaChange(t *testing.T) {
 		checkTable(t, tableName, false)
 	})
 
+	// PARTITIONS
+	checkPartitionedTableCountRows := func(t *testing.T, expectRows int64) {
+		rs := onlineddl.VtgateExecQuery(t, &vtParams, "select count(*) as c from part_test", "")
+		require.NotNil(t, rs)
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+		count, err := row.ToInt64("c")
+		require.NoError(t, err)
+		assert.Equal(t, expectRows, count)
+	}
+	t.Run("partitions: create partitioned table", func(t *testing.T) {
+		uuid := testOnlineDDLStatementForTable(t, createPartitionedTableStatement, ddlStrategy, "vtgate", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, partitionedTableName, true)
+
+		populatePartitionedTable(t)
+		checkPartitionedTableCountRows(t, 6)
+	})
+	t.Run("partitions: drop first partition", func(t *testing.T) {
+		uuid := testOnlineDDLStatementForTable(t, "alter table part_test drop partition `p1`", ddlStrategy+" --fast-range-rotation", "vtgate", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, partitionedTableName, true)
+
+		checkPartitionedTableCountRows(t, 5)
+	})
+	t.Run("partitions: fail revert drop first partition", func(t *testing.T) {
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+
+		checkPartitionedTableCountRows(t, 5)
+	})
+	t.Run("partitions: add new partition", func(t *testing.T) {
+		uuid := testOnlineDDLStatementForTable(t, "alter table part_test add partition (PARTITION p7 VALUES LESS THAN (70))", ddlStrategy+" --fast-range-rotation", "vtgate", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, partitionedTableName, true)
+	})
+	t.Run("partitions: fail revert add new partition", func(t *testing.T) {
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+	})
+
 	// FAILURES
 	t.Run("fail online DROP TABLE", func(t *testing.T) {
 		// The table does not exist now
@@ -963,4 +1028,8 @@ func testSelectTableMetrics(t *testing.T) {
 	assert.NotZero(t, writeMetrics.updates)
 	assert.Equal(t, writeMetrics.inserts-writeMetrics.deletes, numRows)
 	assert.Equal(t, writeMetrics.updates-writeMetrics.deletes, sumUpdates) // because we DELETE WHERE updates=1
+}
+
+func populatePartitionedTable(t *testing.T) {
+	onlineddl.VtgateExecQuery(t, &vtParams, populatePartitionedTableStatement, "")
 }
