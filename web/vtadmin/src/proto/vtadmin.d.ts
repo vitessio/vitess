@@ -21963,8 +21963,11 @@ export namespace tabletmanagerdata {
         /** VDiffRequest workflow */
         workflow?: (string|null);
 
-        /** VDiffRequest action */
-        action?: (string|null);
+        /** VDiffRequest command */
+        command?: (string|null);
+
+        /** VDiffRequest sub_command */
+        sub_command?: (string|null);
 
         /** VDiffRequest vdiff_uuid */
         vdiff_uuid?: (string|null);
@@ -21988,8 +21991,11 @@ export namespace tabletmanagerdata {
         /** VDiffRequest workflow. */
         public workflow: string;
 
-        /** VDiffRequest action. */
-        public action: string;
+        /** VDiffRequest command. */
+        public command: string;
+
+        /** VDiffRequest sub_command. */
+        public sub_command: string;
 
         /** VDiffRequest vdiff_uuid. */
         public vdiff_uuid: string;
