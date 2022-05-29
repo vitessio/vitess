@@ -385,16 +385,6 @@ func TestPurge(t *testing.T) {
 	}
 }
 
-// func cleanupDropTable(t *testing.T) {
-// 	exists, dropTableName, err := tableExists(`\_vt\_DROP\_%`)
-// 	assert.NoError(t, err)
-// 	if !exists {
-// 		return
-// 	}
-// 	err = dropTable(dropTableName)
-// 	assert.NoError(t, err)
-// }
-
 func TestPurgeView(t *testing.T) {
 	populateTable(t)
 	query, tableName, err := schema.GenerateRenameStatement("v1", schema.PurgeTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
