@@ -86,22 +86,70 @@ func TestVDiff2(t *testing.T) {
 	catchup(t, customerTab2, workflow, "MoveTables")
 
 	vdiff(t, ksWorkflow, "") // confirm vdiff1 works
+	t.Run("vdiff2", func(t *testing.T) {
+		uuid, _ := vdiff2(t, ksWorkflow, "create", "")
+		waitForVDiff2ToComplete(t, uuid)
+		time.Sleep(5 * time.Second) // wait for vdiffs on tablets to start
+		_, jsonStr := vdiff2(t, ksWorkflow, "show", uuid)
 
-	uuid := vdiff2(t, ksWorkflow, "create", "")
-	time.Sleep(5 * time.Second) // wait for vdiffs on tablets to start
-	vdiff2(t, ksWorkflow, "show", uuid)
+		info := getVDiffInfo(jsonStr)
+		require.Equal(t, workflow, info.Workflow)
+		require.Equal(t, targetKs, info.Keyspace)
+		require.Equal(t, "completed", info.State)
+		require.Equal(t, "-80,80-", info.Shards)
+		require.False(t, info.HasMismatch)
+	})
 }
 
-func vdiff2(t *testing.T, ksWorkflow, command, subCommand string) string {
-	var uuid string
-	t.Run(fmt.Sprintf("vdiff2.%s", command), func(t *testing.T) {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "-format", "json", ksWorkflow, command, subCommand)
-		log.Infof("vdiff2 err: %+v, output: %+v", err, output)
-		require.Nil(t, err)
+func waitForVDiff2ToComplete(t *testing.T, uuid string) {
+	ch := make(chan bool, 1)
+	go func() {
+		for {
+			time.Sleep(1 * time.Second)
+			_, jsonStr := vdiff2(t, ksWorkflow, "show", uuid)
+			if jsonStr == "" {
 
-		uuid, err = jsonparser.GetString([]byte(output), "UUID")
-		require.NoError(t, err)
-		require.NotEmpty(t, uuid)
-	})
-	return uuid
+			}
+			info := getVDiffInfo(jsonStr)
+			if info.State == "completed" {
+				ch <- true
+			}
+		}
+	}()
+
+	select {
+	case <-ch:
+		return
+	case <-time.After(30 * time.Second):
+		require.FailNowf(t, "VDiff never completed: %s", uuid)
+	}
+}
+
+func vdiff2(t *testing.T, ksWorkflow, command, subCommand string) (uuid string, output string) {
+	var err error
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "-format", "json", ksWorkflow, command, subCommand)
+	log.Infof("vdiff2 err: %+v, output: %+v", err, output)
+	require.Nil(t, err)
+
+	uuid, err = jsonparser.GetString([]byte(output), "UUID")
+	require.NoError(t, err)
+	require.NotEmpty(t, uuid)
+	return uuid, output
+}
+
+type vdiffInfo struct {
+	Workflow, Keyspace, State, Shards string
+	HasMismatch                       bool
+}
+
+func getVDiffInfo(jsonStr string) *vdiffInfo {
+	var info vdiffInfo
+	json := []byte(jsonStr)
+	info.Workflow, _ = jsonparser.GetString(json, "Workflow")
+	info.Keyspace, _ = jsonparser.GetString(json, "Keyspace")
+	info.State, _ = jsonparser.GetString(json, "State")
+	info.Shards, _ = jsonparser.GetString(json, "Shards")
+	info.HasMismatch, _ = jsonparser.GetBoolean(json, "HasMismatch")
+
+	return &info
 }

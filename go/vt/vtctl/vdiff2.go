@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"sort"
 	"strings"
 	"text/template"
 	"time"
@@ -405,27 +406,30 @@ func getVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid stri
 				}
 				diffReport := row.AsString("report", "")
 				dr := vdiff.DiffReport{}
-				log.Infof("unmarshalling diff report")
-				log.Flush()
-				err := json.Unmarshal([]byte(diffReport), &dr)
-				if err != nil {
-					return nil, err
+				if diffReport != "" {
+					log.Infof("unmarshalling diff report: %s, %+v", diffReport, row)
+					log.Flush()
+					err := json.Unmarshal([]byte(diffReport), &dr)
+					if err != nil {
+						return nil, err
+					}
+					log.Infof("DONE unmarshalling diff report")
+					log.Flush()
+					ts.MismatchedRows += dr.MismatchedRows
+					ts.MatchingRows += dr.MatchingRows
+					ts.ExtraRowsTarget += dr.ExtraRowsTarget
+					ts.ExtraRowsSource += dr.ExtraRowsSource
 				}
-				log.Infof("DONE unmarshalling diff report")
-				log.Flush()
-				ts.MismatchedRows += dr.MismatchedRows
-				ts.MatchingRows += dr.MatchingRows
-				ts.ExtraRowsTarget += dr.ExtraRowsTarget
-				ts.ExtraRowsSource += dr.ExtraRowsSource
-
 				if _, ok := reports[table]; !ok {
 					reports[table] = make(map[string]vdiff.DiffReport)
 				}
+
 				reports[table][shard] = dr
 				tableSummaryMap[table] = ts
 			}
 		}
 	}
+	sort.Strings(shards) // sort for predictable output, for test purposes
 	summary.Shards = strings.Join(shards, ",")
 	summary.TableSummaryMap = tableSummaryMap
 	summary.Reports = reports
