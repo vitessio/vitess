@@ -39,7 +39,7 @@ func RandomHash() string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-// UUID5 creeates a UUID v5 string based on the given inputs. We use a SHA256 algorithm.
+// UUIDv5 creeates a UUID v5 string based on the given inputs. We use a SHA256 algorithm.
 func UUIDv5(inputs ...string) string {
 	var baseUUID uuid.UUID
 	input := strings.Join(inputs, "\n")
