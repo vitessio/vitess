@@ -27,19 +27,20 @@ import (
 
 func TestCreateTableDiff(t *testing.T) {
 	tt := []struct {
-		name     string
-		from     string
-		to       string
-		fromName string
-		toName   string
-		diff     string
-		diffs    []string
-		cdiff    string
-		cdiffs   []string
-		isError  bool
-		errorMsg string
-		autoinc  int
-		rotation int
+		name       string
+		from       string
+		to         string
+		fromName   string
+		toName     string
+		diff       string
+		diffs      []string
+		cdiff      string
+		cdiffs     []string
+		isError    bool
+		errorMsg   string
+		autoinc    int
+		rotation   int
+		constraint int
 	}{
 		{
 			name: "identical",
@@ -372,10 +373,27 @@ func TestCreateTableDiff(t *testing.T) {
 			diff: "",
 		},
 		{
-			name: "check constraints, different name",
-			from: "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)))",
-			to:   "create table t2 (id int primary key, i int, constraint `chk_abc123` CHECK ((`i` < 5)))",
-			diff: "",
+			name:       "check constraints, different name, strict",
+			from:       "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `chk_abc123` CHECK ((`i` < 5)))",
+			diff:       "alter table t1 drop check check1, add constraint chk_abc123 check (i < 5)",
+			cdiff:      "ALTER TABLE `t1` DROP CHECK `check1`, ADD CONSTRAINT `chk_abc123` CHECK (`i` < 5)",
+			constraint: ConstraintNamesStrict,
+		},
+		{
+			name:       "check constraints, different name, ignore vitess",
+			from:       "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `chk_abc123` CHECK ((`i` < 5)))",
+			diff:       "alter table t1 drop check check1, add constraint chk_abc123 check (i < 5)",
+			cdiff:      "ALTER TABLE `t1` DROP CHECK `check1`, ADD CONSTRAINT `chk_abc123` CHECK (`i` < 5)",
+			constraint: ConstraintNamesIgnoreVitess,
+		},
+		{
+			name:       "check constraints, different name, ignore all",
+			from:       "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `chk_abc123` CHECK ((`i` < 5)))",
+			diff:       "",
+			constraint: ConstraintNamesIgnoreAll,
 		},
 		{
 			name: "check constraints, different order",
@@ -384,24 +402,27 @@ func TestCreateTableDiff(t *testing.T) {
 			diff: "",
 		},
 		{
-			name: "check constraints, different names & order",
-			from: "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
-			to:   "create table t2 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `chk_789def` CHECK ((`i` < 5)))",
-			diff: "",
+			name:       "check constraints, different names & order",
+			from:       "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
+			to:         "create table t2 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `chk_789def` CHECK ((`i` < 5)))",
+			diff:       "",
+			constraint: ConstraintNamesIgnoreAll,
 		},
 		{
-			name:  "check constraints, add",
-			from:  "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
-			to:    "create table t2 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `check3` CHECK ((`i` != 3)), constraint `chk_789def` CHECK ((`i` < 5)))",
-			diff:  "alter table t1 add constraint check3 check ((`i` != 3))",
-			cdiff: "ALTER TABLE `t1` ADD CONSTRAINT `check3` CHECK ((`i` != 3))",
+			name:       "check constraints, add",
+			from:       "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
+			to:         "create table t2 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `check3` CHECK ((`i` != 3)), constraint `chk_789def` CHECK ((`i` < 5)))",
+			diff:       "alter table t1 add constraint check3 check (i != 3)",
+			cdiff:      "ALTER TABLE `t1` ADD CONSTRAINT `check3` CHECK (`i` != 3)",
+			constraint: ConstraintNamesIgnoreAll,
 		},
 		{
-			name:  "check constraints, remove",
-			from:  "create table t2 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `check3` CHECK ((`i` != 3)), constraint `chk_789def` CHECK ((`i` < 5)))",
-			to:    "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
-			diff:  "alter table t1 drop check check3",
-			cdiff: "ALTER TABLE `t1` DROP CHECK `check3`",
+			name:       "check constraints, remove",
+			from:       "create table t1 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `check3` CHECK ((`i` != 3)), constraint `chk_789def` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
+			diff:       "alter table t1 drop check check3",
+			cdiff:      "ALTER TABLE `t1` DROP CHECK `check3`",
+			constraint: ConstraintNamesIgnoreAll,
 		},
 		// foreign keys
 		{
@@ -862,6 +883,7 @@ func TestCreateTableDiff(t *testing.T) {
 			hints := standardHints
 			hints.AutoIncrementStrategy = ts.autoinc
 			hints.RangeRotationStrategy = ts.rotation
+			hints.ConstraintNamesStrategy = ts.constraint
 			alter, err := c.Diff(other, &hints)
 
 			require.Equal(t, len(ts.diffs), len(ts.cdiffs))
