@@ -13,7 +13,7 @@
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(2)",
+        "Aggregates": "sum(2) AS count",
         "GroupBy": "0",
         "ResultColumns": 4,
         "Inputs": [
@@ -74,7 +74,7 @@
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(2)",
+        "Aggregates": "sum(2) AS count",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -141,7 +141,7 @@
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(2)",
+        "Aggregates": "sum(2) AS count",
         "GroupBy": "0",
         "ResultColumns": 5,
         "Inputs": [
@@ -213,7 +213,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "count(2)",
+            "Aggregates": "sum(2) AS count",
             "GroupBy": "0",
             "Inputs": [
               {
@@ -289,7 +289,7 @@
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(2)",
+        "Aggregates": "sum(2) AS count",
         "GroupBy": "0",
         "ResultColumns": 4,
         "Inputs": [
@@ -359,7 +359,7 @@
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(1)",
+        "Aggregates": "sum(1) AS count",
         "GroupBy": "2",
         "ResultColumns": 3,
         "Inputs": [
