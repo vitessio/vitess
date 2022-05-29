@@ -40,9 +40,9 @@ const (
 type mysqlVersions []mysqlVersion
 
 var (
-	defaultMySQLVersions   = []mysqlVersion{defaultMySQLVersion}
-	mysql80OnlyVersions    = []mysqlVersion{mysql80}
-	allOracleMySQLVersions = []mysqlVersion{mysql57, mysql80}
+	defaultMySQLVersions = []mysqlVersion{defaultMySQLVersion}
+	mysql80OnlyVersions  = []mysqlVersion{mysql80}
+	allMySQLVersions     = []mysqlVersion{mysql57, mysql80}
 )
 
 var (
@@ -169,9 +169,9 @@ type selfHostedTest struct {
 func clusterMySQLVersions(clusterName string) mysqlVersions {
 	switch {
 	case strings.HasPrefix(clusterName, "onlineddl_"):
-		return allOracleMySQLVersions
+		return allMySQLVersions
 	case clusterName == "tabletmanager_tablegc":
-		return allOracleMySQLVersions
+		return allMySQLVersions
 	case clusterName == "mysql80":
 		return []mysqlVersion{mysql80}
 	case clusterName == "vtorc_8.0":
