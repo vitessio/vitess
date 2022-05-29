@@ -616,6 +616,7 @@ var CharacterSetEncoding = map[string]encoding.Encoding{
 	"gbk":     simplifiedchinese.GBK,
 	"latin5":  charmap.ISO8859_9,
 	"utf8":    nil,
+	"utf8mb3": nil,
 	"cp866":   charmap.CodePage866,
 	"cp852":   charmap.CodePage852,
 	"latin7":  charmap.ISO8859_13,
