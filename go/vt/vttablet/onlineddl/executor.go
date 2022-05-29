@@ -28,6 +28,7 @@ import (
 	"math"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -109,6 +110,8 @@ var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-onli
 var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
 var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Hour, "How long should vttablet keep an old migrated table before purging it")
 var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
+var constraintOriginalNameRegexp = regexp.MustCompile(`^((fk|chk)_[0-9a-f]{32}_)?(.+)$`)
+var maxConstraintNameLength = 64
 
 const (
 	maxPasswordLength                        = 32 // MySQL's *replication* password may not exceed 32 characters
@@ -888,6 +891,94 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 	return deferFunc, nil
 }
 
+// validateAndEditCreateTableStatement inspects the CreateTable AST and does the following:
+// - extra validation (no FKs for now...)
+// - generate new and unique names for all constraints (CHECK and FK; yes, why not handle FK names; even as we don't support FKs today, we may in the future)
+func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, onlineDDL *schema.OnlineDDL, createTable *sqlparser.CreateTable) (constraintMap map[string]string, err error) {
+	constraintMap = map[string]string{}
+	hashExists := map[string]bool{}
+	// newConstraintName generates a new, unique name for a constraint. Our problem is that a MySQL
+	// constraint's name is unique in the schema (!). And so as we duplicate the original table, we must
+	// create completely new names for all constraints.
+	// Moreover, we really want this name to be consistent across all shards. We therefore use a deterministic
+	// UUIDv5 (SHA) function over the migration UUID, table name, and constraint's _contents_.
+	// We _also_ try to include the original constraint name as suffix, if there's enough room.
+	// for example, if the original constraint name is "check_1",
+	// we might generate "chk_7c7de6cb4f9b5842b4d0271f40756883_check_1".
+	// If we then again migrate a table whose constraint name is "chk_7c7de6cb4f9b5842b4d0271f40756883_check_1" we
+	// get for example "chk_f4a9c22556ab5eb788181c0a1e44f248_check_1" (hash changes, and we still try to preserve original name)
+	newConstraintName := func(prefix string, seed string, oldName string) string {
+		if submatch := constraintOriginalNameRegexp.FindStringSubmatch(oldName); len(submatch) > 0 {
+			oldName = submatch[3]
+		}
+
+		hash := textutil.UUIDv5(onlineDDL.UUID, onlineDDL.Table, seed)
+		for i := 1; hashExists[hash]; i++ {
+			hash = textutil.UUIDv5(onlineDDL.UUID, onlineDDL.Table, seed, fmt.Sprintf("%d", i))
+		}
+		hashExists[hash] = true
+		newName := prefix + "_" + strings.Replace(hash, "-", "", -1) + "_" + oldName
+		if len(newName) > maxConstraintNameLength {
+			newName = newName[0:maxConstraintNameLength]
+		}
+		return newName
+	}
+	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.ForeignKeyDefinition:
+			return false, schema.ErrForeignKeyFound
+		case *sqlparser.ConstraintDefinition:
+			oldName := node.Name.String()
+			var newName string
+			if _, ok := node.Details.(*sqlparser.CheckConstraintDefinition); ok {
+				newName = newConstraintName("chk", sqlparser.CanonicalString(node.Details), oldName)
+			} else if _, ok := node.Details.(*sqlparser.ForeignKeyDefinition); ok {
+				newName = newConstraintName("fk", sqlparser.CanonicalString(node.Details), oldName)
+			}
+			if newName != "" {
+				node.Name = sqlparser.NewColIdent(newName)
+				constraintMap[oldName] = newName
+			}
+		}
+		return true, nil
+	}
+	if err := sqlparser.Walk(validateWalk, createTable); err != nil {
+		return constraintMap, err
+	}
+	return constraintMap, nil
+}
+
+// validateAndEditAlterTableStatement inspects the AlterTable statement and:
+// - modifies any CONSTRAINT name according to given name mapping
+func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, alterTable *sqlparser.AlterTable, constraintMap map[string]string) (err error) {
+	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.DropKey:
+			if node.Type == sqlparser.CheckKeyType {
+				// drop a check constraint
+				mappedName, ok := constraintMap[node.Name.String()]
+				if !ok {
+					return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Found DROP CONSTRAINT: %v, but could not find constraint name in map", sqlparser.CanonicalString(node))
+				}
+				node.Name = sqlparser.NewColIdent(mappedName)
+			}
+		}
+		return true, nil
+	}
+	if err := sqlparser.Walk(validateWalk, alterTable); err != nil {
+		return err
+	}
+	return nil
+}
+
+// initVreplicationOriginalMigration performs the first steps towards running a VRepl ALTER migration:
+// - analyze the original table
+// - formalize a new CreateTable statement
+// - inspect the ALTER TABLE query
+// - formalize an AlterTable statement
+// - create the vrepl table
+// - modify the vrepl table
+// - Create and return a VRepl instance
 func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (v *VRepl, err error) {
 	restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
 	defer restoreSQLModeFunc()
@@ -899,22 +990,53 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
+	var constraintMap map[string]string
 	{
-		// Apply CREATE TABLE for materialized table
-		parsed := sqlparser.BuildParsedQuery(sqlCreateTableLike, vreplTableName, onlineDDL.Table)
-		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+		existingShowCreateTable, err := e.showCreateTable(ctx, onlineDDL.Table)
+		if err != nil {
+			return nil, err
+		}
+		stmt, err := sqlparser.ParseStrictDDL(existingShowCreateTable)
+		if err != nil {
+			return nil, err
+		}
+		createTable, ok := stmt.(*sqlparser.CreateTable)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CreateTable statement, got: %v", sqlparser.CanonicalString(stmt))
+		}
+		createTable.SetTable(createTable.GetTable().Qualifier.CompliantName(), vreplTableName)
+		// manipulate CreateTable statement: take care of constraints names which have to be
+		// unique across the schema
+		constraintMap, err = e.validateAndEditCreateTableStatement(ctx, onlineDDL, createTable)
+		if err != nil {
+			return v, err
+		}
+		// Create the table
+		if _, err := conn.ExecuteFetch(sqlparser.CanonicalString(createTable), 0, false); err != nil {
 			return v, err
 		}
 	}
-	alterOptions := e.parseAlterOptions(ctx, onlineDDL)
 	{
+		stmt, err := sqlparser.ParseStrictDDL(onlineDDL.SQL)
+		if err != nil {
+			return nil, err
+		}
+		alterTable, ok := stmt.(*sqlparser.AlterTable)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AlterTable statement, got: %v", sqlparser.CanonicalString(stmt))
+		}
+		// ALTER TABLE should apply to the vrepl table
+		alterTable.SetTable(alterTable.GetTable().Qualifier.CompliantName(), vreplTableName)
+		// Also, change any constraint names:
+		if err := e.validateAndEditAlterTableStatement(ctx, alterTable, constraintMap); err != nil {
+			return v, err
+		}
 		// Apply ALTER TABLE to materialized table
-		parsed := sqlparser.BuildParsedQuery(sqlAlterTableOptions, vreplTableName, alterOptions)
-		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+		if _, err := conn.ExecuteFetch(sqlparser.CanonicalString(alterTable), 0, false); err != nil {
 			return v, err
 		}
 	}
-	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, alterOptions)
+	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, onlineDDL.SQL)
 	return v, nil
 }
 
