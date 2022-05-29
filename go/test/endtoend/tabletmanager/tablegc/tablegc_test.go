@@ -394,9 +394,9 @@ func TestPurgeView(t *testing.T) {
 	require.NoError(t, err)
 
 	// table untouched
-	validateTableExists(t, tableName)
+	validateTableExists(t, "t1")
 	if !isMySQL8() {
-		validateTableExists(t, "t1")
+		validateTableExists(t, tableName)
 	}
 	validateTableDoesNotExist(t, "v1")
 
