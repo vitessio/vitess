@@ -66,7 +66,9 @@ const (
 )
 
 const (
-	CheckConstraintIgnoreNames = iota
+	ConstraintNamesIgnoreVitess = iota
+	ConstraintNamesIgnoreAll
+	ConstraintNamesStrict
 )
 
 // DiffHints is an assortment of rules for diffing entities
@@ -74,5 +76,5 @@ type DiffHints struct {
 	StrictIndexOrdering     bool
 	AutoIncrementStrategy   int
 	RangeRotationStrategy   int
-	CheckConstraintStrategy int
+	ConstraintNamesStrategy int
 }
