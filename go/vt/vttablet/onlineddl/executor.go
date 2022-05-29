@@ -975,7 +975,7 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, alter
 // - analyze the original table
 // - formalize a new CreateTable statement
 // - inspect the ALTER TABLE query
-// - formalize a AlterTable statement
+// - formalize an AlterTable statement
 // - create the vrepl table
 // - modify the vrepl table
 // - Create and return a VRepl instance
