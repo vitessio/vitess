@@ -92,15 +92,15 @@ func (v *VReplStream) isFailed() bool {
 
 // VRepl is an online DDL helper for VReplication based migrations (ddl_strategy="online")
 type VRepl struct {
-	workflow     string
-	keyspace     string
-	shard        string
-	dbName       string
-	sourceTable  string
-	targetTable  string
-	pos          string
-	alterOptions string
-	tableRows    int64
+	workflow    string
+	keyspace    string
+	shard       string
+	dbName      string
+	sourceTable string
+	targetTable string
+	pos         string
+	alterQuery  string
+	tableRows   int64
 
 	sourceSharedColumns              *vrepl.ColumnList
 	targetSharedColumns              *vrepl.ColumnList
@@ -127,7 +127,7 @@ type VRepl struct {
 }
 
 // NewVRepl creates a VReplication handler for Online DDL
-func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alterOptions string) *VRepl {
+func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alterQuery string) *VRepl {
 	return &VRepl{
 		workflow:       workflow,
 		keyspace:       keyspace,
@@ -135,7 +135,7 @@ func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alter
 		dbName:         dbName,
 		sourceTable:    sourceTable,
 		targetTable:    targetTable,
-		alterOptions:   alterOptions,
+		alterQuery:     alterQuery,
 		parser:         vrepl.NewAlterTableParser(),
 		enumToTextMap:  map[string]string{},
 		convertCharset: map[string](*binlogdatapb.CharsetConversion){},
@@ -316,11 +316,15 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 }
 
 func (v *VRepl) analyzeAlter(ctx context.Context) error {
-	if err := v.parser.ParseAlterStatement(v.alterOptions); err != nil {
+	if v.alterQuery == "" {
+		// Happens for REVERT
+		return nil
+	}
+	if err := v.parser.ParseAlterStatement(v.alterQuery); err != nil {
 		return err
 	}
 	if v.parser.IsRenameTable() {
-		return fmt.Errorf("Renaming the table is not aupported in ALTER TABLE: %s", v.alterOptions)
+		return fmt.Errorf("Renaming the table is not aupported in ALTER TABLE: %s", v.alterQuery)
 	}
 	return nil
 }

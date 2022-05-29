@@ -505,15 +505,14 @@ const (
 		END,
 		COUNT_COLUMN_IN_INDEX
 	`
-	sqlDropTrigger       = "DROP TRIGGER IF EXISTS `%a`.`%a`"
-	sqlShowTablesLike    = "SHOW TABLES LIKE '%a'"
-	sqlCreateTableLike   = "CREATE TABLE `%a` LIKE `%a`"
-	sqlDropTable         = "DROP TABLE `%a`"
-	sqlAlterTableOptions = "ALTER TABLE `%a` %s"
-	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
-	sqlShowTableStatus   = "SHOW TABLE STATUS LIKE '%a'"
-	sqlShowCreateTable   = "SHOW CREATE TABLE `%a`"
-	sqlGetAutoIncrement  = `
+	sqlDropTrigger      = "DROP TRIGGER IF EXISTS `%a`.`%a`"
+	sqlShowTablesLike   = "SHOW TABLES LIKE '%a'"
+	sqlCreateTableLike  = "CREATE TABLE `%a` LIKE `%a`"
+	sqlDropTable        = "DROP TABLE `%a`"
+	sqlShowColumnsFrom  = "SHOW COLUMNS FROM `%a`"
+	sqlShowTableStatus  = "SHOW TABLE STATUS LIKE '%a'"
+	sqlShowCreateTable  = "SHOW CREATE TABLE `%a`"
+	sqlGetAutoIncrement = `
 		SELECT
 			AUTO_INCREMENT
 		FROM INFORMATION_SCHEMA.TABLES
