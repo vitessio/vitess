@@ -28,7 +28,6 @@ import (
 	"math"
 	"os"
 	"path"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -110,7 +109,6 @@ var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-onli
 var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
 var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Hour, "How long should vttablet keep an old migrated table before purging it")
 var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
-var constraintOriginalNameRegexp = regexp.MustCompile(`^((fk|chk)_[0-9a-f]{32}_)?(.+)$`)
 var maxConstraintNameLength = 64
 
 const (
@@ -908,9 +906,7 @@ func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, onli
 	// If we then again migrate a table whose constraint name is "chk_7c7de6cb4f9b5842b4d0271f40756883_check_1" we
 	// get for example "chk_f4a9c22556ab5eb788181c0a1e44f248_check_1" (hash changes, and we still try to preserve original name)
 	newConstraintName := func(prefix string, seed string, oldName string) string {
-		if submatch := constraintOriginalNameRegexp.FindStringSubmatch(oldName); len(submatch) > 0 {
-			oldName = submatch[3]
-		}
+		oldName = schemadiff.ExtractConstraintOriginalName(oldName)
 
 		hash := textutil.UUIDv5(onlineDDL.UUID, onlineDDL.Table, seed)
 		for i := 1; hashExists[hash]; i++ {
