@@ -963,14 +963,16 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 ) {
 	normalizeConstraintName := func(constraint *sqlparser.ConstraintDefinition) string {
 		switch hints.ConstraintNamesStrategy {
-		case ConstraintNamesStrict:
-			return constraint.Name.String()
 		case ConstraintNamesIgnoreVitess:
-			return constraint.Name.String() // TODO
+			return ExtractConstraintOriginalName(constraint.Name.String())
 		case ConstraintNamesIgnoreAll:
 			return sqlparser.CanonicalString(constraint.Details)
+		case ConstraintNamesStrict:
+			return constraint.Name.String()
+		default:
+			// should never get here; but while here, let's assume strict.
+			return constraint.Name.String()
 		}
-		return ""
 	}
 	t1ConstraintsMap := map[string]*sqlparser.ConstraintDefinition{}
 	t2ConstraintsMap := map[string]*sqlparser.ConstraintDefinition{}

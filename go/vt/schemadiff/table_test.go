@@ -381,11 +381,26 @@ func TestCreateTableDiff(t *testing.T) {
 			constraint: ConstraintNamesStrict,
 		},
 		{
-			name:       "check constraints, different name, ignore vitess",
+			name:       "check constraints, different name, ignore vitess, non vitess names",
 			from:       "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)))",
 			to:         "create table t2 (id int primary key, i int, constraint `chk_abc123` CHECK ((`i` < 5)))",
 			diff:       "alter table t1 drop check check1, add constraint chk_abc123 check (i < 5)",
 			cdiff:      "ALTER TABLE `t1` DROP CHECK `check1`, ADD CONSTRAINT `chk_abc123` CHECK (`i` < 5)",
+			constraint: ConstraintNamesIgnoreVitess,
+		},
+		{
+			name:       "check constraints, different name, ignore vitess, vitess names, no match",
+			from:       "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `chk_5b7f19d3521f59bd85045742d6d95913_check2` CHECK ((`i` < 5)))",
+			diff:       "alter table t1 drop check check1, add constraint chk_5b7f19d3521f59bd85045742d6d95913_check2 check (i < 5)",
+			cdiff:      "ALTER TABLE `t1` DROP CHECK `check1`, ADD CONSTRAINT `chk_5b7f19d3521f59bd85045742d6d95913_check2` CHECK (`i` < 5)",
+			constraint: ConstraintNamesIgnoreVitess,
+		},
+		{
+			name:       "check constraints, different name, ignore vitess, vitess names match",
+			from:       "create table t1 (id int primary key, i int, constraint `check2` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `chk_5b7f19d3521f59bd85045742d6d95913_check2` CHECK ((`i` < 5)))",
+			diff:       "",
 			constraint: ConstraintNamesIgnoreVitess,
 		},
 		{
@@ -423,6 +438,30 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:       "alter table t1 drop check check3",
 			cdiff:      "ALTER TABLE `t1` DROP CHECK `check3`",
 			constraint: ConstraintNamesIgnoreAll,
+		},
+		{
+			name:       "check constraints, remove, ignore vitess, no match",
+			from:       "create table t1 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `check3` CHECK ((`i` != 3)), constraint `chk_789def` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
+			diff:       "alter table t1 drop check chk_123abc, drop check check3, drop check chk_789def, add constraint check1 check (i < 5), add constraint check2 check (i > 2)",
+			cdiff:      "ALTER TABLE `t1` DROP CHECK `chk_123abc`, DROP CHECK `check3`, DROP CHECK `chk_789def`, ADD CONSTRAINT `check1` CHECK (`i` < 5), ADD CONSTRAINT `check2` CHECK (`i` > 2)",
+			constraint: ConstraintNamesIgnoreVitess,
+		},
+		{
+			name:       "check constraints, remove, ignore vitess, match",
+			from:       "create table t1 (id int primary key, i int, constraint `chk_d3ea4658fb83587f9beae3064c354041_check2` CHECK ((`i` > 2)), constraint `check3` CHECK ((`i` != 3)), constraint `chk_326258d255a154229107a02402b2b6f1_check1` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
+			diff:       "alter table t1 drop check check3",
+			cdiff:      "ALTER TABLE `t1` DROP CHECK `check3`",
+			constraint: ConstraintNamesIgnoreVitess,
+		},
+		{
+			name:       "check constraints, remove, strict",
+			from:       "create table t1 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `check3` CHECK ((`i` != 3)), constraint `chk_789def` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
+			diff:       "alter table t1 drop check chk_123abc, drop check check3, drop check chk_789def, add constraint check1 check (i < 5), add constraint check2 check (i > 2)",
+			cdiff:      "ALTER TABLE `t1` DROP CHECK `chk_123abc`, DROP CHECK `check3`, DROP CHECK `chk_789def`, ADD CONSTRAINT `check1` CHECK (`i` < 5), ADD CONSTRAINT `check2` CHECK (`i` > 2)",
+			constraint: ConstraintNamesStrict,
 		},
 		// foreign keys
 		{
