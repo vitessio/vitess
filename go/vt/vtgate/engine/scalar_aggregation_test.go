@@ -113,7 +113,7 @@ func TestScalarAggregateStreamExecute(t *testing.T) {
 
 	oa := &ScalarAggregate{
 		Aggregates: []*AggregateParams{{
-			Opcode: AggregateCount,
+			Opcode: AggregateSum,
 			Col:    0,
 		}},
 		Input:               fp,

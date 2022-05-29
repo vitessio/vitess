@@ -211,14 +211,20 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 // to avoid data races in tests (the latter of these is caused by the cache
 // goroutines).
 //
-// Sub-components of the cluster are `Close`-d concurrently.
+// Sub-components of the cluster are `Close`-d concurrently, caches first, then
+// proxy connections.
 func (c *Cluster) Close() error {
 	var (
 		wg  sync.WaitGroup
 		rec concurrency.AllErrorRecorder
 	)
 
-	for _, closer := range []io.Closer{c.DB, c.Vtctld, c.schemaCache} {
+	// First, close any caches, which may have connections to DB or Vtctld
+	// (N.B. (andrew) when we have multiple caches, we can close them
+	// concurrently, like we do with the proxies).
+	rec.RecordError(c.schemaCache.Close())
+
+	for _, closer := range []io.Closer{c.DB, c.Vtctld} {
 		wg.Add(1)
 		go func(closer io.Closer) {
 			defer wg.Done()

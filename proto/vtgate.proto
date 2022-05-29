@@ -277,6 +277,9 @@ message VStreamFlags {
   uint32 heartbeat_interval = 2;
   // stop streams on a reshard (journal event)
   bool stop_on_reshard = 3;
+  // if specified, these cells (comma-separated) are used to pick source tablets from.
+  // defaults to the cell of the vtgate serving the VStream API.
+  string cells = 4;
 }
 
 // VStreamRequest is the payload for VStream.
