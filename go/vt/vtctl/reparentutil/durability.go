@@ -92,6 +92,12 @@ func SetDurabilityPolicy(name string) error {
 	return nil
 }
 
+// CheckDurabilityPolicyExists is used to check if the durability policy is part of the registered policies
+func CheckDurabilityPolicyExists(name string) bool {
+	_, found := durabilityPolicies[name]
+	return found
+}
+
 // PromotionRule returns the promotion rule for the instance.
 func PromotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
 	// Prevent panics.

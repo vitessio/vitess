@@ -40,7 +40,7 @@ import (
 // sandbox_test.go provides a sandbox for unit testing VTGate.
 
 const (
-	KsTestSharded             = "TestSharded"
+	KsTestSharded             = "TestExecutor"
 	KsTestUnsharded           = "TestUnsharded"
 	KsTestUnshardedServedFrom = "TestUnshardedServedFrom"
 	KsTestBadVSchema          = "TestXBadVSchema"
