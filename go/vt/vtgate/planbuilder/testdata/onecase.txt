@@ -1,3 +1,4 @@
 "select count(distinct user_id, name) from user"
 "unsupported: only one expression allowed inside aggregates: count(distinct user_id, `name`)"
 Gen4 error: aggregate functions take a single argument 'count(distinct user_id, `name`)'
+
