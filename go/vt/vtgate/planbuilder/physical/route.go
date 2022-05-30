@@ -711,6 +711,12 @@ func (r *Route) planIsExpr(ctx *plancontext.PlanningContext, node *sqlparser.IsE
 	if val == nil {
 		return false
 	}
+	opcodeF := func(vindex *vindexes.ColumnVindex) engine.Opcode {
+		if _, ok := vindex.Vindex.(vindexes.Lookup); ok {
+			return engine.Scatter
+		}
+		return equalOrEqualUnique(vindex)
+	}
 
-	return r.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex)
+	return r.haveMatchingVindex(ctx, node, vdValue, column, val, opcodeF, justTheVindex)
 }
