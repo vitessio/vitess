@@ -428,6 +428,33 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		}()
 	}
 
+	// Here, we check if the primary side semi sync is enabled or not. If it isn't enabled then we do not need to take any action.
+	// If it is enabled then we should turn it off and revert in case of failure.
+	//
+	// Note that we need to do this before we issue a statement to disable [Super]ReadOnly mode.
+	// Due to an upstream semi-sync bug the semi-sync ACK request may be lost, causing the
+	// current primary to wait forever on that statement. See:
+	//   https://bugs.mysql.com/bug.php?id=104015
+	//   https://bugs.mysql.com/bug.php?id=101056
+	// This causes the statement to disable [Super]ReadOnly mode to block on a mutex that
+	// the semi-sync plugin is holding while waiting for the ACK. This then can cause the shard to
+	// be left in an unhealthy state without a serving PRIMARY. So here we need to disable SemiSync
+	// which will ensure that we are unblocked by this scenario.
+	if tm.isPrimarySideSemiSyncEnabled() {
+		// If using semi-sync, we need to disable primary-side.
+		if err := tm.fixSemiSync(topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
+			return nil, err
+		}
+		defer func() {
+			if finalErr != nil && revertPartialFailure && wasPrimary {
+				// enable primary-side semi-sync again
+				if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
+					log.Warningf("fixSemiSync(PRIMARY) failed during revert: %v", err)
+				}
+			}
+		}()
+	}
+
 	// Now that we know no writes are in-flight and no new writes can occur,
 	// set MySQL to read-only mode. If we are already read-only because of a
 	// previous demotion, or because we are not primary anyway, this should be
@@ -454,23 +481,6 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 			}
 		}
 	}()
-
-	// Here, we check if the primary side semi sync is enabled or not. If it isn't enabled then we do not need to take any action.
-	// If it is enabled then we should turn it off and revert in case of failure.
-	if tm.isPrimarySideSemiSyncEnabled() {
-		// If using semi-sync, we need to disable primary-side.
-		if err := tm.fixSemiSync(topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
-			return nil, err
-		}
-		defer func() {
-			if finalErr != nil && revertPartialFailure && wasPrimary {
-				// enable primary-side semi-sync again
-				if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
-					log.Warningf("fixSemiSync(PRIMARY) failed during revert: %v", err)
-				}
-			}
-		}()
-	}
 
 	// Return the current replication position.
 	status, err := tm.MysqlDaemon.PrimaryStatus(ctx)
