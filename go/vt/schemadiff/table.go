@@ -961,13 +961,26 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 	t2Constraints []*sqlparser.ConstraintDefinition,
 	hints *DiffHints,
 ) {
+	normalizeConstraintName := func(constraint *sqlparser.ConstraintDefinition) string {
+		switch hints.ConstraintNamesStrategy {
+		case ConstraintNamesIgnoreVitess:
+			return ExtractConstraintOriginalName(constraint.Name.String())
+		case ConstraintNamesIgnoreAll:
+			return sqlparser.CanonicalString(constraint.Details)
+		case ConstraintNamesStrict:
+			return constraint.Name.String()
+		default:
+			// should never get here; but while here, let's assume strict.
+			return constraint.Name.String()
+		}
+	}
 	t1ConstraintsMap := map[string]*sqlparser.ConstraintDefinition{}
 	t2ConstraintsMap := map[string]*sqlparser.ConstraintDefinition{}
 	for _, constraint := range t1Constraints {
-		t1ConstraintsMap[constraint.Name.String()] = constraint
+		t1ConstraintsMap[normalizeConstraintName(constraint)] = constraint
 	}
 	for _, constraint := range t2Constraints {
-		t2ConstraintsMap[constraint.Name.String()] = constraint
+		t2ConstraintsMap[normalizeConstraintName(constraint)] = constraint
 	}
 
 	dropConstraintStatement := func(constraint *sqlparser.ConstraintDefinition) *sqlparser.DropKey {
@@ -980,21 +993,21 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 	// evaluate dropped constraints
 	//
 	for _, t1Constraint := range t1Constraints {
-		if _, ok := t2ConstraintsMap[t1Constraint.Name.String()]; !ok {
-			// column exists in t1 but not in t2, hence it is dropped
+		if _, ok := t2ConstraintsMap[normalizeConstraintName(t1Constraint)]; !ok {
+			// constraint exists in t1 but not in t2, hence it is dropped
 			dropConstraint := dropConstraintStatement(t1Constraint)
 			alterTable.AlterOptions = append(alterTable.AlterOptions, dropConstraint)
 		}
 	}
 
 	for _, t2Constraint := range t2Constraints {
-		t2ConstraintName := t2Constraint.Name.String()
+		normalizedT2ConstraintName := normalizeConstraintName(t2Constraint)
 		// evaluate modified & added constraints:
 		//
-		if t1Constraint, ok := t1ConstraintsMap[t2ConstraintName]; ok {
+		if t1Constraint, ok := t1ConstraintsMap[normalizedT2ConstraintName]; ok {
 			// constraint exists in both tables
 			// check diff between before/after columns:
-			if sqlparser.CanonicalString(t2Constraint) != sqlparser.CanonicalString(t1Constraint) {
+			if sqlparser.CanonicalString(t2Constraint.Details) != sqlparser.CanonicalString(t1Constraint.Details) {
 				// constraints with same name have different definition.
 				// First we check if this is only the enforced setting that changed which can
 				// be directly altered.

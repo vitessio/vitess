@@ -72,9 +72,7 @@ type API struct {
 
 	authz *rbac.Authorizer
 
-	// See https://github.com/vitessio/vitess/issues/7723 for why this exists.
-	vtexplainLock sync.Mutex
-	options       Options
+	options Options
 }
 
 // Options wraps the configuration options for different components of the
@@ -298,6 +296,19 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 			shouldAddCluster = shouldAddCluster || !isEqual
 		}
 		if shouldAddCluster {
+			if existingCluster != nil {
+				if err := existingCluster.Close(); err != nil {
+					log.Errorf("%s; some connections and goroutines may linger", err.Error())
+				}
+
+				idx := stdsort.Search(len(api.clusters), func(i int) bool {
+					return api.clusters[i].ID == existingCluster.ID
+				})
+				if idx >= 0 && idx < len(api.clusters) {
+					api.clusters = append(api.clusters[:idx], api.clusters[idx+1:]...)
+				}
+			}
+
 			api.clusterMap[id] = c
 			api.clusters = append(api.clusters, c)
 			sort.ClustersBy(func(c1, c2 *cluster.Cluster) bool {
@@ -381,9 +392,12 @@ func (api *API) EjectDynamicCluster(key string, value any) {
 	defer api.clusterMu.Unlock()
 
 	// Delete dynamic clusters from clusterMap when they are expired from clusterCache
-	_, ok := api.clusterMap[key]
+	c, ok := api.clusterMap[key]
 	if ok {
 		delete(api.clusterMap, key)
+		if err := c.Close(); err != nil {
+			log.Errorf("%s; some connections and goroutines may linger", err.Error())
+		}
 	}
 
 	// Maintain order of clusters when removing dynamic cluster
@@ -392,9 +406,7 @@ func (api *API) EjectDynamicCluster(key string, value any) {
 		log.Errorf("Cannot remove cluster %s from api.clusters. Cluster index %d is out of range for clusters slice of %d length.", key, clusterIndex, len(api.clusters))
 	}
 
-	api.clusters[0] = api.clusters[clusterIndex]
-
-	api.clusters = api.clusters[1:]
+	api.clusters = append(api.clusters[:clusterIndex], api.clusters[clusterIndex+1:]...)
 }
 
 // CreateKeyspace is part of the vtadminpb.VTAdminServer interface.
@@ -1822,33 +1834,22 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		return nil, er.Error()
 	}
 
-	opts := &vtexplain.Options{ReplicationMode: "ROW"}
-
-	lockWaitStart := time.Now()
-
-	api.vtexplainLock.Lock()
-	defer api.vtexplainLock.Unlock()
-
-	lockWaitTime := time.Since(lockWaitStart)
-	log.Infof("vtexplain lock wait time: %s", lockWaitTime)
-
-	span.Annotate("vtexplain_lock_wait_time", lockWaitTime.String())
-
-	if err := vtexplain.Init(srvVSchema, schema, shardMap, opts); err != nil {
+	vte, err := vtexplain.Init(srvVSchema, schema, shardMap, &vtexplain.Options{ReplicationMode: "ROW"})
+	if err != nil {
 		return nil, fmt.Errorf("error initilaizing vtexplain: %w", err)
 	}
+	defer vte.Stop()
 
-	defer vtexplain.Stop()
-
-	plans, err := vtexplain.Run(req.Sql)
+	plans, err := vte.Run(req.Sql)
 	if err != nil {
 		return nil, fmt.Errorf("error running vtexplain: %w", err)
 	}
 
-	response, err := vtexplain.ExplainsAsText(plans)
+	response, err := vte.ExplainsAsText(plans)
 	if err != nil {
 		return nil, fmt.Errorf("error converting vtexplain to text output: %w", err)
 	}
+
 	return &vtadminpb.VTExplainResponse{
 		Response: response,
 	}, nil

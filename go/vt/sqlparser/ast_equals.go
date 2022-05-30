@@ -920,6 +920,30 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfReferenceDefinition(a, b)
+	case *RegexpInstrExpr:
+		b, ok := inB.(*RegexpInstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpInstrExpr(a, b)
+	case *RegexpLikeExpr:
+		b, ok := inB.(*RegexpLikeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpLikeExpr(a, b)
+	case *RegexpReplaceExpr:
+		b, ok := inB.(*RegexpReplaceExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpReplaceExpr(a, b)
+	case *RegexpSubstrExpr:
+		b, ok := inB.(*RegexpSubstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpSubstrExpr(a, b)
 	case *Release:
 		b, ok := inB.(*Release)
 		if !ok {
@@ -3116,6 +3140,66 @@ func EqualsRefOfReferenceDefinition(a, b *ReferenceDefinition) bool {
 		a.OnUpdate == b.OnUpdate
 }
 
+// EqualsRefOfRegexpInstrExpr does deep equals between the two objects.
+func EqualsRefOfRegexpInstrExpr(a, b *RegexpInstrExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr) &&
+		EqualsExpr(a.Pattern, b.Pattern) &&
+		EqualsExpr(a.Position, b.Position) &&
+		EqualsExpr(a.Occurrence, b.Occurrence) &&
+		EqualsExpr(a.ReturnOption, b.ReturnOption) &&
+		EqualsExpr(a.MatchType, b.MatchType)
+}
+
+// EqualsRefOfRegexpLikeExpr does deep equals between the two objects.
+func EqualsRefOfRegexpLikeExpr(a, b *RegexpLikeExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr) &&
+		EqualsExpr(a.Pattern, b.Pattern) &&
+		EqualsExpr(a.MatchType, b.MatchType)
+}
+
+// EqualsRefOfRegexpReplaceExpr does deep equals between the two objects.
+func EqualsRefOfRegexpReplaceExpr(a, b *RegexpReplaceExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr) &&
+		EqualsExpr(a.Pattern, b.Pattern) &&
+		EqualsExpr(a.Repl, b.Repl) &&
+		EqualsExpr(a.Occurrence, b.Occurrence) &&
+		EqualsExpr(a.Position, b.Position) &&
+		EqualsExpr(a.MatchType, b.MatchType)
+}
+
+// EqualsRefOfRegexpSubstrExpr does deep equals between the two objects.
+func EqualsRefOfRegexpSubstrExpr(a, b *RegexpSubstrExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr) &&
+		EqualsExpr(a.Pattern, b.Pattern) &&
+		EqualsExpr(a.Occurrence, b.Occurrence) &&
+		EqualsExpr(a.Position, b.Position) &&
+		EqualsExpr(a.MatchType, b.MatchType)
+}
+
 // EqualsRefOfRelease does deep equals between the two objects.
 func EqualsRefOfRelease(a, b *Release) bool {
 	if a == b {
@@ -4254,6 +4338,30 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfNtileExpr(a, b)
+	case *RegexpInstrExpr:
+		b, ok := inB.(*RegexpInstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpInstrExpr(a, b)
+	case *RegexpLikeExpr:
+		b, ok := inB.(*RegexpLikeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpLikeExpr(a, b)
+	case *RegexpReplaceExpr:
+		b, ok := inB.(*RegexpReplaceExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpReplaceExpr(a, b)
+	case *RegexpSubstrExpr:
+		b, ok := inB.(*RegexpSubstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpSubstrExpr(a, b)
 	case *SubstrExpr:
 		b, ok := inB.(*SubstrExpr)
 		if !ok {
@@ -4839,6 +4947,30 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfOrExpr(a, b)
+	case *RegexpInstrExpr:
+		b, ok := inB.(*RegexpInstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpInstrExpr(a, b)
+	case *RegexpLikeExpr:
+		b, ok := inB.(*RegexpLikeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpLikeExpr(a, b)
+	case *RegexpReplaceExpr:
+		b, ok := inB.(*RegexpReplaceExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpReplaceExpr(a, b)
+	case *RegexpSubstrExpr:
+		b, ok := inB.(*RegexpSubstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpSubstrExpr(a, b)
 	case *Subquery:
 		b, ok := inB.(*Subquery)
 		if !ok {
@@ -5271,6 +5403,30 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfOrExpr(a, b)
+	case *RegexpInstrExpr:
+		b, ok := inB.(*RegexpInstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpInstrExpr(a, b)
+	case *RegexpLikeExpr:
+		b, ok := inB.(*RegexpLikeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpLikeExpr(a, b)
+	case *RegexpReplaceExpr:
+		b, ok := inB.(*RegexpReplaceExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpReplaceExpr(a, b)
+	case *RegexpSubstrExpr:
+		b, ok := inB.(*RegexpSubstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpSubstrExpr(a, b)
 	case *Subquery:
 		b, ok := inB.(*Subquery)
 		if !ok {

@@ -19,6 +19,7 @@ import (
 	"context"
 	"flag"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +38,7 @@ var (
 	hostname        = "localhost"
 	keyspaceName    = "ks"
 	cell            = "zone1"
+	mysqlVersion    = ""
 	sqlCreateTable  = `
 		create table if not exists t1(
 			id bigint not null auto_increment,
@@ -149,11 +151,16 @@ func populateTable(t *testing.T) {
 		require.NoError(t, err)
 	}
 	checkTableRows(t, "t1", 1024)
+	{
+		exists, _, err := tableExists("t1")
+		require.NoError(t, err)
+		require.True(t, exists)
+	}
 }
 
 // tableExists sees that a given table exists in MySQL
 func tableExists(tableExpr string) (exists bool, tableName string, err error) {
-	query := `show table status like '%a'`
+	query := `select table_name as table_name from information_schema.tables where table_schema=database() and table_name like '%a'`
 	parsed := sqlparser.BuildParsedQuery(query, tableExpr)
 	rs, err := primaryTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
 	if err != nil {
@@ -163,7 +170,7 @@ func tableExists(tableExpr string) (exists bool, tableName string, err error) {
 	if row == nil {
 		return false, "", nil
 	}
-	return true, row.AsString("Name", ""), nil
+	return true, row.AsString("table_name", ""), nil
 }
 
 func validateTableDoesNotExist(t *testing.T, tableExpr string) {
@@ -184,6 +191,28 @@ func validateTableDoesNotExist(t *testing.T, tableExpr string) {
 			}
 		case <-ctx.Done():
 			assert.NoError(t, ctx.Err(), "validateTableDoesNotExist timed out, table %v still exists (%v)", tableExpr, foundTableName)
+			return
+		}
+	}
+}
+
+func validateTableExists(t *testing.T, tableExpr string) {
+	ctx, cancel := context.WithTimeout(context.Background(), waitForTransitionTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	var exists bool
+	var err error
+	for {
+		select {
+		case <-ticker.C:
+			exists, _, err = tableExists(tableExpr)
+			require.NoError(t, err)
+			if exists {
+				return
+			}
+		case <-ctx.Done():
+			assert.NoError(t, ctx.Err(), "validateTableExists timed out, table %v still does not exist", tableExpr)
 			return
 		}
 	}
@@ -235,13 +264,28 @@ func dropTable(t *testing.T, tableName string) {
 	require.NoError(t, err)
 }
 
+func readMysqlVersion(t *testing.T) string {
+	query := `select @@version as ver`
+	rs, err := primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	assert.NoError(t, err)
+	row := rs.Named().Row()
+	assert.NotNil(t, row)
+	version := row["ver"].ToString()
+	assert.NotEmpty(t, row)
+	return version
+}
+
+func isMySQL8() bool {
+	return strings.HasPrefix(mysqlVersion, "8.")
+}
+
+func TestMySQLVersion(t *testing.T) {
+	mysqlVersion = readMysqlVersion(t)
+}
+
 func TestPopulateTable(t *testing.T) {
 	populateTable(t)
-	{
-		exists, _, err := tableExists("t1")
-		assert.NoError(t, err)
-		assert.True(t, exists)
-	}
+	validateTableExists(t, "t1")
 	validateTableDoesNotExist(t, "no_such_table")
 }
 
@@ -254,28 +298,24 @@ func TestHold(t *testing.T) {
 	assert.NoError(t, err)
 
 	validateTableDoesNotExist(t, "t1")
-	{
-		exists, _, err := tableExists(tableName)
-		assert.NoError(t, err)
-		assert.True(t, exists)
-	}
+	validateTableExists(t, tableName)
 
 	time.Sleep(tableTransitionExpiration / 2)
 	{
 		// Table was created with +10s timestamp, so it should still exist
-		exists, _, err := tableExists(tableName)
-		assert.NoError(t, err)
-		assert.True(t, exists)
+		validateTableExists(t, tableName)
 
 		checkTableRows(t, tableName, 1024)
 	}
 
 	time.Sleep(tableTransitionExpiration)
-	{
-		// We're now both beyond table's timestamp as well as a tableGC interval
-		validateTableDoesNotExist(t, tableName)
+	// We're now both beyond table's timestamp as well as a tableGC interval
+	validateTableDoesNotExist(t, tableName)
+	if isMySQL8() {
+		validateAnyState(t, -1, schema.DropTableGCState, schema.TableDroppedGCState)
+	} else {
+		validateAnyState(t, -1, schema.PurgeTableGCState, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
 	}
-	validateAnyState(t, -1, schema.PurgeTableGCState, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
 }
 
 func TestEvac(t *testing.T) {
@@ -287,20 +327,17 @@ func TestEvac(t *testing.T) {
 	assert.NoError(t, err)
 
 	validateTableDoesNotExist(t, "t1")
-	{
-		exists, _, err := tableExists(tableName)
-		assert.NoError(t, err)
-		assert.True(t, exists)
-	}
 
 	time.Sleep(tableTransitionExpiration / 2)
 	{
 		// Table was created with +10s timestamp, so it should still exist
-		exists, _, err := tableExists(tableName)
-		assert.NoError(t, err)
-		assert.True(t, exists)
-
-		checkTableRows(t, tableName, 1024)
+		if isMySQL8() {
+			// EVAC state is skipped in mysql 8.0.23 and beyond
+			validateTableDoesNotExist(t, tableName)
+		} else {
+			validateTableExists(t, tableName)
+			checkTableRows(t, tableName, 1024)
+		}
 	}
 
 	time.Sleep(tableTransitionExpiration)
@@ -334,30 +371,18 @@ func TestPurge(t *testing.T) {
 	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.NoError(t, err)
 
-	{
-		exists, _, err := tableExists("t1")
-		require.NoError(t, err)
-		require.False(t, exists)
-	}
-	{
-		exists, _, err := tableExists(tableName)
-		require.NoError(t, err)
-		require.True(t, exists)
-	}
-
-	time.Sleep(tableTransitionExpiration / 2)
-	{
-		// Table was created with +10s timestamp, so it should still exist
-		exists, _, err := tableExists(tableName)
-		require.NoError(t, err)
-		require.True(t, exists)
-
+	validateTableDoesNotExist(t, "t1")
+	if !isMySQL8() {
+		validateTableExists(t, tableName)
 		checkTableRows(t, tableName, 1024)
 	}
-
 	time.Sleep(5 * gcPurgeCheckInterval) // wwait for table to be purged
 	time.Sleep(2 * gcCheckInterval)      // wait for GC state transition
-	validateAnyState(t, 0, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
+	if isMySQL8() {
+		validateAnyState(t, 0, schema.DropTableGCState, schema.TableDroppedGCState)
+	} else {
+		validateAnyState(t, 0, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
+	}
 }
 
 func TestPurgeView(t *testing.T) {
@@ -368,47 +393,32 @@ func TestPurgeView(t *testing.T) {
 	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.NoError(t, err)
 
-	{
-		// table untouched
-		exists, _, err := tableExists("t1")
-		require.NoError(t, err)
-		require.True(t, exists)
+	// table untouched
+	validateTableExists(t, "t1")
+	if !isMySQL8() {
+		validateTableExists(t, tableName)
 	}
-	{
-		exists, _, err := tableExists("v1")
-		require.NoError(t, err)
-		require.False(t, exists)
-	}
-	{
-		exists, _, err := tableExists(tableName)
-		require.NoError(t, err)
-		require.True(t, exists)
-	}
+	validateTableDoesNotExist(t, "v1")
 
 	time.Sleep(tableTransitionExpiration / 2)
 	{
 		// View was created with +10s timestamp, so it should still exist
-		exists, _, err := tableExists(tableName)
-		require.NoError(t, err)
-		require.True(t, exists)
-
-		// We're really reading the view here:
-		checkTableRows(t, tableName, 1024)
+		if isMySQL8() {
+			// PURGE is skipped in mysql 8.0.23
+			validateTableDoesNotExist(t, tableName)
+		} else {
+			validateTableExists(t, tableName)
+			// We're really reading the view here:
+			checkTableRows(t, tableName, 1024)
+		}
 	}
 
 	time.Sleep(2 * gcPurgeCheckInterval) // wwait for table to be purged
 	time.Sleep(2 * gcCheckInterval)      // wait for GC state transition
-	{
-		// We're now both beyond view's timestamp as well as a tableGC interval
-		exists, _, err := tableExists(tableName)
-		require.NoError(t, err)
-		require.False(t, exists)
-	}
-	{
-		// table still untouched
-		exists, _, err := tableExists("t1")
-		require.NoError(t, err)
-		require.True(t, exists)
-	}
+
+	// We're now both beyond view's timestamp as well as a tableGC interval
+	validateTableDoesNotExist(t, tableName)
+	// table still untouched
+	validateTableExists(t, "t1")
 	validateAnyState(t, 1024, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
 }

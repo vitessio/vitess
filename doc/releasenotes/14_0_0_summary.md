@@ -104,9 +104,15 @@ Example:
 vtctlclient ApplySchema -skip_preflight -ddl_strategy='vitess' -sql "alter table my_table add column my_val int not null default 0" commerce
 ```
 
-### --singleton-context and REVERT migrations
+#### --singleton-context and REVERT migrations
 
 It is now possible to submit a migration with `--singleton-context` strategy flag, while there's a pending (queued or running) `REVERT` migration that does not have a `--singleton-context` flag.
+
+#### Support for CHECK constraints
+
+Online DDL operations are more aware of `CHECK` constraints, and properly handle the limitation where a `CHECK`'s name has to be unique in the schema. As opposed to letting MySQL choose arbitrary names for shadow table's `CHECK` consraints, Online DDL now generates unique yet deterministic names, such that all shards converge onto same names.
+
+Online DDL attempts to preserve the original check's name as a suffix to the generated name, where possible (names are limited to `64` characters).
 
 #### Behavior changes
 
