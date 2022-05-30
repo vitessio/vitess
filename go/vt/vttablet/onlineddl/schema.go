@@ -507,7 +507,6 @@ const (
 	`
 	sqlDropTrigger      = "DROP TRIGGER IF EXISTS `%a`.`%a`"
 	sqlShowTablesLike   = "SHOW TABLES LIKE '%a'"
-	sqlCreateTableLike  = "CREATE TABLE `%a` LIKE `%a`"
 	sqlDropTable        = "DROP TABLE `%a`"
 	sqlShowColumnsFrom  = "SHOW COLUMNS FROM `%a`"
 	sqlShowTableStatus  = "SHOW TABLE STATUS LIKE '%a'"
