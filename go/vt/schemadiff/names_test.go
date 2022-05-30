@@ -26,8 +26,8 @@ func TestConstraintOriginalName(t *testing.T) {
 	{
 		names := []string{
 			"check1",
-			"chk_04a5b01db9d15e218979970c23bfc13a_check1",
-			"fk_04a5b01db9d15e218979970c23bfc13a_check1",
+			"check1_7no794p1x6zw6je1gfqmt7bca",
+			"check1_8mp7joumtzb34562drvj9t7kh",
 		}
 		for _, name := range names {
 			t.Run(name, func(t *testing.T) {
@@ -40,8 +40,10 @@ func TestConstraintOriginalName(t *testing.T) {
 	{
 		names := []string{
 			"check1",
-			"check_04a5b01db9d15e218979970c23bfc13a_check1",
+			"check_991ek3m5g69vcule23s9vnayd_check1",
 			"fk_b9d15e218979970c23bfc13a_check1",
+			"check1_bm701hx09ky10ygpj4imt6fbla",
+			"check1_dbd0nmo0n05nl5fnckbdivkj",
 		}
 		for _, name := range names {
 			t.Run(name, func(t *testing.T) {

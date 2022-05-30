@@ -32,3 +32,9 @@ func TestUUIDv5(t *testing.T) {
 	u := UUIDv5("abc", "def")
 	assert.Equal(t, 36, len(u), "u=%v", u)
 }
+
+func TestUUIDv5Base36(t *testing.T) {
+	assert.NotEmpty(t, UUIDv5("abc"))
+	u := UUIDv5Base36("abc", "def")
+	assert.Equal(t, 25, len(u), "u=%v", u)
+}

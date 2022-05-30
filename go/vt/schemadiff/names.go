@@ -16,23 +16,23 @@ limitations under the License.
 
 package schemadiff
 
-import "regexp"
+import (
+	"regexp"
+)
 
 // constraint name examples:
 // - check1
-// - chk_04a5b01db9d15e218979970c23bfc13a_check1
-// - chk_2dbf8418af7250d783beb208344ae16b_isnegative
-// - fk_353c799af3d858eb99b87d6419133d5c_employee_id
+// - check1_db9d15e218979970c23bfc13a
+// - isnegative_2dbf8418af7250d783beb2083
+// - employee_id_af3d858eb99b87d6419133d5c
 // where:
-// - fk stands for foreign key constraint
-// - chk stands for CHECK constraint
-// - 04a5b01db9d15e218979970c23bfc13a is a deterministic vitess-generates sum
+// - db9d15e218979970c23bfc13a is a deterministic vitess-generates sum (128 bit encoded with base36, 25 characters)
 // - check1, isnegative, employee_id -- are the original constraints names
-var constraintVitessNameRegexp = regexp.MustCompile(`^((fk|chk)_([0-9a-f]{32})_)?(.+)$`)
+var constraintVitessNameRegexp = regexp.MustCompile(`^(.*?)(_([0-9a-z]{25}))?$`)
 
 func ExtractConstraintOriginalName(constraintName string) string {
 	if submatch := constraintVitessNameRegexp.FindStringSubmatch(constraintName); len(submatch) > 0 {
-		return submatch[4]
+		return submatch[1]
 	}
 	return constraintName
 }
