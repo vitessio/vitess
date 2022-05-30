@@ -49,7 +49,7 @@ type testopts struct {
 	shardmap map[string]map[string]*topo.ShardInfo
 }
 
-func initTest(mode string, opts *Options, topts *testopts, t *testing.T) {
+func initTest(mode string, opts *Options, topts *testopts, t *testing.T) *VTExplain {
 	schema, err := os.ReadFile("testdata/test-schema.sql")
 	require.NoError(t, err)
 
@@ -65,8 +65,9 @@ func initTest(mode string, opts *Options, topts *testopts, t *testing.T) {
 	}
 
 	opts.ExecutionMode = mode
-	err = Init(string(vSchema), string(schema), shardmap, opts)
+	vte, err := Init(string(vSchema), string(schema), shardmap, opts)
 	require.NoError(t, err, "vtexplain Init error\n%s", string(schema))
+	return vte
 }
 
 func testExplain(testcase string, opts *Options, t *testing.T) {
@@ -85,7 +86,7 @@ func testExplain(testcase string, opts *Options, t *testing.T) {
 
 func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testing.T) {
 	t.Run(testcase, func(t *testing.T) {
-		initTest(mode, opts, topts, t)
+		vte := initTest(mode, opts, topts, t)
 
 		sqlFile := fmt.Sprintf("testdata/%s-queries.sql", testcase)
 		sql, err := os.ReadFile(sqlFile)
@@ -94,7 +95,7 @@ func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testi
 		textOutFile := fmt.Sprintf("testdata/%s-output/%s-output.txt", mode, testcase)
 		expected, _ := os.ReadFile(textOutFile)
 
-		explains, err := Run(string(sql))
+		explains, err := vte.Run(string(sql))
 		require.NoError(t, err, "vtexplain error")
 		require.NotNil(t, explains, "vtexplain error running %s: no explain", string(sql))
 
@@ -113,7 +114,7 @@ func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testi
 			}
 		}
 
-		explainText, err := ExplainsAsText(explains)
+		explainText, err := vte.ExplainsAsText(explains)
 		require.NoError(t, err, "vtexplain error")
 
 		if diff := cmp.Diff(strings.TrimSpace(string(expected)), strings.TrimSpace(explainText)); diff != "" {
@@ -171,7 +172,7 @@ func TestExplain(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
-	initTest(ModeMulti, defaultTestOpts(), &testopts{}, t)
+	vte := initTest(ModeMulti, defaultTestOpts(), &testopts{}, t)
 
 	tests := []struct {
 		SQL string
@@ -200,7 +201,7 @@ func TestErrors(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.SQL, func(t *testing.T) {
-			_, err := Run(test.SQL)
+			_, err := vte.Run(test.SQL)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), test.Err)
 		})
@@ -208,8 +209,9 @@ func TestErrors(t *testing.T) {
 }
 
 func TestJSONOutput(t *testing.T) {
+	vte := initTest(ModeMulti, defaultTestOpts(), &testopts{}, t)
 	sql := "select 1 from user where id = 1"
-	explains, err := Run(sql)
+	explains, err := vte.Run(sql)
 	require.NoError(t, err, "vtexplain error")
 	require.NotNil(t, explains, "vtexplain error running %s: no explain", string(sql))
 
