@@ -113,7 +113,6 @@ func getFileParam(flag, flagFile, name string, required bool) (string, error) {
 }
 
 func main() {
-	defer vtexplain.Stop()
 	defer exit.RecoverAll()
 	defer logutil.Flush()
 
@@ -165,18 +164,19 @@ func parseAndRun() error {
 	log.V(100).Infof("schema %s\n", schema)
 	log.V(100).Infof("vschema %s\n", vschema)
 
-	err = vtexplain.Init(vschema, schema, ksShardMap, opts)
+	vte, err := vtexplain.Init(vschema, schema, ksShardMap, opts)
 	if err != nil {
 		return err
 	}
+	defer vte.Stop()
 
-	plans, err := vtexplain.Run(sql)
+	plans, err := vte.Run(sql)
 	if err != nil {
 		return err
 	}
 
 	if *outputMode == "text" {
-		fmt.Print(vtexplain.ExplainsAsText(plans))
+		fmt.Print(vte.ExplainsAsText(plans))
 	} else {
 		fmt.Print(vtexplain.ExplainsAsJSON(plans))
 	}
