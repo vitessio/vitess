@@ -479,6 +479,40 @@ func TestStatsURL(t *testing.T) {
 	se.handleDebugSchema(response, request)
 }
 
+func TestSchemaEngineCloseTickRace(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+	db.AddQueryPattern(baseShowTablesPattern,
+		&sqltypes.Result{
+			Fields:       mysql.BaseShowTablesFields,
+			RowsAffected: 0,
+			InsertID:     0,
+			Rows: [][]sqltypes.Value{
+				mysql.BaseShowTablesRow("test_table_01", false, ""),
+				mysql.BaseShowTablesRow("test_table_02", false, ""),
+				mysql.BaseShowTablesRow("test_table_03", false, ""),
+				mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+			},
+			SessionStateChanges: "",
+			StatusFlags:         0,
+		})
+	AddFakeInnoDBReadRowsResult(db, 12)
+	// Start the engine with a small reload tick
+	se := newEngine(10, 100*time.Millisecond, 1*time.Second, db)
+	err := se.Open()
+	require.NoError(t, err)
+
+	// Emulate the command of se.Close(), but with a wait in between
+	// to ensure that a reload-tick happens after locking the mutex but before
+	// stopping the ticks
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	time.Sleep(200 * time.Millisecond)
+	se.ticks.Stop()
+}
+
 func newEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, db *fakesqldb.DB) *Engine {
 	config := tabletenv.NewDefaultConfig()
 	config.QueryCacheSize = queryCacheSize
