@@ -1373,9 +1373,6 @@ func (node *RegexpInstrExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *RegexpLikeExpr) Format(buf *TrackedBuffer) {
-	if node.IsNot {
-		buf.WriteString("not ")
-	}
 	buf.astPrintf(node, "regexp_like(%v, %v", node.Expr, node.Pattern)
 	if node.MatchType != nil {
 		buf.astPrintf(node, ", %v", node.MatchType)

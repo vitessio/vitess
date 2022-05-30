@@ -192,6 +192,10 @@ func TestCanonicalOutput(t *testing.T) {
 			input:     "select regexp_replace('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), REGEXP_LIKE('dog cat dog', 'dog'), REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1), REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}',1), 'Michael!' RLIKE '.*' from dual",
 			canonical: "SELECT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), REGEXP_LIKE('dog cat dog', 'dog'), REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1), REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}', 1), 'Michael!' REGEXP '.*' FROM `dual`",
 		},
+		{
+			input:     "select regexp_replace('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), REGEXP_LIKE('dog cat dog', 'dog'), REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1), REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}',1), 'Michael!' RLIKE '.*' from dual",
+			canonical: "SELECT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), REGEXP_LIKE('dog cat dog', 'dog'), REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1), REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}', 1), 'Michael!' REGEXP '.*' FROM `dual`",
+		},
 	}
 
 	for _, tc := range testcases {

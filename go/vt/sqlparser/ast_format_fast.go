@@ -1810,9 +1810,6 @@ func (node *RegexpInstrExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node
 func (node *RegexpLikeExpr) formatFast(buf *TrackedBuffer) {
-	if node.IsNot {
-		buf.WriteString("not ")
-	}
 	buf.WriteString("regexp_like(")
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteString(", ")

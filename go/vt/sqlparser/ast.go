@@ -2576,7 +2576,6 @@ type (
 	// RegexpLikeExpr represents REGEXP_LIKE()
 	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
 	RegexpLikeExpr struct {
-		IsNot     bool
 		Expr      Expr
 		Pattern   Expr
 		MatchType Expr

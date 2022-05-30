@@ -559,11 +559,9 @@ var (
 	}, {
 		input: "select /* not like escape */ 1 from t where a not like b escape '$'",
 	}, {
-		input:  "select /* regexp */ 1 from t where a regexp b",
-		output: "select /* regexp */ 1 from t where a regexp b",
+		input: "select /* regexp */ 1 from t where a regexp b",
 	}, {
-		input:  "select /* not regexp */ 1 from t where a not regexp b",
-		output: "select /* not regexp */ 1 from t where a not regexp b",
+		input: "select /* not regexp */ 1 from t where a not regexp b",
 	}, {
 		input:  "select /* rlike */ 1 from t where a rlike b",
 		output: "select /* rlike */ 1 from t where a regexp b",
@@ -2963,6 +2961,9 @@ var (
 	}, {
 		input:  "SELECT REGEXP_LIKE('dog cat dog', 'dog')",
 		output: "select regexp_like('dog cat dog', 'dog') from dual",
+	}, {
+		input:  "SELECT NOT REGEXP_LIKE('dog cat dog', 'dog')",
+		output: "select not regexp_like('dog cat dog', 'dog') from dual",
 	}, {
 		input:  "SELECT REGEXP_LIKE('aa aaa aaaa aaaa aaaa aaaa', 'a{4}',1)",
 		output: "select regexp_like('aa aaa aaaa aaaa aaaa aaaa', 'a{4}', 1) from dual",
