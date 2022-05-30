@@ -296,6 +296,14 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitReferenceAction(in, f)
 	case *ReferenceDefinition:
 		return VisitRefOfReferenceDefinition(in, f)
+	case *RegexpInstrExpr:
+		return VisitRefOfRegexpInstrExpr(in, f)
+	case *RegexpLikeExpr:
+		return VisitRefOfRegexpLikeExpr(in, f)
+	case *RegexpReplaceExpr:
+		return VisitRefOfRegexpReplaceExpr(in, f)
+	case *RegexpSubstrExpr:
+		return VisitRefOfRegexpSubstrExpr(in, f)
 	case *Release:
 		return VisitRefOfRelease(in, f)
 	case *RenameIndex:
@@ -2325,6 +2333,102 @@ func VisitRefOfReferenceDefinition(in *ReferenceDefinition, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfRegexpInstrExpr(in *RegexpInstrExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Pattern, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Position, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Occurrence, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.ReturnOption, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.MatchType, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfRegexpLikeExpr(in *RegexpLikeExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Pattern, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.MatchType, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfRegexpReplaceExpr(in *RegexpReplaceExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Pattern, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Repl, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Occurrence, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Position, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.MatchType, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfRegexpSubstrExpr(in *RegexpSubstrExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Pattern, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Occurrence, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Position, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.MatchType, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfRelease(in *Release, f Visit) error {
 	if in == nil {
 		return nil
@@ -3300,6 +3404,14 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
+	case *RegexpInstrExpr:
+		return VisitRefOfRegexpInstrExpr(in, f)
+	case *RegexpLikeExpr:
+		return VisitRefOfRegexpLikeExpr(in, f)
+	case *RegexpReplaceExpr:
+		return VisitRefOfRegexpReplaceExpr(in, f)
+	case *RegexpSubstrExpr:
+		return VisitRefOfRegexpSubstrExpr(in, f)
 	case *SubstrExpr:
 		return VisitRefOfSubstrExpr(in, f)
 	case *TimestampFuncExpr:
@@ -3518,6 +3630,14 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfOffset(in, f)
 	case *OrExpr:
 		return VisitRefOfOrExpr(in, f)
+	case *RegexpInstrExpr:
+		return VisitRefOfRegexpInstrExpr(in, f)
+	case *RegexpLikeExpr:
+		return VisitRefOfRegexpLikeExpr(in, f)
+	case *RegexpReplaceExpr:
+		return VisitRefOfRegexpReplaceExpr(in, f)
+	case *RegexpSubstrExpr:
+		return VisitRefOfRegexpSubstrExpr(in, f)
 	case *Subquery:
 		return VisitRefOfSubquery(in, f)
 	case *SubstrExpr:
@@ -3660,6 +3780,14 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfOffset(in, f)
 	case *OrExpr:
 		return VisitRefOfOrExpr(in, f)
+	case *RegexpInstrExpr:
+		return VisitRefOfRegexpInstrExpr(in, f)
+	case *RegexpLikeExpr:
+		return VisitRefOfRegexpLikeExpr(in, f)
+	case *RegexpReplaceExpr:
+		return VisitRefOfRegexpReplaceExpr(in, f)
+	case *RegexpSubstrExpr:
+		return VisitRefOfRegexpSubstrExpr(in, f)
 	case *Subquery:
 		return VisitRefOfSubquery(in, f)
 	case *SubstrExpr:

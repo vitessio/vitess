@@ -247,7 +247,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> AND
 %right <str> NOT '!'
 %left <str> BETWEEN CASE WHEN THEN ELSE END
-%left <str> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
+%left <str> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP RLIKE IN
 %left <str> '&'
 %left <str> SHIFT_LEFT SHIFT_RIGHT
 %left <str> '+' '-'
@@ -322,6 +322,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> JSON_ARRAY JSON_OBJECT JSON_QUOTE
 %token <str> JSON_DEPTH JSON_TYPE JSON_LENGTH JSON_VALID
 %token <str> JSON_ARRAY_APPEND JSON_ARRAY_INSERT JSON_INSERT JSON_MERGE JSON_MERGE_PATCH JSON_MERGE_PRESERVE JSON_REMOVE JSON_REPLACE JSON_SET JSON_UNQUOTE
+%token <str> REGEXP_INSTR REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -400,7 +401,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> select_option algorithm_view security_view security_view_opt
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
-%type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression
+%type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression regular_expressions
 %type <tableExprs> from_opt table_references from_clause
 %type <tableExpr> table_reference table_factor join_table json_table_function
 %type <jtColumnDefinition> jt_column
@@ -439,7 +440,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <limit> limit_opt limit_clause
 %type <selectInto> into_clause
 %type <columnTypeOptions> column_attribute_list_opt generated_column_attribute_list_opt
-%type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
+%type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt regexp_symbol
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> locking_clause
 %type <columns> ins_column_list column_list at_id_list column_list_opt index_list execute_statement_list_opt
@@ -4937,7 +4938,6 @@ expression:
     $$ = &MemberOfExpr{Value: $1, JSONArr:$5 }
   }
 
-
 bool_pri:
 bool_pri IS NULL %prec IS
   {
@@ -4989,11 +4989,11 @@ bit_expr IN col_tuple
   {
 	$$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4, Escape: $6}
   }
-| bit_expr REGEXP bit_expr
+| bit_expr regexp_symbol bit_expr
   {
 	$$ = &ComparisonExpr{Left: $1, Operator: RegexpOp, Right: $3}
   }
-| bit_expr NOT REGEXP bit_expr
+| bit_expr NOT regexp_symbol bit_expr
   {
 	 $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpOp, Right: $4}
   }
@@ -5001,6 +5001,15 @@ bit_expr IN col_tuple
  {
 	$$ = $1
  }
+
+regexp_symbol:
+  REGEXP
+  {
+  }
+| RLIKE
+  {
+  }
+
 
 bit_expr:
 bit_expr '|' bit_expr %prec '|'
@@ -5540,6 +5549,72 @@ UTC_DATE func_paren_opt
 | JSON_UNQUOTE openb expression closeb
   {
     $$ = &JSONUnquoteExpr{JSONValue:$3}
+  }
+| regular_expressions
+
+regular_expressions:
+  REGEXP_INSTR openb expression ',' expression closeb
+  {
+    $$ = &RegexpInstrExpr{Expr:$3, Pattern:$5}
+  }
+| REGEXP_INSTR openb expression ',' expression ',' expression closeb
+  {
+    $$ = &RegexpInstrExpr{Expr:$3, Pattern:$5, Position: $7}
+  }
+| REGEXP_INSTR openb expression ',' expression ',' expression ',' expression closeb
+  {
+    $$ = &RegexpInstrExpr{Expr:$3, Pattern:$5, Position: $7, Occurrence: $9}
+  }
+| REGEXP_INSTR openb expression ',' expression ',' expression ',' expression ',' expression closeb
+  {
+    $$ = &RegexpInstrExpr{Expr:$3, Pattern:$5, Position: $7, Occurrence: $9, ReturnOption: $11}
+  }
+| REGEXP_INSTR openb expression ',' expression ',' expression ',' expression ',' expression ',' expression closeb
+  {
+    // Match type is kept expression as TRIM( ' m  ') is accepted
+    $$ = &RegexpInstrExpr{Expr:$3, Pattern:$5, Position: $7, Occurrence: $9, ReturnOption: $11, MatchType: $13}
+  }
+| REGEXP_LIKE openb expression ',' expression closeb
+  {
+    $$ = &RegexpLikeExpr{Expr:$3, Pattern:$5}
+  }
+| REGEXP_LIKE openb expression ',' expression ',' expression closeb
+  {
+    $$ = &RegexpLikeExpr{Expr:$3, Pattern:$5, MatchType: $7}
+  }
+| REGEXP_REPLACE openb expression ',' expression ',' expression closeb
+  {
+    $$ = &RegexpReplaceExpr{Expr:$3, Pattern:$5, Repl: $7}
+  }
+| REGEXP_REPLACE openb expression ',' expression ',' expression ',' expression closeb
+  {
+    $$ = &RegexpReplaceExpr{Expr:$3, Pattern:$5, Repl: $7, Position: $9}
+  }
+| REGEXP_REPLACE openb expression ',' expression ',' expression ',' expression ',' expression closeb
+  {
+    $$ = &RegexpReplaceExpr{Expr:$3, Pattern:$5, Repl: $7, Position: $9, Occurrence: $11}
+  }
+| REGEXP_REPLACE openb expression ',' expression ',' expression ',' expression ',' expression ',' expression closeb
+  {
+    // Match type is kept expression as TRIM( ' m  ') is accepted
+    $$ = &RegexpReplaceExpr{Expr:$3, Pattern:$5, Repl: $7, Position: $9, Occurrence: $11, MatchType: $13}
+  }
+| REGEXP_SUBSTR openb expression ',' expression closeb
+  {
+    $$ = &RegexpSubstrExpr{Expr:$3, Pattern:$5 }
+  }
+| REGEXP_SUBSTR openb expression ',' expression ',' expression closeb
+  {
+    $$ = &RegexpSubstrExpr{Expr:$3, Pattern:$5, Position: $7}
+  }
+| REGEXP_SUBSTR openb expression ',' expression ',' expression ',' expression closeb
+  {
+    $$ = &RegexpSubstrExpr{Expr:$3, Pattern:$5, Position: $7, Occurrence: $9}
+  }
+| REGEXP_SUBSTR openb expression ',' expression ',' expression ',' expression ',' expression closeb
+  {
+    // Match type is kept expression as TRIM( ' m  ') is accepted
+    $$ = &RegexpSubstrExpr{Expr:$3, Pattern:$5, Position: $7, Occurrence: $9, MatchType: $11}
   }
 
 returning_type_opt:
@@ -6701,6 +6776,7 @@ reserved_keyword:
 | RENAME
 | REPLACE
 | RIGHT
+| RLIKE
 | ROW_NUMBER
 | SCHEMA
 | SCHEMAS
@@ -6975,6 +7051,10 @@ non_reserved_keyword:
 | REDUNDANT
 | REFERENCE
 | REFERENCES
+| REGEXP_INSTR %prec FUNCTION_CALL_NON_KEYWORD
+| REGEXP_LIKE %prec FUNCTION_CALL_NON_KEYWORD
+| REGEXP_REPLACE %prec FUNCTION_CALL_NON_KEYWORD
+| REGEXP_SUBSTR %prec FUNCTION_CALL_NON_KEYWORD
 | RELAY
 | REMOVE
 | REORGANIZE
