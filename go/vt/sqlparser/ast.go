@@ -2106,10 +2106,9 @@ type (
 	// FrameClause represents frame_clause
 	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html
 	FrameClause struct {
-		Unit      FrameUnitType
-		IsBetween bool
-		Start     *FramePoint
-		End       *FramePoint
+		Unit  FrameUnitType
+		Start *FramePoint
+		End   *FramePoint
 	}
 
 	// FramePoint refers to frame_start/frame_end

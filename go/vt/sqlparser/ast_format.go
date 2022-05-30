@@ -1483,7 +1483,7 @@ func (node *WindowSpecification) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *FrameClause) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, " %s", node.Unit.ToString())
-	if node.IsBetween {
+	if node.End != nil {
 		buf.astPrintf(node, " between%v and%v", node.Start, node.End)
 	} else {
 		buf.astPrintf(node, "%v", node.Start)
@@ -1545,7 +1545,7 @@ func (node *NtileExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *NTHValueExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "nth_value(%v,", node.Expr)
+	buf.astPrintf(node, "nth_value(%v, ", node.Expr)
 	if node.IntValue != nil {
 		buf.astPrintf(node, "%d", *node.IntValue)
 	} else if node.IsNull {

@@ -5296,7 +5296,7 @@ frame_clause:
   }
 | frame_units BETWEEN frame_point AND frame_point
   {
-    $$ = &FrameClause{ Unit: $1, Start: $3, End: $5, IsBetween: true }
+    $$ = &FrameClause{ Unit: $1, Start: $3, End: $5 }
   }
 
 window_partition_clause_opt:

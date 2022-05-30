@@ -15975,7 +15975,7 @@ yydefault:
 		var yyLOCAL *FrameClause
 //line sql.y:5298
 		{
-			yyLOCAL = &FrameClause{Unit: yyDollar[1].frameUnitTypeUnion(), Start: yyDollar[3].framePointUnion(), End: yyDollar[5].framePointUnion(), IsBetween: true}
+			yyLOCAL = &FrameClause{Unit: yyDollar[1].frameUnitTypeUnion(), Start: yyDollar[3].framePointUnion(), End: yyDollar[5].framePointUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1025:

@@ -2126,8 +2126,7 @@ func EqualsRefOfFrameClause(a, b *FrameClause) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.IsBetween == b.IsBetween &&
-		a.Unit == b.Unit &&
+	return a.Unit == b.Unit &&
 		EqualsRefOfFramePoint(a.Start, b.Start) &&
 		EqualsRefOfFramePoint(a.End, b.End)
 }

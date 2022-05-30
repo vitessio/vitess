@@ -1955,7 +1955,7 @@ func (node *WindowSpecification) formatFast(buf *TrackedBuffer) {
 func (node *FrameClause) formatFast(buf *TrackedBuffer) {
 	buf.WriteByte(' ')
 	buf.WriteString(node.Unit.ToString())
-	if node.IsBetween {
+	if node.End != nil {
 		buf.WriteString(" between")
 		node.Start.formatFast(buf)
 		buf.WriteString(" and")
@@ -2033,7 +2033,7 @@ func (node *NtileExpr) formatFast(buf *TrackedBuffer) {
 func (node *NTHValueExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("nth_value(")
 	buf.printExpr(node, node.Expr, true)
-	buf.WriteByte(',')
+	buf.WriteString(", ")
 	if node.IntValue != nil {
 		buf.WriteString(fmt.Sprintf("%d", *node.IntValue))
 	} else if node.IsNull {
