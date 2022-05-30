@@ -14609,7 +14609,7 @@ OUTPUT
 select std(e1 / e2) from bug22555
 END
 INPUT
-select 'вася' regexp '[[:<:]]вася[[:>:]]';
+select 'вася' rlike '[[:<:]]вася[[:>:]]';
 END
 OUTPUT
 select 'вася' regexp '[[:<:]]вася[[:>:]]' from dual
@@ -15983,7 +15983,7 @@ OUTPUT
 select Fld1, max(Fld2) as q from t1 group by Fld1 having q is not null
 END
 INPUT
-select 'zвасяz' regexp '[[:<:]]вася[[:>:]]';
+select 'zвасяz' rlike '[[:<:]]вася[[:>:]]';
 END
 OUTPUT
 select 'zвасяz' regexp '[[:<:]]вася[[:>:]]' from dual
@@ -17465,7 +17465,7 @@ OUTPUT
 select table_type from information_schema.`tables` where table_name = 'v1'
 END
 INPUT
-select _latin1'a' rlike _latin1'A' collate latin1_bin;
+select _latin1'a' regexp _latin1'A' collate latin1_bin;
 END
 OUTPUT
 select _latin1 'a' regexp _latin1 'A' collate latin1_bin from dual
@@ -21413,7 +21413,7 @@ OUTPUT
 select t1.a, t1.b, t2.c from t1 left join t2 on t1.a = t2.a and t1.b = t2.b and t2.c = 3 where t1.a = 1 and t2.c is null
 END
 INPUT
-select 'вася ' regexp '[[:<:]]вася[[:>:]]';
+select 'вася ' rlike '[[:<:]]вася[[:>:]]';
 END
 OUTPUT
 select 'вася ' regexp '[[:<:]]вася[[:>:]]' from dual
