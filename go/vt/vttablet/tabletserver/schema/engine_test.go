@@ -510,7 +510,18 @@ func TestSchemaEngineCloseTickRace(t *testing.T) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	time.Sleep(200 * time.Millisecond)
-	se.ticks.Stop()
+	finished := make(chan bool)
+	go func() {
+		se.ticks.Stop()
+		finished <- true
+	}()
+	// Wait until the ticks are stopped or 2 seonds have expired.
+	select {
+	case <-finished:
+		return
+	case <-time.After(2 * time.Second):
+		t.Fatal("Could not stop the ticks after 2 seconds")
+	}
 }
 
 func newEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, db *fakesqldb.DB) *Engine {
