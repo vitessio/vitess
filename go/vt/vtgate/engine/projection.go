@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"sync"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -82,18 +84,25 @@ func (p *Projection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 // TryStreamExecute implements the Primitive interface
 func (p *Projection) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	var once sync.Once
 	return p.Input.TryStreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		result := &sqltypes.Result{}
-		if len(qr.Fields) > 0 {
-			env.Fields = qr.Fields
-			err := p.addFields(env, result)
-			if err != nil {
-				return err
-			}
-			err = callback(result)
-			if err != nil {
-				return err
-			}
+		var err error
+		if wantfields {
+			once.Do(func() {
+				env.Fields = qr.Fields
+				err = p.addFields(env, result)
+				if err != nil {
+					return
+				}
+				err = callback(result)
+				if err != nil {
+					return
+				}
+			})
+		}
+		if err != nil {
+			return err
 		}
 		resultRows := make([]sqltypes.Row, 0, len(qr.Rows))
 		for _, r := range qr.Rows {
