@@ -193,8 +193,8 @@ func TestCanonicalOutput(t *testing.T) {
 			"SELECT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), REGEXP_LIKE('dog cat dog', 'dog'), REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1), REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}', 1), 'Michael!' REGEXP '.*' FROM `dual`",
 		},
 		{
-			"select regexp_replace('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), REGEXP_LIKE('dog cat dog', 'dog'), REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1), REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}',1), 'Michael!' RLIKE '.*' from dual",
-			"SELECT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), REGEXP_LIKE('dog cat dog', 'dog'), REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1), REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}', 1), 'Michael!' REGEXP '.*' FROM `dual`",
+			"select not regexp_replace('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), not regexp_like('dog cat dog', 'dog'), not regexp_substr('abc def ghi', '[a-z]+', 1), not regexp_instr('aa aaa aaaa aaaa aaaa aaaa', 'a{4}',1), 'Michael!' not rlike '.*' from dual",
+			"SELECT NOT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), NOT REGEXP_LIKE('dog cat dog', 'dog'), NOT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1), NOT REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}', 1), 'Michael!' NOT REGEXP '.*' FROM `dual`",
 		},
 	}
 
