@@ -47,6 +47,11 @@ func TestServerVersionAtLeast(t *testing.T) {
 			expect:  true,
 		},
 		{
+			version: "8.0.14",
+			parts:   []int{7, 5},
+			expect:  true,
+		},
+		{
 			version: "8.0.14-log",
 			parts:   []int{7, 5, 20},
 			expect:  true,
@@ -73,7 +78,7 @@ func TestServerVersionAtLeast(t *testing.T) {
 		},
 	}
 	for _, tc := range testcases {
-		result, err := serverVersionAtLeast(tc.version, tc.parts...)
+		result, err := ServerVersionAtLeast(tc.version, tc.parts...)
 		if tc.expectError {
 			assert.Error(t, err)
 		} else {
