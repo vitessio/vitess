@@ -144,6 +144,7 @@ func isUnrecoverableError(err error) bool {
 		mysql.ERWarnDataTruncated,
 		mysql.ERTruncatedWrongValueForField,
 		mysql.ErrWrongValueForType,
+		mysql.ErrCantCreateGeometryObject,
 		mysql.ErrGISDataWrongEndianess,
 		mysql.ErrNotImplementedForCartesianSRS,
 		mysql.ErrNotImplementedForProjectedSRS,

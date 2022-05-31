@@ -548,10 +548,11 @@ const (
 	ERJSONValueTooBig              = 3150
 	ERJSONDocumentTooDeep          = 3157
 
+	ErrCantCreateGeometryObject      = 1416
+	ErrGISDataWrongEndianess         = 3055
 	ErrNotImplementedForCartesianSRS = 3704
 	ErrNotImplementedForProjectedSRS = 3705
 	ErrNonPositiveRadius             = 3706
-	ErrGISDataWrongEndianess         = 3055
 
 	// server not available
 	ERServerIsntAvailable = 3168
