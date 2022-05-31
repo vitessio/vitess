@@ -1375,8 +1375,9 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 			return false, nil, err
 		}
 		if ksInfo.GetDurabilityPolicy() != "" && ksInfo.GetDurabilityPolicy() != config.Config.Durability {
-			log.Errorf("executeCheckAndRecoverFunction: Analysis: %+v, InstanceKey: %+v: Keyspace has a different durability policy configured than this vtorc instance: %v",
+			err = log.Errorf("executeCheckAndRecoverFunction: Analysis: %+v, InstanceKey: %+v: Keyspace has a different durability policy configured than this vtorc instance: %v",
 				analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, analysisEntry.AnalyzedKeyspace)
+			return false, nil, err
 		}
 
 		// TODO (@GuptaManan100): Refresh only the shard tablet information instead of all the tablets
