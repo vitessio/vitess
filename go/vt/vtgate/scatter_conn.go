@@ -776,16 +776,13 @@ func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSessio
 
 // lockInfo looks at the current session, and returns information about what needs to be done for this tablet
 func lockInfo(target *querypb.Target, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*shardActionInfo, error) {
-	var info *shardActionInfo
+	info := &shardActionInfo{actionNeeded: nothing}
 	if session.LockSession != nil {
 		if !proto.Equal(target, session.LockSession.Target) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "target does match the existing lock session target: (%v, %v)", target, session.LockSession.Target)
 		}
-		info = &shardActionInfo{
-			actionNeeded: nothing,
-			reservedID:   session.LockSession.ReservedId,
-			alias:        session.LockSession.TabletAlias,
-		}
+		info.reservedID = session.LockSession.ReservedId
+		info.alias = session.LockSession.TabletAlias
 	}
 	if lockFuncType != sqlparser.GetLock {
 		return info, nil

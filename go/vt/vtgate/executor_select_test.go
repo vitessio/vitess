@@ -2917,8 +2917,9 @@ func TestSelectLock(t *testing.T) {
 			TabletAlias: sbc1.Tablet().Alias,
 			ReservedId:  1,
 		},
-		FoundRows: 1,
-		RowCount:  -1,
+		AdvisoryLock: map[string]int64{"lock name": 1},
+		FoundRows:    1,
+		RowCount:     -1,
 	}
 
 	_, err := exec(executor, session, "select get_lock('lock name', 10) from dual")
@@ -2931,6 +2932,8 @@ func TestSelectLock(t *testing.T) {
 		Sql:           "select release_lock('lock name') from dual",
 		BindVariables: map[string]*querypb.BindVariable{},
 	})
+	wantSession.AdvisoryLock = nil
+	wantSession.LockSession = nil
 	exec(executor, session, "select release_lock('lock name') from dual")
 	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, wantSession, session.Session, "")

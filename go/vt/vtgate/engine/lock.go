@@ -90,6 +90,14 @@ func (l *Lock) execLock(vcursor VCursor, query string, bindVars map[string]*quer
 	var fields []*querypb.Field
 	var rrow sqltypes.Row
 	for _, lf := range l.LockFunctions {
+		var lName string
+		if lf.Typ.Name != nil {
+			lVal, isLiteral := lf.Typ.Name.(*sqlparser.Literal)
+			if !isLiteral {
+				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %T lock name not supported", lf.Typ.Name)
+			}
+			lName = lVal.Val
+		}
 		qr, err := lf.execLock(vcursor, bindVars, rss[0])
 		if err != nil {
 			return nil, err
@@ -102,7 +110,7 @@ func (l *Lock) execLock(vcursor VCursor, query string, bindVars map[string]*quer
 		case sqlparser.IsFreeLock, sqlparser.IsUsedLock:
 		case sqlparser.GetLock:
 			if lockRes[0].ToString() == "1" {
-				vcursor.Session().AddAdvisoryLock(sqlparser.String(lf.Typ.Name))
+				vcursor.Session().AddAdvisoryLock(lName)
 			}
 		case sqlparser.ReleaseAllLocks:
 			err = vcursor.ReleaseLock()
@@ -112,7 +120,7 @@ func (l *Lock) execLock(vcursor VCursor, query string, bindVars map[string]*quer
 		case sqlparser.ReleaseLock:
 			// TODO: do not execute if lock not taken.
 			if lockRes[0].ToString() == "1" {
-				vcursor.Session().RemoveAdvisoryLock(sqlparser.String(lf.Typ.Name))
+				vcursor.Session().RemoveAdvisoryLock(lName)
 			}
 			if !vcursor.Session().AnyAdvisoryLockTaken() {
 				err = vcursor.ReleaseLock()
