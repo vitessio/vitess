@@ -195,3 +195,20 @@ Thanks to this rewriting we were previously able to plan sharded queries with an
 Queries with an `USING` condition that need to be sent to a sharded keyspace are no longer supported and will return an `unsupported` planner error.
 
 This change was made through pull request [#9767](https://github.com/vitessio/vitess/pull/9767).
+
+### Durability Policy
+
+#### Deprecation of durability_policy flag
+The flag `durability_policy` added to vtctl, vtctld and vtworker binaries has now been deprecated.
+Instead the durability policy for a given keyspace will be stored in the keyspace information in the topo-server.
+
+#### New and Augmented Commands
+The vtctld command `CreateKeyspace` has been augmented to take in an additional argument called `durability_policy` which will
+allow the users to set the correct durability policy at the creation of keyspaces.
+
+For existing keyspaces, a new command `SetKeyspaceDurabilityPolicy` has been added, which allows the users to change the
+durability policy of an existing keyspace.
+
+If semi-sync is not being used then durability policy should be set to `none` in the keyspace information. This is also the default option.
+
+If semi-sync is being used then durability policy should be set to `semi_sync` in the keyspace information and `-enable_semi_sync` should be set in vttablets.
