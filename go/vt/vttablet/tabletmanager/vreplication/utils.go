@@ -145,7 +145,14 @@ func isUnrecoverableError(err error) bool {
 		mysql.ERTruncatedWrongValueForField,
 		mysql.ERBadNullError,
 		mysql.ERDupEntry,
-		mysql.ERNoDefaultForField:
+		mysql.ERNoDefaultForField,
+		mysql.ERInvalidJSONText,
+		mysql.ERInvalidJSONTextInParams,
+		mysql.ERInvalidJSONBinaryData,
+		mysql.ERInvalidJSONCharset,
+		mysql.ERInvalidCastToJSON,
+		mysql.ERJSONValueTooBig,
+		mysql.ERJSONDocumentTooDeep:
 		return true
 	}
 	return false

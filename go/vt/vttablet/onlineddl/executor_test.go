@@ -31,32 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-func TestConstraintOriginalNameRegexp(t *testing.T) {
-	tt := []struct {
-		name     string
-		original string
-	}{
-		{
-			name:     "check1",
-			original: "check1",
-		},
-		{
-			name:     "chk_7c7de6cb4f9b5842b4d0271f40756883_check1",
-			original: "check1",
-		},
-		{
-			name:     "fk_7c7de6cb4f9b5842b4d0271f40756883_check1",
-			original: "check1",
-		},
-	}
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			submatch := constraintOriginalNameRegexp.FindStringSubmatch(tc.name)
-			require.NotEmpty(t, submatch)
-			assert.Equal(t, tc.original, submatch[3])
-		})
-	}
-}
 func TestValidateAndEditCreateTableStatement(t *testing.T) {
 	e := Executor{}
 	tt := []struct {
