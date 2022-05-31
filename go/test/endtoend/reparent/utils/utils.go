@@ -210,6 +210,7 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 	durability := "none"
 	if enableSemiSync {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
+		clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 		durability = "semi_sync"
 	}
 
