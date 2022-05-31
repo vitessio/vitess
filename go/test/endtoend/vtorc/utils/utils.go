@@ -70,10 +70,11 @@ type CellInfo struct {
 
 // VtOrcClusterInfo stores the information for a cluster. This is supposed to be used only for VtOrc tests.
 type VtOrcClusterInfo struct {
-	ClusterInstance *cluster.LocalProcessCluster
-	Ts              *topo.Server
-	CellInfos       []*CellInfo
-	lastUsedValue   int
+	ClusterInstance     *cluster.LocalProcessCluster
+	Ts                  *topo.Server
+	CellInfos           []*CellInfo
+	VtctldClientProcess *cluster.VtctldClientProcess
+	lastUsedValue       int
 }
 
 // CreateClusterAndStartTopo starts the cluster and topology service
@@ -102,13 +103,17 @@ func CreateClusterAndStartTopo(cellInfos []*CellInfo) (*VtOrcClusterInfo, error)
 		return nil, err
 	}
 
+	// store the vtctldclient process
+	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+
 	// create topo server connection
 	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
 	return &VtOrcClusterInfo{
-		ClusterInstance: clusterInstance,
-		Ts:              ts,
-		CellInfos:       cellInfos,
-		lastUsedValue:   100,
+		ClusterInstance:     clusterInstance,
+		Ts:                  ts,
+		CellInfos:           cellInfos,
+		lastUsedValue:       100,
+		VtctldClientProcess: vtctldClientProcess,
 	}, err
 }
 
@@ -307,6 +312,13 @@ func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numRepl
 		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"replica", "rdonly"})
 		require.NoError(t, err)
 	}
+
+	durability := "none"
+	if config.Durability != "" {
+		durability = config.Durability
+	}
+	out, err := clusterInfo.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
+	require.NoError(t, err, out)
 
 	// start vtorc
 	StartVtorcs(t, clusterInfo, orcExtraArgs, config, vtorcCount)
@@ -789,11 +801,13 @@ func SetupNewClusterSemiSync(t *testing.T) *VtOrcClusterInfo {
 		require.NoError(t, err)
 	}
 
+	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
 	clusterInfo := &VtOrcClusterInfo{
-		ClusterInstance: clusterInstance,
-		Ts:              nil,
-		CellInfos:       nil,
-		lastUsedValue:   100,
+		ClusterInstance:     clusterInstance,
+		Ts:                  nil,
+		CellInfos:           nil,
+		lastUsedValue:       100,
+		VtctldClientProcess: vtctldClientProcess,
 	}
 	return clusterInfo
 }
