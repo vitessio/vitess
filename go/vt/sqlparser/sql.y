@@ -439,7 +439,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
 %type <expr> expression frame_expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions
-%type <expr> interval_value simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression
+%type <expr> interval_value simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg
 %type <tableExprs> from_opt table_references from_clause
 %type <tableExpr> table_reference table_factor join_table json_table_function
 %type <jtColumnDefinition> jt_column
@@ -5799,29 +5799,11 @@ UTC_DATE func_paren_opt
   {
     $$ = &FirstOrLastValueExpr{ Type: $1, Expr : $3 , NullTreatmentClause:$5 ,OverClause:$6 }
   }
-| NTILE openb INTEGRAL closeb over_clause
-  {
-    $$ =  &NtileExpr{ N: NewIntLiteral($3), OverClause: $5}
-  }
-//  we are currently using id_or_var. This will require a reiteration later.
-| NTILE openb id_or_var closeb over_clause
-  {
-    $$ =  &NtileExpr{ N: &ColName{Name: $3}, OverClause: $5}
-  }
-| NTILE openb null_as_literal closeb over_clause
+| NTILE openb null_int_variable_arg closeb over_clause
   {
     $$ =  &NtileExpr{N: $3, OverClause: $5}
   }
-| NTH_VALUE openb expression ',' INTEGRAL closeb from_first_last_clause_opt null_treatment_clause_opt over_clause
-  {
-    $$ =  &NTHValueExpr{ Expr: $3, N: NewIntLiteral($5), FromFirstLastClause:$7, NullTreatmentClause:$8, OverClause: $9}
-  }
-//  we are currently using id_or_var. This will require a reiteration later.
-| NTH_VALUE openb expression ',' id_or_var closeb from_first_last_clause_opt null_treatment_clause_opt over_clause
-  {
-    $$ =  &NTHValueExpr{ Expr: $3, N: &ColName{Name: $5}, FromFirstLastClause:$7, NullTreatmentClause:$8, OverClause: $9}
-  }
-| NTH_VALUE openb expression ',' null_as_literal closeb from_first_last_clause_opt null_treatment_clause_opt over_clause
+| NTH_VALUE openb expression ',' null_int_variable_arg closeb from_first_last_clause_opt null_treatment_clause_opt over_clause
   {
     $$ =  &NTHValueExpr{ Expr: $3, N: $5, FromFirstLastClause:$7, NullTreatmentClause:$8, OverClause: $9}
   }
@@ -5829,20 +5811,31 @@ UTC_DATE func_paren_opt
   {
     $$ = &LagLeadExpr{ Type:$1 , Expr: $3, NullTreatmentClause:$5, OverClause: $6 }
   }
-| lag_lead_expr_type openb expression ',' INTEGRAL default_with_comma_opt closeb null_treatment_clause_opt over_clause
-  {
-    $$ = &LagLeadExpr{ Type:$1 , Expr: $3, N: NewIntLiteral($5), Default: $6, NullTreatmentClause:$8, OverClause: $9 }
-  }
-//  we are currently using id_or_var. This will require a reiteration later.
-| lag_lead_expr_type openb expression ',' id_or_var default_with_comma_opt closeb null_treatment_clause_opt over_clause
-  {
-    $$ =  &LagLeadExpr{ Type:$1 , Expr: $3, N: &ColName{Name: $5}, Default: $6, NullTreatmentClause:$8, OverClause: $9}
-  }
-| lag_lead_expr_type openb expression ',' null_as_literal default_with_comma_opt closeb null_treatment_clause_opt over_clause
+| lag_lead_expr_type openb expression ',' null_int_variable_arg default_with_comma_opt closeb null_treatment_clause_opt over_clause
   {
     $$ =  &LagLeadExpr{ Type:$1 , Expr: $3, N: $5, Default: $6, NullTreatmentClause:$8, OverClause: $9}
   }
 | regular_expressions
+
+null_int_variable_arg:
+  null_as_literal
+  {
+    $$ = $1
+  }
+| INTEGRAL
+  {
+    $$ = NewIntLiteral($1)
+  }
+//  we are currently using id_or_var for variables. This will require a reiteration later.
+| id_or_var
+  {
+    $$ = &ColName{Name: $1}
+  }
+| VALUE_ARG
+  {
+    $$ = NewArgument($1[1:])
+    bindVariable(yylex, $1[1:])
+  }
 
 default_with_comma_opt:
   {
