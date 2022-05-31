@@ -72,6 +72,12 @@ const (
 	PutAction    Action = "put"
 	ReloadAction Action = "reload"
 
+	/* shard-specific actions */
+
+	EmergencyReparentShardAction     Action = "emergency_reparent_shard"
+	PlannedReparentShardAction       Action = "planned_reparent_shard"
+	TabletExternallyReparentedAction Action = "tablet_externally_reparented" // NOTE: even though "tablet" is in the name, this actually operates on the tablet's shard.
+
 	/* tablet-specific actions */
 
 	ManageTabletReplicationAction Action = "manage_tablet_replication" // Start/Stop Replication

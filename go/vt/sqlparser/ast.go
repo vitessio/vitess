@@ -2275,8 +2275,9 @@ type (
 	// ConvertExpr represents a call to CONVERT(expr, type)
 	// or it's equivalent CAST(expr AS type). Both are rewritten to the former.
 	ConvertExpr struct {
-		Expr Expr
-		Type *ConvertType
+		Expr  Expr
+		Type  *ConvertType
+		Array bool
 	}
 
 	// ConvertUsingExpr represents a call to CONVERT(expr USING charset).
@@ -2353,8 +2354,12 @@ type (
 		JSONVal Expr
 	}
 
-	// Offset is another AST type that is used during planning and never produced by the parser
-	Offset int
+	// Offset is an AST type that is used during planning and never produced by the parser
+	// it is the column offset from the incoming result stream
+	Offset struct {
+		V        int
+		Original string
+	}
 
 	// JSONArrayExpr represents JSON_ARRAY()
 	// More information on https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-array
@@ -2558,6 +2563,7 @@ type (
 	}
 
 	AggrFunc interface {
+		Expr
 		AggrName() string
 		GetArg() Expr
 		isDistinct() bool
@@ -2592,6 +2598,46 @@ type (
 	Sum struct {
 		Args     Exprs
 		Distinct bool
+	}
+
+	// RegexpInstrExpr represents REGEXP_INSTR()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
+	RegexpInstrExpr struct {
+		Expr         Expr
+		Pattern      Expr
+		Position     Expr
+		Occurrence   Expr
+		ReturnOption Expr
+		MatchType    Expr
+	}
+
+	// RegexpLikeExpr represents REGEXP_LIKE()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
+	RegexpLikeExpr struct {
+		Expr      Expr
+		Pattern   Expr
+		MatchType Expr
+	}
+
+	// RegexpReplaceExpr represents REGEXP_REPLACE()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace
+	RegexpReplaceExpr struct {
+		Expr       Expr
+		Pattern    Expr
+		Repl       Expr
+		Occurrence Expr
+		Position   Expr
+		MatchType  Expr
+	}
+
+	// RegexpSubstrExpr represents REGEXP_SUBSTR()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
+	RegexpSubstrExpr struct {
+		Expr       Expr
+		Pattern    Expr
+		Occurrence Expr
+		Position   Expr
+		MatchType  Expr
 	}
 )
 
@@ -2669,7 +2715,7 @@ func (*ExtractedSubquery) iExpr()                  {}
 func (*TrimFuncExpr) iExpr()                       {}
 func (*JSONSchemaValidFuncExpr) iExpr()            {}
 func (*JSONSchemaValidationReportFuncExpr) iExpr() {}
-func (Offset) iExpr()                              {}
+func (*Offset) iExpr()                             {}
 func (*JSONPrettyExpr) iExpr()                     {}
 func (*JSONStorageFreeExpr) iExpr()                {}
 func (*JSONStorageSizeExpr) iExpr()                {}
@@ -2689,6 +2735,10 @@ func (*JSONValueMergeExpr) iExpr()                 {}
 func (*JSONRemoveExpr) iExpr()                     {}
 func (*JSONUnquoteExpr) iExpr()                    {}
 func (*MemberOfExpr) iExpr()                       {}
+func (*RegexpInstrExpr) iExpr()                    {}
+func (*RegexpLikeExpr) iExpr()                     {}
+func (*RegexpReplaceExpr) iExpr()                  {}
+func (*RegexpSubstrExpr) iExpr()                   {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -2724,6 +2774,10 @@ func (*JSONValueMergeExpr) iCallable()                 {}
 func (*JSONRemoveExpr) iCallable()                     {}
 func (*JSONUnquoteExpr) iCallable()                    {}
 func (*MemberOfExpr) iCallable()                       {}
+func (*RegexpInstrExpr) iCallable()                    {}
+func (*RegexpLikeExpr) iCallable()                     {}
+func (*RegexpReplaceExpr) iCallable()                  {}
+func (*RegexpSubstrExpr) iCallable()                   {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

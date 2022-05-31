@@ -2970,6 +2970,60 @@ var (
 	}, {
 		input:  "CREATE TABLE ts (id INT, purchased DATE) PARTITION BY RANGE( YEAR(purchased) ) SUBPARTITION BY HASH( TO_DAYS(purchased) ) ( PARTITION p0 VALUES LESS THAN (1990) (SUBPARTITION s0,SUBPARTITION s1),PARTITION p1 VALUES LESS THAN (2000),PARTITION p2 VALUES LESS THAN MAXVALUE (SUBPARTITION s2,SUBPARTITION s3));",
 		output: "create table ts (\n\tid INT,\n\tpurchased DATE\n)\npartition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))\n(partition p0 values less than (1990) (subpartition s0, subpartition s1),\n partition p1 values less than (2000),\n partition p2 values less than maxvalue (subpartition s2, subpartition `s3`))",
+	}, {
+		input:  "SELECT REGEXP_INSTR('dog cat dog', 'dog')",
+		output: "select regexp_instr('dog cat dog', 'dog') from dual",
+	}, {
+		input:  "SELECT REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}',1)",
+		output: "select regexp_instr('aa aaa aaaa aaaa aaaa aaaa', 'a{4}', 1) from dual",
+	}, {
+		input:  "SELECT REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}',1,TRIM('2'))",
+		output: "select regexp_instr('aa aaa aaaa aaaa aaaa aaaa', 'a{4}', 1, trim('2')) from dual",
+	}, {
+		input:  "SELECT REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}',1,TRIM('2'),0)",
+		output: "select regexp_instr('aa aaa aaaa aaaa aaaa aaaa', 'a{4}', 1, trim('2'), 0) from dual",
+	}, {
+		input:  "SELECT REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}',1,TRIM('2'),0, 'c')",
+		output: "select regexp_instr('aa aaa aaaa aaaa aaaa aaaa', 'a{4}', 1, trim('2'), 0, 'c') from dual",
+	}, {
+		input:  "SELECT REGEXP_LIKE('dog cat dog', 'dog')",
+		output: "select regexp_like('dog cat dog', 'dog') from dual",
+	}, {
+		input:  "SELECT NOT REGEXP_LIKE('dog cat dog', 'dog')",
+		output: "select not regexp_like('dog cat dog', 'dog') from dual",
+	}, {
+		input:  "SELECT REGEXP_LIKE('aa aaa aaaa aaaa aaaa aaaa', 'a{4}',1)",
+		output: "select regexp_like('aa aaa aaaa aaaa aaaa aaaa', 'a{4}', 1) from dual",
+	}, {
+		input:  "SELECT REGEXP_REPLACE('a b c', 'b', 'X');",
+		output: "select regexp_replace('a b c', 'b', 'X') from dual",
+	}, {
+		input:  "SELECT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1);",
+		output: "select regexp_replace('abc def ghi', '[a-z]+', 'X', 1) from dual",
+	}, {
+		input:  "SELECT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3);",
+		output: "select regexp_replace('abc def ghi', '[a-z]+', 'X', 1, 3) from dual",
+	}, {
+		input:  "SELECT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3, 'c');",
+		output: "select regexp_replace('abc def ghi', '[a-z]+', 'X', 1, 3, 'c') from dual",
+	}, {
+		input:  "SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+');",
+		output: "select regexp_substr('abc def ghi', '[a-z]+') from dual",
+	}, {
+		input:  "SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1);",
+		output: "select regexp_substr('abc def ghi', '[a-z]+', 1) from dual",
+	}, {
+		input:  "SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1, 3);",
+		output: "select regexp_substr('abc def ghi', '[a-z]+', 1, 3) from dual",
+	}, {
+		input:  "SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1, 3, TRIM(' n '));",
+		output: "select regexp_substr('abc def ghi', '[a-z]+', 1, 3, trim(' n ')) from dual",
+	}, {
+		input:  "SELECT 'Michael!' RLIKE '.*';",
+		output: "select 'Michael!' regexp '.*' from dual",
+	}, {
+		input:  "SELECT TRIM('Michael!') RLIKE @j",
+		output: "select trim('Michael!') regexp @j from dual",
 	}}
 )
 
@@ -3576,6 +3630,11 @@ func TestConvert(t *testing.T) {
 		input: "select convert('abc', datetime) from t",
 	}, {
 		input: "select convert('abc', json) from t",
+	}, {
+		input: "select convert(json_keys(c), char(64) array) from t",
+	}, {
+		input:  "select cast(json_keys(c) as char(64) array) from t",
+		output: "select convert(json_keys(c), char(64) array) from t",
 	}}
 
 	for _, tcase := range validSQL {
@@ -4009,6 +4068,9 @@ func TestCreateTable(t *testing.T) {
 			output: `create table t1 (
 	idb varchar(36) character set utf8mb4 collate utf8mb4_0900_ai_ci as (json_unquote(json_extract(jsonobj, _utf8mb4 '$._id'))) stored not null
 )`,
+		},
+		{
+			input: "create table t2 (\n\tid int not null,\n\textra tinyint(1) as (id = 1) stored,\n\tPRIMARY KEY (id)\n)",
 		},
 		// multi-column indexes
 		{
@@ -4906,6 +4968,10 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 		{
 			input:  "create table t (i1 char ascii, i2 char character set ascii, i3 char binary, i4 char unicode binary, i5 char binary unicode, i6 char ascii binary, i7 char binary ascii, i8 char byte, i9 char character set latin1 binary)",
 			output: "create table t (\n\ti1 char character set latin1,\n\ti2 char character set ascii,\n\ti3 char binary,\n\ti4 char character set ucs2 binary,\n\ti5 char character set ucs2 binary,\n\ti6 char character set latin1 binary,\n\ti7 char character set latin1 binary,\n\ti8 binary,\n\ti9 char character set latin1 binary\n)",
+		},
+		{
+			input:  "create table t (id int, info JSON, INDEX zips((CAST(info->'$.field' AS unsigned ARRAY))))",
+			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tINDEX zips ((convert(info -> '$.field', unsigned array)))\n)",
 		},
 	}
 	for _, test := range createTableQueries {

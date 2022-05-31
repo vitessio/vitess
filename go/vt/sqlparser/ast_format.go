@@ -1353,6 +1353,63 @@ func (node *ExtractFuncExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "extract(%s from %v)", node.IntervalTypes.ToString(), node.Expr)
 }
 
+// Format formats the node
+func (node *RegexpInstrExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "regexp_instr(%v, %v", node.Expr, node.Pattern)
+	if node.Position != nil {
+		buf.astPrintf(node, ", %v", node.Position)
+	}
+	if node.Occurrence != nil {
+		buf.astPrintf(node, ", %v", node.Occurrence)
+	}
+	if node.ReturnOption != nil {
+		buf.astPrintf(node, ", %v", node.ReturnOption)
+	}
+	if node.MatchType != nil {
+		buf.astPrintf(node, ", %v", node.MatchType)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *RegexpLikeExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "regexp_like(%v, %v", node.Expr, node.Pattern)
+	if node.MatchType != nil {
+		buf.astPrintf(node, ", %v", node.MatchType)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *RegexpReplaceExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "regexp_replace(%v, %v, %v", node.Expr, node.Pattern, node.Repl)
+	if node.Position != nil {
+		buf.astPrintf(node, ", %v", node.Position)
+	}
+	if node.Occurrence != nil {
+		buf.astPrintf(node, ", %v", node.Occurrence)
+	}
+	if node.MatchType != nil {
+		buf.astPrintf(node, ", %v", node.MatchType)
+	}
+	buf.WriteByte(')')
+}
+
+// Format formats the node
+func (node *RegexpSubstrExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "regexp_substr(%v, %v", node.Expr, node.Pattern)
+	if node.Position != nil {
+		buf.astPrintf(node, ", %v", node.Position)
+	}
+	if node.Occurrence != nil {
+		buf.astPrintf(node, ", %v", node.Occurrence)
+	}
+	if node.MatchType != nil {
+		buf.astPrintf(node, ", %v", node.MatchType)
+	}
+	buf.WriteByte(')')
+}
+
 // Format formats the node.
 func (node *TrimFuncExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%s(", node.TrimFuncType.ToString())
@@ -1457,7 +1514,11 @@ func (node *SubstrExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ConvertExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "convert(%v, %v)", node.Expr, node.Type)
+	buf.astPrintf(node, "convert(%v, %v", node.Expr, node.Type)
+	if node.Array {
+		buf.astPrintf(node, " %s", keywordStrings[ARRAY])
+	}
+	buf.astPrintf(node, ")")
 }
 
 // Format formats the node.
@@ -2144,8 +2205,13 @@ func (node *JtOnResponse) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node Offset) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "[%d]", int(node))
+// Using capital letter for this function as an indicator that it's not a normal function call ¯\_(ツ)_/¯
+func (node *Offset) Format(buf *TrackedBuffer) {
+	if node.Original == "" {
+		buf.astPrintf(node, "OFFSET(%d)", node.V)
+	} else {
+		buf.astPrintf(node, "OFFSET(%d, '%s')", node.V, node.Original)
+	}
 }
 
 // Format formats the node.
@@ -2160,7 +2226,7 @@ func (node *JSONSchemaValidationReportFuncExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *JSONArrayExpr) Format(buf *TrackedBuffer) {
-	//buf.astPrintf(node,"%s(,"node.Name.Lowered())
+	// buf.astPrintf(node,"%s(,"node.Name.Lowered())
 	buf.literal("json_array(")
 	if len(node.Params) > 0 {
 		var prefix string
@@ -2174,7 +2240,7 @@ func (node *JSONArrayExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *JSONObjectExpr) Format(buf *TrackedBuffer) {
-	//buf.astPrintf(node,"%s(,"node.Name.Lowered())
+	// buf.astPrintf(node,"%s(,"node.Name.Lowered())
 	buf.literal("json_object(")
 	if len(node.Params) > 0 {
 		for i, p := range node.Params {

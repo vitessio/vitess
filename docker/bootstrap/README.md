@@ -6,11 +6,12 @@ after successfully running `bootstrap.sh` and `dev.env`.
 The `vitess/bootstrap` image comes in different flavors:
 
 * `vitess/bootstrap:common`    - dependencies that are common to all flavors
-* `vitess/bootstrap:mariadb`   - bootstrap image for MariaDB
-* `vitess/bootstrap:mysql56`   - bootstrap image for MySQL 5.6
+* `vitess/bootstrap:mariadb`   - bootstrap image for MariaDB 10.2
+* `vitess/bootstrap:mariadb103`- bootstrap image for MariaDB 10.3
 * `vitess/bootstrap:mysql57`   - bootstrap image for MySQL 5.7
-* `vitess/bootstrap:percona`   - bootstrap image for Percona Server
+* `vitess/bootstrap:mysql80`   - bootstrap image for MySQL 8.0
 * `vitess/bootstrap:percona57` - bootstrap image for Percona Server 5.7
+* `vitess/bootstrap:percona80` - bootstrap image for Percona Server 8.0
 
 **NOTE: Unlike the base image that builds Vitess itself, this bootstrap image
 will NOT be rebuilt automatically on every push to the Vitess main branch.**
@@ -22,7 +23,7 @@ First build the `common` image, then any flavors you want. For example:
 
 ```sh
 vitess$ docker/bootstrap/build.sh common
-vitess$ docker/bootstrap/build.sh mysql56
+vitess$ docker/bootstrap/build.sh mysql80
 ```
 
 Is it also possible to specify the resulting image name:
@@ -34,13 +35,13 @@ vitess$ docker/bootstrap/build.sh common --image my-common-image
 If custom image names are specified, you might need to set the base image name when building flavors:
 
 ```sh
-vitess$ docker/bootstrap/build.sh mysql56 --base_image my-common-image
+vitess$ docker/bootstrap/build.sh mysql80 --base_image my-common-image
 ```
 
 Both arguments can be combined. For example:
 
 ```sh
-vitess$ docker/bootstrap/build.sh mysql56 --base_image my-common-image --image my-mysql-image
+vitess$ docker/bootstrap/build.sh mysql80 --base_image my-common-image --image my-mysql-image
 ```
 
 ## For Vitess Project Maintainers

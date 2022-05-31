@@ -17,7 +17,6 @@ limitations under the License.
 package schemadiff
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,19 +27,20 @@ import (
 
 func TestCreateTableDiff(t *testing.T) {
 	tt := []struct {
-		name     string
-		from     string
-		to       string
-		fromName string
-		toName   string
-		diff     string
-		diffs    []string
-		cdiff    string
-		cdiffs   []string
-		isError  bool
-		errorMsg string
-		autoinc  int
-		rotation int
+		name       string
+		from       string
+		to         string
+		fromName   string
+		toName     string
+		diff       string
+		diffs      []string
+		cdiff      string
+		cdiffs     []string
+		isError    bool
+		errorMsg   string
+		autoinc    int
+		rotation   int
+		constraint int
 	}{
 		{
 			name: "identical",
@@ -58,6 +58,13 @@ func TestCreateTableDiff(t *testing.T) {
 			to: `create table t (
 						id int primary key
 					)`,
+		},
+		{
+			name:  "column case change",
+			from:  "create table t (id int not null, PRIMARY KEY(id))",
+			to:    "create table t (Id int not null, primary key(id))",
+			diff:  "alter table t modify column Id int not null",
+			cdiff: "ALTER TABLE `t` MODIFY COLUMN `Id` int NOT NULL",
 		},
 		{
 			name: "identical, name change",
@@ -358,6 +365,104 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:  "alter table t1 alter index i_idx invisible",
 			cdiff: "ALTER TABLE `t1` ALTER INDEX `i_idx` INVISIBLE",
 		},
+		// CHECK constraints
+		{
+			name: "identical check constraints",
+			from: "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)))",
+			to:   "create table t2 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)))",
+			diff: "",
+		},
+		{
+			name:       "check constraints, different name, strict",
+			from:       "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `chk_abc123` CHECK ((`i` < 5)))",
+			diff:       "alter table t1 drop check check1, add constraint chk_abc123 check (i < 5)",
+			cdiff:      "ALTER TABLE `t1` DROP CHECK `check1`, ADD CONSTRAINT `chk_abc123` CHECK (`i` < 5)",
+			constraint: ConstraintNamesStrict,
+		},
+		{
+			name:       "check constraints, different name, ignore vitess, non vitess names",
+			from:       "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `chk_abc123` CHECK ((`i` < 5)))",
+			diff:       "alter table t1 drop check check1, add constraint chk_abc123 check (i < 5)",
+			cdiff:      "ALTER TABLE `t1` DROP CHECK `check1`, ADD CONSTRAINT `chk_abc123` CHECK (`i` < 5)",
+			constraint: ConstraintNamesIgnoreVitess,
+		},
+		{
+			name:       "check constraints, different name, ignore vitess, vitess names, no match",
+			from:       "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `check2_7fp024p4rxvr858tsaggvf9dw` CHECK ((`i` < 5)))",
+			diff:       "alter table t1 drop check check1, add constraint check2_7fp024p4rxvr858tsaggvf9dw check (i < 5)",
+			cdiff:      "ALTER TABLE `t1` DROP CHECK `check1`, ADD CONSTRAINT `check2_7fp024p4rxvr858tsaggvf9dw` CHECK (`i` < 5)",
+			constraint: ConstraintNamesIgnoreVitess,
+		},
+		{
+			name:       "check constraints, different name, ignore vitess, vitess names match",
+			from:       "create table t1 (id int primary key, i int, constraint `check2` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `check2_7fp024p4rxvr858tsaggvf9dw` CHECK ((`i` < 5)))",
+			diff:       "",
+			constraint: ConstraintNamesIgnoreVitess,
+		},
+		{
+			name:       "check constraints, different name, ignore all",
+			from:       "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `chk_abc123` CHECK ((`i` < 5)))",
+			diff:       "",
+			constraint: ConstraintNamesIgnoreAll,
+		},
+		{
+			name: "check constraints, different order",
+			from: "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
+			to:   "create table t2 (id int primary key, i int, constraint `check2` CHECK ((`i` > 2)), constraint `check1` CHECK ((`i` < 5)))",
+			diff: "",
+		},
+		{
+			name:       "check constraints, different names & order",
+			from:       "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
+			to:         "create table t2 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `chk_789def` CHECK ((`i` < 5)))",
+			diff:       "",
+			constraint: ConstraintNamesIgnoreAll,
+		},
+		{
+			name:       "check constraints, add",
+			from:       "create table t1 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
+			to:         "create table t2 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `check3` CHECK ((`i` != 3)), constraint `chk_789def` CHECK ((`i` < 5)))",
+			diff:       "alter table t1 add constraint check3 check (i != 3)",
+			cdiff:      "ALTER TABLE `t1` ADD CONSTRAINT `check3` CHECK (`i` != 3)",
+			constraint: ConstraintNamesIgnoreAll,
+		},
+		{
+			name:       "check constraints, remove",
+			from:       "create table t1 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `check3` CHECK ((`i` != 3)), constraint `chk_789def` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
+			diff:       "alter table t1 drop check check3",
+			cdiff:      "ALTER TABLE `t1` DROP CHECK `check3`",
+			constraint: ConstraintNamesIgnoreAll,
+		},
+		{
+			name:       "check constraints, remove, ignore vitess, no match",
+			from:       "create table t1 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `check3` CHECK ((`i` != 3)), constraint `chk_789def` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
+			diff:       "alter table t1 drop check chk_123abc, drop check check3, drop check chk_789def, add constraint check1 check (i < 5), add constraint check2 check (i > 2)",
+			cdiff:      "ALTER TABLE `t1` DROP CHECK `chk_123abc`, DROP CHECK `check3`, DROP CHECK `chk_789def`, ADD CONSTRAINT `check1` CHECK (`i` < 5), ADD CONSTRAINT `check2` CHECK (`i` > 2)",
+			constraint: ConstraintNamesIgnoreVitess,
+		},
+		{
+			name:       "check constraints, remove, ignore vitess, match",
+			from:       "create table t1 (id int primary key, i int, constraint `check2_cukwabxd742sgycn96xj7n87g` CHECK ((`i` > 2)), constraint `check3` CHECK ((`i` != 3)), constraint `check1_19l09s37kbhj4axnzmi10e18k` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
+			diff:       "alter table t1 drop check check3",
+			cdiff:      "ALTER TABLE `t1` DROP CHECK `check3`",
+			constraint: ConstraintNamesIgnoreVitess,
+		},
+		{
+			name:       "check constraints, remove, strict",
+			from:       "create table t1 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `check3` CHECK ((`i` != 3)), constraint `chk_789def` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
+			diff:       "alter table t1 drop check chk_123abc, drop check check3, drop check chk_789def, add constraint check1 check (i < 5), add constraint check2 check (i > 2)",
+			cdiff:      "ALTER TABLE `t1` DROP CHECK `chk_123abc`, DROP CHECK `check3`, DROP CHECK `chk_789def`, ADD CONSTRAINT `check1` CHECK (`i` < 5), ADD CONSTRAINT `check2` CHECK (`i` > 2)",
+			constraint: ConstraintNamesStrict,
+		},
 		// foreign keys
 		{
 			name:  "drop foreign key",
@@ -406,6 +511,13 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key, a int) partition by hash (id) partitions 4",
 			diff:  "alter table t1 add column a int",
 			cdiff: "ALTER TABLE `t1` ADD COLUMN `a` int",
+		},
+		{
+			name:  "partitioning, column case",
+			from:  "create table t1 (id int primary key) partition by hash (id) partitions 4",
+			to:    "create table t1 (id int primary key, a int) partition by hash (ID) partitions 4",
+			diff:  "alter table t1 add column a int \npartition by hash (ID) partitions 4",
+			cdiff: "ALTER TABLE `t1` ADD COLUMN `a` int \nPARTITION BY HASH (`ID`) PARTITIONS 4",
 		},
 		{
 			name:  "remove partitioning",
@@ -802,11 +914,15 @@ func TestCreateTableDiff(t *testing.T) {
 			toCreateTable, ok := toStmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			c := NewCreateTableEntity(fromCreateTable)
-			other := NewCreateTableEntity(toCreateTable)
+			c, err := NewCreateTableEntity(fromCreateTable)
+			require.NoError(t, err)
+			other, err := NewCreateTableEntity(toCreateTable)
+			require.NoError(t, err)
+
 			hints := standardHints
 			hints.AutoIncrementStrategy = ts.autoinc
 			hints.RangeRotationStrategy = ts.rotation
+			hints.ConstraintNamesStrategy = ts.constraint
 			alter, err := c.Diff(other, &hints)
 
 			require.Equal(t, len(ts.diffs), len(ts.cdiffs))
@@ -846,7 +962,7 @@ func TestCreateTableDiff(t *testing.T) {
 						}
 					}
 					// validate we can parse back the statement
-					_, err := sqlparser.Parse(diff)
+					_, err := sqlparser.ParseStrictDDL(diff)
 					assert.NoError(t, err)
 
 					// Validate "from/to" entities
@@ -876,7 +992,7 @@ func TestCreateTableDiff(t *testing.T) {
 				{
 					cdiff := alter.CanonicalStatementString()
 					assert.Equal(t, ts.cdiff, cdiff)
-					_, err := sqlparser.Parse(cdiff)
+					_, err := sqlparser.ParseStrictDDL(cdiff)
 					assert.NoError(t, err)
 				}
 
@@ -893,6 +1009,7 @@ func TestValidate(t *testing.T) {
 		alter     string
 		expectErr error
 	}{
+		// columns
 		{
 			name:  "add column",
 			from:  "create table t (id int primary key)",
@@ -903,13 +1020,20 @@ func TestValidate(t *testing.T) {
 			name:      "duplicate existing column",
 			from:      "create table t (id int primary key, id varchar(10))",
 			alter:     "alter table t add column i int",
-			expectErr: ErrApplyDuplicateColumn,
+			expectErr: &ApplyDuplicateColumnError{Table: "t", Column: "id"},
 		},
+		// keys
 		{
 			name:  "add key",
 			from:  "create table t (id int primary key, i int)",
 			alter: "alter table t add key i_idx(i)",
 			to:    "create table t (id int primary key, i int, key i_idx(i))",
+		},
+		{
+			name:  "add key, column case",
+			from:  "create table t (id int primary key, i int)",
+			alter: "alter table t add key i_idx(I)",
+			to:    "create table t (id int primary key, i int, key i_idx(I))",
 		},
 		{
 			name:  "add column and key",
@@ -921,13 +1045,13 @@ func TestValidate(t *testing.T) {
 			name:      "add key, missing column",
 			from:      "create table t (id int primary key, i int)",
 			alter:     "alter table t add key j_idx(j)",
-			expectErr: ErrInvalidColumnInKey,
+			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "j", Key: "j_idx"},
 		},
 		{
 			name:      "add key, missing column 2",
 			from:      "create table t (id int primary key, i int)",
 			alter:     "alter table t add key j_idx(j, i)",
-			expectErr: ErrInvalidColumnInKey,
+			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "j", Key: "j_idx"},
 		},
 		{
 			name:  "drop column, ok",
@@ -960,16 +1084,22 @@ func TestValidate(t *testing.T) {
 			to:    "create table t (id int primary key, i int, key some_key(id, i), key i_idx(i))",
 		},
 		{
-			name:  "drop column, affect keys with expression",
-			from:  "create table t (id int primary key, i int, key id_idx((IF(id, 0, 1))), key i_idx((IF(i,0,1))))",
-			alter: "alter table t drop column i",
-			to:    "create table t (id int primary key, key id_idx((IF(id, 0, 1))))",
+			name:  "drop column, affect keys 4, column case",
+			from:  "create table t (id int primary key, i int, i2 int, key some_key(id, i), key i_idx(i, I2))",
+			alter: "alter table t drop column i2",
+			to:    "create table t (id int primary key, i int, key some_key(id, i), key i_idx(i))",
 		},
 		{
-			name:  "drop column, affect keys with expression and multi expressions",
-			from:  "create table t (id int primary key, i int, key id_idx((IF(id, 0, 1))), key i_idx((IF(i,0,1)), (IF(id,2,3))))",
-			alter: "alter table t drop column i",
-			to:    "create table t (id int primary key, key id_idx((IF(id, 0, 1))), key i_idx((IF(id,2,3))))",
+			name:      "drop column, affect keys with expression",
+			from:      "create table t (id int primary key, i int, key id_idx((IF(id, 0, 1))), key i_idx((IF(i,0,1))))",
+			alter:     "alter table t drop column i",
+			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "i", Key: "i_idx"},
+		},
+		{
+			name:      "drop column, affect keys with expression and multi expressions",
+			from:      "create table t (id int primary key, i int, key id_idx((IF(id, 0, 1))), key i_idx((IF(i,0,1)), (IF(id,2,3))))",
+			alter:     "alter table t drop column i",
+			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "i", Key: "i_idx"},
 		},
 		{
 			name:  "add multiple keys, multi columns, ok",
@@ -981,19 +1111,26 @@ func TestValidate(t *testing.T) {
 			name:      "add multiple keys, multi columns, missing column",
 			from:      "create table t (id int primary key, i1 int, i2 int, i4 int)",
 			alter:     "alter table t add key i12_idx(i1, i2), add key i32_idx(i3, i2), add key i21_idx(i2, i1)",
-			expectErr: ErrInvalidColumnInKey,
+			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "i3", Key: "i32_idx"},
 		},
+		// partitions
 		{
 			name:      "drop column used by partitions",
 			from:      "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (i) partitions 4",
 			alter:     "alter table t drop column i",
-			expectErr: ErrInvalidColumnInPartition,
+			expectErr: &InvalidColumnInPartitionError{Table: "t", Column: "i"},
+		},
+		{
+			name:      "drop column used by partitions, column case",
+			from:      "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (I) partitions 4",
+			alter:     "alter table t drop column i",
+			expectErr: &InvalidColumnInPartitionError{Table: "t", Column: "i"},
 		},
 		{
 			name:      "drop column used by partitions, function",
 			from:      "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (abs(i)) partitions 4",
 			alter:     "alter table t drop column i",
-			expectErr: ErrInvalidColumnInPartition,
+			expectErr: &InvalidColumnInPartitionError{Table: "t", Column: "i"},
 		},
 		{
 			name:  "unique key covers all partitioned columns",
@@ -1002,17 +1139,18 @@ func TestValidate(t *testing.T) {
 			to:    "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (i) partitions 4",
 		},
 		{
-			name:      "unique key does not all partitioned columns",
+			name:      "unique key does not cover all partitioned columns",
 			from:      "create table t (id int, i int, primary key (id, i)) partition by hash (i) partitions 4",
 			alter:     "alter table t add unique key id_idx(id)",
-			expectErr: ErrMissingParitionColumnInUniqueKey,
+			expectErr: &MissingPartitionColumnInUniqueKeyError{Table: "t", Column: "i", UniqueKey: "id_idx"},
 		},
 		{
 			name:      "add multiple keys, multi columns, missing column",
 			from:      "create table t (id int primary key, i1 int, i2 int, i4 int)",
 			alter:     "alter table t add key i12_idx(i1, i2), add key i32_idx((IF(i3 IS NULL, i2, i3)), i2), add key i21_idx(i2, i1)",
-			expectErr: ErrInvalidColumnInKey,
+			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "i3", Key: "i32_idx"},
 		},
+		// data types
 		{
 			name:  "nullable timestamp",
 			from:  "create table t (id int primary key, t datetime)",
@@ -1029,13 +1167,13 @@ func TestValidate(t *testing.T) {
 			name:      "add range partition, duplicate",
 			from:      "create table t (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20))",
 			alter:     "alter table t add partition (partition p2 values less than (30))",
-			expectErr: ErrApplyDuplicatePartition,
+			expectErr: &ApplyDuplicatePartitionError{Table: "t", Partition: "p2"},
 		},
 		{
 			name:      "add range partition, no partitioning",
 			from:      "create table t (id int primary key)",
 			alter:     "alter table t add partition (partition p2 values less than (30))",
-			expectErr: ErrApplyNoPartitions,
+			expectErr: &ApplyNoPartitionsError{Table: "t"},
 		},
 		{
 			name:  "drop range partition",
@@ -1047,13 +1185,13 @@ func TestValidate(t *testing.T) {
 			name:      "drop range partition, not found",
 			from:      "create table t (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20))",
 			alter:     "alter table t drop partition p7",
-			expectErr: ErrApplyPartitionNotFound,
+			expectErr: &ApplyPartitionNotFoundError{Table: "t", Partition: "p7"},
 		},
 		{
 			name:      "duplicate existing partition name",
 			from:      "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p2 values less than (30))",
 			alter:     "alter table t add column i int",
-			expectErr: ErrApplyDuplicatePartition,
+			expectErr: &ApplyDuplicatePartitionError{Table: "t1", Partition: "p2"},
 		},
 		{
 			name:  "change to visible with alter column",
@@ -1095,19 +1233,86 @@ func TestValidate(t *testing.T) {
 			name:      "drop column used by a generated column",
 			from:      "create table t (id int, i int, neg int as (0-i), primary key (id))",
 			alter:     "alter table t drop column i",
-			expectErr: ErrInvalidColumnInGeneratedColumn,
+			expectErr: &InvalidColumnInGeneratedColumnError{Table: "t", Column: "i", GeneratedColumn: "neg"},
+		},
+		{
+			name:      "drop column used by a generated column, column case",
+			from:      "create table t (id int, i int, neg int as (0-I), primary key (id))",
+			alter:     "alter table t drop column I",
+			expectErr: &InvalidColumnInGeneratedColumnError{Table: "t", Column: "i", GeneratedColumn: "neg"},
 		},
 		{
 			name:      "add generated column referencing nonexistent column",
 			from:      "create table t (id int, primary key (id))",
 			alter:     "alter table t add column neg int as (0-i)",
-			expectErr: ErrInvalidColumnInGeneratedColumn,
+			expectErr: &InvalidColumnInGeneratedColumnError{Table: "t", Column: "i", GeneratedColumn: "neg"},
 		},
 		{
-			name:  "add generated column referencing existent column",
+			name:  "add generated column referencing existing column",
 			from:  "create table t (id int, i int not null default 0, primary key (id))",
 			alter: "alter table t add column neg int as (0-i)",
 			to:    "create table t (id int, i int not null default 0, neg int as (0-i), primary key (id))",
+		},
+		{
+			name:      "drop column used by a functional index",
+			from:      "create table t (id int, d datetime, primary key (id), key m ((month(d))))",
+			alter:     "alter table t drop column d",
+			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "d", Key: "m"},
+		},
+		{
+			name:      "add generated column referencing nonexistent column",
+			from:      "create table t (id int, primary key (id))",
+			alter:     "alter table t add index m ((month(d)))",
+			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "d", Key: "m"},
+		},
+		{
+			name:  "add functional index referencing existing column",
+			from:  "create table t (id int, d datetime, primary key (id))",
+			alter: "alter table t add index m ((month(d)))",
+			to:    "create table t (id int, d datetime, primary key (id), key m ((month(d))))",
+		},
+		{
+			name:  "constraint check which only uses single drop column",
+			from:  "create table t (id int, d datetime, primary key (id), constraint unix_epoch check (d < '1970-01-01'))",
+			alter: "alter table t drop column d",
+			to:    "create table t (id int, primary key (id))",
+		},
+		{
+			name:      "constraint check which uses multiple dropped columns",
+			from:      "create table t (id int, d datetime, e datetime, primary key (id), constraint unix_epoch check (d < '1970-01-01' and e < '1970-01-01'))",
+			alter:     "alter table t drop column d, drop column e",
+			expectErr: &InvalidColumnInCheckConstraintError{Table: "t", Constraint: "unix_epoch", Column: "d"},
+		},
+		{
+			name:      "constraint check which uses multiple dropped columns",
+			from:      "create table t (id int, d datetime, e datetime, primary key (id), constraint unix_epoch check (d < '1970-01-01' and e < '1970-01-01'))",
+			alter:     "alter table t drop column e",
+			expectErr: &InvalidColumnInCheckConstraintError{Table: "t", Constraint: "unix_epoch", Column: "e"},
+		},
+		{
+			name:  "constraint check added",
+			from:  "create table t (id int, d datetime, e datetime, primary key (id))",
+			alter: "alter table t add constraint unix_epoch check (d < '1970-01-01' and e < '1970-01-01')",
+			to:    "create table t (id int, d datetime, e datetime, primary key (id), constraint unix_epoch check (d < '1970-01-01' and e < '1970-01-01'))",
+		},
+		{
+			name:      "constraint check added with invalid column",
+			from:      "create table t (id int, d datetime, e datetime, primary key (id))",
+			alter:     "alter table t add constraint unix_epoch check (d < '1970-01-01' and f < '1970-01-01')",
+			expectErr: &InvalidColumnInCheckConstraintError{Table: "t", Constraint: "unix_epoch", Column: "f"},
+		},
+		// Foreign keys
+		{
+			name:      "existing foreign key, no such column",
+			from:      "create table t (id int primary key, i int, constraint f foreign key (z) references parent(id))",
+			alter:     "alter table t engine=innodb",
+			expectErr: &InvalidColumnInForeignKeyConstraintError{Table: "t", Constraint: "f", Column: "z"},
+		},
+		{
+			name:      "add foreign key, no such column",
+			from:      "create table t (id int primary key, i int)",
+			alter:     "alter table t add constraint f foreign key (z) references parent(id)",
+			expectErr: &InvalidColumnInForeignKeyConstraintError{Table: "t", Constraint: "f", Column: "z"},
 		},
 	}
 	hints := DiffHints{}
@@ -1123,12 +1328,13 @@ func TestValidate(t *testing.T) {
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
 
-			from := NewCreateTableEntity(fromCreateTable)
+			from, err := NewCreateTableEntity(fromCreateTable)
+			require.NoError(t, err)
 			a := &AlterTableEntityDiff{from: from, alterTable: alterTable}
 			applied, err := from.Apply(a)
 			if ts.expectErr != nil {
 				assert.Error(t, err)
-				assert.True(t, errors.Is(err, ts.expectErr), "error mismatch. expected: %v, got: %v", ts.expectErr, err)
+				assert.EqualError(t, err, ts.expectErr.Error())
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, applied)
@@ -1142,7 +1348,8 @@ func TestValidate(t *testing.T) {
 				toCreateTable, ok := stmt.(*sqlparser.CreateTable)
 				require.True(t, ok)
 
-				to := NewCreateTableEntity(toCreateTable)
+				to, err := NewCreateTableEntity(toCreateTable)
+				require.NoError(t, err)
 				diff, err := applied.Diff(to, &hints)
 				require.NoError(t, err)
 				assert.Empty(t, diff, "diff found: %v.\napplied: %v\nto: %v", diff.CanonicalStatementString(), applied.Create().CanonicalStatementString(), to.Create().CanonicalStatementString())
@@ -1193,14 +1400,29 @@ func TestNormalize(t *testing.T) {
 			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
 		},
 		{
-			name: "removes int sizes",
-			from: "create table t (id int primary key, i int(11) default null)",
+			name: "does not remove tinyint(1) size",
+			from: "create table t (id int primary key, i tinyint(1) default null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` tinyint(1)\n)",
+		},
+		{
+			name: "removes other tinyint size",
+			from: "create table t (id int primary key, i tinyint(2) default null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` tinyint\n)",
+		},
+		{
+			name: "removes int size",
+			from: "create table t (id int primary key, i int(1) default null)",
 			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
 		},
 		{
-			name: "removes zerofill and maps to unsigned",
+			name: "removes bigint size",
+			from: "create table t (id int primary key, i bigint(1) default null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` bigint\n)",
+		},
+		{
+			name: "keeps zerofill",
 			from: "create table t (id int primary key, i int zerofill default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int unsigned\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int zerofill\n)",
 		},
 		{
 			name: "removes int sizes case insensitive",
@@ -1298,6 +1520,11 @@ func TestNormalize(t *testing.T) {
 			to:   "CREATE TABLE `t1` (\n\t`id` int PRIMARY KEY,\n\t`i` int,\n\tCONSTRAINT `t1_ibfk_1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n)",
 		},
 		{
+			name: "uses KEY for indexes",
+			from: "create table t (id int primary key, i1 int, index i1_idx(i1))",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1_idx` (`i1`)\n)",
+		},
+		{
 			name: "drops default index type",
 			from: "create table t (id int primary key, i1 int, key i1_idx(i1) using btree)",
 			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1_idx` (`i1`)\n)",
@@ -1335,7 +1562,8 @@ func TestNormalize(t *testing.T) {
 			fromCreateTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			from := NewCreateTableEntity(fromCreateTable)
+			from, err := NewCreateTableEntity(fromCreateTable)
+			require.NoError(t, err)
 			assert.Equal(t, ts.to, sqlparser.CanonicalString(from))
 		})
 	}

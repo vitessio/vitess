@@ -603,6 +603,86 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
+
+	// Technically the next test should belong in onlineddl_revert suite. But we're tking advantage of setup and functionality existing in this tets:
+	// - two shards as opposed to one
+	// - tablet throttling
+	t.Run("Revert a migration completed on one shard and cancelled on another", func(t *testing.T) {
+		// shard 0 will run normally, shard 1 will be throttled
+		defer unthrottleApp(shards[1].Vttablets[0], throttlerAppName)
+		t.Run("throttle shard 1", func(t *testing.T) {
+			_, body, err := throttleApp(shards[1].Vttablets[0], throttlerAppName)
+			assert.NoError(t, err)
+			assert.Contains(t, body, throttlerAppName)
+		})
+
+		var uuid string
+		t.Run("run migrations, expect 1st to complete, 2nd to be running", func(t *testing.T) {
+			uuid = testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)
+			{
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards[:1], uuid, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards[:1], uuid, schema.OnlineDDLStatusComplete)
+			}
+			{
+				// shard 1 is throttled
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards[1:], uuid, normalMigrationWait, schema.OnlineDDLStatusRunning)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards[1:], uuid, schema.OnlineDDLStatusRunning)
+			}
+		})
+		t.Run("check cancel migration", func(t *testing.T) {
+			onlineddl.CheckCancelAllMigrations(t, &vtParams, 1)
+		})
+		t.Run("unthrottle shard 1", func(t *testing.T) {
+			_, body, err := unthrottleApp(shards[1].Vttablets[0], throttlerAppName)
+			assert.NoError(t, err)
+			assert.Contains(t, body, throttlerAppName)
+		})
+		var revertUUID string
+		t.Run("issue revert migration", func(t *testing.T) {
+			revertQuery := fmt.Sprintf("revert vitess_migration '%s'", uuid)
+			rs := onlineddl.VtgateExecQuery(t, &vtParams, revertQuery, "")
+			require.NotNil(t, rs)
+			row := rs.Named().Row()
+			require.NotNil(t, row)
+			revertUUID = row.AsString("uuid", "")
+			assert.NotEmpty(t, revertUUID)
+		})
+		t.Run("expect one revert successful, another failed", func(t *testing.T) {
+			{
+				// shard 0 migration was complete. Revert should be successful
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards[:1], revertUUID, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards[:1], revertUUID, schema.OnlineDDLStatusComplete)
+			}
+			{
+				// shard 0 migration was cancelled. Revert should not be possible
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards[1:], revertUUID, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards[1:], revertUUID, schema.OnlineDDLStatusFailed)
+			}
+		})
+		t.Run("expect two rows in SHOW VITESS_MIGRATIONS", func(t *testing.T) {
+			// This validates that the shards are reflected correctly in output of SHOW VITESS_MIGRATIONS
+			rs := onlineddl.ReadMigrations(t, &vtParams, revertUUID)
+			require.NotNil(t, rs)
+			require.Equal(t, 2, len(rs.Rows))
+			for _, row := range rs.Named().Rows {
+				shard := row["shard"].ToString()
+				status := row["migration_status"].ToString()
+
+				switch shard {
+				case "-80":
+					require.Equal(t, string(schema.OnlineDDLStatusComplete), status)
+				case "80-":
+					require.Equal(t, string(schema.OnlineDDLStatusFailed), status)
+				default:
+					require.NoError(t, fmt.Errorf("unexpected shard name: %s", shard))
+				}
+			}
+		})
+	})
 }
 
 func insertRow(t *testing.T) {

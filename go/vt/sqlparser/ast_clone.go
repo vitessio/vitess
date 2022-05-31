@@ -265,8 +265,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfNotExpr(in)
 	case *NullVal:
 		return CloneRefOfNullVal(in)
-	case Offset:
-		return in
+	case *Offset:
+		return CloneRefOfOffset(in)
 	case OnDup:
 		return CloneOnDup(in)
 	case *OptLike:
@@ -307,6 +307,14 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return in
 	case *ReferenceDefinition:
 		return CloneRefOfReferenceDefinition(in)
+	case *RegexpInstrExpr:
+		return CloneRefOfRegexpInstrExpr(in)
+	case *RegexpLikeExpr:
+		return CloneRefOfRegexpLikeExpr(in)
+	case *RegexpReplaceExpr:
+		return CloneRefOfRegexpReplaceExpr(in)
+	case *RegexpSubstrExpr:
+		return CloneRefOfRegexpSubstrExpr(in)
 	case *Release:
 		return CloneRefOfRelease(in)
 	case *RenameIndex:
@@ -1674,6 +1682,15 @@ func CloneRefOfNullVal(n *NullVal) *NullVal {
 	return &out
 }
 
+// CloneRefOfOffset creates a deep clone of the input.
+func CloneRefOfOffset(n *Offset) *Offset {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
 // CloneOnDup creates a deep clone of the input.
 func CloneOnDup(n OnDup) OnDup {
 	if n == nil {
@@ -1882,6 +1899,62 @@ func CloneRefOfReferenceDefinition(n *ReferenceDefinition) *ReferenceDefinition 
 	out := *n
 	out.ReferencedTable = CloneTableName(n.ReferencedTable)
 	out.ReferencedColumns = CloneColumns(n.ReferencedColumns)
+	return &out
+}
+
+// CloneRefOfRegexpInstrExpr creates a deep clone of the input.
+func CloneRefOfRegexpInstrExpr(n *RegexpInstrExpr) *RegexpInstrExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.Pattern = CloneExpr(n.Pattern)
+	out.Position = CloneExpr(n.Position)
+	out.Occurrence = CloneExpr(n.Occurrence)
+	out.ReturnOption = CloneExpr(n.ReturnOption)
+	out.MatchType = CloneExpr(n.MatchType)
+	return &out
+}
+
+// CloneRefOfRegexpLikeExpr creates a deep clone of the input.
+func CloneRefOfRegexpLikeExpr(n *RegexpLikeExpr) *RegexpLikeExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.Pattern = CloneExpr(n.Pattern)
+	out.MatchType = CloneExpr(n.MatchType)
+	return &out
+}
+
+// CloneRefOfRegexpReplaceExpr creates a deep clone of the input.
+func CloneRefOfRegexpReplaceExpr(n *RegexpReplaceExpr) *RegexpReplaceExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.Pattern = CloneExpr(n.Pattern)
+	out.Repl = CloneExpr(n.Repl)
+	out.Occurrence = CloneExpr(n.Occurrence)
+	out.Position = CloneExpr(n.Position)
+	out.MatchType = CloneExpr(n.MatchType)
+	return &out
+}
+
+// CloneRefOfRegexpSubstrExpr creates a deep clone of the input.
+func CloneRefOfRegexpSubstrExpr(n *RegexpSubstrExpr) *RegexpSubstrExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.Pattern = CloneExpr(n.Pattern)
+	out.Occurrence = CloneExpr(n.Occurrence)
+	out.Position = CloneExpr(n.Position)
+	out.MatchType = CloneExpr(n.MatchType)
 	return &out
 }
 
@@ -2543,6 +2616,30 @@ func CloneRefOfXorExpr(n *XorExpr) *XorExpr {
 	return &out
 }
 
+// CloneAggrFunc creates a deep clone of the input.
+func CloneAggrFunc(in AggrFunc) AggrFunc {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *Avg:
+		return CloneRefOfAvg(in)
+	case *Count:
+		return CloneRefOfCount(in)
+	case *CountStar:
+		return CloneRefOfCountStar(in)
+	case *Max:
+		return CloneRefOfMax(in)
+	case *Min:
+		return CloneRefOfMin(in)
+	case *Sum:
+		return CloneRefOfSum(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // CloneAlterOption creates a deep clone of the input.
 func CloneAlterOption(in AlterOption) AlterOption {
 	if in == nil {
@@ -2659,6 +2756,14 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfMatchExpr(in)
 	case *MemberOfExpr:
 		return CloneRefOfMemberOfExpr(in)
+	case *RegexpInstrExpr:
+		return CloneRefOfRegexpInstrExpr(in)
+	case *RegexpLikeExpr:
+		return CloneRefOfRegexpLikeExpr(in)
+	case *RegexpReplaceExpr:
+		return CloneRefOfRegexpReplaceExpr(in)
+	case *RegexpSubstrExpr:
+		return CloneRefOfRegexpSubstrExpr(in)
 	case *SubstrExpr:
 		return CloneRefOfSubstrExpr(in)
 	case *TimestampFuncExpr:
@@ -2897,10 +3002,18 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfNotExpr(in)
 	case *NullVal:
 		return CloneRefOfNullVal(in)
-	case Offset:
-		return in
+	case *Offset:
+		return CloneRefOfOffset(in)
 	case *OrExpr:
 		return CloneRefOfOrExpr(in)
+	case *RegexpInstrExpr:
+		return CloneRefOfRegexpInstrExpr(in)
+	case *RegexpLikeExpr:
+		return CloneRefOfRegexpLikeExpr(in)
+	case *RegexpReplaceExpr:
+		return CloneRefOfRegexpReplaceExpr(in)
+	case *RegexpSubstrExpr:
+		return CloneRefOfRegexpSubstrExpr(in)
 	case *Subquery:
 		return CloneRefOfSubquery(in)
 	case *SubstrExpr:
@@ -3055,10 +3168,18 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfNotExpr(in)
 	case *NullVal:
 		return CloneRefOfNullVal(in)
-	case Offset:
-		return in
+	case *Offset:
+		return CloneRefOfOffset(in)
 	case *OrExpr:
 		return CloneRefOfOrExpr(in)
+	case *RegexpInstrExpr:
+		return CloneRefOfRegexpInstrExpr(in)
+	case *RegexpLikeExpr:
+		return CloneRefOfRegexpLikeExpr(in)
+	case *RegexpReplaceExpr:
+		return CloneRefOfRegexpReplaceExpr(in)
+	case *RegexpSubstrExpr:
+		return CloneRefOfRegexpSubstrExpr(in)
 	case *Subquery:
 		return CloneRefOfSubquery(in)
 	case *SubstrExpr:

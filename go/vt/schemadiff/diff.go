@@ -58,22 +58,30 @@ func DiffCreateTablesQueries(query1 string, query2 string, hints *DiffHints) (En
 // Either or both of the CreateTable statements can be nil. Based on this, the diff could be
 // nil, CreateTable, DropTable or AlterTable
 func DiffTables(create1 *sqlparser.CreateTable, create2 *sqlparser.CreateTable, hints *DiffHints) (EntityDiff, error) {
-	if create1 != nil && !create1.IsFullyParsed() {
-		return nil, ErrNotFullyParsed
-	}
-	if create2 != nil && !create2.IsFullyParsed() {
-		return nil, ErrNotFullyParsed
-	}
 	switch {
 	case create1 == nil && create2 == nil:
 		return nil, nil
 	case create1 == nil:
-		return NewCreateTableEntity(create2).Create(), nil
+		c2, err := NewCreateTableEntity(create2)
+		if err != nil {
+			return nil, err
+		}
+		return c2.Create(), nil
 	case create2 == nil:
-		return NewCreateTableEntity(create1).Drop(), nil
+		c1, err := NewCreateTableEntity(create1)
+		if err != nil {
+			return nil, err
+		}
+		return c1.Drop(), nil
 	default:
-		c1 := NewCreateTableEntity(create1)
-		c2 := NewCreateTableEntity(create2)
+		c1, err := NewCreateTableEntity(create1)
+		if err != nil {
+			return nil, err
+		}
+		c2, err := NewCreateTableEntity(create2)
+		if err != nil {
+			return nil, err
+		}
 		return c1.Diff(c2, hints)
 	}
 }
@@ -108,26 +116,34 @@ func DiffCreateViewsQueries(query1 string, query2 string, hints *DiffHints) (Ent
 	return DiffViews(fromCreateView, toCreateView, hints)
 }
 
-// DiffTables compares two views and returns the diff from view1 to view2
+// DiffViews compares two views and returns the diff from view1 to view2
 // Either or both of the CreateView statements can be nil. Based on this, the diff could be
 // nil, CreateView, DropView or AlterView
 func DiffViews(create1 *sqlparser.CreateView, create2 *sqlparser.CreateView, hints *DiffHints) (EntityDiff, error) {
-	if create1 != nil && !create1.IsFullyParsed() {
-		return nil, ErrNotFullyParsed
-	}
-	if create2 != nil && !create2.IsFullyParsed() {
-		return nil, ErrNotFullyParsed
-	}
 	switch {
 	case create1 == nil && create2 == nil:
 		return nil, nil
 	case create1 == nil:
-		return NewCreateViewEntity(create2).Create(), nil
+		c2, err := NewCreateViewEntity(create2)
+		if err != nil {
+			return nil, err
+		}
+		return c2.Create(), nil
 	case create2 == nil:
-		return NewCreateViewEntity(create1).Drop(), nil
+		c1, err := NewCreateViewEntity(create1)
+		if err != nil {
+			return nil, err
+		}
+		return c1.Drop(), nil
 	default:
-		c1 := NewCreateViewEntity(create1)
-		c2 := NewCreateViewEntity(create2)
+		c1, err := NewCreateViewEntity(create1)
+		if err != nil {
+			return nil, err
+		}
+		c2, err := NewCreateViewEntity(create2)
+		if err != nil {
+			return nil, err
+		}
 		return c1.Diff(c2, hints)
 	}
 }

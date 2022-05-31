@@ -697,7 +697,7 @@ func (cached *ConvertExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(32)
 	}
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expr.(cachedObject); ok {
@@ -2192,6 +2192,18 @@ func (cached *NotExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *Offset) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Original string
+	size += hack.RuntimeAllocSize(int64(len(cached.Original)))
+	return size
+}
 func (cached *OptLike) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2492,6 +2504,126 @@ func (cached *ReferenceDefinition) CachedSize(alloc bool) int64 {
 		for _, elem := range cached.ReferencedColumns {
 			size += elem.CachedSize(false)
 		}
+	}
+	return size
+}
+func (cached *RegexpInstrExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(96)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Pattern vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Pattern.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Position vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Position.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Occurrence vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Occurrence.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field ReturnOption vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.ReturnOption.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field MatchType vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.MatchType.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *RegexpLikeExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Pattern vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Pattern.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field MatchType vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.MatchType.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *RegexpReplaceExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(96)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Pattern vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Pattern.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Repl vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Repl.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Occurrence vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Occurrence.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Position vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Position.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field MatchType vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.MatchType.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *RegexpSubstrExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(80)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Pattern vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Pattern.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Occurrence vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Occurrence.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Position vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Position.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field MatchType vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.MatchType.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	return size
 }

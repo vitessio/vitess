@@ -196,10 +196,13 @@ type CreateViewEntity struct {
 	sqlparser.CreateView
 }
 
-func NewCreateViewEntity(c *sqlparser.CreateView) *CreateViewEntity {
+func NewCreateViewEntity(c *sqlparser.CreateView) (*CreateViewEntity, error) {
+	if !c.IsFullyParsed() {
+		return nil, &NotFullyParsedError{Entity: c.ViewName.Name.String(), Statement: sqlparser.CanonicalString(c)}
+	}
 	entity := &CreateViewEntity{CreateView: *c}
 	entity.normalize()
-	return entity
+	return entity, nil
 }
 
 func (c *CreateViewEntity) normalize() {
@@ -236,10 +239,10 @@ func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, hints *DiffHints) (
 	otherStmt.ViewName = c.CreateView.ViewName
 
 	if !c.CreateView.IsFullyParsed() {
-		return nil, ErrNotFullyParsed
+		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(&c.CreateView)}
 	}
 	if !otherStmt.IsFullyParsed() {
-		return nil, ErrNotFullyParsed
+		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(&otherStmt)}
 	}
 
 	format := sqlparser.CanonicalString(&c.CreateView)

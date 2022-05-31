@@ -1783,6 +1783,88 @@ func (node *ExtractFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteByte(')')
 }
 
+// formatFast formats the node
+func (node *RegexpInstrExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("regexp_instr(")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Pattern, true)
+	if node.Position != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Position, true)
+	}
+	if node.Occurrence != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Occurrence, true)
+	}
+	if node.ReturnOption != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.ReturnOption, true)
+	}
+	if node.MatchType != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.MatchType, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *RegexpLikeExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("regexp_like(")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Pattern, true)
+	if node.MatchType != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.MatchType, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *RegexpReplaceExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("regexp_replace(")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Pattern, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Repl, true)
+	if node.Position != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Position, true)
+	}
+	if node.Occurrence != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Occurrence, true)
+	}
+	if node.MatchType != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.MatchType, true)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *RegexpSubstrExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("regexp_substr(")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Pattern, true)
+	if node.Position != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Position, true)
+	}
+	if node.Occurrence != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Occurrence, true)
+	}
+	if node.MatchType != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.MatchType, true)
+	}
+	buf.WriteByte(')')
+}
+
 // formatFast formats the node.
 func (node *TrimFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.TrimFuncType.ToString())
@@ -1939,6 +2021,10 @@ func (node *ConvertExpr) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteString(", ")
 	node.Type.formatFast(buf)
+	if node.Array {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[ARRAY])
+	}
 	buf.WriteByte(')')
 }
 
@@ -2793,10 +2879,19 @@ func (node *JtOnResponse) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node Offset) formatFast(buf *TrackedBuffer) {
-	buf.WriteByte('[')
-	buf.WriteString(fmt.Sprintf("%d", int(node)))
-	buf.WriteByte(']')
+// Using capital letter for this function as an indicator that it's not a normal function call ¯\_(ツ)_/¯
+func (node *Offset) formatFast(buf *TrackedBuffer) {
+	if node.Original == "" {
+		buf.WriteString("OFFSET(")
+		buf.WriteString(fmt.Sprintf("%d", node.V))
+		buf.WriteByte(')')
+	} else {
+		buf.WriteString("OFFSET(")
+		buf.WriteString(fmt.Sprintf("%d", node.V))
+		buf.WriteString(", '")
+		buf.WriteString(node.Original)
+		buf.WriteString("')")
+	}
 }
 
 // formatFast formats the node.
@@ -2819,7 +2914,7 @@ func (node *JSONSchemaValidationReportFuncExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *JSONArrayExpr) formatFast(buf *TrackedBuffer) {
-	//buf.astPrintf(node,"%s(,"node.Name.Lowered())
+	// buf.astPrintf(node,"%s(,"node.Name.Lowered())
 	buf.WriteString("json_array(")
 	if len(node.Params) > 0 {
 		var prefix string
@@ -2834,7 +2929,7 @@ func (node *JSONArrayExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *JSONObjectExpr) formatFast(buf *TrackedBuffer) {
-	//buf.astPrintf(node,"%s(,"node.Name.Lowered())
+	// buf.astPrintf(node,"%s(,"node.Name.Lowered())
 	buf.WriteString("json_object(")
 	if len(node.Params) > 0 {
 		for i, p := range node.Params {

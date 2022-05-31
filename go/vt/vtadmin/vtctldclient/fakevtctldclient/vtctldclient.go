@@ -40,7 +40,11 @@ type VtctldClient struct {
 	CreateKeyspaceShouldErr bool
 	DeleteKeyspaceShouldErr bool
 	// Keyed by _sorted_ TabletAlias list string joined by commas.
-	DeleteTabletsResults           map[string]error
+	DeleteTabletsResults          map[string]error
+	EmergencyReparentShardResults map[string]struct {
+		Response *vtctldatapb.EmergencyReparentShardResponse
+		Error    error
+	}
 	FindAllShardsInKeyspaceResults map[string]struct {
 		Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 		Error    error
@@ -77,6 +81,10 @@ type VtctldClient struct {
 		Response *vtctldatapb.GetWorkflowsResponse
 		Error    error
 	}
+	PlannedReparentShardResults map[string]struct {
+		Response *vtctldatapb.PlannedReparentShardResponse
+		Error    error
+	}
 	RefreshStateResults         map[string]error
 	ReloadSchemaKeyspaceResults map[string]struct {
 		Response *vtctldatapb.ReloadSchemaKeyspaceResponse
@@ -99,13 +107,20 @@ type VtctldClient struct {
 		Response *vtctldatapb.ShardReplicationPositionsResponse
 		Error    error
 	}
-	StartReplicationResults map[string]error
-	StopReplicationResults  map[string]error
+	StartReplicationResults           map[string]error
+	StopReplicationResults            map[string]error
+	TabletExternallyReparentedResults map[string]struct {
+		Response *vtctldatapb.TabletExternallyReparentedResponse
+		Error    error
+	}
 }
 
 // Compile-time type assertion to make sure we haven't overriden a method
 // incorrectly.
 var _ vtctldclient.VtctldClient = (*VtctldClient)(nil)
+
+// Close is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) Close() error { return nil }
 
 // CreateKeyspace is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) CreateKeyspace(ctx context.Context, req *vtctldatapb.CreateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.CreateKeyspaceResponse, error) {
@@ -155,6 +170,20 @@ func (fake *VtctldClient) DeleteTablets(ctx context.Context, req *vtctldatapb.De
 		}
 
 		return &vtctldatapb.DeleteTabletsResponse{}, nil
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// EmergencyReparentShard is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) EmergencyReparentShard(ctx context.Context, req *vtctldatapb.EmergencyReparentShardRequest, opts ...grpc.CallOption) (*vtctldatapb.EmergencyReparentShardResponse, error) {
+	if fake.EmergencyReparentShardResults == nil {
+		return nil, fmt.Errorf("%w: EmergencyReparentShardResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := fmt.Sprintf("%s/%s", req.Keyspace, req.Shard)
+	if result, ok := fake.EmergencyReparentShardResults[key]; ok {
+		return result.Response, result.Error
 	}
 
 	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
@@ -271,6 +300,20 @@ func (fake *VtctldClient) GetWorkflows(ctx context.Context, req *vtctldatapb.Get
 	}
 
 	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
+}
+
+// PlannedReparentShard is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) PlannedReparentShard(ctx context.Context, req *vtctldatapb.PlannedReparentShardRequest, opts ...grpc.CallOption) (*vtctldatapb.PlannedReparentShardResponse, error) {
+	if fake.PlannedReparentShardResults == nil {
+		return nil, fmt.Errorf("%w: PlannedReparentShardResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := fmt.Sprintf("%s/%s", req.Keyspace, req.Shard)
+	if result, ok := fake.PlannedReparentShardResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
 }
 
 // RefreshState is part of the vtctldclient.VtctldClient interface.
@@ -409,6 +452,20 @@ func (fake *VtctldClient) StopReplication(ctx context.Context, req *vtctldatapb.
 		}
 
 		return &vtctldatapb.StopReplicationResponse{}, nil
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// TabletExternallyReparented is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) TabletExternallyReparented(ctx context.Context, req *vtctldatapb.TabletExternallyReparentedRequest, opts ...grpc.CallOption) (*vtctldatapb.TabletExternallyReparentedResponse, error) {
+	if fake.TabletExternallyReparentedResults == nil {
+		return nil, fmt.Errorf("%w: TabletExternallyReparentedResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(req.Tablet)
+	if result, ok := fake.TabletExternallyReparentedResults[key]; ok {
+		return result.Response, result.Error
 	}
 
 	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)

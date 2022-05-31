@@ -67,6 +67,8 @@ type orderedAggregate struct {
 	// preProcess is true if one of the aggregates needs preprocessing.
 	preProcess bool
 
+	aggrOnEngine bool
+
 	// aggregates specifies the aggregation parameters for each
 	// aggregation function: function opcode and input column number.
 	aggregates []*engine.AggregateParams
@@ -241,6 +243,7 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 	if len(oa.groupByKeys) == 0 {
 		return &engine.ScalarAggregate{
 			PreProcess:          oa.preProcess,
+			AggrOnEngine:        oa.aggrOnEngine,
 			Aggregates:          oa.aggregates,
 			TruncateColumnCount: oa.truncateColumnCount,
 			Collations:          colls,
@@ -250,6 +253,7 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 
 	return &engine.OrderedAggregate{
 		PreProcess:          oa.preProcess,
+		AggrOnEngine:        oa.aggrOnEngine,
 		Aggregates:          oa.aggregates,
 		GroupByKeys:         oa.groupByKeys,
 		TruncateColumnCount: oa.truncateColumnCount,
@@ -371,7 +375,7 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, expr *sql
 	if !funcExpr.Distinct {
 		return false, nil, nil
 	}
-	if opcode != engine.AggregateCount && opcode != engine.AggregateSum {
+	if opcode != engine.AggregateCount && opcode != engine.AggregateSum && opcode != engine.AggregateCountStar {
 		return false, nil, nil
 	}
 	innerAliased, ok := funcExpr.Exprs[0].(*sqlparser.AliasedExpr)
@@ -415,6 +419,16 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 			oa.truncateColumnCount = len(oa.resultColumns)
 		}
 	}
+	for _, key := range oa.aggregates {
+		switch key.Opcode {
+		case engine.AggregateCount:
+			if key.Alias == "" {
+				key.Alias = key.Opcode.String()
+			}
+			key.Opcode = engine.AggregateSum
+		}
+	}
+
 	return oa.input.Wireup(plan, jt)
 }
 
@@ -437,21 +451,4 @@ func (oa *orderedAggregate) OutputColumns() []sqlparser.SelectExpr {
 // SetTruncateColumnCount sets the truncate column count.
 func (oa *orderedAggregate) SetTruncateColumnCount(count int) {
 	oa.truncateColumnCount = count
-}
-
-// rewriteAggrExpressions is used when our predicate expression contains aggregation.
-// In these cases, we need to rewrite it, so it uses the column output from the ordered aggregate
-func (oa *orderedAggregate) rewriteAggrExpressions() func(*sqlparser.Cursor) bool {
-	return func(cursor *sqlparser.Cursor) bool {
-		sqlNode := cursor.Node()
-		if isAggregate, _ := sqlparser.IsAggregation(sqlNode); isAggregate {
-			fExp := sqlNode.(sqlparser.Expr)
-			for _, aggregate := range oa.aggregates {
-				if sqlparser.EqualsExpr(aggregate.Expr, fExp) {
-					cursor.Replace(sqlparser.Offset(aggregate.Col))
-				}
-			}
-		}
-		return true
-	}
 }
