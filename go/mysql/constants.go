@@ -536,6 +536,7 @@ const (
 	ERQueryInterrupted             = 1317
 	ERTruncatedWrongValueForField  = 1366
 	ERDataTooLong                  = 1406
+	ErrWrongValueForType           = 1411
 	ERWarnDataTruncated            = 1265
 	ERForbidSchemaChange           = 1450
 	ERDataOutOfRange               = 1690
@@ -546,6 +547,11 @@ const (
 	ERInvalidCastToJSON            = 3147
 	ERJSONValueTooBig              = 3150
 	ERJSONDocumentTooDeep          = 3157
+
+	ErrNotImplementedForCartesianSRS = 3704
+	ErrNotImplementedForProjectedSRS = 3705
+	ErrNonPositiveRadius             = 3706
+	ErrGISDataWrongEndianess         = 3055
 
 	// server not available
 	ERServerIsntAvailable = 3168
