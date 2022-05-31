@@ -158,8 +158,10 @@ func TestCreateViewDiff(t *testing.T) {
 			toCreateView, ok := toStmt.(*sqlparser.CreateView)
 			assert.True(t, ok)
 
-			c := NewCreateViewEntity(fromCreateView)
-			other := NewCreateViewEntity(toCreateView)
+			c, err := NewCreateViewEntity(fromCreateView)
+			require.NoError(t, err)
+			other, err := NewCreateViewEntity(toCreateView)
+			require.NoError(t, err)
 			alter, err := c.Diff(other, hints)
 			switch {
 			case ts.isError:
@@ -175,7 +177,7 @@ func TestCreateViewDiff(t *testing.T) {
 					diff := alter.StatementString()
 					assert.Equal(t, ts.diff, diff)
 					// validate we can parse back the statement
-					_, err := sqlparser.Parse(diff)
+					_, err := sqlparser.ParseStrictDDL(diff)
 					assert.NoError(t, err)
 
 					eFrom, eTo := alter.Entities()
@@ -197,7 +199,7 @@ func TestCreateViewDiff(t *testing.T) {
 				{
 					cdiff := alter.CanonicalStatementString()
 					assert.Equal(t, ts.cdiff, cdiff)
-					_, err := sqlparser.Parse(cdiff)
+					_, err := sqlparser.ParseStrictDDL(cdiff)
 					assert.NoError(t, err)
 				}
 			}
@@ -244,7 +246,8 @@ func TestNormalizeView(t *testing.T) {
 			fromCreateView, ok := stmt.(*sqlparser.CreateView)
 			require.True(t, ok)
 
-			from := NewCreateViewEntity(fromCreateView)
+			from, err := NewCreateViewEntity(fromCreateView)
+			require.NoError(t, err)
 			assert.Equal(t, ts.to, sqlparser.CanonicalString(from))
 		})
 	}

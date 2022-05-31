@@ -17,13 +17,11 @@ limitations under the License.
 package aggregation
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
@@ -120,8 +118,7 @@ func TestEqualFilterOnScatter(t *testing.T) {
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a = \"5\"", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a = 5.00", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a, val1 from aggr_test group by val1 having a = 1.00", `[[INT64(1) VARCHAR("a")] [INT64(1) VARCHAR("b")] [INT64(1) VARCHAR("c")] [INT64(1) VARCHAR("d")] [INT64(1) VARCHAR("e")]]`)
-
-			utils.AssertContainsError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) = 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
+			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) = 5", `[[INT64(1)]]`)
 		})
 	}
 }
@@ -179,6 +176,9 @@ func TestAggrOnJoin(t *testing.T) {
 
 	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ a.val1, count(*) as leCount from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1 having leCount = 4",
 		`[[VARCHAR("a") INT64(4)]]`)
+
+	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ a.val1 from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1 having count(*) = 4",
+		`[[VARCHAR("a")]]`)
 }
 
 func TestNotEqualFilterOnScatter(t *testing.T) {
@@ -200,8 +200,7 @@ func TestNotEqualFilterOnScatter(t *testing.T) {
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a != \"1\"", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a != \"5\"", `[]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a != 5.00", `[]`)
-
-			utils.AssertContainsError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) != 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
+			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) != 5", `[]`)
 		})
 	}
 }
@@ -224,8 +223,7 @@ func TestLessFilterOnScatter(t *testing.T) {
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a < \"10\"", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a < \"5\"", `[]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a < 6.00", `[[INT64(5)]]`)
-
-			utils.AssertContainsError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) < 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
+			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) < 5", `[]`)
 		})
 	}
 }
@@ -249,8 +247,7 @@ func TestLessEqualFilterOnScatter(t *testing.T) {
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a <= \"10\"", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a <= \"5\"", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a <= 5.00", `[[INT64(5)]]`)
-
-			utils.AssertContainsError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) <= 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
+			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) <= 5", `[[INT64(1)]]`)
 		})
 	}
 }
@@ -274,8 +271,7 @@ func TestGreaterFilterOnScatter(t *testing.T) {
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a > \"1\"", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a > \"5\"", `[]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a > 4.00", `[[INT64(5)]]`)
-
-			utils.AssertContainsError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) > 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
+			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) > 5", `[]`)
 		})
 	}
 }
@@ -299,25 +295,48 @@ func TestGreaterEqualFilterOnScatter(t *testing.T) {
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a >= \"1\"", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a >= \"5\"", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a >= 5.00", `[[INT64(5)]]`)
-
-			utils.AssertContainsError(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) >= 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
+			mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) >= 5", `[[INT64(1)]]`)
 		})
 	}
 }
 
 func TestGroupByOnlyFullGroupByOff(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
-	conn, err := mysql.Connect(context.Background(), &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
+	mcmp, closer := start(t)
+	defer closer()
 
-	utils.Exec(t, conn, "insert into t9(id1, id2, id3) values(1,'a', '1'), (2,'Abc','2'), (3,'b', '3'), (4,'c', '4'), (5,'test', '5')")
-	utils.Exec(t, conn, "insert into t9(id1, id2, id3) values(6,'a', '11'), (7,'Abc','22'), (8,'b', '33'), (9,'c', '44'), (10,'test', '55')")
-	utils.Exec(t, conn, "set @@sql_mode = ' '")
+	mcmp.Exec("insert into t9(id1, id2, id3) values(1,'a', '1'), (2,'Abc','2'), (3,'b', '3'), (4,'c', '4'), (5,'test', '5')")
+	mcmp.Exec("insert into t9(id1, id2, id3) values(6,'a', '11'), (7,'Abc','22'), (8,'b', '33'), (9,'c', '44'), (10,'test', '55')")
+	mcmp.Exec("set @@sql_mode = ' '")
 
 	// We do not use AssertMatches here because the results for the second column are random
-	utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ id2, id3 from t9 group by id2")
+	_, err := mcmp.ExecAndIgnore("select /*vt+ PLANNER=gen4 */ id2, id3 from t9 group by id2")
+	require.NoError(t, err)
+}
+
+func TestAggOnTopOfLimit(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',6), (2,'a',1), (3,'b',1), (4,'c',3), (5,'c',4), (6,'b',null), (7,null,2), (8,null,null)")
+
+	for _, workload := range []string{"oltp", "olap"} {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
+			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(*) from (select id, val1 from aggr_test where val2 < 4 limit 2) as x", "[[INT64(2)]]")
+			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2)]]")
+			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(*) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(2)]]")
+			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(val1) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(1)]]")
+			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(val2) from (select id, val2 from aggr_test where val2 is null limit 2) as x", "[[INT64(0)]]")
+			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ val1, count(*) from (select id, val1 from aggr_test where val2 < 4 order by val1 limit 2) as x group by val1", `[[NULL INT64(1)] [VARCHAR("a") INT64(1)]]`)
+			mcmp.AssertMatchesNoOrder(" select /*vt+ PLANNER=gen4 */ val1, count(val2) from (select val1, val2 from aggr_test limit 8) as x group by val1", `[[NULL INT64(1)] [VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)]]`)
+
+			// mysql returns FLOAT64(0), vitess returns DECIMAL(0)
+			mcmp.AssertMatchesNoCompare(" select /*vt+ PLANNER=gen4 */ count(*), sum(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) FLOAT64(0)]]", "[[INT64(2) DECIMAL(0)]]")
+			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(val1), sum(id) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) DECIMAL(7)]]")
+			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(*), sum(id) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(2) DECIMAL(14)]]")
+			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(val1), sum(id) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(1) DECIMAL(14)]]")
+			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(val2), sum(val2) from (select id, val2 from aggr_test where val2 is null limit 2) as x", "[[INT64(0) NULL]]")
+			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ val1, count(*), sum(id) from (select id, val1 from aggr_test where val2 < 4 order by val1 limit 2) as x group by val1", `[[NULL INT64(1) DECIMAL(7)] [VARCHAR("a") INT64(1) DECIMAL(2)]]`)
+			mcmp.AssertMatchesNoOrder(" select /*vt+ PLANNER=gen4 */ val1, count(val2), sum(val2) from (select val1, val2 from aggr_test limit 8) as x group by val1", `[[NULL INT64(1) DECIMAL(2)] [VARCHAR("a") INT64(2) DECIMAL(7)] [VARCHAR("b") INT64(1) DECIMAL(1)] [VARCHAR("c") INT64(2) DECIMAL(7)]]`)
+		})
+	}
 }

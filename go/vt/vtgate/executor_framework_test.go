@@ -140,15 +140,7 @@ var executorVSchema = `
 			"params": {
 				"region_bytes": "1"
 			}
-    	},
-		"multicol_vdx": {
-			"type": "multicol",
-			"params": {
-				"column_count": "3",
-				"column_bytes": "1,3,4",
-				"column_vindex": "hash,binary,unicode_loose_xxhash"
-			}
-        }
+    	}
 	},
 	"tables": {
 		"user": {
@@ -328,15 +320,7 @@ var executorVSchema = `
 					"name": "regional_vdx"
 				}
 			]
-    	},
-		"multicoltbl": {
-			"column_vindexes": [
-				{
-					"columns": ["cola","colb","colc"],
-					"name": "multicol_vdx"
-				}
-			]
-		}
+    	}
 	}
 }
 `
@@ -443,7 +427,7 @@ func init() {
 func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
@@ -498,7 +482,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = vschema
 	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
@@ -520,7 +504,7 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 func createCustomExecutorSetValues(vschema string, values []*sqltypes.Result) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = vschema
 	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
@@ -626,7 +610,11 @@ func assertQueriesWithSavepoint(t *testing.T, sbc *sandboxconn.SandboxConn, want
 			if !strings.HasPrefix(expected, "savepoint") {
 				t.Fatal("savepoint expected")
 			}
-			savepointStore[expected[10:]] = got[10:]
+			if sp, exists := savepointStore[expected[10:]]; exists {
+				assert.Equal(t, sp, got[10:])
+			} else {
+				savepointStore[expected[10:]] = got[10:]
+			}
 			continue
 		}
 		if strings.HasPrefix(got, "rollback to") {

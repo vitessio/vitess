@@ -264,8 +264,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfNotExpr(parent, node, replacer)
 	case *NullVal:
 		return a.rewriteRefOfNullVal(parent, node, replacer)
-	case Offset:
-		return a.rewriteOffset(parent, node, replacer)
+	case *Offset:
+		return a.rewriteRefOfOffset(parent, node, replacer)
 	case OnDup:
 		return a.rewriteOnDup(parent, node, replacer)
 	case *OptLike:
@@ -306,6 +306,14 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteReferenceAction(parent, node, replacer)
 	case *ReferenceDefinition:
 		return a.rewriteRefOfReferenceDefinition(parent, node, replacer)
+	case *RegexpInstrExpr:
+		return a.rewriteRefOfRegexpInstrExpr(parent, node, replacer)
+	case *RegexpLikeExpr:
+		return a.rewriteRefOfRegexpLikeExpr(parent, node, replacer)
+	case *RegexpReplaceExpr:
+		return a.rewriteRefOfRegexpReplaceExpr(parent, node, replacer)
+	case *RegexpSubstrExpr:
+		return a.rewriteRefOfRegexpSubstrExpr(parent, node, replacer)
 	case *Release:
 		return a.rewriteRefOfRelease(parent, node, replacer)
 	case *RenameIndex:
@@ -4082,6 +4090,30 @@ func (a *application) rewriteRefOfNullVal(parent SQLNode, node *NullVal, replace
 	}
 	return true
 }
+func (a *application) rewriteRefOfOffset(parent SQLNode, node *Offset, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4703,6 +4735,194 @@ func (a *application) rewriteRefOfReferenceDefinition(parent SQLNode, node *Refe
 	}
 	if !a.rewriteReferenceAction(node, node.OnUpdate, func(newNode, parent SQLNode) {
 		parent.(*ReferenceDefinition).OnUpdate = newNode.(ReferenceAction)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfRegexpInstrExpr(parent SQLNode, node *RegexpInstrExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*RegexpInstrExpr).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Pattern, func(newNode, parent SQLNode) {
+		parent.(*RegexpInstrExpr).Pattern = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Position, func(newNode, parent SQLNode) {
+		parent.(*RegexpInstrExpr).Position = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Occurrence, func(newNode, parent SQLNode) {
+		parent.(*RegexpInstrExpr).Occurrence = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.ReturnOption, func(newNode, parent SQLNode) {
+		parent.(*RegexpInstrExpr).ReturnOption = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.MatchType, func(newNode, parent SQLNode) {
+		parent.(*RegexpInstrExpr).MatchType = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfRegexpLikeExpr(parent SQLNode, node *RegexpLikeExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*RegexpLikeExpr).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Pattern, func(newNode, parent SQLNode) {
+		parent.(*RegexpLikeExpr).Pattern = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.MatchType, func(newNode, parent SQLNode) {
+		parent.(*RegexpLikeExpr).MatchType = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfRegexpReplaceExpr(parent SQLNode, node *RegexpReplaceExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*RegexpReplaceExpr).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Pattern, func(newNode, parent SQLNode) {
+		parent.(*RegexpReplaceExpr).Pattern = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Repl, func(newNode, parent SQLNode) {
+		parent.(*RegexpReplaceExpr).Repl = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Occurrence, func(newNode, parent SQLNode) {
+		parent.(*RegexpReplaceExpr).Occurrence = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Position, func(newNode, parent SQLNode) {
+		parent.(*RegexpReplaceExpr).Position = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.MatchType, func(newNode, parent SQLNode) {
+		parent.(*RegexpReplaceExpr).MatchType = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfRegexpSubstrExpr(parent SQLNode, node *RegexpSubstrExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*RegexpSubstrExpr).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Pattern, func(newNode, parent SQLNode) {
+		parent.(*RegexpSubstrExpr).Pattern = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Occurrence, func(newNode, parent SQLNode) {
+		parent.(*RegexpSubstrExpr).Occurrence = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Position, func(newNode, parent SQLNode) {
+		parent.(*RegexpSubstrExpr).Position = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.MatchType, func(newNode, parent SQLNode) {
+		parent.(*RegexpSubstrExpr).MatchType = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -6700,6 +6920,28 @@ func (a *application) rewriteRefOfXorExpr(parent SQLNode, node *XorExpr, replace
 	}
 	return true
 }
+func (a *application) rewriteAggrFunc(parent SQLNode, node AggrFunc, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	switch node := node.(type) {
+	case *Avg:
+		return a.rewriteRefOfAvg(parent, node, replacer)
+	case *Count:
+		return a.rewriteRefOfCount(parent, node, replacer)
+	case *CountStar:
+		return a.rewriteRefOfCountStar(parent, node, replacer)
+	case *Max:
+		return a.rewriteRefOfMax(parent, node, replacer)
+	case *Min:
+		return a.rewriteRefOfMin(parent, node, replacer)
+	case *Sum:
+		return a.rewriteRefOfSum(parent, node, replacer)
+	default:
+		// this should never happen
+		return true
+	}
+}
 func (a *application) rewriteAlterOption(parent SQLNode, node AlterOption, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6813,6 +7055,14 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *MemberOfExpr:
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
+	case *RegexpInstrExpr:
+		return a.rewriteRefOfRegexpInstrExpr(parent, node, replacer)
+	case *RegexpLikeExpr:
+		return a.rewriteRefOfRegexpLikeExpr(parent, node, replacer)
+	case *RegexpReplaceExpr:
+		return a.rewriteRefOfRegexpReplaceExpr(parent, node, replacer)
+	case *RegexpSubstrExpr:
+		return a.rewriteRefOfRegexpSubstrExpr(parent, node, replacer)
 	case *SubstrExpr:
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *TimestampFuncExpr:
@@ -7037,10 +7287,18 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfNotExpr(parent, node, replacer)
 	case *NullVal:
 		return a.rewriteRefOfNullVal(parent, node, replacer)
-	case Offset:
-		return a.rewriteOffset(parent, node, replacer)
+	case *Offset:
+		return a.rewriteRefOfOffset(parent, node, replacer)
 	case *OrExpr:
 		return a.rewriteRefOfOrExpr(parent, node, replacer)
+	case *RegexpInstrExpr:
+		return a.rewriteRefOfRegexpInstrExpr(parent, node, replacer)
+	case *RegexpLikeExpr:
+		return a.rewriteRefOfRegexpLikeExpr(parent, node, replacer)
+	case *RegexpReplaceExpr:
+		return a.rewriteRefOfRegexpReplaceExpr(parent, node, replacer)
+	case *RegexpSubstrExpr:
+		return a.rewriteRefOfRegexpSubstrExpr(parent, node, replacer)
 	case *Subquery:
 		return a.rewriteRefOfSubquery(parent, node, replacer)
 	case *SubstrExpr:
@@ -7191,10 +7449,18 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfNotExpr(parent, node, replacer)
 	case *NullVal:
 		return a.rewriteRefOfNullVal(parent, node, replacer)
-	case Offset:
-		return a.rewriteOffset(parent, node, replacer)
+	case *Offset:
+		return a.rewriteRefOfOffset(parent, node, replacer)
 	case *OrExpr:
 		return a.rewriteRefOfOrExpr(parent, node, replacer)
+	case *RegexpInstrExpr:
+		return a.rewriteRefOfRegexpInstrExpr(parent, node, replacer)
+	case *RegexpLikeExpr:
+		return a.rewriteRefOfRegexpLikeExpr(parent, node, replacer)
+	case *RegexpReplaceExpr:
+		return a.rewriteRefOfRegexpReplaceExpr(parent, node, replacer)
+	case *RegexpSubstrExpr:
+		return a.rewriteRefOfRegexpSubstrExpr(parent, node, replacer)
 	case *Subquery:
 		return a.rewriteRefOfSubquery(parent, node, replacer)
 	case *SubstrExpr:
@@ -7525,27 +7791,6 @@ func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer repl
 	return true
 }
 func (a *application) rewriteMatchAction(parent SQLNode, node MatchAction, replacer replacerFunc) bool {
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteOffset(parent SQLNode, node Offset, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent

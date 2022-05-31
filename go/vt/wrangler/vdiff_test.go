@@ -395,7 +395,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive: &engine.OrderedAggregate{
 				Aggregates: []*engine.AggregateParams{{
-					Opcode: engine.AggregateCount,
+					Opcode: engine.AggregateSum,
 					Col:    2,
 				}, {
 					Opcode: engine.AggregateSum,
