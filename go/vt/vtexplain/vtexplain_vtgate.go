@@ -104,9 +104,9 @@ func (vte *VTExplain) buildTopology(opts *Options, vschemaStr string, ksShardMap
 		return err
 	}
 	schema := vindexes.BuildVSchema(&srvVSchema)
-	for _, ksSchema := range schema.Keyspaces {
+	for ks, ksSchema := range schema.Keyspaces {
 		if ksSchema.Error != nil {
-			return ksSchema.Error
+			return vterrors.Wrapf(ksSchema.Error, "vschema failed to load on keyspace [%s]", ks)
 		}
 	}
 	vte.explainTopo.Keyspaces = srvVSchema.Keyspaces

@@ -341,14 +341,8 @@ func TestInit(t *testing.T) {
 	vschema := `{
   "ks1": {
     "sharded": true,
-    "vindexes": {
-      "hash": {
-        "type": "hash"
-      }
-    },
     "tables": {
-      "table_missing_primary_vindex": {
-      }
+      "table_missing_primary_vindex": {}
     }
   }
 }`
