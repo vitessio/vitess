@@ -6,9 +6,11 @@ package vschema
 
 import (
 	fmt "fmt"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	io "io"
 	bits "math/bits"
+
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+
 	query "vitess.io/vitess/go/vt/proto/query"
 )
 

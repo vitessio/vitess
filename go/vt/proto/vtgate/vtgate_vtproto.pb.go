@@ -7,10 +7,12 @@ package vtgate
 import (
 	binary "encoding/binary"
 	fmt "fmt"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	io "io"
 	math "math"
 	bits "math/bits"
+
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+
 	binlogdata "vitess.io/vitess/go/vt/proto/binlogdata"
 	query "vitess.io/vitess/go/vt/proto/query"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"

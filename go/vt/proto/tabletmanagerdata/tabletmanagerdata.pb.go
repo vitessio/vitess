@@ -25,10 +25,12 @@
 package tabletmanagerdata
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+
 	logutil "vitess.io/vitess/go/vt/proto/logutil"
 	query "vitess.io/vitess/go/vt/proto/query"
 	replicationdata "vitess.io/vitess/go/vt/proto/replicationdata"

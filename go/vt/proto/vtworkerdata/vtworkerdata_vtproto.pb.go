@@ -6,9 +6,11 @@ package vtworkerdata
 
 import (
 	fmt "fmt"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	io "io"
 	bits "math/bits"
+
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+
 	logutil "vitess.io/vitess/go/vt/proto/logutil"
 )
 

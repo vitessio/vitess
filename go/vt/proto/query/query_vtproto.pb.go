@@ -7,11 +7,13 @@ package query
 import (
 	binary "encoding/binary"
 	fmt "fmt"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	io "io"
 	math "math"
 	bits "math/bits"
 	sync "sync"
+
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
 )

@@ -90,9 +90,7 @@ func TestHandlePathRoot(t *testing.T) {
 
 func TestHandlePathKeyspace(t *testing.T) {
 	cells := []string{"cell1", "cell2", "cell3"}
-	keyspace := &topodatapb.Keyspace{
-		ShardingColumnName: "keyspace_id",
-	}
+	keyspace := &topodatapb.Keyspace{}
 
 	ctx := context.Background()
 	ts := memorytopo.NewServer(cells...)

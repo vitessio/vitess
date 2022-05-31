@@ -48,7 +48,7 @@ func TestAPI(t *testing.T) {
 	defer server.Close()
 
 	// Populate topo. Remove ServedTypes from shards to avoid ordering issues.
-	ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{ShardingColumnName: "shardcol"})
+	ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{})
 	ts.CreateShard(ctx, "ks1", "-80")
 	ts.CreateShard(ctx, "ks1", "80-")
 

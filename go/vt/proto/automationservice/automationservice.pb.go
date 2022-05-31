@@ -24,9 +24,11 @@
 package automationservice
 
 import (
+	reflect "reflect"
+
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	reflect "reflect"
+
 	automation "vitess.io/vitess/go/vt/proto/automation"
 )
 
