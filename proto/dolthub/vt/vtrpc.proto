@@ -21,7 +21,7 @@ option go_package = "github.com/dolthub/vitess/go/vt/proto/vtrpc";
 
 option java_package="io.vitess.proto";
 
-package vtrpc;
+package dolthub.vt.vtrpc;
 
 // CallerID is passed along RPCs to identify the originating client
 // for a request. It is not meant to be secure, but only

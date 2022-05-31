@@ -20,12 +20,12 @@ limitations under the License.
 syntax = "proto3";
 option go_package = "github.com/dolthub/vitess/go/vt/proto/query";
 
-package query;
+package dolthub.vt.query;
 
 option java_package="io.vitess.proto";
 
-import "topodata.proto";
-import "vtrpc.proto";
+import "dolthub/vt/topodata.proto";
+import "dolthub/vt/vtrpc.proto";
 
 // Target describes what the client expects the tablet is.
 // If the tablet does not match, an error is returned.
@@ -414,7 +414,7 @@ message StreamEvent {
 
 // ExecuteRequest is the payload to Execute
 message ExecuteRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   BoundQuery query = 4;
@@ -432,15 +432,15 @@ message ExecuteResponse {
 // TODO: To be used in ExecuteBatchResponse and BeginExecuteBatchResponse.
 message ResultWithError {
   // error contains an query level error, only set if result is unset.
-  vtrpc.RPCError error = 1;
+  dolthub.vt.vtrpc.RPCError error = 1;
 
   // result contains the query result, only set if error is unset.
-  query.QueryResult result = 2;
+  dolthub.vt.query.QueryResult result = 2;
 }
 
 // ExecuteBatchRequest is the payload to ExecuteBatch
 message ExecuteBatchRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   repeated BoundQuery queries = 4;
@@ -456,7 +456,7 @@ message ExecuteBatchResponse {
 
 // StreamExecuteRequest is the payload to StreamExecute
 message StreamExecuteRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   BoundQuery query = 4;
@@ -471,7 +471,7 @@ message StreamExecuteResponse {
 
 // BeginRequest is the payload to Begin
 message BeginRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   ExecuteOptions options = 4;
@@ -484,7 +484,7 @@ message BeginResponse {
 
 // CommitRequest is the payload to Commit
 message CommitRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   int64 transaction_id = 4;
@@ -495,7 +495,7 @@ message CommitResponse {}
 
 // RollbackRequest is the payload to Rollback
 message RollbackRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   int64 transaction_id = 4;
@@ -506,7 +506,7 @@ message RollbackResponse {}
 
 // PrepareRequest is the payload to Prepare
 message PrepareRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   int64 transaction_id = 4;
@@ -518,7 +518,7 @@ message PrepareResponse {}
 
 // CommitPreparedRequest is the payload to CommitPrepared
 message CommitPreparedRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   string dtid = 4;
@@ -529,7 +529,7 @@ message CommitPreparedResponse {}
 
 // RollbackPreparedRequest is the payload to RollbackPrepared
 message RollbackPreparedRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   int64 transaction_id = 4;
@@ -541,7 +541,7 @@ message RollbackPreparedResponse {}
 
 // CreateTransactionRequest is the payload to CreateTransaction
 message CreateTransactionRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   string dtid = 4;
@@ -553,7 +553,7 @@ message CreateTransactionResponse {}
 
 // StartCommitRequest is the payload to StartCommit
 message StartCommitRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   int64 transaction_id = 4;
@@ -565,7 +565,7 @@ message StartCommitResponse {}
 
 // SetRollbackRequest is the payload to SetRollback
 message SetRollbackRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   int64 transaction_id = 4;
@@ -577,7 +577,7 @@ message SetRollbackResponse {}
 
 // ConcludeTransactionRequest is the payload to ConcludeTransaction
 message ConcludeTransactionRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   string dtid = 4;
@@ -588,7 +588,7 @@ message ConcludeTransactionResponse {}
 
 // ReadTransactionRequest is the payload to ReadTransaction
 message ReadTransactionRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   string dtid = 4;
@@ -601,7 +601,7 @@ message ReadTransactionResponse {
 
 // BeginExecuteRequest is the payload to BeginExecute
 message BeginExecuteRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   BoundQuery query = 4;
@@ -613,7 +613,7 @@ message BeginExecuteResponse {
   // error contains an application level error if necessary. Note the
   // transaction_id may be set, even when an error is returned, if the begin
   // worked but the execute failed.
-  vtrpc.RPCError error = 1;
+  dolthub.vt.vtrpc.RPCError error = 1;
 
   QueryResult result = 2;
 
@@ -623,7 +623,7 @@ message BeginExecuteResponse {
 
 // BeginExecuteBatchRequest is the payload to BeginExecuteBatch
 message BeginExecuteBatchRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   repeated BoundQuery queries = 4;
@@ -636,7 +636,7 @@ message BeginExecuteBatchResponse {
   // error contains an application level error if necessary. Note the
   // transaction_id may be set, even when an error is returned, if the begin
   // worked but the execute failed.
-  vtrpc.RPCError error = 1;
+  dolthub.vt.vtrpc.RPCError error = 1;
 
   repeated QueryResult results = 2;
 
@@ -646,7 +646,7 @@ message BeginExecuteBatchResponse {
 
 // MessageStreamRequest is the request payload for MessageStream.
 message MessageStreamRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   // name is the message table name.
@@ -660,7 +660,7 @@ message MessageStreamResponse {
 
 // MessageAckRequest is the request payload for MessageAck.
 message MessageAckRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   // name is the message table name.
@@ -679,7 +679,7 @@ message MessageAckResponse {
 // SplitQueryRequest is the payload for SplitQuery sent by VTGate to a VTTablet.
 // See vtgate.SplitQueryRequest for more details.
 message SplitQueryRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
 
@@ -834,14 +834,14 @@ message StreamHealthResponse {
   // code uses it to verify that it's talking to the correct tablet and that it
   // hasn't changed in the meantime e.g. due to tablet restarts where ports or
   // ips have been reused but assigned differently.
-  topodata.TabletAlias tablet_alias = 5;
+  dolthub.vt.topodata.TabletAlias tablet_alias = 5;
 }
 
 // UpdateStreamRequest is the payload for UpdateStream. At most one of
 // position and timestamp can be set. If neither is set, we will start
 // streaming from the current binlog position.
 message UpdateStreamRequest {
-  vtrpc.CallerID effective_caller_id = 1;
+  dolthub.vt.vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
 

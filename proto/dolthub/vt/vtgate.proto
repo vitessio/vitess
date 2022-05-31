@@ -19,14 +19,14 @@ limitations under the License.
 syntax = "proto3";
 option go_package = "github.com/dolthub/vitess/go/vt/proto/vtgate";
 
-package vtgate;
+package dolthub.vt.vtgate;
 
 option java_package="io.vitess.proto";
 
-import "binlogdata.proto";
-import "query.proto";
-import "topodata.proto";
-import "vtrpc.proto";
+import "dolthub/vt/binlogdata.proto";
+import "dolthub/vt/query.proto";
+import "dolthub/vt/topodata.proto";
+import "dolthub/vt/vtrpc.proto";
 
 // TransactionMode controls the execution of distributed transaction
 // across multiple shards.
@@ -117,14 +117,14 @@ message ExecuteRequest {
   Session session = 2;
 
   // query is the query and bind variables to execute.
-  query.BoundQuery query = 3;
+  dolthub.vt.query.BoundQuery query = 3;
 
   // These values are deprecated. Use session instead.
   // TODO(sougou): remove in 3.1
-  topodata.TabletType tablet_type = 4;
+  dolthub.vt.topodata.TabletType tablet_type = 4;
   bool not_in_transaction = 5;
   string keyspace_shard = 6;
-  query.ExecuteOptions options = 7;
+  dolthub.vt.query.ExecuteOptions options = 7;
 }
 
 // ExecuteResponse is the returned value from Execute.
@@ -138,21 +138,21 @@ message ExecuteResponse {
   Session session = 2;
 
   // result contains the query result, only set if error is unset.
-  query.QueryResult result = 3;
+  dolthub.vt.query.QueryResult result = 3;
 }
 
 // ExecuteShardsRequest is the payload to ExecuteShards.
 message ExecuteShardsRequest {
   // caller_id identifies the caller. This is the effective caller ID,
   // set by the application to further identify the caller.
-  vtrpc.CallerID caller_id = 1;
+  dolthub.vt.vtrpc.CallerID caller_id = 1;
 
   // session carries the current transaction data. It is returned by Begin.
   // Do not fill it in if outside of a transaction.
   Session session = 2;
 
   // query is the query and bind variables to execute.
-  query.BoundQuery query = 3;
+  dolthub.vt.query.BoundQuery query = 3;
 
   // keyspace to target the query to.
   string keyspace = 4;
@@ -161,13 +161,13 @@ message ExecuteShardsRequest {
   repeated string shards = 5;
 
   // tablet_type is the type of tablets that this query is targeted to.
-  topodata.TabletType tablet_type = 6;
+  dolthub.vt.topodata.TabletType tablet_type = 6;
 
   // not_in_transaction is deprecated.
   bool not_in_transaction = 7;
 
   // options
-  query.ExecuteOptions options = 8;
+  dolthub.vt.query.ExecuteOptions options = 8;
 }
 
 // ExecuteShardsResponse is the returned value from ExecuteShards.
@@ -181,7 +181,7 @@ message ExecuteShardsResponse {
   Session session = 2;
 
   // result contains the query result, only set if error is unset.
-  query.QueryResult result = 3;
+  dolthub.vt.query.QueryResult result = 3;
 }
 
 // ExecuteKeyspaceIdsRequest is the payload to ExecuteKeyspaceIds.
@@ -195,7 +195,7 @@ message ExecuteKeyspaceIdsRequest {
   Session session = 2;
 
   // query is the query and bind variables to execute.
-  query.BoundQuery query = 3;
+  dolthub.vt.query.BoundQuery query = 3;
 
   // keyspace to target the query to.
   string keyspace = 4;
@@ -205,13 +205,13 @@ message ExecuteKeyspaceIdsRequest {
   repeated bytes keyspace_ids = 5;
 
   // tablet_type is the type of tablets that this query is targeted to.
-  topodata.TabletType tablet_type = 6;
+  dolthub.vt.topodata.TabletType tablet_type = 6;
 
   // not_in_transaction is deprecated.
   bool not_in_transaction = 7;
 
   // options
-  query.ExecuteOptions options = 8;
+  dolthub.vt.query.ExecuteOptions options = 8;
 }
 
 // ExecuteKeyspaceIdsResponse is the returned value from ExecuteKeyspaceIds.
@@ -219,7 +219,7 @@ message ExecuteKeyspaceIdsResponse {
   // error contains an application level error if necessary. Note the
   // session may have changed, even when an error is returned (for
   // instance if a database integrity error happened).
-  vtrpc.RPCError error = 1;
+  dolthub.vt.vtrpc.RPCError error = 1;
 
   // session is the updated session information (only returned inside a transaction).
   Session session = 2;
@@ -239,23 +239,23 @@ message ExecuteKeyRangesRequest {
   Session session = 2;
 
   // query is the query and bind variables to execute.
-  query.BoundQuery query = 3;
+  dolthub.vt.query.BoundQuery query = 3;
 
   // keyspace to target the query to
   string keyspace = 4;
 
   // key_ranges contains the list of key ranges affected by this query.
   // Will be used to find the shards to send the query to.
-  repeated topodata.KeyRange key_ranges = 5;
+  repeated dolthub.vt.topodata.KeyRange key_ranges = 5;
 
   // tablet_type is the type of tablets that this query is targeted to.
-  topodata.TabletType tablet_type = 6;
+  dolthub.vt.topodata.TabletType tablet_type = 6;
 
   // not_in_transaction is deprecated.
   bool not_in_transaction = 7;
 
   // options
-  query.ExecuteOptions options = 8;
+  dolthub.vt.query.ExecuteOptions options = 8;
 }
 
 // ExecuteKeyRangesResponse is the returned value from ExecuteKeyRanges.
@@ -263,27 +263,27 @@ message ExecuteKeyRangesResponse {
   // error contains an application level error if necessary. Note the
   // session may have changed, even when an error is returned (for
   // instance if a database integrity error happened).
-  vtrpc.RPCError error = 1;
+  dolthub.vt.vtrpc.RPCError error = 1;
 
   // session is the updated session information (only returned inside a transaction).
   Session session = 2;
 
   // result contains the query result, only set if error is unset.
-  query.QueryResult result = 3;
+  dolthub.vt.query.QueryResult result = 3;
 }
 
 // ExecuteEntityIdsRequest is the payload to ExecuteEntityIds.
 message ExecuteEntityIdsRequest {
   // caller_id identifies the caller. This is the effective caller ID,
   // set by the application to further identify the caller.
-  vtrpc.CallerID caller_id = 1;
+  dolthub.vt.vtrpc.CallerID caller_id = 1;
 
   // session carries the current transaction data. It is returned by Begin.
   // Do not fill it in if outside of a transaction.
   Session session = 2;
 
   // query is the query and bind variables to execute.
-  query.BoundQuery query = 3;
+  dolthub.vt.query.BoundQuery query = 3;
 
   // keyspace to target the query to.
   string keyspace = 4;
@@ -293,7 +293,7 @@ message ExecuteEntityIdsRequest {
 
   message EntityId {
     // type is the type of the entity's value. Can be NULL_TYPE.
-    query.Type type = 1;
+    dolthub.vt.query.Type type = 1;
 
     // value is the value for the entity. Not set if type is NULL_TYPE.
     bytes value = 2;
@@ -307,13 +307,13 @@ message ExecuteEntityIdsRequest {
   repeated EntityId entity_keyspace_ids = 6;
 
   // tablet_type is the type of tablets that this query is targeted to.
-  topodata.TabletType tablet_type = 7;
+  dolthub.vt.topodata.TabletType tablet_type = 7;
 
   // not_in_transaction is deprecated.
   bool not_in_transaction = 8;
 
   // options
-  query.ExecuteOptions options = 9;
+  dolthub.vt.query.ExecuteOptions options = 9;
 }
 
 // ExecuteEntityIdsResponse is the returned value from ExecuteEntityIds.
@@ -321,33 +321,33 @@ message ExecuteEntityIdsResponse {
   // error contains an application level error if necessary. Note the
   // session may have changed, even when an error is returned (for
   // instance if a database integrity error happened).
-  vtrpc.RPCError error = 1;
+  dolthub.vt.vtrpc.RPCError error = 1;
 
   // session is the updated session information (only returned inside a transaction).
   Session session = 2;
 
   // result contains the query result, only set if error is unset.
-  query.QueryResult result = 3;
+  dolthub.vt.query.QueryResult result = 3;
 }
 
 // ExecuteBatchRequest is the payload to ExecuteBatch.
 message ExecuteBatchRequest {
   // caller_id identifies the caller. This is the effective caller ID,
   // set by the application to further identify the caller.
-  vtrpc.CallerID caller_id = 1;
+  dolthub.vt.vtrpc.CallerID caller_id = 1;
 
   // session carries the session state.
   Session session = 2;
 
   // queries is a list of query and bind variables to execute.
-  repeated query.BoundQuery queries = 3;
+  repeated dolthub.vt.query.BoundQuery queries = 3;
 
   // These values are deprecated. Use session instead.
   // TODO(sougou): remove in 3.1
-  topodata.TabletType tablet_type = 4;
+  dolthub.vt.topodata.TabletType tablet_type = 4;
   bool as_transaction = 5;
   string keyspace_shard = 6;
-  query.ExecuteOptions options = 7;
+  dolthub.vt.query.ExecuteOptions options = 7;
 }
 
 
@@ -356,13 +356,13 @@ message ExecuteBatchResponse {
   // error contains an application level error if necessary. Note the
   // session may have changed, even when an error is returned (for
   // instance if a database integrity error happened).
-  vtrpc.RPCError error = 1;
+  dolthub.vt.vtrpc.RPCError error = 1;
 
   // session is the updated session information.
   Session session = 2;
 
   // results contains the query results, only set if application level error is unset.
-  repeated query.ResultWithError results = 3;
+  repeated dolthub.vt.query.ResultWithError results = 3;
 }
 
 // BoundShardQuery represents a single query request for the
@@ -370,7 +370,7 @@ message ExecuteBatchResponse {
 // ExecuteBatchShardsRequest.
 message BoundShardQuery {
   // query is the query and bind variables to execute.
-  query.BoundQuery query = 1;
+  dolthub.vt.query.BoundQuery query = 1;
 
   // keyspace to target the query to.
   string keyspace = 2;
@@ -383,7 +383,7 @@ message BoundShardQuery {
 message ExecuteBatchShardsRequest {
   // caller_id identifies the caller. This is the effective caller ID,
   // set by the application to further identify the caller.
-  vtrpc.CallerID caller_id = 1;
+  dolthub.vt.vtrpc.CallerID caller_id = 1;
 
   // session carries the current transaction data. It is returned by Begin.
   // Do not fill it in if outside of a transaction.
@@ -393,7 +393,7 @@ message ExecuteBatchShardsRequest {
   repeated BoundShardQuery queries = 3;
 
   // tablet_type is the type of tablets that this query is targeted to.
-  topodata.TabletType tablet_type = 4;
+  dolthub.vt.topodata.TabletType tablet_type = 4;
 
   // as_transaction will execute the queries in this batch in a single transaction per shard, created for this purpose.
   // (this can be seen as adding a 'begin' before and 'commit' after the queries).
@@ -401,7 +401,7 @@ message ExecuteBatchShardsRequest {
   bool as_transaction = 5;
 
   // options
-  query.ExecuteOptions options = 6;
+  dolthub.vt.query.ExecuteOptions options = 6;
 }
 
 // ExecuteBatchShardsResponse is the returned value from ExecuteBatchShards.
@@ -516,10 +516,10 @@ message StreamExecuteShardsRequest {
   repeated string shards = 4;
 
   // tablet_type is the type of tablets that this query is targeted to.
-  topodata.TabletType tablet_type = 5;
+  dolthub.vt.topodata.TabletType tablet_type = 5;
 
   // options
-  query.ExecuteOptions options = 6;
+  dolthub.vt.query.ExecuteOptions options = 6;
 }
 
 // StreamExecuteShardsResponse is the returned value from StreamExecuteShards.
@@ -527,17 +527,17 @@ message StreamExecuteShardsResponse {
   // result contains the result data.
   // The first value contains only Fields information.
   // The next values contain the actual rows, a few values per result.
-  query.QueryResult result = 1;
+  dolthub.vt.query.QueryResult result = 1;
 }
 
 // StreamExecuteKeyspaceIdsRequest is the payload to StreamExecuteKeyspaceIds.
 message StreamExecuteKeyspaceIdsRequest {
   // caller_id identifies the caller. This is the effective caller ID,
   // set by the application to further identify the caller.
-  vtrpc.CallerID caller_id = 1;
+  dolthub.vt.vtrpc.CallerID caller_id = 1;
 
   // query is the query and bind variables to execute.
-  query.BoundQuery query = 2;
+  dolthub.vt.query.BoundQuery query = 2;
 
   // keyspace to target the query to.
   string keyspace = 3;

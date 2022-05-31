@@ -19,7 +19,7 @@ limitations under the License.
 syntax = "proto3";
 option go_package = "github.com/dolthub/vitess/go/vt/proto/vttime";
 
-package vttime;
+package dolthub.vt.vttime;
 
 // Time represents a time stamp in nanoseconds. In go, use logutil library
 // to convert times.
