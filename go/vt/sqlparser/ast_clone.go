@@ -1599,8 +1599,7 @@ func CloneRefOfLagLeadExpr(n *LagLeadExpr) *LagLeadExpr {
 	}
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
-	out.IntValue = CloneRefOfInt(n.IntValue)
-	out.VarValue = CloneColIdent(n.VarValue)
+	out.N = CloneExpr(n.N)
 	out.Default = CloneExpr(n.Default)
 	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	out.NullTreatmentClause = CloneRefOfNullTreatmentClause(n.NullTreatmentClause)
@@ -1695,8 +1694,7 @@ func CloneRefOfNTHValueExpr(n *NTHValueExpr) *NTHValueExpr {
 	}
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
-	out.IntValue = CloneRefOfInt(n.IntValue)
-	out.VarValue = CloneColIdent(n.VarValue)
+	out.N = CloneExpr(n.N)
 	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	out.FromFirstLastClause = CloneRefOfFromFirstLastClause(n.FromFirstLastClause)
 	out.NullTreatmentClause = CloneRefOfNullTreatmentClause(n.NullTreatmentClause)
@@ -1751,8 +1749,7 @@ func CloneRefOfNtileExpr(n *NtileExpr) *NtileExpr {
 		return nil
 	}
 	out := *n
-	out.IntValue = CloneRefOfInt(n.IntValue)
-	out.VarValue = CloneColIdent(n.VarValue)
+	out.N = CloneExpr(n.N)
 	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
@@ -3738,15 +3735,6 @@ func CloneRefOfJtNestedPathColDef(n *JtNestedPathColDef) *JtNestedPathColDef {
 	return &out
 }
 
-// CloneRefOfInt creates a deep clone of the input.
-func CloneRefOfInt(n *int) *int {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
-}
-
 // CloneTableAndLockTypes creates a deep clone of the input.
 func CloneTableAndLockTypes(n TableAndLockTypes) TableAndLockTypes {
 	if n == nil {
@@ -3769,6 +3757,15 @@ func CloneComments(n Comments) Comments {
 		res = append(res, x)
 	}
 	return res
+}
+
+// CloneRefOfInt creates a deep clone of the input.
+func CloneRefOfInt(n *int) *int {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
 }
 
 // CloneSliceOfRefOfPartitionDefinition creates a deep clone of the input.

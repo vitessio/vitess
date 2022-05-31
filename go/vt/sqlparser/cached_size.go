@@ -2040,16 +2040,16 @@ func (cached *LagLeadExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(80)
 	}
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expr.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field IntValue *int
-	size += hack.RuntimeAllocSize(int64(8))
-	// field VarValue vitess.io/vitess/go/vt/sqlparser.ColIdent
-	size += cached.VarValue.CachedSize(false)
+	// field N vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.N.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	// field Default vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Default.(cachedObject); ok {
 		size += cc.CachedSize(true)
@@ -2180,16 +2180,16 @@ func (cached *NTHValueExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(64)
 	}
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expr.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field IntValue *int
-	size += hack.RuntimeAllocSize(int64(8))
-	// field VarValue vitess.io/vitess/go/vt/sqlparser.ColIdent
-	size += cached.VarValue.CachedSize(false)
+	// field N vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.N.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	// field OverClause *vitess.io/vitess/go/vt/sqlparser.OverClause
 	size += cached.OverClause.CachedSize(true)
 	// field FromFirstLastClause *vitess.io/vitess/go/vt/sqlparser.FromFirstLastClause
@@ -2253,12 +2253,12 @@ func (cached *NtileExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(24)
 	}
-	// field IntValue *int
-	size += hack.RuntimeAllocSize(int64(8))
-	// field VarValue vitess.io/vitess/go/vt/sqlparser.ColIdent
-	size += cached.VarValue.CachedSize(false)
+	// field N vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.N.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	// field OverClause *vitess.io/vitess/go/vt/sqlparser.OverClause
 	size += cached.OverClause.CachedSize(true)
 	return size

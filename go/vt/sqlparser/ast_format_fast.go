@@ -2097,13 +2097,7 @@ func (node *FirstOrLastValueExpr) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node
 func (node *NtileExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("ntile(")
-	if node.IntValue != nil {
-		buf.WriteString(fmt.Sprintf("%d", *node.IntValue))
-	} else if node.IsNull {
-		buf.WriteString("null")
-	} else {
-		node.VarValue.formatFast(buf)
-	}
+	buf.printExpr(node, node.N, true)
 	buf.WriteString(")")
 	if node.OverClause != nil {
 		buf.WriteByte(' ')
@@ -2116,13 +2110,7 @@ func (node *NTHValueExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("nth_value(")
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteString(", ")
-	if node.IntValue != nil {
-		buf.WriteString(fmt.Sprintf("%d", *node.IntValue))
-	} else if node.IsNull {
-		buf.WriteString("null")
-	} else {
-		node.VarValue.formatFast(buf)
-	}
+	buf.printExpr(node, node.N, true)
 	buf.WriteString(")")
 	if node.FromFirstLastClause != nil {
 		node.FromFirstLastClause.formatFast(buf)
@@ -2141,14 +2129,9 @@ func (node *LagLeadExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.Type.ToString())
 	buf.WriteByte('(')
 	buf.printExpr(node, node.Expr, true)
-	if node.IntValue != nil {
+	if node.N != nil {
 		buf.WriteString(", ")
-		buf.WriteString(fmt.Sprintf("%d", *node.IntValue))
-	} else if node.IsNull {
-		buf.WriteString(", null")
-	} else if !node.VarValue.IsEmpty() {
-		buf.WriteString(", ")
-		node.VarValue.formatFast(buf)
+		buf.printExpr(node, node.N, true)
 	}
 	if node.Default != nil {
 		buf.WriteString(", ")

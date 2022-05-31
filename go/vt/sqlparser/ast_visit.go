@@ -2018,7 +2018,7 @@ func VisitRefOfLagLeadExpr(in *LagLeadExpr, f Visit) error {
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
 	}
-	if err := VisitColIdent(in.VarValue, f); err != nil {
+	if err := VisitExpr(in.N, f); err != nil {
 		return err
 	}
 	if err := VisitExpr(in.Default, f); err != nil {
@@ -2138,7 +2138,7 @@ func VisitRefOfNTHValueExpr(in *NTHValueExpr, f Visit) error {
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
 	}
-	if err := VisitColIdent(in.VarValue, f); err != nil {
+	if err := VisitExpr(in.N, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
@@ -2209,7 +2209,7 @@ func VisitRefOfNtileExpr(in *NtileExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitColIdent(in.VarValue, f); err != nil {
+	if err := VisitExpr(in.N, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {

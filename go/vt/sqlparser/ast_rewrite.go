@@ -3838,8 +3838,8 @@ func (a *application) rewriteRefOfLagLeadExpr(parent SQLNode, node *LagLeadExpr,
 	}) {
 		return false
 	}
-	if !a.rewriteColIdent(node, node.VarValue, func(newNode, parent SQLNode) {
-		parent.(*LagLeadExpr).VarValue = newNode.(ColIdent)
+	if !a.rewriteExpr(node, node.N, func(newNode, parent SQLNode) {
+		parent.(*LagLeadExpr).N = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -4109,8 +4109,8 @@ func (a *application) rewriteRefOfNTHValueExpr(parent SQLNode, node *NTHValueExp
 	}) {
 		return false
 	}
-	if !a.rewriteColIdent(node, node.VarValue, func(newNode, parent SQLNode) {
-		parent.(*NTHValueExpr).VarValue = newNode.(ColIdent)
+	if !a.rewriteExpr(node, node.N, func(newNode, parent SQLNode) {
+		parent.(*NTHValueExpr).N = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -4269,8 +4269,8 @@ func (a *application) rewriteRefOfNtileExpr(parent SQLNode, node *NtileExpr, rep
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.VarValue, func(newNode, parent SQLNode) {
-		parent.(*NtileExpr).VarValue = newNode.(ColIdent)
+	if !a.rewriteExpr(node, node.N, func(newNode, parent SQLNode) {
+		parent.(*NtileExpr).N = newNode.(Expr)
 	}) {
 		return false
 	}

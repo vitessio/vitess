@@ -2664,11 +2664,9 @@ func EqualsRefOfLagLeadExpr(a, b *LagLeadExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.IsNull == b.IsNull &&
-		a.Type == b.Type &&
+	return a.Type == b.Type &&
 		EqualsExpr(a.Expr, b.Expr) &&
-		EqualsRefOfInt(a.IntValue, b.IntValue) &&
-		EqualsColIdent(a.VarValue, b.VarValue) &&
+		EqualsExpr(a.N, b.N) &&
 		EqualsExpr(a.Default, b.Default) &&
 		EqualsRefOfOverClause(a.OverClause, b.OverClause) &&
 		EqualsRefOfNullTreatmentClause(a.NullTreatmentClause, b.NullTreatmentClause)
@@ -2777,10 +2775,8 @@ func EqualsRefOfNTHValueExpr(a, b *NTHValueExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.IsNull == b.IsNull &&
-		EqualsExpr(a.Expr, b.Expr) &&
-		EqualsRefOfInt(a.IntValue, b.IntValue) &&
-		EqualsColIdent(a.VarValue, b.VarValue) &&
+	return EqualsExpr(a.Expr, b.Expr) &&
+		EqualsExpr(a.N, b.N) &&
 		EqualsRefOfOverClause(a.OverClause, b.OverClause) &&
 		EqualsRefOfFromFirstLastClause(a.FromFirstLastClause, b.FromFirstLastClause) &&
 		EqualsRefOfNullTreatmentClause(a.NullTreatmentClause, b.NullTreatmentClause)
@@ -2840,9 +2836,7 @@ func EqualsRefOfNtileExpr(a, b *NtileExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.IsNull == b.IsNull &&
-		EqualsRefOfInt(a.IntValue, b.IntValue) &&
-		EqualsColIdent(a.VarValue, b.VarValue) &&
+	return EqualsExpr(a.N, b.N) &&
 		EqualsRefOfOverClause(a.OverClause, b.OverClause)
 }
 
@@ -6192,17 +6186,6 @@ func EqualsRefOfJtNestedPathColDef(a, b *JtNestedPathColDef) bool {
 		EqualsSliceOfRefOfJtColumnDefinition(a.Columns, b.Columns)
 }
 
-// EqualsRefOfInt does deep equals between the two objects.
-func EqualsRefOfInt(a, b *int) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return *a == *b
-}
-
 // EqualsTableAndLockTypes does deep equals between the two objects.
 func EqualsTableAndLockTypes(a, b TableAndLockTypes) bool {
 	if len(a) != len(b) {
@@ -6227,6 +6210,17 @@ func EqualsComments(a, b Comments) bool {
 		}
 	}
 	return true
+}
+
+// EqualsRefOfInt does deep equals between the two objects.
+func EqualsRefOfInt(a, b *int) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
 }
 
 // EqualsSliceOfRefOfPartitionDefinition does deep equals between the two objects.

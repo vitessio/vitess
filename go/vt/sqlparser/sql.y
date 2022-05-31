@@ -5801,31 +5801,29 @@ UTC_DATE func_paren_opt
   }
 | NTILE openb INTEGRAL closeb over_clause
   {
-    val := convertStringToInt($3)
-    $$ =  &NtileExpr{ IntValue: &val, OverClause: $5}
+    $$ =  &NtileExpr{ N: NewIntLiteral($3), OverClause: $5}
   }
 //  we are currently using id_or_var. This will require a reiteration later.
 | NTILE openb id_or_var closeb over_clause
   {
-    $$ =  &NtileExpr{ VarValue: $3, OverClause: $5}
+    $$ =  &NtileExpr{ N: &ColName{Name: $3}, OverClause: $5}
   }
 | NTILE openb null_as_literal closeb over_clause
   {
-    $$ =  &NtileExpr{ IsNull: true, OverClause: $5}
+    $$ =  &NtileExpr{N: $3, OverClause: $5}
   }
 | NTH_VALUE openb expression ',' INTEGRAL closeb from_first_last_clause_opt null_treatment_clause_opt over_clause
   {
-    val := convertStringToInt($5)
-    $$ =  &NTHValueExpr{ Expr: $3, IntValue: &val, FromFirstLastClause:$7, NullTreatmentClause:$8, OverClause: $9}
+    $$ =  &NTHValueExpr{ Expr: $3, N: NewIntLiteral($5), FromFirstLastClause:$7, NullTreatmentClause:$8, OverClause: $9}
   }
 //  we are currently using id_or_var. This will require a reiteration later.
 | NTH_VALUE openb expression ',' id_or_var closeb from_first_last_clause_opt null_treatment_clause_opt over_clause
   {
-    $$ =  &NTHValueExpr{ Expr: $3, VarValue: $5, FromFirstLastClause:$7, NullTreatmentClause:$8, OverClause: $9}
+    $$ =  &NTHValueExpr{ Expr: $3, N: &ColName{Name: $5}, FromFirstLastClause:$7, NullTreatmentClause:$8, OverClause: $9}
   }
 | NTH_VALUE openb expression ',' null_as_literal closeb from_first_last_clause_opt null_treatment_clause_opt over_clause
   {
-    $$ =  &NTHValueExpr{ Expr: $3, IsNull: true, FromFirstLastClause:$7, NullTreatmentClause:$8, OverClause: $9}
+    $$ =  &NTHValueExpr{ Expr: $3, N: $5, FromFirstLastClause:$7, NullTreatmentClause:$8, OverClause: $9}
   }
 | lag_lead_expr_type openb expression closeb null_treatment_clause_opt over_clause
   {
@@ -5833,17 +5831,16 @@ UTC_DATE func_paren_opt
   }
 | lag_lead_expr_type openb expression ',' INTEGRAL default_with_comma_opt closeb null_treatment_clause_opt over_clause
   {
-    val := convertStringToInt($5)
-    $$ = &LagLeadExpr{ Type:$1 , Expr: $3, IntValue: &val, Default: $6, NullTreatmentClause:$8, OverClause: $9 }
+    $$ = &LagLeadExpr{ Type:$1 , Expr: $3, N: NewIntLiteral($5), Default: $6, NullTreatmentClause:$8, OverClause: $9 }
   }
 //  we are currently using id_or_var. This will require a reiteration later.
 | lag_lead_expr_type openb expression ',' id_or_var default_with_comma_opt closeb null_treatment_clause_opt over_clause
   {
-    $$ =  &LagLeadExpr{ Type:$1 , Expr: $3, VarValue: $5, Default: $6, NullTreatmentClause:$8, OverClause: $9}
+    $$ =  &LagLeadExpr{ Type:$1 , Expr: $3, N: &ColName{Name: $5}, Default: $6, NullTreatmentClause:$8, OverClause: $9}
   }
 | lag_lead_expr_type openb expression ',' null_as_literal default_with_comma_opt closeb null_treatment_clause_opt over_clause
   {
-    $$ =  &LagLeadExpr{ Type:$1 , Expr: $3, IsNull: true, Default: $6, NullTreatmentClause:$8, OverClause: $9}
+    $$ =  &LagLeadExpr{ Type:$1 , Expr: $3, N: $5, Default: $6, NullTreatmentClause:$8, OverClause: $9}
   }
 | regular_expressions
 

@@ -1587,13 +1587,7 @@ func (node *FirstOrLastValueExpr) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *NtileExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "ntile(")
-	if node.IntValue != nil {
-		buf.astPrintf(node, "%d", *node.IntValue)
-	} else if node.IsNull {
-		buf.WriteString("null")
-	} else {
-		buf.astPrintf(node, "%v", node.VarValue)
-	}
+	buf.astPrintf(node, "%v", node.N)
 	buf.WriteString(")")
 	if node.OverClause != nil {
 		buf.astPrintf(node, " %v", node.OverClause)
@@ -1603,13 +1597,7 @@ func (node *NtileExpr) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *NTHValueExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "nth_value(%v, ", node.Expr)
-	if node.IntValue != nil {
-		buf.astPrintf(node, "%d", *node.IntValue)
-	} else if node.IsNull {
-		buf.WriteString("null")
-	} else {
-		buf.astPrintf(node, "%v", node.VarValue)
-	}
+	buf.astPrintf(node, "%v", node.N)
 	buf.WriteString(")")
 	if node.FromFirstLastClause != nil {
 		buf.astPrintf(node, "%v", node.FromFirstLastClause)
@@ -1625,12 +1613,8 @@ func (node *NTHValueExpr) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *LagLeadExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%s(%v", node.Type.ToString(), node.Expr)
-	if node.IntValue != nil {
-		buf.astPrintf(node, ", %d", *node.IntValue)
-	} else if node.IsNull {
-		buf.WriteString(", null")
-	} else if !node.VarValue.IsEmpty() {
-		buf.astPrintf(node, ", %v", node.VarValue)
+	if node.N != nil {
+		buf.astPrintf(node, ", %v", node.N)
 	}
 	if node.Default != nil {
 		buf.astPrintf(node, ", %v", node.Default)

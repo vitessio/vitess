@@ -2703,18 +2703,14 @@ type (
 
 	// NtileExpr stands for the NTILE()
 	NtileExpr struct {
-		IntValue   *int
-		VarValue   ColIdent
-		IsNull     bool
+		N          Expr
 		OverClause *OverClause
 	}
 
 	// NTHValueExpr stands for the NTH_VALUE()
 	NTHValueExpr struct {
 		Expr                Expr
-		IntValue            *int
-		VarValue            ColIdent
-		IsNull              bool
+		N                   Expr
 		OverClause          *OverClause
 		FromFirstLastClause *FromFirstLastClause
 		NullTreatmentClause *NullTreatmentClause
@@ -2724,9 +2720,7 @@ type (
 	LagLeadExpr struct {
 		Type                LagLeadExprType
 		Expr                Expr
-		IntValue            *int
-		VarValue            ColIdent
-		IsNull              bool
+		N                   Expr
 		Default             Expr
 		OverClause          *OverClause
 		NullTreatmentClause *NullTreatmentClause
