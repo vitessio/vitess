@@ -25,6 +25,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -100,6 +102,12 @@ func (vte *VTExplain) buildTopology(opts *Options, vschemaStr string, ksShardMap
 	err := json2.Unmarshal([]byte(wrappedStr), &srvVSchema)
 	if err != nil {
 		return err
+	}
+	schema := vindexes.BuildVSchema(&srvVSchema)
+	for _, ksSchema := range schema.Keyspaces {
+		if ksSchema.Error != nil {
+			return ksSchema.Error
+		}
 	}
 	vte.explainTopo.Keyspaces = srvVSchema.Keyspaces
 
