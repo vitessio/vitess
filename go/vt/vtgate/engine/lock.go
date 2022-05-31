@@ -19,10 +19,13 @@ package engine
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/srvtopo"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -81,14 +84,63 @@ func (l *Lock) execLock(vcursor VCursor, query string, bindVars map[string]*quer
 		return nil, err
 	}
 	if len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "lock query can be routed to single shard only: %v", rss)
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "lock query can be routed to single shard only: %v", rss)
 	}
 
+	var fields []*querypb.Field
+	var rrow sqltypes.Row
+	for _, lf := range l.LockFunctions {
+		qr, err := lf.execLock(vcursor, bindVars, rss[0])
+		if err != nil {
+			return nil, err
+		}
+		fields = append(fields, qr.Fields...)
+		lockRes := qr.Rows[0]
+		rrow = append(rrow, lockRes...)
+
+		switch lf.Typ.Type {
+		case sqlparser.IsFreeLock, sqlparser.IsUsedLock:
+		case sqlparser.GetLock:
+			if lockRes[0].ToString() == "1" {
+				vcursor.Session().AddAdvisoryLock(sqlparser.String(lf.Typ.Name))
+			}
+		case sqlparser.ReleaseAllLocks:
+			err = vcursor.ReleaseLock()
+			if err != nil {
+				return nil, err
+			}
+		case sqlparser.ReleaseLock:
+			// TODO: do not execute if lock not taken.
+			if lockRes[0].ToString() == "1" {
+				vcursor.Session().RemoveAdvisoryLock(sqlparser.String(lf.Typ.Name))
+			}
+			if !vcursor.Session().AnyAdvisoryLockTaken() {
+				err = vcursor.ReleaseLock()
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	return &sqltypes.Result{
+		Fields: fields,
+		Rows:   []sqltypes.Row{rrow},
+	}, nil
+}
+
+func (lf *LockFunc) execLock(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
 	boundQuery := &querypb.BoundQuery{
-		Sql:           query,
+		Sql:           fmt.Sprintf("select %s from dual", sqlparser.String(lf.Typ)),
 		BindVariables: bindVars,
 	}
-	return vcursor.ExecuteLock(rss[0], boundQuery)
+	qr, err := vcursor.ExecuteLock(rs, boundQuery, lf.Typ.Type)
+	if err != nil {
+		return nil, err
+	}
+	if len(qr.Rows) != 1 && len(qr.Fields) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected rows or fields returned for the lock function: %v", lf.Typ.Type)
+	}
+	return qr, nil
 }
 
 // TryStreamExecute is part of the Primitive interface

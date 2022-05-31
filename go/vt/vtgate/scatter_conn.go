@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
@@ -251,7 +253,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 func (stc *ScatterConn) runLockQuery(ctx context.Context, session *SafeSession) {
 	rs := &srvtopo.ResolvedShard{Target: session.LockSession.Target, Gateway: stc.gateway}
 	query := &querypb.BoundQuery{Sql: "select 1", BindVariables: nil}
-	_, lockErr := stc.ExecuteLock(ctx, rs, query, session)
+	_, lockErr := stc.ExecuteLock(ctx, rs, query, session, sqlparser.IsUsedLock)
 	if lockErr != nil {
 		log.Warningf("Locking heartbeat failed, held locks might be released: %s", lockErr.Error())
 	}
@@ -637,12 +639,7 @@ func (stc *ScatterConn) multiGoTransaction(
 // It returns an error recorder in which each shard error is recorded positionally,
 // i.e. if rss[2] had an error, then the error recorder will store that error
 // in the second position.
-func (stc *ScatterConn) ExecuteLock(
-	ctx context.Context,
-	rs *srvtopo.ResolvedShard,
-	query *querypb.BoundQuery,
-	session *SafeSession,
-) (*sqltypes.Result, error) {
+func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error) {
 
 	var (
 		qr    *sqltypes.Result
@@ -659,7 +656,7 @@ func (stc *ScatterConn) ExecuteLock(
 	}
 
 	opts = session.Session.Options
-	info, err := lockInfo(rs.Target, session)
+	info, err := lockInfo(rs.Target, session, lockFuncType)
 	// Lock session is created on alphabetic sorted keyspace.
 	// This error will occur if the existing session target does not match the current target.
 	// This will happen either due to re-sharding or a new keyspace which comes before the existing order.
@@ -676,15 +673,15 @@ func (stc *ScatterConn) ExecuteLock(
 
 	switch info.actionNeeded {
 	case nothing:
-		if reservedID == 0 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] reserved id zero not expected %v", reservedID)
-		}
 		qr, err = qs.Execute(ctx, rs.Target, query.Sql, query.BindVariables, 0 /* transactionID */, reservedID, opts)
 		if err != nil && wasConnectionClosed(err) {
+			// TODO: try to acquire lock again.
 			session.ResetLock()
 			err = vterrors.Wrap(err, "held locks released")
 		}
-		session.UpdateLockHeartbeat()
+		if reservedID != 0 {
+			session.UpdateLockHeartbeat()
+		}
 	case reserve:
 		qr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), query.Sql, query.BindVariables, 0 /* transactionID */, opts)
 		if err != nil && reservedID != 0 {
@@ -778,20 +775,25 @@ func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSessio
 }
 
 // lockInfo looks at the current session, and returns information about what needs to be done for this tablet
-func lockInfo(target *querypb.Target, session *SafeSession) (*shardActionInfo, error) {
-	if session.LockSession == nil {
-		return &shardActionInfo{actionNeeded: reserve}, nil
+func lockInfo(target *querypb.Target, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*shardActionInfo, error) {
+	var info *shardActionInfo
+	if session.LockSession != nil {
+		if !proto.Equal(target, session.LockSession.Target) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "target does match the existing lock session target: (%v, %v)", target, session.LockSession.Target)
+		}
+		info = &shardActionInfo{
+			actionNeeded: nothing,
+			reservedID:   session.LockSession.ReservedId,
+			alias:        session.LockSession.TabletAlias,
+		}
 	}
-
-	if !proto.Equal(target, session.LockSession.Target) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "target does match the existing lock session target: (%v, %v)", target, session.LockSession.Target)
+	if lockFuncType != sqlparser.GetLock {
+		return info, nil
 	}
-
-	return &shardActionInfo{
-		actionNeeded: nothing,
-		reservedID:   session.LockSession.ReservedId,
-		alias:        session.LockSession.TabletAlias,
-	}, nil
+	if info.reservedID == 0 {
+		info.actionNeeded = reserve
+	}
+	return info, nil
 }
 
 type shardActionInfo struct {
