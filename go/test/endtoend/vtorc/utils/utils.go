@@ -802,6 +802,10 @@ func SetupNewClusterSemiSync(t *testing.T) *VtOrcClusterInfo {
 	}
 
 	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+
+	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, fmt.Sprintf("--durability-policy=semi_sync"))
+	require.NoError(t, err, out)
+
 	clusterInfo := &VtOrcClusterInfo{
 		ClusterInstance:     clusterInstance,
 		Ts:                  nil,
