@@ -93,7 +93,7 @@ func (vf *VindexFunc) TryExecute(vcursor VCursor, bindVars map[string]*querypb.B
 }
 
 // TryStreamExecute performs a streaming exec.
-func (vf *VindexFunc) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (vf *VindexFunc) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	r, err := vf.mapVindex(vcursor, bindVars)
 	if err != nil {
 		return err

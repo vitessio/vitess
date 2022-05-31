@@ -108,7 +108,7 @@ func (t *noopVCursor) ExecutePrimitive(primitive Primitive, bindVars map[string]
 }
 
 func (t *noopVCursor) StreamExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return primitive.TryStreamExecute(t, bindVars, wantfields, callback)
+	return primitive.TryStreamExecute(t, nil, bindVars, wantfields, callback)
 }
 
 func (t *noopVCursor) HasSystemVariables() bool {
@@ -371,7 +371,7 @@ func (f *loggingVCursor) ExecutePrimitive(primitive Primitive, bindVars map[stri
 }
 
 func (f *loggingVCursor) StreamExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return primitive.TryStreamExecute(f, bindVars, wantfields, callback)
+	return primitive.TryStreamExecute(f, nil, bindVars, wantfields, callback)
 }
 
 func (f *loggingVCursor) KeyspaceAvailable(ks string) bool {

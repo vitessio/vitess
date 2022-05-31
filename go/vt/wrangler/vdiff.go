@@ -1262,7 +1262,7 @@ func (vc *contextVCursor) ExecutePrimitive(primitive engine.Primitive, bindVars 
 }
 
 func (vc *contextVCursor) StreamExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return primitive.TryStreamExecute(vc, bindVars, wantfields, callback)
+	return primitive.TryStreamExecute(vc, nil, bindVars, wantfields, callback)
 }
 
 func (vc *contextVCursor) Context() context.Context {

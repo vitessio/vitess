@@ -70,7 +70,7 @@ func (jn *SemiJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 }
 
 // TryStreamExecute performs a streaming exec.
-func (jn *SemiJoin) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (jn *SemiJoin) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	joinVars := make(map[string]*querypb.BindVariable)
 	err := vcursor.StreamExecutePrimitive(jn.Left, bindVars, wantfields, func(lresult *sqltypes.Result) error {
 		result := &sqltypes.Result{Fields: projectFields(lresult.Fields, jn.Cols)}

@@ -242,7 +242,7 @@ func (ins *Insert) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 }
 
 // TryStreamExecute performs a streaming exec.
-func (ins *Insert) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ins *Insert) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	res, err := ins.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err

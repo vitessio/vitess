@@ -269,7 +269,7 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 }
 
 // TryStreamExecute is a Primitive function.
-func (oa *OrderedAggregate) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (oa *OrderedAggregate) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var current []sqltypes.Value
 	var curDistincts []sqltypes.Value
 	var fields []*querypb.Field

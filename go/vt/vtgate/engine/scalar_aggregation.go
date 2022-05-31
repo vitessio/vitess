@@ -125,7 +125,7 @@ func (sa *ScalarAggregate) TryExecute(vcursor VCursor, bindVars map[string]*quer
 }
 
 // TryStreamExecute implements the Primitive interface
-func (sa *ScalarAggregate) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (sa *ScalarAggregate) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	cb := func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(sa.TruncateColumnCount))
 	}

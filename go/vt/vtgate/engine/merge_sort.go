@@ -75,7 +75,7 @@ func (ms *MergeSort) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bin
 }
 
 // TryStreamExecute performs a streaming exec.
-func (ms *MergeSort) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ms *MergeSort) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	ctx, cancel := context.WithCancel(vcursor.Context())
 	defer cancel()
 	gotFields := wantfields

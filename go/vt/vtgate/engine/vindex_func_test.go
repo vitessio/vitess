@@ -212,7 +212,7 @@ func TestVindexFuncStreamExecute(t *testing.T) {
 		}},
 	}}
 	i := 0
-	err := vf.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err := vf.TryStreamExecute(&noopVCursor{}, nil, nil, false, func(qr *sqltypes.Result) error {
 		if !reflect.DeepEqual(qr, want[i]) {
 			t.Errorf("callback(%d):\n%v, want\n%v", i, qr, want[i])
 		}

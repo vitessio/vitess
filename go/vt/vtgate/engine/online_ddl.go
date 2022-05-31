@@ -108,7 +108,7 @@ func (v *OnlineDDL) TryExecute(vcursor VCursor, bindVars map[string]*query.BindV
 }
 
 // TryStreamExecute implements the Primitive interface
-func (v *OnlineDDL) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (v *OnlineDDL) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	results, err := v.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err

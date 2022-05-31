@@ -82,7 +82,7 @@ func (l *Limit) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 }
 
 // TryStreamExecute satisfies the Primitive interface.
-func (l *Limit) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (l *Limit) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	count, offset, err := l.getCountAndOffset(vcursor, bindVars)
 	if err != nil {
 		return err

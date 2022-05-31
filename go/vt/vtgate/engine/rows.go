@@ -62,7 +62,7 @@ func (r *Rows) TryExecute(VCursor, map[string]*querypb.BindVariable, bool) (*sql
 }
 
 // TryStreamExecute implements the Primitive interface
-func (r *Rows) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
+func (r *Rows) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
 	result, err := r.TryExecute(vcursor, bindVars, wantields)
 	if err != nil {
 		return err

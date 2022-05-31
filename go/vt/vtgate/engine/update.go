@@ -97,7 +97,7 @@ func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 }
 
 // TryStreamExecute performs a streaming exec.
-func (upd *Update) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (upd *Update) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	res, err := upd.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err

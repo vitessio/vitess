@@ -87,7 +87,7 @@ func (del *Delete) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 }
 
 // TryStreamExecute performs a streaming exec.
-func (del *Delete) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (del *Delete) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	res, err := del.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err

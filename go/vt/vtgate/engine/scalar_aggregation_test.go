@@ -122,7 +122,7 @@ func TestScalarAggregateStreamExecute(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := oa.TryStreamExecute(&noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+	err := oa.TryStreamExecute(&noopVCursor{}, nil, nil, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})

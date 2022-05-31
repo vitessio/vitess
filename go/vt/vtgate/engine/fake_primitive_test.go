@@ -79,7 +79,7 @@ func (f *fakePrimitive) TryExecute(vcursor VCursor, bindVars map[string]*querypb
 	return r, nil
 }
 
-func (f *fakePrimitive) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (f *fakePrimitive) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	f.log = append(f.log, fmt.Sprintf("StreamExecute %v %v", printBindVars(bindVars), wantfields))
 	if f.results == nil {
 		return f.sendErr
@@ -136,7 +136,7 @@ func (f *fakePrimitive) NeedsTransaction() bool {
 
 func wrapStreamExecute(prim Primitive, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	var result *sqltypes.Result
-	err := prim.TryStreamExecute(vcursor, bindVars, wantfields, func(r *sqltypes.Result) error {
+	err := prim.TryStreamExecute(vcursor, nil, bindVars, wantfields, func(r *sqltypes.Result) error {
 		if result == nil {
 			result = r
 		} else {

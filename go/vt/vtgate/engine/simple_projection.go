@@ -61,7 +61,7 @@ func (sc *SimpleProjection) TryExecute(vcursor VCursor, bindVars map[string]*que
 }
 
 // TryStreamExecute performs a streaming exec.
-func (sc *SimpleProjection) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (sc *SimpleProjection) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	return vcursor.StreamExecutePrimitive(sc.Input, bindVars, wantfields, func(inner *sqltypes.Result) error {
 		return callback(sc.buildResult(inner))
 	})

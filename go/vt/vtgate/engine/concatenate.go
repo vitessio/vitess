@@ -167,7 +167,7 @@ func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.
 }
 
 // TryStreamExecute performs a streaming exec.
-func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (c *Concatenate) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var seenFields []*querypb.Field
 	var outerErr error
 

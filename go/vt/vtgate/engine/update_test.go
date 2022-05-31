@@ -653,7 +653,7 @@ func TestUpdateInStreamExecute(t *testing.T) {
 	}}
 
 	vc := newDMLTestVCursor("-20", "20-")
-	err := upd.TryStreamExecute(vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
+	err := upd.TryStreamExecute(vc, nil, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.NoError(t, err)

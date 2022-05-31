@@ -69,7 +69,7 @@ func (s SQLCalcFoundRows) TryExecute(vcursor VCursor, bindVars map[string]*query
 }
 
 // TryStreamExecute implements the Primitive interface
-func (s SQLCalcFoundRows) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (s SQLCalcFoundRows) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	err := vcursor.StreamExecutePrimitive(s.LimitPrimitive, bindVars, wantfields, callback)
 	if err != nil {
 		return err

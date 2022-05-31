@@ -443,7 +443,7 @@ func (vc *vcursorImpl) ExecutePrimitive(primitive engine.Primitive, bindVars map
 
 func (vc *vcursorImpl) StreamExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	for try := 0; try < MaxBufferingRetries; try++ {
-		err := primitive.TryStreamExecute(vc, bindVars, wantfields, callback)
+		err := primitive.TryStreamExecute(vc, nil, bindVars, wantfields, callback)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
 		}

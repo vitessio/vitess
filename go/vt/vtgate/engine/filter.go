@@ -79,7 +79,7 @@ func (f *Filter) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 }
 
 // TryStreamExecute satisfies the Primitive interface.
-func (f *Filter) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (f *Filter) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	filter := func(results *sqltypes.Result) error {
 		var rows [][]sqltypes.Value

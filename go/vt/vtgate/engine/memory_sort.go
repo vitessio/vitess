@@ -91,7 +91,7 @@ func (ms *MemorySort) TryExecute(vcursor VCursor, bindVars map[string]*querypb.B
 }
 
 // TryStreamExecute satisfies the Primitive interface.
-func (ms *MemorySort) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ms *MemorySort) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	count, err := ms.fetchCount(vcursor, bindVars)
 	if err != nil {
 		return err

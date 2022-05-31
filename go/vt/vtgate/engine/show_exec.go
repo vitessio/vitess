@@ -58,7 +58,7 @@ func (s *ShowExec) TryExecute(vcursor VCursor, _ map[string]*query.BindVariable,
 	return vcursor.ShowExec(s.Command, s.ShowFilter)
 }
 
-func (s *ShowExec) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (s *ShowExec) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	qr, err := s.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err

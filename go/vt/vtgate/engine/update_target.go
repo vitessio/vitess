@@ -68,7 +68,7 @@ func (updTarget *UpdateTarget) TryExecute(vcursor VCursor, bindVars map[string]*
 }
 
 // TryStreamExecute implements the Primitive interface
-func (updTarget *UpdateTarget) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (updTarget *UpdateTarget) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	result, err := updTarget.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err

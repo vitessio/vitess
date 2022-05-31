@@ -152,7 +152,7 @@ func (lf *LockFunc) execLock(vcursor VCursor, bindVars map[string]*querypb.BindV
 }
 
 // TryStreamExecute is part of the Primitive interface
-func (l *Lock) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (l *Lock) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	qr, err := l.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err

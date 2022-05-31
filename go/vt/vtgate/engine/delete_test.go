@@ -396,7 +396,7 @@ func TestDeleteShardedStreaming(t *testing.T) {
 	}
 
 	vc := newDMLTestVCursor("-20", "20-")
-	err := del.TryStreamExecute(vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
+	err := del.TryStreamExecute(vc, nil, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.NoError(t, err)

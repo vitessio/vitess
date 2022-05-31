@@ -83,7 +83,7 @@ func (r *RenameFields) renameFields(qr *sqltypes.Result) {
 }
 
 // TryStreamExecute implements the Primitive interface
-func (r *RenameFields) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (r *RenameFields) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	if wantfields {
 		innerCallback := callback
 		callback = func(result *sqltypes.Result) error {

@@ -376,7 +376,7 @@ func TestLimitStreamExecute(t *testing.T) {
 
 	// Test with limit smaller than input.
 	var results []*sqltypes.Result
-	err := l.TryStreamExecute(&noopVCursor{}, bindVars, true, func(qr *sqltypes.Result) error {
+	err := l.TryStreamExecute(&noopVCursor{}, nil, bindVars, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -394,7 +394,7 @@ func TestLimitStreamExecute(t *testing.T) {
 	fp.rewind()
 	l.Count = evalengine.NewBindVar("l", collations.TypedCollation{})
 	results = nil
-	err = l.TryStreamExecute(&noopVCursor{}, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(2)}, true, func(qr *sqltypes.Result) error {
+	err = l.TryStreamExecute(&noopVCursor{}, nil, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(2)}, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -407,7 +407,7 @@ func TestLimitStreamExecute(t *testing.T) {
 	fp.rewind()
 	l.Count = evalengine.NewLiteralInt(3)
 	results = nil
-	err = l.TryStreamExecute(&noopVCursor{}, bindVars, true, func(qr *sqltypes.Result) error {
+	err = l.TryStreamExecute(&noopVCursor{}, nil, bindVars, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -427,7 +427,7 @@ func TestLimitStreamExecute(t *testing.T) {
 	fp.rewind()
 	l.Count = evalengine.NewLiteralInt(4)
 	results = nil
-	err = l.TryStreamExecute(&noopVCursor{}, bindVars, true, func(qr *sqltypes.Result) error {
+	err = l.TryStreamExecute(&noopVCursor{}, nil, bindVars, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -464,7 +464,7 @@ func TestOffsetStreamExecute(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := l.TryStreamExecute(&noopVCursor{}, bindVars, true, func(qr *sqltypes.Result) error {
+	err := l.TryStreamExecute(&noopVCursor{}, nil, bindVars, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -511,7 +511,7 @@ func TestLimitInputFail(t *testing.T) {
 	}
 
 	fp.rewind()
-	err := l.TryStreamExecute(&noopVCursor{}, bindVars, false, func(_ *sqltypes.Result) error { return nil })
+	err := l.TryStreamExecute(&noopVCursor{}, nil, bindVars, false, func(_ *sqltypes.Result) error { return nil })
 	if err == nil || err.Error() != want {
 		t.Errorf("l.StreamExecute(): %v, want %s", err, want)
 	}
@@ -541,6 +541,6 @@ func TestLimitInvalidCount(t *testing.T) {
 	_, err = l.TryExecute(&noopVCursor{}, nil, false)
 	assert.EqualError(t, err, "requested limit is out of range: 18446744073709551615")
 
-	err = l.TryStreamExecute(&noopVCursor{}, nil, false, func(_ *sqltypes.Result) error { return nil })
+	err = l.TryStreamExecute(&noopVCursor{}, nil, nil, false, func(_ *sqltypes.Result) error { return nil })
 	assert.EqualError(t, err, "requested limit is out of range: 18446744073709551615")
 }

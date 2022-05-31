@@ -129,7 +129,7 @@ func (hj *HashJoin) buildProbeTable(lresult *sqltypes.Result) (map[evalengine.Ha
 }
 
 // TryStreamExecute implements the Primitive interface
-func (hj *HashJoin) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (hj *HashJoin) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	// build the probe table from the LHS result
 	probeTable := map[evalengine.HashCode][]sqltypes.Row{}
 	var lfields []*querypb.Field

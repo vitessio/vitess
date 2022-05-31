@@ -71,7 +71,7 @@ func (ps *PulloutSubquery) TryExecute(vcursor VCursor, bindVars map[string]*quer
 }
 
 // TryStreamExecute performs a streaming exec.
-func (ps *PulloutSubquery) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ps *PulloutSubquery) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	combinedVars, err := ps.execSubquery(vcursor, bindVars)
 	if err != nil {
 		return err
