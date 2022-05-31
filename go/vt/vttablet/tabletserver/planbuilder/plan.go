@@ -335,18 +335,19 @@ func checkForPoolingUnsafeConstructs(expr sqlparser.SQLNode) error {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed without a reserved connections", sqlparser.String(node))
 	}
 
+	if _, isSetStmt := expr.(*sqlparser.Set); isSetStmt {
+		return genError(expr)
+	}
+
+	sel, isSel := expr.(*sqlparser.Select)
+	if !isSel {
+		return nil
+	}
 	return sqlparser.Walk(func(in sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := in.(type) {
-		case *sqlparser.Set:
+		case *sqlparser.LockingFunc:
 			return false, genError(node)
-		case *sqlparser.FuncExpr:
-			if sqlparser.IsLockingFunc(node) {
-				return false, genError(node)
-			}
 		}
-
-		// TODO: This could be smarter about not walking down parts of the AST that can't contain
-		// function calls.
 		return true, nil
-	}, expr)
+	}, sel.SelectExprs)
 }
