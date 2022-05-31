@@ -203,7 +203,7 @@ The flag `durability_policy` added to vtctl, vtctld and vtworker binaries has no
 Instead the durability policy for a given keyspace will be stored in the keyspace information in the topo-server.
 
 #### New and Augmented Commands
-The vtctld command `CreateKeyspace` has been augmented to take in an additional argument called `durability_policy` which will
+The vtctld command `CreateKeyspace` has been augmented to take in an additional argument called `durability-policy` which will
 allow the users to set the correct durability policy at the creation of keyspaces.
 
 For existing keyspaces, a new command `SetKeyspaceDurabilityPolicy` has been added, which allows the users to change the
