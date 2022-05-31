@@ -456,6 +456,11 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 		name := sourceCol.Name
 		targetName := v.sharedColumnsMap[name]
 
+		targetCol := v.targetSharedColumns.GetColumn(targetName)
+		if targetCol == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot find target column %s", targetName)
+		}
+
 		if i > 0 {
 			sb.WriteString(", ")
 		}
@@ -465,10 +470,6 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 		case sourceCol.Type == vrepl.JSONColumnType:
 			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		case sourceCol.Type == vrepl.StringColumnType:
-			targetCol := v.targetSharedColumns.GetColumn(targetName)
-			if targetCol == nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot find target column %s", targetName)
-			}
 			// Check source and target charset/encoding. If needed, create
 			// a binlogdatapb.CharsetConversion entry (later written to vreplication)
 			fromEncoding, ok := mysql.CharacterSetEncoding[sourceCol.Charset]
@@ -480,7 +481,7 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 			if targetCol.Type == vrepl.StringColumnType && !ok {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset, targetCol.Name)
 			}
-			if fromEncoding == nil && toEncoding == nil {
+			if fromEncoding == nil && toEncoding == nil && targetCol.Type != vrepl.JSONColumnType {
 				// Both source and target have trivial charsets
 				sb.WriteString(escapeName(name))
 			} else {
@@ -491,6 +492,9 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 				}
 				sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 			}
+		case targetCol.Type == vrepl.JSONColumnType && sourceCol.Type != vrepl.JSONColumnType:
+			// Convert any type to JSON: encode the type as utf8mb4 text
+			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		default:
 			sb.WriteString(escapeName(name))
 		}

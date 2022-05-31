@@ -539,6 +539,13 @@ const (
 	ERWarnDataTruncated            = 1265
 	ERForbidSchemaChange           = 1450
 	ERDataOutOfRange               = 1690
+	ERInvalidJSONText              = 3140
+	ERInvalidJSONTextInParams      = 3141
+	ERInvalidJSONBinaryData        = 3142
+	ERInvalidJSONCharset           = 3144
+	ERInvalidCastToJSON            = 3147
+	ERJSONValueTooBig              = 3150
+	ERJSONDocumentTooDeep          = 3157
 
 	// server not available
 	ERServerIsntAvailable = 3168
