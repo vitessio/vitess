@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	mysqlCtlRiceBoxLocation string = "../../../config"
+	mySQLCtlRiceBoxLocation string = "../../../config"
 )
 
 // TestMySQLCtlRiceBox validates that this rice box is fresh: that `make embed_config` has been run after
@@ -37,13 +37,13 @@ const (
 func TestMySQLCtlRiceBox(t *testing.T) {
 	var riceBoxFiles []string
 
-	riceBox := rice.MustFindBox(mysqlCtlRiceBoxLocation)
+	riceBox := rice.MustFindBox(mySQLCtlRiceBoxLocation)
 
-	err := filepath.Walk(mysqlCtlRiceBoxLocation,
+	err := filepath.Walk(mySQLCtlRiceBoxLocation,
 		func(path string, info os.FileInfo, err error) error {
 			require.NoError(t, err)
 			if !info.IsDir() {
-				name := strings.Replace(path, mysqlCtlRiceBoxLocation+"/", "", 1)
+				name := strings.Replace(path, mySQLCtlRiceBoxLocation+"/", "", 1)
 				riceBoxFiles = append(riceBoxFiles, name)
 			}
 			return nil
@@ -55,7 +55,7 @@ func TestMySQLCtlRiceBox(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, riceContents)
 
-			diskBytes, err := ioutil.ReadFile(fmt.Sprintf("%s/%s", mysqlCtlRiceBoxLocation, fileName))
+			diskBytes, err := ioutil.ReadFile(fmt.Sprintf("%s/%s", mySQLCtlRiceBoxLocation, fileName))
 			diskContents := string(diskBytes)
 			require.NoError(t, err)
 			require.Equal(t, riceContents, diskContents)
