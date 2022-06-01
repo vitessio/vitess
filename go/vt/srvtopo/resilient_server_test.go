@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/key"
+
 	"vitess.io/vitess/go/sync2"
 
 	"github.com/stretchr/testify/assert"
@@ -118,6 +120,41 @@ func TestGetSrvKeyspace(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
+	// Now send an updated real value, see it come through.
+	keyRange, err := key.ParseShardingSpec("-")
+	if err != nil || len(keyRange) != 1 {
+		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
+	}
+
+	want = &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			{
+				ServedType: topodatapb.TabletType_PRIMARY,
+				ShardReferences: []*topodatapb.ShardReference{
+					{
+						Name:     "-",
+						KeyRange: keyRange[0],
+					},
+				},
+			},
+		},
+	}
+
+	err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks, %s) failed", want)
+	expiry = time.Now().Add(5 * time.Second)
+	updateTime := time.Now()
+	for {
+		got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+		if err == nil && proto.Equal(want, got) {
+			break
+		}
+		if time.Now().After(expiry) {
+			t.Fatalf("timeout waiting for new keyspace value")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
 	// Now simulate a topo service error and see that the last value is
 	// cached for at least half of the expected ttl.
 	errorTestStart := time.Now()
@@ -126,7 +163,6 @@ func TestGetSrvKeyspace(t *testing.T) {
 	factory.SetError(forceErr)
 
 	expiry = time.Now().Add(*srvTopoCacheTTL / 2)
-	updateTime := time.Now()
 	for {
 		got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 		if err != nil || !proto.Equal(want, got) {
@@ -189,7 +225,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	for {
 		_, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 		if err != nil {
-			t.Fatalf("value should have been cached for the full ttl")
+			t.Fatalf("value should have been cached for the full ttl, error %v", err)
 		}
 		if time.Now().After(expiry) {
 			break
@@ -674,7 +710,7 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 	assert.Nil(t, seen1[0].keyspace)
 	assert.True(t, topo.IsErrType(seen1[0].err, topo.NoNode))
 
-	// Set SrvKeyspace with value
+	// Set SrvKeyspace with no values
 	want := &topodatapb.SrvKeyspace{}
 	err := ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
 	require.NoError(t, err)
@@ -694,8 +730,26 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 	assert.Nil(t, seen3[2].keyspace)
 	assert.True(t, topo.IsErrType(seen3[2].err, topo.NoNode))
 
+	keyRange, err := key.ParseShardingSpec("-")
+	if err != nil || len(keyRange) != 1 {
+		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
+	}
+
 	for i := 0; i < 5; i++ {
-		want = &topodatapb.SrvKeyspace{}
+		want = &topodatapb.SrvKeyspace{
+			Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+				{
+					ServedType: topodatapb.TabletType_PRIMARY,
+					ShardReferences: []*topodatapb.ShardReference{
+						{
+							// This may not be a valid shard spec, but is fine for unit test purposes
+							Name:     fmt.Sprintf("%d", i),
+							KeyRange: keyRange[0],
+						},
+					},
+				},
+			},
+		}
 		err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
 		require.NoError(t, err)
 		time.Sleep(100 * time.Millisecond)

@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/key"
+
 	"google.golang.org/protobuf/proto"
 
 	"context"
@@ -79,7 +81,24 @@ func checkWatch(t *testing.T, ts *topo.Server) {
 	}
 
 	// create some data
-	srvKeyspace := &topodatapb.SrvKeyspace{}
+	keyRange, err := key.ParseShardingSpec("-")
+	if err != nil || len(keyRange) != 1 {
+		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
+	}
+
+	srvKeyspace := &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			{
+				ServedType: topodatapb.TabletType_PRIMARY,
+				ShardReferences: []*topodatapb.ShardReference{
+					{
+						Name:     "name",
+						KeyRange: keyRange[0],
+					},
+				},
+			},
+		},
+	}
 	if err := ts.UpdateSrvKeyspace(ctx, LocalCellName, "test_keyspace", srvKeyspace); err != nil {
 		t.Fatalf("UpdateSrvKeyspace(1): %v", err)
 	}
@@ -88,9 +107,69 @@ func checkWatch(t *testing.T, ts *topo.Server) {
 	changes, cancel := waitForInitialValue(t, conn, srvKeyspace)
 	defer cancel()
 
+	// change the data
+	srvKeyspace.Partitions[0].ShardReferences[0].Name = "new_name"
+	if err := ts.UpdateSrvKeyspace(ctx, LocalCellName, "test_keyspace", srvKeyspace); err != nil {
+		t.Fatalf("UpdateSrvKeyspace(2): %v", err)
+	}
+
+	// Make sure we get the watch data, maybe not as first notice,
+	// but eventually. The API specifies it is possible to get duplicate
+	// notifications.
+	for {
+		wd, ok := <-changes
+		if !ok {
+			t.Fatalf("watch channel unexpectedly closed")
+		}
+		if wd.Err != nil {
+			t.Fatalf("watch interrupted: %v", wd.Err)
+		}
+		got := &topodatapb.SrvKeyspace{}
+		if err := proto.Unmarshal(wd.Contents, got); err != nil {
+			t.Fatalf("cannot proto-unmarshal data: %v", err)
+		}
+
+		if got.Partitions[0].ShardReferences[0].Name == "name" {
+			// extra first value, still good
+			continue
+		}
+		if got.Partitions[0].ShardReferences[0].Name == "new_name" {
+			// watch worked, good
+			break
+		}
+		t.Fatalf("got unknown SrvKeyspace: %v", got)
+	}
+
 	// remove the SrvKeyspace
 	if err := ts.DeleteSrvKeyspace(ctx, LocalCellName, "test_keyspace"); err != nil {
 		t.Fatalf("DeleteSrvKeyspace: %v", err)
+	}
+
+	// Make sure we get the ErrNoNode notification eventually.
+	// The API specifies it is possible to get duplicate
+	// notifications.
+	for {
+		wd, ok := <-changes
+		if !ok {
+			t.Fatalf("watch channel unexpectedly closed")
+		}
+		if topo.IsErrType(wd.Err, topo.NoNode) {
+			// good
+			break
+		}
+		if wd.Err != nil {
+			t.Fatalf("bad error returned for deletion: %v", wd.Err)
+		}
+		// we got something, better be the right value
+		got := &topodatapb.SrvKeyspace{}
+		if err := proto.Unmarshal(wd.Contents, got); err != nil {
+			t.Fatalf("cannot proto-unmarshal data: %v", err)
+		}
+		if got.Partitions[0].ShardReferences[0].Name == "new_name" {
+			// good value
+			continue
+		}
+		t.Fatalf("got unknown SrvKeyspace waiting for deletion: %v", got)
 	}
 
 	// now the channel should be closed
@@ -108,7 +187,24 @@ func checkWatchInterrupt(t *testing.T, ts *topo.Server) {
 	}
 
 	// create some data
-	srvKeyspace := &topodatapb.SrvKeyspace{}
+	keyRange, err := key.ParseShardingSpec("-")
+	if err != nil || len(keyRange) != 1 {
+		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
+	}
+
+	srvKeyspace := &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			{
+				ServedType: topodatapb.TabletType_PRIMARY,
+				ShardReferences: []*topodatapb.ShardReference{
+					{
+						Name:     "name",
+						KeyRange: keyRange[0],
+					},
+				},
+			},
+		},
+	}
 	if err := ts.UpdateSrvKeyspace(ctx, LocalCellName, "test_keyspace", srvKeyspace); err != nil {
 		t.Fatalf("UpdateSrvKeyspace(1): %v", err)
 	}
@@ -118,6 +214,31 @@ func checkWatchInterrupt(t *testing.T, ts *topo.Server) {
 
 	// Now cancel the watch.
 	cancel()
+
+	// Make sure we get the topo.ErrInterrupted notification eventually.
+	for {
+		wd, ok := <-changes
+		if !ok {
+			t.Fatalf("watch channel unexpectedly closed")
+		}
+		if topo.IsErrType(wd.Err, topo.Interrupted) {
+			// good
+			break
+		}
+		if wd.Err != nil {
+			t.Fatalf("bad error returned for cancellation: %v", wd.Err)
+		}
+		// we got something, better be the right value
+		got := &topodatapb.SrvKeyspace{}
+		if err := proto.Unmarshal(wd.Contents, got); err != nil {
+			t.Fatalf("cannot proto-unmarshal data: %v", err)
+		}
+		if got.Partitions[0].ShardReferences[0].Name == "name" {
+			// good value
+			continue
+		}
+		t.Fatalf("got unknown SrvKeyspace waiting for deletion: %v", got)
+	}
 
 	// Now the channel should be closed.
 	if wd, ok := <-changes; ok {

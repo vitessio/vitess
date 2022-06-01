@@ -90,7 +90,9 @@ func TestHandlePathRoot(t *testing.T) {
 
 func TestHandlePathKeyspace(t *testing.T) {
 	cells := []string{"cell1", "cell2", "cell3"}
-	keyspace := &topodatapb.Keyspace{}
+	keyspace := &topodatapb.Keyspace{
+		KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
+	}
 
 	ctx := context.Background()
 	ts := memorytopo.NewServer(cells...)
@@ -108,7 +110,7 @@ func TestHandlePathKeyspace(t *testing.T) {
 
 	// Test the Keyspace object itself.
 	input := path.Join("/global", "keyspaces", "test_keyspace", "Keyspace")
-	want := "sharding_column_name:\"keyspace_id\""
+	want := "keyspace_type:SNAPSHOT"
 	result := ex.HandlePath(input, nil)
 	if got := result.Data; got != want {
 		t.Errorf("HandlePath(%q) = %q, want %q", input, got, want)
