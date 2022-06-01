@@ -6,12 +6,10 @@ package binlogdata
 
 import (
 	fmt "fmt"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	io "io"
 	bits "math/bits"
 	sync "sync"
-
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-
 	query "vitess.io/vitess/go/vt/proto/query"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"

@@ -26,11 +26,9 @@
 package throttlerservice
 
 import (
-	reflect "reflect"
-
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-
+	reflect "reflect"
 	throttlerdata "vitess.io/vitess/go/vt/proto/throttlerdata"
 )
 

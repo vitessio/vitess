@@ -25,11 +25,9 @@
 package vtgateservice
 
 import (
-	reflect "reflect"
-
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-
+	reflect "reflect"
 	vtgate "vitess.io/vitess/go/vt/proto/vtgate"
 )
 

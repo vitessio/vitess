@@ -8,11 +8,9 @@ package automationservice
 
 import (
 	context "context"
-
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-
 	automation "vitess.io/vitess/go/vt/proto/automation"
 )
 

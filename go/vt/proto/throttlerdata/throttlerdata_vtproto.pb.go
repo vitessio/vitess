@@ -7,11 +7,10 @@ package throttlerdata
 import (
 	binary "encoding/binary"
 	fmt "fmt"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	io "io"
 	math "math"
 	bits "math/bits"
-
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
