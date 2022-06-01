@@ -119,6 +119,14 @@ func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.Al
 	stc.timings.Record(statsKey, startTime)
 }
 
+func (stc *ScatterConn) endLockAction(startTime time.Time, allErrors *concurrency.AllErrorRecorder, statsKey []string, err *error) {
+	if *err != nil {
+		allErrors.RecordError(*err)
+		stc.tabletCallErrorCount.Add(statsKey, 1)
+	}
+	stc.timings.Record(statsKey, startTime)
+}
+
 type reset int
 
 const (
@@ -649,7 +657,7 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 	)
 	allErrors := new(concurrency.AllErrorRecorder)
 	startTime, statsKey := stc.startAction("ExecuteLock", rs.Target)
-	defer stc.endAction(startTime, allErrors, statsKey, &err, session)
+	defer stc.endLockAction(startTime, allErrors, statsKey, &err)
 
 	if session == nil || session.Session == nil {
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "session cannot be nil")
