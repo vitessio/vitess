@@ -2543,18 +2543,16 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 
 // addInstantAlgorithm adds or modifies the AlterTable's ALGORITHM to INSTANT
 func (e *Executor) addInstantAlgorithm(alterTable *sqlparser.AlterTable) {
-	existingAlgorithmEdited := false
 	instantOpt := sqlparser.AlgorithmValue("INSTANT")
 	for i, opt := range alterTable.AlterOptions {
 		if _, ok := opt.(sqlparser.AlgorithmValue); ok {
+			// replace an existing algorithm
 			alterTable.AlterOptions[i] = instantOpt
-			existingAlgorithmEdited = true
-			break
+			return
 		}
 	}
-	if !existingAlgorithmEdited {
-		alterTable.AlterOptions = append(alterTable.AlterOptions, instantOpt)
-	}
+	// append an algorithm
+	alterTable.AlterOptions = append(alterTable.AlterOptions, instantOpt)
 }
 
 // executeSpecialAlterDDLActionMigrationIfApplicable sees if the given migration can be executed via special execution path, that isn't a full blown online schema change process.
