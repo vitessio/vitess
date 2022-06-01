@@ -57,25 +57,52 @@ jobs:
       - get_latest_release
 
     steps:
+    # Checkout to this build's commit
+    - name: Checkout to commit's code
+      uses: actions/checkout@v2
+
+    - name: Check for changes in relevant files
+      uses: frouioui/paths-filter@main
+      id: changes
+      with:
+        token: ''
+        filters: |
+          end_to_end:
+            - 'go/**'
+            - 'go/**/*.go'
+            - 'test.go'
+            - 'Makefile'
+            - 'build.env'
+            - 'go.[sumod]'
+            - 'proto/*.proto'
+            - 'tools/**'
+            - 'config/**'
+            - 'bootstrap.sh'
+
     - name: Set up Go
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v2
       with:
-        go-version: 1.18
+        go-version: 1.18.1
 
     - name: Set up python
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@v2
 
     - name: Tune the OS
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
 
     # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
     - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
     # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
 
     - name: Get base dependencies
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
         # Uninstall any previously installed MySQL first
@@ -112,15 +139,18 @@ jobs:
 
     # Checkout to the last release of Vitess
     - name: Checkout to the other version's code (${{ needs.get_latest_release.outputs.latest_release }})
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@v2
       with:
         ref: ${{ needs.get_latest_release.outputs.latest_release }}
 
     - name: Get dependencies for the last release
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
 
     - name: Building last release's binaries
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         source build.env
@@ -131,17 +161,21 @@ jobs:
 
     # Checkout to this build's commit
     - name: Checkout to commit's code
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@v2
 
     - name: Get dependencies for this commit
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
 
     - name: Run make minimaltools
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         make minimaltools
 
     - name: Building the binaries for this commit
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         source build.env
@@ -152,6 +186,7 @@ jobs:
     # We create a sharded Vitess cluster following the local example.
     # We also insert a few rows in our three tables.
     - name: Create the example Vitess cluster with all components using version N
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         source build.env ; cd examples/local
@@ -159,6 +194,7 @@ jobs:
 
     # Taking a backup
     - name: Take a backup of all the shards
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 2
       run: |
         source build.env ; cd examples/local
@@ -172,6 +208,7 @@ jobs:
     #     - corder:   5
     # We shall see the same number of rows after restoring the backup.
     - name: Insert more data after the backup
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env ; cd examples/local ; source ./env.sh
 
@@ -181,6 +218,7 @@ jobs:
 
     # Stop all the tablets and remove their data
     - name: Stop tablets
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         source build.env ; cd examples/local
@@ -188,6 +226,7 @@ jobs:
 
     # We downgrade: we use the version N-1 of vttablet
     - name: Downgrade - Swap binaries, use VTTablet N-1
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
@@ -197,6 +236,7 @@ jobs:
 
     # Starting the tablets again, they will automatically start restoring the last backup.
     - name: Start new tablets and restore
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         source build.env ; cd examples/local
@@ -206,6 +246,7 @@ jobs:
 
     # Count the number of rows in each table to make sure the restoration is successful.
     - name: Assert the number of rows in every table
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env ; cd examples/local ; source ./env.sh
 
@@ -215,6 +256,7 @@ jobs:
 
     # We insert one more row in every table.
     - name: Insert more rows in the tables
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env ; cd examples/local ; source ./env.sh
 
@@ -224,6 +266,7 @@ jobs:
 
     # Taking a second backup of the cluster.
     - name: Take a second backup of all the shards
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 2
       run: |
         source build.env ; cd examples/local
@@ -231,6 +274,7 @@ jobs:
 
     # Stopping the tablets so we can perform the upgrade.
     - name: Stop tablets
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         source build.env ; cd examples/local
@@ -238,6 +282,7 @@ jobs:
 
     # We upgrade: we swap binaries and use the version N of the tablet.
     - name: Upgrade - Swap binaries, use VTTablet N
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
@@ -247,6 +292,7 @@ jobs:
 
     # Starting the tablets again and restoring the previous backup.
     - name: Start new tablets and restore
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         source build.env ; cd examples/local
@@ -256,6 +302,7 @@ jobs:
 
     # We count the number of rows in every table to check that the restore step was successful.
     - name: Assert the number of rows in every table
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env ; cd examples/local ; source ./env.sh
 
@@ -264,6 +311,7 @@ jobs:
         echo "select count(sku) from corder;" | mysql 2>&1| grep 6
 
     - name: Stop the Vitess cluster
+      if: steps.changes.outputs.end_to_end == 'true'
       if: always()
       run: |
         source build.env ; cd examples/local

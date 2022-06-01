@@ -74,6 +74,9 @@ const (
 	alterSchemaMigrationsTableIsView                   = "ALTER TABLE _vt.schema_migrations add column is_view tinyint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableReadyToComplete          = "ALTER TABLE _vt.schema_migrations add column ready_to_complete tinyint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableStowawayTable            = "ALTER TABLE _vt.schema_migrations add column stowaway_table tinytext NOT NULL"
+	alterSchemaMigrationsTableVreplLivenessIndicator   = "ALTER TABLE _vt.schema_migrations add column vitess_liveness_indicator bigint NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableUserThrottleRatio        = "ALTER TABLE _vt.schema_migrations add column user_throttle_ratio float NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableSpecialPlan              = "ALTER TABLE _vt.schema_migrations add column special_plan text NOT NULL"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -147,6 +150,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateMigrationUserThrottleRatio = `UPDATE _vt.schema_migrations
+			SET user_throttle_ratio=%a
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateMigrationStartedTimestamp = `UPDATE _vt.schema_migrations SET
 			started_timestamp =IFNULL(started_timestamp,  NOW()),
 			liveness_timestamp=IFNULL(liveness_timestamp, NOW())
@@ -155,6 +163,11 @@ const (
 	`
 	sqlUpdateMigrationTimestamp = `UPDATE _vt.schema_migrations
 			SET %s=NOW()
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationVitessLivenessIndicator = `UPDATE _vt.schema_migrations
+			SET vitess_liveness_indicator=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -170,6 +183,11 @@ const (
 	`
 	sqlClearArtifacts = `UPDATE _vt.schema_migrations
 			SET artifacts=''
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateSpecialPlan = `UPDATE _vt.schema_migrations
+			SET special_plan=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -377,6 +395,10 @@ const (
 			retain_artifacts_seconds,
 			is_view,
 			ready_to_complete,
+			reverted_uuid,
+			stowaway_table,
+			rows_copied,
+			vitess_liveness_indicator,
 			postpone_completion
 		FROM _vt.schema_migrations
 		WHERE
@@ -483,15 +505,13 @@ const (
 		END,
 		COUNT_COLUMN_IN_INDEX
 	`
-	sqlDropTrigger       = "DROP TRIGGER IF EXISTS `%a`.`%a`"
-	sqlShowTablesLike    = "SHOW TABLES LIKE '%a'"
-	sqlCreateTableLike   = "CREATE TABLE `%a` LIKE `%a`"
-	sqlDropTable         = "DROP TABLE `%a`"
-	sqlAlterTableOptions = "ALTER TABLE `%a` %s"
-	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
-	sqlShowTableStatus   = "SHOW TABLE STATUS LIKE '%a'"
-	sqlShowCreateTable   = "SHOW CREATE TABLE `%a`"
-	sqlGetAutoIncrement  = `
+	sqlDropTrigger      = "DROP TRIGGER IF EXISTS `%a`.`%a`"
+	sqlShowTablesLike   = "SHOW TABLES LIKE '%a'"
+	sqlDropTable        = "DROP TABLE `%a`"
+	sqlShowColumnsFrom  = "SHOW COLUMNS FROM `%a`"
+	sqlShowTableStatus  = "SHOW TABLE STATUS LIKE '%a'"
+	sqlShowCreateTable  = "SHOW CREATE TABLE `%a`"
+	sqlGetAutoIncrement = `
 		SELECT
 			AUTO_INCREMENT
 		FROM INFORMATION_SCHEMA.TABLES
@@ -501,7 +521,9 @@ const (
 			AND AUTO_INCREMENT IS NOT NULL
 		`
 	sqlAlterTableAutoIncrement      = "ALTER TABLE `%s` AUTO_INCREMENT=%a"
-	sqlImpossibleSelectVreplication = "SELECT no_such_column__init_ddl FROM _vt.vreplication LIMIT 1"
+	sqlAlterTableExchangePartition  = "ALTER TABLE `%a` EXCHANGE PARTITION `%a` WITH TABLE `%a`"
+	sqlAlterTableRemovePartitioning = "ALTER TABLE `%a` REMOVE PARTITIONING"
+	sqlAlterTableDropPartition      = "ALTER TABLE `%a` DROP PARTITION `%a`"
 	sqlStartVReplStream             = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
 	sqlStopVReplStream              = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
 	sqlDeleteVReplStream            = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
@@ -585,4 +607,7 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableIsView,
 	alterSchemaMigrationsTableReadyToComplete,
 	alterSchemaMigrationsTableStowawayTable,
+	alterSchemaMigrationsTableVreplLivenessIndicator,
+	alterSchemaMigrationsTableUserThrottleRatio,
+	alterSchemaMigrationsTableSpecialPlan,
 }

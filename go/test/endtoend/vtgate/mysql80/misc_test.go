@@ -221,3 +221,74 @@ func BenchmarkReservedConnWhenSettingSysVar(b *testing.B) {
 		benchmarkName = "Use reserved connections"
 	}
 }
+
+func TestJsonFunctions(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.AssertMatches(t, conn,
+		`SELECT 
+JSON_QUOTE('null'), 
+JSON_QUOTE('"null"'), 
+JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), 
+JSON_ARRAY(1, "abc", NULL, TRUE)`,
+		`[[VARBINARY("\"null\"") VARBINARY("\"\\\"null\\\"\"") JSON("{\"1\": 2, \"abc\": 52}") JSON("[1, \"abc\", null, true]")]]`)
+
+	utils.AssertMatches(t, conn,
+		`SELECT 
+JSON_CONTAINS('{"a": 1, "b": 2, "c": {"d": 4}}', '1'), 
+JSON_CONTAINS_PATH('{"a": 1, "b": 2, "c": {"d": 4}}', 'one', '$.a', '$.e'), 
+JSON_EXTRACT('[10, 20, [30, 40]]', '$[1]'), 
+JSON_UNQUOTE(JSON_EXTRACT('["a","b"]', '$[1]')), 
+JSON_KEYS('{"a": 1, "b": {"c": 30}}'), 
+JSON_OVERLAPS("[1,3,5,7]", "[2,5,7]"), 
+JSON_SEARCH('["abc"]', 'one', 'abc'), 
+JSON_VALUE('{"fname": "Joe", "lname": "Palmer"}', '$.fname'), 
+JSON_ARRAY(4,5) MEMBER OF('[[3,4],[4,5]]')`,
+		`[[INT64(0) INT64(1) JSON("20") BLOB("b") JSON("[\"a\", \"b\"]") INT64(1) JSON("\"$[0]\"") VARBINARY("Joe") INT64(1)]]`)
+
+	utils.AssertMatches(t, conn,
+		`SELECT 
+JSON_SCHEMA_VALIDATION_REPORT('{"type":"string","pattern":"("}', '"abc"'), 
+JSON_SCHEMA_VALID('{"type":"string","pattern":"("}', '"abc"');`,
+		`[[JSON("{\"valid\": true}") INT64(1)]]`)
+
+	utils.Exec(t, conn, "create table jt(a JSON, b INT)")
+	utils.Exec(t, conn, `INSERT INTO jt (a, b) VALUES ("[3,10,5,\"x\",44]", 33), ("[3,10,5,17,[22,44,66]]", 0)`)
+	defer func() {
+		utils.Exec(t, conn, "drop table jt")
+	}()
+
+	utils.AssertMatches(t, conn,
+		`SELECT a->"$[4]", a->>"$[3]" FROM jt`,
+		`[[JSON("44") BLOB("x")] [JSON("[22, 44, 66]") BLOB("17")]]`)
+
+	utils.AssertMatches(t, conn,
+		`select JSON_DEPTH('{}'), JSON_LENGTH('{"a": 1, "b": {"c": 30}}', '$.b'), JSON_TYPE(JSON_EXTRACT('{"a": [10, true]}', '$.a')), JSON_VALID('{"a": 1}');`,
+		`[[INT64(1) INT64(1) VARBINARY("ARRAY") INT64(1)]]`)
+
+	utils.AssertMatches(t, conn,
+		`select 
+JSON_ARRAY_APPEND('{"a": 1}', '$', 'z'), 
+JSON_ARRAY_INSERT('["a", {"b": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), 
+JSON_INSERT('{ "a": 1, "b": [2, 3]}', '$.a', 10, '$.c', CAST('[true, false]' AS JSON))`,
+		`[[JSON("[{\"a\": 1}, \"z\"]") JSON("[\"x\", \"a\", {\"b\": [1, 2]}, [3, 4]]") JSON("{\"a\": 1, \"b\": [2, 3], \"c\": [true, false]}")]]`)
+
+	utils.AssertMatches(t, conn,
+		`select 
+JSON_MERGE('[1, 2]', '[true, false]'), 
+JSON_MERGE_PATCH('{"name": "x"}', '{"id": 47}'),
+JSON_MERGE_PRESERVE('[1, 2]', '{"id": 47}')`,
+		`[[JSON("[1, 2, true, false]") JSON("{\"id\": 47, \"name\": \"x\"}") JSON("[1, 2, {\"id\": 47}]")]]`)
+
+	utils.AssertMatches(t, conn,
+		`select 
+JSON_REMOVE('[1, [2, 3], 4]', '$[1]'), 
+JSON_REPLACE('{ "a": 1, "b": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), 
+JSON_SET('{ "a": 1, "b": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), 
+JSON_UNQUOTE('"abc"')`,
+		`[[JSON("[1, 4]") JSON("{\"a\": 10, \"b\": [2, 3]}") JSON("{\"a\": 10, \"b\": [2, 3], \"c\": \"[true, false]\"}") VARBINARY("abc")]]`)
+}

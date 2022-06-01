@@ -21,6 +21,9 @@ import (
 	"fmt"
 	"io"
 
+	"vitess.io/vitess/go/vt/key"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -100,9 +103,84 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 		filter.Source = src
 
 		return filter, nil
+	case *abstract.Update:
+		var typ topodatapb.TabletType
+		var dest key.Destination
+
+		vindexTable := op.TableInfo.GetVindexTable()
+		opCode := engine.Unsharded
+		if vindexTable.Keyspace.Sharded {
+			opCode = engine.Scatter
+		}
+
+		tblName, ok := op.Table.Alias.Expr.(sqlparser.TableName)
+		if ok {
+			var err error
+			_, _, _, typ, dest, err = ctx.VSchema.FindTableOrVindex(tblName)
+			if err != nil {
+				return nil, err
+			}
+			if dest != nil {
+				if typ != topodatapb.TabletType_PRIMARY {
+					return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.InnodbReadOnly, "unsupported: update statement with a replica target")
+				}
+				// we are dealing with an explicitly targeted UPDATE
+				opCode = engine.ByDestination
+			}
+		}
+
+		vp, cvv, ovq, err := getUpdateVindexInformation(op, vindexTable)
+		if err != nil {
+			return nil, err
+		}
+
+		r := &Route{
+			Source: &Update{
+				QTable:              op.Table,
+				VTable:              vindexTable,
+				Assignments:         op.Assignments,
+				ChangedVindexValues: cvv,
+				OwnedVindexQuery:    ovq,
+				AST:                 op.AST,
+			},
+			RouteOpCode:       opCode,
+			Keyspace:          vindexTable.Keyspace,
+			VindexPreds:       vp,
+			TargetDestination: dest,
+		}
+
+		for _, predicate := range op.Table.Predicates {
+			err := r.UpdateRoutingLogic(ctx, predicate)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if r.RouteOpCode == engine.Scatter && op.AST.Limit != nil {
+			// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard update with limit is not supported")
+		}
+
+		return r, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
 	}
+}
+
+func getUpdateVindexInformation(op *abstract.Update, vindexTable *vindexes.Table) ([]*VindexPlusPredicates, map[string]*engine.VindexValues, string, error) {
+	if !vindexTable.Keyspace.Sharded {
+		return nil, nil, "", nil
+	}
+	primaryVindex, vindexAndPredicates, err := getVindexInformation(op.TableID(), op.Table.Predicates, vindexTable)
+	if err != nil {
+		return nil, nil, "", err
+	}
+
+	changedVindexValues, ownedVindexQuery, err := buildChangedVindexesValues(op.AST, vindexTable, primaryVindex.Columns)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	return vindexAndPredicates, changedVindexValues, ownedVindexQuery, nil
 }
 
 /*
@@ -173,7 +251,10 @@ func createRoute(ctx *plancontext.PlanningContext, table *abstract.QueryTable, s
 	if table.IsInfSchema {
 		return createInfSchemaRoute(ctx, table)
 	}
-	vschemaTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(table.Table)
+	vschemaTable, _, _, _, target, err := ctx.VSchema.FindTableOrVindex(table.Table)
+	if target != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: SELECT with a target destination")
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +319,85 @@ func createRoute(ctx *plancontext.PlanningContext, table *abstract.QueryTable, s
 		}
 	}
 
+	if plan.RouteOpCode == engine.Scatter && len(table.Predicates) > 0 {
+		// If we have a scatter query, it's worth spending a little extra time seeing if we can't improve it
+		for _, pred := range table.Predicates {
+			rewritten := tryRewriteOrToIn(pred)
+			if rewritten != nil {
+				err = plan.UpdateRoutingLogic(ctx, rewritten)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
 	return plan, nil
+}
+
+func tryRewriteOrToIn(expr sqlparser.Expr) sqlparser.Expr {
+	rewrote := false
+	newPred := sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
+		_, ok := cursor.Node().(*sqlparser.OrExpr)
+		return ok
+	}, func(cursor *sqlparser.Cursor) bool {
+		// we are looking for the pattern WHERE c = 1 or c = 2
+		switch or := cursor.Node().(type) {
+		case *sqlparser.OrExpr:
+			lftCmp, ok := or.Left.(*sqlparser.ComparisonExpr)
+			if !ok {
+				return true
+			}
+			rgtCmp, ok := or.Right.(*sqlparser.ComparisonExpr)
+			if !ok {
+				return true
+			}
+
+			col, ok := lftCmp.Left.(*sqlparser.ColName)
+			if !ok || !sqlparser.EqualsExpr(lftCmp.Left, rgtCmp.Left) {
+				return true
+			}
+
+			var tuple sqlparser.ValTuple
+			switch lftCmp.Operator {
+			case sqlparser.EqualOp:
+				tuple = sqlparser.ValTuple{lftCmp.Right}
+			case sqlparser.InOp:
+				lft, ok := lftCmp.Right.(sqlparser.ValTuple)
+				if !ok {
+					return true
+				}
+				tuple = lft
+			default:
+				return true
+			}
+
+			switch rgtCmp.Operator {
+			case sqlparser.EqualOp:
+				tuple = append(tuple, rgtCmp.Right)
+			case sqlparser.InOp:
+				lft, ok := rgtCmp.Right.(sqlparser.ValTuple)
+				if !ok {
+					return true
+				}
+				tuple = append(tuple, lft...)
+			default:
+				return true
+			}
+
+			rewrote = true
+			cursor.Replace(&sqlparser.ComparisonExpr{
+				Operator: sqlparser.InOp,
+				Left:     col,
+				Right:    tuple,
+			})
+		}
+		return true
+	})
+	if rewrote {
+		return newPred.(sqlparser.Expr)
+	}
+	return nil
 }
 
 func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *abstract.QueryTable) (*Route, error) {
@@ -369,7 +528,7 @@ func getJoinFor(ctx *plancontext.PlanningContext, cm opCacheMap, lhs, rhs abstra
 func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs abstract.PhysicalOperator, joinPredicates []sqlparser.Expr, inner bool) (abstract.PhysicalOperator, error) {
 
 	merger := func(a, b *Route) (*Route, error) {
-		return createRouteOperatorForJoin(ctx, a, b, joinPredicates, inner)
+		return createRouteOperatorForJoin(a, b, joinPredicates, inner)
 	}
 
 	newPlan, _ := tryMerge(ctx, lhs, rhs, joinPredicates, merger)
@@ -387,7 +546,7 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs abstract.PhysicalOpe
 	return pushJoinPredicates(ctx, joinPredicates, join)
 }
 
-func createRouteOperatorForJoin(ctx *plancontext.PlanningContext, aRoute, bRoute *Route, joinPredicates []sqlparser.Expr, inner bool) (*Route, error) {
+func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparser.Expr, inner bool) (*Route, error) {
 	// append system table names from both the routes.
 	sysTableName := aRoute.SysTableTableName
 	if sysTableName == nil {
@@ -569,17 +728,22 @@ func leaves(op abstract.Operator) (sources []abstract.Operator) {
 }
 
 func tryMergeReferenceTable(aRoute, bRoute *Route, merger mergeFunc) (*Route, error) {
-	// if either side is a reference table, we can just merge it and use the opcode of the other side
-	var opCode engine.Opcode
-	var selected *VindexOption
+	var (
+		// if either side is a reference table, we can just merge it and use the opcode of the other side
+		opCode engine.Opcode
+		vindex *VindexOption
+		ks     *vindexes.Keyspace
+	)
 
 	switch {
 	case aRoute.RouteOpCode == engine.Reference:
-		selected = bRoute.Selected
+		vindex = bRoute.Selected
 		opCode = bRoute.RouteOpCode
+		ks = bRoute.Keyspace
 	case bRoute.RouteOpCode == engine.Reference:
-		selected = aRoute.Selected
+		vindex = aRoute.Selected
 		opCode = aRoute.RouteOpCode
+		ks = aRoute.Keyspace
 	default:
 		return nil, nil
 	}
@@ -589,7 +753,8 @@ func tryMergeReferenceTable(aRoute, bRoute *Route, merger mergeFunc) (*Route, er
 		return nil, err
 	}
 	r.RouteOpCode = opCode
-	r.Selected = selected
+	r.Selected = vindex
+	r.Keyspace = ks
 	return r, nil
 }
 
@@ -628,7 +793,7 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a *Route, exp sqlparser.
 	var singCol vindexes.SingleColumn
 
 	// for each equality expression that exp has with other column name, we check if it
-	// can be solved by any table in our routeTree a. If an equality expression can be solved,
+	// can be solved by any table in our routeTree. If an equality expression can be solved,
 	// we check if the equality expression and our table share the same vindex, if they do:
 	// the method will return the associated vindexes.SingleColumn.
 	for _, expr := range ctx.SemTable.GetExprAndEqualities(exp) {
@@ -639,12 +804,12 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a *Route, exp sqlparser.
 		leftDep := ctx.SemTable.RecursiveDeps(expr)
 
 		_ = VisitOperators(a, func(rel abstract.PhysicalOperator) (bool, error) {
-			to, isTableOp := rel.(*Table)
+			to, isTableOp := rel.(abstract.IntroducesTable)
 			if !isTableOp {
 				return true, nil
 			}
-			if leftDep.IsSolvedBy(to.QTable.ID) {
-				for _, vindex := range to.VTable.ColumnVindexes {
+			if leftDep.IsSolvedBy(to.GetQTable().ID) {
+				for _, vindex := range to.GetVTable().ColumnVindexes {
 					sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
 					if isSingle && vindex.Columns[0].Equal(col.Name) {
 						singCol = sC
@@ -684,7 +849,7 @@ func VisitOperators(op abstract.PhysicalOperator, f func(tbl abstract.PhysicalOp
 	}
 
 	switch op := op.(type) {
-	case *Table, *Vindex:
+	case *Table, *Vindex, *Update:
 		// leaf - no children to visit
 	case *Route:
 		err := VisitOperators(op.Source, f)

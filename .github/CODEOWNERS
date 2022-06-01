@@ -17,6 +17,7 @@ bootstrap.sh @deepthi
 /go/protoutil @ajm188
 /go/test/endtoend/onlineddl @shlomi-noach
 /go/test/endtoend/orchestrator @deepthi @shlomi-noach @GuptaManan100
+/go/test/endtoend/messaging @mattlord @rohit-nayak-ps @derekperkins
 /go/test/endtoend/vtgate @harshit-gangal @systay @frouioui
 /go/vt/discovery @deepthi
 /go/vt/mysqlctl @deepthi @mattlord
@@ -39,9 +40,9 @@ bootstrap.sh @deepthi
 /go/vt/vttablet/tabletmanager/vreplication @rohit-nayak-ps @mattlord
 /go/vt/vttablet/tabletmanager/vstreamer @rohit-nayak-ps @mattlord
 /go/vt/vttablet/tabletserver @harshit-gangal @systay @shlomi-noach
+/go/vt/vttablet/tabletserver/messager @mattlord @rohit-nayak-ps @derekperkins
 /go/vt/wrangler @deepthi @rohit-nayak-ps @mattlord
 /go/vt/workflow @rohit-nayak-ps @mattlord
-/helm/ @derekperkins @dkhenry
 /proto/vtadmin.proto @ajm188 @doeg @notfelineit
 /proto/vtctldata.proto @ajm188 @doeg @notfelineit
 /proto/vtctlservice.proto @ajm188 @doeg @notfelineit

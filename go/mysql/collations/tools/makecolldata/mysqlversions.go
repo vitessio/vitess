@@ -43,6 +43,13 @@ type alias struct {
 	name string
 }
 
+// CharsetAliases is a list of all aliases that MySQL uses to refer to charsets.
+// As of MySQL 8, all versions of MySQL map the utf8 charset to utf8mb3;
+// this will be changed sometime in the future so it maps to utf8mb4.
+var CharsetAliases = map[string]string{
+	"utf8": "utf8mb3",
+}
+
 func makeversions(output string) {
 	flag.Parse()
 
@@ -79,7 +86,16 @@ func makeversions(output string) {
 				versioninfo[uint(collid)] = vi
 			}
 
-			vi.alias[cols[0]] |= 1 << v
+			collname := cols[0]
+			vi.alias[collname] |= 1 << v
+
+			for from, to := range CharsetAliases {
+				if strings.HasPrefix(collname, from+"_") {
+					aliased := strings.Replace(collname, from+"_", to+"_", 1)
+					vi.alias[aliased] |= 1 << v
+				}
+			}
+
 			switch cols[3] {
 			case "Yes":
 				vi.isdefault |= 1 << v
@@ -102,6 +118,7 @@ func makeversions(output string) {
 
 	var g = codegen.NewGenerator("vitess.io/vitess/go/mysql/collations")
 	g.P("type collver byte")
+	g.P("type collalias struct { mask collver; name string }")
 	g.P("const (")
 	g.P("collverInvalid collver = 0")
 	for n, version := range versions {
@@ -123,8 +140,14 @@ func makeversions(output string) {
 	g.P("default: panic(\"invalid version identifier\")")
 	g.P("}")
 	g.P("}")
+
+	// These are the default aliases for charsets; right now they're common between
+	// all MySQL versions, but this is implemented as a method on `collver` so when
+	// MySQL maps utf8 to utfmb4, we can perform the mapping only for the specific
+	// MySQL version onwards.
+	g.P("func (v collver) charsetAliases() map[string]string { return ", fmt.Sprintf("%#v", CharsetAliases), "}")
 	g.P()
-	g.P("var globalVersionInfo = map[ID]struct{alias map[collver]string; isdefault collver}{")
+	g.P("var globalVersionInfo = map[ID]struct{alias []collalias; isdefault collver}{")
 
 	var sorted []*versionInfo
 	for _, vi := range versioninfo {
@@ -141,9 +164,9 @@ func makeversions(output string) {
 		sort.Slice(reverse, func(i, j int) bool {
 			return reverse[i].name < reverse[j].name
 		})
-		fmt.Fprintf(g, "%d: {alias: map[collver]string{", vi.id)
+		fmt.Fprintf(g, "%d: {alias: []collalias{", vi.id)
 		for _, a := range reverse {
-			fmt.Fprintf(g, "0b%08b: %q,", a.mask, a.name)
+			fmt.Fprintf(g, "{0b%08b, %q},", a.mask, a.name)
 		}
 		fmt.Fprintf(g, "}, isdefault: 0b%08b},\n", vi.isdefault)
 	}

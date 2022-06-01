@@ -17,6 +17,7 @@
 import { Link, Redirect, Route, Switch, useParams, useRouteMatch } from 'react-router-dom';
 import { useExperimentalTabletDebugVars, useTablet } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
+import { isReadOnlyMode } from '../../../util/env';
 import { formatDisplayType, formatState } from '../../../util/tablets';
 import { Code } from '../../Code';
 import { ContentContainer } from '../../layout/ContentContainer';
@@ -31,6 +32,7 @@ import { TabContainer } from '../../tabs/TabContainer';
 import Advanced from './Advanced';
 import style from './Tablet.module.scss';
 import { TabletCharts } from './TabletCharts';
+import { TabletReplication } from './TabletReplication';
 
 interface RouteParams {
     alias: string;
@@ -102,6 +104,7 @@ export const Tablet = () => {
             <ContentContainer>
                 <TabContainer>
                     <Tab text="QPS" to={`${url}/qps`} />
+                    <Tab text="Replication Status" to={`${url}/replication`} />
                     <Tab text="JSON" to={`${url}/json`} />
 
                     <ReadOnlyGate>
@@ -114,6 +117,10 @@ export const Tablet = () => {
                         <TabletCharts alias={alias} clusterID={clusterID} />
                     </Route>
 
+                    <Route path={`${path}/replication`}>
+                        <TabletReplication tablet={tablet} />
+                    </Route>
+
                     <Route path={`${path}/json`}>
                         <div>
                             <Code code={JSON.stringify(tablet, null, 2)} />
@@ -124,11 +131,11 @@ export const Tablet = () => {
                         </div>
                     </Route>
 
-                    <ReadOnlyGate>
+                    {!isReadOnlyMode() && (
                         <Route path={`${path}/advanced`}>
-                            <Advanced tablet={tablet} />
+                            <Advanced alias={alias} clusterID={clusterID} tablet={tablet} />
                         </Route>
-                    </ReadOnlyGate>
+                    )}
 
                     <Redirect to={`${path}/qps`} />
                 </Switch>

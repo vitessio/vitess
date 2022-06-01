@@ -1495,6 +1495,28 @@ func TestCreateKeyspace(t *testing.T) {
 			vschemaShouldExist: false,
 			expectedVSchema:    nil,
 			shouldErr:          false,
+		}, {
+			name: "keyspace with durability policy specified",
+			topo: nil,
+			req: &vtctldatapb.CreateKeyspaceRequest{
+				Name:             "testkeyspace",
+				Type:             topodatapb.KeyspaceType_NORMAL,
+				DurabilityPolicy: "semi_sync",
+			},
+			expected: &vtctldatapb.CreateKeyspaceResponse{
+				Keyspace: &vtctldatapb.Keyspace{
+					Name: "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{
+						KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+						DurabilityPolicy: "semi_sync",
+					},
+				},
+			},
+			vschemaShouldExist: true,
+			expectedVSchema: &vschemapb.Keyspace{
+				Sharded: false,
+			},
+			shouldErr: false,
 		},
 	}
 
@@ -3406,7 +3428,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 					},
 					"zone1-0000000200": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
-							Before: &replicationdatapb.Status{},
+							Before: &replicationdatapb.Status{IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
@@ -4275,6 +4297,153 @@ func TestGetKeyspaces(t *testing.T) {
 
 	_, err = vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
 	assert.Error(t, err)
+}
+
+func TestGetPermissions(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	var testGetPermissionsReply = &tabletmanagerdatapb.Permissions{
+		UserPermissions: []*tabletmanagerdatapb.UserPermission{
+			{
+				Host: "host1",
+				User: "user1",
+				Privileges: map[string]string{
+					"create": "yes",
+					"delete": "no",
+				},
+			},
+		},
+		DbPermissions: []*tabletmanagerdatapb.DbPermission{
+			{
+				Host: "host2",
+				Db:   "db1",
+				User: "user2",
+				Privileges: map[string]string{
+					"create": "no",
+					"delete": "yes",
+				},
+			},
+		},
+	}
+	tests := []struct {
+		name      string
+		tablets   []*topodatapb.Tablet
+		tmc       testutil.TabletManagerClient
+		req       *vtctldatapb.GetPermissionsRequest
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			tmc: testutil.TabletManagerClient{
+				GetPermissionsResults: map[string]struct {
+					Permissions *tabletmanagerdatapb.Permissions
+					Error       error
+				}{
+					"zone1-0000000100": {
+						Permissions: testGetPermissionsReply,
+						Error:       nil,
+					},
+				},
+			},
+			req: &vtctldatapb.GetPermissionsRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		},
+		{
+			name: "no tablet",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  404,
+					},
+				},
+			},
+			tmc: testutil.TabletManagerClient{
+				GetPermissionsResults: map[string]struct {
+					Permissions *tabletmanagerdatapb.Permissions
+					Error       error
+				}{
+					"zone1-0000000100": {
+						Permissions: testGetPermissionsReply,
+						Error:       nil,
+					},
+				},
+			},
+			req: &vtctldatapb.GetPermissionsRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "tmc call failed",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			tmc: testutil.TabletManagerClient{
+				GetPermissionsResults: map[string]struct {
+					Permissions *tabletmanagerdatapb.Permissions
+					Error       error
+				}{
+					"zone1-0000000100": {
+						Permissions: testGetPermissionsReply,
+						Error:       assert.AnError,
+					},
+				},
+			},
+			req: &vtctldatapb.GetPermissionsRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ts := memorytopo.NewServer("zone1")
+			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			resp, err := vtctld.GetPermissions(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+			// we should expect same user and DB permissions as assigned
+			assert.Equal(t, resp.Permissions.DbPermissions[0].Host, "host2")
+			assert.Equal(t, resp.Permissions.UserPermissions[0].Host, "host1")
+
+			require.NoError(t, err)
+		})
+	}
 }
 
 func TestGetRoutingRules(t *testing.T) {
@@ -6349,7 +6518,8 @@ func TestRefreshStateByShard(t *testing.T) {
 				Cells:    []string{"zone1"}, // If we didn't filter, we would get IsPartialRefresh=true because of the failure in zone2.
 			},
 			expected: &vtctldatapb.RefreshStateByShardResponse{
-				IsPartialRefresh: false,
+				IsPartialRefresh:      false,
+				PartialRefreshDetails: "",
 			},
 			shouldErr: false,
 		},
@@ -6385,7 +6555,8 @@ func TestRefreshStateByShard(t *testing.T) {
 				Shard:    "-",
 			},
 			expected: &vtctldatapb.RefreshStateByShardResponse{
-				IsPartialRefresh: true,
+				IsPartialRefresh:      true,
+				PartialRefreshDetails: "failed to refresh tablet zone2-0000000100: assert.AnError general error for testing: RefreshState failed on zone2-100",
 			},
 			shouldErr: false,
 		},
@@ -8164,6 +8335,86 @@ func TestRunHealthCheck(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+		})
+	}
+}
+
+func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		keyspaces   []*vtctldatapb.Keyspace
+		req         *vtctldatapb.SetKeyspaceDurabilityPolicyRequest
+		expected    *vtctldatapb.SetKeyspaceDurabilityPolicyResponse
+		expectedErr string
+	}{
+		{
+			name: "ok",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "ks1",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+				{
+					Name:     "ks2",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			req: &vtctldatapb.SetKeyspaceDurabilityPolicyRequest{
+				Keyspace:         "ks1",
+				DurabilityPolicy: "none",
+			},
+			expected: &vtctldatapb.SetKeyspaceDurabilityPolicyResponse{
+				Keyspace: &topodatapb.Keyspace{
+					DurabilityPolicy: "none",
+				},
+			},
+		},
+		{
+			name: "keyspace not found",
+			req: &vtctldatapb.SetKeyspaceDurabilityPolicyRequest{
+				Keyspace: "ks1",
+			},
+			expectedErr: "node doesn't exist: keyspaces/ks1",
+		},
+		{
+			name: "fail to update durability policy",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "ks1",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			req: &vtctldatapb.SetKeyspaceDurabilityPolicyRequest{
+				Keyspace:         "ks1",
+				DurabilityPolicy: "non-existent",
+			},
+			expectedErr: "durability policy <non-existent> is not a valid policy. Please register it as a policy first",
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ts := memorytopo.NewServer("zone1")
+			testutil.AddKeyspaces(ctx, t, ts, tt.keyspaces...)
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			resp, err := vtctld.SetKeyspaceDurabilityPolicy(ctx, tt.req)
+			if tt.expectedErr != "" {
+				assert.EqualError(t, err, tt.expectedErr)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }

@@ -16,6 +16,13 @@ limitations under the License.
 
 package discovery
 
+import (
+	"strings"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+)
+
 // This file contains helper filter methods to process the unfiltered list of
 // tablets returned by LegacyHealthCheck.GetTabletStatsFrom*.
 // See also legacy_replicationlag.go for a more sophisicated filter used by vtgate.
@@ -36,4 +43,15 @@ func RemoveUnhealthyTablets(tabletStatsList []LegacyTabletStats) []LegacyTabletS
 		result = append(result, ts)
 	}
 	return result
+}
+
+func ParseTabletTypesAndOrder(tabletTypesStr string) ([]topodatapb.TabletType, bool, error) {
+	inOrder := false
+	if strings.HasPrefix(tabletTypesStr, inOrderHint) {
+		inOrder = true
+		tabletTypesStr = tabletTypesStr[len(inOrderHint):]
+	}
+	tabletTypes, err := topoproto.ParseTabletTypes(tabletTypesStr)
+
+	return tabletTypes, inOrder, err
 }

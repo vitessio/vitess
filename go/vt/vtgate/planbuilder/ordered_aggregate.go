@@ -67,6 +67,8 @@ type orderedAggregate struct {
 	// preProcess is true if one of the aggregates needs preprocessing.
 	preProcess bool
 
+	aggrOnEngine bool
+
 	// aggregates specifies the aggregation parameters for each
 	// aggregation function: function opcode and input column number.
 	aggregates []*engine.AggregateParams
@@ -104,7 +106,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 		if hasAggregates {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
 		}
-		pb.plan = newDistinct(pb.plan, nil)
+		pb.plan = newDistinctV3(pb.plan)
 		return nil
 	}
 
@@ -241,6 +243,7 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 	if len(oa.groupByKeys) == 0 {
 		return &engine.ScalarAggregate{
 			PreProcess:          oa.preProcess,
+			AggrOnEngine:        oa.aggrOnEngine,
 			Aggregates:          oa.aggregates,
 			TruncateColumnCount: oa.truncateColumnCount,
 			Collations:          colls,
@@ -250,6 +253,7 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 
 	return &engine.OrderedAggregate{
 		PreProcess:          oa.preProcess,
+		AggrOnEngine:        oa.aggrOnEngine,
 		Aggregates:          oa.aggregates,
 		GroupByKeys:         oa.groupByKeys,
 		TruncateColumnCount: oa.truncateColumnCount,
@@ -285,12 +289,6 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 		}
 		oa.extraDistinct = col
 		oa.preProcess = true
-		var alias string
-		if expr.As.IsEmpty() {
-			alias = sqlparser.String(expr.Expr)
-		} else {
-			alias = expr.As.String()
-		}
 		switch opcode {
 		case engine.AggregateCount:
 			opcode = engine.AggregateCountDistinct
@@ -300,7 +298,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
 			Opcode: opcode,
 			Col:    innerCol,
-			Alias:  alias,
+			Alias:  expr.ColumnName(),
 		})
 	} else {
 		newBuilder, _, innerCol, err := planProjection(pb, oa.input, expr, origin)
@@ -328,7 +326,7 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 	if !funcExpr.Distinct {
 		return false, nil, nil
 	}
-	if opcode != engine.AggregateCount && opcode != engine.AggregateSum {
+	if opcode != engine.AggregateCount && opcode != engine.AggregateSum && opcode != engine.AggregateCountStar {
 		return false, nil, nil
 	}
 	innerAliased, ok := funcExpr.Exprs[0].(*sqlparser.AliasedExpr)
@@ -370,6 +368,16 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 			oa.truncateColumnCount = len(oa.resultColumns)
 		}
 	}
+	for _, key := range oa.aggregates {
+		switch key.Opcode {
+		case engine.AggregateCount:
+			if key.Alias == "" {
+				key.Alias = key.Opcode.String()
+			}
+			key.Opcode = engine.AggregateSum
+		}
+	}
+
 	return oa.input.Wireup(plan, jt)
 }
 

@@ -139,7 +139,7 @@ type VTGate struct {
 	resolver *Resolver
 	vsm      *vstreamManager
 	txConn   *TxConn
-	gw       Gateway
+	gw       *TabletGateway
 
 	// stats objects.
 	// TODO(sougou): This needs to be cleaned up. There
@@ -178,8 +178,8 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	// TabletGateway can create it's own healthcheck
 	gw := NewTabletGateway(ctx, hc, serv, cell)
 	gw.RegisterStats()
-	if err := WaitForTablets(gw, tabletTypesToWait); err != nil {
-		log.Fatalf("gateway.WaitForTablets failed: %v", err)
+	if err := gw.WaitForTablets(tabletTypesToWait); err != nil {
+		log.Fatalf("tabletGateway.WaitForTablets failed: %v", err)
 	}
 
 	// If we want to filter keyspaces replace the srvtopo.Server with a
@@ -364,7 +364,7 @@ func (vtg *VTGate) IsHealthy() error {
 }
 
 // Gateway returns the current gateway implementation. Mostly used for tests.
-func (vtg *VTGate) Gateway() Gateway {
+func (vtg *VTGate) Gateway() *TabletGateway {
 	return vtg.gw
 }
 
@@ -377,17 +377,17 @@ func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
-		goto handleError
+	} else {
+		safeSession := NewSafeSession(session)
+		qr, err = vtg.executor.Execute(ctx, "Execute", safeSession, sql, bindVariables)
+		safeSession.RemoveInternalSavepoint()
 	}
-
-	qr, err = vtg.executor.Execute(ctx, "Execute", NewSafeSession(session), sql, bindVariables)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		vtg.rowsAffected.Add(statsKey, int64(qr.RowsAffected))
 		return session, qr, nil
 	}
 
-handleError:
 	query := map[string]any{
 		"Sql":           sql,
 		"BindVariables": bindVariables,
@@ -439,10 +439,11 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 	} else {
+		safeSession := NewSafeSession(session)
 		err = vtg.executor.StreamExecute(
 			ctx,
 			"StreamExecute",
-			NewSafeSession(session),
+			safeSession,
 			sql,
 			bindVariables,
 			func(reply *sqltypes.Result) error {
@@ -450,6 +451,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 				vtg.rowsAffected.Add(statsKey, int64(reply.RowsAffected))
 				return callback(reply)
 			})
+		safeSession.RemoveInternalSavepoint()
 	}
 	if err != nil {
 		query := map[string]any{

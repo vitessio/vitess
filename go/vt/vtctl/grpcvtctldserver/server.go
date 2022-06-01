@@ -525,6 +525,7 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 	span.Annotate("sharding_column_type", topoproto.KeyspaceIDTypeLString(req.ShardingColumnType))
 	span.Annotate("force", req.Force)
 	span.Annotate("allow_empty_vschema", req.AllowEmptyVSchema)
+	span.Annotate("durability_policy", req.DurabilityPolicy)
 
 	switch req.Type {
 	case topodatapb.KeyspaceType_NORMAL:
@@ -550,8 +551,9 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 
 		ServedFroms: req.ServedFroms,
 
-		BaseKeyspace: req.BaseKeyspace,
-		SnapshotTime: req.SnapshotTime,
+		BaseKeyspace:     req.BaseKeyspace,
+		SnapshotTime:     req.SnapshotTime,
+		DurabilityPolicy: req.DurabilityPolicy,
 	}
 
 	err := s.ts.CreateKeyspace(ctx, req.Name, ki)
@@ -1169,6 +1171,27 @@ func (s *VtctldServer) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKey
 	}
 
 	return &vtctldatapb.GetKeyspacesResponse{Keyspaces: keyspaces}, nil
+}
+
+// GetPermissions is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetPermissions(ctx context.Context, req *vtctldatapb.GetPermissionsRequest) (*vtctldatapb.GetPermissionsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetPermissions")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "Failed to get tablet %v: %v", req.TabletAlias, err)
+	}
+
+	p, err := s.tmc.GetPermissions(ctx, ti.Tablet)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetPermissionsResponse{
+		Permissions: p,
+	}, nil
 }
 
 // GetRoutingRules is part of the vtctlservicepb.VtctldServer interface.
@@ -2043,7 +2066,7 @@ func (s *VtctldServer) RefreshStateByShard(ctx context.Context, req *vtctldatapb
 		return nil, fmt.Errorf("Failed to get shard %s/%s/: %w", req.Keyspace, req.Shard, err)
 	}
 
-	isPartial, err := topotools.RefreshTabletsByShard(ctx, s.ts, s.tmc, si, req.Cells, logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+	isPartial, partialDetails, err := topotools.RefreshTabletsByShard(ctx, s.ts, s.tmc, si, req.Cells, logutil.NewCallbackLogger(func(e *logutilpb.Event) {
 		switch e.Level {
 		case logutilpb.Level_WARNING:
 			log.Warningf(e.Value)
@@ -2058,7 +2081,8 @@ func (s *VtctldServer) RefreshStateByShard(ctx context.Context, req *vtctldatapb
 	}
 
 	return &vtctldatapb.RefreshStateByShardResponse{
-		IsPartialRefresh: isPartial,
+		IsPartialRefresh:      isPartial,
+		PartialRefreshDetails: partialDetails,
 	}, nil
 }
 
@@ -2369,6 +2393,44 @@ func (s *VtctldServer) RunHealthCheck(ctx context.Context, req *vtctldatapb.RunH
 	}
 
 	return &vtctldatapb.RunHealthCheckResponse{}, nil
+}
+
+// SetKeyspaceDurabilityPolicy is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SetKeyspaceDurabilityPolicy(ctx context.Context, req *vtctldatapb.SetKeyspaceDurabilityPolicyRequest) (*vtctldatapb.SetKeyspaceDurabilityPolicyResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetKeyspaceDurabilityPolicy")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("durability_policy", req.DurabilityPolicy)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "SetKeyspaceDurabilityPolicy")
+	if lockErr != nil {
+		return nil, lockErr
+	}
+
+	var err error
+	defer unlock(&err)
+
+	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	policyValid := reparentutil.CheckDurabilityPolicyExists(req.DurabilityPolicy)
+	if !policyValid {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "durability policy <%v> is not a valid policy. Please register it as a policy first", req.DurabilityPolicy)
+	}
+
+	ki.DurabilityPolicy = req.DurabilityPolicy
+
+	err = s.ts.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.SetKeyspaceDurabilityPolicyResponse{
+		Keyspace: ki.Keyspace,
+	}, nil
 }
 
 // SetKeyspaceServedFrom is part of the vtctlservicepb.VtctldServer interface.

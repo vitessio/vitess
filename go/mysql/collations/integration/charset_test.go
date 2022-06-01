@@ -21,6 +21,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 	"vitess.io/vitess/go/mysql/collations/remote"
 )
@@ -40,7 +41,7 @@ func TestLocalEncodings(t *testing.T) {
 	defer conn.Close()
 
 	for _, tc := range cases {
-		local := defaultenv.LookupByName(tc.collation)
+		local := collations.Local().LookupByName(tc.collation)
 		remote := remote.NewCollation(conn, tc.collation)
 		verifyTranscoding(t, local, remote, tc.input)
 	}

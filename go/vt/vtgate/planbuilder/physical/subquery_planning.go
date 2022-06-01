@@ -4,6 +4,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -100,6 +101,9 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 	}
 	outer.SysTableTableSchema = append(outer.SysTableTableSchema, inner.SysTableTableSchema...)
 	for k, v := range inner.SysTableTableName {
+		if outer.SysTableTableName == nil {
+			outer.SysTableTableName = map[string]evalengine.Expr{}
+		}
 		outer.SysTableTableName[k] = v
 	}
 
@@ -121,11 +125,14 @@ func tryMergeSubQueryOp(
 	var err error
 	switch outerOp := outer.(type) {
 	case *Route:
-		merged, err = tryMerge(ctx, outerOp, subq, joinPredicates, merger)
-		if err != nil {
-			return nil, err
+		if shouldTryMergingSubquery(outerOp, subq) {
+			merged, err = tryMerge(ctx, outerOp, subq, joinPredicates, merger)
+			if err != nil {
+				return nil, err
+			}
+			return merged, err
 		}
-		return merged, err
+		return nil, nil
 	case *ApplyJoin:
 		// Trying to merge the subquery with the left-hand or right-hand side of the join
 
@@ -169,6 +176,20 @@ func tryMergeSubQueryOp(
 	default:
 		return nil, nil
 	}
+}
+
+// shouldTryMergingSubquery returns whether there is a possibility of merging the subquery with the outer route
+// For some cases like Reference, we shouldn't try to merge them, since the common logic of tryMerge will allow them to
+// be merged, even though they shouldn't
+func shouldTryMergingSubquery(outerOp *Route, subq abstract.PhysicalOperator) bool {
+	if outerOp.RouteOpCode == engine.Reference {
+		subqRoute, isRoute := subq.(*Route)
+		if !isRoute {
+			return false
+		}
+		return subqRoute.RouteOpCode.IsSingleShard()
+	}
+	return true
 }
 
 // rewriteColumnsInSubqueryOpForApplyJoin rewrites the columns that appear from the other side

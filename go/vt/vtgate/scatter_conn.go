@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"io"
-	"regexp"
 	"sync"
 	"time"
 
@@ -35,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -53,7 +53,7 @@ type ScatterConn struct {
 	timings              *stats.MultiTimings
 	tabletCallErrorCount *stats.CountersWithMultiLabels
 	txConn               *TxConn
-	gateway              Gateway
+	gateway              *TabletGateway
 }
 
 // shardActionFunc defines the contract for a shard action
@@ -180,7 +180,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				}
 			}
 
-			qs, err = getQueryService(rs, info)
+			qs, err = getQueryService(rs, info, session, false)
 			if err != nil {
 				return nil, err
 			}
@@ -273,11 +273,25 @@ func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSe
 	return retry
 }
 
-func getQueryService(rs *srvtopo.ResolvedShard, info *shardActionInfo) (queryservice.QueryService, error) {
+func getQueryService(rs *srvtopo.ResolvedShard, info *shardActionInfo, session *SafeSession, skipReset bool) (queryservice.QueryService, error) {
 	if info.alias == nil {
 		return rs.Gateway, nil
 	}
-	return rs.Gateway.QueryServiceByAlias(info.alias, rs.Target)
+	qs, err := rs.Gateway.QueryServiceByAlias(info.alias, rs.Target)
+	if err == nil || skipReset {
+		return qs, err
+	}
+	// If the session info has only reserved connection and no transaction then we will route it through gateway
+	// Otherwise, we will fail.
+	if info.reservedID == 0 || info.transactionID != 0 {
+		return nil, err
+	}
+	err = session.ResetShard(info.alias)
+	if err != nil {
+		return nil, err
+	}
+	// Returning rs.Gateway will make the gateway to choose new healthy tablet for the targeted tablet type.
+	return rs.Gateway, nil
 }
 
 func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *bool, qr *sqltypes.Result, callback func(*sqltypes.Result) error) error {
@@ -344,7 +358,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				}
 			}
 
-			qs, err = getQueryService(rs, info)
+			qs, err = getQueryService(rs, info, session, false)
 			if err != nil {
 				return nil, err
 			}
@@ -574,7 +588,7 @@ func (stc *ScatterConn) multiGoTransaction(
 		startTime, statsKey := stc.startAction(name, rs.Target)
 		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-		shardActionInfo := actionInfo(rs.Target, session, autocommit)
+		shardActionInfo := actionInfo(ctx, rs.Target, session, autocommit)
 		updated, err := action(rs, i, shardActionInfo)
 		if updated == nil {
 			return
@@ -654,7 +668,7 @@ func (stc *ScatterConn) ExecuteLock(
 		_ = stc.txConn.ReleaseLock(ctx, session)
 		return nil, vterrors.Wrap(err, "Any previous held locks are released")
 	}
-	qs, err := getQueryService(rs, info)
+	qs, err := getQueryService(rs, info, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -694,27 +708,46 @@ func (stc *ScatterConn) ExecuteLock(
 	return qr, err
 }
 
-var txClosed = regexp.MustCompile("transaction ([a-z0-9:]+) (?:ended|not found)")
-
 func wasConnectionClosed(err error) bool {
 	sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
 	message := sqlErr.Error()
 
-	return sqlErr.Number() == mysql.CRServerGone ||
-		sqlErr.Number() == mysql.CRServerLost ||
-		(sqlErr.Number() == mysql.ERQueryInterrupted && txClosed.MatchString(message))
+	switch sqlErr.Number() {
+	case mysql.CRServerGone, mysql.CRServerLost:
+		return true
+	case mysql.ERQueryInterrupted:
+		return vterrors.TxClosed.MatchString(message)
+	default:
+		return false
+	}
 }
 
+// requireNewQS this checks if we need to fallback to new tablet.
 func requireNewQS(err error, target *querypb.Target) bool {
 	code := vterrors.Code(err)
 	msg := err.Error()
-	return (code == vtrpcpb.Code_FAILED_PRECONDITION && vterrors.RxWrongTablet.MatchString(msg)) ||
-		(code == vtrpcpb.Code_CLUSTER_EVENT && ((target != nil && target.TabletType == topodatapb.TabletType_PRIMARY) || vterrors.RxOp.MatchString(msg)))
+	switch code {
+	// when the tablet or mysql is unavailable for any reason.
+	case vtrpcpb.Code_UNAVAILABLE:
+		return true
+	// when received wrong tablet error message.
+	case vtrpcpb.Code_FAILED_PRECONDITION:
+		return vterrors.RxWrongTablet.MatchString(msg)
+	// when received cluster_event from tablet and tablet is not operational.
+	// this will also help in buffering the query if needed.
+	case vtrpcpb.Code_CLUSTER_EVENT:
+		return (target != nil && target.TabletType == topodatapb.TabletType_PRIMARY) || vterrors.RxOp.MatchString(msg)
+	}
+	return false
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
-func actionInfo(target *querypb.Target, session *SafeSession, autocommit bool) *shardActionInfo {
+func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSession, autocommit bool) *shardActionInfo {
 	if !(session.InTransaction() || session.InReservedConn()) {
+		return &shardActionInfo{}
+	}
+	ignoreSession := ctx.Value(engine.IgnoreReserveTxn)
+	if ignoreSession != nil {
 		return &shardActionInfo{}
 	}
 	// No need to protect ourselves from the race condition between

@@ -280,19 +280,19 @@ func newASTRewriter(keyspace string, selectLimit int, setVarComment string, sysV
 }
 
 const (
-	//LastInsertIDName is a reserved bind var name for last_insert_id()
+	// LastInsertIDName is a reserved bind var name for last_insert_id()
 	LastInsertIDName = "__lastInsertId"
 
-	//DBVarName is a reserved bind var name for database()
+	// DBVarName is a reserved bind var name for database()
 	DBVarName = "__vtdbname"
 
-	//FoundRowsName is a reserved bind var name for found_rows()
+	// FoundRowsName is a reserved bind var name for found_rows()
 	FoundRowsName = "__vtfrows"
 
-	//RowCountName is a reserved bind var name for row_count()
+	// RowCountName is a reserved bind var name for row_count()
 	RowCountName = "__vtrcount"
 
-	//UserDefinedVariableName is what we prepend bind var names for user defined variables
+	// UserDefinedVariableName is what we prepend bind var names for user defined variables
 	UserDefinedVariableName = "__vtudv"
 )
 
@@ -311,7 +311,7 @@ func (er *astRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, err
 func (er *astRewriter) rewrite(cursor *Cursor) bool {
 	// Add SET_VAR comment to this node if it supports it and is needed
 	if supportOptimizerHint, supportsOptimizerHint := cursor.Node().(SupportOptimizerHint); supportsOptimizerHint && er.setVarComment != "" {
-		newComments, err := supportOptimizerHint.GetComments().AddQueryHint(er.setVarComment)
+		newComments, err := supportOptimizerHint.GetParsedComments().AddQueryHint(er.setVarComment)
 		if err != nil {
 			er.err = err
 			return false
@@ -406,6 +406,8 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 				er.bindVars.AddSysVar(sysVar)
 			}
 		}
+	case *ExistsExpr:
+		er.existsRewrite(cursor, node)
 	}
 	return true
 }
@@ -506,6 +508,9 @@ func (er *astRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
 }
 
 func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
+	if _, isExists := cursor.Parent().(*ExistsExpr); isExists {
+		return
+	}
 	sel, isSimpleSelect := subquery.Select.(*Select)
 	if !isSimpleSelect {
 		return
@@ -555,6 +560,34 @@ func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 	}
 
 	cursor.Replace(rewritten)
+}
+
+func (er *astRewriter) existsRewrite(cursor *Cursor, node *ExistsExpr) {
+	switch node := node.Subquery.Select.(type) {
+	case *Select:
+		if node.Limit == nil {
+			node.Limit = &Limit{}
+		}
+		node.Limit.Rowcount = NewIntLiteral("1")
+
+		if node.Having != nil {
+			// If the query has HAVING, we can't take any shortcuts
+			return
+		}
+
+		if len(node.GroupBy) == 0 && node.SelectExprs.AllAggregation() {
+			// in these situations, we are guaranteed to always get a non-empty result,
+			// so we can replace the EXISTS with a literal true
+			cursor.Replace(BoolVal(true))
+		}
+
+		// If we are not doing HAVING, we can safely replace all select expressions with a
+		// single `1` and remove any grouping
+		node.SelectExprs = SelectExprs{
+			&AliasedExpr{Expr: NewIntLiteral("1")},
+		}
+		node.GroupBy = nil
+	}
 }
 
 func bindVarExpression(name string) Expr {

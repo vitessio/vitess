@@ -17,25 +17,47 @@ jobs:
     runs-on: ubuntu-18.04
 
     steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Check for changes in relevant files
+      uses: frouioui/paths-filter@main
+      id: changes
+      with:
+        token: ''
+        filters: |
+          end_to_end:
+            - 'go/**/*.go'
+            - 'test.go'
+            - 'Makefile'
+            - 'build.env'
+            - 'go.[sumod]'
+            - 'proto/*.proto'
+            - 'tools/**'
+            - 'config/**'
+            - 'bootstrap.sh'
+            - '.github/workflows/**'
+
     - name: Set up Go
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v2
       with:
-        go-version: 1.18
+        go-version: 1.18.1
 
     - name: Set up python
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@v2
 
     - name: Tune the OS
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
         # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
         echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
         sudo sysctl -p /etc/sysctl.conf
 
-    - name: Check out code
-      uses: actions/checkout@v2
-
     - name: Get dependencies
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo apt-get update
         sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
@@ -48,13 +70,8 @@ jobs:
         # install JUnit report formatter
         go install github.com/jstemmer/go-junit-report@latest
 
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get install -y gnupg2
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get update
-        sudo apt-get install percona-xtrabackup-24
-
     - name: Setup launchable dependencies
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
         pip3 install --user launchable~=1.0 > /dev/null
@@ -66,8 +83,12 @@ jobs:
         launchable record build --name "$GITHUB_RUN_ID" --source .
 
     - name: Run cluster endtoend test
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 30
       run: |
+        # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
+        # which musn't be more than 107 characters long.
+        export VTDATAROOT="/tmp/"
         source build.env
 
         set -x
@@ -76,10 +97,10 @@ jobs:
         eatmydata -- go run test.go -docker=false -follow -shard 21 | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable
+      if: steps.changes.outputs.end_to_end == 'true' && always()
       run: |
         # send recorded tests to launchable
         launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
 
         # print test output
         cat output.txt
-      if: always()

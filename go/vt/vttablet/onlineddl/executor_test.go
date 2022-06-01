@@ -19,3 +19,107 @@ Functionality of this Executor is tested in go/test/endtoend/onlineddl/...
 */
 
 package onlineddl
+
+import (
+	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
+)
+
+func TestConstraintOriginalNameRegexp(t *testing.T) {
+	tt := []struct {
+		name     string
+		original string
+	}{
+		{
+			name:     "check1",
+			original: "check1",
+		},
+		{
+			name:     "chk_7c7de6cb4f9b5842b4d0271f40756883_check1",
+			original: "check1",
+		},
+		{
+			name:     "fk_7c7de6cb4f9b5842b4d0271f40756883_check1",
+			original: "check1",
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			submatch := constraintOriginalNameRegexp.FindStringSubmatch(tc.name)
+			require.NotEmpty(t, submatch)
+			assert.Equal(t, tc.original, submatch[3])
+		})
+	}
+}
+func TestValidateAndEditCreateTableStatement(t *testing.T) {
+	e := Executor{}
+	tt := []struct {
+		name             string
+		query            string
+		expectError      bool
+		countConstraints int
+	}{
+		{
+			name: "table with FK",
+			query: `
+				create table onlineddl_test (
+						id int auto_increment,
+						i int not null,
+						parent_id int not null,
+						primary key(id),
+						constraint test_fk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
+					)
+				`,
+			countConstraints: 1,
+			expectError:      true,
+		},
+		{
+			name: "table with FK",
+			query: `
+				create table onlineddl_test (
+						id int auto_increment,
+						i int not null,
+						primary key(id),
+						constraint check_1 CHECK ((i >= 0)),
+						constraint check_2 CHECK ((i <> 5)),
+						constraint check_3 CHECK ((i >= 0)),
+						constraint chk_1111033c1d2d5908bf1f956ba900b192_check_4 CHECK ((i >= 0))
+					)
+				`,
+			countConstraints: 4,
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			stmt, err := sqlparser.ParseStrictDDL(tc.query)
+			require.NoError(t, err)
+			createTable, ok := stmt.(*sqlparser.CreateTable)
+			require.True(t, ok)
+
+			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "onlineddl_test"}
+			constraintMap, err := e.validateAndEditCreateTableStatement(context.Background(), onlineDDL, createTable)
+			if tc.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+			uniqueConstraintNames := map[string]bool{}
+			err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				switch node := node.(type) {
+				case *sqlparser.ConstraintDefinition:
+					uniqueConstraintNames[node.Name.String()] = true
+				}
+				return true, nil
+			}, createTable)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.countConstraints, len(uniqueConstraintNames))
+			assert.Equal(t, tc.countConstraints, len(constraintMap))
+		})
+	}
+}

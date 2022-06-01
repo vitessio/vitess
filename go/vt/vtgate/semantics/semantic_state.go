@@ -88,8 +88,8 @@ type (
 
 		ExprTypes   map[sqlparser.Expr]Type
 		selectScope map[*sqlparser.Select]*scope
-		Comments    sqlparser.Comments
-		SubqueryMap map[*sqlparser.Select][]*sqlparser.ExtractedSubquery
+		Comments    *sqlparser.ParsedComments
+		SubqueryMap map[sqlparser.Statement][]*sqlparser.ExtractedSubquery
 		SubqueryRef map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery
 
 		// ColumnEqualities is used to enable transitive closures

@@ -74,6 +74,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfAlterCharset(a, b)
+	case *AlterCheck:
+		b, ok := inB.(*AlterCheck)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterCheck(a, b)
 	case *AlterColumn:
 		b, ok := inB.(*AlterColumn)
 		if !ok {
@@ -86,6 +92,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfAlterDatabase(a, b)
+	case *AlterIndex:
+		b, ok := inB.(*AlterIndex)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterIndex(a, b)
 	case *AlterMigration:
 		b, ok := inB.(*AlterMigration)
 		if !ok {
@@ -212,12 +224,6 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsColumns(a, b)
-	case Comments:
-		b, ok := inB.(Comments)
-		if !ok {
-			return false
-		}
-		return EqualsComments(a, b)
 	case *Commit:
 		b, ok := inB.(*Commit)
 		if !ok {
@@ -476,6 +482,138 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return a == b
+	case *JSONArrayExpr:
+		b, ok := inB.(*JSONArrayExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONArrayExpr(a, b)
+	case *JSONAttributesExpr:
+		b, ok := inB.(*JSONAttributesExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONAttributesExpr(a, b)
+	case *JSONContainsExpr:
+		b, ok := inB.(*JSONContainsExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONContainsExpr(a, b)
+	case *JSONContainsPathExpr:
+		b, ok := inB.(*JSONContainsPathExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONContainsPathExpr(a, b)
+	case *JSONExtractExpr:
+		b, ok := inB.(*JSONExtractExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONExtractExpr(a, b)
+	case *JSONKeysExpr:
+		b, ok := inB.(*JSONKeysExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONKeysExpr(a, b)
+	case *JSONObjectExpr:
+		b, ok := inB.(*JSONObjectExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONObjectExpr(a, b)
+	case JSONObjectParam:
+		b, ok := inB.(JSONObjectParam)
+		if !ok {
+			return false
+		}
+		return EqualsJSONObjectParam(a, b)
+	case *JSONOverlapsExpr:
+		b, ok := inB.(*JSONOverlapsExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONOverlapsExpr(a, b)
+	case *JSONPrettyExpr:
+		b, ok := inB.(*JSONPrettyExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONPrettyExpr(a, b)
+	case *JSONQuoteExpr:
+		b, ok := inB.(*JSONQuoteExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONQuoteExpr(a, b)
+	case *JSONRemoveExpr:
+		b, ok := inB.(*JSONRemoveExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONRemoveExpr(a, b)
+	case *JSONSchemaValidFuncExpr:
+		b, ok := inB.(*JSONSchemaValidFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidFuncExpr(a, b)
+	case *JSONSchemaValidationReportFuncExpr:
+		b, ok := inB.(*JSONSchemaValidationReportFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidationReportFuncExpr(a, b)
+	case *JSONSearchExpr:
+		b, ok := inB.(*JSONSearchExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSearchExpr(a, b)
+	case *JSONStorageFreeExpr:
+		b, ok := inB.(*JSONStorageFreeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONStorageFreeExpr(a, b)
+	case *JSONStorageSizeExpr:
+		b, ok := inB.(*JSONStorageSizeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONStorageSizeExpr(a, b)
+	case *JSONTableExpr:
+		b, ok := inB.(*JSONTableExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONTableExpr(a, b)
+	case *JSONUnquoteExpr:
+		b, ok := inB.(*JSONUnquoteExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONUnquoteExpr(a, b)
+	case *JSONValueExpr:
+		b, ok := inB.(*JSONValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONValueExpr(a, b)
+	case *JSONValueMergeExpr:
+		b, ok := inB.(*JSONValueMergeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONValueMergeExpr(a, b)
+	case *JSONValueModifierExpr:
+		b, ok := inB.(*JSONValueModifierExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONValueModifierExpr(a, b)
 	case *JoinCondition:
 		b, ok := inB.(*JoinCondition)
 		if !ok {
@@ -488,6 +626,18 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfJoinTableExpr(a, b)
+	case *JtColumnDefinition:
+		b, ok := inB.(*JtColumnDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJtColumnDefinition(a, b)
+	case *JtOnResponse:
+		b, ok := inB.(*JtOnResponse)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJtOnResponse(a, b)
 	case *KeyState:
 		b, ok := inB.(*KeyState)
 		if !ok {
@@ -530,12 +680,24 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfLockTables(a, b)
+	case MatchAction:
+		b, ok := inB.(MatchAction)
+		if !ok {
+			return false
+		}
+		return a == b
 	case *MatchExpr:
 		b, ok := inB.(*MatchExpr)
 		if !ok {
 			return false
 		}
 		return EqualsRefOfMatchExpr(a, b)
+	case *MemberOfExpr:
+		b, ok := inB.(*MemberOfExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMemberOfExpr(a, b)
 	case *ModifyColumn:
 		b, ok := inB.(*ModifyColumn)
 		if !ok {
@@ -560,12 +722,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfNullVal(a, b)
-	case Offset:
-		b, ok := inB.(Offset)
+	case *Offset:
+		b, ok := inB.(*Offset)
 		if !ok {
 			return false
 		}
-		return a == b
+		return EqualsRefOfOffset(a, b)
 	case OnDup:
 		b, ok := inB.(OnDup)
 		if !ok {
@@ -620,12 +782,30 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfParenTableExpr(a, b)
+	case *ParsedComments:
+		b, ok := inB.(*ParsedComments)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfParsedComments(a, b)
 	case *PartitionDefinition:
 		b, ok := inB.(*PartitionDefinition)
 		if !ok {
 			return false
 		}
 		return EqualsRefOfPartitionDefinition(a, b)
+	case *PartitionDefinitionOptions:
+		b, ok := inB.(*PartitionDefinitionOptions)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPartitionDefinitionOptions(a, b)
+	case *PartitionEngine:
+		b, ok := inB.(*PartitionEngine)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPartitionEngine(a, b)
 	case *PartitionOption:
 		b, ok := inB.(*PartitionOption)
 		if !ok {
@@ -668,6 +848,30 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfReferenceDefinition(a, b)
+	case *RegexpInstrExpr:
+		b, ok := inB.(*RegexpInstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpInstrExpr(a, b)
+	case *RegexpLikeExpr:
+		b, ok := inB.(*RegexpLikeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpLikeExpr(a, b)
+	case *RegexpReplaceExpr:
+		b, ok := inB.(*RegexpReplaceExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpReplaceExpr(a, b)
+	case *RegexpSubstrExpr:
+		b, ok := inB.(*RegexpSubstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpSubstrExpr(a, b)
 	case *Release:
 		b, ok := inB.(*Release)
 		if !ok {
@@ -788,18 +992,24 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfShowFilter(a, b)
-	case *ShowLegacy:
-		b, ok := inB.(*ShowLegacy)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfShowLegacy(a, b)
 	case *ShowMigrationLogs:
 		b, ok := inB.(*ShowMigrationLogs)
 		if !ok {
 			return false
 		}
 		return EqualsRefOfShowMigrationLogs(a, b)
+	case *ShowOther:
+		b, ok := inB.(*ShowOther)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowOther(a, b)
+	case *ShowThrottledApps:
+		b, ok := inB.(*ShowThrottledApps)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowThrottledApps(a, b)
 	case *StarExpr:
 		b, ok := inB.(*StarExpr)
 		if !ok {
@@ -818,6 +1028,24 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfSubPartition(a, b)
+	case *SubPartitionDefinition:
+		b, ok := inB.(*SubPartitionDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubPartitionDefinition(a, b)
+	case *SubPartitionDefinitionOptions:
+		b, ok := inB.(*SubPartitionDefinitionOptions)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubPartitionDefinitionOptions(a, b)
+	case SubPartitionDefinitions:
+		b, ok := inB.(SubPartitionDefinitions)
+		if !ok {
+			return false
+		}
+		return EqualsSubPartitionDefinitions(a, b)
 	case *Subquery:
 		b, ok := inB.(*Subquery)
 		if !ok {
@@ -1084,6 +1312,18 @@ func EqualsRefOfAlterCharset(a, b *AlterCharset) bool {
 		a.Collate == b.Collate
 }
 
+// EqualsRefOfAlterCheck does deep equals between the two objects.
+func EqualsRefOfAlterCheck(a, b *AlterCheck) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Enforced == b.Enforced &&
+		EqualsColIdent(a.Name, b.Name)
+}
+
 // EqualsRefOfAlterColumn does deep equals between the two objects.
 func EqualsRefOfAlterColumn(a, b *AlterColumn) bool {
 	if a == b {
@@ -1094,7 +1334,8 @@ func EqualsRefOfAlterColumn(a, b *AlterColumn) bool {
 	}
 	return a.DropDefault == b.DropDefault &&
 		EqualsRefOfColName(a.Column, b.Column) &&
-		EqualsExpr(a.DefaultVal, b.DefaultVal)
+		EqualsExpr(a.DefaultVal, b.DefaultVal) &&
+		EqualsRefOfBool(a.Invisible, b.Invisible)
 }
 
 // EqualsRefOfAlterDatabase does deep equals between the two objects.
@@ -1108,7 +1349,19 @@ func EqualsRefOfAlterDatabase(a, b *AlterDatabase) bool {
 	return a.UpdateDataDirectory == b.UpdateDataDirectory &&
 		a.FullyParsed == b.FullyParsed &&
 		EqualsTableIdent(a.DBName, b.DBName) &&
-		EqualsSliceOfCollateAndCharset(a.AlterOptions, b.AlterOptions)
+		EqualsSliceOfDatabaseOption(a.AlterOptions, b.AlterOptions)
+}
+
+// EqualsRefOfAlterIndex does deep equals between the two objects.
+func EqualsRefOfAlterIndex(a, b *AlterIndex) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Invisible == b.Invisible &&
+		EqualsColIdent(a.Name, b.Name)
 }
 
 // EqualsRefOfAlterMigration does deep equals between the two objects.
@@ -1120,7 +1373,9 @@ func EqualsRefOfAlterMigration(a, b *AlterMigration) bool {
 		return false
 	}
 	return a.UUID == b.UUID &&
-		a.Type == b.Type
+		a.Expire == b.Expire &&
+		a.Type == b.Type &&
+		EqualsRefOfLiteral(a.Ratio, b.Ratio)
 }
 
 // EqualsRefOfAlterTable does deep equals between the two objects.
@@ -1136,7 +1391,7 @@ func EqualsRefOfAlterTable(a, b *AlterTable) bool {
 		EqualsSliceOfAlterOption(a.AlterOptions, b.AlterOptions) &&
 		EqualsRefOfPartitionSpec(a.PartitionSpec, b.PartitionSpec) &&
 		EqualsRefOfPartitionOption(a.PartitionOption, b.PartitionOption) &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfAlterView does deep equals between the two objects.
@@ -1154,7 +1409,7 @@ func EqualsRefOfAlterView(a, b *AlterView) bool {
 		EqualsRefOfDefiner(a.Definer, b.Definer) &&
 		EqualsColumns(a.Columns, b.Columns) &&
 		EqualsSelectStatement(a.Select, b.Select) &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfAlterVschema does deep equals between the two objects.
@@ -1339,10 +1594,10 @@ func EqualsRefOfColumnType(a, b *ColumnType) bool {
 	return a.Type == b.Type &&
 		a.Unsigned == b.Unsigned &&
 		a.Zerofill == b.Zerofill &&
-		a.Charset == b.Charset &&
 		EqualsRefOfColumnTypeOptions(a.Options, b.Options) &&
 		EqualsRefOfLiteral(a.Length, b.Length) &&
 		EqualsRefOfLiteral(a.Scale, b.Scale) &&
+		EqualsColumnCharset(a.Charset, b.Charset) &&
 		EqualsSliceOfString(a.EnumValues, b.EnumValues)
 }
 
@@ -1353,19 +1608,6 @@ func EqualsColumns(a, b Columns) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if !EqualsColIdent(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-// EqualsComments does deep equals between the two objects.
-func EqualsComments(a, b Comments) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if a[i] != b[i] {
 			return false
 		}
 	}
@@ -1430,7 +1672,8 @@ func EqualsRefOfConvertExpr(a, b *ConvertExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsExpr(a.Expr, b.Expr) &&
+	return a.Array == b.Array &&
+		EqualsExpr(a.Expr, b.Expr) &&
 		EqualsRefOfConvertType(a.Type, b.Type)
 }
 
@@ -1443,9 +1686,9 @@ func EqualsRefOfConvertType(a, b *ConvertType) bool {
 		return false
 	}
 	return a.Type == b.Type &&
-		a.Charset == b.Charset &&
 		EqualsRefOfLiteral(a.Length, b.Length) &&
-		EqualsRefOfLiteral(a.Scale, b.Scale)
+		EqualsRefOfLiteral(a.Scale, b.Scale) &&
+		EqualsColumnCharset(a.Charset, b.Charset)
 }
 
 // EqualsRefOfConvertUsingExpr does deep equals between the two objects.
@@ -1470,9 +1713,9 @@ func EqualsRefOfCreateDatabase(a, b *CreateDatabase) bool {
 	}
 	return a.IfNotExists == b.IfNotExists &&
 		a.FullyParsed == b.FullyParsed &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsTableIdent(a.DBName, b.DBName) &&
-		EqualsSliceOfCollateAndCharset(a.CreateOptions, b.CreateOptions)
+		EqualsSliceOfDatabaseOption(a.CreateOptions, b.CreateOptions)
 }
 
 // EqualsRefOfCreateTable does deep equals between the two objects.
@@ -1489,7 +1732,7 @@ func EqualsRefOfCreateTable(a, b *CreateTable) bool {
 		EqualsTableName(a.Table, b.Table) &&
 		EqualsRefOfTableSpec(a.TableSpec, b.TableSpec) &&
 		EqualsRefOfOptLike(a.OptLike, b.OptLike) &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfCreateView does deep equals between the two objects.
@@ -1508,7 +1751,7 @@ func EqualsRefOfCreateView(a, b *CreateView) bool {
 		EqualsRefOfDefiner(a.Definer, b.Definer) &&
 		EqualsColumns(a.Columns, b.Columns) &&
 		EqualsSelectStatement(a.Select, b.Select) &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfCurTimeFuncExpr does deep equals between the two objects.
@@ -1520,7 +1763,7 @@ func EqualsRefOfCurTimeFuncExpr(a, b *CurTimeFuncExpr) bool {
 		return false
 	}
 	return EqualsColIdent(a.Name, b.Name) &&
-		EqualsRefOfLiteral(a.Fsp, b.Fsp)
+		EqualsExpr(a.Fsp, b.Fsp)
 }
 
 // EqualsRefOfDeallocateStmt does deep equals between the two objects.
@@ -1532,7 +1775,7 @@ func EqualsRefOfDeallocateStmt(a, b *DeallocateStmt) bool {
 		return false
 	}
 	return a.Type == b.Type &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsColIdent(a.Name, b.Name)
 }
 
@@ -1569,7 +1812,7 @@ func EqualsRefOfDelete(a, b *Delete) bool {
 	}
 	return EqualsRefOfWith(a.With, b.With) &&
 		a.Ignore == b.Ignore &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsTableNames(a.Targets, b.Targets) &&
 		EqualsTableExprs(a.TableExprs, b.TableExprs) &&
 		EqualsPartitions(a.Partitions, b.Partitions) &&
@@ -1586,7 +1829,8 @@ func EqualsRefOfDerivedTable(a, b *DerivedTable) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsSelectStatement(a.Select, b.Select)
+	return a.Lateral == b.Lateral &&
+		EqualsSelectStatement(a.Select, b.Select)
 }
 
 // EqualsRefOfDropColumn does deep equals between the two objects.
@@ -1609,7 +1853,7 @@ func EqualsRefOfDropDatabase(a, b *DropDatabase) bool {
 		return false
 	}
 	return a.IfExists == b.IfExists &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsTableIdent(a.DBName, b.DBName)
 }
 
@@ -1636,7 +1880,7 @@ func EqualsRefOfDropTable(a, b *DropTable) bool {
 	return a.Temp == b.Temp &&
 		a.IfExists == b.IfExists &&
 		EqualsTableNames(a.FromTables, b.FromTables) &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfDropView does deep equals between the two objects.
@@ -1649,7 +1893,7 @@ func EqualsRefOfDropView(a, b *DropView) bool {
 	}
 	return a.IfExists == b.IfExists &&
 		EqualsTableNames(a.FromTables, b.FromTables) &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfExecuteStmt does deep equals between the two objects.
@@ -1661,7 +1905,7 @@ func EqualsRefOfExecuteStmt(a, b *ExecuteStmt) bool {
 		return false
 	}
 	return EqualsColIdent(a.Name, b.Name) &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsColumns(a.Arguments, b.Arguments)
 }
 
@@ -1889,7 +2133,7 @@ func EqualsRefOfInsert(a, b *Insert) bool {
 		return false
 	}
 	return a.Action == b.Action &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		a.Ignore == b.Ignore &&
 		EqualsTableName(a.Table, b.Table) &&
 		EqualsPartitions(a.Partitions, b.Partitions) &&
@@ -1934,6 +2178,270 @@ func EqualsRefOfIsExpr(a, b *IsExpr) bool {
 		a.Right == b.Right
 }
 
+// EqualsRefOfJSONArrayExpr does deep equals between the two objects.
+func EqualsRefOfJSONArrayExpr(a, b *JSONArrayExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExprs(a.Params, b.Params)
+}
+
+// EqualsRefOfJSONAttributesExpr does deep equals between the two objects.
+func EqualsRefOfJSONAttributesExpr(a, b *JSONAttributesExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsExpr(a.JSONDoc, b.JSONDoc) &&
+		EqualsJSONPathParam(a.Path, b.Path)
+}
+
+// EqualsRefOfJSONContainsExpr does deep equals between the two objects.
+func EqualsRefOfJSONContainsExpr(a, b *JSONContainsExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Target, b.Target) &&
+		EqualsExpr(a.Candidate, b.Candidate) &&
+		EqualsSliceOfJSONPathParam(a.PathList, b.PathList)
+}
+
+// EqualsRefOfJSONContainsPathExpr does deep equals between the two objects.
+func EqualsRefOfJSONContainsPathExpr(a, b *JSONContainsPathExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.JSONDoc, b.JSONDoc) &&
+		EqualsExpr(a.OneOrAll, b.OneOrAll) &&
+		EqualsSliceOfJSONPathParam(a.PathList, b.PathList)
+}
+
+// EqualsRefOfJSONExtractExpr does deep equals between the two objects.
+func EqualsRefOfJSONExtractExpr(a, b *JSONExtractExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.JSONDoc, b.JSONDoc) &&
+		EqualsSliceOfJSONPathParam(a.PathList, b.PathList)
+}
+
+// EqualsRefOfJSONKeysExpr does deep equals between the two objects.
+func EqualsRefOfJSONKeysExpr(a, b *JSONKeysExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.JSONDoc, b.JSONDoc) &&
+		EqualsSliceOfJSONPathParam(a.PathList, b.PathList)
+}
+
+// EqualsRefOfJSONObjectExpr does deep equals between the two objects.
+func EqualsRefOfJSONObjectExpr(a, b *JSONObjectExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSliceOfRefOfJSONObjectParam(a.Params, b.Params)
+}
+
+// EqualsJSONObjectParam does deep equals between the two objects.
+func EqualsJSONObjectParam(a, b JSONObjectParam) bool {
+	return EqualsExpr(a.Key, b.Key) &&
+		EqualsExpr(a.Value, b.Value)
+}
+
+// EqualsRefOfJSONOverlapsExpr does deep equals between the two objects.
+func EqualsRefOfJSONOverlapsExpr(a, b *JSONOverlapsExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.JSONDoc1, b.JSONDoc1) &&
+		EqualsExpr(a.JSONDoc2, b.JSONDoc2)
+}
+
+// EqualsRefOfJSONPrettyExpr does deep equals between the two objects.
+func EqualsRefOfJSONPrettyExpr(a, b *JSONPrettyExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.JSONVal, b.JSONVal)
+}
+
+// EqualsRefOfJSONQuoteExpr does deep equals between the two objects.
+func EqualsRefOfJSONQuoteExpr(a, b *JSONQuoteExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.StringArg, b.StringArg)
+}
+
+// EqualsRefOfJSONRemoveExpr does deep equals between the two objects.
+func EqualsRefOfJSONRemoveExpr(a, b *JSONRemoveExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.JSONDoc, b.JSONDoc) &&
+		EqualsExprs(a.PathList, b.PathList)
+}
+
+// EqualsRefOfJSONSchemaValidFuncExpr does deep equals between the two objects.
+func EqualsRefOfJSONSchemaValidFuncExpr(a, b *JSONSchemaValidFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Schema, b.Schema) &&
+		EqualsExpr(a.Document, b.Document)
+}
+
+// EqualsRefOfJSONSchemaValidationReportFuncExpr does deep equals between the two objects.
+func EqualsRefOfJSONSchemaValidationReportFuncExpr(a, b *JSONSchemaValidationReportFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Schema, b.Schema) &&
+		EqualsExpr(a.Document, b.Document)
+}
+
+// EqualsRefOfJSONSearchExpr does deep equals between the two objects.
+func EqualsRefOfJSONSearchExpr(a, b *JSONSearchExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.JSONDoc, b.JSONDoc) &&
+		EqualsExpr(a.OneOrAll, b.OneOrAll) &&
+		EqualsExpr(a.SearchStr, b.SearchStr) &&
+		EqualsExpr(a.EscapeChar, b.EscapeChar) &&
+		EqualsSliceOfJSONPathParam(a.PathList, b.PathList)
+}
+
+// EqualsRefOfJSONStorageFreeExpr does deep equals between the two objects.
+func EqualsRefOfJSONStorageFreeExpr(a, b *JSONStorageFreeExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.JSONVal, b.JSONVal)
+}
+
+// EqualsRefOfJSONStorageSizeExpr does deep equals between the two objects.
+func EqualsRefOfJSONStorageSizeExpr(a, b *JSONStorageSizeExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.JSONVal, b.JSONVal)
+}
+
+// EqualsRefOfJSONTableExpr does deep equals between the two objects.
+func EqualsRefOfJSONTableExpr(a, b *JSONTableExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr) &&
+		EqualsTableIdent(a.Alias, b.Alias) &&
+		EqualsExpr(a.Filter, b.Filter) &&
+		EqualsSliceOfRefOfJtColumnDefinition(a.Columns, b.Columns)
+}
+
+// EqualsRefOfJSONUnquoteExpr does deep equals between the two objects.
+func EqualsRefOfJSONUnquoteExpr(a, b *JSONUnquoteExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.JSONValue, b.JSONValue)
+}
+
+// EqualsRefOfJSONValueExpr does deep equals between the two objects.
+func EqualsRefOfJSONValueExpr(a, b *JSONValueExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.JSONDoc, b.JSONDoc) &&
+		EqualsJSONPathParam(a.Path, b.Path) &&
+		EqualsRefOfConvertType(a.ReturningType, b.ReturningType) &&
+		EqualsRefOfJtOnResponse(a.EmptyOnResponse, b.EmptyOnResponse) &&
+		EqualsRefOfJtOnResponse(a.ErrorOnResponse, b.ErrorOnResponse)
+}
+
+// EqualsRefOfJSONValueMergeExpr does deep equals between the two objects.
+func EqualsRefOfJSONValueMergeExpr(a, b *JSONValueMergeExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsExpr(a.JSONDoc, b.JSONDoc) &&
+		EqualsExprs(a.JSONDocList, b.JSONDocList)
+}
+
+// EqualsRefOfJSONValueModifierExpr does deep equals between the two objects.
+func EqualsRefOfJSONValueModifierExpr(a, b *JSONValueModifierExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsExpr(a.JSONDoc, b.JSONDoc) &&
+		EqualsSliceOfRefOfJSONObjectParam(a.Params, b.Params)
+}
+
 // EqualsRefOfJoinCondition does deep equals between the two objects.
 func EqualsRefOfJoinCondition(a, b *JoinCondition) bool {
 	if a == b {
@@ -1958,6 +2466,31 @@ func EqualsRefOfJoinTableExpr(a, b *JoinTableExpr) bool {
 		a.Join == b.Join &&
 		EqualsTableExpr(a.RightExpr, b.RightExpr) &&
 		EqualsRefOfJoinCondition(a.Condition, b.Condition)
+}
+
+// EqualsRefOfJtColumnDefinition does deep equals between the two objects.
+func EqualsRefOfJtColumnDefinition(a, b *JtColumnDefinition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsRefOfJtOrdinalColDef(a.JtOrdinal, b.JtOrdinal) &&
+		EqualsRefOfJtPathColDef(a.JtPath, b.JtPath) &&
+		EqualsRefOfJtNestedPathColDef(a.JtNestedPath, b.JtNestedPath)
+}
+
+// EqualsRefOfJtOnResponse does deep equals between the two objects.
+func EqualsRefOfJtOnResponse(a, b *JtOnResponse) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.ResponseType == b.ResponseType &&
+		EqualsExpr(a.Expr, b.Expr)
 }
 
 // EqualsRefOfKeyState does deep equals between the two objects.
@@ -2041,6 +2574,18 @@ func EqualsRefOfMatchExpr(a, b *MatchExpr) bool {
 		a.Option == b.Option
 }
 
+// EqualsRefOfMemberOfExpr does deep equals between the two objects.
+func EqualsRefOfMemberOfExpr(a, b *MemberOfExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Value, b.Value) &&
+		EqualsExpr(a.JSONArr, b.JSONArr)
+}
+
 // EqualsRefOfModifyColumn does deep equals between the two objects.
 func EqualsRefOfModifyColumn(a, b *ModifyColumn) bool {
 	if a == b {
@@ -2085,6 +2630,18 @@ func EqualsRefOfNullVal(a, b *NullVal) bool {
 		return false
 	}
 	return true
+}
+
+// EqualsRefOfOffset does deep equals between the two objects.
+func EqualsRefOfOffset(a, b *Offset) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.V == b.V &&
+		a.Original == b.Original
 }
 
 // EqualsOnDup does deep equals between the two objects.
@@ -2192,6 +2749,17 @@ func EqualsRefOfParenTableExpr(a, b *ParenTableExpr) bool {
 	return EqualsTableExprs(a.Exprs, b.Exprs)
 }
 
+// EqualsRefOfParsedComments does deep equals between the two objects.
+func EqualsRefOfParsedComments(a, b *ParsedComments) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsComments(a.comments, b.comments)
+}
+
 // EqualsRefOfPartitionDefinition does deep equals between the two objects.
 func EqualsRefOfPartitionDefinition(a, b *PartitionDefinition) bool {
 	if a == b {
@@ -2201,7 +2769,38 @@ func EqualsRefOfPartitionDefinition(a, b *PartitionDefinition) bool {
 		return false
 	}
 	return EqualsColIdent(a.Name, b.Name) &&
-		EqualsRefOfPartitionValueRange(a.ValueRange, b.ValueRange)
+		EqualsRefOfPartitionDefinitionOptions(a.Options, b.Options)
+}
+
+// EqualsRefOfPartitionDefinitionOptions does deep equals between the two objects.
+func EqualsRefOfPartitionDefinitionOptions(a, b *PartitionDefinitionOptions) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.TableSpace == b.TableSpace &&
+		EqualsRefOfPartitionValueRange(a.ValueRange, b.ValueRange) &&
+		EqualsRefOfLiteral(a.Comment, b.Comment) &&
+		EqualsRefOfPartitionEngine(a.Engine, b.Engine) &&
+		EqualsRefOfLiteral(a.DataDirectory, b.DataDirectory) &&
+		EqualsRefOfLiteral(a.IndexDirectory, b.IndexDirectory) &&
+		EqualsRefOfInt(a.MaxRows, b.MaxRows) &&
+		EqualsRefOfInt(a.MinRows, b.MinRows) &&
+		EqualsSubPartitionDefinitions(a.SubPartitionDefinitions, b.SubPartitionDefinitions)
+}
+
+// EqualsRefOfPartitionEngine does deep equals between the two objects.
+func EqualsRefOfPartitionEngine(a, b *PartitionEngine) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Storage == b.Storage &&
+		a.Name == b.Name
 }
 
 // EqualsRefOfPartitionOption does deep equals between the two objects.
@@ -2273,10 +2872,9 @@ func EqualsRefOfPrepareStmt(a, b *PrepareStmt) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Statement == b.Statement &&
-		EqualsColIdent(a.Name, b.Name) &&
-		EqualsComments(a.Comments, b.Comments) &&
-		EqualsColIdent(a.StatementIdentifier, b.StatementIdentifier)
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsExpr(a.Statement, b.Statement) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfReferenceDefinition does deep equals between the two objects.
@@ -2289,8 +2887,69 @@ func EqualsRefOfReferenceDefinition(a, b *ReferenceDefinition) bool {
 	}
 	return EqualsTableName(a.ReferencedTable, b.ReferencedTable) &&
 		EqualsColumns(a.ReferencedColumns, b.ReferencedColumns) &&
+		a.Match == b.Match &&
 		a.OnDelete == b.OnDelete &&
 		a.OnUpdate == b.OnUpdate
+}
+
+// EqualsRefOfRegexpInstrExpr does deep equals between the two objects.
+func EqualsRefOfRegexpInstrExpr(a, b *RegexpInstrExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr) &&
+		EqualsExpr(a.Pattern, b.Pattern) &&
+		EqualsExpr(a.Position, b.Position) &&
+		EqualsExpr(a.Occurrence, b.Occurrence) &&
+		EqualsExpr(a.ReturnOption, b.ReturnOption) &&
+		EqualsExpr(a.MatchType, b.MatchType)
+}
+
+// EqualsRefOfRegexpLikeExpr does deep equals between the two objects.
+func EqualsRefOfRegexpLikeExpr(a, b *RegexpLikeExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr) &&
+		EqualsExpr(a.Pattern, b.Pattern) &&
+		EqualsExpr(a.MatchType, b.MatchType)
+}
+
+// EqualsRefOfRegexpReplaceExpr does deep equals between the two objects.
+func EqualsRefOfRegexpReplaceExpr(a, b *RegexpReplaceExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr) &&
+		EqualsExpr(a.Pattern, b.Pattern) &&
+		EqualsExpr(a.Repl, b.Repl) &&
+		EqualsExpr(a.Occurrence, b.Occurrence) &&
+		EqualsExpr(a.Position, b.Position) &&
+		EqualsExpr(a.MatchType, b.MatchType)
+}
+
+// EqualsRefOfRegexpSubstrExpr does deep equals between the two objects.
+func EqualsRefOfRegexpSubstrExpr(a, b *RegexpSubstrExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr) &&
+		EqualsExpr(a.Pattern, b.Pattern) &&
+		EqualsExpr(a.Occurrence, b.Occurrence) &&
+		EqualsExpr(a.Position, b.Position) &&
+		EqualsExpr(a.MatchType, b.MatchType)
 }
 
 // EqualsRefOfRelease does deep equals between the two objects.
@@ -2347,7 +3006,7 @@ func EqualsRefOfRevertMigration(a, b *RevertMigration) bool {
 		return false
 	}
 	return a.UUID == b.UUID &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfRollback does deep equals between the two objects.
@@ -2401,7 +3060,7 @@ func EqualsRefOfSelect(a, b *Select) bool {
 		a.SQLCalcFoundRows == b.SQLCalcFoundRows &&
 		EqualsRefOfBool(a.Cache, b.Cache) &&
 		EqualsSliceOfTableExpr(a.From, b.From) &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsSelectExprs(a.SelectExprs, b.SelectExprs) &&
 		EqualsRefOfWhere(a.Where, b.Where) &&
 		EqualsRefOfWith(a.With, b.With) &&
@@ -2435,12 +3094,12 @@ func EqualsRefOfSelectInto(a, b *SelectInto) bool {
 		return false
 	}
 	return a.FileName == b.FileName &&
-		a.Charset == b.Charset &&
 		a.FormatOption == b.FormatOption &&
 		a.ExportOption == b.ExportOption &&
 		a.Manifest == b.Manifest &&
 		a.Overwrite == b.Overwrite &&
-		a.Type == b.Type
+		a.Type == b.Type &&
+		EqualsColumnCharset(a.Charset, b.Charset)
 }
 
 // EqualsRefOfSet does deep equals between the two objects.
@@ -2451,7 +3110,7 @@ func EqualsRefOfSet(a, b *Set) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsComments(a.Comments, b.Comments) &&
+	return EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsSetExprs(a.Exprs, b.Exprs)
 }
 
@@ -2490,7 +3149,7 @@ func EqualsRefOfSetTransaction(a, b *SetTransaction) bool {
 		return false
 	}
 	return EqualsSQLNode(a.SQLNode, b.SQLNode) &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		a.Scope == b.Scope &&
 		EqualsSliceOfCharacteristic(a.Characteristics, b.Characteristics)
 }
@@ -2545,23 +3204,6 @@ func EqualsRefOfShowFilter(a, b *ShowFilter) bool {
 		EqualsExpr(a.Filter, b.Filter)
 }
 
-// EqualsRefOfShowLegacy does deep equals between the two objects.
-func EqualsRefOfShowLegacy(a, b *ShowLegacy) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Extended == b.Extended &&
-		a.Type == b.Type &&
-		EqualsTableName(a.OnTable, b.OnTable) &&
-		EqualsTableName(a.Table, b.Table) &&
-		EqualsRefOfShowTablesOpt(a.ShowTablesOpt, b.ShowTablesOpt) &&
-		a.Scope == b.Scope &&
-		EqualsExpr(a.ShowCollationFilterOpt, b.ShowCollationFilterOpt)
-}
-
 // EqualsRefOfShowMigrationLogs does deep equals between the two objects.
 func EqualsRefOfShowMigrationLogs(a, b *ShowMigrationLogs) bool {
 	if a == b {
@@ -2571,7 +3213,29 @@ func EqualsRefOfShowMigrationLogs(a, b *ShowMigrationLogs) bool {
 		return false
 	}
 	return a.UUID == b.UUID &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
+}
+
+// EqualsRefOfShowOther does deep equals between the two objects.
+func EqualsRefOfShowOther(a, b *ShowOther) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Command == b.Command
+}
+
+// EqualsRefOfShowThrottledApps does deep equals between the two objects.
+func EqualsRefOfShowThrottledApps(a, b *ShowThrottledApps) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfStarExpr does deep equals between the two objects.
@@ -2593,7 +3257,7 @@ func EqualsRefOfStream(a, b *Stream) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsComments(a.Comments, b.Comments) &&
+	return EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsSelectExpr(a.SelectExpr, b.SelectExpr) &&
 		EqualsTableName(a.Table, b.Table)
 }
@@ -2612,6 +3276,48 @@ func EqualsRefOfSubPartition(a, b *SubPartition) bool {
 		a.Type == b.Type &&
 		EqualsColumns(a.ColList, b.ColList) &&
 		EqualsExpr(a.Expr, b.Expr)
+}
+
+// EqualsRefOfSubPartitionDefinition does deep equals between the two objects.
+func EqualsRefOfSubPartitionDefinition(a, b *SubPartitionDefinition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsRefOfSubPartitionDefinitionOptions(a.Options, b.Options)
+}
+
+// EqualsRefOfSubPartitionDefinitionOptions does deep equals between the two objects.
+func EqualsRefOfSubPartitionDefinitionOptions(a, b *SubPartitionDefinitionOptions) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.TableSpace == b.TableSpace &&
+		EqualsRefOfLiteral(a.Comment, b.Comment) &&
+		EqualsRefOfPartitionEngine(a.Engine, b.Engine) &&
+		EqualsRefOfLiteral(a.DataDirectory, b.DataDirectory) &&
+		EqualsRefOfLiteral(a.IndexDirectory, b.IndexDirectory) &&
+		EqualsRefOfInt(a.MaxRows, b.MaxRows) &&
+		EqualsRefOfInt(a.MinRows, b.MinRows)
+}
+
+// EqualsSubPartitionDefinitions does deep equals between the two objects.
+func EqualsSubPartitionDefinitions(a, b SubPartitionDefinitions) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfSubPartitionDefinition(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // EqualsRefOfSubquery does deep equals between the two objects.
@@ -2803,7 +3509,7 @@ func EqualsRefOfUpdate(a, b *Update) bool {
 		return false
 	}
 	return EqualsRefOfWith(a.With, b.With) &&
-		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		a.Ignore == b.Ignore &&
 		EqualsTableExprs(a.TableExprs, b.TableExprs) &&
 		EqualsUpdateExprs(a.Exprs, b.Exprs) &&
@@ -2856,7 +3562,7 @@ func EqualsRefOfVStream(a, b *VStream) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsComments(a.Comments, b.Comments) &&
+	return EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsSelectExpr(a.SelectExpr, b.SelectExpr) &&
 		EqualsTableName(a.Table, b.Table) &&
 		EqualsRefOfWhere(a.Where, b.Where) &&
@@ -3029,12 +3735,24 @@ func EqualsAlterOption(inA, inB AlterOption) bool {
 			return false
 		}
 		return EqualsRefOfAlterCharset(a, b)
+	case *AlterCheck:
+		b, ok := inB.(*AlterCheck)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterCheck(a, b)
 	case *AlterColumn:
 		b, ok := inB.(*AlterColumn)
 		if !ok {
 			return false
 		}
 		return EqualsRefOfAlterColumn(a, b)
+	case *AlterIndex:
+		b, ok := inB.(*AlterIndex)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterIndex(a, b)
 	case *ChangeColumn:
 		b, ok := inB.(*ChangeColumn)
 		if !ok {
@@ -3164,12 +3882,162 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfGroupConcatExpr(a, b)
+	case *JSONArrayExpr:
+		b, ok := inB.(*JSONArrayExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONArrayExpr(a, b)
+	case *JSONAttributesExpr:
+		b, ok := inB.(*JSONAttributesExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONAttributesExpr(a, b)
+	case *JSONContainsExpr:
+		b, ok := inB.(*JSONContainsExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONContainsExpr(a, b)
+	case *JSONContainsPathExpr:
+		b, ok := inB.(*JSONContainsPathExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONContainsPathExpr(a, b)
+	case *JSONExtractExpr:
+		b, ok := inB.(*JSONExtractExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONExtractExpr(a, b)
+	case *JSONKeysExpr:
+		b, ok := inB.(*JSONKeysExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONKeysExpr(a, b)
+	case *JSONObjectExpr:
+		b, ok := inB.(*JSONObjectExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONObjectExpr(a, b)
+	case *JSONOverlapsExpr:
+		b, ok := inB.(*JSONOverlapsExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONOverlapsExpr(a, b)
+	case *JSONPrettyExpr:
+		b, ok := inB.(*JSONPrettyExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONPrettyExpr(a, b)
+	case *JSONQuoteExpr:
+		b, ok := inB.(*JSONQuoteExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONQuoteExpr(a, b)
+	case *JSONRemoveExpr:
+		b, ok := inB.(*JSONRemoveExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONRemoveExpr(a, b)
+	case *JSONSchemaValidFuncExpr:
+		b, ok := inB.(*JSONSchemaValidFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidFuncExpr(a, b)
+	case *JSONSchemaValidationReportFuncExpr:
+		b, ok := inB.(*JSONSchemaValidationReportFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidationReportFuncExpr(a, b)
+	case *JSONSearchExpr:
+		b, ok := inB.(*JSONSearchExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSearchExpr(a, b)
+	case *JSONStorageFreeExpr:
+		b, ok := inB.(*JSONStorageFreeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONStorageFreeExpr(a, b)
+	case *JSONStorageSizeExpr:
+		b, ok := inB.(*JSONStorageSizeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONStorageSizeExpr(a, b)
+	case *JSONUnquoteExpr:
+		b, ok := inB.(*JSONUnquoteExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONUnquoteExpr(a, b)
+	case *JSONValueExpr:
+		b, ok := inB.(*JSONValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONValueExpr(a, b)
+	case *JSONValueMergeExpr:
+		b, ok := inB.(*JSONValueMergeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONValueMergeExpr(a, b)
+	case *JSONValueModifierExpr:
+		b, ok := inB.(*JSONValueModifierExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONValueModifierExpr(a, b)
 	case *MatchExpr:
 		b, ok := inB.(*MatchExpr)
 		if !ok {
 			return false
 		}
 		return EqualsRefOfMatchExpr(a, b)
+	case *MemberOfExpr:
+		b, ok := inB.(*MemberOfExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMemberOfExpr(a, b)
+	case *RegexpInstrExpr:
+		b, ok := inB.(*RegexpInstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpInstrExpr(a, b)
+	case *RegexpLikeExpr:
+		b, ok := inB.(*RegexpLikeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpLikeExpr(a, b)
+	case *RegexpReplaceExpr:
+		b, ok := inB.(*RegexpReplaceExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpReplaceExpr(a, b)
+	case *RegexpSubstrExpr:
+		b, ok := inB.(*RegexpSubstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpSubstrExpr(a, b)
 	case *SubstrExpr:
 		b, ok := inB.(*SubstrExpr)
 		if !ok {
@@ -3551,6 +4419,126 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfIsExpr(a, b)
+	case *JSONArrayExpr:
+		b, ok := inB.(*JSONArrayExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONArrayExpr(a, b)
+	case *JSONAttributesExpr:
+		b, ok := inB.(*JSONAttributesExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONAttributesExpr(a, b)
+	case *JSONContainsExpr:
+		b, ok := inB.(*JSONContainsExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONContainsExpr(a, b)
+	case *JSONContainsPathExpr:
+		b, ok := inB.(*JSONContainsPathExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONContainsPathExpr(a, b)
+	case *JSONExtractExpr:
+		b, ok := inB.(*JSONExtractExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONExtractExpr(a, b)
+	case *JSONKeysExpr:
+		b, ok := inB.(*JSONKeysExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONKeysExpr(a, b)
+	case *JSONObjectExpr:
+		b, ok := inB.(*JSONObjectExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONObjectExpr(a, b)
+	case *JSONOverlapsExpr:
+		b, ok := inB.(*JSONOverlapsExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONOverlapsExpr(a, b)
+	case *JSONPrettyExpr:
+		b, ok := inB.(*JSONPrettyExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONPrettyExpr(a, b)
+	case *JSONQuoteExpr:
+		b, ok := inB.(*JSONQuoteExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONQuoteExpr(a, b)
+	case *JSONRemoveExpr:
+		b, ok := inB.(*JSONRemoveExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONRemoveExpr(a, b)
+	case *JSONSchemaValidFuncExpr:
+		b, ok := inB.(*JSONSchemaValidFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidFuncExpr(a, b)
+	case *JSONSchemaValidationReportFuncExpr:
+		b, ok := inB.(*JSONSchemaValidationReportFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidationReportFuncExpr(a, b)
+	case *JSONSearchExpr:
+		b, ok := inB.(*JSONSearchExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSearchExpr(a, b)
+	case *JSONStorageFreeExpr:
+		b, ok := inB.(*JSONStorageFreeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONStorageFreeExpr(a, b)
+	case *JSONStorageSizeExpr:
+		b, ok := inB.(*JSONStorageSizeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONStorageSizeExpr(a, b)
+	case *JSONUnquoteExpr:
+		b, ok := inB.(*JSONUnquoteExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONUnquoteExpr(a, b)
+	case *JSONValueExpr:
+		b, ok := inB.(*JSONValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONValueExpr(a, b)
+	case *JSONValueMergeExpr:
+		b, ok := inB.(*JSONValueMergeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONValueMergeExpr(a, b)
+	case *JSONValueModifierExpr:
+		b, ok := inB.(*JSONValueModifierExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONValueModifierExpr(a, b)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {
@@ -3569,6 +4557,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfMatchExpr(a, b)
+	case *MemberOfExpr:
+		b, ok := inB.(*MemberOfExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMemberOfExpr(a, b)
 	case *NotExpr:
 		b, ok := inB.(*NotExpr)
 		if !ok {
@@ -3581,18 +4575,42 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfNullVal(a, b)
-	case Offset:
-		b, ok := inB.(Offset)
+	case *Offset:
+		b, ok := inB.(*Offset)
 		if !ok {
 			return false
 		}
-		return a == b
+		return EqualsRefOfOffset(a, b)
 	case *OrExpr:
 		b, ok := inB.(*OrExpr)
 		if !ok {
 			return false
 		}
 		return EqualsRefOfOrExpr(a, b)
+	case *RegexpInstrExpr:
+		b, ok := inB.(*RegexpInstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpInstrExpr(a, b)
+	case *RegexpLikeExpr:
+		b, ok := inB.(*RegexpLikeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpLikeExpr(a, b)
+	case *RegexpReplaceExpr:
+		b, ok := inB.(*RegexpReplaceExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpReplaceExpr(a, b)
+	case *RegexpSubstrExpr:
+		b, ok := inB.(*RegexpSubstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpSubstrExpr(a, b)
 	case *Subquery:
 		b, ok := inB.(*Subquery)
 		if !ok {
@@ -3686,6 +4704,393 @@ func EqualsInsertRows(inA, inB InsertRows) bool {
 	}
 }
 
+// EqualsJSONPathParam does deep equals between the two objects.
+func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *AndExpr:
+		b, ok := inB.(*AndExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAndExpr(a, b)
+	case Argument:
+		b, ok := inB.(Argument)
+		if !ok {
+			return false
+		}
+		return a == b
+	case *BetweenExpr:
+		b, ok := inB.(*BetweenExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBetweenExpr(a, b)
+	case *BinaryExpr:
+		b, ok := inB.(*BinaryExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBinaryExpr(a, b)
+	case BoolVal:
+		b, ok := inB.(BoolVal)
+		if !ok {
+			return false
+		}
+		return a == b
+	case *CaseExpr:
+		b, ok := inB.(*CaseExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCaseExpr(a, b)
+	case *ColName:
+		b, ok := inB.(*ColName)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfColName(a, b)
+	case *CollateExpr:
+		b, ok := inB.(*CollateExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCollateExpr(a, b)
+	case *ComparisonExpr:
+		b, ok := inB.(*ComparisonExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfComparisonExpr(a, b)
+	case *ConvertExpr:
+		b, ok := inB.(*ConvertExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfConvertExpr(a, b)
+	case *ConvertUsingExpr:
+		b, ok := inB.(*ConvertUsingExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfConvertUsingExpr(a, b)
+	case *CurTimeFuncExpr:
+		b, ok := inB.(*CurTimeFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCurTimeFuncExpr(a, b)
+	case *Default:
+		b, ok := inB.(*Default)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDefault(a, b)
+	case *ExistsExpr:
+		b, ok := inB.(*ExistsExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExistsExpr(a, b)
+	case *ExtractFuncExpr:
+		b, ok := inB.(*ExtractFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExtractFuncExpr(a, b)
+	case *ExtractedSubquery:
+		b, ok := inB.(*ExtractedSubquery)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExtractedSubquery(a, b)
+	case *FuncExpr:
+		b, ok := inB.(*FuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFuncExpr(a, b)
+	case *GroupConcatExpr:
+		b, ok := inB.(*GroupConcatExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfGroupConcatExpr(a, b)
+	case *IntervalExpr:
+		b, ok := inB.(*IntervalExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfIntervalExpr(a, b)
+	case *IntroducerExpr:
+		b, ok := inB.(*IntroducerExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfIntroducerExpr(a, b)
+	case *IsExpr:
+		b, ok := inB.(*IsExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfIsExpr(a, b)
+	case *JSONArrayExpr:
+		b, ok := inB.(*JSONArrayExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONArrayExpr(a, b)
+	case *JSONAttributesExpr:
+		b, ok := inB.(*JSONAttributesExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONAttributesExpr(a, b)
+	case *JSONContainsExpr:
+		b, ok := inB.(*JSONContainsExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONContainsExpr(a, b)
+	case *JSONContainsPathExpr:
+		b, ok := inB.(*JSONContainsPathExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONContainsPathExpr(a, b)
+	case *JSONExtractExpr:
+		b, ok := inB.(*JSONExtractExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONExtractExpr(a, b)
+	case *JSONKeysExpr:
+		b, ok := inB.(*JSONKeysExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONKeysExpr(a, b)
+	case *JSONObjectExpr:
+		b, ok := inB.(*JSONObjectExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONObjectExpr(a, b)
+	case *JSONOverlapsExpr:
+		b, ok := inB.(*JSONOverlapsExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONOverlapsExpr(a, b)
+	case *JSONPrettyExpr:
+		b, ok := inB.(*JSONPrettyExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONPrettyExpr(a, b)
+	case *JSONQuoteExpr:
+		b, ok := inB.(*JSONQuoteExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONQuoteExpr(a, b)
+	case *JSONRemoveExpr:
+		b, ok := inB.(*JSONRemoveExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONRemoveExpr(a, b)
+	case *JSONSchemaValidFuncExpr:
+		b, ok := inB.(*JSONSchemaValidFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidFuncExpr(a, b)
+	case *JSONSchemaValidationReportFuncExpr:
+		b, ok := inB.(*JSONSchemaValidationReportFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSchemaValidationReportFuncExpr(a, b)
+	case *JSONSearchExpr:
+		b, ok := inB.(*JSONSearchExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONSearchExpr(a, b)
+	case *JSONStorageFreeExpr:
+		b, ok := inB.(*JSONStorageFreeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONStorageFreeExpr(a, b)
+	case *JSONStorageSizeExpr:
+		b, ok := inB.(*JSONStorageSizeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONStorageSizeExpr(a, b)
+	case *JSONUnquoteExpr:
+		b, ok := inB.(*JSONUnquoteExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONUnquoteExpr(a, b)
+	case *JSONValueExpr:
+		b, ok := inB.(*JSONValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONValueExpr(a, b)
+	case *JSONValueMergeExpr:
+		b, ok := inB.(*JSONValueMergeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONValueMergeExpr(a, b)
+	case *JSONValueModifierExpr:
+		b, ok := inB.(*JSONValueModifierExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONValueModifierExpr(a, b)
+	case ListArg:
+		b, ok := inB.(ListArg)
+		if !ok {
+			return false
+		}
+		return a == b
+	case *Literal:
+		b, ok := inB.(*Literal)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLiteral(a, b)
+	case *MatchExpr:
+		b, ok := inB.(*MatchExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMatchExpr(a, b)
+	case *MemberOfExpr:
+		b, ok := inB.(*MemberOfExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMemberOfExpr(a, b)
+	case *NotExpr:
+		b, ok := inB.(*NotExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNotExpr(a, b)
+	case *NullVal:
+		b, ok := inB.(*NullVal)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNullVal(a, b)
+	case *Offset:
+		b, ok := inB.(*Offset)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfOffset(a, b)
+	case *OrExpr:
+		b, ok := inB.(*OrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfOrExpr(a, b)
+	case *RegexpInstrExpr:
+		b, ok := inB.(*RegexpInstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpInstrExpr(a, b)
+	case *RegexpLikeExpr:
+		b, ok := inB.(*RegexpLikeExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpLikeExpr(a, b)
+	case *RegexpReplaceExpr:
+		b, ok := inB.(*RegexpReplaceExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpReplaceExpr(a, b)
+	case *RegexpSubstrExpr:
+		b, ok := inB.(*RegexpSubstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRegexpSubstrExpr(a, b)
+	case *Subquery:
+		b, ok := inB.(*Subquery)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubquery(a, b)
+	case *SubstrExpr:
+		b, ok := inB.(*SubstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubstrExpr(a, b)
+	case *TimestampFuncExpr:
+		b, ok := inB.(*TimestampFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfTimestampFuncExpr(a, b)
+	case *TrimFuncExpr:
+		b, ok := inB.(*TrimFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfTrimFuncExpr(a, b)
+	case *UnaryExpr:
+		b, ok := inB.(*UnaryExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUnaryExpr(a, b)
+	case ValTuple:
+		b, ok := inB.(ValTuple)
+		if !ok {
+			return false
+		}
+		return EqualsValTuple(a, b)
+	case *ValuesFuncExpr:
+		b, ok := inB.(*ValuesFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfValuesFuncExpr(a, b)
+	case *WeightStringFuncExpr:
+		b, ok := inB.(*WeightStringFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfWeightStringFuncExpr(a, b)
+	case *XorExpr:
+		b, ok := inB.(*XorExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfXorExpr(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // EqualsSelectExpr does deep equals between the two objects.
 func EqualsSelectExpr(inA, inB SelectExpr) bool {
 	if inA == nil && inB == nil {
@@ -3767,12 +5172,12 @@ func EqualsShowInternal(inA, inB ShowInternal) bool {
 			return false
 		}
 		return EqualsRefOfShowCreate(a, b)
-	case *ShowLegacy:
-		b, ok := inB.(*ShowLegacy)
+	case *ShowOther:
+		b, ok := inB.(*ShowOther)
 		if !ok {
 			return false
 		}
-		return EqualsRefOfShowLegacy(a, b)
+		return EqualsRefOfShowOther(a, b)
 	default:
 		// this should never happen
 		return false
@@ -4037,6 +5442,12 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfShowMigrationLogs(a, b)
+	case *ShowThrottledApps:
+		b, ok := inB.(*ShowThrottledApps)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowThrottledApps(a, b)
 	case *Stream:
 		b, ok := inB.(*Stream)
 		if !ok {
@@ -4100,6 +5511,12 @@ func EqualsTableExpr(inA, inB TableExpr) bool {
 			return false
 		}
 		return EqualsRefOfAliasedTableExpr(a, b)
+	case *JSONTableExpr:
+		b, ok := inB.(*JSONTableExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONTableExpr(a, b)
 	case *JoinTableExpr:
 		b, ok := inB.(*JoinTableExpr)
 		if !ok {
@@ -4131,13 +5548,24 @@ func EqualsSliceOfRefOfColumnDefinition(a, b []*ColumnDefinition) bool {
 	return true
 }
 
-// EqualsSliceOfCollateAndCharset does deep equals between the two objects.
-func EqualsSliceOfCollateAndCharset(a, b []CollateAndCharset) bool {
+// EqualsRefOfBool does deep equals between the two objects.
+func EqualsRefOfBool(a, b *bool) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+// EqualsSliceOfDatabaseOption does deep equals between the two objects.
+func EqualsSliceOfDatabaseOption(a, b []DatabaseOption) bool {
 	if len(a) != len(b) {
 		return false
 	}
 	for i := 0; i < len(a); i++ {
-		if !EqualsCollateAndCharset(a[i], b[i]) {
+		if !EqualsDatabaseOption(a[i], b[i]) {
 			return false
 		}
 	}
@@ -4201,10 +5629,10 @@ func EqualsColumnType(a, b ColumnType) bool {
 	return a.Type == b.Type &&
 		a.Unsigned == b.Unsigned &&
 		a.Zerofill == b.Zerofill &&
-		a.Charset == b.Charset &&
 		EqualsRefOfColumnTypeOptions(a.Options, b.Options) &&
 		EqualsRefOfLiteral(a.Length, b.Length) &&
 		EqualsRefOfLiteral(a.Scale, b.Scale) &&
+		EqualsColumnCharset(a.Charset, b.Charset) &&
 		EqualsSliceOfString(a.EnumValues, b.EnumValues)
 }
 
@@ -4225,7 +5653,18 @@ func EqualsRefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
 		EqualsRefOfLiteral(a.Comment, b.Comment) &&
 		a.Storage == b.Storage &&
 		EqualsRefOfReferenceDefinition(a.Reference, b.Reference) &&
-		a.KeyOpt == b.KeyOpt
+		a.KeyOpt == b.KeyOpt &&
+		EqualsRefOfBool(a.Invisible, b.Invisible) &&
+		a.Format == b.Format &&
+		EqualsRefOfLiteral(a.EngineAttribute, b.EngineAttribute) &&
+		EqualsRefOfLiteral(a.SecondaryEngineAttribute, b.SecondaryEngineAttribute) &&
+		EqualsRefOfLiteral(a.SRID, b.SRID)
+}
+
+// EqualsColumnCharset does deep equals between the two objects.
+func EqualsColumnCharset(a, b ColumnCharset) bool {
+	return a.Name == b.Name &&
+		a.Binary == b.Binary
 }
 
 // EqualsSliceOfString does deep equals between the two objects.
@@ -4267,6 +5706,96 @@ func EqualsSliceOfRefOfIndexOption(a, b []*IndexOption) bool {
 	return true
 }
 
+// EqualsSliceOfJSONPathParam does deep equals between the two objects.
+func EqualsSliceOfJSONPathParam(a, b []JSONPathParam) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsJSONPathParam(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsSliceOfRefOfJSONObjectParam does deep equals between the two objects.
+func EqualsSliceOfRefOfJSONObjectParam(a, b []*JSONObjectParam) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfJSONObjectParam(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsRefOfJSONObjectParam does deep equals between the two objects.
+func EqualsRefOfJSONObjectParam(a, b *JSONObjectParam) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Key, b.Key) &&
+		EqualsExpr(a.Value, b.Value)
+}
+
+// EqualsSliceOfRefOfJtColumnDefinition does deep equals between the two objects.
+func EqualsSliceOfRefOfJtColumnDefinition(a, b []*JtColumnDefinition) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfJtColumnDefinition(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsRefOfJtOrdinalColDef does deep equals between the two objects.
+func EqualsRefOfJtOrdinalColDef(a, b *JtOrdinalColDef) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name)
+}
+
+// EqualsRefOfJtPathColDef does deep equals between the two objects.
+func EqualsRefOfJtPathColDef(a, b *JtPathColDef) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.JtColExists == b.JtColExists &&
+		EqualsColIdent(a.Name, b.Name) &&
+		EqualsColumnType(a.Type, b.Type) &&
+		EqualsExpr(a.Path, b.Path) &&
+		EqualsRefOfJtOnResponse(a.EmptyOnResponse, b.EmptyOnResponse) &&
+		EqualsRefOfJtOnResponse(a.ErrorOnResponse, b.ErrorOnResponse)
+}
+
+// EqualsRefOfJtNestedPathColDef does deep equals between the two objects.
+func EqualsRefOfJtNestedPathColDef(a, b *JtNestedPathColDef) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Path, b.Path) &&
+		EqualsSliceOfRefOfJtColumnDefinition(a.Columns, b.Columns)
+}
+
 // EqualsTableAndLockTypes does deep equals between the two objects.
 func EqualsTableAndLockTypes(a, b TableAndLockTypes) bool {
 	if len(a) != len(b) {
@@ -4278,6 +5807,30 @@ func EqualsTableAndLockTypes(a, b TableAndLockTypes) bool {
 		}
 	}
 	return true
+}
+
+// EqualsComments does deep equals between the two objects.
+func EqualsComments(a, b Comments) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsRefOfInt does deep equals between the two objects.
+func EqualsRefOfInt(a, b *int) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
 }
 
 // EqualsSliceOfRefOfPartitionDefinition does deep equals between the two objects.
@@ -4317,17 +5870,6 @@ func EqualsRefOfRootNode(a, b *RootNode) bool {
 	return EqualsSQLNode(a.SQLNode, b.SQLNode)
 }
 
-// EqualsRefOfBool does deep equals between the two objects.
-func EqualsRefOfBool(a, b *bool) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return *a == *b
-}
-
 // EqualsSliceOfTableExpr does deep equals between the two objects.
 func EqualsSliceOfTableExpr(a, b []TableExpr) bool {
 	if len(a) != len(b) {
@@ -4352,19 +5894,6 @@ func EqualsSliceOfCharacteristic(a, b []Characteristic) bool {
 		}
 	}
 	return true
-}
-
-// EqualsRefOfShowTablesOpt does deep equals between the two objects.
-func EqualsRefOfShowTablesOpt(a, b *ShowTablesOpt) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Full == b.Full &&
-		a.DbName == b.DbName &&
-		EqualsRefOfShowFilter(a.Filter, b.Filter)
 }
 
 // EqualsRefOfTableIdent does deep equals between the two objects.
@@ -4400,6 +5929,7 @@ func EqualsRefOfTableOption(a, b *TableOption) bool {
 	}
 	return a.Name == b.Name &&
 		a.String == b.String &&
+		a.CaseSensitive == b.CaseSensitive &&
 		EqualsRefOfLiteral(a.Value, b.Value) &&
 		EqualsTableNames(a.Tables, b.Tables)
 }
@@ -4468,11 +5998,23 @@ func EqualsSliceOfRefOfCommonTableExpr(a, b []*CommonTableExpr) bool {
 	return true
 }
 
-// EqualsCollateAndCharset does deep equals between the two objects.
-func EqualsCollateAndCharset(a, b CollateAndCharset) bool {
+// EqualsDatabaseOption does deep equals between the two objects.
+func EqualsDatabaseOption(a, b DatabaseOption) bool {
 	return a.IsDefault == b.IsDefault &&
 		a.Value == b.Value &&
 		a.Type == b.Type
+}
+
+// EqualsRefOfColumnCharset does deep equals between the two objects.
+func EqualsRefOfColumnCharset(a, b *ColumnCharset) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		a.Binary == b.Binary
 }
 
 // EqualsRefOfIndexColumn does deep equals between the two objects.
@@ -4485,6 +6027,7 @@ func EqualsRefOfIndexColumn(a, b *IndexColumn) bool {
 	}
 	return EqualsColIdent(a.Column, b.Column) &&
 		EqualsRefOfLiteral(a.Length, b.Length) &&
+		EqualsExpr(a.Expression, b.Expression) &&
 		a.Direction == b.Direction
 }
 
@@ -4525,8 +6068,8 @@ func EqualsRefOfRenameTablePair(a, b *RenameTablePair) bool {
 		EqualsTableName(a.ToTable, b.ToTable)
 }
 
-// EqualsRefOfCollateAndCharset does deep equals between the two objects.
-func EqualsRefOfCollateAndCharset(a, b *CollateAndCharset) bool {
+// EqualsRefOfDatabaseOption does deep equals between the two objects.
+func EqualsRefOfDatabaseOption(a, b *DatabaseOption) bool {
 	if a == b {
 		return true
 	}

@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/mysql"
@@ -90,9 +91,6 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 
 	if enableSemiSync {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
-		if clusterInstance.VtctlMajorVersion >= 13 {
-			clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
-		}
 	}
 
 	// Start topo server
@@ -132,17 +130,13 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		// In this case, the close method and initSchema method of the onlineDDL executor race.
 		// If the initSchema acquires the lock, then it takes about 30 seconds for it to run during which time the
 		// DemotePrimary rpc is stalled!
-		"--queryserver_enable_online_ddl=false")
-
-	if clusterInstance.VtTabletMajorVersion >= 13 && clusterInstance.VtctlMajorVersion >= 13 {
+		"--queryserver_enable_online_ddl=false",
 		// disabling active reparents on the tablet since we don't want the replication manager
 		// to fix replication if it is stopped. Some tests deliberately do that. Also, we don't want
 		// the replication manager to silently fix the replication in case ERS or PRS mess up. All the
 		// tests in this test suite should work irrespective of this flag. Each run of ERS, PRS should be
 		// setting up the replication correctly.
-		// However, due to the bugs in old vitess components we can only do this for version >= 13.
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--disable_active_reparents")
-	}
+		"--disable_active_reparents")
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
@@ -208,9 +202,6 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 
 	if enableSemiSync {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
-		if clusterInstance.VtctlMajorVersion >= 13 {
-			clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
-		}
 	}
 
 	// Start topo server
@@ -250,17 +241,13 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 		// In this case, the close method and initSchema method of the onlineDDL executor race.
 		// If the initSchema acquires the lock, then it takes about 30 seconds for it to run during which time the
 		// DemotePrimary rpc is stalled!
-		"--queryserver_enable_online_ddl=false")
-
-	if clusterInstance.VtTabletMajorVersion >= 13 && clusterInstance.VtctlMajorVersion >= 13 {
+		"--queryserver_enable_online_ddl=false",
 		// disabling active reparents on the tablet since we don't want the replication manager
 		// to fix replication if it is stopped. Some tests deliberately do that. Also, we don't want
 		// the replication manager to silently fix the replication in case ERS or PRS mess up. All the
 		// tests in this test suite should work irrespective of this flag. Each run of ERS, PRS should be
 		// setting up the replication correctly.
-		// However, due to the bugs in old vitess components we can only do this for version >= 13.
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--disable_active_reparents")
-	}
+		"--disable_active_reparents")
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
@@ -424,9 +411,6 @@ func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.
 // ErsWithVtctl runs ERS via vtctl binary
 func ErsWithVtctl(clusterInstance *cluster.LocalProcessCluster) (string, error) {
 	args := []string{"EmergencyReparentShard", "--", "--keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
-	if clusterInstance.VtctlMajorVersion >= 13 {
-		args = append([]string{"--durability_policy=semi_sync"}, args...)
-	}
 	return clusterInstance.VtctlProcess.ExecuteCommandWithOutput(args...)
 }
 
@@ -741,10 +725,7 @@ func CheckDBstatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, 
 // unable to setReplicationSource. Since some tests are used in upgrade-downgrade testing, we need this function to
 // work with different versions of vtctl.
 func SetReplicationSourceFailed(tablet *cluster.Vttablet, prsOut string) bool {
-	if strings.Contains(prsOut, fmt.Sprintf("tablet %s failed to SetReplicationSource", tablet.Alias)) {
-		return true
-	}
-	return strings.Contains(prsOut, fmt.Sprintf("tablet %s failed to SetMaster", tablet.Alias))
+	return strings.Contains(prsOut, fmt.Sprintf("tablet %s failed to SetReplicationSource", tablet.Alias))
 }
 
 // CheckReplicationStatus checks that the replication for sql and io threads is setup as expected
@@ -761,4 +742,39 @@ func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.V
 	} else {
 		require.Equal(t, "No", res.Rows[0][11].ToString())
 	}
+}
+
+// ReplicationThreadsStatus returns the status of the IO and SQL thread. It reads the result of the replication status
+// based on the vtctl major version provided. It also uses the vttabletVersion to assert on the expectation of the new fields
+// being unknown for the old vttablets and that they match for the new vttablets
+func ReplicationThreadsStatus(t *testing.T, status *replicationdatapb.Status, vtctlVersion, vttabletVersion int) (bool, bool) {
+	if vttabletVersion == 13 {
+		// If vttablet is version 13, then the new fields should be unknown
+		require.Equal(t, mysql.ReplicationStateUnknown, mysql.ReplicationState(status.IoState))
+		require.Equal(t, mysql.ReplicationStateUnknown, mysql.ReplicationState(status.SqlState))
+	} else {
+		// For the new vttablet, the new parameters should not be unknown. Moreover, the old parameters should also be provided
+		// and should agree with the new ones
+		require.NotEqual(t, mysql.ReplicationStateUnknown, mysql.ReplicationState(status.IoState))
+		require.NotEqual(t, mysql.ReplicationStateUnknown, mysql.ReplicationState(status.SqlState))
+		require.Equal(t, status.IoThreadRunning, mysql.ReplicationState(status.IoState) == mysql.ReplicationStateRunning)
+		require.Equal(t, status.SqlThreadRunning, mysql.ReplicationState(status.SqlState) == mysql.ReplicationStateRunning)
+	}
+
+	// if vtctlVersion provided is 13, then we should read the old parameters, since that is what old vtctl would do
+	if vtctlVersion == 13 {
+		return status.IoThreadRunning, status.SqlThreadRunning
+	}
+	// If we are at the latest vtctl version, we should read the latest parameters if provided otherwise the old ones
+	ioState := mysql.ReplicationState(status.IoState)
+	ioThread := status.IoThreadRunning
+	if ioState != mysql.ReplicationStateUnknown {
+		ioThread = ioState == mysql.ReplicationStateRunning
+	}
+	sqlState := mysql.ReplicationState(status.SqlState)
+	sqlThread := status.SqlThreadRunning
+	if sqlState != mysql.ReplicationStateUnknown {
+		sqlThread = sqlState == mysql.ReplicationStateRunning
+	}
+	return ioThread, sqlThread
 }

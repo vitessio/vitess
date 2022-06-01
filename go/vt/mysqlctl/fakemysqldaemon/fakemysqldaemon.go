@@ -407,11 +407,6 @@ func (fmd *FakeMysqlDaemon) WaitForReparentJournal(ctx context.Context, timeCrea
 	return nil
 }
 
-// DemoteMaster is deprecated: use mysqld.DemotePrimary() instead
-func (fmd *FakeMysqlDaemon) DemoteMaster() (mysql.Position, error) {
-	return fmd.CurrentPrimaryPosition, nil
-}
-
 // WaitSourcePos is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) WaitSourcePos(_ context.Context, pos mysql.Position) error {
 	if fmd.TimeoutHook != nil {
@@ -529,6 +524,11 @@ func (fmd *FakeMysqlDaemon) GetColumns(ctx context.Context, dbName, table string
 
 // GetPrimaryKeyColumns is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) GetPrimaryKeyColumns(ctx context.Context, dbName, table string) ([]string, error) {
+	return []string{}, nil
+}
+
+// GetPrimaryKeyEquivalentColumns is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, error) {
 	return []string{}, nil
 }
 

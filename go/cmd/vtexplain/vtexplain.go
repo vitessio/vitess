@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"os"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -111,7 +113,6 @@ func getFileParam(flag, flagFile, name string, required bool) (string, error) {
 }
 
 func main() {
-	defer vtexplain.Stop()
 	defer exit.RecoverAll()
 	defer logutil.Flush()
 
@@ -145,7 +146,7 @@ func parseAndRun() error {
 		return err
 	}
 
-	plannerVersion := querypb.ExecuteOptions_PlannerVersion(querypb.ExecuteOptions_PlannerVersion_value[*plannerVersionStr])
+	plannerVersion, _ := plancontext.PlannerNameToVersion(*plannerVersionStr)
 	if plannerVersion != querypb.ExecuteOptions_V3 && plannerVersion != querypb.ExecuteOptions_Gen4 {
 		return fmt.Errorf("invalid value specified for planner-version of '%s' -- valid values are V3 and Gen4", *plannerVersionStr)
 	}
@@ -163,18 +164,19 @@ func parseAndRun() error {
 	log.V(100).Infof("schema %s\n", schema)
 	log.V(100).Infof("vschema %s\n", vschema)
 
-	err = vtexplain.Init(vschema, schema, ksShardMap, opts)
+	vte, err := vtexplain.Init(vschema, schema, ksShardMap, opts)
 	if err != nil {
 		return err
 	}
+	defer vte.Stop()
 
-	plans, err := vtexplain.Run(sql)
+	plans, err := vte.Run(sql)
 	if err != nil {
 		return err
 	}
 
 	if *outputMode == "text" {
-		fmt.Print(vtexplain.ExplainsAsText(plans))
+		fmt.Print(vte.ExplainsAsText(plans))
 	} else {
 		fmt.Print(vtexplain.ExplainsAsJSON(plans))
 	}

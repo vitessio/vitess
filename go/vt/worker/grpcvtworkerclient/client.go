@@ -36,11 +36,11 @@ import (
 )
 
 var (
-	cert = flag.String("vtworker_client_grpc_cert", "", "the cert to use to connect")
-	key  = flag.String("vtworker_client_grpc_key", "", "the key to use to connect")
-	ca   = flag.String("vtworker_client_grpc_ca", "", "the server ca to use to validate servers when connecting")
-	crl  = flag.String("vtworker_client_grpc_crl", "", "the server crl to use to validate server certificates when connecting")
-	name = flag.String("vtworker_client_grpc_server_name", "", "the server name to use to validate server certificate")
+	cert = flag.String("vtworker_client_grpc_cert", "", "(DEPRECATED) the cert to use to connect")
+	key  = flag.String("vtworker_client_grpc_key", "", "(DEPRECATED) the key to use to connect")
+	ca   = flag.String("vtworker_client_grpc_ca", "", "(DEPRECATED) the server ca to use to validate servers when connecting")
+	crl  = flag.String("vtworker_client_grpc_crl", "", "(DEPRECATED) the server crl to use to validate server certificates when connecting")
+	name = flag.String("vtworker_client_grpc_server_name", "", "(DEPRECATED) the server name to use to validate server certificate")
 )
 
 type gRPCVtworkerClient struct {

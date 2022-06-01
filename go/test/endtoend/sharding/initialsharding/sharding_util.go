@@ -97,7 +97,6 @@ func ClusterWrapper(isMulti bool) (int, error) {
 	ClusterInstance = nil
 	ClusterInstance = cluster.NewCluster(cell, hostname)
 
-	ClusterInstance.VtctldExtraArgs = append(ClusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 	// Start topo server
 	if err := ClusterInstance.StartTopo(); err != nil {
 		return 1, err
@@ -646,8 +645,8 @@ GRANT GRANT OPTION ON *.* TO 'vt_dba'@'127.0.0.1';
 CREATE USER 'vt_app'@'127.0.0.1' IDENTIFIED BY 'VtAppPass';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
-  LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
-  SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
+  LOCK TABLES, EXECUTE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW,
+  CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
   ON *.* TO 'vt_app'@'127.0.0.1';
 # User for administrative operations that need to be executed as non-SUPER.
 # Same permissions as vt_app here.
@@ -657,8 +656,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
   SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
   ON *.* TO 'vt_allprivs'@'127.0.0.1';
-# User for Vitess filtered replication (binlog player).
-# Same permissions as vt_app.
+# User for Vitess VReplication (base vstreamers and vplayer).
 CREATE USER 'vt_filtered'@'127.0.0.1' IDENTIFIED BY 'VtFilteredPass';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,

@@ -531,3 +531,36 @@ Gen4 plan same as above
 "set socket = ''"
 "variable 'socket' is a read only variable"
 Gen4 plan same as above
+
+# set transaction
+"set transaction read only"
+{
+  "QueryType": "SET",
+  "Original": "set transaction read only",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+Gen4 plan same as above
+
+# set vitess_metadata
+"set @@vitess_metadata.app_v1= '1'"
+{
+  "QueryType": "SET",
+  "Original": "set @@vitess_metadata.app_v1= '1'",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Name": "app_v1",
+        "Value": "1"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+Gen4 plan same as above

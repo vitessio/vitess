@@ -98,10 +98,10 @@ func TestOperator(t *testing.T) {
 			require.NoError(t, err)
 			tree, err := sqlparser.Parse(tc.query)
 			require.NoError(t, err)
-			stmt := tree.(sqlparser.SelectStatement)
+			stmt := tree.(sqlparser.Statement)
 			semTable, err := semantics.Analyze(stmt, "", si)
 			require.NoError(t, err)
-			optree, err := CreateOperatorFromAST(stmt, semTable)
+			optree, err := CreateLogicalOperatorFromAST(stmt, semTable)
 			require.NoError(t, err)
 			output := testString(optree)
 			if tc.expected != output {
@@ -164,8 +164,21 @@ func testString(op Operator) string {
 			dist = "(distinct)"
 		}
 		return fmt.Sprintf("Concatenate%s {\n%s\n}", dist, strings.Join(inners, ",\n"))
+	case *Update:
+		tbl := "table: " + op.Table.testString()
+		var assignments []string
+		// sort to produce stable results, otherwise test is flaky
+		keys := make([]string, 0, len(op.Assignments))
+		for k := range op.Assignments {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			assignments = append(assignments, fmt.Sprintf("\t%s = %s", k, sqlparser.String(op.Assignments[k])))
+		}
+		return fmt.Sprintf("Update {\n\t%s\nassignments:\n%s\n}", tbl, strings.Join(assignments, "\n"))
 	}
-	return fmt.Sprintf("implement me: %T", op)
+	panic(fmt.Sprintf("%T", op))
 }
 
 func indent(s string) string {

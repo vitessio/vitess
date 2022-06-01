@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-
-	"vitess.io/vitess/go/vt/servenv"
 )
 
 type colldefaults struct {
@@ -164,24 +162,27 @@ func makeEnv(version collver) *Environment {
 	}
 
 	for collid, vi := range globalVersionInfo {
-		var ourname string
-		for mask, name := range vi.alias {
-			if mask&version != 0 {
-				ourname = name
-				break
+		var ournames []string
+		for _, alias := range vi.alias {
+			if alias.mask&version != 0 {
+				ournames = append(ournames, alias.name)
 			}
 		}
-		if ourname == "" {
+		if len(ournames) == 0 {
 			continue
 		}
 
 		collation, ok := globalAllCollations[collid]
 		if !ok {
-			env.unsupported[ourname] = collid
+			for _, name := range ournames {
+				env.unsupported[name] = collid
+			}
 			continue
 		}
 
-		env.byName[ourname] = collation
+		for _, name := range ournames {
+			env.byName[name] = collation
+		}
 		env.byID[collid] = collation
 
 		csname := collation.Charset().Name()
@@ -202,23 +203,12 @@ func makeEnv(version collver) *Environment {
 			defaults.Binary = collation
 		}
 	}
+
+	for from, to := range version.charsetAliases() {
+		env.byCharset[from] = env.byCharset[to]
+	}
+
 	return env
-}
-
-var defaultEnv *Environment
-var defaultEnvInit sync.Once
-
-// Local is the default collation Environment for Vitess. This depends
-// on the value of the `mysql_server_version` flag passed to this Vitess process.
-func Local() *Environment {
-	defaultEnvInit.Do(func() {
-		if *servenv.MySQLServerVersion == "" {
-			defaultEnv = fetchCacheEnvironment(collverMySQL80)
-		} else {
-			defaultEnv = NewEnvironment(*servenv.MySQLServerVersion)
-		}
-	})
-	return defaultEnv
 }
 
 // A few interesting character set values.
@@ -228,6 +218,15 @@ const (
 	CollationUtf8mb4ID = 255
 	CollationBinaryID  = 63
 )
+
+// CharsetAlias returns the internal charset name for the given charset.
+// For now, this only maps `utf8` to `utf8mb3`; in future versions of MySQL,
+// this mapping will change, so it's important to use this helper so that
+// Vitess code has a consistent mapping for the active collations environment.
+func (env *Environment) CharsetAlias(charset string) (alias string, ok bool) {
+	alias, ok = env.version.charsetAliases()[charset]
+	return
+}
 
 // DefaultConnectionCharset is the default charset that Vitess will use when negotiating a
 // charset in a MySQL connection handshake. Note that in this context, a 'charset' is equivalent
@@ -269,11 +268,4 @@ func (env *Environment) ParseConnectionCharset(csname string) (uint8, error) {
 		return 0, fmt.Errorf("unsupported connection charset: %q", csname)
 	}
 	return uint8(collid), nil
-}
-
-// Default returns the default collation for this Vitess process.
-// This is based on the local collation environment, which is based on the user's configured
-// MySQL version for this Vitess deployment.
-func Default() ID {
-	return ID(Local().DefaultConnectionCharset())
 }

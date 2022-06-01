@@ -40,6 +40,8 @@ const (
 	EvacTableGCState TableGCState = "EVAC"
 	// DropTableGCState is the state where the table is to be dropped. Probably ASAP
 	DropTableGCState TableGCState = "DROP"
+	// TableDroppedGCState is a pseudo state; a hint that the table does not exists anymore
+	TableDroppedGCState TableGCState = ""
 )
 
 var (
