@@ -1229,15 +1229,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"vreplication_source_time_zone": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesTZ"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vreplication_migrate",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"topo_connection_cache": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/topoconncache", "-run", "TestVtctldListAllTablets"],
