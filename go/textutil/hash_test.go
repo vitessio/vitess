@@ -32,3 +32,13 @@ func TestUUIDv5(t *testing.T) {
 	u := UUIDv5("abc", "def")
 	assert.Equal(t, 36, len(u), "u=%v", u)
 }
+
+func TestUUIDv5Base36(t *testing.T) {
+	assert.NotEmpty(t, UUIDv5("abc"))
+	u := UUIDv5Base36("abc", "def")
+	assert.Equal(t, 25, len(u), "u=%v", u)
+
+	assert.Equal(t, UUIDv5Base36("abc", "def"), UUIDv5Base36("abc", "def"))     // verify deterministic
+	assert.NotEqual(t, UUIDv5Base36("abc", "defg"), UUIDv5Base36("abc", "def")) // verify deterministic
+	assert.Equal(t, "53qgoh2c0taw2uj43j5a0f0ul", UUIDv5Base36("abc", "def"))    // never change! The algorithm is fixed in stone
+}

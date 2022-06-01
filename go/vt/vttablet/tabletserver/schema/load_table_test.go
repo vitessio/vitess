@@ -18,6 +18,7 @@ package schema
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -28,11 +29,10 @@ import (
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestLoadTable(t *testing.T) {
@@ -133,6 +133,59 @@ func TestLoadTableMessage(t *testing.T) {
 	want.MessageInfo.MinBackoff = 10 * time.Second
 	want.MessageInfo.MaxBackoff = 100 * time.Second
 	assert.Equal(t, want, table)
+
+	//
+	// multiple tests for vt_message_cols
+	//
+	origFields := want.MessageInfo.Fields
+
+	// Test loading id column from vt_message_cols
+	table, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_message_cols=id,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30,vt_min_backoff=10,vt_max_backoff=100", db)
+	require.NoError(t, err)
+	want.MessageInfo.Fields = []*querypb.Field{{
+		Name: "id",
+		Type: sqltypes.Int64,
+	}}
+	assert.Equal(t, want, table)
+
+	// Test loading message column from vt_message_cols
+	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_message_cols=message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30,vt_min_backoff=10,vt_max_backoff=100", db)
+	require.Equal(t, errors.New("vt_message_cols must begin with id: test_table"), err)
+
+	// Test loading id & message columns from vt_message_cols
+	table, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_message_cols=id|message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30,vt_min_backoff=10,vt_max_backoff=100", db)
+	require.NoError(t, err)
+	want.MessageInfo.Fields = []*querypb.Field{{
+		Name: "id",
+		Type: sqltypes.Int64,
+	}, {
+		Name: "message",
+		Type: sqltypes.VarBinary,
+	}}
+	assert.Equal(t, want, table)
+
+	// Test loading id & message columns in reverse order from vt_message_cols
+	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_message_cols=message|id,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30,vt_min_backoff=10,vt_max_backoff=100", db)
+	require.Equal(t, errors.New("vt_message_cols must begin with id: test_table"), err)
+
+	// Test setting zero columns on vt_message_cols, which is ignored and loads the default columns
+	table, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_message_cols,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30,vt_min_backoff=10,vt_max_backoff=100", db)
+	require.NoError(t, err)
+	want.MessageInfo.Fields = []*querypb.Field{{
+		Name: "id",
+		Type: sqltypes.Int64,
+	}, {
+		Name: "message",
+		Type: sqltypes.VarBinary,
+	}}
+	assert.Equal(t, want, table)
+
+	// reset fields after all vt_message_cols tests
+	want.MessageInfo.Fields = origFields
+
+	//
+	// end vt_message_cols tests
+	//
 
 	// Missing property
 	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30", db)

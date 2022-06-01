@@ -196,7 +196,7 @@ func Init(vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options) (*VTExplai
 	vte.setGlobalTabletEnv(tabletEnv)
 	err = vte.initVtgateExecutor(vSchemaStr, ksShardMapStr, opts)
 	if err != nil {
-		return nil, fmt.Errorf("initVtgateExecutor: %v", err)
+		return nil, fmt.Errorf("initVtgateExecutor: %v", err.Error())
 	}
 
 	return vte, nil

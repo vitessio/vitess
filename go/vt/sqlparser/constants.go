@@ -309,6 +309,40 @@ const (
 	LeadingTrimStr  = "leading"
 	TrailingTrimStr = "trailing"
 
+	// FrameUnitType strings
+	FrameRowsStr  = "rows"
+	FrameRangeStr = "range"
+
+	// FramePointType strings
+	CurrentRowStr         = "current row"
+	UnboundedPrecedingStr = "unbounded preceding"
+	UnboundedFollowingStr = "unbounded following"
+	ExprPrecedingStr      = "preceding"
+	ExprFollowingStr      = "following"
+
+	// ArgumentLessWindowExprType strings
+	CumeDistExprStr    = "cume_dist"
+	DenseRankExprStr   = "dense_rank"
+	PercentRankExprStr = "percent_rank"
+	RankExprStr        = "rank"
+	RowNumberExprStr   = "row_number"
+
+	// NullTreatmentType strings
+	RespectNullsStr = "respect nulls"
+	IgnoreNullsStr  = "ignore nulls"
+
+	// FromFirstLastType strings
+	FromFirstStr = "respect nulls"
+	FromLastStr  = "ignore nulls"
+
+	// FirstOrLastValueExprType strings
+	FirstValueExprStr = "first_value"
+	LastValueExprStr  = "last_value"
+
+	// FirstOrLastValueExprType strings
+	LagExprStr  = "lag"
+	LeadExprStr = "lead"
+
 	// TrimFuncType strings
 	NormalTrimStr = "trim"
 	LTrimStr      = "ltrim"
@@ -429,6 +463,54 @@ const (
 	NormalTrimType TrimFuncType = iota
 	LTrimType
 	RTrimType
+)
+
+// Constants for Enum Type - FrameUnitType
+const (
+	FrameRowsType FrameUnitType = iota
+	FrameRangeType
+)
+
+// Constants for Enum Type - FramePointType
+const (
+	CurrentRowType FramePointType = iota
+	UnboundedPrecedingType
+	UnboundedFollowingType
+	ExprPrecedingType
+	ExprFollowingType
+)
+
+// Constants for Enum Type - ArgumentLessWindowExprType
+const (
+	CumeDistExprType ArgumentLessWindowExprType = iota
+	DenseRankExprType
+	PercentRankExprType
+	RankExprType
+	RowNumberExprType
+)
+
+// Constants for Enum Type - NullTreatmentType
+const (
+	RespectNullsType NullTreatmentType = iota
+	IgnoreNullsType
+)
+
+// Constants for Enum Type - FromFirstLastType
+const (
+	FromFirstType FromFirstLastType = iota
+	FromLastType
+)
+
+// Constants for Enum Type - FirstOrLastValueExprType
+const (
+	FirstValueExprType FirstOrLastValueExprType = iota
+	LastValueExprType
+)
+
+// Constants for Enum Type - FirstOrLastValueExprType
+const (
+	LagExprType LagLeadExprType = iota
+	LeadExprType
 )
 
 // Constants for Enum Type - JSONAttributeType
