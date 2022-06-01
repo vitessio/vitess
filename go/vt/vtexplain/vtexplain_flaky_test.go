@@ -327,6 +327,21 @@ func TestUsingKeyspaceShardMap(t *testing.T) {
 	}
 }
 
+func TestInit(t *testing.T) {
+	vschema := `{
+  "ks1": {
+    "sharded": true,
+    "tables": {
+      "table_missing_primary_vindex": {}
+    }
+  }
+}`
+	schema := "create table table_missing_primary_vindex (id int primary key)"
+	err := Init(vschema, schema, "", defaultTestOpts())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "missing primary col vindex")
+}
+
 type vtexplainTestTopoVersion struct{}
 
 func (vtexplain *vtexplainTestTopoVersion) String() string { return "vtexplain-test-topo" }
