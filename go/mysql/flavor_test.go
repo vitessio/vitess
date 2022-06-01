@@ -87,3 +87,33 @@ func TestServerVersionAtLeast(t *testing.T) {
 		}
 	}
 }
+
+func TestGetFlavor(t *testing.T) {
+	testcases := []struct {
+		version string
+		family  FlavorFamilty
+	}{
+		{
+			version: "8.0.14",
+			family:  MySQL80FlavorFamily,
+		},
+		{
+			version: "8.0.0",
+			family:  MySQL80FlavorFamily,
+		},
+		{
+			version: "5.6.7",
+			family:  MySQL56FlavorFamily,
+		},
+		{
+			version: "5.7.29",
+			family:  MySQL57FlavorFamily,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.version, func(t *testing.T) {
+			_, family, _ := GetFlavor(tc.version, nil)
+			assert.Equal(t, tc.family, family)
+		})
+	}
+}
