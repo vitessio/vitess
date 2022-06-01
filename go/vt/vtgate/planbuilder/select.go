@@ -73,7 +73,16 @@ func buildSelectPlan(query string) stmtPlanner {
 				return primitive, nil
 			}
 		}
-		return plan.Primitive(), nil
+		primitive := plan.Primitive()
+		if rb, ok := primitive.(*engine.Route); ok {
+			// this is done because engine.Route doesn't handle the empty result well
+			// if it doesn't find a shard to send the query to.
+			// All other engine primitives can handle this, so we only need it when
+			// Route is the last (and only) instruction before the user sees a result
+			rb.NoRoutesSpecialHandling = true
+		}
+
+		return primitive, nil
 	}
 }
 

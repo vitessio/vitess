@@ -1106,7 +1106,7 @@ func TestSelectBindvars(t *testing.T) {
 	})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from `user` where 1 != 1",
+		Sql: "select id from `user` where `name` in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name1": sqltypes.BytesBindVariable([]byte("foo1")),
 			"name2": sqltypes.BytesBindVariable([]byte("foo2")),
@@ -1137,7 +1137,7 @@ func TestSelectBindvars(t *testing.T) {
 
 	// When there are no matching rows in the vindex, vtgate still needs the field info
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from `user` where 1 != 1",
+		Sql: "select id from `user` where `name` = :name",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name": sqltypes.StringBindVariable("nonexistent"),
 		},
