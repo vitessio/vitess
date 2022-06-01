@@ -134,6 +134,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return a == b
+	case *ArgumentLessWindowExpr:
+		b, ok := inB.(*ArgumentLessWindowExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfArgumentLessWindowExpr(a, b)
 	case *AutoIncSpec:
 		b, ok := inB.(*AutoIncSpec)
 		if !ok {
@@ -392,6 +398,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfExtractedSubquery(a, b)
+	case *FirstOrLastValueExpr:
+		b, ok := inB.(*FirstOrLastValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFirstOrLastValueExpr(a, b)
 	case *Flush:
 		b, ok := inB.(*Flush)
 		if !ok {
@@ -410,6 +422,24 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfForeignKeyDefinition(a, b)
+	case *FrameClause:
+		b, ok := inB.(*FrameClause)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFrameClause(a, b)
+	case *FramePoint:
+		b, ok := inB.(*FramePoint)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFramePoint(a, b)
+	case *FromFirstLastClause:
+		b, ok := inB.(*FromFirstLastClause)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFromFirstLastClause(a, b)
 	case *FuncExpr:
 		b, ok := inB.(*FuncExpr)
 		if !ok {
@@ -644,6 +674,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfKeyState(a, b)
+	case *LagLeadExpr:
+		b, ok := inB.(*LagLeadExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLagLeadExpr(a, b)
 	case *Limit:
 		b, ok := inB.(*Limit)
 		if !ok {
@@ -710,6 +746,24 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfModifyColumn(a, b)
+	case *NTHValueExpr:
+		b, ok := inB.(*NTHValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNTHValueExpr(a, b)
+	case *NamedWindow:
+		b, ok := inB.(*NamedWindow)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNamedWindow(a, b)
+	case NamedWindows:
+		b, ok := inB.(NamedWindows)
+		if !ok {
+			return false
+		}
+		return EqualsNamedWindows(a, b)
 	case *Nextval:
 		b, ok := inB.(*Nextval)
 		if !ok {
@@ -722,6 +776,18 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfNotExpr(a, b)
+	case *NtileExpr:
+		b, ok := inB.(*NtileExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNtileExpr(a, b)
+	case *NullTreatmentClause:
+		b, ok := inB.(*NullTreatmentClause)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNullTreatmentClause(a, b)
 	case *NullVal:
 		b, ok := inB.(*NullVal)
 		if !ok {
@@ -782,6 +848,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfOtherRead(a, b)
+	case *OverClause:
+		b, ok := inB.(*OverClause)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfOverClause(a, b)
 	case *ParenTableExpr:
 		b, ok := inB.(*ParenTableExpr)
 		if !ok {
@@ -1226,6 +1298,24 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfWhere(a, b)
+	case *WindowDefinition:
+		b, ok := inB.(*WindowDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfWindowDefinition(a, b)
+	case WindowDefinitions:
+		b, ok := inB.(WindowDefinitions)
+		if !ok {
+			return false
+		}
+		return EqualsWindowDefinitions(a, b)
+	case *WindowSpecification:
+		b, ok := inB.(*WindowSpecification)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfWindowSpecification(a, b)
 	case *With:
 		b, ok := inB.(*With)
 		if !ok {
@@ -1443,6 +1533,18 @@ func EqualsRefOfAndExpr(a, b *AndExpr) bool {
 	}
 	return EqualsExpr(a.Left, b.Left) &&
 		EqualsExpr(a.Right, b.Right)
+}
+
+// EqualsRefOfArgumentLessWindowExpr does deep equals between the two objects.
+func EqualsRefOfArgumentLessWindowExpr(a, b *ArgumentLessWindowExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsRefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // EqualsRefOfAutoIncSpec does deep equals between the two objects.
@@ -1993,6 +2095,20 @@ func EqualsRefOfExtractedSubquery(a, b *ExtractedSubquery) bool {
 		EqualsExpr(a.alternative, b.alternative)
 }
 
+// EqualsRefOfFirstOrLastValueExpr does deep equals between the two objects.
+func EqualsRefOfFirstOrLastValueExpr(a, b *FirstOrLastValueExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsExpr(a.Expr, b.Expr) &&
+		EqualsRefOfNullTreatmentClause(a.NullTreatmentClause, b.NullTreatmentClause) &&
+		EqualsRefOfOverClause(a.OverClause, b.OverClause)
+}
+
 // EqualsRefOfFlush does deep equals between the two objects.
 func EqualsRefOfFlush(a, b *Flush) bool {
 	if a == b {
@@ -2030,6 +2146,42 @@ func EqualsRefOfForeignKeyDefinition(a, b *ForeignKeyDefinition) bool {
 	return EqualsColumns(a.Source, b.Source) &&
 		EqualsColIdent(a.IndexName, b.IndexName) &&
 		EqualsRefOfReferenceDefinition(a.ReferenceDefinition, b.ReferenceDefinition)
+}
+
+// EqualsRefOfFrameClause does deep equals between the two objects.
+func EqualsRefOfFrameClause(a, b *FrameClause) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Unit == b.Unit &&
+		EqualsRefOfFramePoint(a.Start, b.Start) &&
+		EqualsRefOfFramePoint(a.End, b.End)
+}
+
+// EqualsRefOfFramePoint does deep equals between the two objects.
+func EqualsRefOfFramePoint(a, b *FramePoint) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsExpr(a.Expr, b.Expr)
+}
+
+// EqualsRefOfFromFirstLastClause does deep equals between the two objects.
+func EqualsRefOfFromFirstLastClause(a, b *FromFirstLastClause) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type
 }
 
 // EqualsRefOfFuncExpr does deep equals between the two objects.
@@ -2510,6 +2662,22 @@ func EqualsRefOfKeyState(a, b *KeyState) bool {
 	return a.Enable == b.Enable
 }
 
+// EqualsRefOfLagLeadExpr does deep equals between the two objects.
+func EqualsRefOfLagLeadExpr(a, b *LagLeadExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsExpr(a.Expr, b.Expr) &&
+		EqualsExpr(a.N, b.N) &&
+		EqualsExpr(a.Default, b.Default) &&
+		EqualsRefOfOverClause(a.OverClause, b.OverClause) &&
+		EqualsRefOfNullTreatmentClause(a.NullTreatmentClause, b.NullTreatmentClause)
+}
+
 // EqualsRefOfLimit does deep equals between the two objects.
 func EqualsRefOfLimit(a, b *Limit) bool {
 	if a == b {
@@ -2618,6 +2786,45 @@ func EqualsRefOfModifyColumn(a, b *ModifyColumn) bool {
 		EqualsRefOfColName(a.After, b.After)
 }
 
+// EqualsRefOfNTHValueExpr does deep equals between the two objects.
+func EqualsRefOfNTHValueExpr(a, b *NTHValueExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr) &&
+		EqualsExpr(a.N, b.N) &&
+		EqualsRefOfOverClause(a.OverClause, b.OverClause) &&
+		EqualsRefOfFromFirstLastClause(a.FromFirstLastClause, b.FromFirstLastClause) &&
+		EqualsRefOfNullTreatmentClause(a.NullTreatmentClause, b.NullTreatmentClause)
+}
+
+// EqualsRefOfNamedWindow does deep equals between the two objects.
+func EqualsRefOfNamedWindow(a, b *NamedWindow) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsWindowDefinitions(a.Windows, b.Windows)
+}
+
+// EqualsNamedWindows does deep equals between the two objects.
+func EqualsNamedWindows(a, b NamedWindows) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfNamedWindow(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // EqualsRefOfNextval does deep equals between the two objects.
 func EqualsRefOfNextval(a, b *Nextval) bool {
 	if a == b {
@@ -2638,6 +2845,29 @@ func EqualsRefOfNotExpr(a, b *NotExpr) bool {
 		return false
 	}
 	return EqualsExpr(a.Expr, b.Expr)
+}
+
+// EqualsRefOfNtileExpr does deep equals between the two objects.
+func EqualsRefOfNtileExpr(a, b *NtileExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.N, b.N) &&
+		EqualsRefOfOverClause(a.OverClause, b.OverClause)
+}
+
+// EqualsRefOfNullTreatmentClause does deep equals between the two objects.
+func EqualsRefOfNullTreatmentClause(a, b *NullTreatmentClause) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type
 }
 
 // EqualsRefOfNullVal does deep equals between the two objects.
@@ -2755,6 +2985,18 @@ func EqualsRefOfOtherRead(a, b *OtherRead) bool {
 		return false
 	}
 	return true
+}
+
+// EqualsRefOfOverClause does deep equals between the two objects.
+func EqualsRefOfOverClause(a, b *OverClause) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.WindowName, b.WindowName) &&
+		EqualsRefOfWindowSpecification(a.WindowSpec, b.WindowSpec)
 }
 
 // EqualsRefOfParenTableExpr does deep equals between the two objects.
@@ -3085,6 +3327,7 @@ func EqualsRefOfSelect(a, b *Select) bool {
 		EqualsRefOfWith(a.With, b.With) &&
 		EqualsGroupBy(a.GroupBy, b.GroupBy) &&
 		EqualsRefOfWhere(a.Having, b.Having) &&
+		EqualsNamedWindows(a.Windows, b.Windows) &&
 		EqualsOrderBy(a.OrderBy, b.OrderBy) &&
 		EqualsRefOfLimit(a.Limit, b.Limit) &&
 		a.Lock == b.Lock &&
@@ -3691,6 +3934,45 @@ func EqualsRefOfWhere(a, b *Where) bool {
 		EqualsExpr(a.Expr, b.Expr)
 }
 
+// EqualsRefOfWindowDefinition does deep equals between the two objects.
+func EqualsRefOfWindowDefinition(a, b *WindowDefinition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsRefOfWindowSpecification(a.WindowSpec, b.WindowSpec)
+}
+
+// EqualsWindowDefinitions does deep equals between the two objects.
+func EqualsWindowDefinitions(a, b WindowDefinitions) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfWindowDefinition(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsRefOfWindowSpecification does deep equals between the two objects.
+func EqualsRefOfWindowSpecification(a, b *WindowSpecification) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsExprs(a.PartitionClause, b.PartitionClause) &&
+		EqualsOrderBy(a.OrderClause, b.OrderClause) &&
+		EqualsRefOfFrameClause(a.FrameClause, b.FrameClause)
+}
+
 // EqualsRefOfWith does deep equals between the two objects.
 func EqualsRefOfWith(a, b *With) bool {
 	if a == b {
@@ -3865,6 +4147,12 @@ func EqualsCallable(inA, inB Callable) bool {
 		return false
 	}
 	switch a := inA.(type) {
+	case *ArgumentLessWindowExpr:
+		b, ok := inB.(*ArgumentLessWindowExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfArgumentLessWindowExpr(a, b)
 	case *ConvertExpr:
 		b, ok := inB.(*ConvertExpr)
 		if !ok {
@@ -3889,6 +4177,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfExtractFuncExpr(a, b)
+	case *FirstOrLastValueExpr:
+		b, ok := inB.(*FirstOrLastValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFirstOrLastValueExpr(a, b)
 	case *FuncExpr:
 		b, ok := inB.(*FuncExpr)
 		if !ok {
@@ -4021,6 +4315,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfJSONValueModifierExpr(a, b)
+	case *LagLeadExpr:
+		b, ok := inB.(*LagLeadExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLagLeadExpr(a, b)
 	case *MatchExpr:
 		b, ok := inB.(*MatchExpr)
 		if !ok {
@@ -4033,6 +4333,24 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfMemberOfExpr(a, b)
+	case *NTHValueExpr:
+		b, ok := inB.(*NTHValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNTHValueExpr(a, b)
+	case *NamedWindow:
+		b, ok := inB.(*NamedWindow)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNamedWindow(a, b)
+	case *NtileExpr:
+		b, ok := inB.(*NtileExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNtileExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {
@@ -4324,6 +4642,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return a == b
+	case *ArgumentLessWindowExpr:
+		b, ok := inB.(*ArgumentLessWindowExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfArgumentLessWindowExpr(a, b)
 	case *BetweenExpr:
 		b, ok := inB.(*BetweenExpr)
 		if !ok {
@@ -4408,6 +4732,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfExtractedSubquery(a, b)
+	case *FirstOrLastValueExpr:
+		b, ok := inB.(*FirstOrLastValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFirstOrLastValueExpr(a, b)
 	case *FuncExpr:
 		b, ok := inB.(*FuncExpr)
 		if !ok {
@@ -4558,6 +4888,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfJSONValueModifierExpr(a, b)
+	case *LagLeadExpr:
+		b, ok := inB.(*LagLeadExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLagLeadExpr(a, b)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {
@@ -4588,12 +4924,30 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfMemberOfExpr(a, b)
+	case *NTHValueExpr:
+		b, ok := inB.(*NTHValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNTHValueExpr(a, b)
+	case *NamedWindow:
+		b, ok := inB.(*NamedWindow)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNamedWindow(a, b)
 	case *NotExpr:
 		b, ok := inB.(*NotExpr)
 		if !ok {
 			return false
 		}
 		return EqualsRefOfNotExpr(a, b)
+	case *NtileExpr:
+		b, ok := inB.(*NtileExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNtileExpr(a, b)
 	case *NullVal:
 		b, ok := inB.(*NullVal)
 		if !ok {
@@ -4750,6 +5104,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return a == b
+	case *ArgumentLessWindowExpr:
+		b, ok := inB.(*ArgumentLessWindowExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfArgumentLessWindowExpr(a, b)
 	case *BetweenExpr:
 		b, ok := inB.(*BetweenExpr)
 		if !ok {
@@ -4834,6 +5194,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfExtractedSubquery(a, b)
+	case *FirstOrLastValueExpr:
+		b, ok := inB.(*FirstOrLastValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFirstOrLastValueExpr(a, b)
 	case *FuncExpr:
 		b, ok := inB.(*FuncExpr)
 		if !ok {
@@ -4984,6 +5350,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfJSONValueModifierExpr(a, b)
+	case *LagLeadExpr:
+		b, ok := inB.(*LagLeadExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLagLeadExpr(a, b)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {
@@ -5014,12 +5386,30 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfMemberOfExpr(a, b)
+	case *NTHValueExpr:
+		b, ok := inB.(*NTHValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNTHValueExpr(a, b)
+	case *NamedWindow:
+		b, ok := inB.(*NamedWindow)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNamedWindow(a, b)
 	case *NotExpr:
 		b, ok := inB.(*NotExpr)
 		if !ok {
 			return false
 		}
 		return EqualsRefOfNotExpr(a, b)
+	case *NtileExpr:
+		b, ok := inB.(*NtileExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNtileExpr(a, b)
 	case *NullVal:
 		b, ok := inB.(*NullVal)
 		if !ok {

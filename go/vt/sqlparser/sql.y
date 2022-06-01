@@ -127,6 +127,23 @@ func bindVariable(yylex yyLexer, bvar string) {
   revertMigration *RevertMigration
   alterMigration  *AlterMigration
   trimType        TrimType
+  frameClause     *FrameClause
+  framePoint 	  *FramePoint
+  frameUnitType   FrameUnitType
+  framePointType  FramePointType
+  argumentLessWindowExprType ArgumentLessWindowExprType
+  windowSpecification *WindowSpecification
+  overClause *OverClause
+  nullTreatmentClause *NullTreatmentClause
+  nullTreatmentType NullTreatmentType
+  firstOrLastValueExprType FirstOrLastValueExprType
+  fromFirstLastType FromFirstLastType
+  fromFirstLastClause *FromFirstLastClause
+  lagLeadExprType LagLeadExprType
+  windowDefinition *WindowDefinition
+  windowDefinitions WindowDefinitions
+  namedWindow *NamedWindow
+  namedWindows NamedWindows
 
   whens         []*When
   columnDefinitions []*ColumnDefinition
@@ -263,6 +280,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %right <str> UNDERSCORE_UTF16LE UNDERSCORE_UTF32 UNDERSCORE_UTF8 UNDERSCORE_UTF8MB4 UNDERSCORE_UTF8MB3
 %right <str> INTERVAL
 %nonassoc <str> '.'
+%left <str> WINDOW_EXPR
 
 // There is no need to define precedence for the JSON
 // operators because the syntax is restricted enough that
@@ -346,6 +364,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 // Flush tokens
 %token <str> NO_WRITE_TO_BINLOG LOGS ERROR GENERAL HOSTS OPTIMIZER_COSTS USER_RESOURCES SLOW CHANNEL RELAY EXPORT
 
+// Window Functions Token
+%token <str> CURRENT ROW ROWS
+
 // TableOptions tokens
 %token <str> AVG_ROW_LENGTH CONNECTION CHECKSUM DELAY_KEY_WRITE ENCRYPTION ENGINE INSERT_METHOD MAX_ROWS MIN_ROWS PACK_KEYS PASSWORD
 %token <str> FIXED DYNAMIC COMPRESSED REDUNDANT COMPACT ROW_FORMAT STATS_AUTO_RECALC STATS_PERSISTENT STATS_SAMPLE_PAGES STORAGE MEMORY DISK
@@ -384,6 +405,22 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> wild_opt check_option_opt cascade_or_local_opt restrict_or_cascade_opt
 %type <explainType> explain_format_opt
 %type <trimType> trim_type
+%type <frameUnitType> frame_units
+%type <argumentLessWindowExprType> argument_less_window_expr_type
+%type <framePoint> frame_point
+%type <frameClause> frame_clause frame_clause_opt
+%type <windowSpecification> window_spec
+%type <overClause> over_clause
+%type <nullTreatmentType> null_treatment_type
+%type <nullTreatmentClause> null_treatment_clause null_treatment_clause_opt
+%type <fromFirstLastType> from_first_last_type
+%type <fromFirstLastClause> from_first_last_clause from_first_last_clause_opt
+%type <firstOrLastValueExprType> first_or_last_value_expr_type
+%type <lagLeadExprType> lag_lead_expr_type
+%type <windowDefinition> window_definition
+%type <windowDefinitions> window_definition_list
+%type <namedWindow> named_window
+%type <namedWindows> named_windows_list named_windows_list_opt
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
 %type <partitionOption> partitions_options_opt partitions_options_beginning
@@ -402,7 +439,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> select_option algorithm_view security_view security_view_opt
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
-%type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression regular_expressions
+%type <expr> expression frame_expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions
+%type <expr> interval_value simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg
 %type <tableExprs> from_opt table_references from_clause
 %type <tableExpr> table_reference table_factor join_table json_table_function
 %type <jtColumnDefinition> jt_column
@@ -424,7 +462,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
 %type <isExprOperator> is_suffix
 %type <colTuple> col_tuple
-%type <exprs> expression_list expression_list_opt
+%type <exprs> expression_list expression_list_opt window_partition_clause_opt
 %type <values> tuple_list
 %type <valTuple> row_tuple tuple_or_empty
 %type <subquery> subquery
@@ -432,7 +470,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <colName> column_name after_opt
 %type <whens> when_expression_list
 %type <when> when_expression
-%type <expr> expression_opt else_expression_opt
+%type <expr> expression_opt else_expression_opt default_with_comma_opt
 %type <exprs> group_by_opt
 %type <expr> having_opt
 %type <orderBy> order_by_opt order_list order_by_clause
@@ -463,7 +501,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <boolean> exists_opt not_exists_opt enforced enforced_opt temp_opt full_opt
 %type <empty> to_opt
 %type <str> reserved_keyword non_reserved_keyword
-%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
+%type <colIdent> sql_id sql_id_opt reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt
 %type <empty> as_opt work_opt savepoint_opt
@@ -727,7 +765,7 @@ query_expression:
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
-	$$ = NewSelect(Comments($2), SelectExprs{&Nextval{Expr: $5}}, []string{$3}/*options*/, nil, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/)
+	$$ = NewSelect(Comments($2), SelectExprs{&Nextval{Expr: $5}}, []string{$3}/*options*/, nil, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/, nil)
   }
 
 query_expression_body:
@@ -813,14 +851,14 @@ vstream_statement:
 
 // query_primary is an unparenthesized SELECT with no order by clause or beyond.
 query_primary:
-//  1         2            3              4                    5             6                7           8
-  SELECT comment_opt select_options select_expression_list into_clause from_opt where_expression_opt group_by_opt having_opt
+//  1         2            3              4                    5             6                7           8            9           10
+  SELECT comment_opt select_options select_expression_list into_clause from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
-    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, NewWhere(WhereClause, $7), GroupBy($8), NewWhere(HavingClause, $9))
+    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, NewWhere(WhereClause, $7), GroupBy($8), NewWhere(HavingClause, $9), $10)
   }
-| SELECT comment_opt select_options select_expression_list from_opt where_expression_opt group_by_opt having_opt
+| SELECT comment_opt select_options select_expression_list from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
-    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, NewWhere(WhereClause, $6), GroupBy($7), NewWhere(HavingClause, $8))
+    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, NewWhere(WhereClause, $6), GroupBy($7), NewWhere(HavingClause, $8), $9)
   }
 
 
@@ -5151,13 +5189,13 @@ function_call_keyword
   {
 	 $$ = &Default{ColName: $2}
   }
-| INTERVAL simple_expr sql_id
+| interval_value
   {
 	// This rule prevents the usage of INTERVAL
 	// as a function. If support is needed for that,
 	// we'll need to revisit this. The solution
 	// will be non-trivial because of grammar conflicts.
-	$$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
+	$$ = $1
   }
 | column_name JSON_EXTRACT_OP text_literal_or_arg
   {
@@ -5166,6 +5204,12 @@ function_call_keyword
 | column_name JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
   {
 	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
+  }
+
+interval_value:
+  INTERVAL simple_expr sql_id
+  {
+     $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
   }
 
 trim_type:
@@ -5180,6 +5224,203 @@ trim_type:
 | TRAILING
   {
     $$ = TrailingTrimType
+  }
+
+frame_units:
+  ROWS
+  {
+    $$ = FrameRowsType
+  }
+| RANGE
+  {
+    $$ = FrameRangeType
+  }
+
+
+argument_less_window_expr_type:
+  CUME_DIST
+  {
+    $$ = CumeDistExprType
+  }
+| DENSE_RANK
+  {
+    $$ = DenseRankExprType
+  }
+| PERCENT_RANK
+  {
+    $$ = PercentRankExprType
+  }
+| RANK
+  {
+    $$ = RankExprType
+  }
+| ROW_NUMBER
+  {
+    $$ = RowNumberExprType
+  }
+
+frame_point:
+  CURRENT ROW
+  {
+    $$ = &FramePoint{Type:CurrentRowType}
+  }
+| UNBOUNDED PRECEDING
+  {
+    $$ = &FramePoint{Type:UnboundedPrecedingType}
+  }
+| UNBOUNDED FOLLOWING
+  {
+    $$ = &FramePoint{Type:UnboundedFollowingType}
+  }
+| frame_expression PRECEDING
+  {
+    $$ = &FramePoint{Type:ExprPrecedingType, Expr:$1}
+  }
+| frame_expression FOLLOWING
+  {
+    $$ = &FramePoint{Type:ExprFollowingType, Expr:$1}
+  }
+
+frame_expression:
+  NUM_literal
+  {
+    $$ = $1
+  }
+| interval_value
+  {
+    $$ = $1
+  }
+
+frame_clause_opt:
+  {
+    $$ = nil
+  }
+| frame_clause
+  {
+    $$ = $1
+  }
+
+frame_clause:
+  frame_units frame_point
+  {
+    $$ = &FrameClause{ Unit: $1, Start: $2 }
+  }
+| frame_units BETWEEN frame_point AND frame_point
+  {
+    $$ = &FrameClause{ Unit: $1, Start: $3, End: $5 }
+  }
+
+window_partition_clause_opt:
+  {
+    $$= nil
+  }
+| PARTITION BY expression_list
+  {
+    $$ = $3
+  }
+
+sql_id_opt:
+  {
+  }
+| sql_id
+  {
+    $$ = $1
+  }
+
+window_spec:
+sql_id_opt window_partition_clause_opt order_by_opt frame_clause_opt
+  {
+    $$ = &WindowSpecification{ Name: $1, PartitionClause: $2, OrderClause: $3, FrameClause: $4}
+  }
+
+over_clause:
+  OVER openb window_spec closeb
+  {
+    $$ = &OverClause{ WindowSpec: $3 }
+  }
+| OVER sql_id
+  {
+    $$ = &OverClause{WindowName: $2}
+  }
+
+null_treatment_clause_opt:
+  {
+    $$ = nil
+  }
+| null_treatment_clause
+
+null_treatment_clause:
+  null_treatment_type
+  {
+    $$ = &NullTreatmentClause{$1}
+  }
+
+null_treatment_type:
+  RESPECT NULLS
+  {
+    $$ = RespectNullsType
+  }
+| IGNORE NULLS
+  {
+    $$ = IgnoreNullsType
+  }
+
+first_or_last_value_expr_type:
+  FIRST_VALUE
+  {
+    $$ = FirstValueExprType
+  }
+| LAST_VALUE
+  {
+    $$ = LastValueExprType
+  }
+
+from_first_last_type:
+  FROM FIRST
+  {
+    $$ = FromFirstType
+  }
+| FROM LAST
+  {
+    $$ = FromLastType
+  }
+
+from_first_last_clause_opt:
+  {
+    $$ = nil
+  }
+| from_first_last_clause
+
+from_first_last_clause:
+  from_first_last_type
+  {
+    $$ = &FromFirstLastClause{$1}
+  }
+
+lag_lead_expr_type:
+  LAG
+  {
+    $$ = LagExprType
+  }
+| LEAD
+  {
+    $$ = LeadExprType
+  }
+
+window_definition:
+  sql_id AS openb window_spec closeb
+  {
+    $$ = &WindowDefinition{Name:$1, WindowSpec:$4}
+  }
+
+window_definition_list:
+  window_definition
+  {
+    $$ = WindowDefinitions{$1}
+  }
+| window_definition_list ',' window_definition
+  {
+    $$ = append($1,$3)
   }
 
 default_opt:
@@ -5571,7 +5812,61 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONUnquoteExpr{JSONValue:$3}
   }
+| argument_less_window_expr_type openb closeb over_clause
+  {
+    $$ = &ArgumentLessWindowExpr{ Type: $1, OverClause : $4 }
+  }
+| first_or_last_value_expr_type openb expression closeb null_treatment_clause_opt over_clause
+  {
+    $$ = &FirstOrLastValueExpr{ Type: $1, Expr : $3 , NullTreatmentClause:$5 ,OverClause:$6 }
+  }
+| NTILE openb null_int_variable_arg closeb over_clause
+  {
+    $$ =  &NtileExpr{N: $3, OverClause: $5}
+  }
+| NTH_VALUE openb expression ',' null_int_variable_arg closeb from_first_last_clause_opt null_treatment_clause_opt over_clause
+  {
+    $$ =  &NTHValueExpr{ Expr: $3, N: $5, FromFirstLastClause:$7, NullTreatmentClause:$8, OverClause: $9}
+  }
+| lag_lead_expr_type openb expression closeb null_treatment_clause_opt over_clause
+  {
+    $$ = &LagLeadExpr{ Type:$1 , Expr: $3, NullTreatmentClause:$5, OverClause: $6 }
+  }
+| lag_lead_expr_type openb expression ',' null_int_variable_arg default_with_comma_opt closeb null_treatment_clause_opt over_clause
+  {
+    $$ =  &LagLeadExpr{ Type:$1 , Expr: $3, N: $5, Default: $6, NullTreatmentClause:$8, OverClause: $9}
+  }
 | regular_expressions
+
+null_int_variable_arg:
+  null_as_literal
+  {
+    $$ = $1
+  }
+| INTEGRAL
+  {
+    $$ = NewIntLiteral($1)
+  }
+//  we are currently using id_or_var for variables. This will require a reiteration later.
+| id_or_var
+  {
+    $$ = &ColName{Name: $1}
+  }
+| VALUE_ARG
+  {
+    $$ = NewArgument($1[1:])
+    bindVariable(yylex, $1[1:])
+  }
+
+default_with_comma_opt:
+  {
+    $$ = nil
+  }
+| ',' expression
+  {
+    $$ = $2
+  }
+
 
 regular_expressions:
   REGEXP_INSTR openb expression ',' expression closeb
@@ -6028,6 +6323,31 @@ having_opt:
 | HAVING expression
   {
     $$ = $2
+  }
+
+named_window:
+  WINDOW window_definition_list %prec WINDOW_EXPR
+  {
+    $$ = &NamedWindow{$2}
+  }
+
+named_windows_list:
+  named_window
+  {
+    $$ = NamedWindows{$1}
+  }
+| named_windows_list ',' named_window
+  {
+    $$ = append($1,$3)
+  }
+
+named_windows_list_opt:
+  {
+    $$ = nil
+  }
+| named_windows_list
+  {
+    $$ = $1
   }
 
 order_by_opt:
@@ -6492,6 +6812,10 @@ row_tuple:
   {
     $$ = ValTuple($2)
   }
+| ROW openb expression_list closeb
+  {
+    $$ = ValTuple($3)
+  }
 tuple_expression:
  row_tuple
   {
@@ -6798,7 +7122,9 @@ reserved_keyword:
 | REPLACE
 | RIGHT
 | RLIKE
+| ROW
 | ROW_NUMBER
+| ROWS
 | SCHEMA
 | SCHEMAS
 | SELECT
@@ -6887,6 +7213,7 @@ non_reserved_keyword:
 | CONNECTION
 | COPY
 | CSV
+| CURRENT
 | DATA
 | DATE
 | DATETIME
