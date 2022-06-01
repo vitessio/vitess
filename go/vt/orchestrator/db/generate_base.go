@@ -870,4 +870,12 @@ var generateSQLBase = []string{
 	`
 		CREATE INDEX ks_idx_vitess_tablet ON vitess_tablet (keyspace, shard)
 	`,
+	`
+		CREATE TABLE IF NOT EXISTS vitess_keyspace (
+			keyspace varchar(128) CHARACTER SET ascii NOT NULL,
+			keyspace_type smallint(5) NOT NULL,
+			durability_policy varchar(512) CHARACTER SET ascii NOT NULL,
+			PRIMARY KEY (keyspace)
+		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+	`,
 }
