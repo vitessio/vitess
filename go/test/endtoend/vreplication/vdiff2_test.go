@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,59 +29,59 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
+var (
+	vdiffTimeout = time.Second * 60
+)
+
 func TestVDiff2(t *testing.T) {
 	allCellNames = "zone1"
 	defaultCellName := "zone1"
 	workflow := "wf1"
 	sourceKs := "product"
+	sourceShards := []string{"0"}
 	targetKs := "customer"
+	targetShards := []string{"-80", "80-"}
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 
-	vc = NewVitessCluster(t, "TestVDiff2", []string{"zone1"}, mainClusterConfig)
+	vc = NewVitessCluster(t, "TestVDiff2", []string{allCellNames}, mainClusterConfig)
 	require.NotNil(t, vc)
 	defaultCell = vc.Cells[defaultCellName]
 	cells := []*Cell{defaultCell}
 
 	defer vc.TearDown(t)
 
-	cell1 := vc.Cells["zone1"]
-	vc.AddKeyspace(t, []*Cell{cell1}, sourceKs, "0", initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)
+	vc.AddKeyspace(t, cells, sourceKs, strings.Join(sourceShards, ","), initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)
 
-	vtgate = cell1.Vtgates[0]
+	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, sourceShards[0]), 1)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
-	productTab := vc.Cells[defaultCell.Name].Keyspaces[sourceKs].Shards["0"].Tablets["zone1-100"].Vttablet
-	_ = productTab
 	insertInitialData(t)
 
 	// Insert null and empty enum values for testing vdiff comparisons for those values.
 	// If we add this to the initial data list, the counts in several other tests will need to change
 	query := "insert into customer(cid, name, typ, sport) values(1001, null, 'soho','');"
-	execVtgateQuery(t, vtgateConn, "product:0", query)
+	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:%s", sourceKs, sourceShards[0]), query)
 
-	if _, err := vc.AddKeyspace(t, cells, targetKs, "-80,80-", customerVSchema, customerSchema, 0, 0, 200, targetKsOpts); err != nil {
-		require.NoError(t, err)
-	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "-80"), 1); err != nil {
-		require.NoError(t, err)
-	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "80-"), 1); err != nil {
-		require.NoError(t, err)
-	}
+	_, err := vc.AddKeyspace(t, cells, targetKs, strings.Join(targetShards, ","), customerVSchema, customerSchema, 0, 0, 200, targetKsOpts)
+	require.NoError(t, err)
+	err = vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, targetShards[0]), 1)
+	require.NoError(t, err)
+	err = vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, targetShards[1]), 1)
+	require.NoError(t, err)
 
-	defaultCell := vc.Cells["zone1"]
 	custKs := vc.Cells[defaultCell.Name].Keyspaces[targetKs]
-	customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
-	customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
+	customerTab1 := custKs.Shards[targetShards[0]].Tablets[fmt.Sprintf("%s-200", defaultCell.Name)].Vttablet
+	customerTab2 := custKs.Shards[targetShards[1]].Tablets[fmt.Sprintf("%s-300", defaultCell.Name)].Vttablet
 	tables := "customer,customer2,Lead"
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput("MoveTables", "--", "--source", sourceKs, "--tables",
 		tables, "Create", ksWorkflow)
 	require.NoError(t, err, output)
+	require.NotEmpty(t, output, "No output returned from MoveTables")
 
 	catchup(t, customerTab1, workflow, "MoveTables")
 	catchup(t, customerTab2, workflow, "MoveTables")
@@ -89,7 +90,6 @@ func TestVDiff2(t *testing.T) {
 	t.Run("vdiff2", func(t *testing.T) {
 		uuid, _ := vdiff2(t, ksWorkflow, "create", "")
 		waitForVDiff2ToComplete(t, uuid)
-		time.Sleep(5 * time.Second) // wait for vdiffs on tablets to start
 		_, jsonStr := vdiff2(t, ksWorkflow, "show", uuid)
 
 		info := getVDiffInfo(jsonStr)
@@ -102,16 +102,12 @@ func TestVDiff2(t *testing.T) {
 }
 
 func waitForVDiff2ToComplete(t *testing.T, uuid string) {
-	ch := make(chan bool, 1)
+	ch := make(chan bool)
 	go func() {
 		for {
 			time.Sleep(1 * time.Second)
 			_, jsonStr := vdiff2(t, ksWorkflow, "show", uuid)
-			if jsonStr == "" {
-
-			}
-			info := getVDiffInfo(jsonStr)
-			if info.State == "completed" {
+			if info := getVDiffInfo(jsonStr); info.State == "completed" {
 				ch <- true
 			}
 		}
@@ -120,15 +116,15 @@ func waitForVDiff2ToComplete(t *testing.T, uuid string) {
 	select {
 	case <-ch:
 		return
-	case <-time.After(30 * time.Second):
+	case <-time.After(vdiffTimeout):
 		require.FailNowf(t, "VDiff never completed: %s", uuid)
 	}
 }
 
 func vdiff2(t *testing.T, ksWorkflow, command, subCommand string) (uuid string, output string) {
 	var err error
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "-format", "json", ksWorkflow, command, subCommand)
-	log.Infof("vdiff2 err: %+v, output: %+v", err, output)
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "--format", "json", ksWorkflow, command, subCommand)
+	log.Infof("vdiff2 output: %+v (err: %+v)", output, err)
 	require.Nil(t, err)
 
 	uuid, err = jsonparser.GetString([]byte(output), "UUID")
