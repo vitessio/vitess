@@ -19,6 +19,8 @@ package engine
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/vt/srvtopo"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -92,11 +94,16 @@ func (l *Lock) execLock(vcursor VCursor, query string, bindVars map[string]*quer
 	for _, lf := range l.LockFunctions {
 		var lName string
 		if lf.Typ.Name != nil {
-			lVal, isLiteral := lf.Typ.Name.(*sqlparser.Literal)
-			if !isLiteral {
-				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %T lock name not supported", lf.Typ.Name)
+			pv, err := evalengine.Translate(lf.Typ.Name, nil)
+			if err != nil {
+				return nil, err
 			}
-			lName = lVal.Val
+			env := &evalengine.ExpressionEnv{BindVars: bindVars}
+			er, err := env.Evaluate(pv)
+			if err != nil {
+				return nil, err
+			}
+			lName = er.String()
 		}
 		qr, err := lf.execLock(vcursor, bindVars, rss[0])
 		if err != nil {
