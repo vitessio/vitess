@@ -24,9 +24,9 @@ option go_package = "github.com/dolthub/vitess/go/vt/proto/topodata";
 
 option java_package="io.vitess.proto";
 
-package topodata;
+package dolthub.vt.topodata;
 
-import "time.proto";
+import "dolthub/vt/time.proto";
 
 // KeyRange describes a range of sharding keys, when range-based
 // sharding is used.
@@ -167,7 +167,7 @@ message Tablet {
   // replication-management commands like PlannedReparentShard,
   // EmergencyReparentShard, and TabletExternallyReparented.
   //
-  vttime.Time master_term_start_time = 14;
+  dolthub.vt.vttime.Time master_term_start_time = 14;
 
   // OBSOLETE: ip and tablet health information
   // string ip = 3;
@@ -198,7 +198,7 @@ message Shard {
   // at a later time than this. Note that a new term can start for the tablet
   // that is already the master. In that case, the master_term_start_time would
   // be increased without changing the master_alias.
-  vttime.Time master_term_start_time = 8;
+  dolthub.vt.vttime.Time master_term_start_time = 8;
 
   // key_range is the KeyRange for this shard. It can be unset if:
   // - we are not using range-based sharding in this shard.
@@ -315,7 +315,7 @@ message Keyspace {
   // snapshot_time (in UTC) is a property of snapshot
   // keyspaces which tells us what point in time
   // the snapshot is of
-  vttime.Time snapshot_time = 7;  
+  dolthub.vt.vttime.Time snapshot_time = 7;  
 }
 
 // ShardReplication describes the MySQL replication relationships

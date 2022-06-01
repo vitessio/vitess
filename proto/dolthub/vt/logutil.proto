@@ -19,9 +19,9 @@ limitations under the License.
 syntax = "proto3";
 option go_package = "github.com/dolthub/vitess/go/vt/proto/logutil";
 
-package logutil;
+package dolthub.vt.logutil;
 
-import "time.proto";
+import "dolthub/vt/time.proto";
 
 // Level is the level of the log messages.
 enum Level {
@@ -38,7 +38,7 @@ enum Level {
 
 // Event is a single logging event
 message Event {
-  vttime.Time time = 1;
+  dolthub.vt.vttime.Time time = 1;
   Level level = 2;
   string file = 3;
   int64 line = 4;

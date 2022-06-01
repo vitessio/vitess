@@ -19,7 +19,7 @@ limitations under the License.
 syntax = "proto3";
 option go_package = "github.com/dolthub/vitess/go/vt/proto/replicationdata";
 
-package replicationdata;
+package dolthub.vt.replicationdata;
 
 // Status is the replication status for MySQL (returned by 'show slave status'
 // and parsed into a Position and fields).
