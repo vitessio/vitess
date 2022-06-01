@@ -38,14 +38,14 @@ func init() {
 	addCommand(cellsAliasesGroupName, command{
 		name:   "AddCellsAlias",
 		method: commandAddCellsAlias,
-		params: "[-cells <cell,cell2...>] <alias>",
+		params: "[--cells <cell,cell2...>] <alias>",
 		help:   "Defines a group of cells within which replica/rdonly traffic can be routed across cells. Between cells that are not in the same group (alias), only primary traffic can be routed.",
 	})
 
 	addCommand(cellsAliasesGroupName, command{
 		name:   "UpdateCellsAlias",
 		method: commandUpdateCellsAlias,
-		params: "[-cells <cell,cell2,...>] <alias>",
+		params: "[--cells <cell,cell2,...>] <alias>",
 		help:   "Updates the content of a CellsAlias with the provided parameters. If a value is empty, it is not updated. The CellsAlias will be created if it doesn't exist.",
 	})
 

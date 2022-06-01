@@ -46,7 +46,7 @@ func init() {
 	addCommand("Shards", command{
 		name:   "BackupShard",
 		method: commandBackupShard,
-		params: "[-allow_primary=false] <keyspace/shard>",
+		params: "[--allow_primary=false] <keyspace/shard>",
 		help:   "Chooses a tablet and creates a backup for a shard.",
 	})
 	addCommand("Shards", command{
@@ -59,13 +59,13 @@ func init() {
 	addCommand("Tablets", command{
 		name:   "Backup",
 		method: commandBackup,
-		params: "[-concurrency=4] [-allow_primary=false] <tablet alias>",
+		params: "[--concurrency=4] [--allow_primary=false] <tablet alias>",
 		help:   "Stops mysqld and uses the BackupStorage service to store a new backup. This function also remembers if the tablet was replicating so that it can restore the same state after the backup completes.",
 	})
 	addCommand("Tablets", command{
 		name:   "RestoreFromBackup",
 		method: commandRestoreFromBackup,
-		params: "[-backup_timestamp=yyyy-MM-dd.HHmmss] <tablet alias>",
+		params: "[--backup_timestamp=yyyy-MM-dd.HHmmss] <tablet alias>",
 		help:   "Stops mysqld and restores the data from the latest backup or if a timestamp is specified then the most recent backup at or before that time.",
 	})
 }
