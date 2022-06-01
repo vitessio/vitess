@@ -2406,9 +2406,6 @@ var (
 		input:  "DROP /* comment */ PREPARE stmt1",
 		output: "drop /* comment */ prepare stmt1",
 	}, {
-		input:  "create table unused_reserved_keywords (dense_rank bigint, lead VARCHAR(255), percent_rank decimal(3, 0), row TINYINT, rows CHAR(10), constraint PK_project PRIMARY KEY (dense_rank))",
-		output: "create table unused_reserved_keywords (\n\t`dense_rank` bigint,\n\t`lead` VARCHAR(255),\n\t`percent_rank` decimal(3,0),\n\t`row` TINYINT,\n\t`rows` CHAR(10),\n\tconstraint PK_project PRIMARY KEY (`dense_rank`)\n)",
-	}, {
 		input:  `SELECT JSON_PRETTY('{"a":"10","b":"15","x":"25"}')`,
 		output: `select json_pretty('{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
 	}, {
@@ -2997,6 +2994,72 @@ var (
 	}, {
 		input:  "SELECT TRIM('Michael!') RLIKE @j",
 		output: "select trim('Michael!') regexp @j from dual",
+	}, {
+		input:  "SELECT val, CUME_DIST() OVER w, ROW_NUMBER() OVER w, DENSE_RANK() OVER w, PERCENT_RANK() OVER w, RANK() OVER w AS 'cd' FROM numbers",
+		output: "select val, cume_dist() over w, row_number() over w, dense_rank() over w, percent_rank() over w, rank() over w as cd from numbers",
+	}, {
+		input:  "SELECT year, country, product, profit, CUME_DIST() OVER() AS total_profit FROM sales",
+		output: "select `year`, country, product, profit, cume_dist() over () as total_profit from sales",
+	}, {
+		input:  "SELECT val, CUME_DIST() OVER (ORDER BY val) AS 'cd' FROM numbers",
+		output: "select val, cume_dist() over ( order by val asc) as cd from numbers",
+	}, {
+		input:  "SELECT val, CUME_DIST() OVER (PARTITION BY z ORDER BY val, subject DESC ROWS CURRENT ROW) AS 'cd' FROM numbers",
+		output: "select val, cume_dist() over ( partition by z order by val asc, subject desc rows current row) as cd from numbers",
+	}, {
+		input:  "SELECT val, CUME_DIST() OVER (val PARTITION BY z, subject ORDER BY val, subject DESC ROWS CURRENT ROW) AS 'cd' FROM numbers",
+		output: "select val, cume_dist() over ( val partition by z, subject order by val asc, subject desc rows current row) as cd from numbers",
+	}, {
+		input:  "SELECT val, FIRST_VALUE(val) OVER w FROM numbers",
+		output: "select val, first_value(val) over w from numbers",
+	}, {
+		input:  "SELECT val, LAST_VALUE(val) IGNORE NULLS OVER w FROM numbers",
+		output: "select val, last_value(val) ignore nulls over w from numbers",
+	}, {
+		input:  "SELECT NTILE(1) OVER w, NTILE(0) OVER w  FROM numbers",
+		output: "select ntile(1) over w, ntile(0) over w from numbers",
+	}, {
+		input:  "SELECT NTILE(NULL) OVER w FROM numbers",
+		output: "select ntile(null) over w from numbers",
+	}, {
+		input:  "SELECT NTILE(val) OVER W, NTILE(@val) OVER w FROM numbers",
+		output: "select ntile(val) over W, ntile(@val) over w from numbers",
+	}, {
+		input:  "SELECT NTH_VALUE(@z,1) OVER w, NTH_VALUE('val',0) OVER w FROM numbers",
+		output: "select nth_value(@z, 1) over w, nth_value('val', 0) over w from numbers",
+	}, {
+		input:  "SELECT NTH_VALUE(val,NULL) FROM FIRST OVER w FROM numbers",
+		output: "select nth_value(val, null) respect nulls over w from numbers",
+	}, {
+		input:  "SELECT NTH_VALUE(val,NULL) RESPECT NULLS OVER w FROM numbers",
+		output: "select nth_value(val, null) respect nulls over w from numbers",
+	}, {
+		input:  "SELECT LAG(val) OVER w, LEAD(TRIM('abc')) OVER w FROM numbers",
+		output: "select lag(val) over w, lead(trim('abc')) over w from numbers",
+	}, {
+		input:  "SELECT LAG(val, 10) OVER w, LEAD('val', null) OVER w, LEAD(val, 1, ASCII(1)) OVER w FROM numbers",
+		output: "select lag(val, 10) over w, lead('val', null) over w, lead(val, 1, ASCII(1)) over w from numbers",
+	}, {
+		input:  "SELECT val, ROW_NUMBER() OVER (ORDER BY val) AS 'row_number' FROM numbers WINDOW w AS (ORDER BY val);",
+		output: "select val, row_number() over ( order by val asc) as `row_number` from numbers window w AS ( order by val asc)",
+	}, {
+		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ROWS UNBOUNDED PRECEDING);",
+		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc rows unbounded preceding)",
+	}, {
+		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time RANGE 10 PRECEDING);",
+		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc range 10 preceding)",
+	}, {
+		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ROWS INTERVAL 5 DAY PRECEDING);",
+		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc rows interval 5 DAY preceding)",
+	}, {
+		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time RANGE 5 FOLLOWING);",
+		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc range 5 following)",
+	}, {
+		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ROWS INTERVAL '2:30' MINUTE_SECOND FOLLOWING);",
+		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc rows interval '2:30' MINUTE_SECOND following)",
+	}, {
+		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ASC RANGE BETWEEN 10 PRECEDING AND 10 FOLLOWING);",
+		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc range between 10 preceding and 10 following)",
 	}}
 )
 
@@ -3182,6 +3245,27 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "SELECT JSON_REMOVE('[\"a\", [\"b\", \"c\"], \"d\"]')",
 		err:   "syntax error at position 45",
+	}, {
+		input: "SELECT NTILE('val') OVER w FROM numbers",
+		err:   "syntax error at position 19 near 'val'",
+	}, {
+		input: "SELECT NTILE(-10) OVER w FROM numbers",
+		err:   "syntax error at position 15",
+	}, {
+		input: "SELECT NTH_VALUE(val,) OVER w FROM numbers",
+		err:   "syntax error at position 23",
+	}, {
+		input: "SELECT NTH_VALUE(TRIM('abc'),-10) OVER w FROM numbers",
+		err:   "syntax error at position 31",
+	}, {
+		input: "SELECT LAG(val, ) OVER w",
+		err:   "syntax error at position 18",
+	}, {
+		input: "SELECT LAG(val, 10,  ) OVER w",
+		err:   "syntax error at position 23",
+	}, {
+		input: "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ROWS -10 FOLLOWING);",
+		err:   "syntax error at position 246",
 	}}
 
 	for _, tcase := range invalidSQL {
@@ -3509,9 +3593,6 @@ func TestKeywords(t *testing.T) {
 	}, {
 		input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
 		output: "select /* share and mode as cols */ `share`, `mode` from t where `share` = 'foo'",
-	}, {
-		input:  "select /* unused keywords as cols */ `write`, varying from t where `trailing` = 'foo' and `leading` = 'foo' and `both` = 'foo'",
-		output: "select /* unused keywords as cols */ `write`, `varying` from t where `trailing` = 'foo' and `leading` = 'foo' and `both` = 'foo'",
 	}, {
 		input:  "select status from t",
 		output: "select `status` from t",

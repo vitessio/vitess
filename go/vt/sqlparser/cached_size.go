@@ -317,6 +317,18 @@ func (cached *AndExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *ArgumentLessWindowExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field OverClause *vitess.io/vitess/go/vt/sqlparser.OverClause
+	size += cached.OverClause.CachedSize(true)
+	return size
+}
 func (cached *AutoIncSpec) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1103,6 +1115,26 @@ func (cached *ExtractedSubquery) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *FirstOrLastValueExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field NullTreatmentClause *vitess.io/vitess/go/vt/sqlparser.NullTreatmentClause
+	if cached.NullTreatmentClause != nil {
+		size += hack.RuntimeAllocSize(int64(1))
+	}
+	// field OverClause *vitess.io/vitess/go/vt/sqlparser.OverClause
+	size += cached.OverClause.CachedSize(true)
+	return size
+}
 func (cached *Flush) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1146,6 +1178,44 @@ func (cached *ForeignKeyDefinition) CachedSize(alloc bool) int64 {
 	size += cached.IndexName.CachedSize(false)
 	// field ReferenceDefinition *vitess.io/vitess/go/vt/sqlparser.ReferenceDefinition
 	size += cached.ReferenceDefinition.CachedSize(true)
+	return size
+}
+func (cached *FrameClause) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Start *vitess.io/vitess/go/vt/sqlparser.FramePoint
+	size += cached.Start.CachedSize(true)
+	// field End *vitess.io/vitess/go/vt/sqlparser.FramePoint
+	size += cached.End.CachedSize(true)
+	return size
+}
+func (cached *FramePoint) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *FromFirstLastClause) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
 	return size
 }
 func (cached *FuncExpr) CachedSize(alloc bool) int64 {
@@ -1964,6 +2034,34 @@ func (cached *KeyState) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *LagLeadExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(80)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field N vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.N.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Default vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Default.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field OverClause *vitess.io/vitess/go/vt/sqlparser.OverClause
+	size += cached.OverClause.CachedSize(true)
+	// field NullTreatmentClause *vitess.io/vitess/go/vt/sqlparser.NullTreatmentClause
+	if cached.NullTreatmentClause != nil {
+		size += hack.RuntimeAllocSize(int64(1))
+	}
+	return size
+}
 func (cached *Limit) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2076,6 +2174,51 @@ func (cached *ModifyColumn) CachedSize(alloc bool) int64 {
 	size += cached.After.CachedSize(true)
 	return size
 }
+func (cached *NTHValueExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field N vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.N.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field OverClause *vitess.io/vitess/go/vt/sqlparser.OverClause
+	size += cached.OverClause.CachedSize(true)
+	// field FromFirstLastClause *vitess.io/vitess/go/vt/sqlparser.FromFirstLastClause
+	if cached.FromFirstLastClause != nil {
+		size += hack.RuntimeAllocSize(int64(1))
+	}
+	// field NullTreatmentClause *vitess.io/vitess/go/vt/sqlparser.NullTreatmentClause
+	if cached.NullTreatmentClause != nil {
+		size += hack.RuntimeAllocSize(int64(1))
+	}
+	return size
+}
+func (cached *NamedWindow) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Windows vitess.io/vitess/go/vt/sqlparser.WindowDefinitions
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Windows)) * int64(8))
+		for _, elem := range cached.Windows {
+			size += elem.CachedSize(true)
+		}
+	}
+	return size
+}
 func (cached *Nextval) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2101,6 +2244,32 @@ func (cached *NotExpr) CachedSize(alloc bool) int64 {
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expr.(cachedObject); ok {
 		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *NtileExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field N vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.N.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field OverClause *vitess.io/vitess/go/vt/sqlparser.OverClause
+	size += cached.OverClause.CachedSize(true)
+	return size
+}
+func (cached *NullTreatmentClause) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
 	}
 	return size
 }
@@ -2175,6 +2344,20 @@ func (cached *OrderByOption) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(false)
 		}
 	}
+	return size
+}
+func (cached *OverClause) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field WindowName vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.WindowName.CachedSize(false)
+	// field WindowSpec *vitess.io/vitess/go/vt/sqlparser.WindowSpecification
+	size += cached.WindowSpec.CachedSize(true)
 	return size
 }
 func (cached *ParenTableExpr) CachedSize(alloc bool) int64 {
@@ -2666,7 +2849,7 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(176)
+		size += int64(192)
 	}
 	// field Cache *bool
 	size += hack.RuntimeAllocSize(int64(1))
@@ -2705,6 +2888,13 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	}
 	// field Having *vitess.io/vitess/go/vt/sqlparser.Where
 	size += cached.Having.CachedSize(true)
+	// field Windows vitess.io/vitess/go/vt/sqlparser.NamedWindows
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Windows)) * int64(8))
+		for _, elem := range cached.Windows {
+			size += elem.CachedSize(true)
+		}
+	}
 	// field OrderBy vitess.io/vitess/go/vt/sqlparser.OrderBy
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(8))
@@ -3430,6 +3620,50 @@ func (cached *Where) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Expr.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	return size
+}
+func (cached *WindowDefinition) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
+	// field WindowSpec *vitess.io/vitess/go/vt/sqlparser.WindowSpecification
+	size += cached.WindowSpec.CachedSize(true)
+	return size
+}
+func (cached *WindowSpecification) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(96)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
+	// field PartitionClause vitess.io/vitess/go/vt/sqlparser.Exprs
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.PartitionClause)) * int64(16))
+		for _, elem := range cached.PartitionClause {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	// field OrderClause vitess.io/vitess/go/vt/sqlparser.OrderBy
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderClause)) * int64(8))
+		for _, elem := range cached.OrderClause {
+			size += elem.CachedSize(true)
+		}
+	}
+	// field FrameClause *vitess.io/vitess/go/vt/sqlparser.FrameClause
+	size += cached.FrameClause.CachedSize(true)
 	return size
 }
 func (cached *With) CachedSize(alloc bool) int64 {
