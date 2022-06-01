@@ -91,20 +91,21 @@ func TestJoinCanMerge(t *testing.T) {
 
 func TestSubqueryCanMerge(t *testing.T) {
 	testcases := [][]bool{
-		{true, false, false, false, false /*not tested*/, false, false, false, false, true, false, false},
-		{false, false, false, false, false /*not tested*/, false, false, false, false, true, false, false},
-		{false, false, false, false, false /*not tested*/, false, false, false, false, true, false, false},
-		{false, false, false, false, false /*not tested*/, false, false, false, false, true, false, false},
-		{false, false, false, false, false /*not tested*/, false, false, false, false, true, false, false},
+		// US    EU    E      IN      ME         subShard        scatter  nxt   dba    ref   none   byD
+		{true, false, false, false, false /*not tested*/, false, false, false, false, true, false, false},   // unsharded
+		{false, false, false, false, false /*not tested*/, false, false, false, false, true, false, false},  // equalUnique
+		{false, false, false, false, false /*not tested*/, false, false, false, false, false, false, false}, // equal
+		{false, false, false, false, false /*not tested*/, false, false, false, false, false, false, false}, // in
+		{false, false, false, false, false /*not tested*/, false, false, false, false, false, false, false}, // multiEqual
 
-		{false, false, false, false, false, false, false, false, false, false, false, false, false}, // this whole line is not tested
+		{false, false, false, false, false, false, false, false, false, false, false, false, false}, // subshard - this whole line is not tested
 
-		{false, false, false, false, false /*not tested*/, false, false, false, false, true, false, false},
-		{false, false, false, false, false /*not tested*/, false, false, false, false, true, false, false},
-		{false, false, false, false, false /*not tested*/, false, false, false, true, true, false, false},
-		{true, true, true, true, true /*not tested*/, false, true, true, true, true, true, true},
-		{false, false, false, false, false /*not tested*/, false, false, false, false, true, false, false},
-		{false, false, false, false, false /*not tested*/, false, false, false, false, true, false, false},
+		{false, false, false, false, false /*not tested*/, false, false, false, false, false, false, false}, // scatter
+		{false, false, false, false, false /*not tested*/, false, false, false, false, true, false, false},  // next
+		{false, false, false, false, false /*not tested*/, false, false, false, true, true, false, false},   // dba
+		{true, true, false, false, false /*not tested*/, false, false, true, true, true, false, false},      // reference
+		{false, false, false, false, false /*not tested*/, false, false, false, false, false, false, false}, // none
+		{false, false, false, false, false /*not tested*/, false, false, false, false, false, false, false}, // byDestination
 	}
 
 	ks := &vindexes.Keyspace{}
