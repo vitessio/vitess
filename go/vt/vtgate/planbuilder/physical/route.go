@@ -309,7 +309,7 @@ func (r *Route) haveMatchingVindex(
 				// single column vindex - just add the option
 				routeOpcode := opcode(v.ColVindex)
 				vindex := vfunc(v.ColVindex)
-				if vindex == nil {
+				if vindex == nil || routeOpcode == engine.Scatter {
 					continue
 				}
 				v.Options = append(v.Options, &VindexOption{
