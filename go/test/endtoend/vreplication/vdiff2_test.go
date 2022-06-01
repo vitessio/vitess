@@ -64,7 +64,7 @@ func TestVDiff2(t *testing.T) {
 
 	// Insert null and empty enum values for testing vdiff comparisons for those values.
 	// If we add this to the initial data list, the counts in several other tests will need to change
-	query := "insert into customer(cid, name, typ, sport) values(1001, null, 'soho','');"
+	query := `insert into customer(cid, name, typ, sport) values(1001, null, 'soho','')`
 	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:%s", sourceKs, sourceShards[0]), query)
 
 	_, err := vc.AddKeyspace(t, cells, targetKs, strings.Join(targetShards, ","), customerVSchema, customerSchema, 0, 0, 200, targetKsOpts)
@@ -96,7 +96,7 @@ func TestVDiff2(t *testing.T) {
 		require.Equal(t, workflow, info.Workflow)
 		require.Equal(t, targetKs, info.Keyspace)
 		require.Equal(t, "completed", info.State)
-		require.Equal(t, "-80,80-", info.Shards)
+		require.Equal(t, strings.Join(targetShards, ","), info.Shards)
 		require.False(t, info.HasMismatch)
 	})
 }

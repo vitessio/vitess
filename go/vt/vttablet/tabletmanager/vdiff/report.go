@@ -146,6 +146,7 @@ func formatSampleRow(logger logutil.Logger, rd *RowDiff, debug bool) { //nolint
 	}
 }
 
+/* commenting out for now -- do we need this???
 func formatValue(val sqltypes.Value) string {
 	if val.Type() == sqltypes.Null {
 		return "null (NULL_TYPE)"
@@ -160,3 +161,4 @@ func formatValue(val sqltypes.Value) string {
 	}
 	return fmt.Sprintf("%s (%v)", val.Raw(), val.Type())
 }
+*/

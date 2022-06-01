@@ -53,7 +53,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 
 	debugQuery := subFlags.Bool("debug_query", false, "Adds a mysql query to the report that can be used for further debugging")
 	onlyPks := subFlags.Bool("only_pks", false, "When reporting missing rows, only show primary keys in the report.")
-	format := subFlags.String("format", "", "Format of report") //"json" or ""
+	format := subFlags.String("format", "", "Format of report") // "json" or ""
 	maxExtraRowsToCompare := subFlags.Int64("max_extra_rows_to_compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
 
 	resumable := subFlags.Bool("resumable", false, "Should this vdiff retry in case of recoverable errors, not yet implemented")
@@ -66,7 +66,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	var cmd vdiff.VDiffAction
 	var subCommand string
 
-	usage := fmt.Errorf("usage: vdiff --v2 <keyspace>.<workflow> command [sub_command|vdiff_uuid]")
+	usage := fmt.Errorf("usage: vdiff -- --v2 <keyspace>.<workflow> command [sub_command|vdiff_uuid]")
 	switch subFlags.NArg() {
 	case 1: // for backward compatibility with vdiff1
 		cmd = vdiff.CreateAction
@@ -132,7 +132,6 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 			}
 			uuid = subCommand
 		}
-
 	default:
 		return fmt.Errorf("invalid command %s", cmd)
 	}

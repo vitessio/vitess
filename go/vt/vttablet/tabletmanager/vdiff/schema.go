@@ -42,7 +42,7 @@ const (
 		liveness_timestamp timestamp NULL DEFAULT NULL,
 		completed_timestamp timestamp NULL DEFAULT NULL,
 		unique key uuid_idx (vdiff_uuid),
-		primary key (id))`
+		primary key (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
 
 	sqlCreateVDiffTableTable = `CREATE TABLE IF NOT EXISTS _vt.vdiff_table(
 		vdiff_id varchar(64) NOT NULL,
@@ -55,16 +55,16 @@ const (
 		report json,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-		primary key (vdiff_id, table_name))`
+		primary key (vdiff_id, table_name)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
 
 	sqlCreateVDiffLogTable = `CREATE TABLE IF NOT EXISTS _vt.vdiff_log (
 		id int AUTO_INCREMENT,
 		vdiff_id int not null,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		message text NOT NULL,
-		primary key (id))`
+		primary key (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
 
-	sqlNewVDiff                       = "insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values (%s, %s, '%s', %s, '%s', '%s', '%s')"
+	sqlNewVDiff                       = "insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values(%s, %s, '%s', %s, '%s', '%s', '%s')"
 	sqlGetVDiffByKeyspaceWorkflowUUID = "select * from _vt.vdiff where keyspace = %s and workflow = %s and vdiff_uuid = %s"
 	sqlGetMostRecentVDiff             = "select * from _vt.vdiff where keyspace = %s and workflow = %s order by id desc limit 1"
 	sqlGetVDiffByID                   = "select * from _vt.vdiff where id = %d"
@@ -77,7 +77,7 @@ const (
 										where v.id = vt.vdiff_id and v.id = %d`
 	sqlUpdateVDiffState     = "update _vt.vdiff set state = %s where id = %d"
 	sqlGetVReplicationEntry = "select * from _vt.vreplication %s"
-	sqlGetPendingVDiffs     = "select * from _vt.vdiff where state in ('pending')"
+	sqlGetPendingVDiffs     = "select * from _vt.vdiff where state = 'pending'"
 	sqlGetAllVDiffs         = "select * from _vt.vdiff order by id desc"
 
 	sqlNewVDiffTable       = "insert into _vt.vdiff_table(vdiff_id, table_name, state, table_rows) values(%d, %s, 'pending', %d)"

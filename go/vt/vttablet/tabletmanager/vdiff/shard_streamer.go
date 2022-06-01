@@ -30,8 +30,8 @@ type shardStreamer struct {
 	tablet *topodatapb.Tablet // tablet currently picked to stream from
 	shard  string
 
-	snapshotPosition string                // gtid of the current snapshot which is being streamed from
-	result           chan *sqltypes.Result // the top row is pushed to this channel and pulled by comparator
+	snapshotPosition string                // gtid set of the current snapshot which is being streamed from
+	result           chan *sqltypes.Result // the next row is sent to this channel and received by the comparator
 	err              error
 }
 
