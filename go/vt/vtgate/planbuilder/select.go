@@ -345,17 +345,25 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 			return nil, nil
 		}
 		var err error
-		if sqlparser.IsLockingFunc(expr.Expr) {
-			// if we are using any locking functions, we will send the whole query to a single destination
-			lockFunctions = append(lockFunctions, &engine.LockFunc{Typ: expr.Expr.(*sqlparser.LockingFunc), Pos: i})
+		lFunc, isLFunc := expr.Expr.(*sqlparser.LockingFunc)
+		if isLFunc {
+			elem := &engine.LockFunc{Typ: expr.Expr.(*sqlparser.LockingFunc)}
+			if lFunc.Name != nil {
+				n, err := evalengine.Translate(lFunc.Name, nil)
+				if err != nil {
+					return nil, err
+				}
+				elem.Name = n
+			}
+			lockFunctions = append(lockFunctions, elem)
 			continue
+		}
+		if len(lockFunctions) > 0 {
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: lock function and other expression in same select query")
 		}
 		exprs[i], err = evalengine.Translate(expr.Expr, evalengine.LookupDefaultCollation(vschema.ConnCollation()))
 		if err != nil {
 			return nil, nil
-		}
-		if len(lockFunctions) > 0 {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: lock function and other expression in same select query")
 		}
 		cols[i] = expr.As.String()
 		if cols[i] == "" {
@@ -381,7 +389,6 @@ func buildLockingPrimitive(sel *sqlparser.Select, vschema plancontext.VSchema, l
 	return &engine.Lock{
 		Keyspace:          ks,
 		TargetDestination: key.DestinationKeyspaceID{0},
-		Query:             sqlparser.String(sel),
 		FieldQuery:        buf.String(),
 		LockFunctions:     lockFunctions,
 	}, nil

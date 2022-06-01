@@ -43,9 +43,6 @@ type Lock struct {
 	// TargetDestination specifies an explicit target destination to send the query to.
 	TargetDestination key.Destination
 
-	// Query specifies the query to be executed.
-	Query string
-
 	FieldQuery string
 
 	LockFunctions []*LockFunc
@@ -56,8 +53,8 @@ type Lock struct {
 }
 
 type LockFunc struct {
-	Typ *sqlparser.LockingFunc
-	Pos int
+	Typ  *sqlparser.LockingFunc
+	Name evalengine.Expr
 }
 
 // RouteType is part of the Primitive interface
@@ -77,10 +74,10 @@ func (l *Lock) GetTableName() string {
 
 // TryExecute is part of the Primitive interface
 func (l *Lock) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
-	return l.execLock(vcursor, l.Query, bindVars)
+	return l.execLock(vcursor, bindVars)
 }
 
-func (l *Lock) execLock(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (l *Lock) execLock(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(l.Keyspace.Name, nil, []key.Destination{l.TargetDestination})
 	if err != nil {
 		return nil, err
@@ -89,21 +86,17 @@ func (l *Lock) execLock(vcursor VCursor, query string, bindVars map[string]*quer
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "lock query can be routed to single shard only: %v", rss)
 	}
 
+	env := &evalengine.ExpressionEnv{BindVars: bindVars}
 	var fields []*querypb.Field
 	var rrow sqltypes.Row
 	for _, lf := range l.LockFunctions {
 		var lName string
-		if lf.Typ.Name != nil {
-			pv, err := evalengine.Translate(lf.Typ.Name, nil)
+		if lf.Name != nil {
+			er, err := env.Evaluate(lf.Name)
 			if err != nil {
 				return nil, err
 			}
-			env := &evalengine.ExpressionEnv{BindVars: bindVars}
-			er, err := env.Evaluate(pv)
-			if err != nil {
-				return nil, err
-			}
-			lName = er.String()
+			lName = er.Value().ToString()
 		}
 		qr, err := lf.execLock(vcursor, bindVars, rss[0])
 		if err != nil {
@@ -169,17 +162,31 @@ func (l *Lock) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 
 // GetFields is part of the Primitive interface
 func (l *Lock) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return l.execLock(vcursor, l.FieldQuery, bindVars)
+	rss, _, err := vcursor.ResolveDestinations(l.Keyspace.Name, nil, []key.Destination{l.TargetDestination})
+	if err != nil {
+		return nil, err
+	}
+	if len(rss) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "lock query can be routed to single shard only: %v", rss)
+	}
+	boundQuery := []*querypb.BoundQuery{{
+		Sql:           l.FieldQuery,
+		BindVariables: bindVars,
+	}}
+	qr, errs := vcursor.ExecuteMultiShard(rss, boundQuery, false, true)
+	if len(errs) > 0 {
+		return nil, vterrors.Aggregate(errs)
+	}
+	return qr, nil
 }
 
 func (l *Lock) description() PrimitiveDescription {
 	other := map[string]any{
-		"Query":      l.Query,
 		"FieldQuery": l.FieldQuery,
 	}
 	var lf []string
 	for _, f := range l.LockFunctions {
-		lf = append(lf, fmt.Sprintf("%d:%s", f.Pos, sqlparser.String(f.Typ)))
+		lf = append(lf, fmt.Sprintf("%s", sqlparser.String(f.Typ)))
 	}
 	other["lock_func"] = lf
 	return PrimitiveDescription{
