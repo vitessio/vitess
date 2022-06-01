@@ -268,6 +268,41 @@ func TestMessageStreamingPlan(t *testing.T) {
 	}
 }
 
+func TestLockPlan(t *testing.T) {
+	testSchema := loadSchema("schema_test.json")
+	for tcase := range iterateExecFile("lock_cases.txt") {
+		t.Run(tcase.input, func(t *testing.T) {
+			var plan *Plan
+			var err error
+			statement, err := sqlparser.Parse(tcase.input)
+			if err == nil {
+				plan, err = Build(statement, testSchema, false, "dbName")
+			}
+
+			var out string
+			if err != nil {
+				out = err.Error()
+			} else {
+				bout, err := json.Marshal(plan)
+				if err != nil {
+					t.Fatalf("Error marshalling %v: %v", plan, err)
+				}
+				out = string(bout)
+			}
+			if out != tcase.output {
+				t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
+				if err != nil {
+					out = fmt.Sprintf("\"%s\"", out)
+				} else {
+					bout, _ := json.MarshalIndent(plan, "", "  ")
+					out = string(bout)
+				}
+				fmt.Printf("\"in> %s\"\nout>%s\nexpected: %s\n\n", tcase.input, out, tcase.output)
+			}
+		})
+	}
+}
+
 func loadSchema(name string) map[string]*schema.Table {
 	b, err := os.ReadFile(locateFile(name))
 	if err != nil {

@@ -1,0 +1,59 @@
+# is_free_lock named locks are unsafe with server-side connection pooling
+"select is_free_lock('foo') from dual"
+{
+  "PlanID": "Select",
+  "TableName": "dual",
+  "Permissions": [
+    {
+      "TableName": "dual",
+      "Role": 0
+    }
+  ],
+  "FieldQuery": "select is_free_lock('foo') from dual where 1 != 1",
+  "FullQuery": "select is_free_lock('foo') from dual limit :#maxLimit"
+}
+
+# is_used_lock named locks are unsafe with server-side connection pooling
+"select is_used_lock('foo') from dual"
+{
+  "PlanID": "Select",
+  "TableName": "dual",
+  "Permissions": [
+    {
+      "TableName": "dual",
+      "Role": 0
+    }
+  ],
+  "FieldQuery": "select is_used_lock('foo') from dual where 1 != 1",
+  "FullQuery": "select is_used_lock('foo') from dual limit :#maxLimit"
+}
+
+# release_all_locks named locks are unsafe with server-side connection pooling
+"select release_all_locks() from dual"
+{
+  "PlanID": "Select",
+  "TableName": "dual",
+  "Permissions": [
+    {
+      "TableName": "dual",
+      "Role": 0
+    }
+  ],
+  "FieldQuery": "select release_all_locks() from dual where 1 != 1",
+  "FullQuery": "select release_all_locks() from dual limit :#maxLimit"
+}
+
+# release_lock named locks are unsafe with server-side connection pooling
+"select release_lock('foo') from dual"
+{
+  "PlanID": "Select",
+  "TableName": "dual",
+  "Permissions": [
+    {
+      "TableName": "dual",
+      "Role": 0
+    }
+  ],
+  "FieldQuery": "select release_lock('foo') from dual where 1 != 1",
+  "FullQuery": "select release_lock('foo') from dual limit :#maxLimit"
+}
