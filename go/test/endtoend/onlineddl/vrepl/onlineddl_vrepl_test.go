@@ -243,9 +243,9 @@ func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	shards = clusterInstance.Keyspaces[0].Shards
-	assert.Equal(t, 2, len(shards))
+	require.Equal(t, 2, len(shards))
 	for _, shard := range shards {
-		assert.Equal(t, 2, len(shard.Vttablets))
+		require.Equal(t, 2, len(shard.Vttablets))
 	}
 
 	providedUUID := ""
