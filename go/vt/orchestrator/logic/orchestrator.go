@@ -507,6 +507,7 @@ func ContinuousDiscovery() {
 				}
 			}()
 		case <-tabletTopoTick:
+			go RefreshAllKeyspaces()
 			go RefreshTablets(false /* forceRefresh */)
 		}
 	}

@@ -21,11 +21,20 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/orchestrator/db"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topotools"
 )
 
 func TestSaveAndReadKeyspace(t *testing.T) {
+	orcDb, err := db.OpenOrchestrator()
+	require.NoError(t, err)
+	defer func() {
+		_, err = orcDb.Exec("delete from vitess_keyspace")
+		require.NoError(t, err)
+	}()
+
 	tests := []struct {
 		name           string
 		keyspaceName   string
@@ -81,6 +90,7 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			if tt.keyspaceWanted == nil {
 				tt.keyspaceWanted = tt.keyspace
 			}
@@ -99,8 +109,8 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 				require.EqualError(t, err, tt.err)
 			} else {
 				require.NoError(t, err)
-				require.EqualValues(t, tt.keyspaceWanted, readKeyspaceInfo.Keyspace)
-				require.EqualValues(t, tt.keyspaceName, readKeyspaceInfo.KeyspaceName())
+				require.True(t, topotools.KeyspaceEquality(tt.keyspaceWanted, readKeyspaceInfo.Keyspace))
+				require.Equal(t, tt.keyspaceName, readKeyspaceInfo.KeyspaceName())
 			}
 		})
 	}
