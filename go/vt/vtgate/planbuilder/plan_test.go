@@ -256,7 +256,7 @@ func TestOne(t *testing.T) {
 		v: loadSchema(t, "schema_test.json", true),
 	}
 
-	//testFile(t, "onecase.txt", "", vschema)
+	// testFile(t, "onecase.txt", "", vschema)
 	testFile(t, "aggr_cases.txt", "", vschema)
 }
 

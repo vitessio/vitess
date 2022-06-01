@@ -79,19 +79,21 @@ func (hp *horizonPlanning) pushAggregation(
 
 		for _, aggr := range aggregations {
 			var offset int
-			fExpr, ok := aggr.Original.Expr.(*sqlparser.FuncExpr)
+			aggrExpr, ok := aggr.Original.Expr.(sqlparser.AggrFunc)
 			if !ok {
 				return nil, nil, nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: unexpected expression: %v", aggr.Original)
 			}
-			if len(fExpr.Exprs) != 1 {
-				return nil, nil, nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: unexpected expression: %v", fExpr)
-			}
-			switch e := fExpr.Exprs[0].(type) {
-			case *sqlparser.StarExpr:
+
+			switch aggrExpr.(type) {
+			case *sqlparser.CountStar:
 				offset = 0
-			case *sqlparser.AliasedExpr:
-				offset, _, err = pushProjection(ctx, e, plan.input, true, true, false)
+			default:
+				if len(aggrExpr.GetArgs()) != 1 {
+					return nil, nil, nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: unexpected expression: %v", aggrExpr)
+				}
+				offset, _, err = pushProjection(ctx, &sqlparser.AliasedExpr{Expr: aggrExpr.GetArg() /*As: expr.As*/}, plan.input, true, true, false)
 			}
+
 			if err != nil {
 				return nil, nil, nil, false, err
 			}
