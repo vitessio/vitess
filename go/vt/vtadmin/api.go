@@ -72,9 +72,7 @@ type API struct {
 
 	authz *rbac.Authorizer
 
-	// See https://github.com/vitessio/vitess/issues/7723 for why this exists.
-	vtexplainLock sync.Mutex
-	options       Options
+	options Options
 }
 
 // Options wraps the configuration options for different components of the
@@ -1836,33 +1834,22 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		return nil, er.Error()
 	}
 
-	opts := &vtexplain.Options{ReplicationMode: "ROW"}
-
-	lockWaitStart := time.Now()
-
-	api.vtexplainLock.Lock()
-	defer api.vtexplainLock.Unlock()
-
-	lockWaitTime := time.Since(lockWaitStart)
-	log.Infof("vtexplain lock wait time: %s", lockWaitTime)
-
-	span.Annotate("vtexplain_lock_wait_time", lockWaitTime.String())
-
-	if err := vtexplain.Init(srvVSchema, schema, shardMap, opts); err != nil {
+	vte, err := vtexplain.Init(srvVSchema, schema, shardMap, &vtexplain.Options{ReplicationMode: "ROW"})
+	if err != nil {
 		return nil, fmt.Errorf("error initilaizing vtexplain: %w", err)
 	}
+	defer vte.Stop()
 
-	defer vtexplain.Stop()
-
-	plans, err := vtexplain.Run(req.Sql)
+	plans, err := vte.Run(req.Sql)
 	if err != nil {
 		return nil, fmt.Errorf("error running vtexplain: %w", err)
 	}
 
-	response, err := vtexplain.ExplainsAsText(plans)
+	response, err := vte.ExplainsAsText(plans)
 	if err != nil {
 		return nil, fmt.Errorf("error converting vtexplain to text output: %w", err)
 	}
+
 	return &vtadminpb.VTExplainResponse{
 		Response: response,
 	}, nil

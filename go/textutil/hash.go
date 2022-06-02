@@ -20,6 +20,8 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/google/uuid"
@@ -39,11 +41,28 @@ func RandomHash() string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-// UUIDv5 creeates a UUID v5 string based on the given inputs. We use a SHA256 algorithm.
-func UUIDv5(inputs ...string) string {
+// uuidv5 creates a UUID v5 string based on the given inputs. We use a SHA256 algorithm.
+func uuidv5(inputs ...string) uuid.UUID {
 	var baseUUID uuid.UUID
 	input := strings.Join(inputs, "\n")
-	outputUUID := uuid.NewHash(sha256.New(), baseUUID, []byte(input), 5)
+	return uuid.NewHash(sha256.New(), baseUUID, []byte(input), 5)
+}
 
-	return outputUUID.String()
+// UUIDv5 creates a UUID v5 string based on the given inputs. We use a SHA256 algorithm. Return format is textual
+func UUIDv5(inputs ...string) string {
+	return uuidv5(inputs...).String()
+}
+
+// UUIDv5Var creeates a UUID v5 string based on the given inputs. Return value is a big.Int
+func UUIDv5Val(inputs ...string) big.Int {
+	u := uuidv5(inputs...)
+	var i big.Int
+	i.SetBytes(u[:])
+	return i
+}
+
+// UUIDv5Base36 creeates a UUID v5 string based on the given inputs. Return value is a 25 character, base36 string
+func UUIDv5Base36(inputs ...string) string {
+	i := UUIDv5Val(inputs...)
+	return fmt.Sprintf("%025s", i.Text(36))
 }

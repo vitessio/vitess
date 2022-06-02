@@ -143,9 +143,22 @@ func isUnrecoverableError(err error) bool {
 		mysql.ERDataTooLong,
 		mysql.ERWarnDataTruncated,
 		mysql.ERTruncatedWrongValueForField,
+		mysql.ErrWrongValueForType,
+		mysql.ErrCantCreateGeometryObject,
+		mysql.ErrGISDataWrongEndianess,
+		mysql.ErrNotImplementedForCartesianSRS,
+		mysql.ErrNotImplementedForProjectedSRS,
+		mysql.ErrNonPositiveRadius,
 		mysql.ERBadNullError,
 		mysql.ERDupEntry,
-		mysql.ERNoDefaultForField:
+		mysql.ERNoDefaultForField,
+		mysql.ERInvalidJSONText,
+		mysql.ERInvalidJSONTextInParams,
+		mysql.ERInvalidJSONBinaryData,
+		mysql.ERInvalidJSONCharset,
+		mysql.ERInvalidCastToJSON,
+		mysql.ERJSONValueTooBig,
+		mysql.ERJSONDocumentTooDeep:
 		return true
 	}
 	return false
