@@ -54,13 +54,13 @@ type DiffMismatch struct {
 
 // RowDiff is a row that didn't match as part of the comparison.
 type RowDiff struct {
-	Row   map[string]string
+	Row   map[string]sqltypes.Value
 	Query string
 }
 
 func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug, onlyPks bool) (*RowDiff, error) {
 	drp := &RowDiff{}
-	drp.Row = make(map[string]string)
+	drp.Row = make(map[string]sqltypes.Value)
 	statement, err := sqlparser.Parse(queryStmt)
 	if err != nil {
 		return nil, err
@@ -78,11 +78,7 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug,
 		buf := sqlparser.NewTrackedBuffer(nil)
 		sel.SelectExprs[index].Format(buf)
 		col := buf.String()
-		val := row[index].ToString()
-		if len(val) > 20 {
-			val = val[:20]
-		}
-		drp.Row[col] = val
+		drp.Row[col] = row[index]
 	}
 
 	if onlyPks {
@@ -129,7 +125,10 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 	return buf.String()
 }
 
-func formatSampleRow(logger logutil.Logger, rd *RowDiff, debug bool) { //nolint
+// formatSampleRow returns a formatted string representing a sample mismatched row
+// TODO: we need to figure out a way to leverage this with the JSON formatted
+// output as it's currently generated via the stadard JSON package marshalling.
+func formatSampleRow(logger logutil.Logger, rd *RowDiff, debug bool) { //nolint:unused,deadcode
 	keys := make([]string, 0, len(rd.Row))
 	for k := range rd.Row {
 		keys = append(keys, k)
@@ -138,7 +137,7 @@ func formatSampleRow(logger logutil.Logger, rd *RowDiff, debug bool) { //nolint
 	sort.Strings(keys)
 
 	for _, k := range keys {
-		logger.Printf("\t\t\t %s: %s\n", k, rd.Row[k])
+		logger.Printf("\t\t\t %s: %s\n", k, formatValue(rd.Row[k]))
 	}
 
 	if debug {
@@ -146,7 +145,7 @@ func formatSampleRow(logger logutil.Logger, rd *RowDiff, debug bool) { //nolint
 	}
 }
 
-/* commenting out for now -- do we need this???
+// formatValue returns a properly formatted string based on the SQL type
 func formatValue(val sqltypes.Value) string {
 	if val.Type() == sqltypes.Null {
 		return "null (NULL_TYPE)"
@@ -161,4 +160,3 @@ func formatValue(val sqltypes.Value) string {
 	}
 	return fmt.Sprintf("%s (%v)", val.Raw(), val.Type())
 }
-*/

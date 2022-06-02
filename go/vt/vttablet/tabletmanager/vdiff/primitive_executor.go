@@ -29,7 +29,7 @@ import (
 	VDiff gets data from multiple sources. There is a global ordering of all the data (based on PKs). However, that
 	data is potentially spread across shards. The distribution is selected by the vindex (sharding key) and hence
 	we need to globally sort the data across the shards to match the order on the target: we need the rows to be in
-    order so that we can compare the data exactly.
+	order so that we can compare the data correctly.
 
 	We leverage the merge sorting functionality that vtgate uses to return sorted data from a scatter query.
 		* Merge sorter engine.Primitives are set up, one each for the source and target shards.
@@ -75,7 +75,8 @@ func newPrimitiveExecutor(ctx context.Context, prim vtgateEngine.Primitive, name
 	return pe
 }
 
-// get the top row for this shard, if we are out of rows then wait on the result channel for the shard streamer to produce them
+// next gets the next row in the stream for this shard, if there's currently no rows to process in the stream then wait on the
+// result channel for the shard streamer to produce them
 func (pe *primitiveExecutor) next() ([]sqltypes.Value, error) {
 	for len(pe.rows) == 0 {
 		qr, ok := <-pe.resultch
@@ -90,7 +91,8 @@ func (pe *primitiveExecutor) next() ([]sqltypes.Value, error) {
 	return row, nil
 }
 
-// fastforward shard to consume all its results and return count of discarded rows
+// drain fastforward's a shard to process (and ignore) everything from its results stream and return a count of the
+// discarded rows
 func (pe *primitiveExecutor) drain(ctx context.Context) (int64, error) {
 	var count int64
 	for {
