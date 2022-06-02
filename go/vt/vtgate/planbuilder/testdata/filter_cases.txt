@@ -2126,7 +2126,21 @@ Gen4 plan same as above
     "Vindex": "music_user_map"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from music where id is null",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from music where 1 != 1",
+    "Query": "select id from music where id is null",
+    "Table": "music"
+  }
+}
 
 # SELECT with IS NOT NULL
 "select id from music where id is not null"
@@ -4047,6 +4061,47 @@ Gen4 plan same as above
     "Table": "`user`",
     "Values": [
       "(INT64(1), INT64(2), INT64(3), INT64(4))"
+    ],
+    "Vindex": "user_index"
+  }
+}
+
+# Don't pick a vindex for an IS NULL predicate if it's a lookup vindex
+"select id from music where id is null and user_id in (1,2)"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from music where id is null and user_id in (1,2)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from music where 1 != 1",
+    "Query": "select id from music where id is null and user_id in (1, 2)",
+    "Table": "music",
+    "Values": [
+      "NULL"
+    ],
+    "Vindex": "music_user_map"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id from music where id is null and user_id in (1,2)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "IN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from music where 1 != 1",
+    "Query": "select id from music where id is null and user_id in ::__vals",
+    "Table": "music",
+    "Values": [
+      "(INT64(1), INT64(2))"
     ],
     "Vindex": "user_index"
   }
