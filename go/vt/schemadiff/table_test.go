@@ -1067,6 +1067,12 @@ func TestValidate(t *testing.T) {
 			to:    "create table t (id int primary key, i int, key i_idx(i))",
 		},
 		{
+			name:  "drop and add same column, ok",
+			from:  "create table t (id int primary key, i int, i2 int, key i_idx(i))",
+			alter: "alter table t drop column i2, add column i2 bigint not null",
+			to:    "create table t (id int primary key, i int, i2 bigint not null, key i_idx(i))",
+		},
+		{
 			name:  "drop column, affect keys",
 			from:  "create table t (id int primary key, i int, key i_idx(i))",
 			alter: "alter table t drop column i",
