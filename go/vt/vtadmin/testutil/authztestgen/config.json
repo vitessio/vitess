@@ -1,0 +1,62 @@
+{
+    "package": "vtadmin_test",
+    "vtctldclient_mock_data": [
+        {
+            "field": "DeleteTabletsResults",
+            "type": "map[string]error",
+            "value": "\"zone1-0000000100\": nil,"
+        },
+        {
+            "field": "GetCellInfoNamesResults",
+            "type": "&struct{\nResponse *vtctldatapb.GetCellInfoNamesResponse\nError error}",
+            "value": "Response: &vtctldatapb.GetCellInfoNamesResponse{\nNames: []string{\"zone1\"},\n},"
+        }
+    ],
+    "db_tablet_list": [
+        {
+            "tablet": {
+                "alias": {"cell": "zone1", "uid": 100}
+            }
+        }
+    ],
+    "tests": [
+        {
+            "method": "GetClusters",
+            "rules": [
+                {
+                    "resource": "Cluster",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.GetClustersRequest{}",
+            "cases": [
+                {
+                    "name": "unauthenticated",
+                    "actor": null,
+                    "assertions": [
+                        "assert.Empty(t, resp.Clusters, $$)"
+                    ]
+                },
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "assertions": [
+                        "assert.Empty(t, resp.Clusters, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "is_permitted": true,
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotEmpty(t, resp.Clusters, $$)"
+                    ]
+                }
+            ]
+        }
+    ]
+}
