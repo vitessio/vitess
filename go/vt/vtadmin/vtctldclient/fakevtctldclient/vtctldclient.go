@@ -38,6 +38,7 @@ type VtctldClient struct {
 	vtctldclient.VtctldClient
 
 	CreateKeyspaceShouldErr bool
+	CreateShardShouldErr    bool
 	DeleteKeyspaceShouldErr bool
 	// Keyed by _sorted_ TabletAlias list string joined by commas.
 	DeleteTabletsResults          map[string]error
@@ -141,6 +142,25 @@ func (fake *VtctldClient) CreateKeyspace(ctx context.Context, req *vtctldatapb.C
 		Keyspace: &vtctldatapb.Keyspace{
 			Name:     req.Name,
 			Keyspace: ks,
+		},
+	}, nil
+}
+
+// CreateShard is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) CreateShard(cxt context.Context, req *vtctldatapb.CreateShardRequest, opts ...grpc.CallOption) (*vtctldatapb.CreateShardResponse, error) {
+	if fake.CreateShardShouldErr {
+		return nil, fmt.Errorf("%w: CreateShard error", assert.AnError)
+	}
+
+	return &vtctldatapb.CreateShardResponse{
+		Keyspace: &vtctldatapb.Keyspace{
+			Name:     req.Keyspace,
+			Keyspace: &topodatapb.Keyspace{},
+		},
+		Shard: &vtctldatapb.Shard{
+			Keyspace: req.Keyspace,
+			Name:     req.ShardName,
+			Shard:    &topodatapb.Shard{},
 		},
 	}, nil
 }
