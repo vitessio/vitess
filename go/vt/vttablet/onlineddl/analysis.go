@@ -193,6 +193,12 @@ func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, create
 		}
 		return false
 	}
+	colStringWithoutDefault := func(col *sqlparser.ColumnDefinition) string {
+		def := col.Type.Options.Default
+		col.Type.Options.Default = nil
+		defer func() { col.Type.Options.Default = def }()
+		return sqlparser.CanonicalString(col)
+	}
 	// Up to 8.0.26 we could only ADD COLUMN as last column
 	switch opt := alterOption.(type) {
 	case *sqlparser.AddColumns:
@@ -211,6 +217,14 @@ func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, create
 	case *sqlparser.ModifyColumn:
 		if col := findColumn(opt.NewColDefinition.Name.String()); col != nil {
 			// Check if only diff is change of default
+			// we temporarily remove the DEFAULT expression (if any) from both
+			// table and ALTER statement, and compare the columns: if they're otherwise equal,
+			// then the only change can be an addition/change/removal of DEFAULT, which
+			// is instant-table.
+			tableColDefinition := colStringWithoutDefault(col)
+			newColDefinition := colStringWithoutDefault(opt.NewColDefinition)
+
+			return tableColDefinition == newColDefinition, nil
 		}
 		return false, nil
 	default:
