@@ -47,6 +47,11 @@ func TestServerVersionAtLeast(t *testing.T) {
 			expect:  true,
 		},
 		{
+			version: "8.0.14",
+			parts:   []int{7, 5},
+			expect:  true,
+		},
+		{
 			version: "8.0.14-log",
 			parts:   []int{7, 5, 20},
 			expect:  true,
@@ -73,12 +78,42 @@ func TestServerVersionAtLeast(t *testing.T) {
 		},
 	}
 	for _, tc := range testcases {
-		result, err := serverVersionAtLeast(tc.version, tc.parts...)
+		result, err := ServerVersionAtLeast(tc.version, tc.parts...)
 		if tc.expectError {
 			assert.Error(t, err)
 		} else {
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expect, result)
 		}
+	}
+}
+
+func TestGetFlavor(t *testing.T) {
+	testcases := []struct {
+		version string
+		family  FlavorFamilty
+	}{
+		{
+			version: "8.0.14",
+			family:  MySQL80FlavorFamily,
+		},
+		{
+			version: "8.0.0",
+			family:  MySQL80FlavorFamily,
+		},
+		{
+			version: "5.6.7",
+			family:  MySQL56FlavorFamily,
+		},
+		{
+			version: "5.7.29",
+			family:  MySQL57FlavorFamily,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.version, func(t *testing.T) {
+			_, family, _ := GetFlavor(tc.version, nil)
+			assert.Equal(t, tc.family, family)
+		})
 	}
 }

@@ -97,3 +97,46 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 		})
 	}
 }
+
+func TestAddInstantAlgorithm(t *testing.T) {
+	e := Executor{}
+	tt := []struct {
+		alter  string
+		expect string
+	}{
+		{
+			alter:  "alter table t add column i2 int not null",
+			expect: "ALTER TABLE `t` ADD COLUMN `i2` int NOT NULL, ALGORITHM = INSTANT",
+		},
+		{
+			alter:  "alter table t add column i2 int not null, lock=none",
+			expect: "ALTER TABLE `t` ADD COLUMN `i2` int NOT NULL, LOCK NONE, ALGORITHM = INSTANT",
+		},
+		{
+			alter:  "alter table t add column i2 int not null, algorithm=inplace",
+			expect: "ALTER TABLE `t` ADD COLUMN `i2` int NOT NULL, ALGORITHM = INSTANT",
+		},
+		{
+			alter:  "alter table t add column i2 int not null, algorithm=inplace, lock=none",
+			expect: "ALTER TABLE `t` ADD COLUMN `i2` int NOT NULL, ALGORITHM = INSTANT, LOCK NONE",
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.alter, func(t *testing.T) {
+			stmt, err := sqlparser.ParseStrictDDL(tc.alter)
+			require.NoError(t, err)
+			alterTable, ok := stmt.(*sqlparser.AlterTable)
+			require.True(t, ok)
+
+			e.addInstantAlgorithm(alterTable)
+			alterInstant := sqlparser.CanonicalString(alterTable)
+
+			assert.Equal(t, tc.expect, alterInstant)
+
+			stmt, err = sqlparser.ParseStrictDDL(alterInstant)
+			require.NoError(t, err)
+			_, ok = stmt.(*sqlparser.AlterTable)
+			require.True(t, ok)
+		})
+	}
+}
