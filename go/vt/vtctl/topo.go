@@ -45,14 +45,14 @@ func init() {
 	addCommand(topoGroupName, command{
 		name:   "TopoCat",
 		method: commandTopoCat,
-		params: "[-cell <cell>] [-decode_proto] [-decode_proto_json] [-long] <path> [<path>...]",
+		params: "[--cell <cell>] [--decode_proto] [--decode_proto_json] [--long] <path> [<path>...]",
 		help:   "Retrieves the file(s) at <path> from the topo service, and displays it. It can resolve wildcards, and decode the proto-encoded data.",
 	})
 
 	addCommand(topoGroupName, command{
 		name:   "TopoCp",
 		method: commandTopoCp,
-		params: "[-cell <cell>] [-to_topo] <src> <dst>",
+		params: "[--cell <cell>] [--to_topo] <src> <dst>",
 		help:   "Copies a file from topo to local file structure, or the other way around",
 	})
 }

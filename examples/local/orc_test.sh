@@ -31,7 +31,7 @@ fi
 # start vtctld
 CELL=zone1 ./scripts/vtctld-up.sh
 
-vtctlclient AddCellInfo -root /vitess/zone2 -server_address "${ETCD_SERVER}" zone2
+vtctlclient AddCellInfo -- --root /vitess/zone2 --server_address "${ETCD_SERVER}" zone2
 
 # start vttablets for keyspace commerce
 for i in 100 101 102; do
@@ -45,10 +45,10 @@ for i in 110 111; do
 done
 
 # create the schema
-#vtctlclient ApplySchema -sql-file create_commerce_schema.sql commerce
+#vtctlclient ApplySchema -- --sql-file create_commerce_schema.sql commerce
 
 # create the vschema
-#vtctlclient ApplyVSchema -vschema_file vschema_commerce_initial.json commerce
+#vtctlclient ApplyVSchema -- --vschema_file vschema_commerce_initial.json commerce
 
 # start vtgate
 CELL=zone1 ./scripts/vtgate-up.sh
