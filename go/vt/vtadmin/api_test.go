@@ -5147,3 +5147,6 @@ func init() {
 	// attempts to read that value by way of grpc.NewServer().
 	grpccommon.EnableTracingOpt()
 }
+
+//go:generate -command authztestgen go run ./testutil/authztestgen
+//go:generate authztestgen -c ./testutil/authztestgen/config.json -o ./api_authz_test.go
