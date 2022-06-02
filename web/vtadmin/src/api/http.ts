@@ -280,7 +280,7 @@ export interface RefreshTabletReplicationSourceParams {
 }
 
 export const refreshTabletReplicationSource = async ({ clusterID, alias }: RefreshTabletReplicationSourceParams) => {
-    const { result } = await vtfetch(`/api/tablet/${alias}/reparent`, { method: 'put' });
+    const { result } = await vtfetch(`/api/tablet/${alias}/refresh_replication_source`, { method: 'put' });
 
     const err = pb.RefreshTabletReplicationSourceResponse.verify(result);
     if (err) throw Error(err);
