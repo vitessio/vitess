@@ -2,6 +2,11 @@
     "package": "vtadmin_test",
     "vtctldclient_mock_data": [
         {
+            "field": "DeleteShardsResults",
+            "type": "map[string]error",
+            "value": "\"test/-\": nil,"
+        },
+        {
             "field": "DeleteTabletsResults",
             "type": "map[string]error",
             "value": "\"zone1-0000000100\": nil,"
@@ -20,6 +25,171 @@
         }
     ],
     "tests": [
+        {
+            "method": "CreateKeyspace",
+            "rules": [
+                {
+                    "resource": "Keyspace",
+                    "actions": ["create"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.CreateKeyspaceRequest{\nClusterId: \"test\",\nOptions: &vtctldatapb.CreateKeyspaceRequest{\nName: \"test\",\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "CreateShard",
+            "rules": [
+                {
+                    "resource": "Shard",
+                    "actions": ["create"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.CreateShardRequest{\nClusterId: \"test\",\nOptions: &vtctldatapb.CreateShardRequest{\nKeyspace: \"test\",\nShardName: \"-\",\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "DeleteKeyspace",
+            "rules": [
+                {
+                    "resource": "Keyspace",
+                    "actions": ["delete"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.DeleteKeyspaceRequest{\nClusterId: \"test\",\nOptions: &vtctldatapb.DeleteKeyspaceRequest{\nKeyspace: \"test\",\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "DeleteShards",
+            "rules": [
+                {
+                    "resource": "Shard",
+                    "actions": ["delete"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.DeleteShardsRequest{\nClusterId: \"test\",\nOptions: &vtctldatapb.DeleteShardsRequest{\nShards: []*vtctldatapb.Shard{\n{\nKeyspace: \"test\",\nName: \"-\",\n},\n},\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "DeleteTablet",
+            "rules": [
+                {
+                    "resource": "Tablet",
+                    "actions": ["delete"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.DeleteTabletRequest{\nClusterIds: []string{\"test\"},\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
         {
             "method": "GetClusters",
             "rules": [
