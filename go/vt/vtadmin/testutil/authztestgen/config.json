@@ -21,6 +21,38 @@
     ],
     "tests": [
         {
+            "method": "CreateKeyspace",
+            "rules": [
+                {
+                    "resource": "Keyspace",
+                    "actions": ["create"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.CreateKeyspaceRequest{\nClusterId: \"test\",\nOptions: &vtctldatapb.CreateKeyspaceRequest{\nName: \"test\",\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
             "method": "GetClusters",
             "rules": [
                 {

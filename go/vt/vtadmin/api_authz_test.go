@@ -35,7 +35,7 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-func TestGetClusters(t *testing.T) {
+func TestCreateKeyspace(t *testing.T) {
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -45,8 +45,8 @@ func TestGetClusters(t *testing.T) {
 				Clusters []string
 			}{
 				{
-					Resource: "Cluster",
-					Actions:  []string{"get"},
+					Resource: "Keyspace",
+					Actions:  []string{"create"},
 					Subjects: []string{"user:allowed"},
 					Clusters: []string{"*"},
 				},
@@ -63,7 +63,64 @@ func TestGetClusters(t *testing.T) {
 				Name: "test",
 			},
 			VtctldClient: newVtctldClient(),
-			Tablets: []*vtadminpb.Tablet{
+			Tablets:      newTabletList(),
+		}),
+		opts,
+	)
+
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.CreateKeyspace(ctx, &vtadminpb.CreateKeyspaceRequest{
+			ClusterId: "test",
+			Options: &vtctldatapb.CreateKeyspaceRequest{
+				Name: "test",
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to CreateKeyspace", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to CreateKeyspace", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.CreateKeyspace(ctx, &vtadminpb.CreateKeyspaceRequest{
+			ClusterId: "test",
+			Options: &vtctldatapb.CreateKeyspaceRequest{
+				Name: "test",
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should not be permitted to CreateKeyspace", actor)
+	})
+}
+func TestGetClusters(t *testing.T) {
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
 				{
 					Resource: "Cluster",
 					Actions:  []string{"get"},
