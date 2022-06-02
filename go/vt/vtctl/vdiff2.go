@@ -305,7 +305,6 @@ func displayVDiff2ShowRecent(wr *wrangler.Wrangler, format, keyspace, workflowNa
 		if str == "" {
 			str = fmt.Sprintf("No vdiffs found for %s.%s", keyspace, workflowName)
 		}
-		wr.Logger().Printf(str)
 	}
 	wr.Logger().Printf(str + "\n")
 	return nil
