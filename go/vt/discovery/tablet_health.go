@@ -38,10 +38,10 @@ type TabletHealth struct {
 	Conn                 queryservice.QueryService
 	Tablet               *topodata.Tablet
 	Target               *query.Target
-	Serving              bool
-	PrimaryTermStartTime int64
 	Stats                *query.RealtimeStats
+	PrimaryTermStartTime int64
 	LastError            error
+	Serving              bool
 }
 
 func (th *TabletHealth) MarshalJSON() ([]byte, error) {
@@ -68,11 +68,16 @@ func (th *TabletHealth) MarshalJSON() ([]byte, error) {
 		// TODO: remove Up in v15
 		Up: true,
 
-		Serving:                             th.Serving,
+		Serving: th.Serving,
+
+		// We copy the PrimaryTermStartTime value onto TabletExternallyReparentedTimestamp to
+		// ensure backward compatibility.
+		// TODO: remove Up in v15
 		PrimaryTermStartTime:                th.PrimaryTermStartTime,
 		TabletExternallyReparentedTimestamp: th.PrimaryTermStartTime,
-		Stats:                               th.Stats,
-		LastError:                           th.LastError,
+
+		Stats:     th.Stats,
+		LastError: th.LastError,
 	})
 }
 
