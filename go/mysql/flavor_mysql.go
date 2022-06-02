@@ -336,7 +336,8 @@ func (mysqlFlavor80) supportsCapability(c *Conn, capability FlavorCapability) (b
 		return c.ServerVersionAtLeast(8, 0, 23)
 	case TransactionalGtidExecutedFlavorCapability:
 		return c.ServerVersionAtLeast(8, 0, 17)
-	case InstantAddLastColumnFlavorCapability,
+	case InstantDDLFlavorCapability,
+		InstantAddLastColumnFlavorCapability,
 		InstantAddDropVirtualColumnFlavorCapability,
 		InstantChangeColumnDefaultFlavorCapability:
 		return true, nil

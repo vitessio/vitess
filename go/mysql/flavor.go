@@ -55,6 +55,7 @@ const (
 	NoneFlavorCapability          FlavorCapability = iota // default placeholder
 	FastDropTableFlavorCapability                         // supported in MySQL 8.0.23 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-23.html
 	TransactionalGtidExecutedFlavorCapability
+	InstantDDLFlavorCapability
 	InstantAddLastColumnFlavorCapability
 	InstantAddDropVirtualColumnFlavorCapability
 	InstantAddDropColumnFlavorCapability
