@@ -198,10 +198,9 @@ func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, create
 		return col.Type.Options.Storage == sqlparser.VirtualStorage
 	}
 	colStringWithoutDefault := func(col *sqlparser.ColumnDefinition) string {
-		def := col.Type.Options.Default
-		col.Type.Options.Default = nil
-		defer func() { col.Type.Options.Default = def }()
-		return sqlparser.CanonicalString(col)
+		colWithoutDefault := sqlparser.CloneRefOfColumnDefinition(col)
+		colWithoutDefault.Type.Options.Default = nil
+		return sqlparser.CanonicalString(colWithoutDefault)
 	}
 	// Up to 8.0.26 we could only ADD COLUMN as last column
 	switch opt := alterOption.(type) {
