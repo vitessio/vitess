@@ -696,6 +696,10 @@ func (rb *route) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExp
 	if vindex == nil {
 		return engine.Scatter, nil, nil
 	}
+	if _, isLookup := vindex.(vindexes.Lookup); isLookup {
+		// the lookup table is keyed by the lookup value, so it does not support nulls
+		return engine.Scatter, nil, nil
+	}
 	if vindex.IsUnique() {
 		return engine.EqualUnique, vindex, &sqlparser.NullVal{}
 	}
