@@ -298,7 +298,7 @@ func displayVDiff2ShowRecent(wr *wrangler.Wrangler, format, keyspace, workflowNa
 		}
 		str = string(jsonText)
 		if str == "null" {
-			str = "{}"
+			str = "[]"
 		}
 	} else {
 		str = displayListings(recent)
