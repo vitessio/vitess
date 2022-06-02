@@ -85,21 +85,24 @@ func (p *Projection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 func (p *Projection) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	var once sync.Once
+	var fields []*querypb.Field
 	return p.Input.TryStreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
-		result := &sqltypes.Result{}
 		var err error
 		if wantfields {
 			once.Do(func() {
 				env.Fields = qr.Fields
-				err = p.addFields(env, result)
+				fieldRes := &sqltypes.Result{}
+				err = p.addFields(env, fieldRes)
 				if err != nil {
 					return
 				}
-				err = callback(result)
+				fields = fieldRes.Fields
+				err = callback(fieldRes)
 				if err != nil {
 					return
 				}
 			})
+			qr.Fields = fields
 		}
 		if err != nil {
 			return err
@@ -117,8 +120,8 @@ func (p *Projection) TryStreamExecute(vcursor VCursor, bindVars map[string]*quer
 			}
 			resultRows = append(resultRows, resultRow)
 		}
-		result.Rows = resultRows
-		return callback(result)
+		qr.Rows = resultRows
+		return callback(qr)
 	})
 }
 
