@@ -1290,6 +1290,15 @@ func TestValidate(t *testing.T) {
 			alter: "alter table t add index m ((month(d)))",
 			to:    "create table t (id int, d datetime, primary key (id), key m ((month(d))))",
 		},
+		// This case slightly diverges right now from MySQL behavior where a referenced column
+		// gets normalized to the casing it has in the table definition. This version here
+		// still works though.
+		{
+			name:  "add functional index referencing existing column with different case",
+			from:  "create table t (id int, d datetime, primary key (id))",
+			alter: "alter table t add index m ((month(D)))",
+			to:    "create table t (id int, d datetime, primary key (id), key m ((month(D))))",
+		},
 		{
 			name:  "constraint check which only uses single drop column",
 			from:  "create table t (id int, d datetime, primary key (id), constraint unix_epoch check (d < '1970-01-01'))",
