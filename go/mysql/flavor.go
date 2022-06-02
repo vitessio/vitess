@@ -49,6 +49,18 @@ const (
 	MariaDB102FlavorFamily
 )
 
+type FlavorCapability int
+
+const (
+	NoneFlavorCapability          FlavorCapability = iota // default placeholder
+	FastDropTableFlavorCapability                         // supported in MySQL 8.0.23 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-23.html
+	TransactionalGtidExecutedFlavorCapability
+	InstantAddLastColumnFlavorCapability
+	InstantAddDropVirtualColumnFlavorCapability
+	InstantAddDropColumnFlavorCapability
+	InstantChangeColumnDefaultFlavorCapability
+)
+
 const (
 	// mariaDBReplicationHackPrefix is the prefix of a version for MariaDB 10.0
 	// versions, to work around replication bugs.
@@ -139,10 +151,7 @@ type flavor interface {
 
 	baseShowTablesWithSizes() string
 
-	// SupportsFastDropTable checks if the database server supports fast DROP TABLE operations that do not
-	// lock the buffer pool and other queries.
-	// Specifically, this is supported in MySQL 8.0.23 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-23.html
-	supportsFastDropTable(c *Conn) (bool, error)
+	supportsCapability(c *Conn, capability FlavorCapability) (bool, error)
 }
 
 // flavors maps flavor names to their implementation.
@@ -517,9 +526,7 @@ func (c *Conn) BaseShowTables() string {
 	return c.flavor.baseShowTablesWithSizes()
 }
 
-// SupportsFastDropTable checks if the database server supports fast DROP TABLE operations that do not
-// lock the buffer pool and other queries.
-// Specifically, this is supported in MySQL 8.0.23 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-23.html
-func (c *Conn) SupportsFastDropTable() (bool, error) {
-	return c.flavor.supportsFastDropTable(c)
+// SupportsCapability checks if the database server supports the given capability
+func (c *Conn) SupportsCapability(capability FlavorCapability) (bool, error) {
+	return c.flavor.supportsCapability(c, capability)
 }
