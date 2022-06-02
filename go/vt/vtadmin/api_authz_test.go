@@ -268,6 +268,93 @@ func TestDeleteKeyspace(t *testing.T) {
 		assert.NotNil(t, resp, "actor %+v should be permitted to DeleteKeyspace", actor)
 	})
 }
+func TestDeleteShards(t *testing.T) {
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Shard",
+					Actions:  []string{"delete"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(
+		testutil.BuildClusters(t, testutil.TestClusterConfig{
+			Cluster: &vtadminpb.Cluster{
+				Id:   "test",
+				Name: "test",
+			},
+			VtctldClient: newVtctldClient(),
+			Tablets:      newTabletList(),
+		}),
+		opts,
+	)
+
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.DeleteShards(ctx, &vtadminpb.DeleteShardsRequest{
+			ClusterId: "test",
+			Options: &vtctldatapb.DeleteShardsRequest{
+				Shards: []*vtctldatapb.Shard{
+					{
+						Keyspace: "test",
+						Name:     "-",
+					},
+				},
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to DeleteShards", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to DeleteShards", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.DeleteShards(ctx, &vtadminpb.DeleteShardsRequest{
+			ClusterId: "test",
+			Options: &vtctldatapb.DeleteShardsRequest{
+				Shards: []*vtctldatapb.Shard{
+					{
+						Keyspace: "test",
+						Name:     "-",
+					},
+				},
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to DeleteShards", actor)
+	})
+}
 func TestGetClusters(t *testing.T) {
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
@@ -363,6 +450,9 @@ func newTabletList() []*vtadminpb.Tablet {
 
 func newVtctldClient() *fakevtctldclient.VtctldClient {
 	return &fakevtctldclient.VtctldClient{
+		DeleteShardsResults: map[string]error{
+			"test/-": nil,
+		},
 		DeleteTabletsResults: map[string]error{
 			"zone1-0000000100": nil,
 		},
