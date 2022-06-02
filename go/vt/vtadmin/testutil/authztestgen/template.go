@@ -84,18 +84,7 @@ func Test{{ .Method }}(t *testing.T) {
 				Name: "test",
 			},
 			VtctldClient: newVtctldClient(),
-			Tablets: []*vtadminpb.Tablet{
-				{{ range $.DBTablets -}}
-				{
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "{{ .Tablet.Alias.Cell }}",
-							Uid: {{ .Tablet.Alias.Uid }},
-						},
-					},
-				},
-				{{- end }}
-			},
+			Tablets: newTabletList(),
 		}),
 		opts,
 	)
@@ -130,6 +119,21 @@ func Test{{ .Method }}(t *testing.T) {
 	{{- end -}}
 }
 {{- end }}
+
+func newTabletList() []*vtadminpb.Tablet {
+	return []*vtadminpb.Tablet{
+		{{ range $.DBTablets -}}
+		{
+			Tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "{{ .Tablet.Alias.Cell }}",
+					Uid: {{ .Tablet.Alias.Uid }},
+				},
+			},
+		},
+		{{- end }}
+	}
+}
 
 func newVtctldClient() *fakevtctldclient.VtctldClient {
 	return &fakevtctldclient.VtctldClient{

@@ -65,14 +65,25 @@ func TestGetClusters(t *testing.T) {
 			VtctldClient: newVtctldClient(),
 			Tablets: []*vtadminpb.Tablet{
 				{
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  100,
-						},
-					},
+					Resource: "Cluster",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
 				},
 			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(
+		testutil.BuildClusters(t, testutil.TestClusterConfig{
+			Cluster: &vtadminpb.Cluster{
+				Id:   "test",
+				Name: "test",
+			},
+			VtctldClient: newVtctldClient(),
+			Tablets:      newTabletList(),
 		}),
 		opts,
 	)
@@ -122,6 +133,19 @@ func TestGetClusters(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotEmpty(t, resp.Clusters, "actor %+v should be permitted to GetClusters", actor)
 	})
+}
+
+func newTabletList() []*vtadminpb.Tablet {
+	return []*vtadminpb.Tablet{
+		{
+			Tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		},
+	}
 }
 
 func newVtctldClient() *fakevtctldclient.VtctldClient {
