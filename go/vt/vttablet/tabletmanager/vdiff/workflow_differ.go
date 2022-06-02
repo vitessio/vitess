@@ -60,7 +60,7 @@ func newWorkflowDiffer(ct *controller, opts *tabletmanagerdatapb.VDiffOptions) (
 // by MySQL on each side then we'll have the same number of extras on
 // both sides. If that's the case, then let's see if the extra rows on
 // both sides are actually different.
-func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64) *DiffReport {
+func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64) {
 	if (dr.ExtraRowsSource == dr.ExtraRowsTarget) && (dr.ExtraRowsSource <= maxExtraRowsToCompare) {
 		for i := range dr.ExtraRowsSourceDiffs {
 			foundMatch := false
@@ -89,7 +89,6 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 	if len(dr.ExtraRowsTargetDiffs) > maxVDiffReportSampleRows {
 		dr.ExtraRowsTargetDiffs = dr.ExtraRowsTargetDiffs[:maxVDiffReportSampleRows-1]
 	}
-	return dr
 }
 
 func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer) error {
@@ -108,7 +107,9 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		return err
 	}
 	log.Infof("td.diff done for %s, with dr %+v", tableName, dr)
-	dr = wd.reconcileExtraRows(dr, wd.opts.CoreOptions.MaxExtraRowsToCompare)
+	if dr.ExtraRowsSource > 0 || dr.ExtraRowsTarget > 0 {
+		wd.reconcileExtraRows(dr, wd.opts.CoreOptions.MaxExtraRowsToCompare)
+	}
 
 	if err := td.updateTableState(ctx, dbClient, tableName, "completed", dr); err != nil {
 		return err
@@ -116,7 +117,7 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 	return nil
 }
 
-func (wd *workflowDiffer) getTotalRows(dbClient binlogplayer.DBClient) error {
+func (wd *workflowDiffer) getTotalRowsEstimate(dbClient binlogplayer.DBClient) error {
 	query := "select db_name from _vt.vreplication where workflow = %s"
 	query = fmt.Sprintf(query, encodeString(wd.ct.workflow))
 	qr, err := dbClient.ExecuteFetch(query, 1)
@@ -156,7 +157,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 	if err = wd.buildPlan(filter, schm); err != nil {
 		return vterrors.Wrap(err, "buildPlan")
 	}
-	if err := wd.getTotalRows(dbClient); err != nil {
+	if err := wd.getTotalRowsEstimate(dbClient); err != nil {
 		return err
 	}
 	for _, td := range wd.tableDiffers {
