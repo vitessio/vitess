@@ -71,7 +71,7 @@ type (
 	// Aggr encodes all information needed for aggregation functions
 	Aggr struct {
 		Original *sqlparser.AliasedExpr
-		Func     sqlparser.Expr
+		Func     sqlparser.AggrFunc
 		OpCode   engine.AggregateOpcode
 		Alias    string
 		// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
@@ -302,19 +302,11 @@ func (qp *QueryProjection) GetGrouping() []GroupBy {
 
 func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		/*fExpr, ok := node.(*sqlparser.FuncExpr)
-		if ok && fExpr.IsAggregate() {
-			if len(fExpr.Exprs) != 1 {
-				return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(fExpr))
-			}
-		}*/
 		fExpr, ok := node.(sqlparser.Expr)
 		if ok {
-			if isAggregate, _ := sqlparser.IsAggregation(fExpr); isAggregate {
-				aggrFunc := node.(sqlparser.AggrFunc)
+			if aggrFunc, isAggregate := fExpr.(sqlparser.AggrFunc); isAggregate {
 				if aggrFunc.GetArgs() != nil &&
 					len(aggrFunc.GetArgs()) != 1 {
-					//return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument")
 					return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(fExpr))
 				}
 				return true, nil
@@ -346,7 +338,7 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Sel
 
 func (qp *QueryProjection) isOrderByExprInGroupBy(order OrderBy) bool {
 	// ORDER BY NULL or Aggregation functions need not be present in group by
-	isAggregate, _ := sqlparser.IsAggregation(order.WeightStrExpr)
+	_, isAggregate := order.WeightStrExpr.(sqlparser.AggrFunc)
 	if sqlparser.IsNull(order.Inner.Expr) || isAggregate {
 		return true
 	}
@@ -532,7 +524,7 @@ orderBy:
 
 		out = append(out, Aggr{
 			Original: aliasedExpr,
-			Func:     aliasedExpr.Expr,
+			Func:     aliasedExpr.Expr.(sqlparser.AggrFunc),
 			OpCode:   opcode,
 			Alias:    aliasedExpr.ColumnName(),
 			Index:    &idxCopy,
@@ -620,7 +612,7 @@ func (qp *QueryProjection) GetColumnCount() int {
 
 func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		if isAggregate, _ := sqlparser.IsAggregation(node); isAggregate {
+		if _, isAggregate := node.(sqlparser.AggrFunc); isAggregate {
 			return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongGroupField, "Can't group on '%s'", sqlparser.String(expr))
 		}
 		_, isSubQ := node.(*sqlparser.Subquery)

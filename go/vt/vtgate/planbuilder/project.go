@@ -72,8 +72,8 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 		// others. This functionality depends on the PushOrderBy to request that
 		// the rows be correctly ordered.
 	case *orderedAggregate:
-		if isAggregate, aggName := sqlparser.IsAggregation(expr.Expr); isAggregate {
-			if _, ok := engine.SupportedAggregates[aggName]; ok {
+		if aggrFunc, isAggregate := expr.Expr.(sqlparser.AggrFunc); isAggregate {
+			if _, ok := engine.SupportedAggregates[aggrFunc.AggrName()]; ok {
 				rc, colNumber, err := node.pushAggr(pb, expr, origin)
 				if err != nil {
 					return nil, nil, 0, err

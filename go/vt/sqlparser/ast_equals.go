@@ -1771,8 +1771,7 @@ func EqualsRefOfCountStar(a, b *CountStar) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Distinct == b.Distinct &&
-		EqualsStarExpr(a.Star, b.Star)
+	return a.Distinct == b.Distinct
 }
 
 // EqualsRefOfCreateDatabase does deep equals between the two objects.
@@ -5909,11 +5908,6 @@ func EqualsSliceOfString(a, b []string) bool {
 		}
 	}
 	return true
-}
-
-// EqualsStarExpr does deep equals between the two objects.
-func EqualsStarExpr(a, b StarExpr) bool {
-	return EqualsTableName(a.TableName, b.TableName)
 }
 
 // EqualsSliceOfRefOfIndexColumn does deep equals between the two objects.

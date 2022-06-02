@@ -514,7 +514,7 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 			}
 		}
 
-		inner, innerWS, err := hp.qp.GetSimplifiedExpr(expr.Func.(sqlparser.AggrFunc).GetArg()) // todo: fixit: no hard casting please
+		inner, innerWS, err := hp.qp.GetSimplifiedExpr(expr.Func.GetArg())
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -584,15 +584,6 @@ func (hp *horizonPlanning) createGroupingsForColumns(columns []*sqlparser.ColNam
 		})
 	}
 	return lhsGrouping, nil
-}
-
-func isCountStar(expr sqlparser.Expr) bool {
-	switch expr.(type) {
-	case *sqlparser.CountStar:
-		return true
-	default:
-		return false
-	}
 }
 
 func hasUniqueVindex(semTable *semantics.SemTable, groupByExprs []abstract.GroupBy) bool {

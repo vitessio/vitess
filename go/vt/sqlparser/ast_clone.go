@@ -861,7 +861,6 @@ func CloneRefOfCountStar(n *CountStar) *CountStar {
 		return nil
 	}
 	out := *n
-	out.Star = CloneStarExpr(n.Star)
 	return &out
 }
 
@@ -3511,11 +3510,6 @@ func CloneSliceOfString(n []string) []string {
 	res := make([]string, 0, len(n))
 	copy(res, n)
 	return res
-}
-
-// CloneStarExpr creates a deep clone of the input.
-func CloneStarExpr(n StarExpr) StarExpr {
-	return *CloneRefOfStarExpr(&n)
 }
 
 // CloneSliceOfRefOfIndexColumn creates a deep clone of the input.

@@ -2576,7 +2576,6 @@ type (
 	}
 
 	CountStar struct {
-		Star     StarExpr
 		Distinct bool
 	}
 

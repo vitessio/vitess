@@ -225,9 +225,7 @@ func addAggregationToSelect(sel *sqlparser.Select, aggregation abstract.Aggr) of
 }
 
 func countStarAggr() *abstract.Aggr {
-	f := &sqlparser.CountStar{
-		Star: sqlparser.StarExpr{},
-	}
+	f := &sqlparser.CountStar{}
 
 	return &abstract.Aggr{
 		Original: &sqlparser.AliasedExpr{Expr: f},
@@ -421,7 +419,7 @@ func splitAggregationsToLeftAndRight(
 	var lhsAggrs, rhsAggrs []*abstract.Aggr
 	for _, aggr := range aggregations {
 		newAggr := aggr
-		if isCountStar(aggr.Original.Expr) {
+		if _, ok := aggr.Original.Expr.(*sqlparser.CountStar); ok {
 			lhsAggrs = append(lhsAggrs, &newAggr)
 			rhsAggrs = append(rhsAggrs, &newAggr)
 		} else {

@@ -766,10 +766,8 @@ func (cached *CountStar) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(8)
 	}
-	// field Star vitess.io/vitess/go/vt/sqlparser.StarExpr
-	size += cached.Star.CachedSize(false)
 	return size
 }
 func (cached *CreateDatabase) CachedSize(alloc bool) int64 {

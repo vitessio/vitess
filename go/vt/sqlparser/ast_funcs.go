@@ -1719,7 +1719,7 @@ func formatAddress(address string) string {
 func ContainsAggregation(e SQLNode) bool {
 	hasAggregates := false
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
-		if isAggregate, _ := IsAggregation(node); isAggregate {
+		if _, isAggregate := node.(AggrFunc); isAggregate {
 			hasAggregates = true
 			return false, nil
 		}
@@ -1728,7 +1728,7 @@ func ContainsAggregation(e SQLNode) bool {
 	return hasAggregates
 }
 
-func IsAggregation(node SQLNode) (bool, string) {
+/*func IsAggregation(node SQLNode) (bool, string) {
 	fExpr, ok := node.(Expr)
 	if ok {
 		switch expr := fExpr.(type) {
@@ -1737,23 +1737,13 @@ func IsAggregation(node SQLNode) (bool, string) {
 		}
 	}
 	return false, ""
-}
+}*/
 
 func IsDistinct(expr Expr) bool {
-	switch node := expr.(type) {
-	case *Count:
-		return node.Distinct
-	case *CountStar:
-		return node.Distinct
-	case *Avg:
-		return node.Distinct
-	case *Max:
-		return node.Distinct
-	case *Min:
-		return node.Distinct
-	case *Sum:
-		return node.Distinct
+	if aggr, ok := expr.(AggrFunc); ok {
+		return aggr.isDistinct()
 	}
+
 	return false
 }
 

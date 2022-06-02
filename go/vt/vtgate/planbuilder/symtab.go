@@ -564,16 +564,6 @@ func newResultColumn(expr *sqlparser.AliasedExpr, origin logicalPlan) *resultCol
 		}
 		// If it's a col it should already have metadata.
 		rc.column = col.Metadata.(*column)
-		/*} else if aggr, ok := expr.Expr.(sqlparser.AggrFunc); ok {
-		if arg := aggr.GetArg(); arg != nil {
-			if col, ok := arg.(*sqlparser.ColName); ok {
-				if rc.alias.IsEmpty() {
-					rc.alias = col.Name
-				}
-				// If it's a col it should already have metadata.
-				rc.column = col.Metadata.(*column)
-			}
-		}*/
 	} else {
 		// We don't generate an alias if the expression is non-trivial.
 		// Just to be safe, generate an anonymous column for the expression.

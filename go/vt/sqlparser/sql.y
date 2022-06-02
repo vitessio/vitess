@@ -323,11 +323,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> JSON_ARRAY JSON_OBJECT JSON_QUOTE
 %token <str> JSON_DEPTH JSON_TYPE JSON_LENGTH JSON_VALID
 %token <str> JSON_ARRAY_APPEND JSON_ARRAY_INSERT JSON_INSERT JSON_MERGE JSON_MERGE_PATCH JSON_MERGE_PRESERVE JSON_REMOVE JSON_REPLACE JSON_SET JSON_UNQUOTE
-%token <str> COUNT // aggregate function
-%token <str> AVG // aggregate function
-%token <str> MAX // aggregate function
-%token <str> MIN // aggregate function
-%token <str> SUM // aggregate function
+%token <str> COUNT AVG MAX MIN SUM
 %token <str> REGEXP_INSTR REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR
 
 // Match
@@ -531,7 +527,6 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> underscore_charsets
 %type <str> expire_opt
 %type <literal> ratio_opt
-%type <starExpr> star_count
 %start any_command
 
 %%
@@ -4526,12 +4521,6 @@ select_option:
     $$ = AllStr // These are not picked up by NewSelect, and so ALL will be dropped. But this is OK, since it's redundant anyway
   }
 
-star_count:
-  '*'
-  {
-    $$ = StarExpr{}
-  }
-
 select_expression_list:
   select_expression
   {
@@ -5385,13 +5374,9 @@ UTC_DATE func_paren_opt
   {
     $$ = &CurTimeFuncExpr{Name:NewColIdent("current_time"), Fsp: $2}
   }
-| AVG openb distinct_opt expression_list closeb
+| COUNT openb distinct_opt '*' closeb
   {
-    $$ = &Avg{Args:$4, Distinct:$3}
-  }
-| COUNT openb distinct_opt star_count closeb
-  {
-    $$ = &CountStar{Star:$4, Distinct:$3}
+    $$ = &CountStar{Distinct:$3}
   }
 | COUNT openb distinct_opt expression_list closeb
   {
@@ -5408,6 +5393,10 @@ UTC_DATE func_paren_opt
 | SUM openb distinct_opt expression_list closeb
   {
     $$ = &Sum{Args:$4, Distinct:$3}
+  }
+| AVG openb distinct_opt expression_list closeb
+  {
+    $$ = &Avg{Args:$4, Distinct:$3}
   }
 | TIMESTAMPADD openb sql_id ',' expression ',' expression closeb
   {
