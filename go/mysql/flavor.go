@@ -38,17 +38,6 @@ var (
 	ErrNoPrimaryStatus = errors.New("no master status")
 )
 
-type FlavorFamilty int
-
-const (
-	UnknownFlavorFamily FlavorFamilty = iota
-	MySQL56FlavorFamily
-	MySQL57FlavorFamily
-	MySQL80FlavorFamily
-	MariaDB101FlavorFamily
-	MariaDB102FlavorFamily
-)
-
 type FlavorCapability int
 
 const (
@@ -155,6 +144,8 @@ type flavor interface {
 	supportsCapability(serverVersion string, capability FlavorCapability) (bool, error)
 }
 
+type CapableOf func(capability FlavorCapability) (bool, error)
+
 // flavors maps flavor names to their implementation.
 // Flavors need to register only if they support being specified in the
 // connection parameters.
@@ -195,8 +186,7 @@ func ServerVersionAtLeast(serverVersion string, parts ...int) (bool, error) {
 // Note on such servers, 'select version()' would return 10.0.21-MariaDB-...
 // as well (not matching what c.ServerVersion is, but matching after we remove
 // the prefix).
-func GetFlavor(serverVersion string, flavorFunc func() flavor) (f flavor, family FlavorFamilty, canonicalVersion string) {
-	family = UnknownFlavorFamily
+func GetFlavor(serverVersion string, flavorFunc func() flavor) (f flavor, capableOf CapableOf, canonicalVersion string) {
 	canonicalVersion = serverVersion
 	switch {
 	case flavorFunc != nil:
@@ -204,27 +194,24 @@ func GetFlavor(serverVersion string, flavorFunc func() flavor) (f flavor, family
 	case strings.HasPrefix(serverVersion, mariaDBReplicationHackPrefix):
 		canonicalVersion = serverVersion[len(mariaDBReplicationHackPrefix):]
 		f = mariadbFlavor101{}
-		family = MariaDB101FlavorFamily
 	case strings.Contains(serverVersion, mariaDBVersionString):
 		mariadbVersion, err := strconv.ParseFloat(serverVersion[:4], 64)
 		if err != nil || mariadbVersion < 10.2 {
 			f = mariadbFlavor101{}
-			family = MariaDB101FlavorFamily
 		} else {
 			f = mariadbFlavor102{}
-			family = MariaDB102FlavorFamily
 		}
 	case strings.HasPrefix(serverVersion, mysql57VersionPrefix):
 		f = mysqlFlavor57{}
-		family = MySQL57FlavorFamily
 	case strings.HasPrefix(serverVersion, mysql80VersionPrefix):
 		f = mysqlFlavor80{}
-		family = MySQL80FlavorFamily
 	default:
 		f = mysqlFlavor56{}
-		family = MySQL56FlavorFamily
 	}
-	return f, family, canonicalVersion
+	return f,
+		func(capability FlavorCapability) (bool, error) {
+			return f.supportsCapability(serverVersion, capability)
+		}, canonicalVersion
 }
 
 // fillFlavor fills in c.Flavor. If the params specify the flavor,

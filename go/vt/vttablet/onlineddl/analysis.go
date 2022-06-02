@@ -211,8 +211,12 @@ func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, create
 // using ALGORITM=INSTANT for that version.
 // This function is INTENTIONALLY public, even though we do not guarantee that it will remain so.
 func AnalyzeInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable, serverVersion string) (*SpecialAlterPlan, error) {
-	_, family, _ := mysql.GetFlavor(serverVersion, nil)
-	if family != mysql.MySQL80FlavorFamily {
+	_, capableOf, _ := mysql.GetFlavor(serverVersion, nil)
+	capable, err := capableOf(mysql.InstantDDLFlavorCapability)
+	if err != nil {
+		return nil, err
+	}
+	if !capable {
 		return nil, nil
 	}
 	if alterTable.PartitionOption != nil {
