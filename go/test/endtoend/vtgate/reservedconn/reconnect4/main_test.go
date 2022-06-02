@@ -90,7 +90,7 @@ func TestVttabletDownServingChange(t *testing.T) {
 	// kill vttablet process
 	_ = primaryTablet.VttabletProcess.TearDown()
 	require.NoError(t,
-		clusterInstance.VtctlclientProcess.ExecuteCommand("EmergencyReparentShard", "-keyspace_shard", "ks/0"))
+		clusterInstance.VtctlclientProcess.ExecuteCommand("EmergencyReparentShard", "--", "--keyspace_shard", "ks/0"))
 
 	// This should work without any error.
 	_ = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ * from test")
