@@ -176,14 +176,20 @@ func analyzeAddRangePartition(alterTable *sqlparser.AlterTable, createTable *sql
 }
 
 func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, createTable *sqlparser.CreateTable, serverVersion string) (bool, error) {
-	isVirtualColumn := func(colName string) bool {
+	findColumn := func(colName string) *sqlparser.ColumnDefinition {
 		if createTable == nil {
-			return false
+			return nil
 		}
 		for _, col := range createTable.TableSpec.Columns {
 			if strings.EqualFold(colName, col.Name.String()) {
-				return col.Type.Options.As != nil
+				return col
 			}
+		}
+		return nil
+	}
+	isVirtualColumn := func(colName string) bool {
+		if col := findColumn(colName); col != nil {
+			return col.Type.Options.As != nil
 		}
 		return false
 	}
@@ -202,6 +208,11 @@ func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, create
 			return true, nil
 		}
 		return mysql.ServerVersionAtLeast(serverVersion, 8, 0, 29)
+	case *sqlparser.ModifyColumn:
+		if col := findColumn(opt.NewColDefinition.Name.String()); col != nil {
+			// Check if only diff is change of default
+		}
+		return false, nil
 	default:
 		return false, nil
 	}
