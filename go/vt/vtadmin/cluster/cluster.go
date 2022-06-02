@@ -1969,9 +1969,7 @@ func (c *Cluster) RefreshState(ctx context.Context, tablet *vtadminpb.Tablet) er
 }
 
 // RefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO` on
-// a tablet to replicate from the current primary in the shard. This only works
-// if the current replica position matches the last known
-// `CHANGE REPLICATION SOURCE TO` or failover action.
+// a tablet to replicate from the current primary in the shard.
 func (c *Cluster) RefreshTabletReplicationSource(ctx context.Context, tablet *vtadminpb.Tablet) (*vtadminpb.RefreshTabletReplicationSourceResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "Cluster.RefreshTabletReplicationSource")
 	defer span.Finish()

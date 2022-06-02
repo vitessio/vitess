@@ -104,9 +104,7 @@ type VTAdminClient interface {
 	// RefreshState reloads the tablet record on the specified tablet.
 	RefreshState(ctx context.Context, in *RefreshStateRequest, opts ...grpc.CallOption) (*RefreshStateResponse, error)
 	// RefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO`
-	// on a tablet to replicate from the current primary in the shard. This only
-	// works if the current replica position matches the last known
-	// `CHANGE REPLICATION SOURCE TO` or failover action.
+	// on a tablet to replicate from the current primary in the shard.
 	RefreshTabletReplicationSource(ctx context.Context, in *RefreshTabletReplicationSourceRequest, opts ...grpc.CallOption) (*RefreshTabletReplicationSourceResponse, error)
 	// ReloadSchemas reloads the schema definition across keyspaces, shards, or
 	// tablets in one or more clusters, depending on the request fields (see
@@ -611,9 +609,7 @@ type VTAdminServer interface {
 	// RefreshState reloads the tablet record on the specified tablet.
 	RefreshState(context.Context, *RefreshStateRequest) (*RefreshStateResponse, error)
 	// RefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO`
-	// on a tablet to replicate from the current primary in the shard. This only
-	// works if the current replica position matches the last known
-	// `CHANGE REPLICATION SOURCE TO` or failover action.
+	// on a tablet to replicate from the current primary in the shard.
 	RefreshTabletReplicationSource(context.Context, *RefreshTabletReplicationSourceRequest) (*RefreshTabletReplicationSourceResponse, error)
 	// ReloadSchemas reloads the schema definition across keyspaces, shards, or
 	// tablets in one or more clusters, depending on the request fields (see

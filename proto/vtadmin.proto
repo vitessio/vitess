@@ -114,9 +114,7 @@ service VTAdmin {
     // RefreshState reloads the tablet record on the specified tablet.
     rpc RefreshState(RefreshStateRequest) returns (RefreshStateResponse) {};
     // RefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO`
-    // on a tablet to replicate from the current primary in the shard. This only
-    // works if the current replica position matches the last known
-    // `CHANGE REPLICATION SOURCE TO` or failover action.
+    // on a tablet to replicate from the current primary in the shard.
     rpc RefreshTabletReplicationSource(RefreshTabletReplicationSourceRequest) returns (RefreshTabletReplicationSourceResponse) {};
     // ReloadSchemas reloads the schema definition across keyspaces, shards, or
     // tablets in one or more clusters, depending on the request fields (see

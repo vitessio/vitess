@@ -168,9 +168,7 @@ export const useDeleteTablet = (
 
 /**
  * useRefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO`
- * on a tablet to replicate from the current primary in the shard. This only
- * works if the current replica position matches the last known
- * `CHANGE REPLICATION SOURCE TO` or failover action.
+ * on a tablet to replicate from the current primary in the shard.
  */
 export const useRefreshTabletReplicationSource = (
     params: Parameters<typeof refreshTabletReplicationSource>[0],
