@@ -209,7 +209,7 @@ Table {{$table.TableName}}:
 {{ if $table.ExtraRowsTarget}}	ExtraRowsTarget:  {{$table.ExtraRowsTarget}}{{ end }}
 {{ end }}
  
-Use "--format=json" for more detailed output
+Use "--format=json" for more detailed output.
 `
 )
 
@@ -218,7 +218,8 @@ type VDiffListing struct {
 }
 
 func (vdl *VDiffListing) String() string {
-	str := ""
+	str := fmt.Sprintf("UUID: %s, Workflow: %s, Keyspace: %s, Shard: %s, State: %s",
+		vdl.UUID, vdl.Workflow, vdl.Keyspace, vdl.Shard, vdl.State)
 	return str
 }
 
@@ -288,30 +289,30 @@ func showVDiff2ShowResponse(wr *wrangler.Wrangler, format, keyspace, workflowNam
 
 func showVDiff2ShowRecent(wr *wrangler.Wrangler, format, keyspace, workflowName, subCommand string, output *wrangler.VDiffOutput) error {
 	str := ""
-	recent, err := getVDiff2Recent(output)
+	recent, err := buildVDiff2Recent(output)
 	if err != nil {
 		return err
 	}
 	log.Infof("recent: %+v", recent)
 	log.Flush()
-	if format != "json" {
-		str = displayListings(recent)
-		if str == "" {
-			str = fmt.Sprintf("No vdiffs found for %s.%s", keyspace, workflowName)
-		}
-		wr.Logger().Printf(str)
-	} else {
+	if format == "json" {
 		jsonText, err := json.MarshalIndent(recent, "", "\t")
 		if err != nil {
 			return err
 		}
 		str = string(jsonText)
+	} else {
+		str = displayListings(recent)
+		if str == "" {
+			str = fmt.Sprintf("No vdiffs found for %s.%s", keyspace, workflowName)
+		}
+		wr.Logger().Printf(str)
 	}
 	wr.Logger().Printf(str + "\n")
 	return nil
 }
 
-func getVDiff2Recent(output *wrangler.VDiffOutput) ([]*VDiffListing, error) {
+func buildVDiff2Recent(output *wrangler.VDiffOutput) ([]*VDiffListing, error) {
 	var listings []*VDiffListing
 	for _, resp := range output.Responses {
 		if resp != nil && resp.Output != nil {
@@ -333,7 +334,7 @@ func getVDiff2Recent(output *wrangler.VDiffOutput) ([]*VDiffListing, error) {
 
 func showVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, workflowName, uuid string, output *wrangler.VDiffOutput) error {
 	str := ""
-	summary, err := getVDiff2SingleSummary(wr, keyspace, workflowName, uuid, output)
+	summary, err := buildVDiff2SingleSummary(wr, keyspace, workflowName, uuid, output)
 	if err != nil {
 		return err
 	}
@@ -365,7 +366,7 @@ func showVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, workfl
 	wr.Logger().Printf(str + "\n")
 	return nil
 }
-func getVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid string, output *wrangler.VDiffOutput) (*vdiffSummary, error) {
+func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid string, output *wrangler.VDiffOutput) (*vdiffSummary, error) {
 	summary := &vdiffSummary{
 		Workflow:    workflow,
 		Keyspace:    keyspace,
@@ -388,7 +389,7 @@ func getVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid stri
 				tableSummaryMap = make(map[string]vdiffTableSummary, 0)
 				reports = make(map[string]map[string]vdiff.DiffReport, 0)
 			}
-			log.Infof("qr is %+v", qr.Named().Rows)
+			log.Infof("rows are %+v", qr.Named().Rows)
 			for _, row := range qr.Named().Rows {
 				log.Infof("table row is %+v", row)
 				if first {
@@ -449,9 +450,9 @@ func getVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid stri
 	summary.Shards = strings.Join(shards, ",")
 	summary.TableSummaryMap = tableSummaryMap
 	summary.Reports = reports
-	if !summary.HasMismatch { // nolint // lines below commented during testing
-		//summary.Reports = nil
-		//summary.TableSummaryMap = nil
+	if !summary.HasMismatch {
+		summary.Reports = nil
+		summary.TableSummaryMap = nil
 	}
 	return summary, nil
 }
@@ -459,16 +460,16 @@ func getVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid stri
 //endregion
 
 func showVDiff2CreateResponse(wr *wrangler.Wrangler, format string, uuid string) {
-	if format != "json" {
-		wr.Logger().Printf("VDiff %s scheduled on target shards, use Show to view progress\n", uuid)
-	} else {
+	if format == "json" {
 		type CreateResponse struct {
 			UUID string
 		}
 		resp := &CreateResponse{UUID: uuid}
-		log.Infof("VDiff scheduled on target shards, use Show to view progress")
+		log.Infof("VDiff scheduled on target shards, use show to view progress")
 		jsonText, _ := json.MarshalIndent(resp, "", "\t")
 		log.Infof("response is %+v, %s", resp, jsonText)
 		wr.Logger().Printf(string(jsonText) + "\n")
+	} else {
+		wr.Logger().Printf("VDiff %s scheduled on target shards, use show to view progress\n", uuid)
 	}
 }
