@@ -121,9 +121,9 @@ func waitForVDiff2ToComplete(t *testing.T, uuid string) {
 	}
 }
 
-func vdiff2(t *testing.T, ksWorkflow, command, subCommand string) (uuid string, output string) {
+func vdiff2(t *testing.T, ksWorkflow, action, actionArg string) (uuid string, output string) {
 	var err error
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "--format", "json", ksWorkflow, command, subCommand)
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "--format", "json", ksWorkflow, action, actionArg)
 	log.Infof("vdiff2 output: %+v (err: %+v)", output, err)
 	require.Nil(t, err)
 

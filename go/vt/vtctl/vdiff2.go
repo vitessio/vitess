@@ -79,15 +79,6 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	case 3:
 		action = vdiff.VDiffAction(strings.ToLower(subFlags.Arg(1)))
 		actionArg = strings.ToLower(subFlags.Arg(2))
-		switch actionArg {
-		case vdiff.AllActionArg, vdiff.LastActionArg:
-		default:
-			_, err := uuid.Parse(actionArg)
-			if err != nil {
-				return err
-			}
-			return usage
-		}
 	default:
 		return usage
 	}
@@ -156,13 +147,13 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 
 	switch action {
 	case vdiff.CreateAction:
-		showVDiff2CreateResponse(wr, *format, vdiffUUID.String())
+		displayVDiff2CreateResponse(wr, *format, vdiffUUID.String())
 	case vdiff.ShowAction:
 		if output == nil {
 			return fmt.Errorf("invalid response from show command")
 		}
 		log.Infof("show action: %+v", output)
-		if err := showVDiff2ShowResponse(wr, *format, keyspace, workflowName, actionArg, output); err != nil {
+		if err := displayVDiff2ShowResponse(wr, *format, keyspace, workflowName, actionArg, output); err != nil {
 			return err
 		}
 	default:
@@ -258,17 +249,22 @@ func displayListings(listings []*VDiffListing) string {
 	return str
 }
 
-func showVDiff2ShowResponse(wr *wrangler.Wrangler, format, keyspace, workflowName, actionArg string, output *wrangler.VDiffOutput) error {
+func displayVDiff2ShowResponse(wr *wrangler.Wrangler, format, keyspace, workflowName, actionArg string, output *wrangler.VDiffOutput) error {
 	var vdiffUUID uuid.UUID
 	var err error
 	switch actionArg {
 	case vdiff.AllActionArg:
-		return showVDiff2ShowRecent(wr, format, keyspace, workflowName, actionArg, output)
+		return displayVDiff2ShowRecent(wr, format, keyspace, workflowName, actionArg, output)
 	case vdiff.LastActionArg:
 		for _, resp := range output.Responses {
 			vdiffUUID, err = uuid.Parse(resp.VdiffUuid)
 			if err != nil {
-				return err
+				if format == "json" {
+					wr.Logger().Printf("{}\n")
+				} else {
+					wr.Logger().Printf("No previous vdiff found for %s.%s\n", keyspace, workflowName)
+				}
+				return nil
 			}
 			break
 		}
@@ -281,13 +277,13 @@ func showVDiff2ShowResponse(wr *wrangler.Wrangler, format, keyspace, workflowNam
 			}
 		}
 		if len(output.Responses) == 0 {
-			return fmt.Errorf("no response received for vdiff2 show of %s.%s(%s)", keyspace, workflowName, vdiffUUID.String())
+			return fmt.Errorf("no response received for vdiff show of %s.%s(%s)", keyspace, workflowName, vdiffUUID.String())
 		}
-		return showVDiff2ShowSingleSummary(wr, format, keyspace, workflowName, vdiffUUID.String(), output)
+		return displayVDiff2ShowSingleSummary(wr, format, keyspace, workflowName, vdiffUUID.String(), output)
 	}
 }
 
-func showVDiff2ShowRecent(wr *wrangler.Wrangler, format, keyspace, workflowName, subCommand string, output *wrangler.VDiffOutput) error {
+func displayVDiff2ShowRecent(wr *wrangler.Wrangler, format, keyspace, workflowName, subCommand string, output *wrangler.VDiffOutput) error {
 	str := ""
 	recent, err := buildVDiff2Recent(output)
 	if err != nil {
@@ -301,6 +297,9 @@ func showVDiff2ShowRecent(wr *wrangler.Wrangler, format, keyspace, workflowName,
 			return err
 		}
 		str = string(jsonText)
+		if str == "null" {
+			str = "{}"
+		}
 	} else {
 		str = displayListings(recent)
 		if str == "" {
@@ -332,13 +331,19 @@ func buildVDiff2Recent(output *wrangler.VDiffOutput) ([]*VDiffListing, error) {
 	return listings, nil
 }
 
-func showVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, workflowName, uuid string, output *wrangler.VDiffOutput) error {
+func displayVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, workflowName, uuid string, output *wrangler.VDiffOutput) error {
 	str := ""
 	summary, err := buildVDiff2SingleSummary(wr, keyspace, workflowName, uuid, output)
 	if err != nil {
 		return err
 	}
-	if format != "json" {
+	if format == "json" {
+		jsonText, err := json.MarshalIndent(summary, "", "\t")
+		if err != nil {
+			return err
+		}
+		str = string(jsonText)
+	} else {
 		tmpl, err := template.New("test").Parse(summaryTextTemplate)
 		if err != nil {
 			return err
@@ -356,12 +361,6 @@ func showVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, workfl
 			}
 			str = str2
 		}
-	} else {
-		jsonText, err := json.MarshalIndent(summary, "", "\t")
-		if err != nil {
-			return err
-		}
-		str = string(jsonText)
 	}
 	wr.Logger().Printf(str + "\n")
 	return nil
@@ -459,7 +458,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 
 //endregion
 
-func showVDiff2CreateResponse(wr *wrangler.Wrangler, format string, uuid string) {
+func displayVDiff2CreateResponse(wr *wrangler.Wrangler, format string, uuid string) {
 	if format == "json" {
 		type CreateResponse struct {
 			UUID string
