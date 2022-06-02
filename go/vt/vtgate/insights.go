@@ -633,7 +633,12 @@ func normalizeSQL(sql string) (string, error) {
 		switch node := node.(type) {
 		case *sqlparser.ComparisonExpr:
 			if node.Operator == sqlparser.InOp {
-				buf.Myprintf("%l in (<elements>)", node.Left)
+				switch node.Right.(type) {
+				case *sqlparser.Subquery: // don't normalize subqueries
+					node.Format(buf)
+				default:
+					buf.Myprintf("%l in (<elements>)", node.Left)
+				}
 			} else {
 				node.Format(buf)
 			}

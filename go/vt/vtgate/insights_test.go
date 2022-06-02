@@ -341,6 +341,12 @@ func TestNormalization(t *testing.T) {
 
 		// mixed nested and simple
 		{"select 1 from x where xyz in ((:v1, :v2), :v3)", "select 1 from x where xyz in (<elements>)"},
+
+		// subqueries should not be normalized
+		{"select 1 from x where xyz in (select distinct foo from bar)", "select 1 from x where xyz in (select distinct foo from bar)"},
+
+		// stuff within a subquery should be normalized
+		{"select 1 from x where xyz in (select distinct foo from bar where baz in (1,2,3))", "select 1 from x where xyz in (select distinct foo from bar where baz in (<elements>))"},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.input, func(t *testing.T) {
