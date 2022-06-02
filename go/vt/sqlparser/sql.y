@@ -316,14 +316,14 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> REPLACE
 %token <str> CONVERT CAST
 %token <str> SUBSTR SUBSTRING
-%token <str> GROUP_CONCAT SEPARATOR
+%token <str> SEPARATOR
 %token <str> TIMESTAMPADD TIMESTAMPDIFF
 %token <str> WEIGHT_STRING
 %token <str> LTRIM RTRIM TRIM
 %token <str> JSON_ARRAY JSON_OBJECT JSON_QUOTE
 %token <str> JSON_DEPTH JSON_TYPE JSON_LENGTH JSON_VALID
 %token <str> JSON_ARRAY_APPEND JSON_ARRAY_INSERT JSON_INSERT JSON_MERGE JSON_MERGE_PATCH JSON_MERGE_PRESERVE JSON_REMOVE JSON_REPLACE JSON_SET JSON_UNQUOTE
-%token <str> COUNT AVG MAX MIN SUM
+%token <str> COUNT AVG MAX MIN SUM GROUP_CONCAT
 %token <str> REGEXP_INSTR REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR
 
 // Match
@@ -5328,10 +5328,6 @@ function_call_keyword:
   {
   	$$ = &SubstrExpr{Name: $3, From: $5}
   }
-| GROUP_CONCAT openb distinct_opt select_expression_list order_by_opt separator_opt limit_opt closeb
-  {
-    $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
-  }
 | CASE expression_opt when_expression_list else_expression_opt END
   {
     $$ = &CaseExpr{Expr: $2, Whens: $3, Else: $4}
@@ -5376,27 +5372,31 @@ UTC_DATE func_paren_opt
   }
 | COUNT openb distinct_opt '*' closeb
   {
-    $$ = &CountStar{Distinct:$3}
+    $$ = &CountStar{Name:$1, Distinct:$3}
   }
 | COUNT openb distinct_opt expression_list closeb
   {
-    $$ = &Count{Args:$4, Distinct:$3}
+    $$ = &Count{Name:$1, Distinct:$3, Args:$4}
   }
 | MAX openb distinct_opt expression_list closeb
   {
-    $$ = &Max{Args:$4, Distinct:$3}
+    $$ = &Max{Name:$1 , Distinct:$3, Args:$4}
   }
 | MIN openb distinct_opt expression_list closeb
   {
-    $$ = &Min{Args:$4, Distinct:$3}
+    $$ = &Min{Name:$1 , Distinct:$3, Args:$4}
   }
 | SUM openb distinct_opt expression_list closeb
   {
-    $$ = &Sum{Args:$4, Distinct:$3}
+    $$ = &Sum{Name:$1 , Distinct:$3, Args:$4}
   }
 | AVG openb distinct_opt expression_list closeb
   {
-    $$ = &Avg{Args:$4, Distinct:$3}
+    $$ = &Avg{Name:$1 , Distinct:$3, Args:$4}
+  }
+| GROUP_CONCAT openb distinct_opt expression_list order_by_opt separator_opt limit_opt closeb
+  {
+    $$ = &GroupConcatExpr{Name:$1, Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
   }
 | TIMESTAMPADD openb sql_id ',' expression ',' expression closeb
   {
@@ -6941,6 +6941,7 @@ non_reserved_keyword:
 | GEOMETRYCOLLECTION
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
+| GROUP_CONCAT
 | GTID_EXECUTED
 | HASH
 | HEADER

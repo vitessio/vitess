@@ -3153,7 +3153,8 @@ func (node *JSONUnquoteExpr) formatFast(buf *TrackedBuffer) {
 }
 
 func (node *Count) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("count(")
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
 	if node.Distinct {
 		buf.WriteString(DistinctStr)
 	}
@@ -3162,7 +3163,8 @@ func (node *Count) formatFast(buf *TrackedBuffer) {
 }
 
 func (node *CountStar) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("count(")
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
 	if node.Distinct {
 		buf.WriteString(DistinctStr)
 	}
@@ -3170,7 +3172,8 @@ func (node *CountStar) formatFast(buf *TrackedBuffer) {
 }
 
 func (node *Avg) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("avg(")
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
 	if node.Distinct {
 		buf.WriteString(DistinctStr)
 	}
@@ -3179,7 +3182,8 @@ func (node *Avg) formatFast(buf *TrackedBuffer) {
 }
 
 func (node *Max) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("max(")
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
 	if node.Distinct {
 		buf.WriteString(DistinctStr)
 	}
@@ -3188,7 +3192,8 @@ func (node *Max) formatFast(buf *TrackedBuffer) {
 }
 
 func (node *Min) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("min(")
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
 	if node.Distinct {
 		buf.WriteString(DistinctStr)
 	}
@@ -3197,7 +3202,8 @@ func (node *Min) formatFast(buf *TrackedBuffer) {
 }
 
 func (node *Sum) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("sum(")
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
 	if node.Distinct {
 		buf.WriteString(DistinctStr)
 	}

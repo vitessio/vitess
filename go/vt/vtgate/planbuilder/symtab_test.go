@@ -208,17 +208,23 @@ func TestGetReturnType(t *testing.T) {
 		output:      querypb.Type_DECIMAL,
 		expectedErr: nil,
 	}, {
+		input:       &sqlparser.Count{Name: "Count"},
+		output:      querypb.Type_INT64,
+		expectedErr: nil,
+	}, {
+		input:       &sqlparser.CountStar{Name: "Count"},
+		output:      querypb.Type_INT64,
+		expectedErr: nil,
+	}, {
 		input: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("Count"), Exprs: sqlparser.SelectExprs{
 			&sqlparser.StarExpr{},
 		}},
-		output:      querypb.Type_INT64,
-		expectedErr: nil,
+		expectedErr: fmt.Errorf("cannot evaluate return type for *sqlparser.FuncExpr"),
 	}, {
 		input: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("cOunt"), Exprs: sqlparser.SelectExprs{
 			&sqlparser.StarExpr{},
 		}},
-		output:      querypb.Type_INT64,
-		expectedErr: nil,
+		expectedErr: fmt.Errorf("cannot evaluate return type for *sqlparser.FuncExpr"),
 	}, {
 		input: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("Abs"), Exprs: sqlparser.SelectExprs{
 			&sqlparser.StarExpr{},

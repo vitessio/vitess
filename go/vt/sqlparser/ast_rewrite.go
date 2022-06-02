@@ -2557,8 +2557,8 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 			return true
 		}
 	}
-	if !a.rewriteSelectExprs(node, node.Exprs, func(newNode, parent SQLNode) {
-		parent.(*GroupConcatExpr).Exprs = newNode.(SelectExprs)
+	if !a.rewriteExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+		parent.(*GroupConcatExpr).Exprs = newNode.(Exprs)
 	}) {
 		return false
 	}
@@ -6931,6 +6931,8 @@ func (a *application) rewriteAggrFunc(parent SQLNode, node AggrFunc, replacer re
 		return a.rewriteRefOfCount(parent, node, replacer)
 	case *CountStar:
 		return a.rewriteRefOfCountStar(parent, node, replacer)
+	case *GroupConcatExpr:
+		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case *Max:
 		return a.rewriteRefOfMax(parent, node, replacer)
 	case *Min:

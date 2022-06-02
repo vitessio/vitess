@@ -2410,7 +2410,7 @@ func (node *JSONUnquoteExpr) Format(buf *TrackedBuffer) {
 }
 
 func (node *Count) Format(buf *TrackedBuffer) {
-	buf.WriteString("count(")
+	buf.astPrintf(node, "%s(", node.AggrName())
 	if node.Distinct {
 		buf.literal(DistinctStr)
 	}
@@ -2418,7 +2418,7 @@ func (node *Count) Format(buf *TrackedBuffer) {
 }
 
 func (node *CountStar) Format(buf *TrackedBuffer) {
-	buf.WriteString("count(")
+	buf.astPrintf(node, "%s(", node.AggrName())
 	if node.Distinct {
 		buf.literal(DistinctStr)
 	}
@@ -2426,7 +2426,7 @@ func (node *CountStar) Format(buf *TrackedBuffer) {
 }
 
 func (node *Avg) Format(buf *TrackedBuffer) {
-	buf.WriteString("avg(")
+	buf.astPrintf(node, "%s(", node.AggrName())
 	if node.Distinct {
 		buf.literal(DistinctStr)
 	}
@@ -2434,7 +2434,7 @@ func (node *Avg) Format(buf *TrackedBuffer) {
 }
 
 func (node *Max) Format(buf *TrackedBuffer) {
-	buf.WriteString("max(")
+	buf.astPrintf(node, "%s(", node.AggrName())
 	if node.Distinct {
 		buf.literal(DistinctStr)
 	}
@@ -2442,7 +2442,7 @@ func (node *Max) Format(buf *TrackedBuffer) {
 }
 
 func (node *Min) Format(buf *TrackedBuffer) {
-	buf.WriteString("min(")
+	buf.astPrintf(node, "%s(", node.AggrName())
 	if node.Distinct {
 		buf.literal(DistinctStr)
 	}
@@ -2450,7 +2450,7 @@ func (node *Min) Format(buf *TrackedBuffer) {
 }
 
 func (node *Sum) Format(buf *TrackedBuffer) {
-	buf.WriteString("sum(")
+	buf.astPrintf(node, "%s(", node.AggrName())
 	if node.Distinct {
 		buf.literal(DistinctStr)
 	}

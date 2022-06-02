@@ -1413,7 +1413,7 @@ func VisitRefOfGroupConcatExpr(in *GroupConcatExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitSelectExprs(in.Exprs, f); err != nil {
+	if err := VisitExprs(in.Exprs, f); err != nil {
 		return err
 	}
 	if err := VisitOrderBy(in.OrderBy, f); err != nil {
@@ -3383,6 +3383,8 @@ func VisitAggrFunc(in AggrFunc, f Visit) error {
 		return VisitRefOfCount(in, f)
 	case *CountStar:
 		return VisitRefOfCountStar(in, f)
+	case *GroupConcatExpr:
+		return VisitRefOfGroupConcatExpr(in, f)
 	case *Max:
 		return VisitRefOfMax(in, f)
 	case *Min:

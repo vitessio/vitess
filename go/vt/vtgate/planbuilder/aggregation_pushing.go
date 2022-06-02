@@ -225,7 +225,7 @@ func addAggregationToSelect(sel *sqlparser.Select, aggregation abstract.Aggr) of
 }
 
 func countStarAggr() *abstract.Aggr {
-	f := &sqlparser.CountStar{}
+	f := &sqlparser.CountStar{Name: "count"}
 
 	return &abstract.Aggr{
 		Original: &sqlparser.AliasedExpr{Expr: f},

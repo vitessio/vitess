@@ -504,7 +504,7 @@ orderBy:
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
 		}
 
-		opcode, found := engine.SupportedAggregates[fnc.AggrName()]
+		opcode, found := engine.SupportedAggregates[strings.ToLower(fnc.AggrName())]
 		if !found {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: aggregation function '%s'", fnc.AggrName())
 		}

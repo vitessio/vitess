@@ -2247,15 +2247,6 @@ type (
 		Exprs     SelectExprs
 	}
 
-	// GroupConcatExpr represents a call to GROUP_CONCAT
-	GroupConcatExpr struct {
-		Distinct  bool
-		Exprs     SelectExprs
-		OrderBy   OrderBy
-		Separator string
-		Limit     *Limit
-	}
-
 	// ValuesFuncExpr represents a function call.
 	ValuesFuncExpr struct {
 		Name *ColName
@@ -2573,30 +2564,46 @@ type (
 	Count struct {
 		Args     Exprs
 		Distinct bool
+		Name     string
 	}
 
 	CountStar struct {
 		Distinct bool
+		Name     string
 	}
 
 	Avg struct {
 		Args     Exprs
 		Distinct bool
+		Name     string
 	}
 
 	Max struct {
 		Args     Exprs
 		Distinct bool
+		Name     string
 	}
 
 	Min struct {
 		Args     Exprs
 		Distinct bool
+		Name     string
 	}
 
 	Sum struct {
 		Args     Exprs
 		Distinct bool
+		Name     string
+	}
+
+	// GroupConcatExpr represents a call to GROUP_CONCAT
+	GroupConcatExpr struct {
+		Distinct  bool
+		Exprs     Exprs
+		OrderBy   OrderBy
+		Separator string
+		Limit     *Limit
+		Name      string
 	}
 
 	// RegexpInstrExpr represents REGEXP_INSTR()
@@ -2641,40 +2648,45 @@ type (
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
-func (*Sum) iExpr()       {}
-func (*Min) iExpr()       {}
-func (*Max) iExpr()       {}
-func (*Avg) iExpr()       {}
-func (*CountStar) iExpr() {}
-func (*Count) iExpr()     {}
+func (*Sum) iExpr()             {}
+func (*Min) iExpr()             {}
+func (*Max) iExpr()             {}
+func (*Avg) iExpr()             {}
+func (*CountStar) iExpr()       {}
+func (*Count) iExpr()           {}
+func (*GroupConcatExpr) iExpr() {}
 
-func (sum *Sum) GetArg() Expr     { return sum.Args[0] }
-func (min *Min) GetArg() Expr     { return min.Args[0] }
-func (max *Max) GetArg() Expr     { return max.Args[0] }
-func (avg *Avg) GetArg() Expr     { return avg.Args[0] }
-func (*CountStar) GetArg() Expr   { return nil }
-func (count *Count) GetArg() Expr { return count.Args[0] }
+func (sum *Sum) GetArg() Expr                   { return sum.Args[0] }
+func (min *Min) GetArg() Expr                   { return min.Args[0] }
+func (max *Max) GetArg() Expr                   { return max.Args[0] }
+func (avg *Avg) GetArg() Expr                   { return avg.Args[0] }
+func (*CountStar) GetArg() Expr                 { return nil }
+func (count *Count) GetArg() Expr               { return count.Args[0] }
+func (grpConcat *GroupConcatExpr) GetArg() Expr { return grpConcat.Exprs[0] }
 
-func (sum *Sum) GetArgs() Exprs     { return sum.Args }
-func (min *Min) GetArgs() Exprs     { return min.Args }
-func (max *Max) GetArgs() Exprs     { return max.Args }
-func (avg *Avg) GetArgs() Exprs     { return avg.Args }
-func (*CountStar) GetArgs() Exprs   { return nil }
-func (count *Count) GetArgs() Exprs { return count.Args }
+func (sum *Sum) GetArgs() Exprs                   { return sum.Args }
+func (min *Min) GetArgs() Exprs                   { return min.Args }
+func (max *Max) GetArgs() Exprs                   { return max.Args }
+func (avg *Avg) GetArgs() Exprs                   { return avg.Args }
+func (*CountStar) GetArgs() Exprs                 { return nil }
+func (count *Count) GetArgs() Exprs               { return count.Args }
+func (grpConcat *GroupConcatExpr) GetArgs() Exprs { return grpConcat.Exprs }
 
-func (sum *Sum) isDistinct() bool         { return sum.Distinct }
-func (min *Min) isDistinct() bool         { return min.Distinct }
-func (max *Max) isDistinct() bool         { return max.Distinct }
-func (avg *Avg) isDistinct() bool         { return avg.Distinct }
-func (cStar *CountStar) isDistinct() bool { return cStar.Distinct }
-func (count *Count) isDistinct() bool     { return count.Distinct }
+func (sum *Sum) isDistinct() bool                   { return sum.Distinct }
+func (min *Min) isDistinct() bool                   { return min.Distinct }
+func (max *Max) isDistinct() bool                   { return max.Distinct }
+func (avg *Avg) isDistinct() bool                   { return avg.Distinct }
+func (cStar *CountStar) isDistinct() bool           { return cStar.Distinct }
+func (count *Count) isDistinct() bool               { return count.Distinct }
+func (grpConcat *GroupConcatExpr) isDistinct() bool { return grpConcat.Distinct }
 
-func (*Sum) AggrName() string       { return "sum" }
-func (*Min) AggrName() string       { return "min" }
-func (*Max) AggrName() string       { return "max" }
-func (*Avg) AggrName() string       { return "avg" }
-func (*CountStar) AggrName() string { return "count" }
-func (*Count) AggrName() string     { return "count" }
+func (sum *Sum) AggrName() string                   { return sum.Name }
+func (min *Min) AggrName() string                   { return min.Name }
+func (max *Max) AggrName() string                   { return max.Name }
+func (avg *Avg) AggrName() string                   { return avg.Name }
+func (cStar *CountStar) AggrName() string           { return cStar.Name }
+func (count *Count) AggrName() string               { return count.Name }
+func (grpConcat *GroupConcatExpr) AggrName() string { return grpConcat.Name }
 
 func (*AndExpr) iExpr()                            {}
 func (*OrExpr) iExpr()                             {}
@@ -2708,7 +2720,6 @@ func (*ConvertExpr) iExpr()                        {}
 func (*SubstrExpr) iExpr()                         {}
 func (*ConvertUsingExpr) iExpr()                   {}
 func (*MatchExpr) iExpr()                          {}
-func (*GroupConcatExpr) iExpr()                    {}
 func (*Default) iExpr()                            {}
 func (*ExtractedSubquery) iExpr()                  {}
 func (*TrimFuncExpr) iExpr()                       {}

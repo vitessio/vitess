@@ -1728,17 +1728,6 @@ func ContainsAggregation(e SQLNode) bool {
 	return hasAggregates
 }
 
-/*func IsAggregation(node SQLNode) (bool, string) {
-	fExpr, ok := node.(Expr)
-	if ok {
-		switch expr := fExpr.(type) {
-		case AggrFunc:
-			return true, expr.AggrName()
-		}
-	}
-	return false, ""
-}*/
-
 func IsDistinct(expr Expr) bool {
 	if aggr, ok := expr.(AggrFunc); ok {
 		return aggr.isDistinct()

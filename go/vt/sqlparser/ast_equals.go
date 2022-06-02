@@ -1496,6 +1496,7 @@ func EqualsRefOfAvg(a, b *Avg) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
+		a.Name == b.Name &&
 		EqualsExprs(a.Args, b.Args)
 }
 
@@ -1760,6 +1761,7 @@ func EqualsRefOfCount(a, b *Count) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
+		a.Name == b.Name &&
 		EqualsExprs(a.Args, b.Args)
 }
 
@@ -1771,7 +1773,8 @@ func EqualsRefOfCountStar(a, b *CountStar) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Distinct == b.Distinct
+	return a.Distinct == b.Distinct &&
+		a.Name == b.Name
 }
 
 // EqualsRefOfCreateDatabase does deep equals between the two objects.
@@ -2134,7 +2137,8 @@ func EqualsRefOfGroupConcatExpr(a, b *GroupConcatExpr) bool {
 	}
 	return a.Distinct == b.Distinct &&
 		a.Separator == b.Separator &&
-		EqualsSelectExprs(a.Exprs, b.Exprs) &&
+		a.Name == b.Name &&
+		EqualsExprs(a.Exprs, b.Exprs) &&
 		EqualsOrderBy(a.OrderBy, b.OrderBy) &&
 		EqualsRefOfLimit(a.Limit, b.Limit)
 }
@@ -2654,6 +2658,7 @@ func EqualsRefOfMax(a, b *Max) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
+		a.Name == b.Name &&
 		EqualsExprs(a.Args, b.Args)
 }
 
@@ -2678,6 +2683,7 @@ func EqualsRefOfMin(a, b *Min) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
+		a.Name == b.Name &&
 		EqualsExprs(a.Args, b.Args)
 }
 
@@ -3448,6 +3454,7 @@ func EqualsRefOfSum(a, b *Sum) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
+		a.Name == b.Name &&
 		EqualsExprs(a.Args, b.Args)
 }
 
@@ -3830,6 +3837,12 @@ func EqualsAggrFunc(inA, inB AggrFunc) bool {
 			return false
 		}
 		return EqualsRefOfCountStar(a, b)
+	case *GroupConcatExpr:
+		b, ok := inB.(*GroupConcatExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfGroupConcatExpr(a, b)
 	case *Max:
 		b, ok := inB.(*Max)
 		if !ok {

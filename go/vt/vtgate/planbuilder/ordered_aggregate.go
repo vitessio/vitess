@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
 
@@ -264,7 +265,7 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 
 func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin logicalPlan) (rc *resultColumn, colNumber int, err error) {
 	aggrFunc, _ := expr.Expr.(sqlparser.AggrFunc)
-	opcode := engine.SupportedAggregates[aggrFunc.AggrName()]
+	opcode := engine.SupportedAggregates[strings.ToLower(aggrFunc.AggrName())]
 
 	if aggrFunc.GetArgs() != nil &&
 		len(aggrFunc.GetArgs()) != 1 {

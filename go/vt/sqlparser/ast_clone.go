@@ -1162,7 +1162,7 @@ func CloneRefOfGroupConcatExpr(n *GroupConcatExpr) *GroupConcatExpr {
 		return nil
 	}
 	out := *n
-	out.Exprs = CloneSelectExprs(n.Exprs)
+	out.Exprs = CloneExprs(n.Exprs)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	return &out
@@ -2627,6 +2627,8 @@ func CloneAggrFunc(in AggrFunc) AggrFunc {
 		return CloneRefOfCount(in)
 	case *CountStar:
 		return CloneRefOfCountStar(in)
+	case *GroupConcatExpr:
+		return CloneRefOfGroupConcatExpr(in)
 	case *Max:
 		return CloneRefOfMax(in)
 	case *Min:
