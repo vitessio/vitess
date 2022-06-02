@@ -293,7 +293,7 @@ func (*filePosFlavor) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (*filePosFlavor) supportsCapability(c *Conn, capability FlavorCapability) (bool, error) {
+func (*filePosFlavor) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
 	switch capability {
 	default:
 		return false, nil

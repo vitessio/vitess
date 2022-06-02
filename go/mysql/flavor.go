@@ -152,7 +152,7 @@ type flavor interface {
 
 	baseShowTablesWithSizes() string
 
-	supportsCapability(c *Conn, capability FlavorCapability) (bool, error)
+	supportsCapability(serverVersion string, capability FlavorCapability) (bool, error)
 }
 
 // flavors maps flavor names to their implementation.
@@ -529,5 +529,5 @@ func (c *Conn) BaseShowTables() string {
 
 // SupportsCapability checks if the database server supports the given capability
 func (c *Conn) SupportsCapability(capability FlavorCapability) (bool, error) {
-	return c.flavor.supportsCapability(c, capability)
+	return c.flavor.supportsCapability(c.ServerVersion, capability)
 }

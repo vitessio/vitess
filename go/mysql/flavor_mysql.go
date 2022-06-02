@@ -304,7 +304,7 @@ func (mysqlFlavor56) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (mysqlFlavor56) supportsCapability(c *Conn, capability FlavorCapability) (bool, error) {
+func (mysqlFlavor56) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
 	switch capability {
 	default:
 		return false, nil
@@ -317,7 +317,7 @@ func (mysqlFlavor57) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (mysqlFlavor57) supportsCapability(c *Conn, capability FlavorCapability) (bool, error) {
+func (mysqlFlavor57) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
 	switch capability {
 	default:
 		return false, nil
@@ -330,19 +330,19 @@ func (mysqlFlavor80) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (mysqlFlavor80) supportsCapability(c *Conn, capability FlavorCapability) (bool, error) {
+func (mysqlFlavor80) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
 	switch capability {
 	case FastDropTableFlavorCapability:
-		return c.ServerVersionAtLeast(8, 0, 23)
+		return ServerVersionAtLeast(serverVersion, 8, 0, 23)
 	case TransactionalGtidExecutedFlavorCapability:
-		return c.ServerVersionAtLeast(8, 0, 17)
+		return ServerVersionAtLeast(serverVersion, 8, 0, 17)
 	case InstantDDLFlavorCapability,
 		InstantAddLastColumnFlavorCapability,
 		InstantAddDropVirtualColumnFlavorCapability,
 		InstantChangeColumnDefaultFlavorCapability:
 		return true, nil
 	case InstantAddDropColumnFlavorCapability:
-		return c.ServerVersionAtLeast(8, 0, 29)
+		return ServerVersionAtLeast(serverVersion, 8, 0, 29)
 	default:
 		return false, nil
 	}
