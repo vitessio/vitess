@@ -188,10 +188,14 @@ func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, create
 		return nil
 	}
 	isVirtualColumn := func(colName string) bool {
-		if col := findColumn(colName); col != nil {
-			return col.Type.Options.As != nil
+		col := findColumn(colName)
+		if col == nil {
+			return false
 		}
-		return false
+		if col.Type.Options.As == nil {
+			return false
+		}
+		return col.Type.Options.Storage == sqlparser.VirtualStorage
 	}
 	colStringWithoutDefault := func(col *sqlparser.ColumnDefinition) string {
 		def := col.Type.Options.Default
