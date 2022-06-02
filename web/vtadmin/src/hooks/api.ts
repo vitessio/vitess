@@ -46,7 +46,7 @@ import {
     refreshState,
     runHealthCheck,
     deleteTablet,
-    reparentTablet,
+    refreshTabletReplicationSource,
     startReplication,
     stopReplication,
     setReadOnly,
@@ -167,15 +167,17 @@ export const useDeleteTablet = (
 };
 
 /**
- * useReparentTablet reparents a tablet to the current primary in the shard.
- * This only works if the current replication position matches the last known reparent action.
+ * useRefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO`
+ * on a tablet to replicate from the current primary in the shard. This only
+ * works if the current replica position matches the last known
+ * `CHANGE REPLICATION SOURCE TO` or failover action.
  */
-export const useReparentTablet = (
-    params: Parameters<typeof reparentTablet>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof reparentTablet>>, Error>
+export const useRefreshTabletReplicationSource = (
+    params: Parameters<typeof refreshTabletReplicationSource>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof refreshTabletReplicationSource>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof reparentTablet>>, Error>(() => {
-        return reparentTablet(params);
+    return useMutation<Awaited<ReturnType<typeof refreshTabletReplicationSource>>, Error>(() => {
+        return refreshTabletReplicationSource(params);
     }, options);
 };
 

@@ -274,18 +274,18 @@ export const deleteTablet = async ({ allowPrimary, clusterID, alias }: DeleteTab
     return pb.DeleteTabletResponse.create(result);
 };
 
-export interface ReparentTabletParams {
+export interface RefreshTabletReplicationSourceParams {
     clusterID: string;
     alias: string;
 }
 
-export const reparentTablet = async ({ clusterID, alias }: ReparentTabletParams) => {
+export const refreshTabletReplicationSource = async ({ clusterID, alias }: RefreshTabletReplicationSourceParams) => {
     const { result } = await vtfetch(`/api/tablet/${alias}/reparent`, { method: 'put' });
 
-    const err = pb.ReparentTabletResponse.verify(result);
+    const err = pb.RefreshTabletReplicationSourceResponse.verify(result);
     if (err) throw Error(err);
 
-    return pb.ReparentTabletResponse.create(result);
+    return pb.RefreshTabletReplicationSourceResponse.create(result);
 };
 
 export interface PingTabletParams {

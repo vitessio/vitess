@@ -20,7 +20,7 @@ import { useHistory } from 'react-router-dom';
 import { DeleteTabletParams } from '../../../api/http';
 import {
     useDeleteTablet,
-    useReparentTablet,
+    useRefreshTabletReplicationSource,
     useSetReadOnly,
     useSetReadWrite,
     useStartReplication,
@@ -56,13 +56,13 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
         onError: (error) => warn(`There was an error deleting tablet: ${error}`),
     });
 
-    const reparentTabletMutation = useReparentTablet(
+    const refreshTabletReplicationSourceMutation = useRefreshTabletReplicationSource(
         { alias, clusterID },
         {
             onSuccess: (result) => {
-                success(`Successfully reparented tablet ${alias} under primary ${result.primary}`, { autoClose: 7000 });
+                success(`Successfully refreshed tablet replication source for tablet ${alias} to replicate from primary ${result.primary}`, { autoClose: 7000 });
             },
-            onError: (error) => warn(`There was an error reparenting tablet: ${error}`),
+            onError: (error) => warn(`There was an error refreshing tablet replication source: ${error}`),
         }
     );
 
@@ -154,17 +154,17 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                         confirmationValue=""
                         description={
                             <>
-                                Reconnect replication for tablet <span className="font-bold">{alias}</span> to the
-                                current primary tablet. This only works if the current replication position matches the
+                                Refresh replication source for tablet <span className="font-bold">{alias}</span> to the
+                                current shard primary tablet. This only works if the current replication position matches the
                                 last known reparent action.
                             </>
                         }
                         disabled={primary}
                         documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#reparenttablet"
-                        loadedText="Reparent"
-                        loadingText="Reparenting..."
-                        mutation={reparentTabletMutation as UseMutationResult}
-                        title="Reparent"
+                        loadedText="Refresh"
+                        loadingText="Refreshing..."
+                        mutation={refreshTabletReplicationSourceMutation as UseMutationResult}
+                        title="Refresh Replication Source"
                         warnings={[primary && 'Command ReparentTablet cannot be run on the primary tablet.']}
                     />
                 </div>
