@@ -1228,6 +1228,15 @@
 			"Shard": "vreplication_migrate",
 			"RetryMax": 1,
 			"Tags": []
+		},
+		"vdiff2": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVDiff2"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_migrate",
+			"RetryMax": 1,
+			"Tags": []
 		}
 	}
 }
