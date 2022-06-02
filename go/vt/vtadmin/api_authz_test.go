@@ -191,6 +191,83 @@ func TestCreateShard(t *testing.T) {
 		assert.NotNil(t, resp, "actor %+v should be permitted to CreateShard", actor)
 	})
 }
+func TestDeleteKeyspace(t *testing.T) {
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Keyspace",
+					Actions:  []string{"delete"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(
+		testutil.BuildClusters(t, testutil.TestClusterConfig{
+			Cluster: &vtadminpb.Cluster{
+				Id:   "test",
+				Name: "test",
+			},
+			VtctldClient: newVtctldClient(),
+			Tablets:      newTabletList(),
+		}),
+		opts,
+	)
+
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.DeleteKeyspace(ctx, &vtadminpb.DeleteKeyspaceRequest{
+			ClusterId: "test",
+			Options: &vtctldatapb.DeleteKeyspaceRequest{
+				Keyspace: "test",
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to DeleteKeyspace", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to DeleteKeyspace", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.DeleteKeyspace(ctx, &vtadminpb.DeleteKeyspaceRequest{
+			ClusterId: "test",
+			Options: &vtctldatapb.DeleteKeyspaceRequest{
+				Keyspace: "test",
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to DeleteKeyspace", actor)
+	})
+}
 func TestGetClusters(t *testing.T) {
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{

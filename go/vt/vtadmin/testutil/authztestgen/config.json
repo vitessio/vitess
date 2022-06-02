@@ -87,6 +87,39 @@
             ]
         },
         {
+            "method": "DeleteKeyspace",
+            "rules": [
+                {
+                    "resource": "Keyspace",
+                    "actions": ["delete"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.DeleteKeyspaceRequest{\nClusterId: \"test\",\nOptions: &vtctldatapb.DeleteKeyspaceRequest{\nKeyspace: \"test\",\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
             "method": "GetClusters",
             "rules": [
                 {
