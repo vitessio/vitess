@@ -37,7 +37,7 @@ import (
 )
 
 /*
-  vdiff states: pending/completed/error
+  vdiff operation states: pending/completed/error
   vdiff table states: pending/completed/error
 */
 
@@ -51,10 +51,10 @@ type controller struct {
 	vde             *Engine // the singleton vdiff engine
 	done            chan struct{}
 
-	sources         map[string]*migrationSource // currently picked source tablets for this shard's data
-	vrepWhereClause string                      // todo rename
-	sourceKeyspace  string
-	tmc             tmclient.TabletManagerClient
+	sources        map[string]*migrationSource // currently picked source tablets for this shard's data
+	workflowFilter string
+	sourceKeyspace string
+	tmc            tmclient.TabletManagerClient
 
 	targetShardStreamer *shardStreamer
 	filter              *binlogdatapb.Filter            // vreplication row filter
@@ -64,7 +64,7 @@ type controller struct {
 func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFactory func() binlogplayer.DBClient,
 	ts *topo.Server, vde *Engine, options *tabletmanagerdata.VDiffOptions) (*controller, error) {
 
-	log.Infof("VDiff controller inited for %+v", row)
+	log.Infof("VDiff controller initializing for %+v", row)
 	id, _ := row["id"].ToInt64()
 
 	ct := &controller{
@@ -86,13 +86,11 @@ func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFac
 }
 
 func (ct *controller) Stop() {
-	log.Infof("Stop()")
 	ct.cancel()
 	<-ct.done
 }
 
 func (ct *controller) run(ctx context.Context) {
-	log.Infof("Start of run()")
 	defer func() {
 		log.Infof("vdiff stopped")
 		close(ct.done)
@@ -100,7 +98,7 @@ func (ct *controller) run(ctx context.Context) {
 
 	dbClient := ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
-		log.Errorf("db connect", err)
+		log.Errorf("db connect error: %v", err)
 		return
 	}
 	defer dbClient.Close()
@@ -112,11 +110,11 @@ func (ct *controller) run(ctx context.Context) {
 	query := fmt.Sprintf(sqlGetVDiffByID, ct.id)
 	qr, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 	if err != nil {
-		log.Errorf(fmt.Sprintf("no data for %s", query), err)
+		log.Errorf(fmt.Sprintf("No data for %s", query), err)
 		return
 	}
 	if len(qr.Rows) == 0 {
-		err := fmt.Errorf("missing vdiff row for %s", query)
+		err := fmt.Errorf("Missing vdiff row for %s", query)
 		log.Errorf("", err)
 		return
 	}
@@ -127,7 +125,7 @@ func (ct *controller) run(ctx context.Context) {
 	case "pending":
 		log.Infof("Starting vdiff")
 		if err := ct.start(ctx, dbClient); err != nil {
-			log.Errorf("init: %s", err)
+			log.Errorf("run() failed: %s", err)
 			insertVDiffLog(ctx, dbClient, ct.id, fmt.Sprintf("Error: %s", err))
 			if err := ct.updateState(dbClient, "error"); err != nil {
 				return
@@ -158,15 +156,14 @@ func (ct *controller) updateState(dbClient binlogplayer.DBClient, state string) 
 }
 
 func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient) error {
-	ct.vrepWhereClause = fmt.Sprintf("where workflow = %s and db_name = %s", encodeString(ct.workflow), encodeString(ct.vde.dbName))
-	query := fmt.Sprintf(sqlGetVReplicationEntry, ct.vrepWhereClause)
+	ct.workflowFilter = fmt.Sprintf("where workflow = %s and db_name = %s", encodeString(ct.workflow), encodeString(ct.vde.dbName))
+	query := fmt.Sprintf(sqlGetVReplicationEntry, ct.workflowFilter)
 	qr, err := withDDL.Exec(ct.vde.ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 	if err != nil {
 		return err
 	}
-	log.Infof("found %d streams for %s", len(qr.Rows), ct.workflow)
+	log.Infof("Found %d vreplication streams for %s", len(qr.Rows), ct.workflow)
 	for i, row := range qr.Named().Rows {
-
 		source := newMigrationSource()
 		sourceBytes, err := row["source"].ToBytes()
 		if err != nil {
@@ -174,7 +171,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 		}
 		var bls binlogdatapb.BinlogSource
 		if err := prototext.Unmarshal(sourceBytes, &bls); err != nil {
-			log.Errorf(err.Error())
+			log.Errorf("Failed to unmarshal vdiff binlog source: %v", err)
 			return err
 		}
 		source.shard = bls.Shard
@@ -199,7 +196,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 		return err
 	}
 	if err := wd.diff(ctx); err != nil {
-		log.Infof("wd.diff error %s", err)
+		log.Infof("wd.diff error %v", err)
 		return err
 	}
 

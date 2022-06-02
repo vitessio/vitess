@@ -8,7 +8,7 @@ import (
 )
 
 func (tm *TabletManager) VDiff(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
-	log.Infof("VDiff called for %+v", req)
+	log.Infof("VDiff called with %+v", req)
 	resp, err := tm.VDiffEngine.PerformVDiffAction(ctx, req)
 	return resp, err
 }

@@ -22,9 +22,7 @@ import (
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/vt/schema"
+	"github.com/google/uuid"
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
@@ -53,7 +51,8 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 		Id:     0,
 		Output: nil,
 	}
-	dbClient := vde.dbClientFactoryDba()
+	// We use the db_filtered user for vreplication related work
+	dbClient := vde.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
 	}
@@ -93,24 +92,24 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 			return nil, err
 		}
 	case ShowAction:
-		uuid := ""
-		if req.SubCommand == "last" {
+		vdiffUUID := ""
+		if req.SubCommand == LastActionArg {
 			query := fmt.Sprintf(sqlGetMostRecentVDiff, encodeString(req.Keyspace), encodeString(req.Workflow))
 			if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 				return nil, err
 			}
 			if len(qr.Rows) == 1 {
 				row := qr.Named().Row()
-				uuid = row.AsString("vdiff_uuid", "")
+				vdiffUUID = row.AsString("vdiff_uuid", "")
 			}
 		} else {
-			if schema.IsOnlineDDLUUID(req.SubCommand) {
-				uuid = req.SubCommand
+			if uuidt, err := uuid.Parse(req.SubCommand); err == nil {
+				vdiffUUID = uuidt.String()
 			}
 		}
-		if uuid != "" {
-			resp.VdiffUuid = uuid
-			query := fmt.Sprintf(sqlGetVDiffByKeyspaceWorkflowUUID, encodeString(req.Keyspace), encodeString(req.Workflow), encodeString(uuid))
+		if vdiffUUID != "" {
+			resp.VdiffUuid = vdiffUUID
+			query := fmt.Sprintf(sqlGetVDiffByKeyspaceWorkflowUUID, encodeString(req.Keyspace), encodeString(req.Workflow), encodeString(vdiffUUID))
 			if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 				return nil, err
 			}
@@ -120,19 +119,17 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 			case 1:
 				row := qr.Named().Row()
 				vdiffID, _ := row["id"].ToInt64()
-				log.Infof("before summary")
 				summary, err := vde.getVDiffSummary(vdiffID, dbClient)
-				log.Infof("after summary")
 				resp.Output = summary
 				if err != nil {
 					return nil, err
 				}
 			default:
-				return nil, fmt.Errorf("error: too many VDiffs found for keyspace %s and workflow %s", req.Keyspace, req.Workflow)
+				return nil, fmt.Errorf("error: too many VDiffs found (%d) for keyspace %s and workflow %s", len(qr.Rows), req.Keyspace, req.Workflow)
 			}
 		}
 		switch req.SubCommand {
-		case "all":
+		case AllActionArg:
 			if qr, err = withDDL.Exec(context.Background(), sqlGetAllVDiffs, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 				return nil, err
 			}
@@ -140,10 +137,10 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 
 			}
 			resp.Output = sqltypes.ResultToProto3(qr)
-		case "last":
+		case LastActionArg:
 		default:
-			if !schema.IsOnlineDDLUUID(req.SubCommand) {
-				return nil, fmt.Errorf("subcommand %s not supported", req.SubCommand)
+			if _, err := uuid.Parse(req.SubCommand); err != nil {
+				return nil, fmt.Errorf("action argument %s not supported", req.SubCommand)
 			}
 		}
 	default:

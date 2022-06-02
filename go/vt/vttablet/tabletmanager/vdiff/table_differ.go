@@ -131,14 +131,14 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClient binlogplayer.DBClient) error {
 	log.Infof("stopTargetVReplicationStreams")
 	ct := td.wd.ct
-	query := fmt.Sprintf("update _vt.vreplication set state = 'Stopped' %s", ct.vrepWhereClause)
+	query := fmt.Sprintf("update _vt.vreplication set state = 'Stopped' %s", ct.workflowFilter)
 	if _, err := ct.vde.vre.Exec(query); err != nil {
 		return err
 	}
 	// streams are no longer running because vre.Exec would have replaced old controllers and new ones will not start
 
 	// update position of all source streams
-	query = fmt.Sprintf("select id, source, pos from _vt.vreplication %s", ct.vrepWhereClause)
+	query = fmt.Sprintf("select id, source, pos from _vt.vreplication %s", ct.workflowFilter)
 	qr, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 	if err != nil {
 		return err
