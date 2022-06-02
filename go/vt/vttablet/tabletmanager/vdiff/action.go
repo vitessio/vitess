@@ -37,8 +37,15 @@ import (
 type VDiffAction string //nolint
 
 const (
-	CreateAction VDiffAction = "create"
-	ShowAction   VDiffAction = "show"
+	CreateAction  VDiffAction = "create"
+	ShowAction    VDiffAction = "show"
+	AllActionArg              = "all"
+	LastActionArg             = "last"
+)
+
+var (
+	Actions    = []VDiffAction{CreateAction, ShowAction}
+	ActionArgs = []string{AllActionArg, LastActionArg}
 )
 
 func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {

@@ -29,13 +29,14 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"unsafe"
 
 	"github.com/bndr/gotabulate"
+	"github.com/google/uuid"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 	"vitess.io/vitess/go/vt/wrangler"
 )
@@ -63,32 +64,41 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	var cmd vdiff.VDiffAction
-	var subCommand string
+	var action vdiff.VDiffAction
+	var actionArg string
 
-	usage := fmt.Errorf("usage: vdiff -- --v2 <keyspace>.<workflow> command [sub_command|vdiff_uuid]")
+	usage := fmt.Errorf("usage: vdiff -- --v2 <keyspace>.<workflow> %s [%s|<uuid>]", strings.Join(*(*[]string)(unsafe.Pointer(&vdiff.Actions)), "|"), strings.Join(vdiff.ActionArgs, "|"))
 	switch subFlags.NArg() {
 	case 1: // for backward compatibility with vdiff1
-		cmd = vdiff.CreateAction
+		action = vdiff.CreateAction
 	case 2:
-		cmd = vdiff.VDiffAction(strings.ToLower(subFlags.Arg(1)))
-		if cmd != vdiff.CreateAction {
+		action = vdiff.VDiffAction(strings.ToLower(subFlags.Arg(1)))
+		if action != vdiff.CreateAction {
 			return usage
 		}
 	case 3:
-		cmd = vdiff.VDiffAction(strings.ToLower(subFlags.Arg(1)))
-		subCommand = strings.ToLower(subFlags.Arg(2))
+		action = vdiff.VDiffAction(strings.ToLower(subFlags.Arg(1)))
+		actionArg = strings.ToLower(subFlags.Arg(2))
+		switch actionArg {
+		case vdiff.AllActionArg, vdiff.LastActionArg:
+		default:
+			_, err := uuid.Parse(actionArg)
+			if err != nil {
+				return err
+			}
+			return usage
+		}
 	default:
 		return usage
 	}
-	if cmd == "" {
-		return fmt.Errorf("invalid command %s", subFlags.Arg(1))
+	if action == "" {
+		return fmt.Errorf("invalid action %s", subFlags.Arg(1))
 	}
 	keyspace, workflowName, err := splitKeyspaceWorkflow(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	log.Infof("VDiff2 Action is %s, args %s", cmd, strings.Join(args, " "))
+	log.Infof("VDiff2 action is %s, args %s", action, strings.Join(args, " "))
 
 	if *maxRows <= 0 {
 		return fmt.Errorf("maximum number of rows to compare needs to be greater than 0")
@@ -116,47 +126,47 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		},
 	}
 
-	var uuid string
-	switch cmd {
+	var vdiffUUID uuid.UUID
+	switch action {
 	case vdiff.CreateAction:
-		uuid, err = schema.CreateOnlineDDLUUID()
+		vdiffUUID, err = uuid.NewUUID()
 		if err != nil {
 			return err
 		}
 	case vdiff.ShowAction:
-		switch subCommand {
-		case "all", "last":
+		switch actionArg {
+		case vdiff.AllActionArg, vdiff.LastActionArg:
 		default:
-			if !schema.IsOnlineDDLUUID(subCommand) {
-				return fmt.Errorf("can only show specific migration, provide valid uuid")
+			vdiffUUID, err = uuid.Parse(actionArg)
+			if err != nil {
+				return fmt.Errorf("can only show specific migration, provide valid uuid; view all with: vdiff -- --v2 show all")
 			}
-			uuid = subCommand
 		}
 	default:
-		return fmt.Errorf("invalid command %s", cmd)
+		return fmt.Errorf("invalid command %s", action)
 	}
 	type ErrorResponse struct {
 		Error string
 	}
-	output, err := wr.VDiff2(ctx, keyspace, workflowName, cmd, subCommand, uuid, options)
+	output, err := wr.VDiff2(ctx, keyspace, workflowName, action, actionArg, vdiffUUID.String(), options)
 	if err != nil {
 		log.Errorf("vdiff2 returning with error: %v", err)
 		return err
 	}
 
-	switch cmd {
+	switch action {
 	case vdiff.CreateAction:
-		showVDiff2CreateResponse(wr, *format, uuid)
+		showVDiff2CreateResponse(wr, *format, vdiffUUID.String())
 	case vdiff.ShowAction:
 		if output == nil {
 			return fmt.Errorf("invalid response from show command")
 		}
 		log.Infof("show action: %+v", output)
-		if err := showVDiff2ShowResponse(wr, *format, keyspace, workflowName, subCommand, output); err != nil {
+		if err := showVDiff2ShowResponse(wr, *format, keyspace, workflowName, actionArg, output); err != nil {
 			return err
 		}
 	default:
-		return fmt.Errorf("action %s not valid", cmd)
+		return fmt.Errorf("action %s not valid", action)
 	}
 	return nil
 }
@@ -247,25 +257,32 @@ func displayListings(listings []*VDiffListing) string {
 	return str
 }
 
-func showVDiff2ShowResponse(wr *wrangler.Wrangler, format, keyspace, workflowName, subCommand string, output *wrangler.VDiffOutput) error {
-	var uuid string
-	if schema.IsOnlineDDLUUID(subCommand) {
-		uuid = subCommand
-	}
-	if subCommand == "last" {
+func showVDiff2ShowResponse(wr *wrangler.Wrangler, format, keyspace, workflowName, actionArg string, output *wrangler.VDiffOutput) error {
+	var vdiffUUID uuid.UUID
+	var err error
+	switch actionArg {
+	case vdiff.AllActionArg:
+		return showVDiff2ShowRecent(wr, format, keyspace, workflowName, actionArg, output)
+	case vdiff.LastActionArg:
 		for _, resp := range output.Responses {
-			uuid = resp.VdiffUuid
+			vdiffUUID, err = uuid.Parse(resp.VdiffUuid)
+			if err != nil {
+				return err
+			}
 			break
 		}
-	}
-	switch subCommand {
-	case "all":
-		return showVDiff2ShowRecent(wr, format, keyspace, workflowName, subCommand, output)
+		fallthrough
 	default:
-		if len(output.Responses) == 0 {
-			return fmt.Errorf("no response received for vdiff2 show of %s.%s(%s)", keyspace, workflowName, uuid)
+		if vdiffUUID == uuid.Nil { // then it must be passed as the action arg
+			vdiffUUID, err = uuid.Parse(actionArg)
+			if err != nil {
+				return err
+			}
 		}
-		return showVDiff2ShowSingleSummary(wr, format, keyspace, workflowName, uuid, output)
+		if len(output.Responses) == 0 {
+			return fmt.Errorf("no response received for vdiff2 show of %s.%s(%s)", keyspace, workflowName, vdiffUUID.String())
+		}
+		return showVDiff2ShowSingleSummary(wr, format, keyspace, workflowName, vdiffUUID.String(), output)
 	}
 }
 
