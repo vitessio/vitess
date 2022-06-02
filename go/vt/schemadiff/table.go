@@ -1726,7 +1726,7 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
 			case *sqlparser.ColName:
-				referencedColumns = append(referencedColumns, node.Name.String())
+				referencedColumns = append(referencedColumns, node.Name.Lowered())
 			}
 			return true, nil
 		}, check.Expr)
@@ -1858,7 +1858,7 @@ func (c *CreateTableEntity) validate() error {
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
 			case *sqlparser.ColName:
-				referencedColumns = append(referencedColumns, node.Name.String())
+				referencedColumns = append(referencedColumns, node.Name.Lowered())
 			}
 			return true, nil
 		}, check.Expr)

@@ -1301,6 +1301,12 @@ func TestValidate(t *testing.T) {
 			alter:     "alter table t add constraint unix_epoch check (d < '1970-01-01' and f < '1970-01-01')",
 			expectErr: &InvalidColumnInCheckConstraintError{Table: "t", Constraint: "unix_epoch", Column: "f"},
 		},
+		{
+			name:  "constraint check added with camelcase column",
+			from:  "create table t (id int, dateT datetime, e datetime, primary key (id))",
+			alter: "alter table t add constraint unix_epoch check (dateT < '1970-01-01')",
+			to:    "create table t (id int, dateT datetime, e datetime, primary key (id), constraint unix_epoch check (dateT < '1970-01-01'))",
+		},
 		// Foreign keys
 		{
 			name:      "existing foreign key, no such column",
