@@ -60,7 +60,10 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
         { alias, clusterID },
         {
             onSuccess: (result) => {
-                success(`Successfully refreshed tablet replication source for tablet ${alias} to replicate from primary ${result.primary}`, { autoClose: 7000 });
+                success(
+                    `Successfully refreshed tablet replication source for tablet ${alias} to replicate from primary ${result.primary}`,
+                    { autoClose: 7000 }
+                );
             },
             onError: (error) => warn(`There was an error refreshing tablet replication source: ${error}`),
         }
@@ -155,8 +158,8 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
                         description={
                             <>
                                 Refresh replication source for tablet <span className="font-bold">{alias}</span> to the
-                                current shard primary tablet. This only works if the current replication position matches the
-                                last known reparent action.
+                                current shard primary tablet. This only works if the current replication position
+                                matches the last known reparent action.
                             </>
                         }
                         disabled={primary}
