@@ -1641,6 +1641,10 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 				ctx = _ctx
 			}
 
+			durability, err := GetDurabilityPolicy("none")
+			require.NoError(t, err)
+			tt.opts.durability = durability
+
 			pos, err := pr.performGracefulPromotion(
 				ctx,
 				tt.ev,
@@ -1790,10 +1794,12 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 				ctx = _ctx
 			}
 
+			durability, err := GetDurabilityPolicy("none")
+			require.NoError(t, err)
 			pos, err := pr.performInitialPromotion(
 				ctx,
 				tt.primaryElect,
-				PlannedReparentOptions{},
+				PlannedReparentOptions{durability: durability},
 			)
 
 			if tt.shouldErr {
@@ -2505,7 +2511,9 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 				ctx = _ctx
 			}
 
-			rp, err := pr.performPotentialPromotion(ctx, tt.keyspace, tt.shard, tt.primaryElect, tt.tabletMap)
+			durability, err := GetDurabilityPolicy("none")
+			require.NoError(t, err)
+			rp, err := pr.performPotentialPromotion(ctx, tt.keyspace, tt.shard, tt.primaryElect, tt.tabletMap, PlannedReparentOptions{durability: durability})
 			if tt.shouldErr {
 				assert.Error(t, err)
 
@@ -3578,7 +3586,10 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 			t.Parallel()
 
 			pr := NewPlannedReparenter(nil, tt.tmc, logger)
-			err := pr.reparentTablets(ctx, tt.ev, tt.reparentJournalPosition, tt.tabletMap, tt.opts)
+			durability, err := GetDurabilityPolicy("none")
+			require.NoError(t, err)
+			tt.opts.durability = durability
+			err = pr.reparentTablets(ctx, tt.ev, tt.reparentJournalPosition, tt.tabletMap, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
 

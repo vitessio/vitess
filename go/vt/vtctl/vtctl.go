@@ -192,7 +192,7 @@ var commands = []commandGroup{
 			{
 				name:   "DeleteTablet",
 				method: commandDeleteTablet,
-				params: "[-allow_primary] <tablet alias> ...",
+				params: "[--allow_primary] <tablet alias> ...",
 				help:   "Deletes tablet(s) from the topology.",
 			},
 			{

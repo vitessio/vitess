@@ -142,6 +142,13 @@ func TestCreateTableDiff(t *testing.T) {
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `id` int PRIMARY KEY AFTER `d`",
 		},
 		{
+			name:  "reorder column, far jump with case sentivity",
+			from:  "create table t1 (id int primary key, a int, b int, c int, d int)",
+			to:    "create table t2 (a int, B int, c int, d int, id int primary key)",
+			diff:  "alter table t1 modify column B int, modify column id int primary key after d",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `B` int, MODIFY COLUMN `id` int PRIMARY KEY AFTER `d`",
+		},
+		{
 			name:  "reorder column, far jump, another reorder",
 			from:  "create table t1 (id int primary key, a int, b int, c int, d int)",
 			to:    "create table t2 (a int, c int, b int, d int, id int primary key)",
@@ -1060,6 +1067,12 @@ func TestValidate(t *testing.T) {
 			to:    "create table t (id int primary key, i int, key i_idx(i))",
 		},
 		{
+			name:  "drop and add same column, ok",
+			from:  "create table t (id int primary key, i int, i2 int, key i_idx(i))",
+			alter: "alter table t drop column i2, add column i2 bigint not null",
+			to:    "create table t (id int primary key, i int, i2 bigint not null, key i_idx(i))",
+		},
+		{
 			name:  "drop column, affect keys",
 			from:  "create table t (id int primary key, i int, key i_idx(i))",
 			alter: "alter table t drop column i",
@@ -1124,7 +1137,7 @@ func TestValidate(t *testing.T) {
 			name:      "drop column used by partitions, column case",
 			from:      "create table t (id int, i int, primary key (id, i), unique key i_idx(i)) partition by hash (I) partitions 4",
 			alter:     "alter table t drop column i",
-			expectErr: &InvalidColumnInPartitionError{Table: "t", Column: "i"},
+			expectErr: &InvalidColumnInPartitionError{Table: "t", Column: "I"},
 		},
 		{
 			name:      "drop column used by partitions, function",
@@ -1168,6 +1181,12 @@ func TestValidate(t *testing.T) {
 			from:      "create table t (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20))",
 			alter:     "alter table t add partition (partition p2 values less than (30))",
 			expectErr: &ApplyDuplicatePartitionError{Table: "t", Partition: "p2"},
+		},
+		{
+			name:      "add range partition, duplicate",
+			from:      "create table t (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20))",
+			alter:     "alter table t add partition (partition P2 values less than (30))",
+			expectErr: &ApplyDuplicatePartitionError{Table: "t", Partition: "P2"},
 		},
 		{
 			name:      "add range partition, no partitioning",
@@ -1239,7 +1258,7 @@ func TestValidate(t *testing.T) {
 			name:      "drop column used by a generated column, column case",
 			from:      "create table t (id int, i int, neg int as (0-I), primary key (id))",
 			alter:     "alter table t drop column I",
-			expectErr: &InvalidColumnInGeneratedColumnError{Table: "t", Column: "i", GeneratedColumn: "neg"},
+			expectErr: &InvalidColumnInGeneratedColumnError{Table: "t", Column: "I", GeneratedColumn: "neg"},
 		},
 		{
 			name:      "add generated column referencing nonexistent column",
@@ -1271,6 +1290,15 @@ func TestValidate(t *testing.T) {
 			alter: "alter table t add index m ((month(d)))",
 			to:    "create table t (id int, d datetime, primary key (id), key m ((month(d))))",
 		},
+		// This case slightly diverges right now from MySQL behavior where a referenced column
+		// gets normalized to the casing it has in the table definition. This version here
+		// still works though.
+		{
+			name:  "add functional index referencing existing column with different case",
+			from:  "create table t (id int, d datetime, primary key (id))",
+			alter: "alter table t add index m ((month(D)))",
+			to:    "create table t (id int, d datetime, primary key (id), key m ((month(D))))",
+		},
 		{
 			name:  "constraint check which only uses single drop column",
 			from:  "create table t (id int, d datetime, primary key (id), constraint unix_epoch check (d < '1970-01-01'))",
@@ -1301,6 +1329,18 @@ func TestValidate(t *testing.T) {
 			alter:     "alter table t add constraint unix_epoch check (d < '1970-01-01' and f < '1970-01-01')",
 			expectErr: &InvalidColumnInCheckConstraintError{Table: "t", Constraint: "unix_epoch", Column: "f"},
 		},
+		{
+			name:  "constraint check added with camelcase column",
+			from:  "create table t (id int, dateT datetime, e datetime, primary key (id))",
+			alter: "alter table t add constraint unix_epoch check (dateT < '1970-01-01')",
+			to:    "create table t (id int, dateT datetime, e datetime, primary key (id), constraint unix_epoch check (dateT < '1970-01-01'))",
+		},
+		{
+			name:  "constraint check added with camelcase column",
+			from:  "create table t (id int, dateT datetime, e datetime, primary key (id), constraint unix_epoch check (dateT < '1970-01-01'))",
+			alter: "alter table t drop column e",
+			to:    "create table t (id int, dateT datetime, primary key (id), constraint unix_epoch check (dateT < '1970-01-01'))",
+		},
 		// Foreign keys
 		{
 			name:      "existing foreign key, no such column",
@@ -1313,6 +1353,12 @@ func TestValidate(t *testing.T) {
 			from:      "create table t (id int primary key, i int)",
 			alter:     "alter table t add constraint f foreign key (z) references parent(id)",
 			expectErr: &InvalidColumnInForeignKeyConstraintError{Table: "t", Constraint: "f", Column: "z"},
+		},
+		{
+			name:  "change with constraints with uppercase columns",
+			from:  "CREATE TABLE `Machine` (id int primary key, `a` int, `B` int, PRIMARY KEY (`id`), CONSTRAINT `chk` CHECK (`B` >= `a`))",
+			alter: "ALTER TABLE `Machine` MODIFY COLUMN `id` bigint primary key",
+			to:    "CREATE TABLE `Machine` (id bigint primary key, `a` int, `B` int, PRIMARY KEY (`id`), CONSTRAINT `chk` CHECK (`B` >= `a`))",
 		},
 	}
 	hints := DiffHints{}
@@ -1510,9 +1556,19 @@ func TestNormalize(t *testing.T) {
 			to:   "CREATE TABLE `a` (\n\t`id` int NOT NULL PRIMARY KEY\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci\nPARTITION BY RANGE (`id`)\n(PARTITION `p10` VALUES LESS THAN (10) ENGINE InnoDB)",
 		},
 		{
+			name: "generates a name for a key with proper casing",
+			from: "create table t (id int, I int, index i (i), index(I))",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`I` int,\n\tKEY `i` (`i`),\n\tKEY `I_2` (`I`)\n)",
+		},
+		{
 			name: "generates a name for checks",
 			from: "create table t (id int NOT NULL, test int NOT NULL DEFAULT 0, PRIMARY KEY (id), CHECK ((test >= 0)))",
 			to:   "CREATE TABLE `t` (\n\t`id` int NOT NULL,\n\t`test` int NOT NULL DEFAULT 0,\n\tPRIMARY KEY (`id`),\n\tCONSTRAINT `t_chk_1` CHECK (`test` >= 0)\n)",
+		},
+		{
+			name: "generates a name for checks with proper casing",
+			from: "create table t (id int NOT NULL, test int NOT NULL DEFAULT 0, PRIMARY KEY (id), CONSTRAINT t_CHK_1 CHECK (test >= 0), CHECK ((test >= 0)))",
+			to:   "CREATE TABLE `t` (\n\t`id` int NOT NULL,\n\t`test` int NOT NULL DEFAULT 0,\n\tPRIMARY KEY (`id`),\n\tCONSTRAINT `t_CHK_1` CHECK (`test` >= 0),\n\tCONSTRAINT `t_chk_2` CHECK (`test` >= 0)\n)",
 		},
 		{
 			name: "generates a name for foreign key constraints",

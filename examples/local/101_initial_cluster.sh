@@ -39,6 +39,9 @@ for i in 100 101 102; do
 	CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ./scripts/vttablet-up.sh
 done
 
+# set the correct durability policy for the keyspace
+vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-policy=semi_sync commerce
+
 # set one of the replicas to primary
 vtctldclient PlannedReparentShard commerce/0 --new-primary zone1-100
 
