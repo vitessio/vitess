@@ -204,11 +204,11 @@ Instead the durability policy for a given keyspace will be stored in the keyspac
 
 #### New and Augmented Commands
 The vtctld command `CreateKeyspace` has been augmented to take in an additional argument called `durability-policy` which will
-allow the users to set the correct durability policy at the creation of keyspaces.
+allow users to set the desired durability policy for a keyspace at creation time.
 
-For existing keyspaces, a new command `SetKeyspaceDurabilityPolicy` has been added, which allows the users to change the
+For existing keyspaces, a new command `SetKeyspaceDurabilityPolicy` has been added, which allows users to change the
 durability policy of an existing keyspace.
 
-If semi-sync is not being used then durability policy should be set to `none` in the keyspace information. This is also the default option.
+If semi-sync is not being used then durability policy should be set to `none` for the keyspace. This is also the default option.
 
-If semi-sync is being used then durability policy should be set to `semi_sync` in the keyspace information and `-enable_semi_sync` should be set in vttablets.
+If semi-sync is being used then durability policy should be set to `semi_sync` for the keyspace and `-enable_semi_sync` should be set on vttablets.
