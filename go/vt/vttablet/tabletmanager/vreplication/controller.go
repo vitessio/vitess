@@ -48,7 +48,7 @@ var (
 	_          = flag.Duration("vreplication_healthcheck_timeout", 1*time.Minute, "healthcheck retry delay")
 	retryDelay = flag.Duration("vreplication_retry_delay", 5*time.Second, "delay before retrying a failed workflow event in the replication phase")
 
-	maxTimeToRetryErrors = flag.Duration("vreplication_max_time_to_retry_errors", 1*time.Minute, "stop trying to retry after this time")
+	maxTimeToRetryErrors = flag.Duration("vreplication_max_time_to_retry_errors", 15*time.Minute, "stop trying to retry after this time")
 )
 
 // controller is created by Engine. Members are initialized upfront.
