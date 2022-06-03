@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/orchestrator/test"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 )
 
 func TestGetReplicationAnalysis(t *testing.T) {
@@ -439,8 +438,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 			if tt.durability == "" {
 				tt.durability = "none"
 			}
-			err := reparentutil.SetDurabilityPolicy(tt.durability)
-			require.NoError(t, err)
+			SetDurabilityPolicy(tt.durability)
 
 			var rowMaps []sqlutils.RowMap
 			for _, analysis := range tt.info {
