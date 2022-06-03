@@ -255,10 +255,10 @@ func stopReplicationAndBuildStatusMaps(
 
 				primaryStatus, err = tmc.DemotePrimary(groupCtx, tabletInfo.Tablet)
 				if err != nil {
-					msg := "replica %v thinks it's primary but we failed to demote it"
-					err = vterrors.Wrapf(err, msg+": %v", alias, err)
+					msg := "replica %v thinks it's primary but we failed to demote it: %v"
+					err = vterrors.Wrapf(err, msg, alias, err)
 
-					logger.Warningf(msg+": %v", alias, err)
+					logger.Warningf(msg, alias, err)
 					return
 				}
 
