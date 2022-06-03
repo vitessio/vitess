@@ -69,7 +69,7 @@ func (gc *Gen4CompareV3) NeedsTransaction() bool {
 // TryExecute implements the Primitive interface
 func (gc *Gen4CompareV3) TryExecute(
 	vcursor VCursor,
-	routing *RoutingParameters,
+	routing *RouteDestination,
 	bindVars map[string]*querypb.BindVariable,
 	wantfields bool,
 ) (*sqltypes.Result, error) {
@@ -95,7 +95,7 @@ func (gc *Gen4CompareV3) TryExecute(
 // TryStreamExecute implements the Primitive interface
 func (gc *Gen4CompareV3) TryStreamExecute(
 	vcursor VCursor,
-	routing *RoutingParameters,
+	routing *RouteDestination,
 	bindVars map[string]*querypb.BindVariable,
 	wantfields bool,
 	callback func(*sqltypes.Result) error,
@@ -105,7 +105,7 @@ func (gc *Gen4CompareV3) TryStreamExecute(
 	v3Result, gen4Result := &sqltypes.Result{}, &sqltypes.Result{}
 
 	if gc.Gen4 != nil {
-		gen4Err = gc.Gen4.TryStreamExecute(vcursor, nil, bindVars, wantfields, func(result *sqltypes.Result) error {
+		gen4Err = gc.Gen4.TryStreamExecute(vcursor, routing, bindVars, wantfields, func(result *sqltypes.Result) error {
 			mu.Lock()
 			defer mu.Unlock()
 			gen4Result.AppendResult(result)
@@ -113,7 +113,7 @@ func (gc *Gen4CompareV3) TryStreamExecute(
 		})
 	}
 	if gc.V3 != nil {
-		v3Err = gc.V3.TryStreamExecute(vcursor, nil, bindVars, wantfields, func(result *sqltypes.Result) error {
+		v3Err = gc.V3.TryStreamExecute(vcursor, routing, bindVars, wantfields, func(result *sqltypes.Result) error {
 			mu.Lock()
 			defer mu.Unlock()
 			v3Result.AppendResult(result)

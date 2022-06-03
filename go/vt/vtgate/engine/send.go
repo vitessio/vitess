@@ -83,7 +83,7 @@ func (s *Send) GetTableName() string {
 }
 
 // TryExecute implements Primitive interface
-func (s *Send) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (s *Send) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
 	if err != nil {
 		return nil, err
@@ -135,7 +135,7 @@ func copyBindVars(in map[string]*querypb.BindVariable) map[string]*querypb.BindV
 }
 
 // TryStreamExecute implements Primitive interface
-func (s *Send) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (s *Send) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
 	if err != nil {
 		return err

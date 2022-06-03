@@ -84,8 +84,8 @@ type (
 		AutocommitApproval() bool
 
 		// Primitive functions
-		ExecutePrimitive(primitive Primitive, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
-		StreamExecutePrimitive(primitive Primitive, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
+		ExecutePrimitive(primitive Primitive, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
+		StreamExecutePrimitive(primitive Primitive, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
 
 		// Shard-level functions.
 		ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error)
@@ -221,8 +221,8 @@ type (
 		GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 		NeedsTransaction() bool
 
-		TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
-		TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
+		TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
+		TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
 
 		// Inputs is a slice containing the inputs to this Primitive
 		Inputs() []Primitive
@@ -230,6 +230,11 @@ type (
 		// description is the description, sans the inputs, of this Primitive.
 		// to get the plan description with all children, use PrimitiveToPlanDescription()
 		description() PrimitiveDescription
+	}
+
+	RouteDestination struct {
+		Shards   []*srvtopo.ResolvedShard
+		BindVars map[string]*querypb.BindVariable
 	}
 
 	// noInputs default implementation for Primitives that are leaves

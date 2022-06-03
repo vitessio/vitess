@@ -1257,11 +1257,11 @@ func (vc *contextVCursor) ConnCollation() collations.ID {
 	return collations.CollationBinaryID
 }
 
-func (vc *contextVCursor) ExecutePrimitive(primitive engine.Primitive, routing *engine.RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (vc *contextVCursor) ExecutePrimitive(primitive engine.Primitive, routing *engine.RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return primitive.TryExecute(vc, routing, bindVars, wantfields)
 }
 
-func (vc *contextVCursor) StreamExecutePrimitive(primitive engine.Primitive, routing *engine.RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (vc *contextVCursor) StreamExecutePrimitive(primitive engine.Primitive, routing *engine.RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	return primitive.TryStreamExecute(vc, routing, bindVars, wantfields, callback)
 }
 

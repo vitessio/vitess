@@ -70,7 +70,7 @@ func (v *RevertMigration) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (v *RevertMigration) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
+func (v *RevertMigration) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	result = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -110,7 +110,7 @@ func (v *RevertMigration) TryExecute(vcursor VCursor, routing *RoutingParameters
 }
 
 // TryStreamExecute implements the Primitive interface
-func (v *RevertMigration) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (v *RevertMigration) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	results, err := v.TryExecute(vcursor, routing, bindVars, wantfields)
 	if err != nil {
 		return err

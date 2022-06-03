@@ -84,7 +84,7 @@ func (sa *ScalarAggregate) NeedsTransaction() bool {
 }
 
 // TryExecute implements the Primitive interface
-func (sa *ScalarAggregate) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (sa *ScalarAggregate) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	result, err := vcursor.ExecutePrimitive(sa.Input, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -125,7 +125,7 @@ func (sa *ScalarAggregate) TryExecute(vcursor VCursor, routing *RoutingParameter
 }
 
 // TryStreamExecute implements the Primitive interface
-func (sa *ScalarAggregate) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (sa *ScalarAggregate) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	cb := func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(sa.TruncateColumnCount))
 	}

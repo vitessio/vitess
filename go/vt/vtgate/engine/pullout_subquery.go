@@ -62,7 +62,7 @@ func (ps *PulloutSubquery) GetTableName() string {
 }
 
 // TryExecute satisfies the Primitive interface.
-func (ps *PulloutSubquery) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (ps *PulloutSubquery) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	combinedVars, err := ps.execSubquery(vcursor, routing, bindVars)
 	if err != nil {
 		return nil, err
@@ -71,7 +71,7 @@ func (ps *PulloutSubquery) TryExecute(vcursor VCursor, routing *RoutingParameter
 }
 
 // TryStreamExecute performs a streaming exec.
-func (ps *PulloutSubquery) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ps *PulloutSubquery) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	combinedVars, err := ps.execSubquery(vcursor, routing, bindVars)
 	if err != nil {
 		return err
@@ -110,7 +110,7 @@ var (
 	errSqColumn = vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "subquery returned more than one column")
 )
 
-func (ps *PulloutSubquery) execSubquery(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
+func (ps *PulloutSubquery) execSubquery(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
 	subqueryBindVars := make(map[string]*querypb.BindVariable, len(bindVars))
 	for k, v := range bindVars {
 		subqueryBindVars[k] = v

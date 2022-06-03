@@ -63,7 +63,7 @@ type HashJoin struct {
 }
 
 // TryExecute implements the Primitive interface
-func (hj *HashJoin) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (hj *HashJoin) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	lresult, err := vcursor.ExecutePrimitive(hj.Left, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -129,7 +129,7 @@ func (hj *HashJoin) buildProbeTable(lresult *sqltypes.Result) (map[evalengine.Ha
 }
 
 // TryStreamExecute implements the Primitive interface
-func (hj *HashJoin) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (hj *HashJoin) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	// build the probe table from the LHS result
 	probeTable := map[evalengine.HashCode][]sqltypes.Row{}
 	var lfields []*querypb.Field

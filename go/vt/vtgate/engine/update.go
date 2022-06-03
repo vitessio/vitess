@@ -70,7 +70,7 @@ func (upd *Update) GetTableName() string {
 }
 
 // TryExecute performs a non-streaming exec.
-func (upd *Update) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (upd *Update) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if upd.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(upd.QueryTimeout) * time.Millisecond)
 		defer cancel()
@@ -97,7 +97,7 @@ func (upd *Update) TryExecute(vcursor VCursor, routing *RoutingParameters, bindV
 }
 
 // TryStreamExecute performs a streaming exec.
-func (upd *Update) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (upd *Update) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	res, err := upd.TryExecute(vcursor, routing, bindVars, wantfields)
 	if err != nil {
 		return err

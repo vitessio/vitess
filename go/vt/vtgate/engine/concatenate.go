@@ -85,7 +85,7 @@ func formatTwoOptionsNicely(a, b string) string {
 var ErrWrongNumberOfColumnsInSelect = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
 
 // TryExecute performs a non-streaming exec.
-func (c *Concatenate) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (c *Concatenate) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	res, err := c.execSources(vcursor, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -141,7 +141,7 @@ func (c *Concatenate) getFields(res []*sqltypes.Result) ([]*querypb.Field, error
 	return fields, nil
 }
 
-func (c *Concatenate) execSources(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
+func (c *Concatenate) execSources(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
 	results := make([]*sqltypes.Result, len(c.Sources))
 	var wg sync.WaitGroup
 	var outerErr error
@@ -167,7 +167,7 @@ func (c *Concatenate) execSources(vcursor VCursor, routing *RoutingParameters, b
 }
 
 // TryStreamExecute performs a streaming exec.
-func (c *Concatenate) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (c *Concatenate) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var seenFields []*querypb.Field
 	var outerErr error
 

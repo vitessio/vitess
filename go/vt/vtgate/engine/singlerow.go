@@ -45,7 +45,7 @@ func (s *SingleRow) GetTableName() string {
 }
 
 // TryExecute performs a non-streaming exec.
-func (s *SingleRow) TryExecute(VCursor, *RoutingParameters, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
+func (s *SingleRow) TryExecute(VCursor, *RouteDestination, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
 	result := sqltypes.Result{
 		Rows: [][]sqltypes.Value{
 			{},
@@ -55,7 +55,7 @@ func (s *SingleRow) TryExecute(VCursor, *RoutingParameters, map[string]*querypb.
 }
 
 // TryStreamExecute performs a streaming exec.
-func (s *SingleRow) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (s *SingleRow) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	res, err := s.TryExecute(vcursor, routing, bindVars, wantfields)
 	if err != nil {
 		return err

@@ -48,7 +48,7 @@ func (s SQLCalcFoundRows) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (s SQLCalcFoundRows) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (s SQLCalcFoundRows) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	limitQr, err := vcursor.ExecutePrimitive(s.LimitPrimitive, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ func (s SQLCalcFoundRows) TryExecute(vcursor VCursor, routing *RoutingParameters
 }
 
 // TryStreamExecute implements the Primitive interface
-func (s SQLCalcFoundRows) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (s SQLCalcFoundRows) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	err := vcursor.StreamExecutePrimitive(s.LimitPrimitive, routing, bindVars, wantfields, callback)
 	if err != nil {
 		return err

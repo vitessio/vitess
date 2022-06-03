@@ -52,7 +52,7 @@ func (l *Limit) GetTableName() string {
 }
 
 // TryExecute satisfies the Primitive interface.
-func (l *Limit) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (l *Limit) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, offset, err := l.getCountAndOffset(vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -82,7 +82,7 @@ func (l *Limit) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars
 }
 
 // TryStreamExecute satisfies the Primitive interface.
-func (l *Limit) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (l *Limit) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	count, offset, err := l.getCountAndOffset(vcursor, bindVars)
 	if err != nil {
 		return err

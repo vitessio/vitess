@@ -65,7 +65,7 @@ func (f *fakePrimitive) GetTableName() string {
 	return "fakeTable"
 }
 
-func (f *fakePrimitive) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (f *fakePrimitive) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("Execute %v %v", printBindVars(bindVars), wantfields))
 	if f.results == nil {
 		return nil, f.sendErr
@@ -79,7 +79,7 @@ func (f *fakePrimitive) TryExecute(vcursor VCursor, routing *RoutingParameters, 
 	return r, nil
 }
 
-func (f *fakePrimitive) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (f *fakePrimitive) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	f.log = append(f.log, fmt.Sprintf("StreamExecute %v %v", printBindVars(bindVars), wantfields))
 	if f.results == nil {
 		return f.sendErr

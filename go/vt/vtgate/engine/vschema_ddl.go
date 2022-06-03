@@ -64,7 +64,7 @@ func (v *AlterVSchema) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (v *AlterVSchema) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (v *AlterVSchema) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	err := vcursor.ExecuteVSchema(v.Keyspace.Name, v.AlterVschemaDDL)
 	if err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func (v *AlterVSchema) TryExecute(vcursor VCursor, routing *RoutingParameters, b
 }
 
 // TryStreamExecute implements the Primitive interface
-func (v *AlterVSchema) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (v *AlterVSchema) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	res, err := v.TryExecute(vcursor, routing, bindVars, wantfields)
 	if err != nil {
 		return err

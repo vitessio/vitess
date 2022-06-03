@@ -52,7 +52,7 @@ func (sc *SimpleProjection) GetTableName() string {
 }
 
 // TryExecute performs a non-streaming exec.
-func (sc *SimpleProjection) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (sc *SimpleProjection) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	inner, err := vcursor.ExecutePrimitive(sc.Input, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func (sc *SimpleProjection) TryExecute(vcursor VCursor, routing *RoutingParamete
 }
 
 // TryStreamExecute performs a streaming exec.
-func (sc *SimpleProjection) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (sc *SimpleProjection) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	return vcursor.StreamExecutePrimitive(sc.Input, routing, bindVars, wantfields, func(inner *sqltypes.Result) error {
 		return callback(sc.buildResult(inner))
 	})

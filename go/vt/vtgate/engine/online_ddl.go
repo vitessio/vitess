@@ -72,7 +72,7 @@ func (v *OnlineDDL) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (v *OnlineDDL) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
+func (v *OnlineDDL) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	result = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -108,7 +108,7 @@ func (v *OnlineDDL) TryExecute(vcursor VCursor, routing *RoutingParameters, bind
 }
 
 // TryStreamExecute implements the Primitive interface
-func (v *OnlineDDL) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (v *OnlineDDL) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	results, err := v.TryExecute(vcursor, routing, bindVars, wantfields)
 	if err != nil {
 		return err

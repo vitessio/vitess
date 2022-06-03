@@ -49,7 +49,7 @@ type Join struct {
 }
 
 // TryExecute performs a non-streaming exec.
-func (jn *Join) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (jn *Join) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	joinVars := make(map[string]*querypb.BindVariable)
 	lresult, err := vcursor.ExecutePrimitive(jn.Left, routing, bindVars, wantfields)
 	if err != nil {
@@ -93,7 +93,7 @@ func (jn *Join) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars
 }
 
 // TryStreamExecute performs a streaming exec.
-func (jn *Join) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (jn *Join) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	joinVars := make(map[string]*querypb.BindVariable)
 	err := vcursor.StreamExecutePrimitive(jn.Left, routing, bindVars, wantfields, func(lresult *sqltypes.Result) error {
 		for _, lrow := range lresult.Rows {
