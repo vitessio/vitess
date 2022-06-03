@@ -564,7 +564,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
 				}
-				dr.MismatchedRowsSample = append(dr.MismatchedRowsSample, &DiffMismatch{Source: sourceDiffRow, Target: targetDiffRow})
+				dr.MismatchedRowsDiffs = append(dr.MismatchedRowsDiffs, &DiffMismatch{Source: sourceDiffRow, Target: targetDiffRow})
 			}
 			dr.MismatchedRows++
 		default:

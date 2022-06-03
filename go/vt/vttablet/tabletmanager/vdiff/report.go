@@ -19,8 +19,7 @@ package vdiff
 import (
 	"fmt"
 	"sort"
-
-	"vitess.io/vitess/go/vt/logutil"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -41,11 +40,9 @@ type DiffReport struct {
 	ExtraRowsTarget int64
 
 	// actual data for a few sample rows
-	//ExtraRowsSourceDiffs []*RowDiff      `json:"ExtraRowsSourceDiffs,omitempty"`
-	ExtraRowsSourceDiffs []*RowDiff `json:"-"`
-	//ExtraRowsTargetDiffs []*RowDiff      `json:"ExtraRowsTargetDiffs,omitempty"`
-	ExtraRowsTargetDiffs []*RowDiff      `json:"-"`
-	MismatchedRowsSample []*DiffMismatch `json:"MismatchedRowsSample,omitempty"`
+	ExtraRowsSourceDiffs []*RowDiff      `json:"ExtraRowsSourceSample,omitempty"`
+	ExtraRowsTargetDiffs []*RowDiff      `json:"ExtraRowsTargetSample,omitempty"`
+	MismatchedRowsDiffs  []*DiffMismatch `json:"MismatchedRowsSample,omitempty"`
 }
 
 // DiffMismatch is a sample of row diffs between source and target.
@@ -56,13 +53,13 @@ type DiffMismatch struct {
 
 // RowDiff is a row that didn't match as part of the comparison.
 type RowDiff struct {
-	Row   map[string]sqltypes.Value `json:"row,omitempty"`
-	Query string                    `json:"-"`
+	Row   map[string]string `json:"Row,omitempty"`
+	Query string            `json:"-"`
 }
 
 func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug, onlyPks bool) (*RowDiff, error) {
 	drp := &RowDiff{}
-	drp.Row = make(map[string]sqltypes.Value)
+	drp.Row = make(map[string]string)
 	statement, err := sqlparser.Parse(queryStmt)
 	if err != nil {
 		return nil, err
@@ -80,7 +77,7 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug,
 		buf := sqlparser.NewTrackedBuffer(nil)
 		sel.SelectExprs[index].Format(buf)
 		col := buf.String()
-		drp.Row[col] = row[index]
+		drp.Row[col] = row[index].ToString()
 	}
 
 	if onlyPks {
@@ -93,6 +90,7 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug,
 	for i := range sel.SelectExprs {
 		setVal(i)
 	}
+	formatSampleRow(drp)
 
 	return drp, nil
 }
@@ -127,38 +125,22 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 	return buf.String()
 }
 
-// formatSampleRow returns a formatted string representing a sample mismatched row
-// TODO: we need to figure out a way to leverage this with the JSON formatted
-// output as it's currently generated via the stadard JSON package marshalling.
-func formatSampleRow(logger logutil.Logger, rd *RowDiff, debug bool) { //nolint:unused,deadcode
+// formatSampleRow returns a formatted string representing a sample
+// extra/mismatched row
+func formatSampleRow(rd *RowDiff) {
 	keys := make([]string, 0, len(rd.Row))
+	rowString := strings.Builder{}
 	for k := range rd.Row {
 		keys = append(keys, k)
 	}
 
 	sort.Strings(keys)
-
+	truncated := " ...[TRUNCATED]"
 	for _, k := range keys {
-		logger.Printf("\t\t\t %s: %s\n", k, formatValue(rd.Row[k]))
-	}
-
-	if debug {
-		logger.Printf("\t\tDebugQuery: %v\n", rd.Query)
-	}
-}
-
-// formatValue returns a properly formatted string based on the SQL type
-func formatValue(val sqltypes.Value) string {
-	if val.Type() == sqltypes.Null {
-		return "null (NULL_TYPE)"
-	}
-	if val.IsQuoted() || val.Type() == sqltypes.Bit {
-		if len(val.Raw()) >= 20 {
-			rawBytes := val.Raw()[:20]
-			rawBytes = append(rawBytes, []byte("...[TRUNCATED]")...)
-			return fmt.Sprintf("%q (%v)", rawBytes, val.Type())
+		// Let's truncate if it's really worth it to avoid losing value for a few chars
+		if len(rd.Row[k]) >= 30+len(truncated)+20 {
+			rd.Row[k] = rd.Row[k][:30] + truncated
 		}
-		return fmt.Sprintf("%q (%v)", val.Raw(), val.Type())
+		rowString.WriteString(fmt.Sprintf("%s: %s\n", k, rd.Row[k]))
 	}
-	return fmt.Sprintf("%s (%v)", val.Raw(), val.Type())
 }
