@@ -89,8 +89,10 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	clusterInstance := cluster.NewCluster(cells[0], Hostname)
 	keyspace := &cluster.Keyspace{Name: KeyspaceName}
 
+	durability := "none"
 	if enableSemiSync {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
+		durability = "semi_sync"
 	}
 
 	// Start topo server
@@ -159,6 +161,11 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 			clusterInstance.PrintMysqlctlLogFiles()
 			require.FailNow(t, "Error starting mysql: %s", err.Error())
 		}
+	}
+	if clusterInstance.VtctlMajorVersion >= 14 {
+		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+		out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", KeyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
+		require.NoError(t, err, out)
 	}
 
 	setupShard(ctx, t, clusterInstance, shardName, tablets)
@@ -200,8 +207,10 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 	clusterInstance := cluster.NewCluster(cells[0], Hostname)
 	keyspace := &cluster.Keyspace{Name: KeyspaceName}
 
+	durability := "none"
 	if enableSemiSync {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
+		durability = "semi_sync"
 	}
 
 	// Start topo server
@@ -270,6 +279,12 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 			clusterInstance.PrintMysqlctlLogFiles()
 			require.FailNow(t, "Error starting mysql: %s", err.Error())
 		}
+	}
+
+	if clusterInstance.VtctlMajorVersion >= 14 {
+		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+		out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", KeyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
+		require.NoError(t, err, out)
 	}
 
 	setupShardLegacy(ctx, t, clusterInstance, shardName, tablets)

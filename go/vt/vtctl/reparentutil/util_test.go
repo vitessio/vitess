@@ -433,13 +433,15 @@ func TestChooseNewPrimary(t *testing.T) {
 		},
 	}
 
+	durability, err := GetDurabilityPolicy("none")
+	require.NoError(t, err)
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			actual, err := ChooseNewPrimary(ctx, tt.tmc, tt.shardInfo, tt.tabletMap, tt.avoidPrimaryAlias, time.Millisecond*50, logger)
+			actual, err := ChooseNewPrimary(ctx, tt.tmc, tt.shardInfo, tt.tabletMap, tt.avoidPrimaryAlias, time.Millisecond*50, durability, logger)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
@@ -1206,10 +1208,10 @@ func Test_getTabletsWithPromotionRules(t *testing.T) {
 			filteredTablets: nil,
 		},
 	}
-	_ = SetDurabilityPolicy("none")
+	durability, _ := GetDurabilityPolicy("none")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res := getTabletsWithPromotionRules(tt.tablets, tt.rule)
+			res := getTabletsWithPromotionRules(durability, tt.tablets, tt.rule)
 			require.EqualValues(t, tt.filteredTablets, res)
 		})
 	}

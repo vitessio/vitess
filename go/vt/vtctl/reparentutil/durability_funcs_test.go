@@ -99,9 +99,9 @@ func TestSemiSyncAckersForPrimary(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := SetDurabilityPolicy(tt.durabilityPolicy)
+			durability, err := GetDurabilityPolicy(tt.durabilityPolicy)
 			require.NoError(t, err, "error setting durability policy")
-			semiSyncAckers := SemiSyncAckersForPrimary(tt.primary, tt.allTablets)
+			semiSyncAckers := SemiSyncAckersForPrimary(durability, tt.primary, tt.allTablets)
 			require.Equal(t, tt.wantSemiSyncAckers, semiSyncAckers)
 		})
 	}
@@ -197,9 +197,9 @@ func Test_haveRevokedForTablet(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := SetDurabilityPolicy(tt.durabilityPolicy)
+			durability, err := GetDurabilityPolicy(tt.durabilityPolicy)
 			require.NoError(t, err)
-			out := haveRevokedForTablet(tt.primaryEligible, tt.tabletsReached, tt.allTablets)
+			out := haveRevokedForTablet(durability, tt.primaryEligible, tt.tabletsReached, tt.allTablets)
 			require.Equal(t, tt.revoked, out)
 		})
 	}
@@ -307,9 +307,9 @@ func Test_haveRevoked(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := SetDurabilityPolicy(tt.durabilityPolicy)
+			durability, err := GetDurabilityPolicy(tt.durabilityPolicy)
 			require.NoError(t, err)
-			out := haveRevoked(tt.tabletsReached, tt.allTablets)
+			out := haveRevoked(durability, tt.tabletsReached, tt.allTablets)
 			require.Equal(t, tt.revoked, out)
 		})
 	}
@@ -375,9 +375,9 @@ func Test_canEstablishForTablet(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("'%s' durability policy - %s", tt.durabilityPolicy, tt.name), func(t *testing.T) {
-			err := SetDurabilityPolicy(tt.durabilityPolicy)
+			durability, err := GetDurabilityPolicy(tt.durabilityPolicy)
 			require.NoError(t, err)
-			require.Equalf(t, tt.canEstablish, canEstablishForTablet(tt.primaryEligible, tt.tabletsReached), "canEstablishForTablet(%v, %v)", tt.primaryEligible, tt.tabletsReached)
+			require.Equalf(t, tt.canEstablish, canEstablishForTablet(durability, tt.primaryEligible, tt.tabletsReached), "canEstablishForTablet(%v, %v)", tt.primaryEligible, tt.tabletsReached)
 		})
 	}
 }

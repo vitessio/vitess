@@ -1108,9 +1108,9 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			err := SetDurabilityPolicy(tt.durability)
+			durability, err := GetDurabilityPolicy(tt.durability)
 			require.NoError(t, err)
-			res, err := stopReplicationAndBuildStatusMaps(ctx, tt.tmc, &events.Reparent{}, tt.tabletMap, tt.waitReplicasTimeout, tt.ignoredTablets, tt.tabletToWaitFor, logger)
+			res, err := stopReplicationAndBuildStatusMaps(ctx, tt.tmc, &events.Reparent{}, tt.tabletMap, tt.waitReplicasTimeout, tt.ignoredTablets, tt.tabletToWaitFor, durability, logger)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
