@@ -104,10 +104,15 @@ func RefreshState(ctx context.Context, r Request, api *API) *JSONResponse {
 	return NewJSONResponse(result, err)
 }
 
-// ReparentTablet reparents a tablet to the current primary in the shard. This
-// only works if the current replica position matches the last known reparent
-// action.
-func ReparentTablet(ctx context.Context, r Request, api *API) *JSONResponse {
+// RefreshTabletReplicationSource implements the http wrapper for
+// PUT /tablet/{tablet}/refresh_replication_source.
+//
+// Query params:
+// - cluster: repeatable, list of cluster IDs to restrict to when searching fo
+//			  a tablet with that alias.
+//
+// PUT body is unused; this endpoint takes no additional options.
+func RefreshTabletReplicationSource(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := r.Vars()
 
 	alias, err := vars.GetTabletAlias("tablet")
@@ -115,7 +120,7 @@ func ReparentTablet(ctx context.Context, r Request, api *API) *JSONResponse {
 		return NewJSONResponse(nil, err)
 	}
 
-	result, err := api.server.ReparentTablet(ctx, &vtadminpb.ReparentTabletRequest{
+	result, err := api.server.RefreshTabletReplicationSource(ctx, &vtadminpb.RefreshTabletReplicationSourceRequest{
 		Alias:      alias,
 		ClusterIds: r.URL.Query()["cluster"],
 	})
@@ -208,13 +213,14 @@ func StopReplication(ctx context.Context, r Request, api *API) *JSONResponse {
 	return NewJSONResponse(result, err)
 }
 
-// TabletExternallyReparented implements the http wrapper for POST /tablet/{tablet}/tablet_externally_reparented.
+// TabletExternallyPromoted implements the http wrapper for
+// POST /tablet/{tablet}/tablet_externally_promoted.
 //
 // Query params:
 // - `cluster`: repeated list of clusterIDs to limit the request to.
 //
 // POST body is unused; this endpoint takes no additional options.
-func TabletExternallyReparented(ctx context.Context, r Request, api *API) *JSONResponse {
+func TabletExternallyPromoted(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := r.Vars()
 
 	alias, err := vars.GetTabletAlias("tablet")
@@ -222,7 +228,7 @@ func TabletExternallyReparented(ctx context.Context, r Request, api *API) *JSONR
 		return NewJSONResponse(nil, err)
 	}
 
-	result, err := api.server.TabletExternallyReparented(ctx, &vtadminpb.TabletExternallyReparentedRequest{
+	result, err := api.server.TabletExternallyPromoted(ctx, &vtadminpb.TabletExternallyPromotedRequest{
 		Alias:      alias,
 		ClusterIds: r.URL.Query()["cluster"],
 	})
