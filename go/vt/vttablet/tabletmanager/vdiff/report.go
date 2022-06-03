@@ -41,21 +41,23 @@ type DiffReport struct {
 	ExtraRowsTarget int64
 
 	// actual data for a few sample rows
-	ExtraRowsSourceDiffs []*RowDiff      `json:"ExtraRowsSourceDiffs,omitempty"`
-	ExtraRowsTargetDiffs []*RowDiff      `json:"ExtraRowsTargetDiffs,omitempty"`
+	//ExtraRowsSourceDiffs []*RowDiff      `json:"ExtraRowsSourceDiffs,omitempty"`
+	ExtraRowsSourceDiffs []*RowDiff `json:"-"`
+	//ExtraRowsTargetDiffs []*RowDiff      `json:"ExtraRowsTargetDiffs,omitempty"`
+	ExtraRowsTargetDiffs []*RowDiff      `json:"-"`
 	MismatchedRowsSample []*DiffMismatch `json:"MismatchedRowsSample,omitempty"`
 }
 
 // DiffMismatch is a sample of row diffs between source and target.
 type DiffMismatch struct {
-	Source *RowDiff
-	Target *RowDiff
+	Source *RowDiff `json:"source_diff,omitempty"`
+	Target *RowDiff `json:"target_diff,omitempty"`
 }
 
 // RowDiff is a row that didn't match as part of the comparison.
 type RowDiff struct {
-	Row   map[string]sqltypes.Value
-	Query string
+	Row   map[string]sqltypes.Value `json:"row,omitempty"`
+	Query string                    `json:"-"`
 }
 
 func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug, onlyPks bool) (*RowDiff, error) {

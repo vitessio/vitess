@@ -323,7 +323,6 @@ func buildVDiff2Recent(output *wrangler.VDiffOutput) ([]*VDiffListing, error) {
 					Shard:    row["shard"].ToString(),
 					State:    row["state"].ToString(),
 				})
-
 			}
 		}
 	}
@@ -394,7 +393,10 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 					first = false
 					summary.State, _ = row.ToString("vdiff_state")
 					summary.State = strings.ToLower(summary.State)
-					summary.HasMismatch, _ = row.ToBool("has_mismatch")
+				}
+				// If we had a mismatch on any table then the vdiff as a unit does too
+				if mm, _ := row.ToBool("has_mismatch"); mm {
+					summary.HasMismatch = true
 				}
 				table := row.AsString("table_name", "")
 				if _, ok := tableSummaryMap[table]; !ok {

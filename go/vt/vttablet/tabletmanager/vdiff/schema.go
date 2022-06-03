@@ -72,7 +72,7 @@ const (
 										v.vdiff_uuid as 'uuid',
 										vt.state as table_state, vt.table_rows, 
 										vt.rows_compared, 
-										IF(vt.mismatch = 0, 'false', 'true') as has_mismatch, vt.report
+										IF(vt.mismatch = 1, 1, 0) as has_mismatch, vt.report
 										from _vt.vdiff v, _vt.vdiff_table vt 
 										where v.id = vt.vdiff_id and v.id = %d`
 	sqlUpdateVDiffState     = "update _vt.vdiff set state = %s where id = %d"
