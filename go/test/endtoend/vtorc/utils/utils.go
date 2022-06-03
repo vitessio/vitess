@@ -271,7 +271,7 @@ func StopVtorcs(t *testing.T, clusterInfo *VtOrcClusterInfo) {
 }
 
 // SetupVttabletsAndVtorc is used to setup the vttablets and start the orchestrator
-func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, config cluster.VtorcConfiguration, vtorcCount int) {
+func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, config cluster.VtorcConfiguration, vtorcCount int, durability string) {
 	// stop vtorc if it is running
 	StopVtorcs(t, clusterInfo)
 
@@ -313,9 +313,8 @@ func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numRepl
 		require.NoError(t, err)
 	}
 
-	durability := "none"
-	if config.Durability != "" {
-		durability = config.Durability
+	if durability == "" {
+		durability = "none"
 	}
 	out, err := clusterInfo.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
 	require.NoError(t, err, out)
@@ -439,7 +438,7 @@ func CheckReplication(t *testing.T, clusterInfo *VtOrcClusterInfo, primary *clus
 		default:
 			_, err := RunSQL(t, sqlSchema, primary, "")
 			if err != nil {
-				log.Warning("create table failed on primary, will retry")
+				log.Warningf("create table failed on primary - %v, will retry", err)
 				time.Sleep(100 * time.Millisecond)
 				break
 			}
