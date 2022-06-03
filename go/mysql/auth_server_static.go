@@ -96,7 +96,7 @@ func InitAuthServerStatic() {
 	}
 	if *mysqlAuthServerStaticFile != "" && *mysqlAuthServerStaticString != "" {
 		// Both parameters specified, can only use one.
-		log.Exitf("Both mysql_auth_server_static_file and mysql_auth_server_static_string specified, can only use one.")
+		log.Fatalf("Both mysql_auth_server_static_file and mysql_auth_server_static_string specified, can only use one.")
 	}
 
 	// Create and register auth server.
@@ -123,12 +123,12 @@ func NewAuthServerStatic(file, jsonConfig string, reloadInterval time.Duration) 
 
 // RegisterAuthServerStaticFromParams creates and registers a new
 // AuthServerStatic, loaded for a JSON file or string. If file is set,
-// it uses file. Otherwise, load the string. It log.Exits out in case
+// it uses file. Otherwise, load the string. It log.Fatals out in case
 // of error.
 func RegisterAuthServerStaticFromParams(file, str string, reloadInterval time.Duration) {
 	authServerStatic := NewAuthServerStatic(file, str, reloadInterval)
 	if len(authServerStatic.entries) <= 0 {
-		log.Exitf("Failed to populate entries from file: %v", file)
+		log.Fatalf("Failed to populate entries from file: %v", file)
 	}
 	RegisterAuthServerImpl("static", authServerStatic)
 }

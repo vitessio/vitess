@@ -17,15 +17,11 @@ limitations under the License.
 package stats
 
 import (
+	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/dolthub/vitess/go/sync2"
-	"github.com/dolthub/vitess/go/vt/logutil"
 )
-
-// logCounterNegative is for throttling adding a negative value to a counter messages in logs
-var logCounterNegative = logutil.NewThrottledLogger("StatsCounterNegative", 1*time.Minute)
 
 // Counter tracks a cumulative count of a metric.
 // For a one-dimensional or multi-dimensional counter, please use
@@ -47,7 +43,7 @@ func NewCounter(name string, help string) *Counter {
 // Add adds the provided value to the Counter.
 func (v *Counter) Add(delta int64) {
 	if delta < 0 {
-		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", v)
+		panic(fmt.Sprintf("Adding a negative value to a counter, %v should be a gauge instead", v))
 	}
 	v.i.Add(delta)
 }

@@ -480,12 +480,15 @@ func TestClientFoundRows(t *testing.T) {
 	c.Close()
 }
 
+var newUserNum int = 1
+
 func TestConnCounts(t *testing.T) {
 	th := &testHandler{}
 
 	initialNumUsers := len(connCountPerUser.Counts())
 
-	user := "anotherNotYetConnectedUser1"
+	user := fmt.Sprintf("anotherNotYetConnectedUser%10d", newUserNum)
+	newUserNum++
 	passwd := "password1"
 
 	authServer := NewAuthServerStatic("", "", 0)
@@ -517,7 +520,7 @@ func TestConnCounts(t *testing.T) {
 
 	connCounts := connCountPerUser.Counts()
 	if l := len(connCounts); l-initialNumUsers != 1 {
-		t.Errorf("Expected 1 new user, got %d", l)
+		t.Errorf("Expected 1 new user, got %d", l-initialNumUsers)
 	}
 	checkCountsForUser(t, user, 1)
 
@@ -530,7 +533,7 @@ func TestConnCounts(t *testing.T) {
 	connCounts = connCountPerUser.Counts()
 	// There is still only one new user.
 	if l2 := len(connCounts); l2-initialNumUsers != 1 {
-		t.Errorf("Expected 1 new user, got %d", l2)
+		t.Errorf("Expected 1 new user, got %d", l2-initialNumUsers)
 	}
 	checkCountsForUser(t, user, 2)
 
@@ -1086,7 +1089,7 @@ func TestTLSRequired(t *testing.T) {
 		t.Fatalf("mysql should have failed with revoked certificate.")
 	}
 	if !strings.Contains(err.Error(), "remote error: tls: bad certificate") {
-		t.Fatalf("error should have had tls: bad certificate")
+		t.Fatalf("error should have had tls: bad certificate, was: %v", err)
 	}
 	if conn != nil {
 		conn.Close()
