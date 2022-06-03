@@ -49,6 +49,13 @@ type (
 	// VCursor defines the interface the engine will use
 	// to execute routes.
 	VCursor interface {
+		// vindexes.VCursor declares the following methods:
+		//	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
+		//	ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
+		//	InTransactionAndIsDML() bool
+		//	LookupRowLockShardSession() vtgatepb.CommitOrder
+		vindexes.VCursor
+
 		// Context returns the context of the current request.
 		Context() context.Context
 
@@ -74,8 +81,6 @@ type (
 		// provides back function to move back to original context.
 		SetContextWithValue(key, value interface{}) func()
 
-		// V3 functions.
-		Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
 		AutocommitApproval() bool
 
 		// Primitive functions
@@ -86,9 +91,6 @@ type (
 		ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error)
 		ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error)
 		StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error
-
-		// Keyspace ID level functions.
-		ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
 
 		// Resolver methods, from key.Destination to srvtopo.ResolvedShard.
 		// Will replace all of the Topo functions.
@@ -103,10 +105,6 @@ type (
 		ConnCollation() collations.ID
 
 		ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
-
-		InTransactionAndIsDML() bool
-
-		LookupRowLockShardSession() vtgatepb.CommitOrder
 
 		FindRoutedTable(tablename sqlparser.TableName) (*vindexes.Table, error)
 
