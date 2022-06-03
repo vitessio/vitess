@@ -50,7 +50,8 @@ var (
 	normalize          = flag.Bool("normalize", false, "Whether to enable vtgate normalization")
 	outputMode         = flag.String("output-mode", "text", "Output in human-friendly text or json")
 	dbName             = flag.String("dbname", "", "Optional database target to override normal routing")
-	plannerVersionStr  = flag.String("planner-version", "gen4", "Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4")
+	badPlannerVersion  = flag.String("planner-version", "", "Deprecated flag. Use planner_version instead")
+	plannerVersionStr  = flag.String("planner_version", "gen4", "Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4")
 
 	// vtexplainFlags lists all the flags that should show in usage
 	vtexplainFlags = []string{
@@ -146,6 +147,13 @@ func parseAndRun() error {
 		return err
 	}
 
+	if badPlannerVersion != nil {
+		if plannerVersionStr != nil && *badPlannerVersion != *plannerVersionStr {
+			return fmt.Errorf("can't specify planner-version and planner_version with different versions")
+		}
+		log.Warningf("planner-version is deprecated. please use planner_version instead")
+		plannerVersionStr = badPlannerVersion
+	}
 	plannerVersion, _ := plancontext.PlannerNameToVersion(*plannerVersionStr)
 	if plannerVersion != querypb.ExecuteOptions_V3 && plannerVersion != querypb.ExecuteOptions_Gen4 {
 		return fmt.Errorf("invalid value specified for planner-version of '%s' -- valid values are V3 and Gen4", *plannerVersionStr)

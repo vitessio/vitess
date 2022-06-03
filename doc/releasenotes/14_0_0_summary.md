@@ -70,6 +70,10 @@ The heartbeats are generated according to `--heartbeat_interval`.
 
 The flag `--online_ddl_check_interval` is deprecated and will be removed in `v15`. It has been unused in `v13`.
 
+#### Deprecation of --planner-version for vtexplain
+
+The flag `--planner-version` is deprecated and will be removed in `v15`. Instead, please use `--planer_version`.
+
 ### Online DDL changes
 
 #### Online DDL is generally available
@@ -183,18 +187,6 @@ The throttler now checks in with the heartbeat writer to request heartbeats, any
 When `--heartbeat_on_demand_duration` is not set, there is no change in behavior.
 
 When `--heartbeat_on_demand_duration` is set to a positive value, then the throttler ensures that the heartbeat writer generated heartbeats for at least the following duration. This also means at the first throttler check, it's possible that heartbeats are idle, and so the first check will fail. As heartbeats start running, followup checks will get a more accurate lag evaluation and will respond accordingly. In a sense, it's a "cold engine" scenario, where the engine takes time to start up, and then runs smoothly.
-
-### Compatibility
-
-#### Join with `USING`
-
-In previous versions of Vitess our planners (v3 and Gen4) were rewriting the `USING` condition of a join to an `ON` condition.
-This rewriting was causing an incompatible behavior with MySQL due to how MySQL handles queries with `ON` and `USING` differently.
-
-Thanks to this rewriting we were previously able to plan sharded queries with an `USING` condition. This is no longer the case.
-Queries with an `USING` condition that need to be sent to a sharded keyspace are no longer supported and will return an `unsupported` planner error.
-
-This change was made through pull request [#9767](https://github.com/vitessio/vitess/pull/9767).
 
 ### Durability Policy
 
