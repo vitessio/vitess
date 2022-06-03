@@ -104,14 +104,14 @@ func DeleteShards(ctx context.Context, r Request, api *API) *JSONResponse {
 	return NewJSONResponse(resp, err)
 }
 
-// EmergencyReparentShard implements the http wrapper for
-// POST /shard/{cluster_id}/{keyspace}/{shard}/emergency_reparent.
+// EmergencyFailoverShard implements the http wrapper for
+// POST /shard/{cluster_id}/{keyspace}/{shard}/emergency_failover.
 //
 // Query params: none
 //
 // POST body is unmarshalled as vtctldatapb.EmergencyReparentShardRequest, but
 // the Keyspace and Shard fields are ignored (coming instead from the route).
-func EmergencyReparentShard(ctx context.Context, r Request, api *API) *JSONResponse {
+func EmergencyFailoverShard(ctx context.Context, r Request, api *API) *JSONResponse {
 	decoder := json.NewDecoder(r.Body)
 	defer r.Body.Close()
 
@@ -126,21 +126,21 @@ func EmergencyReparentShard(ctx context.Context, r Request, api *API) *JSONRespo
 	options.Keyspace = vars["keyspace"]
 	options.Shard = vars["shard"]
 
-	result, err := api.server.EmergencyReparentShard(ctx, &vtadminpb.EmergencyReparentShardRequest{
+	result, err := api.server.EmergencyFailoverShard(ctx, &vtadminpb.EmergencyFailoverShardRequest{
 		ClusterId: vars["cluster_id"],
 		Options:   &options,
 	})
 	return NewJSONResponse(result, err)
 }
 
-// PlannedReparentShard implements the http wrapper for
-// POST /shard/{cluster_id}/{keyspace}/{shard}/planned_reparent.
+// PlannedFailoverShard implements the http wrapper for
+// POST /shard/{cluster_id}/{keyspace}/{shard}/planned_failover.
 //
 // Query params: none
 //
 // POST body is unmarshalled as vtctldatapb.PlannedReparentShardRequest, but
 // the Keyspace and Shard fields are ignored (coming instead from the route).
-func PlannedReparentShard(ctx context.Context, r Request, api *API) *JSONResponse {
+func PlannedFailoverShard(ctx context.Context, r Request, api *API) *JSONResponse {
 	decoder := json.NewDecoder(r.Body)
 	defer r.Body.Close()
 
@@ -155,7 +155,7 @@ func PlannedReparentShard(ctx context.Context, r Request, api *API) *JSONRespons
 	options.Keyspace = vars["keyspace"]
 	options.Shard = vars["shard"]
 
-	result, err := api.server.PlannedReparentShard(ctx, &vtadminpb.PlannedReparentShardRequest{
+	result, err := api.server.PlannedFailoverShard(ctx, &vtadminpb.PlannedFailoverShardRequest{
 		ClusterId: vars["cluster_id"],
 		Options:   &options,
 	})
