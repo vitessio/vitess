@@ -281,7 +281,13 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 		}
 
 		// Switch to SSL.
-		conn := tls.Client(c.Conn, clientConfig)
+		tlsConn := tls.Client(c.Conn, clientConfig)
+		err = tlsConn.Handshake()
+		if err != nil {
+			return err
+		}
+
+		conn := tlsConn
 		c.Conn = conn
 		c.bufferedReader.Reset(conn)
 		c.Capabilities |= CapabilityClientSSL
