@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -931,7 +932,10 @@ func TestTLSServer(t *testing.T) {
 	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
-		path.Join(root, "ca-cert.pem"))
+		path.Join(root, "ca-cert.pem"),
+		"",
+		"",
+		tls.VersionTLS12)
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
@@ -1027,12 +1031,18 @@ func TestTLSRequired(t *testing.T) {
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", host)
+	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
+	tlstest.CreateSignedCert(root, tlstest.CA, "03", "revoked-client", "Revoked Client Cert")
+	tlstest.RevokeCertAndRegenerateCRL(root, tlstest.CA, "revoked-client")
 
 	// Create the server with TLS config.
 	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
-		path.Join(root, "ca-cert.pem"))
+		path.Join(root, "ca-cert.pem"),
+		path.Join(root, "ca-crl.pem"),
+		"",
+		tls.VersionTLS12)
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
@@ -1056,7 +1066,6 @@ func TestTLSRequired(t *testing.T) {
 	}
 
 	// setup conn params with TLS
-	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
 	params.Flags = CapabilityClientSSL
 	params.SslCa = path.Join(root, "ca-cert.pem")
 	params.SslCert = path.Join(root, "client-cert.pem")
@@ -1065,6 +1074,19 @@ func TestTLSRequired(t *testing.T) {
 	conn, err = Connect(context.Background(), params)
 	if err != nil {
 		t.Fatalf("mysql failed: %v", err)
+	}
+	if conn != nil {
+		conn.Close()
+	}
+
+	params.SslCert = path.Join(root, "revoked-client-cert.pem")
+	params.SslKey = path.Join(root, "revoked-client-key.pem")
+	conn, err = Connect(context.Background(), params)
+	if err == nil {
+		t.Fatalf("mysql should have failed with revoked certificate.")
+	}
+	if !strings.Contains(err.Error(), "remote error: tls: bad certificate") {
+		t.Fatalf("error should have had tls: bad certificate")
 	}
 	if conn != nil {
 		conn.Close()
