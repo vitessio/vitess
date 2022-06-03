@@ -168,7 +168,7 @@ func newProbeTable(checkCols []CheckCol) *probeTable {
 
 // TryExecute implements the Primitive interface
 func (d *Distinct) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	input, err := vcursor.ExecutePrimitive(d.Source, bindVars, wantfields)
+	input, err := vcursor.ExecutePrimitive(d.Source, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +199,7 @@ func (d *Distinct) TryExecute(vcursor VCursor, routing *RoutingParameters, bindV
 func (d *Distinct) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	pt := newProbeTable(d.CheckCols)
 
-	err := vcursor.StreamExecutePrimitive(d.Source, bindVars, wantfields, func(input *sqltypes.Result) error {
+	err := vcursor.StreamExecutePrimitive(d.Source, routing, bindVars, wantfields, func(input *sqltypes.Result) error {
 		result := &sqltypes.Result{
 			Fields:   input.Fields,
 			InsertID: input.InsertID,

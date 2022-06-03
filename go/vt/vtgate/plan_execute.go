@@ -206,7 +206,7 @@ func (e *Executor) executePlan(
 ) (*sqltypes.Result, error) {
 
 	// 4: Execute!
-	qr, err := vcursor.ExecutePrimitive(plan.Instructions, bindVars, true)
+	qr, err := vcursor.ExecutePrimitive(plan.Instructions, nil, bindVars, true)
 
 	// 5: Log and add statistics
 	e.setLogStats(logStats, plan, vcursor, execStart, err, qr)

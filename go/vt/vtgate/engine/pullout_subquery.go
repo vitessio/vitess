@@ -63,20 +63,20 @@ func (ps *PulloutSubquery) GetTableName() string {
 
 // TryExecute satisfies the Primitive interface.
 func (ps *PulloutSubquery) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	combinedVars, err := ps.execSubquery(vcursor, bindVars)
+	combinedVars, err := ps.execSubquery(vcursor, routing, bindVars)
 	if err != nil {
 		return nil, err
 	}
-	return vcursor.ExecutePrimitive(ps.Underlying, combinedVars, wantfields)
+	return vcursor.ExecutePrimitive(ps.Underlying, routing, combinedVars, wantfields)
 }
 
 // TryStreamExecute performs a streaming exec.
 func (ps *PulloutSubquery) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	combinedVars, err := ps.execSubquery(vcursor, bindVars)
+	combinedVars, err := ps.execSubquery(vcursor, routing, bindVars)
 	if err != nil {
 		return err
 	}
-	return vcursor.StreamExecutePrimitive(ps.Underlying, combinedVars, wantfields, callback)
+	return vcursor.StreamExecutePrimitive(ps.Underlying, routing, combinedVars, wantfields, callback)
 }
 
 // GetFields fetches the field info.
@@ -110,12 +110,12 @@ var (
 	errSqColumn = vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "subquery returned more than one column")
 )
 
-func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
+func (ps *PulloutSubquery) execSubquery(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
 	subqueryBindVars := make(map[string]*querypb.BindVariable, len(bindVars))
 	for k, v := range bindVars {
 		subqueryBindVars[k] = v
 	}
-	result, err := vcursor.ExecutePrimitive(ps.Subquery, subqueryBindVars, false)
+	result, err := vcursor.ExecutePrimitive(ps.Subquery, routing, subqueryBindVars, false)
 	if err != nil {
 		return nil, err
 	}

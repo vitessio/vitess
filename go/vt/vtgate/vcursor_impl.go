@@ -430,9 +430,9 @@ func (vc *vcursorImpl) TargetString() string {
 // MaxBufferingRetries is to represent max retries on buffering.
 const MaxBufferingRetries = 3
 
-func (vc *vcursorImpl) ExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (vc *vcursorImpl) ExecutePrimitive(primitive engine.Primitive, routing *engine.RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	for try := 0; try < MaxBufferingRetries; try++ {
-		res, err := primitive.TryExecute(vc, nil, bindVars, wantfields)
+		res, err := primitive.TryExecute(vc, routing, bindVars, wantfields)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
 		}
@@ -441,9 +441,9 @@ func (vc *vcursorImpl) ExecutePrimitive(primitive engine.Primitive, bindVars map
 	return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
 }
 
-func (vc *vcursorImpl) StreamExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (vc *vcursorImpl) StreamExecutePrimitive(primitive engine.Primitive, routing *engine.RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	for try := 0; try < MaxBufferingRetries; try++ {
-		err := primitive.TryStreamExecute(vc, nil, bindVars, wantfields, callback)
+		err := primitive.TryStreamExecute(vc, routing, bindVars, wantfields, callback)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
 		}

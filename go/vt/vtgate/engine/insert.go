@@ -222,7 +222,7 @@ func (ins *Insert) GetTableName() string {
 }
 
 // TryExecute performs a non-streaming exec.
-func (ins *Insert) TryExecute(vcursor VCursor, _ *RoutingParameters, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+func (ins *Insert) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	if ins.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(ins.QueryTimeout) * time.Millisecond)
 		defer cancel()
@@ -230,11 +230,11 @@ func (ins *Insert) TryExecute(vcursor VCursor, _ *RoutingParameters, bindVars ma
 
 	switch ins.Opcode {
 	case InsertUnsharded:
-		return ins.execInsertUnsharded(vcursor, bindVars)
+		return ins.execInsertUnsharded(vcursor, routing, bindVars)
 	case InsertSharded:
 		return ins.execInsertSharded(vcursor, bindVars)
 	case InsertSelect:
-		return ins.execInsertFromSelect(vcursor, bindVars)
+		return ins.execInsertFromSelect(vcursor, routing, bindVars)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported query route: %v", ins)
@@ -255,10 +255,10 @@ func (ins *Insert) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltyp
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code for %q", ins.Query)
 }
 
-func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ins *Insert) execInsertUnsharded(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	query := ins.Query
 	if ins.Input != nil {
-		result, err := vcursor.ExecutePrimitive(ins.Input, bindVars, false)
+		result, err := vcursor.ExecutePrimitive(ins.Input, routing, bindVars, false)
 		if err != nil {
 			return nil, err
 		}
@@ -440,13 +440,13 @@ func (ins *Insert) getInsertSelectQueries(
 	return rss, queries, nil
 }
 
-func (ins *Insert) execInsertFromSelect(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ins *Insert) execInsertFromSelect(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	// run the SELECT query
 	if ins.Input == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "something went wrong planning INSERT SELECT")
 	}
 
-	result, err := vcursor.ExecutePrimitive(ins.Input, bindVars, false)
+	result, err := vcursor.ExecutePrimitive(ins.Input, routing, bindVars, false)
 	if err != nil {
 		return nil, err
 	}

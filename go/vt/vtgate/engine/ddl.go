@@ -90,7 +90,7 @@ func (ddl *DDL) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars
 	if ddl.CreateTempTable {
 		vcursor.Session().HasCreatedTempTable()
 		vcursor.Session().NeedsReservedConn()
-		return vcursor.ExecutePrimitive(ddl.NormalDDL, bindVars, wantfields)
+		return vcursor.ExecutePrimitive(ddl.NormalDDL, routing, bindVars, wantfields)
 	}
 
 	ddlStrategySetting, err := schema.ParseDDLStrategy(vcursor.Session().GetDDLStrategy())
@@ -104,12 +104,12 @@ func (ddl *DDL) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars
 		if !ddl.OnlineDDLEnabled {
 			return nil, schema.ErrOnlineDDLDisabled
 		}
-		return vcursor.ExecutePrimitive(ddl.OnlineDDL, bindVars, wantfields)
+		return vcursor.ExecutePrimitive(ddl.OnlineDDL, routing, bindVars, wantfields)
 	default: // non online-ddl
 		if !ddl.DirectDDLEnabled {
 			return nil, schema.ErrDirectDDLDisabled
 		}
-		return vcursor.ExecutePrimitive(ddl.NormalDDL, bindVars, wantfields)
+		return vcursor.ExecutePrimitive(ddl.NormalDDL, routing, bindVars, wantfields)
 	}
 }
 

@@ -86,7 +86,7 @@ var ErrWrongNumberOfColumnsInSelect = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRE
 
 // TryExecute performs a non-streaming exec.
 func (c *Concatenate) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	res, err := c.execSources(vcursor, bindVars, wantfields)
+	res, err := c.execSources(vcursor, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +141,7 @@ func (c *Concatenate) getFields(res []*sqltypes.Result) ([]*querypb.Field, error
 	return fields, nil
 }
 
-func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
+func (c *Concatenate) execSources(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
 	results := make([]*sqltypes.Result, len(c.Sources))
 	var wg sync.WaitGroup
 	var outerErr error
@@ -151,7 +151,7 @@ func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			result, err := vcursor.ExecutePrimitive(currSource, vars, wantfields)
+			result, err := vcursor.ExecutePrimitive(currSource, routing, vars, wantfields)
 			if err != nil {
 				outerErr = err
 				vcursor.CancelContext()
@@ -182,7 +182,7 @@ func (c *Concatenate) TryStreamExecute(vcursor VCursor, routing *RoutingParamete
 
 		go func() {
 			defer wg.Done()
-			err := vcursor.StreamExecutePrimitive(currSource, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
+			err := vcursor.StreamExecutePrimitive(currSource, routing, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
 				// if we have fields to compare, make sure all the fields are all the same
 				if currIndex == 0 {
 					fieldsMu.Lock()

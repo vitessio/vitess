@@ -164,7 +164,7 @@ func (s *Send) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bin
 
 // GetFields implements Primitive interface
 func (s *Send) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	qr, err := vcursor.ExecutePrimitive(s, bindVars, false)
+	qr, err := vcursor.ExecutePrimitive(s, nil, bindVars, false)
 	if err != nil {
 		return nil, err
 	}

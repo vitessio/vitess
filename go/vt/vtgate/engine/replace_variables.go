@@ -51,7 +51,7 @@ func (r *ReplaceVariables) GetTableName() string {
 
 // TryExecute implements the Primitive interface
 func (r *ReplaceVariables) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	qr, err := vcursor.ExecutePrimitive(r.Input, bindVars, wantfields)
+	qr, err := vcursor.ExecutePrimitive(r.Input, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +66,7 @@ func (r *ReplaceVariables) TryStreamExecute(vcursor VCursor, routing *RoutingPar
 		replaceVariables(result, bindVars)
 		return innerCallback(result)
 	}
-	return vcursor.StreamExecutePrimitive(r.Input, bindVars, wantfields, callback)
+	return vcursor.StreamExecutePrimitive(r.Input, routing, bindVars, wantfields, callback)
 }
 
 // GetFields implements the Primitive interface

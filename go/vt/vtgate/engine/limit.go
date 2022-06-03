@@ -61,7 +61,7 @@ func (l *Limit) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars
 	// the offset in memory from the result of the scatter query with count + offset.
 	bindVars["__upper_limit"] = sqltypes.Int64BindVariable(int64(count + offset))
 
-	result, err := vcursor.ExecutePrimitive(l.Input, bindVars, wantfields)
+	result, err := vcursor.ExecutePrimitive(l.Input, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func (l *Limit) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bi
 	// the offset in memory from the result of the scatter query with count + offset.
 	bindVars["__upper_limit"] = sqltypes.Int64BindVariable(int64(count + offset))
 
-	err = vcursor.StreamExecutePrimitive(l.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	err = vcursor.StreamExecutePrimitive(l.Input, routing, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err

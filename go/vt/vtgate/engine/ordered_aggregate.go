@@ -218,15 +218,15 @@ func (oa *OrderedAggregate) SetTruncateColumnCount(count int) {
 
 // TryExecute is a Primitive function.
 func (oa *OrderedAggregate) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	qr, err := oa.execute(vcursor, bindVars, wantfields)
+	qr, err := oa.execute(vcursor, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
 	return qr.Truncate(oa.TruncateColumnCount), nil
 }
 
-func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	result, err := vcursor.ExecutePrimitive(oa.Input, bindVars, wantfields)
+func (oa *OrderedAggregate) execute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	result, err := vcursor.ExecutePrimitive(oa.Input, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +278,7 @@ func (oa *OrderedAggregate) TryStreamExecute(vcursor VCursor, routing *RoutingPa
 		return callback(qr.Truncate(oa.TruncateColumnCount))
 	}
 
-	err := vcursor.StreamExecutePrimitive(oa.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	err := vcursor.StreamExecutePrimitive(oa.Input, routing, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			fields = convertFields(qr.Fields, oa.PreProcess, oa.Aggregates, oa.AggrOnEngine)
 			if err := cb(&sqltypes.Result{Fields: fields}); err != nil {

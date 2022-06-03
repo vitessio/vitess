@@ -97,7 +97,7 @@ func (v *OnlineDDL) TryExecute(vcursor VCursor, routing *RoutingParameters, bind
 			IsDML:             false,
 			SingleShardOnly:   false,
 		}
-		if _, err := vcursor.ExecutePrimitive(&s, bindVars, wantfields); err != nil {
+		if _, err := vcursor.ExecutePrimitive(&s, routing, bindVars, wantfields); err != nil {
 			return result, err
 		}
 		result.Rows = append(result.Rows, []sqltypes.Value{

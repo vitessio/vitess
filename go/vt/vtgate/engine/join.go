@@ -51,7 +51,7 @@ type Join struct {
 // TryExecute performs a non-streaming exec.
 func (jn *Join) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	joinVars := make(map[string]*querypb.BindVariable)
-	lresult, err := vcursor.ExecutePrimitive(jn.Left, bindVars, wantfields)
+	lresult, err := vcursor.ExecutePrimitive(jn.Left, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func (jn *Join) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars
 		for k, col := range jn.Vars {
 			joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
 		}
-		rresult, err := vcursor.ExecutePrimitive(jn.Right, combineVars(bindVars, joinVars), wantfields)
+		rresult, err := vcursor.ExecutePrimitive(jn.Right, routing, combineVars(bindVars, joinVars), wantfields)
 		if err != nil {
 			return nil, err
 		}
@@ -95,13 +95,13 @@ func (jn *Join) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars
 // TryStreamExecute performs a streaming exec.
 func (jn *Join) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	joinVars := make(map[string]*querypb.BindVariable)
-	err := vcursor.StreamExecutePrimitive(jn.Left, bindVars, wantfields, func(lresult *sqltypes.Result) error {
+	err := vcursor.StreamExecutePrimitive(jn.Left, routing, bindVars, wantfields, func(lresult *sqltypes.Result) error {
 		for _, lrow := range lresult.Rows {
 			for k, col := range jn.Vars {
 				joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
 			}
 			rowSent := false
-			err := vcursor.StreamExecutePrimitive(jn.Right, combineVars(bindVars, joinVars), wantfields, func(rresult *sqltypes.Result) error {
+			err := vcursor.StreamExecutePrimitive(jn.Right, routing, combineVars(bindVars, joinVars), wantfields, func(rresult *sqltypes.Result) error {
 				result := &sqltypes.Result{}
 				if wantfields {
 					// This code is currently unreachable because the first result

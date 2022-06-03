@@ -49,11 +49,11 @@ func (s SQLCalcFoundRows) GetTableName() string {
 
 // TryExecute implements the Primitive interface
 func (s SQLCalcFoundRows) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	limitQr, err := vcursor.ExecutePrimitive(s.LimitPrimitive, bindVars, wantfields)
+	limitQr, err := vcursor.ExecutePrimitive(s.LimitPrimitive, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
-	countQr, err := vcursor.ExecutePrimitive(s.CountPrimitive, bindVars, false)
+	countQr, err := vcursor.ExecutePrimitive(s.CountPrimitive, routing, bindVars, false)
 	if err != nil {
 		return nil, err
 	}
@@ -70,14 +70,14 @@ func (s SQLCalcFoundRows) TryExecute(vcursor VCursor, routing *RoutingParameters
 
 // TryStreamExecute implements the Primitive interface
 func (s SQLCalcFoundRows) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	err := vcursor.StreamExecutePrimitive(s.LimitPrimitive, bindVars, wantfields, callback)
+	err := vcursor.StreamExecutePrimitive(s.LimitPrimitive, routing, bindVars, wantfields, callback)
 	if err != nil {
 		return err
 	}
 
 	var fr *uint64
 
-	err = vcursor.StreamExecutePrimitive(s.CountPrimitive, bindVars, wantfields, func(countQr *sqltypes.Result) error {
+	err = vcursor.StreamExecutePrimitive(s.CountPrimitive, routing, bindVars, wantfields, func(countQr *sqltypes.Result) error {
 		if len(countQr.Rows) == 0 && countQr.Fields != nil {
 			// this is the fields, which we can ignore
 			return nil

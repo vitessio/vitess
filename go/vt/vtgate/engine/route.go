@@ -171,7 +171,7 @@ func (route *Route) SetTruncateColumnCount(count int) {
 }
 
 // TryExecute performs a non-streaming exec.
-func (route *Route) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (route *Route) TryExecute(vcursor VCursor, _ *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if route.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(route.QueryTimeout) * time.Millisecond)
 		defer cancel()
@@ -308,10 +308,10 @@ func (route *Route) TryStreamExecute(vcursor VCursor, routing *RoutingParameters
 	}
 
 	// There is an order by. We have to merge-sort.
-	return route.mergeSort(vcursor, bindVars, wantfields, callback, rss, bvs)
+	return route.mergeSort(vcursor, routing, bindVars, wantfields, callback, rss, bvs)
 }
 
-func (route *Route) mergeSort(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable) error {
+func (route *Route) mergeSort(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable) error {
 	prims := make([]StreamExecutor, 0, len(rss))
 	for i, rs := range rss {
 		prims = append(prims, &shardRoute{
@@ -325,7 +325,7 @@ func (route *Route) mergeSort(vcursor VCursor, bindVars map[string]*querypb.Bind
 		OrderBy:                 route.OrderBy,
 		ScatterErrorsAsWarnings: route.ScatterErrorsAsWarnings,
 	}
-	return vcursor.StreamExecutePrimitive(&ms, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	return vcursor.StreamExecutePrimitive(&ms, routing, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))
 	})
 }

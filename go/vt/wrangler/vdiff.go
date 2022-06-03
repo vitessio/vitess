@@ -945,7 +945,7 @@ func newPrimitiveExecutor(ctx context.Context, prim engine.Primitive) *primitive
 	vcursor := &contextVCursor{ctx: ctx}
 	go func() {
 		defer close(pe.resultch)
-		pe.err = vcursor.StreamExecutePrimitive(pe.prim, make(map[string]*querypb.BindVariable), true, func(qr *sqltypes.Result) error {
+		pe.err = vcursor.StreamExecutePrimitive(pe.prim, nil, make(map[string]*querypb.BindVariable), true, func(qr *sqltypes.Result) error {
 			select {
 			case pe.resultch <- qr:
 			case <-ctx.Done():
@@ -1257,12 +1257,12 @@ func (vc *contextVCursor) ConnCollation() collations.ID {
 	return collations.CollationBinaryID
 }
 
-func (vc *contextVCursor) ExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return primitive.TryExecute(vc, nil, bindVars, wantfields)
+func (vc *contextVCursor) ExecutePrimitive(primitive engine.Primitive, routing *engine.RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return primitive.TryExecute(vc, routing, bindVars, wantfields)
 }
 
-func (vc *contextVCursor) StreamExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return primitive.TryStreamExecute(vc, nil, bindVars, wantfields, callback)
+func (vc *contextVCursor) StreamExecutePrimitive(primitive engine.Primitive, routing *engine.RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	return primitive.TryStreamExecute(vc, routing, bindVars, wantfields, callback)
 }
 
 func (vc *contextVCursor) Context() context.Context {

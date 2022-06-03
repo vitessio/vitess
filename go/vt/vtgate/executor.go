@@ -288,7 +288,7 @@ func (e *Executor) StreamExecute(
 		}
 
 		// 4: Execute!
-		err := vc.StreamExecutePrimitive(plan.Instructions, bindVars, true, func(qr *sqltypes.Result) error {
+		err := vc.StreamExecutePrimitive(plan.Instructions, nil, bindVars, true, func(qr *sqltypes.Result) error {
 			return srr.storeResultStats(plan.Type, qr)
 		})
 

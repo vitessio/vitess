@@ -103,12 +103,12 @@ func (t *noopVCursor) ConnCollation() collations.ID {
 	return collations.CollationUtf8mb4ID
 }
 
-func (t *noopVCursor) ExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return primitive.TryExecute(t, nil, bindVars, wantfields)
+func (t *noopVCursor) ExecutePrimitive(primitive Primitive, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return primitive.TryExecute(t, routing, bindVars, wantfields)
 }
 
-func (t *noopVCursor) StreamExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return primitive.TryStreamExecute(t, nil, bindVars, wantfields, callback)
+func (t *noopVCursor) StreamExecutePrimitive(primitive Primitive, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	return primitive.TryStreamExecute(t, routing, bindVars, wantfields, callback)
 }
 
 func (t *noopVCursor) HasSystemVariables() bool {
@@ -366,12 +366,12 @@ type tableRoutes struct {
 	tbl *vindexes.Table
 }
 
-func (f *loggingVCursor) ExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return primitive.TryExecute(f, nil, bindVars, wantfields)
+func (f *loggingVCursor) ExecutePrimitive(primitive Primitive, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return primitive.TryExecute(f, routing, bindVars, wantfields)
 }
 
-func (f *loggingVCursor) StreamExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return primitive.TryStreamExecute(f, nil, bindVars, wantfields, callback)
+func (f *loggingVCursor) StreamExecutePrimitive(primitive Primitive, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	return primitive.TryStreamExecute(f, routing, bindVars, wantfields, callback)
 }
 
 func (f *loggingVCursor) KeyspaceAvailable(ks string) bool {

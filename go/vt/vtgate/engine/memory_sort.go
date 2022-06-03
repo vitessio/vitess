@@ -71,7 +71,7 @@ func (ms *MemorySort) TryExecute(vcursor VCursor, routing *RoutingParameters, bi
 		return nil, err
 	}
 
-	result, err := vcursor.ExecutePrimitive(ms.Input, bindVars, wantfields)
+	result, err := vcursor.ExecutePrimitive(ms.Input, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (ms *MemorySort) TryStreamExecute(vcursor VCursor, routing *RoutingParamete
 		comparers: extractSlices(ms.OrderBy),
 		reverse:   true,
 	}
-	err = vcursor.StreamExecutePrimitive(ms.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	err = vcursor.StreamExecutePrimitive(ms.Input, routing, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
