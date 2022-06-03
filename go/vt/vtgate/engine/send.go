@@ -84,24 +84,16 @@ func (s *Send) GetTableName() string {
 
 // TryExecute implements Primitive interface
 func (s *Send) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
+	rss, bvs, err := s.findShards(vcursor, routing, bindVars)
 	if err != nil {
 		return nil, err
 	}
 
-	if !s.Keyspace.Sharded && len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
-	}
-
-	if s.SingleShardOnly && len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %s, got: %v", s.Query, s.TargetDestination)
-	}
-
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i, rs := range rss {
-		bv := bindVars
+		bv := bvs[i]
 		if s.ShardNameNeeded {
-			bv = copyBindVars(bindVars)
+			bv = copyBindVars(bv)
 			bv[ShardName] = sqltypes.StringBindVariable(rs.Target.Shard)
 		}
 		queries[i] = &querypb.BoundQuery{
@@ -136,24 +128,16 @@ func copyBindVars(in map[string]*querypb.BindVariable) map[string]*querypb.BindV
 
 // TryStreamExecute implements Primitive interface
 func (s *Send) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
+	rss, bvs, err := s.findShards(vcursor, routing, bindVars)
 	if err != nil {
 		return err
 	}
 
-	if !s.Keyspace.Sharded && len(rss) != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
-	}
-
-	if s.SingleShardOnly && len(rss) != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %s, got: %v", s.Query, s.TargetDestination)
-	}
-
 	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
 	for i, rs := range rss {
-		bv := bindVars
+		bv := bvs[i]
 		if s.ShardNameNeeded {
-			bv = copyBindVars(bindVars)
+			bv = copyBindVars(bv)
 			bv[ShardName] = sqltypes.StringBindVariable(rs.Target.Shard)
 		}
 		multiBindVars[i] = bv
@@ -195,4 +179,45 @@ func (s *Send) description() PrimitiveDescription {
 		TargetDestination: s.TargetDestination,
 		Other:             other,
 	}
+}
+
+func (s *Send) findShards(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable, err error) {
+	if s.TargetDestination != nil {
+		if routing != nil {
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "send static route was provided a destination")
+		}
+
+		rss, _, err = vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
+		if err != nil {
+			return nil, nil, err
+		}
+		bvs = make([]map[string]*querypb.BindVariable, 0, len(rss))
+		for range rss {
+			bvs = append(bvs, bindVars)
+		}
+	} else {
+		if routing == nil {
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "send without static route was not provided a destination")
+		}
+		rss = routing.Shards
+		bvs = routing.BindVars
+		for _, bv := range bvs {
+			for k, v := range bindVars {
+				if _, ok := bv[k]; ok {
+					// already in the bindvars - let's not overwrite
+					continue
+				}
+				bv[k] = v
+			}
+		}
+	}
+
+	if !s.Keyspace.Sharded && len(rss) != 1 {
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
+	}
+
+	if s.SingleShardOnly && len(rss) != 1 {
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %s, got: %v", s.Query, s.TargetDestination)
+	}
+	return
 }

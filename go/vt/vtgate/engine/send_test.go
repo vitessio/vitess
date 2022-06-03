@@ -20,6 +20,8 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/vt/srvtopo"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	"github.com/stretchr/testify/require"
@@ -44,93 +46,85 @@ func TestSendTable(t *testing.T) {
 
 	singleShard := []string{"0"}
 	twoShards := []string{"-20", "20-"}
-	tests := []testCase{
-		{
-			testName:    "unsharded with no autocommit",
-			sharded:     false,
-			shards:      singleShard,
-			destination: key.DestinationAllShards{},
-			expectedQueryLog: []string{
-				`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-				`ExecuteMultiShard ks.0: dummy_query {} false false`,
-			},
-			isDML:                false,
-			multiShardAutocommit: false,
+	tests := []testCase{{
+		testName:    "unsharded with no autocommit",
+		sharded:     false,
+		shards:      singleShard,
+		destination: key.DestinationAllShards{},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`ExecuteMultiShard ks.0: dummy_query {} false false`,
 		},
-		{
-			testName:    "sharded with no autocommit",
-			sharded:     true,
-			shards:      twoShards,
-			destination: key.DestinationShard("20-"),
-			expectedQueryLog: []string{
-				`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
-				`ExecuteMultiShard ks.DestinationShard(20-): dummy_query {} false false`,
-			},
-			isDML:                false,
-			multiShardAutocommit: false,
+		isDML:                false,
+		multiShardAutocommit: false,
+	}, {
+		testName:    "sharded with no autocommit",
+		sharded:     true,
+		shards:      twoShards,
+		destination: key.DestinationShard("20-"),
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
+			`ExecuteMultiShard ks.DestinationShard(20-): dummy_query {} false false`,
 		},
-		{
-			testName:    "unsharded",
-			sharded:     false,
-			shards:      singleShard,
-			destination: key.DestinationAllShards{},
-			expectedQueryLog: []string{
-				`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-				`ExecuteMultiShard ks.0: dummy_query {} true true`,
-			},
-			isDML:                true,
-			multiShardAutocommit: false,
+		isDML:                false,
+		multiShardAutocommit: false,
+	}, {
+		testName:    "unsharded",
+		sharded:     false,
+		shards:      singleShard,
+		destination: key.DestinationAllShards{},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`ExecuteMultiShard ks.0: dummy_query {} true true`,
 		},
-		{
-			testName:    "sharded with single shard destination",
-			sharded:     true,
-			shards:      twoShards,
-			destination: key.DestinationShard("20-"),
-			expectedQueryLog: []string{
-				`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
-				`ExecuteMultiShard ks.DestinationShard(20-): dummy_query {} true true`,
-			},
-			isDML:                true,
-			multiShardAutocommit: false,
+		isDML:                true,
+		multiShardAutocommit: false,
+	}, {
+		testName:    "sharded with single shard destination",
+		sharded:     true,
+		shards:      twoShards,
+		destination: key.DestinationShard("20-"),
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
+			`ExecuteMultiShard ks.DestinationShard(20-): dummy_query {} true true`,
 		},
-		{
-			testName:    "sharded with multi shard destination",
-			sharded:     true,
-			shards:      twoShards,
-			destination: key.DestinationAllShards{},
-			expectedQueryLog: []string{
-				`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-				`ExecuteMultiShard ks.-20: dummy_query {} ks.20-: dummy_query {} true false`,
-			},
-			isDML:                true,
-			multiShardAutocommit: false,
+		isDML:                true,
+		multiShardAutocommit: false,
+	}, {
+		testName:    "sharded with multi shard destination",
+		sharded:     true,
+		shards:      twoShards,
+		destination: key.DestinationAllShards{},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`ExecuteMultiShard ks.-20: dummy_query {} ks.20-: dummy_query {} true false`,
 		},
-		{
-			testName:    "sharded with multi shard destination and autocommit",
-			sharded:     true,
-			shards:      twoShards,
-			destination: key.DestinationAllShards{},
-			expectedQueryLog: []string{
-				`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-				`ExecuteMultiShard ks.-20: dummy_query {} ks.20-: dummy_query {} true true`,
-			},
-			isDML:                true,
-			multiShardAutocommit: true,
+		isDML:                true,
+		multiShardAutocommit: false,
+	}, {
+		testName:    "sharded with multi shard destination and autocommit",
+		sharded:     true,
+		shards:      twoShards,
+		destination: key.DestinationAllShards{},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`ExecuteMultiShard ks.-20: dummy_query {} ks.20-: dummy_query {} true true`,
 		},
-		{
-			testName:    "sharded with multi shard destination",
-			sharded:     true,
-			shards:      twoShards,
-			destination: key.DestinationAllShards{},
-			expectedQueryLog: []string{
-				`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-			},
-			expectedError:        "Unexpected error, DestinationKeyspaceID mapping to multiple shards: dummy_query, got: DestinationAllShards()",
-			isDML:                true,
-			singleShardOnly:      true,
-			multiShardAutocommit: false,
+		isDML:                true,
+		multiShardAutocommit: true,
+	}, {
+		testName:    "sharded with multi shard destination",
+		sharded:     true,
+		shards:      twoShards,
+		destination: key.DestinationAllShards{},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		},
-	}
+		expectedError:        "Unexpected error, DestinationKeyspaceID mapping to multiple shards: dummy_query, got: DestinationAllShards()",
+		isDML:                true,
+		singleShardOnly:      true,
+		multiShardAutocommit: false,
+	}}
 
 	for _, tc := range tests {
 		t.Run(tc.testName, func(t *testing.T) {
@@ -182,75 +176,68 @@ func TestSendTable_StreamExecute(t *testing.T) {
 
 	singleShard := []string{"0"}
 	twoShards := []string{"-20", "20-"}
-	tests := []testCase{
-		{
-			testName:    "unsharded with no autocommit",
-			sharded:     false,
-			shards:      singleShard,
-			destination: key.DestinationAllShards{},
-			expectedQueryLog: []string{
-				`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-				`StreamExecuteMulti dummy_query ks.0: {} `,
-			},
-			isDML: false,
+	tests := []testCase{{
+		testName:    "unsharded with no autocommit",
+		sharded:     false,
+		shards:      singleShard,
+		destination: key.DestinationAllShards{},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`StreamExecuteMulti dummy_query ks.0: {} `,
 		},
-		{
-			testName:    "sharded with no autocommit",
-			sharded:     true,
-			shards:      twoShards,
-			destination: key.DestinationShard("20-"),
-			expectedQueryLog: []string{
-				`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
-				`StreamExecuteMulti dummy_query ks.DestinationShard(20-): {} `,
-			},
-			isDML: false,
+		isDML: false,
+	}, {
+		testName:    "sharded with no autocommit",
+		sharded:     true,
+		shards:      twoShards,
+		destination: key.DestinationShard("20-"),
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
+			`StreamExecuteMulti dummy_query ks.DestinationShard(20-): {} `,
 		},
-		{
-			testName:    "unsharded",
-			sharded:     false,
-			shards:      singleShard,
-			destination: key.DestinationAllShards{},
-			expectedQueryLog: []string{
-				`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-				`StreamExecuteMulti dummy_query ks.0: {} `,
-			},
-			isDML: true,
+		isDML: false,
+	}, {
+		testName:    "unsharded",
+		sharded:     false,
+		shards:      singleShard,
+		destination: key.DestinationAllShards{},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`StreamExecuteMulti dummy_query ks.0: {} `,
 		},
-		{
-			testName:    "sharded with single shard destination",
-			sharded:     true,
-			shards:      twoShards,
-			destination: key.DestinationShard("20-"),
-			expectedQueryLog: []string{
-				`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
-				`StreamExecuteMulti dummy_query ks.DestinationShard(20-): {} `,
-			},
-			isDML: true,
+		isDML: true,
+	}, {
+		testName:    "sharded with single shard destination",
+		sharded:     true,
+		shards:      twoShards,
+		destination: key.DestinationShard("20-"),
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
+			`StreamExecuteMulti dummy_query ks.DestinationShard(20-): {} `,
 		},
-		{
-			testName:    "sharded with multi shard destination",
-			sharded:     true,
-			shards:      twoShards,
-			destination: key.DestinationAllShards{},
-			expectedQueryLog: []string{
-				`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-				`StreamExecuteMulti dummy_query ks.-20: {} ks.20-: {} `,
-			},
-			isDML: true,
+		isDML: true,
+	}, {
+		testName:    "sharded with multi shard destination",
+		sharded:     true,
+		shards:      twoShards,
+		destination: key.DestinationAllShards{},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`StreamExecuteMulti dummy_query ks.-20: {} ks.20-: {} `,
 		},
-		{
-			testName:    "sharded with multi shard destination single shard setting",
-			sharded:     true,
-			shards:      twoShards,
-			destination: key.DestinationAllShards{},
-			expectedQueryLog: []string{
-				`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-			},
-			expectedError:   "Unexpected error, DestinationKeyspaceID mapping to multiple shards: dummy_query, got: DestinationAllShards()",
-			isDML:           true,
-			singleShardOnly: true,
+		isDML: true,
+	}, {
+		testName:    "sharded with multi shard destination single shard setting",
+		sharded:     true,
+		shards:      twoShards,
+		destination: key.DestinationAllShards{},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		},
-	}
+		expectedError:   "Unexpected error, DestinationKeyspaceID mapping to multiple shards: dummy_query, got: DestinationAllShards()",
+		isDML:           true,
+		singleShardOnly: true,
+	}}
 
 	for _, tc := range tests {
 		t.Run(tc.testName, func(t *testing.T) {
@@ -316,4 +303,36 @@ func TestSendGetFields(t *testing.T) {
 	})
 	require.Nil(t, qr.Rows)
 	require.Equal(t, 4, len(qr.Fields))
+}
+
+func TestGetDestinationFromTheOutside(t *testing.T) {
+	send := &Send{
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		Query:             "dummy_query",
+		TargetDestination: nil,
+	}
+	vc := &loggingVCursor{shards: []string{"-80", "80-"}}
+	routing := &RouteDestination{
+		Shards: []*srvtopo.ResolvedShard{
+			{Target: &querypb.Target{Keyspace: "foo", Shard: "-80"}},
+			{Target: &querypb.Target{Keyspace: "bar", Shard: "80-"}},
+		},
+		BindVars: []map[string]*querypb.BindVariable{
+			{"bar": sqltypes.Int64BindVariable(1)},
+			{"foo": sqltypes.Int64BindVariable(1)},
+		},
+	}
+	vars := map[string]*querypb.BindVariable{
+		"apa": sqltypes.Int64BindVariable(12),
+	}
+	_, err := send.TryExecute(vc, routing, vars, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ExecuteMultiShard ` +
+			`foo.-80: dummy_query {apa: type:INT64 value:"12" bar: type:INT64 value:"1"} ` +
+			`bar.80-: dummy_query {apa: type:INT64 value:"12" foo: type:INT64 value:"1"} false false`,
+	})
 }

@@ -234,7 +234,7 @@ type (
 
 	RouteDestination struct {
 		Shards   []*srvtopo.ResolvedShard
-		BindVars map[string]*querypb.BindVariable
+		BindVars []map[string]*querypb.BindVariable
 	}
 
 	// noInputs default implementation for Primitives that are leaves
