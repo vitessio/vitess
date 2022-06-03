@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 
 	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
@@ -318,18 +319,6 @@ func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) err
 	return err
 }
 
-// cloneVRS takes a deep copy of the grpc response object passed by VStreamRows(), otherwise the following callbacks
-// overwrite the data from the previous callback.
-// In vdiff1 we use VStreamResults where this is not needed.
-// todo: this is obviously inefficient -- understand why this is happening (possibly the optimization added for
-//       inplace grpc operations is only in VStreamRows).
-func cloneVRS(vrsIn *binlogdatapb.VStreamRowsResponse) *binlogdatapb.VStreamRowsResponse {
-	var vrsOut binlogdatapb.VStreamRowsResponse
-	b, _ := vrsIn.MarshalVT()
-	_ = vrsOut.UnmarshalVT(b)
-	return &vrsOut
-}
-
 func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStreamer, query string, gtidch chan string) {
 	log.Infof("streamOneShard Start %s", participant.tablet.Alias.String())
 	defer func() {
@@ -350,33 +339,33 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			TabletType: participant.tablet.Type,
 		}
 		var fields []*querypb.Field
-		return conn.VStreamRows(ctx, target, query, nil, func(vrs *binlogdatapb.VStreamRowsResponse) error {
-			// TODO: figure out out to remove this as it could make vdiff2 unusable for large tables with large rows
-			vrs2 := cloneVRS(vrs)
-			//log.Infof("VStreamRows start %s:%d", participant.tablet.Alias.String(), len(vrs2.Rows))
+		return conn.VStreamRows(ctx, target, query, nil, func(vsrr *binlogdatapb.VStreamRowsResponse) error {
+			// TODO: figure out if we can safely avoid the clone ???
+			vsr := proto.Clone(vsrr).(*binlogdatapb.VStreamRowsResponse)
+			//log.Infof("VStreamRows start %s:%d", participant.tablet.Alias.String(), len(vsr.Rows))
 
 			if len(fields) == 0 {
-				if len(vrs2.Fields) == 0 {
-					return fmt.Errorf("did not received expected fields in response %+v", vrs)
+				if len(vsr.Fields) == 0 {
+					return fmt.Errorf("did not received expected fields in response %+v", vsr)
 				}
 				//log.Infof("received fields from %s", participant.tablet.Alias)
-				fields = vrs2.Fields // cloneFields(vrs.Fields)
+				fields = vsr.Fields
 				//log.Infof("fields received were %+v, %s", fields, participant.tablet.Alias)
-				gtidch <- vrs2.Gtid
+				gtidch <- vsr.Gtid
 			}
-			if len(vrs2.Rows) == 0 && len(vrs2.Fields) == 0 {
+			if len(vsr.Rows) == 0 && len(vsr.Fields) == 0 {
 				//log.Infof("no rows, no fields %+v, %s", fields, participant.tablet.Alias)
 				return nil
 			}
-			//log.Infof("received %d rows from %s, fields %+v", len(vrs.Rows), participant.tablet.Alias, fields)
+			//log.Infof("received %d rows from %s, fields %+v", len(vsr.Rows), participant.tablet.Alias, fields)
 			p3qr := &querypb.QueryResult{
 				Fields: fields,
-				Rows:   vrs2.Rows, //cloneRows(vrs.Rows),
+				Rows:   vsr.Rows,
 			}
 			result := sqltypes.Proto3ToResult(p3qr)
 
 			// Fields should be received only once, and sent only once.
-			if vrs2.Fields == nil {
+			if vsr.Fields == nil {
 				result.Fields = nil
 			}
 			//log.Infof("%s pushing1 %d fields, %d rows", participant.tablet.Alias.String(), len(result.Fields),len(result.Rows))//, result.Rows)

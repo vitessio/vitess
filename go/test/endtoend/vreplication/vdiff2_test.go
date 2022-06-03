@@ -42,6 +42,7 @@ func TestVDiff2(t *testing.T) {
 	targetKs := "customer"
 	targetShards := []string{"-80", "80-"}
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
+	extraVTTabletArgs = []string{"--vstream_packet_size=1"}
 
 	vc = NewVitessCluster(t, "TestVDiff2", []string{allCellNames}, mainClusterConfig)
 	require.NotNil(t, vc)
