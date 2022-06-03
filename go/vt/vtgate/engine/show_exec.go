@@ -46,7 +46,7 @@ func (s *ShowExec) GetTableName() string {
 }
 
 func (s *ShowExec) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
-	qr, err := s.TryExecute(vcursor, bindVars, true)
+	qr, err := s.TryExecute(vcursor, nil, bindVars, true)
 	if err != nil {
 		return nil, err
 	}
@@ -54,12 +54,12 @@ func (s *ShowExec) GetFields(vcursor VCursor, bindVars map[string]*query.BindVar
 	return qr, nil
 }
 
-func (s *ShowExec) TryExecute(vcursor VCursor, _ map[string]*query.BindVariable, _ bool) (*sqltypes.Result, error) {
+func (s *ShowExec) TryExecute(vcursor VCursor, _ *RoutingParameters, _ map[string]*query.BindVariable, _ bool) (*sqltypes.Result, error) {
 	return vcursor.ShowExec(s.Command, s.ShowFilter)
 }
 
 func (s *ShowExec) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	qr, err := s.TryExecute(vcursor, bindVars, wantfields)
+	qr, err := s.TryExecute(vcursor, routing, bindVars, wantfields)
 	if err != nil {
 		return err
 	}

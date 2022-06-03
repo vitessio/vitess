@@ -61,7 +61,7 @@ func (r *RenameFields) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (r *RenameFields) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (r *RenameFields) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	qr, err := vcursor.ExecutePrimitive(r.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err

@@ -84,7 +84,7 @@ func (sa *ScalarAggregate) NeedsTransaction() bool {
 }
 
 // TryExecute implements the Primitive interface
-func (sa *ScalarAggregate) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (sa *ScalarAggregate) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	result, err := vcursor.ExecutePrimitive(sa.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err

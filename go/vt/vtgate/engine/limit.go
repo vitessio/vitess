@@ -52,7 +52,7 @@ func (l *Limit) GetTableName() string {
 }
 
 // TryExecute satisfies the Primitive interface.
-func (l *Limit) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (l *Limit) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, offset, err := l.getCountAndOffset(vcursor, bindVars)
 	if err != nil {
 		return nil, err

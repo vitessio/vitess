@@ -60,7 +60,7 @@ func (del *Delete) GetTableName() string {
 }
 
 // TryExecute performs a non-streaming exec.
-func (del *Delete) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+func (del *Delete) TryExecute(vcursor VCursor, _ *RoutingParameters, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	if del.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(del.QueryTimeout) * time.Millisecond)
 		defer cancel()
@@ -88,7 +88,7 @@ func (del *Delete) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 
 // TryStreamExecute performs a streaming exec.
 func (del *Delete) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	res, err := del.TryExecute(vcursor, bindVars, wantfields)
+	res, err := del.TryExecute(vcursor, routing, bindVars, wantfields)
 	if err != nil {
 		return err
 	}

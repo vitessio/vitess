@@ -62,7 +62,7 @@ func (ps *PulloutSubquery) GetTableName() string {
 }
 
 // TryExecute satisfies the Primitive interface.
-func (ps *PulloutSubquery) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (ps *PulloutSubquery) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	combinedVars, err := ps.execSubquery(vcursor, bindVars)
 	if err != nil {
 		return nil, err

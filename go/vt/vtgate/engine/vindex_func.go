@@ -88,7 +88,7 @@ func (vf *VindexFunc) GetTableName() string {
 }
 
 // TryExecute performs a non-streaming exec.
-func (vf *VindexFunc) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (vf *VindexFunc) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return vf.mapVindex(vcursor, bindVars)
 }
 

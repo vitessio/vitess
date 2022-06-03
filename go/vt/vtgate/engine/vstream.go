@@ -61,7 +61,7 @@ func (v *VStream) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (v *VStream) TryExecute(_ VCursor, _ map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (v *VStream) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] 'Execute' called for VStream")
 }
 

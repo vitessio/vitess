@@ -50,7 +50,7 @@ func (p *Projection) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (p *Projection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (p *Projection) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	result, err := vcursor.ExecutePrimitive(p.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err

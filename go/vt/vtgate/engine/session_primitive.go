@@ -59,7 +59,7 @@ func (s *SessionPrimitive) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (s *SessionPrimitive) TryExecute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+func (s *SessionPrimitive) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return s.action(vcursor.Session())
 }
 

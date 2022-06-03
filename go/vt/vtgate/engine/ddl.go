@@ -86,7 +86,7 @@ func (ddl *DDL) isOnlineSchemaDDL() bool {
 }
 
 // TryExecute implements the Primitive interface
-func (ddl *DDL) TryExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
+func (ddl *DDL) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	if ddl.CreateTempTable {
 		vcursor.Session().HasCreatedTempTable()
 		vcursor.Session().NeedsReservedConn()
@@ -115,7 +115,7 @@ func (ddl *DDL) TryExecute(vcursor VCursor, bindVars map[string]*query.BindVaria
 
 // TryStreamExecute implements the Primitive interface
 func (ddl *DDL) TryStreamExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	results, err := ddl.TryExecute(vcursor, bindVars, wantfields)
+	results, err := ddl.TryExecute(vcursor, routing, bindVars, wantfields)
 	if err != nil {
 		return err
 	}

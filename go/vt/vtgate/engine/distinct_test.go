@@ -99,7 +99,7 @@ func TestDistinct(t *testing.T) {
 				Truncate:  false,
 			}
 
-			qr, err := distinct.TryExecute(&noopVCursor{ctx: context.Background()}, nil, true)
+			qr, err := distinct.TryExecute(&noopVCursor{ctx: context.Background()}, nil, nil, true)
 			if tc.expectedError == "" {
 				require.NoError(t, err)
 				got := fmt.Sprintf("%v", qr.Rows)
@@ -148,7 +148,7 @@ func TestWeightStringFallBack(t *testing.T) {
 		Truncate:  true,
 	}
 
-	qr, err := distinct.TryExecute(&noopVCursor{ctx: context.Background()}, nil, true)
+	qr, err := distinct.TryExecute(&noopVCursor{ctx: context.Background()}, nil, nil, true)
 	require.NoError(t, err)
 
 	got := fmt.Sprintf("%v", qr.Rows)

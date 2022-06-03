@@ -80,7 +80,7 @@ func TestEmptyRows(outer *testing.T) {
 				Input: fp,
 			}
 
-			result, err := oa.TryExecute(&noopVCursor{}, nil, false)
+			result, err := oa.TryExecute(&noopVCursor{}, nil, nil, false)
 			assert.NoError(err)
 
 			wantResult := sqltypes.MakeTestResult(

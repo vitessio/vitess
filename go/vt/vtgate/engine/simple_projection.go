@@ -52,7 +52,7 @@ func (sc *SimpleProjection) GetTableName() string {
 }
 
 // TryExecute performs a non-streaming exec.
-func (sc *SimpleProjection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (sc *SimpleProjection) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	inner, err := vcursor.ExecutePrimitive(sc.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err

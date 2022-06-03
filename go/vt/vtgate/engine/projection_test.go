@@ -52,7 +52,7 @@ func TestMultiply(t *testing.T) {
 		Input:      fp,
 		noTxNeeded: noTxNeeded{},
 	}
-	qr, err := proj.TryExecute(&noopVCursor{}, map[string]*querypb.BindVariable{}, false)
+	qr, err := proj.TryExecute(&noopVCursor{}, nil, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	assert.Equal(t, "[[UINT64(6)] [UINT64(0)] [UINT64(2)]]", fmt.Sprintf("%v", qr.Rows))
 

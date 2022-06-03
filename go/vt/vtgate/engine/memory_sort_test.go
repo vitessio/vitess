@@ -54,7 +54,7 @@ func TestMemorySortExecute(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := ms.TryExecute(&noopVCursor{}, nil, false)
+	result, err := ms.TryExecute(&noopVCursor{}, nil, nil, false)
 	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -71,7 +71,7 @@ func TestMemorySortExecute(t *testing.T) {
 	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
-	result, err = ms.TryExecute(&noopVCursor{}, bv, false)
+	result, err = ms.TryExecute(&noopVCursor{}, nil, bv, false)
 	require.NoError(t, err)
 
 	wantResult = sqltypes.MakeTestResult(
@@ -173,7 +173,7 @@ func TestMemorySortExecuteWeightString(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := ms.TryExecute(&noopVCursor{}, nil, false)
+	result, err := ms.TryExecute(&noopVCursor{}, nil, nil, false)
 	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -190,7 +190,7 @@ func TestMemorySortExecuteWeightString(t *testing.T) {
 	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
-	result, err = ms.TryExecute(&noopVCursor{}, bv, false)
+	result, err = ms.TryExecute(&noopVCursor{}, nil, bv, false)
 	require.NoError(t, err)
 
 	wantResult = sqltypes.MakeTestResult(
@@ -315,7 +315,7 @@ func TestMemorySortExecuteCollation(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := ms.TryExecute(&noopVCursor{}, nil, false)
+	result, err := ms.TryExecute(&noopVCursor{}, nil, nil, false)
 	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -332,7 +332,7 @@ func TestMemorySortExecuteCollation(t *testing.T) {
 	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
-	result, err = ms.TryExecute(&noopVCursor{}, bv, false)
+	result, err = ms.TryExecute(&noopVCursor{}, nil, bv, false)
 	require.NoError(t, err)
 
 	wantResult = sqltypes.MakeTestResult(
@@ -446,7 +446,7 @@ func TestMemorySortExecuteTruncate(t *testing.T) {
 		TruncateColumnCount: 2,
 	}
 
-	result, err := ms.TryExecute(&noopVCursor{}, nil, false)
+	result, err := ms.TryExecute(&noopVCursor{}, nil, nil, false)
 	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -531,7 +531,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := ms.TryExecute(&noopVCursor{}, nil, false)
+	result, err := ms.TryExecute(&noopVCursor{}, nil, nil, false)
 	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -548,7 +548,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
-	result, err = ms.TryExecute(&noopVCursor{}, bv, false)
+	result, err = ms.TryExecute(&noopVCursor{}, nil, bv, false)
 	require.NoError(t, err)
 
 	wantResult = sqltypes.MakeTestResult(
@@ -636,7 +636,7 @@ func TestMemorySortExecuteNoVarChar(t *testing.T) {
 		Input: fp,
 	}
 
-	_, err := ms.TryExecute(&noopVCursor{}, nil, false)
+	_, err := ms.TryExecute(&noopVCursor{}, nil, nil, false)
 	want := "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute err: %v, want %v", err, want)

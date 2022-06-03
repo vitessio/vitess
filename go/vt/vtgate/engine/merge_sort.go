@@ -65,7 +65,7 @@ func (ms *MergeSort) GetKeyspaceName() string { return "" }
 func (ms *MergeSort) GetTableName() string { return "" }
 
 // TryExecute is not supported.
-func (ms *MergeSort) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (ms *MergeSort) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] Execute is not reachable")
 }
 

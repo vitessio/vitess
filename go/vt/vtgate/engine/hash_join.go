@@ -63,7 +63,7 @@ type HashJoin struct {
 }
 
 // TryExecute implements the Primitive interface
-func (hj *HashJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (hj *HashJoin) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	lresult, err := vcursor.ExecutePrimitive(hj.Left, bindVars, wantfields)
 	if err != nil {
 		return nil, err

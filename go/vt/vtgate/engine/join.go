@@ -49,7 +49,7 @@ type Join struct {
 }
 
 // TryExecute performs a non-streaming exec.
-func (jn *Join) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (jn *Join) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	joinVars := make(map[string]*querypb.BindVariable)
 	lresult, err := vcursor.ExecutePrimitive(jn.Left, bindVars, wantfields)
 	if err != nil {

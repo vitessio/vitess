@@ -432,7 +432,7 @@ const MaxBufferingRetries = 3
 
 func (vc *vcursorImpl) ExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	for try := 0; try < MaxBufferingRetries; try++ {
-		res, err := primitive.TryExecute(vc, bindVars, wantfields)
+		res, err := primitive.TryExecute(vc, nil, bindVars, wantfields)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
 		}

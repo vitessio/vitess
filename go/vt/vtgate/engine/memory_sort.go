@@ -65,7 +65,7 @@ func (ms *MemorySort) SetTruncateColumnCount(count int) {
 }
 
 // TryExecute satisfies the Primitive interface.
-func (ms *MemorySort) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (ms *MemorySort) TryExecute(vcursor VCursor, routing *RoutingParameters, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, err := ms.fetchCount(vcursor, bindVars)
 	if err != nil {
 		return nil, err

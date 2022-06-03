@@ -104,7 +104,7 @@ func (t *noopVCursor) ConnCollation() collations.ID {
 }
 
 func (t *noopVCursor) ExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return primitive.TryExecute(t, bindVars, wantfields)
+	return primitive.TryExecute(t, nil, bindVars, wantfields)
 }
 
 func (t *noopVCursor) StreamExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
@@ -367,7 +367,7 @@ type tableRoutes struct {
 }
 
 func (f *loggingVCursor) ExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return primitive.TryExecute(f, bindVars, wantfields)
+	return primitive.TryExecute(f, nil, bindVars, wantfields)
 }
 
 func (f *loggingVCursor) StreamExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {

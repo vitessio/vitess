@@ -69,16 +69,17 @@ func (gc *Gen4CompareV3) NeedsTransaction() bool {
 // TryExecute implements the Primitive interface
 func (gc *Gen4CompareV3) TryExecute(
 	vcursor VCursor,
+	routing *RoutingParameters,
 	bindVars map[string]*querypb.BindVariable,
 	wantfields bool,
 ) (*sqltypes.Result, error) {
 	var v3Err, gen4Err error
 	v3Result, gen4Result := &sqltypes.Result{}, &sqltypes.Result{}
 	if gc.Gen4 != nil {
-		gen4Result, gen4Err = gc.Gen4.TryExecute(vcursor, bindVars, wantfields)
+		gen4Result, gen4Err = gc.Gen4.TryExecute(vcursor, routing, bindVars, wantfields)
 	}
 	if gc.V3 != nil {
-		v3Result, v3Err = gc.V3.TryExecute(vcursor, bindVars, wantfields)
+		v3Result, v3Err = gc.V3.TryExecute(vcursor, routing, bindVars, wantfields)
 	}
 
 	if err := CompareV3AndGen4Errors(v3Err, gen4Err); err != nil {
