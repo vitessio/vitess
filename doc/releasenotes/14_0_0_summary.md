@@ -192,7 +192,7 @@ When `--heartbeat_on_demand_duration` is set to a positive value, then the throt
 
 #### Deprecation of durability_policy Flag
 The flag `durability_policy` added to vtctl, vtctld and vtworker binaries has now been deprecated.
-Instead the durability policy for a given keyspace will be stored in the keyspace information in the topo-server.
+Instead the durability policy for a given keyspace will be stored in the keyspace record in the topo-server.
 
 #### New and Augmented Commands
 The vtctld command `CreateKeyspace` has been augmented to take in an additional argument called `durability-policy` which will
