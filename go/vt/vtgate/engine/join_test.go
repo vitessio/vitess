@@ -464,7 +464,7 @@ func TestGetFields(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	r, err := jn.GetFields(nil, map[string]*querypb.BindVariable{})
+	r, err := jn.GetFields(nil, nil, map[string]*querypb.BindVariable{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -501,7 +501,7 @@ func TestGetFieldsErrors(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	_, err := jn.GetFields(nil, map[string]*querypb.BindVariable{})
+	_, err := jn.GetFields(nil, nil, map[string]*querypb.BindVariable{})
 	require.EqualError(t, err, "left err")
 
 	jn.Left = &fakePrimitive{
@@ -514,6 +514,6 @@ func TestGetFieldsErrors(t *testing.T) {
 			),
 		},
 	}
-	_, err = jn.GetFields(nil, map[string]*querypb.BindVariable{})
+	_, err = jn.GetFields(nil, nil, map[string]*querypb.BindVariable{})
 	require.EqualError(t, err, "right err")
 }

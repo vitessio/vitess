@@ -126,8 +126,8 @@ func (p *Projection) TryStreamExecute(vcursor VCursor, routing *RouteDestination
 }
 
 // GetFields implements the Primitive interface
-func (p *Projection) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	qr, err := p.Input.GetFields(vcursor, bindVars)
+func (p *Projection) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	qr, err := p.Input.GetFields(vcursor, routing, bindVars)
 	if err != nil {
 		return nil, err
 	}

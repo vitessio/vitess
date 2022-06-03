@@ -77,6 +77,6 @@ func (updTarget *UpdateTarget) TryStreamExecute(vcursor VCursor, routing *RouteD
 }
 
 // GetFields implements the Primitive interface
-func (updTarget *UpdateTarget) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
+func (updTarget *UpdateTarget) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] GetFields not reachable for use statement")
 }

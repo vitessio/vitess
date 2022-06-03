@@ -45,8 +45,8 @@ func (s *ShowExec) GetTableName() string {
 	return ""
 }
 
-func (s *ShowExec) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
-	qr, err := s.TryExecute(vcursor, nil, bindVars, true)
+func (s *ShowExec) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
+	qr, err := s.TryExecute(vcursor, routing, bindVars, true)
 	if err != nil {
 		return nil, err
 	}

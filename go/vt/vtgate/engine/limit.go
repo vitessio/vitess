@@ -147,8 +147,8 @@ func (l *Limit) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bin
 }
 
 // GetFields implements the Primitive interface.
-func (l *Limit) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return l.Input.GetFields(vcursor, bindVars)
+func (l *Limit) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return l.Input.GetFields(vcursor, routing, bindVars)
 }
 
 // Inputs returns the input to limit

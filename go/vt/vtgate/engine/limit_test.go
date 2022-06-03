@@ -492,7 +492,7 @@ func TestLimitGetFields(t *testing.T) {
 
 	l := &Limit{Input: fp}
 
-	got, err := l.GetFields(nil, nil)
+	got, err := l.GetFields(nil, nil, nil)
 	require.NoError(t, err)
 	if !reflect.DeepEqual(got, result) {
 		t.Errorf("l.GetFields:\n%v, want\n%v", got, result)
@@ -517,7 +517,7 @@ func TestLimitInputFail(t *testing.T) {
 	}
 
 	fp.rewind()
-	if _, err := l.GetFields(nil, nil); err == nil || err.Error() != want {
+	if _, err := l.GetFields(nil, nil, nil); err == nil || err.Error() != want {
 		t.Errorf("l.GetFields(): %v, want %s", err, want)
 	}
 }

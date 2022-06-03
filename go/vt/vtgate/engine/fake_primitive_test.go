@@ -118,9 +118,9 @@ func (f *fakePrimitive) TryStreamExecute(vcursor VCursor, routing *RouteDestinat
 
 	return nil
 }
-func (f *fakePrimitive) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (f *fakePrimitive) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("GetFields %v", printBindVars(bindVars)))
-	return f.TryExecute(vcursor, nil, bindVars, true /* wantfields */)
+	return f.TryExecute(vcursor, routing, bindVars, true /* wantfields */)
 }
 
 func (f *fakePrimitive) ExpectLog(t *testing.T, want []string) {

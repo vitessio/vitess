@@ -201,7 +201,7 @@ func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*queryp
 	if len(rss) == 0 {
 		if !route.NoRoutesSpecialHandling {
 			if wantfields {
-				return route.GetFields(vcursor, bindVars)
+				return route.GetFields(vcursor, nil, bindVars)
 			}
 			return &sqltypes.Result{}, nil
 		}
@@ -268,7 +268,7 @@ func (route *Route) TryStreamExecute(vcursor VCursor, routing *RouteDestination,
 	if len(rss) == 0 {
 		if !route.NoRoutesSpecialHandling {
 			if wantfields {
-				r, err := route.GetFields(vcursor, bindVars)
+				r, err := route.GetFields(vcursor, routing, bindVars)
 				if err != nil {
 					return err
 				}
@@ -331,7 +331,7 @@ func (route *Route) mergeSort(vcursor VCursor, routing *RouteDestination, bindVa
 }
 
 // GetFields fetches the field info.
-func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (route *Route) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
 		return nil, err

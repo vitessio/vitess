@@ -57,8 +57,8 @@ func (gc *Gen4CompareV3) GetTableName() string {
 }
 
 // GetFields implements the Primitive interface
-func (gc *Gen4CompareV3) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return gc.Gen4.GetFields(vcursor, bindVars)
+func (gc *Gen4CompareV3) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return gc.Gen4.GetFields(vcursor, routing, bindVars)
 }
 
 // NeedsTransaction implements the Primitive interface

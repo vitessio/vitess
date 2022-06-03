@@ -73,7 +73,7 @@ func (m *MStream) TryStreamExecute(vcursor VCursor, routing *RouteDestination, b
 }
 
 // GetFields implements the Primitive interface
-func (m *MStream) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (m *MStream) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] 'GetFields' called for Stream")
 }
 

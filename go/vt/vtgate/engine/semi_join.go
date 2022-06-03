@@ -96,8 +96,8 @@ func (jn *SemiJoin) TryStreamExecute(vcursor VCursor, routing *RouteDestination,
 }
 
 // GetFields fetches the field info.
-func (jn *SemiJoin) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return jn.Left.GetFields(vcursor, bindVars)
+func (jn *SemiJoin) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return jn.Left.GetFields(vcursor, routing, bindVars)
 }
 
 // Inputs returns the input primitives for this SemiJoin

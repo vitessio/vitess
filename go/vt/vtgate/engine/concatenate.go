@@ -234,15 +234,15 @@ func (c *Concatenate) TryStreamExecute(vcursor VCursor, routing *RouteDestinatio
 }
 
 // GetFields fetches the field info.
-func (c *Concatenate) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (c *Concatenate) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	// TODO: type coercions
-	res, err := c.Sources[0].GetFields(vcursor, bindVars)
+	res, err := c.Sources[0].GetFields(vcursor, routing, bindVars)
 	if err != nil {
 		return nil, err
 	}
 
 	for i := 1; i < len(c.Sources); i++ {
-		result, err := c.Sources[i].GetFields(vcursor, bindVars)
+		result, err := c.Sources[i].GetFields(vcursor, routing, bindVars)
 		if err != nil {
 			return nil, err
 		}

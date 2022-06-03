@@ -214,7 +214,7 @@ func TestOrderedAggregateGetFields(t *testing.T) {
 
 	oa := &OrderedAggregate{Input: fp}
 
-	got, err := oa.GetFields(nil, nil)
+	got, err := oa.GetFields(nil, nil, nil)
 	assert.NoError(err)
 	assert.Equal(got, input)
 }
@@ -234,7 +234,7 @@ func TestOrderedAggregateGetFieldsTruncate(t *testing.T) {
 		Input:               fp,
 	}
 
-	got, err := oa.GetFields(nil, nil)
+	got, err := oa.GetFields(nil, nil, nil)
 	assert.NoError(err)
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -261,7 +261,7 @@ func TestOrderedAggregateInputFail(t *testing.T) {
 	}
 
 	fp.rewind()
-	if _, err := oa.GetFields(nil, nil); err == nil || err.Error() != want {
+	if _, err := oa.GetFields(nil, nil, nil); err == nil || err.Error() != want {
 		t.Errorf("oa.GetFields(): %v, want %s", err, want)
 	}
 }

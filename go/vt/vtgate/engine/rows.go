@@ -71,7 +71,7 @@ func (r *Rows) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bind
 }
 
 // GetFields implements the Primitive interface
-func (r *Rows) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (r *Rows) GetFields(VCursor, *RouteDestination, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{
 		Fields:   r.fields,
 		InsertID: 0,

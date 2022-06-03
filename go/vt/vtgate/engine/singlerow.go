@@ -64,7 +64,7 @@ func (s *SingleRow) TryStreamExecute(vcursor VCursor, routing *RouteDestination,
 }
 
 // GetFields fetches the field info.
-func (s *SingleRow) GetFields(_ VCursor, _ map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (s *SingleRow) GetFields(_ VCursor, _ *RouteDestination, _ map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{}, nil
 }
 

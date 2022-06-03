@@ -73,7 +73,7 @@ func (s *SessionPrimitive) TryStreamExecute(vcursor VCursor, _ *RouteDestination
 }
 
 // GetFields implements the Primitive interface
-func (s *SessionPrimitive) GetFields(_ VCursor, _ map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (s *SessionPrimitive) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "not supported for this primitive")
 }
 

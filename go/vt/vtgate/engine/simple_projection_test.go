@@ -149,7 +149,7 @@ func TestSubqueryGetFields(t *testing.T) {
 		"a": sqltypes.Int64BindVariable(1),
 	}
 
-	r, err := sq.GetFields(nil, bv)
+	r, err := sq.GetFields(nil, nil, bv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,6 +168,6 @@ func TestSubqueryGetFields(t *testing.T) {
 	sq.Input = &fakePrimitive{
 		sendErr: errors.New("err"),
 	}
-	_, err = sq.GetFields(nil, bv)
+	_, err = sq.GetFields(nil, nil, bv)
 	require.EqualError(t, err, `err`)
 }

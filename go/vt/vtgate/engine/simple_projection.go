@@ -68,8 +68,8 @@ func (sc *SimpleProjection) TryStreamExecute(vcursor VCursor, routing *RouteDest
 }
 
 // GetFields fetches the field info.
-func (sc *SimpleProjection) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	inner, err := sc.Input.GetFields(vcursor, bindVars)
+func (sc *SimpleProjection) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	inner, err := sc.Input.GetFields(vcursor, routing, bindVars)
 	if err != nil {
 		return nil, err
 	}

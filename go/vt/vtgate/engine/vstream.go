@@ -153,7 +153,7 @@ func addRowChangeIndicatorColumn(change *binlogdatapb.RowChange, eventFields []*
 }
 
 // GetFields implements the Primitive interface
-func (v *VStream) GetFields(_ VCursor, _ map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (v *VStream) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] 'GetFields' called for VStream")
 }
 

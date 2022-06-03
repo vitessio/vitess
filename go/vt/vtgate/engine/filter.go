@@ -106,8 +106,8 @@ func (f *Filter) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bi
 }
 
 // GetFields implements the Primitive interface.
-func (f *Filter) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return f.Input.GetFields(vcursor, bindVars)
+func (f *Filter) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return f.Input.GetFields(vcursor, routing, bindVars)
 }
 
 // Inputs returns the input to limit

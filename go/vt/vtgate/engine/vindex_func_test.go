@@ -226,7 +226,7 @@ func TestVindexFuncStreamExecute(t *testing.T) {
 
 func TestVindexFuncGetFields(t *testing.T) {
 	vf := testVindexFunc(&uvindex{matchid: true})
-	got, err := vf.GetFields(nil, nil)
+	got, err := vf.GetFields(nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

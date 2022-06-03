@@ -66,6 +66,6 @@ func TestUpdateTargetTable(t *testing.T) {
 func TestUpdateTargetGetFields(t *testing.T) {
 	updateTarget := &UpdateTarget{}
 	vc := &noopVCursor{}
-	_, err := updateTarget.GetFields(vc, map[string]*querypb.BindVariable{})
+	_, err := updateTarget.GetFields(vc, nil, map[string]*querypb.BindVariable{})
 	require.EqualError(t, err, "[BUG] GetFields not reachable for use statement")
 }

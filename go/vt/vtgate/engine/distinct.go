@@ -235,8 +235,8 @@ func (d *Distinct) GetTableName() string {
 }
 
 // GetFields implements the Primitive interface
-func (d *Distinct) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return d.Source.GetFields(vcursor, bindVars)
+func (d *Distinct) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return d.Source.GetFields(vcursor, routing, bindVars)
 }
 
 // NeedsTransaction implements the Primitive interface

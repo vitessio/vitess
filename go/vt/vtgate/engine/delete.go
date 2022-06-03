@@ -96,7 +96,7 @@ func (del *Delete) TryStreamExecute(vcursor VCursor, routing *RouteDestination, 
 }
 
 // GetFields fetches the field info.
-func (del *Delete) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (del *Delete) GetFields(VCursor, *RouteDestination, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("BUG: unreachable code for %q", del.Query)
 }
 

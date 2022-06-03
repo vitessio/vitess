@@ -80,7 +80,7 @@ func (ps *PulloutSubquery) TryStreamExecute(vcursor VCursor, routing *RouteDesti
 }
 
 // GetFields fetches the field info.
-func (ps *PulloutSubquery) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ps *PulloutSubquery) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	combinedVars := make(map[string]*querypb.BindVariable, len(bindVars)+1)
 	for k, v := range bindVars {
 		combinedVars[k] = v
@@ -97,7 +97,7 @@ func (ps *PulloutSubquery) GetFields(vcursor VCursor, bindVars map[string]*query
 	case PulloutExists:
 		combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
 	}
-	return ps.Underlying.GetFields(vcursor, combinedVars)
+	return ps.Underlying.GetFields(vcursor, routing, combinedVars)
 }
 
 // NeedsTransaction implements the Primitive interface

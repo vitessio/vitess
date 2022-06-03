@@ -60,7 +60,7 @@ func (jn *Join) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars 
 		for k := range jn.Vars {
 			joinVars[k] = sqltypes.NullBindVariable
 		}
-		rresult, err := jn.Right.GetFields(vcursor, combineVars(bindVars, joinVars))
+		rresult, err := jn.Right.GetFields(vcursor, routing, combineVars(bindVars, joinVars))
 		if err != nil {
 			return nil, err
 		}
@@ -137,7 +137,7 @@ func (jn *Join) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bin
 				joinVars[k] = sqltypes.NullBindVariable
 			}
 			result := &sqltypes.Result{}
-			rresult, err := jn.Right.GetFields(vcursor, combineVars(bindVars, joinVars))
+			rresult, err := jn.Right.GetFields(vcursor, routing, combineVars(bindVars, joinVars))
 			if err != nil {
 				return err
 			}
@@ -150,9 +150,9 @@ func (jn *Join) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bin
 }
 
 // GetFields fetches the field info.
-func (jn *Join) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (jn *Join) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	joinVars := make(map[string]*querypb.BindVariable)
-	lresult, err := jn.Left.GetFields(vcursor, bindVars)
+	lresult, err := jn.Left.GetFields(vcursor, routing, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +160,7 @@ func (jn *Join) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVari
 	for k := range jn.Vars {
 		joinVars[k] = sqltypes.NullBindVariable
 	}
-	rresult, err := jn.Right.GetFields(vcursor, combineVars(bindVars, joinVars))
+	rresult, err := jn.Right.GetFields(vcursor, routing, combineVars(bindVars, joinVars))
 	if err != nil {
 		return nil, err
 	}

@@ -70,8 +70,8 @@ func (r *ReplaceVariables) TryStreamExecute(vcursor VCursor, routing *RouteDesti
 }
 
 // GetFields implements the Primitive interface
-func (r *ReplaceVariables) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return r.Input.GetFields(vcursor, bindVars)
+func (r *ReplaceVariables) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return r.Input.GetFields(vcursor, routing, bindVars)
 }
 
 // Inputs implements the Primitive interface

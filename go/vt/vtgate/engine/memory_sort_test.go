@@ -416,7 +416,7 @@ func TestMemorySortGetFields(t *testing.T) {
 
 	ms := &MemorySort{Input: fp}
 
-	got, err := ms.GetFields(nil, nil)
+	got, err := ms.GetFields(nil, nil, nil)
 	require.NoError(t, err)
 	utils.MustMatch(t, result, got)
 }

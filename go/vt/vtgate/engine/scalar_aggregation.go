@@ -69,8 +69,8 @@ func (sa *ScalarAggregate) GetTableName() string {
 }
 
 // GetFields implements the Primitive interface
-func (sa *ScalarAggregate) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	qr, err := sa.Input.GetFields(vcursor, bindVars)
+func (sa *ScalarAggregate) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	qr, err := sa.Input.GetFields(vcursor, routing, bindVars)
 	if err != nil {
 		return nil, err
 	}

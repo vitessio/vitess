@@ -190,7 +190,7 @@ func (c *DBDDL) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bin
 }
 
 // GetFields implements the Primitive interface
-func (c *DBDDL) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (c *DBDDL) GetFields(VCursor, *RouteDestination, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{}, nil
 }
 

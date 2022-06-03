@@ -103,8 +103,8 @@ func (s SQLCalcFoundRows) TryStreamExecute(vcursor VCursor, routing *RouteDestin
 }
 
 // GetFields implements the Primitive interface
-func (s SQLCalcFoundRows) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return s.LimitPrimitive.GetFields(vcursor, bindVars)
+func (s SQLCalcFoundRows) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return s.LimitPrimitive.GetFields(vcursor, routing, bindVars)
 }
 
 // NeedsTransaction implements the Primitive interface

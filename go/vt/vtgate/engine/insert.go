@@ -251,7 +251,7 @@ func (ins *Insert) TryStreamExecute(vcursor VCursor, routing *RouteDestination, 
 }
 
 // GetFields fetches the field info.
-func (ins *Insert) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ins *Insert) GetFields(VCursor, *RouteDestination, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code for %q", ins.Query)
 }
 

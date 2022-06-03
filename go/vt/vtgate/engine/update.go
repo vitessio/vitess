@@ -107,7 +107,7 @@ func (upd *Update) TryStreamExecute(vcursor VCursor, routing *RouteDestination, 
 }
 
 // GetFields fetches the field info.
-func (upd *Update) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (upd *Update) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("BUG: unreachable code for %q", upd.Query)
 }
 

@@ -410,8 +410,8 @@ func findComparableCurrentDistinct(row []sqltypes.Value, aggr *AggregateParams) 
 }
 
 // GetFields is a Primitive function.
-func (oa *OrderedAggregate) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	qr, err := oa.Input.GetFields(vcursor, bindVars)
+func (oa *OrderedAggregate) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	qr, err := oa.Input.GetFields(vcursor, routing, bindVars)
 	if err != nil {
 		return nil, err
 	}

@@ -82,6 +82,6 @@ func (v *AlterVSchema) TryStreamExecute(vcursor VCursor, routing *RouteDestinati
 }
 
 // GetFields implements the Primitive interface
-func (v *AlterVSchema) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
+func (v *AlterVSchema) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
 }

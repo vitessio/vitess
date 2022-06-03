@@ -99,8 +99,8 @@ func (r *RenameFields) TryStreamExecute(vcursor VCursor, routing *RouteDestinati
 }
 
 // GetFields implements the primitive interface
-func (r *RenameFields) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	qr, err := r.Input.GetFields(vcursor, bindVars)
+func (r *RenameFields) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	qr, err := r.Input.GetFields(vcursor, routing, bindVars)
 	if err != nil {
 		return nil, err
 	}

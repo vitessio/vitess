@@ -218,7 +218,7 @@ type (
 		RouteType() string
 		GetKeyspaceName() string
 		GetTableName() string
-		GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
+		GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 		NeedsTransaction() bool
 
 		TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)

@@ -212,14 +212,14 @@ func (hj *HashJoin) GetTableName() string {
 }
 
 // GetFields implements the Primitive interface
-func (hj *HashJoin) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (hj *HashJoin) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	joinVars := make(map[string]*querypb.BindVariable)
-	lresult, err := hj.Left.GetFields(vcursor, bindVars)
+	lresult, err := hj.Left.GetFields(vcursor, routing, bindVars)
 	if err != nil {
 		return nil, err
 	}
 	result := &sqltypes.Result{}
-	rresult, err := hj.Right.GetFields(vcursor, combineVars(bindVars, joinVars))
+	rresult, err := hj.Right.GetFields(vcursor, routing, combineVars(bindVars, joinVars))
 	if err != nil {
 		return nil, err
 	}

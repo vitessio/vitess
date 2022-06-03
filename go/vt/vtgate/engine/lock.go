@@ -161,7 +161,7 @@ func (l *Lock) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bind
 }
 
 // GetFields is part of the Primitive interface
-func (l *Lock) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (l *Lock) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(l.Keyspace.Name, nil, []key.Destination{l.TargetDestination})
 	if err != nil {
 		return nil, err

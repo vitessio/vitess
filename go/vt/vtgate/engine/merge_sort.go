@@ -70,7 +70,7 @@ func (ms *MergeSort) TryExecute(vcursor VCursor, routing *RouteDestination, bind
 }
 
 // GetFields is not supported.
-func (ms *MergeSort) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ms *MergeSort) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] GetFields is not reachable")
 }
 

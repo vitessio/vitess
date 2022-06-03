@@ -143,8 +143,8 @@ func (ms *MemorySort) TryStreamExecute(vcursor VCursor, routing *RouteDestinatio
 }
 
 // GetFields satisfies the Primitive interface.
-func (ms *MemorySort) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return ms.Input.GetFields(vcursor, bindVars)
+func (ms *MemorySort) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return ms.Input.GetFields(vcursor, routing, bindVars)
 }
 
 // Inputs returns the input to memory sort
