@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
@@ -123,6 +124,7 @@ func FindValidEmergencyReparentCandidates(
 		case len(errantGTIDs) != 0:
 			// This tablet has errant GTIDs. It's not a valid candidate for
 			// reparent, so don't insert it into the final mapping.
+			log.Errorf("skipping %v because we detected errant GTIDs - %v", alias, errantGTIDs)
 			continue
 		}
 
@@ -256,7 +258,7 @@ func stopReplicationAndBuildStatusMaps(
 					msg := "replica %v thinks it's primary but we failed to demote it"
 					err = vterrors.Wrapf(err, msg+": %v", alias, err)
 
-					logger.Warningf(msg, alias)
+					logger.Warningf(msg+": %v", alias, err)
 					return
 				}
 
