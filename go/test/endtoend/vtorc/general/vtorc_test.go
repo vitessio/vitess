@@ -406,3 +406,23 @@ func TestVtorcWithPrs(t *testing.T) {
 	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, shard0.Vttablets, 10*time.Second)
 }
+
+// TestMultipleDurabilities tests that VTOrc works with 2 keyspaces having 2 different durability policies
+func TestMultipleDurabilities(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	// Setup a normal cluster and start vtorc
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, nil, cluster.VtorcConfiguration{}, 1, "")
+	// Setup a semi-sync cluster
+	utils.AddSemiSyncKeyspace(t, clusterInfo)
+
+	keyspaceNone := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shardNone := &keyspaceNone.Shards[0]
+	utils.CheckPrimaryTablet(t, clusterInfo, shardNone.Vttablets[0], true)
+	utils.CheckReplication(t, clusterInfo, shardNone.Vttablets[0], shardNone.Vttablets[1:], 10*time.Second)
+
+	keyspaceSemiSync := &clusterInfo.ClusterInstance.Keyspaces[1]
+	shardSemiSync := &keyspaceSemiSync.Shards[0]
+	// find primary from topo
+	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspaceSemiSync, shardSemiSync)
+	assert.NotNil(t, primary, "should have elected a primary")
+}

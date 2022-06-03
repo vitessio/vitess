@@ -815,6 +815,72 @@ func SetupNewClusterSemiSync(t *testing.T) *VtOrcClusterInfo {
 	return clusterInfo
 }
 
+// AddSemiSyncKeyspace is used to setup a new keyspace with semi-sync.
+// It creates a keyspace with 3 tablets
+func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VtOrcClusterInfo) {
+	var tablets []*cluster.Vttablet
+	keyspaceSemiSyncName := "ks2"
+	keyspace := &cluster.Keyspace{Name: keyspaceSemiSyncName}
+
+	for i := 0; i < 3; i++ {
+		tablet := clusterInfo.ClusterInstance.NewVttabletInstance("replica", 300+i, Cell1)
+		tablets = append(tablets, tablet)
+	}
+
+	shard := &cluster.Shard{Name: shardName}
+	shard.Vttablets = tablets
+
+	oldVttabletArgs := clusterInfo.ClusterInstance.VtTabletExtraArgs
+	defer func() {
+		clusterInfo.ClusterInstance.VtTabletExtraArgs = oldVttabletArgs
+	}()
+	clusterInfo.ClusterInstance.VtTabletExtraArgs = []string{
+		"--lock_tables_timeout", "5s",
+		"--disable_active_reparents",
+		"--enable_semi_sync",
+	}
+
+	// Initialize Cluster
+	err := clusterInfo.ClusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
+	require.NoError(t, err, "Cannot launch cluster: %v", err)
+
+	//Start MySql
+	var mysqlCtlProcessList []*exec.Cmd
+	for _, shard := range clusterInfo.ClusterInstance.Keyspaces[1].Shards {
+		for _, tablet := range shard.Vttablets {
+			log.Infof("Starting MySql for tablet %v", tablet.Alias)
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
+				require.NoError(t, err, "Error starting start mysql: %v", err)
+			}
+			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
+		}
+	}
+
+	// Wait for mysql processes to start
+	for _, proc := range mysqlCtlProcessList {
+		if err := proc.Wait(); err != nil {
+			require.NoError(t, err, "Error starting mysql: %v", err)
+		}
+	}
+
+	for _, tablet := range tablets {
+		require.NoError(t, err)
+		// Start the tablet
+		err = tablet.VttabletProcess.Setup()
+		require.NoError(t, err)
+	}
+
+	for _, tablet := range tablets {
+		err := tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
+		require.NoError(t, err)
+	}
+
+	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInfo.ClusterInstance.VtctldProcess.GrpcPort, clusterInfo.ClusterInstance.TmpDirectory)
+	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceSemiSyncName, fmt.Sprintf("--durability-policy=semi_sync"))
+	require.NoError(t, err, out)
+}
+
 // IsSemiSyncSetupCorrectly checks that the semi-sync is setup correctly on the given vttablet
 func IsSemiSyncSetupCorrectly(t *testing.T, tablet *cluster.Vttablet, semiSyncVal string) bool {
 	dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", "")
