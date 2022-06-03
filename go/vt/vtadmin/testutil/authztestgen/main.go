@@ -30,8 +30,14 @@ import (
 )
 
 type Config struct {
-	Package                 string                    `json:"package"`
-	Tests                   []*Test                   `json:"tests"`
+	Package  string           `json:"package"`
+	Clusters []*ClusterConfig `json:"clusters"`
+	Tests    []*Test          `json:"tests"`
+}
+
+type ClusterConfig struct {
+	ID                      string                    `json:"id"`
+	Name                    string                    `json:"name"`
 	FakeVtctldClientResults []*FakeVtctldClientResult `json:"vtctldclient_mock_data"`
 	DBTablets               []*vtadminpb.Tablet       `json:"db_tablet_list"`
 }
