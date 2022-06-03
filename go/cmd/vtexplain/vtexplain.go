@@ -151,6 +151,7 @@ func parseAndRun() error {
 		if plannerVersionStr != nil && *badPlannerVersion != *plannerVersionStr {
 			return fmt.Errorf("can't specify planner-version and planner_version with different versions")
 		}
+		log.Warningf("planner-version is deprecated. please use planner_version instead")
 		plannerVersionStr = badPlannerVersion
 	}
 	plannerVersion, _ := plancontext.PlannerNameToVersion(*plannerVersionStr)
