@@ -198,7 +198,7 @@ This change was made through pull request [#9767](https://github.com/vitessio/vi
 
 ### Durability Policy
 
-#### Deprecation of durability_policy flag
+#### Deprecation of durability_policy Flag
 The flag `durability_policy` added to vtctl, vtctld and vtworker binaries has now been deprecated.
 Instead the durability policy for a given keyspace will be stored in the keyspace information in the topo-server.
 
@@ -212,3 +212,11 @@ durability policy of an existing keyspace.
 If semi-sync is not being used then durability policy should be set to `none` for the keyspace. This is also the default option.
 
 If semi-sync is being used then durability policy should be set to `semi_sync` for the keyspace and `-enable_semi_sync` should be set on vttablets.
+
+### Deprecation of Durability Configuration
+The `Durability` configuration is deprecated and removed from VTOrc. Instead VTOrc will find the durability policy of the keyspace from
+the topo server. This allows VTOrc to monitor and repair multiple keyspaces which have different durability policies in use.
+
+It will ignore the keyspaces which have no durability policy specified in the keyspace record. So on upgrading to v14, users must run
+the command `SetKeyspaceDurabilityPolicy` specified above, to ensure VTOrc continues to work as desired.
+
