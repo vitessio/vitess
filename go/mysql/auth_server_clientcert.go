@@ -37,7 +37,7 @@ func InitAuthServerClientCert() {
 		return
 	}
 	if *clientcertAuthMethod != MysqlClearPassword && *clientcertAuthMethod != MysqlDialog {
-		log.Exitf("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
+		log.Fatalf("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
 	}
 	ascc := &AuthServerClientCert{
 		Method: *clientcertAuthMethod,

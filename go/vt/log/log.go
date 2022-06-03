@@ -21,58 +21,29 @@ limitations under the License.
 
 package log
 
-import (
-	"flag"
-
-	"github.com/golang/glog"
-)
-
-// Level is used with V() to test log verbosity.
-type Level = glog.Level
+import "log"
 
 var (
-	// V quickly checks if the logging verbosity meets a threshold.
-	V = glog.V
-
 	// Flush ensures any pending I/O is written.
-	Flush = glog.Flush
+	Flush = func(){}
 
 	// Info formats arguments like fmt.Print.
-	Info = glog.Info
+	Info = log.Print
 	// Infof formats arguments like fmt.Printf.
-	Infof = glog.Infof
-	// InfoDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
-	InfoDepth = glog.InfoDepth
+	Infof = log.Printf
 
 	// Warning formats arguments like fmt.Print.
-	Warning = glog.Warning
+	Warning = log.Print
 	// Warningf formats arguments like fmt.Printf.
-	Warningf = glog.Warningf
-	// WarningDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
-	WarningDepth = glog.WarningDepth
+	Warningf = log.Printf
 
 	// Error formats arguments like fmt.Print.
-	Error = glog.Error
+	Error = log.Print
 	// Errorf formats arguments like fmt.Printf.
-	Errorf = glog.Errorf
-	// ErrorDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
-	ErrorDepth = glog.ErrorDepth
-
-	// Exit formats arguments like fmt.Print.
-	Exit = glog.Exit
-	// Exitf formats arguments like fmt.Printf.
-	Exitf = glog.Exitf
-	// ExitDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
-	ExitDepth = glog.ExitDepth
+	Errorf = log.Printf
 
 	// Fatal formats arguments like fmt.Print.
-	Fatal = glog.Fatal
+	Fatal = log.Fatal
 	// Fatalf formats arguments like fmt.Printf
-	Fatalf = glog.Fatalf
-	// FatalDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
-	FatalDepth = glog.FatalDepth
+	Fatalf = log.Fatalf
 )
-
-func init() {
-	flag.Uint64Var(&glog.MaxSize, "log_rotate_max_size", glog.MaxSize, "size in bytes at which logs are rotated (glog.MaxSize)")
-}

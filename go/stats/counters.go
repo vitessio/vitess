@@ -166,7 +166,7 @@ func (c *CountersWithSingleLabel) Label() string {
 // Add adds a value to a named counter.
 func (c *CountersWithSingleLabel) Add(name string, value int64) {
 	if value < 0 {
-		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", c)
+		panic(fmt.Sprintf("Adding a negative value to a counter, %v should be a gauge instead", c))
 	}
 	a := c.getValueAddr(name)
 	atomic.AddInt64(a, value)
@@ -213,7 +213,7 @@ func (mc *CountersWithMultiLabels) Add(names []string, value int64) {
 		panic("CountersWithMultiLabels: wrong number of values in Add")
 	}
 	if value < 0 {
-		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", mc)
+		panic(fmt.Sprintf("Adding a negative value to a counter, %v should be a gauge instead", mc))
 	}
 
 	mc.counters.Add(safeJoinLabels(names), value)
