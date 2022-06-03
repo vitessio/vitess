@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vtadmin"
+	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	"vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
@@ -56,18 +57,7 @@ func TestCreateKeyspace(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(
-		testutil.BuildClusters(t, testutil.TestClusterConfig{
-			Cluster: &vtadminpb.Cluster{
-				Id:   "test",
-				Name: "test",
-			},
-			VtctldClient: newVtctldClient(),
-			Tablets:      newTabletList(),
-		}),
-		opts,
-	)
-
+	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -133,18 +123,7 @@ func TestCreateShard(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(
-		testutil.BuildClusters(t, testutil.TestClusterConfig{
-			Cluster: &vtadminpb.Cluster{
-				Id:   "test",
-				Name: "test",
-			},
-			VtctldClient: newVtctldClient(),
-			Tablets:      newTabletList(),
-		}),
-		opts,
-	)
-
+	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -212,18 +191,7 @@ func TestDeleteKeyspace(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(
-		testutil.BuildClusters(t, testutil.TestClusterConfig{
-			Cluster: &vtadminpb.Cluster{
-				Id:   "test",
-				Name: "test",
-			},
-			VtctldClient: newVtctldClient(),
-			Tablets:      newTabletList(),
-		}),
-		opts,
-	)
-
+	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -289,18 +257,7 @@ func TestDeleteShards(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(
-		testutil.BuildClusters(t, testutil.TestClusterConfig{
-			Cluster: &vtadminpb.Cluster{
-				Id:   "test",
-				Name: "test",
-			},
-			VtctldClient: newVtctldClient(),
-			Tablets:      newTabletList(),
-		}),
-		opts,
-	)
-
+	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -376,18 +333,7 @@ func TestDeleteTablet(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(
-		testutil.BuildClusters(t, testutil.TestClusterConfig{
-			Cluster: &vtadminpb.Cluster{
-				Id:   "test",
-				Name: "test",
-			},
-			VtctldClient: newVtctldClient(),
-			Tablets:      newTabletList(),
-		}),
-		opts,
-	)
-
+	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -455,18 +401,7 @@ func TestGetClusters(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(
-		testutil.BuildClusters(t, testutil.TestClusterConfig{
-			Cluster: &vtadminpb.Cluster{
-				Id:   "test",
-				Name: "test",
-			},
-			VtctldClient: newVtctldClient(),
-			Tablets:      newTabletList(),
-		}),
-		opts,
-	)
-
+	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -514,34 +449,42 @@ func TestGetClusters(t *testing.T) {
 	})
 }
 
-func newTabletList() []*vtadminpb.Tablet {
-	return []*vtadminpb.Tablet{
+func testClusters(t testing.TB) []*cluster.Cluster {
+	configs := []testutil.TestClusterConfig{
 		{
-			Tablet: &topodatapb.Tablet{
-				Alias: &topodatapb.TabletAlias{
-					Cell: "zone1",
-					Uid:  100,
+			Cluster: &vtadminpb.Cluster{
+				Id:   "test",
+				Name: "test",
+			},
+			VtctldClient: &fakevtctldclient.VtctldClient{
+				DeleteShardsResults: map[string]error{
+					"test/-": nil,
+				},
+				DeleteTabletsResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				GetCellInfoNamesResults: &struct {
+					Response *vtctldatapb.GetCellInfoNamesResponse
+					Error    error
+				}{
+					Response: &vtctldatapb.GetCellInfoNamesResponse{
+						Names: []string{"zone1"},
+					},
+				},
+			},
+			Tablets: []*vtadminpb.Tablet{
+				{
+					Cluster: &vtadminpb.Cluster{Id: "test", Name: "test"},
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
 				},
 			},
 		},
 	}
-}
 
-func newVtctldClient() *fakevtctldclient.VtctldClient {
-	return &fakevtctldclient.VtctldClient{
-		DeleteShardsResults: map[string]error{
-			"test/-": nil,
-		},
-		DeleteTabletsResults: map[string]error{
-			"zone1-0000000100": nil,
-		},
-		GetCellInfoNamesResults: &struct {
-			Response *vtctldatapb.GetCellInfoNamesResponse
-			Error    error
-		}{
-			Response: &vtctldatapb.GetCellInfoNamesResponse{
-				Names: []string{"zone1"},
-			},
-		},
-	}
+	return testutil.BuildClusters(t, configs...)
 }
