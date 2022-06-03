@@ -1,27 +1,33 @@
 {
     "package": "vtadmin_test",
-    "vtctldclient_mock_data": [
+    "clusters": [
         {
-            "field": "DeleteShardsResults",
-            "type": "map[string]error",
-            "value": "\"test/-\": nil,"
-        },
-        {
-            "field": "DeleteTabletsResults",
-            "type": "map[string]error",
-            "value": "\"zone1-0000000100\": nil,"
-        },
-        {
-            "field": "GetCellInfoNamesResults",
-            "type": "&struct{\nResponse *vtctldatapb.GetCellInfoNamesResponse\nError error}",
-            "value": "Response: &vtctldatapb.GetCellInfoNamesResponse{\nNames: []string{\"zone1\"},\n},"
-        }
-    ],
-    "db_tablet_list": [
-        {
-            "tablet": {
-                "alias": {"cell": "zone1", "uid": 100}
-            }
+            "id": "test",
+            "name": "test",
+            "vtctldclient_mock_data": [
+                {
+                    "field": "DeleteShardsResults",
+                    "type": "map[string]error",
+                    "value": "\"test/-\": nil,"
+                },
+                {
+                    "field": "DeleteTabletsResults",
+                    "type": "map[string]error",
+                    "value": "\"zone1-0000000100\": nil,"
+                },
+                {
+                    "field": "GetCellInfoNamesResults",
+                    "type": "&struct{\nResponse *vtctldatapb.GetCellInfoNamesResponse\nError error}",
+                    "value": "Response: &vtctldatapb.GetCellInfoNamesResponse{\nNames: []string{\"zone1\"},\n},"
+                }
+            ],
+            "db_tablet_list": [
+                {
+                    "tablet": {
+                        "alias": {"cell": "zone1", "uid": 100}
+                    }
+                }
+            ]
         }
     ],
     "tests": [
