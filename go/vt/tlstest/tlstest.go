@@ -292,9 +292,14 @@ func CreateCRL(root, parent string) {
 		log.Fatal(err)
 	}
 
+	now := time.Now().Add(-1 * time.Hour)
+	next := now.Add(2 * time.Hour)
+
 	crlList, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
 		RevokedCertificates: nil,
 		Number:              big.NewInt(1),
+		ThisUpdate:          now,
+		NextUpdate:          next,
 	}, caCert, caKey.(crypto.Signer))
 	if err != nil {
 		log.Fatal(err)
@@ -357,9 +362,14 @@ func RevokeCertAndRegenerateCRL(root, parent, name string) {
 		log.Fatal(err)
 	}
 
+	now := time.Now().Add(-1 * time.Hour)
+	next := now.Add(2 * time.Hour)
+
 	newCrl, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
 		RevokedCertificates: revoked,
 		Number:              big.NewInt(int64(crlList.TBSCertList.Version) + 1),
+		ThisUpdate:          now,
+		NextUpdate:          next,
 	}, caCert, caKey.(crypto.Signer))
 	if err != nil {
 		log.Fatal(err)
