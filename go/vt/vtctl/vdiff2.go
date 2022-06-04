@@ -396,6 +396,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 				}
 				// If we had a mismatch on any table then the vdiff as a unit does too
 				if mm, _ := row.ToBool("has_mismatch"); mm {
+					log.Infof(">>>>>>>>>>> mismatch due to %+v", row)
 					summary.HasMismatch = true
 				}
 				table := row.AsString("table_name", "")
@@ -407,7 +408,6 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 				}
 				ts := tableSummaryMap[table]
 				state := strings.ToLower(row.AsString("table_state", ""))
-				ts.RowsCompared += row.AsInt64("rows_compared", 0)
 
 				switch state {
 				case "completed":
@@ -432,6 +432,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 					}
 					log.Infof("DONE unmarshalling diff report")
 					log.Flush()
+					ts.RowsCompared += dr.ProcessedRows
 					ts.MismatchedRows += dr.MismatchedRows
 					ts.MatchingRows += dr.MatchingRows
 					ts.ExtraRowsTarget += dr.ExtraRowsTarget

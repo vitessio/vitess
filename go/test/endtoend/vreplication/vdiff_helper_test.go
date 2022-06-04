@@ -42,9 +42,6 @@ func vdiff(t *testing.T, keyspace, workflow, cells string, v1, v2 bool, wantV2Re
 	}
 	if v2 {
 		vdiff2(t, keyspace, workflow, cells, wantV2Result)
-		if workflow == "m2m3" {
-			//panic("debug")
-		}
 	}
 }
 
@@ -89,6 +86,7 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, uuid string) *vdiffInfo {
 			_, jsonStr := performVDiff2Action(t, ksWorkflow, "show", uuid)
 			if info = getVDiffInfo(jsonStr); info.State == "completed" {
 				ch <- true
+				return
 			}
 		}
 	}()

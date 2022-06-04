@@ -784,10 +784,6 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 			switchWritesDryRun(t, ksWorkflow, dryRunResultSwitchWrites)
 		}
 		switchWrites(t, ksWorkflow, false)
-
-		if strings.Contains(ksWorkflow, "m2m3") {
-			panic("m2m3")
-		}
 		dropSources(t, ksWorkflow)
 		for tabletName, count := range counts {
 			if tablets[tabletName] == nil {

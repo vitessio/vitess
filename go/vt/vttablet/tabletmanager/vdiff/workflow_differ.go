@@ -111,6 +111,13 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		wd.reconcileExtraRows(dr, wd.opts.CoreOptions.MaxExtraRowsToCompare)
 	}
 
+	if dr.MismatchedRows > 0 || dr.ExtraRowsTarget > 0 || dr.ExtraRowsSource > 0 {
+		if err := updateTableMismatch(dbClient, wd.ct.id, tableName); err != nil {
+			return err
+		}
+	}
+
+	log.Infof("td.diff after reconciliation for %s, with dr %+v", tableName, dr)
 	if err := td.updateTableState(ctx, dbClient, tableName, "completed", dr); err != nil {
 		return err
 	}
@@ -224,11 +231,17 @@ func (wd *workflowDiffer) buildPlan(filter *binlogdatapb.Filter, schm *tabletman
 			continue
 		}
 		sourceQuery := rule.Filter
-		if rule.Filter == "" || key.IsKeyRange(rule.Filter) {
+		switch {
+		case rule.Filter == "":
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf("select * from %v", sqlparser.NewTableIdent(table.Name))
 			sourceQuery = buf.String()
+		case key.IsKeyRange(rule.Filter):
+			buf := sqlparser.NewTrackedBuffer(nil)
+			buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(table.Name), sqlparser.NewStrLiteral(rule.Filter))
+			sourceQuery = buf.String()
 		}
+
 		td := newTableDiffer(wd, table, sourceQuery)
 		wd.tableDiffers[table.Name] = td
 		if _, err := td.buildTablePlan(); err != nil {

@@ -69,7 +69,7 @@ func TestVDiff2(t *testing.T) {
 	custKs := vc.Cells[defaultCell.Name].Keyspaces[targetKs]
 	customerTab1 := custKs.Shards[targetShards[0]].Tablets[fmt.Sprintf("%s-200", defaultCell.Name)].Vttablet
 	customerTab2 := custKs.Shards[targetShards[1]].Tablets[fmt.Sprintf("%s-300", defaultCell.Name)].Vttablet
-	tables := "customer,customer2,Lead"
+	tables := "customer"
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput("MoveTables", "--", "--source", sourceKs, "--tables",
 		tables, "Create", ksWorkflow)
 	require.NoError(t, err, output)
@@ -79,4 +79,63 @@ func TestVDiff2(t *testing.T) {
 	catchup(t, customerTab2, workflow, "MoveTables")
 
 	vdiff(t, targetKs, workflowName, "", true, true, nil)
+
+	// now test 2 => 3 shards split/merge
+	require.NoError(t, vc.AddShards(t, cells, custKs, "-40,40-a0,a0-", 0, 0, 400))
+	err = vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, "-40"), 1)
+	require.NoError(t, err)
+	err = vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, "40-a0"), 1)
+	require.NoError(t, err)
+	err = vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, "a0-"), 1)
+	require.NoError(t, err)
+
+	ksWorkflow = "customer.c2c3"
+	workflowName := "c2c3"
+	if err := vc.VtctlClient.ExecuteCommand("Reshard", "--", "--source_shards", "-80,80-", "--target_shards", "-40,40-a0,a0-", "Create", ksWorkflow); err != nil {
+		t.Fatalf("Reshard create failed with %+v\n", err)
+	}
+	require.NoError(t, err, output)
+	require.NotEmpty(t, output, "No output returned from Reshard")
+
+	customerTab3 := custKs.Shards["-40"].Tablets[fmt.Sprintf("%s-400", defaultCell.Name)].Vttablet
+	catchup(t, customerTab3, workflowName, "Reshard")
+	customerTab4 := custKs.Shards["40-a0"].Tablets[fmt.Sprintf("%s-500", defaultCell.Name)].Vttablet
+	catchup(t, customerTab4, workflowName, "Reshard")
+	customerTab5 := custKs.Shards["a0-"].Tablets[fmt.Sprintf("%s-600", defaultCell.Name)].Vttablet
+	catchup(t, customerTab5, workflowName, "Reshard")
+
+	vdiff(t, targetKs, workflowName, "", true, true, nil)
+	if err := vc.VtctlClient.ExecuteCommand("Reshard", "--", "SwitchTraffic", ksWorkflow); err != nil {
+		t.Fatalf("Reshard SwitchTraffic failed with %+v\n", err)
+	}
+	require.NoError(t, err, output)
+
+	if err := vc.VtctlClient.ExecuteCommand("Reshard", "--", "Complete", ksWorkflow); err != nil {
+		t.Fatalf("Reshard Complete failed with %+v\n", err)
+	}
+	require.NoError(t, err, output)
+
+	// now test 3=>1 merge
+
+	require.NoError(t, vc.AddShards(t, cells, custKs, "0", 0, 0, 700))
+	err = vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, "0"), 1)
+	require.NoError(t, err)
+
+	ksWorkflow = "customer.c3c1"
+	workflowName = "c3c1"
+	if err := vc.VtctlClient.ExecuteCommand("Reshard", "--", "--source_shards", "-40,40-a0,a0-", "--target_shards", "0", "Create", ksWorkflow); err != nil {
+		t.Fatalf("Reshard create failed with %+v\n", err)
+	}
+	require.NoError(t, err, output)
+	require.NotEmpty(t, output, "No output returned from Reshard")
+
+	customerTab7 := custKs.Shards["0"].Tablets[fmt.Sprintf("%s-700", defaultCell.Name)].Vttablet
+	catchup(t, customerTab7, workflowName, "Reshard")
+
+	vdiff(t, targetKs, workflowName, "", true, true, nil)
+	if err := vc.VtctlClient.ExecuteCommand("Reshard", "--", "SwitchTraffic", ksWorkflow); err != nil {
+		t.Fatalf("Reshard SwitchTraffic failed with %+v\n", err)
+	}
+	require.NoError(t, err, output)
+
 }

@@ -342,7 +342,7 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 		return conn.VStreamRows(ctx, target, query, nil, func(vsrr *binlogdatapb.VStreamRowsResponse) error {
 			// TODO: figure out if we can safely avoid the clone ???
 			vsr := proto.Clone(vsrr).(*binlogdatapb.VStreamRowsResponse)
-			//log.Infof("VStreamRows start %s:%d", participant.tablet.Alias.String(), len(vsr.Rows))
+			log.Infof("VStreamRows start %s:%d", participant.tablet.Alias.String(), len(vsr.Rows))
 
 			if len(fields) == 0 {
 				if len(vsr.Fields) == 0 {
@@ -357,7 +357,8 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 				//log.Infof("no rows, no fields %+v, %s", fields, participant.tablet.Alias)
 				return nil
 			}
-			//log.Infof("received %d rows from %s, fields %+v", len(vsr.Rows), participant.tablet.Alias, fields)
+			log.Infof(">>>>>>>>>> workflow %s: received %d rows, %d fields, from %s, rows %+v",
+				td.wd.ct.workflow, len(vsr.Rows), len(vsr.Fields), participant.tablet.Alias, vsr.Rows)
 			p3qr := &querypb.QueryResult{
 				Fields: fields,
 				Rows:   vsr.Rows,
@@ -419,14 +420,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 	advanceSource := true
 	advanceTarget := true
 	mismatch := false
-	defer func() {
-		_ = td.updateRowsCompared(dbClient, dr.ProcessedRows)
-		if !mismatch && (dr.MismatchedRows > 0 || dr.ExtraRowsSource > 0 || dr.ExtraRowsTarget > 0) {
-			mismatch = true
-			log.Infof("Flagging mismatch for %s: %+v", td.table.Name, dr)
-			_ = updateTableMismatch(dbClient, td.wd.ct.id, td.table.Name)
-		}
-	}()
+
 	for {
 		if dr.ProcessedRows%1e7 == 0 { // log progress every 10 million rows
 			log.Infof("VDiff progress:: table %s: %d rows", td.table.Name, dr.ProcessedRows)
