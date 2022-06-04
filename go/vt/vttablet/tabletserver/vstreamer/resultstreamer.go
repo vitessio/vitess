@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -45,6 +47,7 @@ type resultStreamer struct {
 
 func newResultStreamer(ctx context.Context, cp dbconfigs.Connector, query string, send func(*binlogdatapb.VStreamResultsResponse) error, vse *Engine) *resultStreamer {
 	ctx, cancel := context.WithCancel(ctx)
+	log.Infof("abcd newResultStreamer with query %s", query)
 	return &resultStreamer{
 		ctx:     ctx,
 		cancel:  cancel,

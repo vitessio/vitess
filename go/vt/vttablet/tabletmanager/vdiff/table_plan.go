@@ -93,8 +93,13 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 			if expr, ok := selExpr.Expr.(*sqlparser.FuncExpr); ok {
 				switch fname := expr.Name.Lowered(); fname {
 				case "count", "sum":
+					// this will only work as long as aggregates can be pushed down to tablets
+					// this won't work: "select count(*) from (select id from t limit 1)"
+					// since vreplication only handles simple tables (no joins/derived tables) this is fine for now
+					// but will need to be revisited when we add such support to vreplication
+					aggregateFuncType := "sum"
 					aggregates = append(aggregates, &engine.AggregateParams{
-						Opcode: engine.SupportedAggregates[fname],
+						Opcode: engine.SupportedAggregates[aggregateFuncType],
 						Col:    len(sourceSelect.SelectExprs) - 1,
 					})
 				}

@@ -76,6 +76,7 @@ type rowStreamer struct {
 
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) *rowStreamer {
 	ctx, cancel := context.WithCancel(ctx)
+	log.Infof("abcd newRowStreamer with query %s", query)
 	return &rowStreamer{
 		ctx:     ctx,
 		cancel:  cancel,

@@ -118,7 +118,7 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 }
 
 func (wd *workflowDiffer) getTotalRowsEstimate(dbClient binlogplayer.DBClient) error {
-	query := "select db_name from _vt.vreplication where workflow = %s"
+	query := "select db_name from _vt.vreplication where workflow = %s limit 1"
 	query = fmt.Sprintf(query, encodeString(wd.ct.workflow))
 	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {

@@ -20,17 +20,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/buger/jsonparser"
 
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/log"
-)
-
-var (
-	vdiffTimeout = time.Second * 60
 )
 
 func TestVDiff2(t *testing.T) {
@@ -63,7 +54,7 @@ func TestVDiff2(t *testing.T) {
 
 	insertInitialData(t)
 
-	// Insert null and empty enum values for testing vdiff comparisons for those values.
+	// Insert null and empty enum values for testing vdiff1 comparisons for those values.
 	// If we add this to the initial data list, the counts in several other tests will need to change
 	query := `insert into customer(cid, name, typ, sport) values(1001, null, 'soho','')`
 	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:%s", sourceKs, sourceShards[0]), query)
@@ -87,66 +78,5 @@ func TestVDiff2(t *testing.T) {
 	catchup(t, customerTab1, workflow, "MoveTables")
 	catchup(t, customerTab2, workflow, "MoveTables")
 
-	vdiff(t, ksWorkflow, "") // confirm vdiff1 works
-	t.Run("vdiff2", func(t *testing.T) {
-		uuid, _ := vdiff2(t, ksWorkflow, "create", "")
-		waitForVDiff2ToComplete(t, uuid)
-		_, jsonStr := vdiff2(t, ksWorkflow, "show", uuid)
-
-		info := getVDiffInfo(jsonStr)
-		require.Equal(t, workflow, info.Workflow)
-		require.Equal(t, targetKs, info.Keyspace)
-		require.Equal(t, "completed", info.State)
-		require.Equal(t, strings.Join(targetShards, ","), info.Shards)
-		require.False(t, info.HasMismatch)
-	})
-}
-
-func waitForVDiff2ToComplete(t *testing.T, uuid string) {
-	ch := make(chan bool)
-	go func() {
-		for {
-			time.Sleep(1 * time.Second)
-			_, jsonStr := vdiff2(t, ksWorkflow, "show", uuid)
-			if info := getVDiffInfo(jsonStr); info.State == "completed" {
-				ch <- true
-			}
-		}
-	}()
-
-	select {
-	case <-ch:
-		return
-	case <-time.After(vdiffTimeout):
-		require.FailNowf(t, "VDiff never completed: %s", uuid)
-	}
-}
-
-func vdiff2(t *testing.T, ksWorkflow, action, actionArg string) (uuid string, output string) {
-	var err error
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "--format", "json", ksWorkflow, action, actionArg)
-	log.Infof("vdiff2 output: %+v (err: %+v)", output, err)
-	require.Nil(t, err)
-
-	uuid, err = jsonparser.GetString([]byte(output), "UUID")
-	require.NoError(t, err)
-	require.NotEmpty(t, uuid)
-	return uuid, output
-}
-
-type vdiffInfo struct {
-	Workflow, Keyspace, State, Shards string
-	HasMismatch                       bool
-}
-
-func getVDiffInfo(jsonStr string) *vdiffInfo {
-	var info vdiffInfo
-	json := []byte(jsonStr)
-	info.Workflow, _ = jsonparser.GetString(json, "Workflow")
-	info.Keyspace, _ = jsonparser.GetString(json, "Keyspace")
-	info.State, _ = jsonparser.GetString(json, "State")
-	info.Shards, _ = jsonparser.GetString(json, "Shards")
-	info.HasMismatch, _ = jsonparser.GetBoolean(json, "HasMismatch")
-
-	return &info
+	vdiff(t, targetKs, workflowName, "", true, true, nil)
 }
