@@ -429,7 +429,8 @@ func TestGetBackups(t *testing.T) {
 			ctx = rbac.NewContext(ctx, actor)
 		}
 
-		resp, _ := api.GetBackups(ctx, &vtadminpb.GetBackupsRequest{})
+		resp, err := api.GetBackups(ctx, &vtadminpb.GetBackupsRequest{})
+		assert.NoError(t, err)
 		assert.Empty(t, resp.Backups, "actor %+v should not be permitted to GetBackups", actor)
 	})
 

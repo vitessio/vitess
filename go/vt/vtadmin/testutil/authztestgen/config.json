@@ -254,7 +254,9 @@
                     "name": "unauthorized actor",
                     "actor": {"name": "unauthorized"},
                     "is_permitted": false,
+                    "include_error_var": true,
                     "assertions": [
+                        "assert.NoError(t, err)",
                         "assert.Empty(t, resp.Backups, $$)"
                     ]
                 },
