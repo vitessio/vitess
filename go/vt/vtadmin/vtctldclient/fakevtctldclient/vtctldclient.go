@@ -38,7 +38,10 @@ type VtctldClient struct {
 	vtctldclient.VtctldClient
 
 	CreateKeyspaceShouldErr bool
+	CreateShardShouldErr    bool
 	DeleteKeyspaceShouldErr bool
+	// Keyed by _sorted_ <ks/shard> list string joined by commas.
+	DeleteShardsResults map[string]error
 	// Keyed by _sorted_ TabletAlias list string joined by commas.
 	DeleteTabletsResults          map[string]error
 	EmergencyReparentShardResults map[string]struct {
@@ -145,6 +148,25 @@ func (fake *VtctldClient) CreateKeyspace(ctx context.Context, req *vtctldatapb.C
 	}, nil
 }
 
+// CreateShard is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) CreateShard(cxt context.Context, req *vtctldatapb.CreateShardRequest, opts ...grpc.CallOption) (*vtctldatapb.CreateShardResponse, error) {
+	if fake.CreateShardShouldErr {
+		return nil, fmt.Errorf("%w: CreateShard error", assert.AnError)
+	}
+
+	return &vtctldatapb.CreateShardResponse{
+		Keyspace: &vtctldatapb.Keyspace{
+			Name:     req.Keyspace,
+			Keyspace: &topodatapb.Keyspace{},
+		},
+		Shard: &vtctldatapb.Shard{
+			Keyspace: req.Keyspace,
+			Name:     req.ShardName,
+			Shard:    &topodatapb.Shard{},
+		},
+	}, nil
+}
+
 // DeleteKeyspace is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) DeleteKeyspace(ctx context.Context, req *vtctldatapb.DeleteKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.DeleteKeyspaceResponse, error) {
 	if fake.DeleteKeyspaceShouldErr {
@@ -152,6 +174,30 @@ func (fake *VtctldClient) DeleteKeyspace(ctx context.Context, req *vtctldatapb.D
 	}
 
 	return &vtctldatapb.DeleteKeyspaceResponse{}, nil
+}
+
+// DeleteShards is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) DeleteShards(ctx context.Context, req *vtctldatapb.DeleteShardsRequest, opts ...grpc.CallOption) (*vtctldatapb.DeleteShardsResponse, error) {
+	if fake.DeleteShardsResults == nil {
+		return nil, fmt.Errorf("%w: DeleteShardsResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	shards := make([]string, len(req.Shards))
+	for i, shard := range req.Shards {
+		shards[i] = fmt.Sprintf("%s/%s", shard.Keyspace, shard.Name)
+	}
+	sort.Strings(shards)
+	key := strings.Join(shards, ",")
+
+	if err, ok := fake.DeleteShardsResults[key]; ok {
+		if err != nil {
+			return nil, err
+		}
+
+		return &vtctldatapb.DeleteShardsResponse{}, nil
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
 }
 
 // DeleteTablets is part of the vtctldclient.VtctldClient interface.

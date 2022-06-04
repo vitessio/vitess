@@ -509,8 +509,10 @@ orderBy:
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: aggregation function '%s'", fnc.AggrName())
 		}
 
-		if _, isStar := fnc.(*sqlparser.CountStar); isStar {
-			opcode = engine.AggregateCountStar
+		if opcode == engine.AggregateCount {
+			if _, isStar := fnc.(*sqlparser.CountStar); isStar {
+				opcode = engine.AggregateCountStar
+			}
 		}
 
 		if sqlparser.IsDistinct(aliasedExpr.Expr) {

@@ -38,21 +38,21 @@ func init() {
 	addCommand(cellsGroupName, command{
 		name:   "AddCellInfo",
 		method: commandAddCellInfo,
-		params: "[-server_address <addr>] [-root <root>] <cell>",
+		params: "[--server_address <addr>] [--root <root>] <cell>",
 		help:   "Registers a local topology service in a new cell by creating the CellInfo with the provided parameters. The address will be used to connect to the topology service, and we'll put Vitess data starting at the provided root.",
 	})
 
 	addCommand(cellsGroupName, command{
 		name:   "UpdateCellInfo",
 		method: commandUpdateCellInfo,
-		params: "[-server_address <addr>] [-root <root>] <cell>",
+		params: "[--server_address <addr>] [--root <root>] <cell>",
 		help:   "Updates the content of a CellInfo with the provided parameters. If a value is empty, it is not updated. The CellInfo will be created if it doesn't exist.",
 	})
 
 	addCommand(cellsGroupName, command{
 		name:   "DeleteCellInfo",
 		method: commandDeleteCellInfo,
-		params: "[-force] <cell>",
+		params: "[--force] <cell>",
 		help:   "Deletes the CellInfo for the provided cell. The cell cannot be referenced by any Shard record.",
 	})
 

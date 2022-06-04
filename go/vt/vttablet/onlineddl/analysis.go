@@ -19,7 +19,9 @@ package onlineddl
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
+	"vitess.io/vitess/go/mysql"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -29,6 +31,7 @@ import (
 type specialAlterOperation string
 
 const (
+	instantDDLSpecialOperation         specialAlterOperation = "instant-ddl"
 	dropRangePartitionSpecialOperation specialAlterOperation = "drop-range-partition"
 	addRangePartitionSpecialOperation  specialAlterOperation = "add-range-partition"
 )
@@ -53,6 +56,7 @@ func (p *SpecialAlterPlan) SetDetail(key string, val string) *SpecialAlterPlan {
 	p.details[key] = val
 	return p
 }
+
 func (p *SpecialAlterPlan) Detail(key string) string {
 	return p.details[key]
 }
@@ -83,7 +87,7 @@ func (e *Executor) getCreateTableStatement(ctx context.Context, tableName string
 }
 
 // analyzeDropRangePartition sees if the online DDL drops a single partition in a range partitioned table
-func (e *Executor) analyzeDropRangePartition(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable) (*SpecialAlterPlan, error) {
+func analyzeDropRangePartition(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable) (*SpecialAlterPlan, error) {
 	// we are looking for a `ALTER TABLE <table> DROP PARTITION <name>` statement with nothing else
 	if len(alterTable.AlterOptions) > 0 {
 		return nil, nil
@@ -135,7 +139,7 @@ func (e *Executor) analyzeDropRangePartition(alterTable *sqlparser.AlterTable, c
 }
 
 // analyzeAddRangePartition sees if the online DDL adds a partition in a range partitioned table
-func (e *Executor) analyzeAddRangePartition(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable) *SpecialAlterPlan {
+func analyzeAddRangePartition(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable) *SpecialAlterPlan {
 	// we are looking for a `ALTER TABLE <table> ADD PARTITION (PARTITION ...)` statement with nothing else
 	if len(alterTable.AlterOptions) > 0 {
 		return nil
@@ -171,9 +175,70 @@ func (e *Executor) analyzeAddRangePartition(alterTable *sqlparser.AlterTable, cr
 	return op
 }
 
+func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, createTable *sqlparser.CreateTable, serverVersion string) (bool, error) {
+	isVirtualColumn := func(colName string) bool {
+		if createTable == nil {
+			return false
+		}
+		for _, col := range createTable.TableSpec.Columns {
+			if strings.EqualFold(colName, col.Name.String()) {
+				return col.Type.Options.As != nil
+			}
+		}
+		return false
+	}
+	// Up to 8.0.26 we could only ADD COLUMN as last column
+	switch opt := alterOption.(type) {
+	case *sqlparser.AddColumns:
+		if opt.First || opt.After != nil {
+			// not a "last" column. Only supported as of 8.0.29
+			return mysql.ServerVersionAtLeast(serverVersion, 8, 0, 29)
+		}
+		// Adding a *last* column is supported in 8.0
+		return true, nil
+	case *sqlparser.DropColumn:
+		if isVirtualColumn(opt.Name.Name.String()) {
+			// supported by all 8.0 versions
+			return true, nil
+		}
+		return mysql.ServerVersionAtLeast(serverVersion, 8, 0, 29)
+	default:
+		return false, nil
+	}
+}
+
+// AnalyzeInstantDDL takes declarative CreateTable and AlterTable, as well as a server version, and checks whether it is possible to run the ALTER
+// using ALGORITM=INSTANT for that version.
+// This function is INTENTIONALLY public, even though we do not guarantee that it will remain so.
+func AnalyzeInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable, serverVersion string) (*SpecialAlterPlan, error) {
+	_, family, _ := mysql.GetFlavor(serverVersion, nil)
+	if family != mysql.MySQL80FlavorFamily {
+		return nil, nil
+	}
+	if alterTable.PartitionOption != nil {
+		// no INSTANT for partitions
+		return nil, nil
+	}
+	if alterTable.PartitionSpec != nil {
+		// no INSTANT for partitions
+		return nil, nil
+	}
+	for _, alterOption := range alterTable.AlterOptions {
+		instantOK, err := alterOptionAvailableViaInstantDDL(alterOption, createTable, serverVersion)
+		if err != nil {
+			return nil, err
+		}
+		if !instantOK {
+			return nil, nil
+		}
+	}
+	op := NewSpecialAlterOperation(instantDDLSpecialOperation, alterTable, createTable)
+	return op, nil
+}
+
 // analyzeSpecialAlterPlan checks if the given ALTER onlineDDL, and for the current state of affected table,
 // can be executed in a special way. If so, it returns with a "special plan"
-func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schema.OnlineDDL) (*SpecialAlterPlan, error) {
+func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schema.OnlineDDL, serverVersion string) (*SpecialAlterPlan, error) {
 	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
 	if err != nil {
 		return nil, err
@@ -192,14 +257,23 @@ func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schem
 	// special plans which support reverts are trivially desired:
 	// special plans which do not support reverts are flag protected:
 	if onlineDDL.StrategySetting().IsFastRangeRotationFlag() {
-		op, err := e.analyzeDropRangePartition(alterTable, createTable)
+		op, err := analyzeDropRangePartition(alterTable, createTable)
 		if err != nil {
 			return nil, err
 		}
 		if op != nil {
 			return op, nil
 		}
-		if op := e.analyzeAddRangePartition(alterTable, createTable); op != nil {
+		if op := analyzeAddRangePartition(alterTable, createTable); op != nil {
+			return op, nil
+		}
+	}
+	if onlineDDL.StrategySetting().IsFastOverRevertibleFlag() {
+		op, err := AnalyzeInstantDDL(alterTable, createTable, serverVersion)
+		if err != nil {
+			return nil, err
+		}
+		if op != nil {
 			return op, nil
 		}
 	}
