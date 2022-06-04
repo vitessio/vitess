@@ -79,7 +79,9 @@ func buildSelectPlan(query string) selectPlanner {
 			// if it doesn't find a shard to send the query to.
 			// All other engine primitives can handle this, so we only need it when
 			// Route is the last (and only) instruction before the user sees a result
-			rb.NoRoutesSpecialHandling = true
+			if isOnlyDual(sel) || (len(sel.GroupBy) == 0 && sel.SelectExprs.AllAggregation()) {
+				rb.NoRoutesSpecialHandling = true
+			}
 		}
 
 		return primitive, nil

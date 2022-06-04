@@ -993,6 +993,15 @@
 			"RetryMax": 2,
 			"Tags": []
 		},
+		"vindex_secondary": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/sec_vind"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_vindex_heavy",
+			"RetryMax": 2,
+			"Tags": []
+		},
 		"web_test": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtctldweb"],
