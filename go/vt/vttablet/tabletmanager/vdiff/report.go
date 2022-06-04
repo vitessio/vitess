@@ -25,8 +25,11 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-// At most how many samples we should show for row differences in the final report
-const maxVDiffReportSampleRows = 10
+const (
+	// At most how many samples we should show for row differences in the final report
+	maxVDiffReportSampleRows = 10
+	truncatedNotation        = " ...[TRUNCATED]"
+)
 
 // DiffReport is the summary of differences for one table.
 type DiffReport struct {
@@ -135,11 +138,10 @@ func formatSampleRow(rd *RowDiff) {
 	}
 
 	sort.Strings(keys)
-	truncated := " ...[TRUNCATED]"
 	for _, k := range keys {
 		// Let's truncate if it's really worth it to avoid losing value for a few chars
-		if len(rd.Row[k]) >= 30+len(truncated)+20 {
-			rd.Row[k] = rd.Row[k][:30] + truncated
+		if len(rd.Row[k]) >= 30+len(truncatedNotation)+20 {
+			rd.Row[k] = rd.Row[k][:30] + truncatedNotation
 		}
 		rowString.WriteString(fmt.Sprintf("%s: %s\n", k, rd.Row[k]))
 	}
