@@ -5472,27 +5472,11 @@ func BenchmarkParse3(b *testing.B) {
 }
 
 func TestValidUnionCases(t *testing.T) {
-	testOutputTempDir, err := os.MkdirTemp("", "parse_test")
-	require.NoError(t, err)
-	defer func() {
-		if !t.Failed() {
-			os.RemoveAll(testOutputTempDir)
-		}
-	}()
-
-	testFile(t, "union_cases.txt", testOutputTempDir)
+	testFile(t, "union_cases.txt", t.TempDir())
 }
 
 func TestValidSelectCases(t *testing.T) {
-	testOutputTempDir, err := os.MkdirTemp("", "parse_test")
-	require.NoError(t, err)
-	defer func() {
-		if !t.Failed() {
-			os.RemoveAll(testOutputTempDir)
-		}
-	}()
-
-	testFile(t, "select_cases.txt", testOutputTempDir)
+	testFile(t, "select_cases.txt", t.TempDir())
 }
 
 type testCase struct {

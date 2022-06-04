@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -32,8 +33,6 @@ import (
 
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/vttls"
-
-	"context"
 )
 
 // assertSQLError makes sure we get the right error.
@@ -152,9 +151,7 @@ func TestTLSClientDisabled(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := os.MkdirTemp("", "TestTLSServer")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", host)
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
@@ -226,9 +223,7 @@ func TestTLSClientPreferredDefault(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := os.MkdirTemp("", "TestTLSServer")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
@@ -348,9 +343,7 @@ func TestTLSClientVerifyCA(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := os.MkdirTemp("", "TestTLSServer")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
@@ -433,9 +426,7 @@ func TestTLSClientVerifyIdentity(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := os.MkdirTemp("", "TestTLSServer")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")

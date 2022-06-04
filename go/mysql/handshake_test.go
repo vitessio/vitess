@@ -17,16 +17,14 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"crypto/tls"
 	"net"
-	"os"
 	"path"
 	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/test/utils"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/vttls"
@@ -111,11 +109,7 @@ func TestSSLConnection(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := os.MkdirTemp("", "TestSSLConnection")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
