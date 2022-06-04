@@ -59,6 +59,11 @@
                     "value": "\"otherks/-\": {\nResponse: &vtctldatapb.GetBackupsResponse{\nBackups: []*mysqlctlpb.BackupInfo{\n{}, {}, {},\n},\n},\n},"
                 },
                 {
+                    "field": "GetCellInfoNamesResults",
+                    "type": "&struct{\nResponse *vtctldatapb.GetCellInfoNamesResponse\nError error}",
+                    "value": "Response: &vtctldatapb.GetCellInfoNamesResponse{\nNames: []string{\"other1\"},\n},"
+                },
+                {
                     "field": "GetKeyspacesResults",
                     "type": "&struct{\nKeyspaces []*vtctldatapb.Keyspace\nError error}",
                     "value": "Keyspaces: []*vtctldatapb.Keyspace{\n{\nName: \"otherks\",\nKeyspace: &topodatapb.Keyspace{},\n},\n},"
@@ -276,6 +281,54 @@
                     "assertions": [
                         "assert.NotEmpty(t, resp.Backups, $$)",
                         "assert.Len(t, resp.Backups, 4, \"'all' actor should be able to see backups in all clusters\")"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "GetCellInfos",
+            "rules": [
+                {
+                    "resource": "CellInfo",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-all"],
+                    "clusters": ["*"]
+                },
+                {
+                    "resource": "CellInfo",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-other"],
+                    "clusters": ["other"]
+                }
+            ],
+            "request": "&vtadminpb.GetCellInfosRequest{\nNamesOnly: true,\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "unauthorized"},
+                    "is_permitted": false,
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.NoError(t, err)",
+                        "assert.Empty(t, resp.CellInfos, $$)"
+                    ]
+                },
+                {
+                    "name": "partial access",
+                    "actor": {"name": "allowed-other"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.CellInfos, $$)",
+                        "assert.ElementsMatch(t, resp.CellInfos, []*vtadminpb.ClusterCellInfo{{Cluster: &vtadminpb.Cluster{Id: \"other\", Name: \"other\"}, Name: \"other1\"}})"
+                    ]
+                },
+                {
+                    "name": "full access",
+                    "actor": {"name": "allowed-all"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.CellInfos, $$)",
+                        "assert.ElementsMatch(t, resp.CellInfos, []*vtadminpb.ClusterCellInfo{{Cluster: &vtadminpb.Cluster{Id: \"test\", Name: \"test\"}, Name: \"zone1\"}, {Cluster: &vtadminpb.Cluster{Id: \"other\", Name: \"other\"}, Name: \"other1\"}})"
                     ]
                 }
             ]
