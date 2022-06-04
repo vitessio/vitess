@@ -615,6 +615,10 @@ func (api *API) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsRequest
 		backups []*vtadminpb.ClusterBackup
 	)
 
+	if req.RequestOptions == nil {
+		req.RequestOptions = &vtctldatapb.GetBackupsRequest{}
+	}
+
 	for _, c := range clusters {
 		if !api.authz.IsAuthorized(ctx, c.ID, rbac.BackupResource, rbac.GetAction) {
 			continue
