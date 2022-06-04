@@ -615,6 +615,83 @@ func TestGetClusters(t *testing.T) {
 	})
 }
 
+func TestGetCellsAliases(t *testing.T) {
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "CellsAlias",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "CellsAlias",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetCellsAliases(ctx, &vtadminpb.GetCellsAliasesRequest{})
+		assert.NoError(t, err)
+		assert.Empty(t, resp.Aliases, "actor %+v should not be permitted to GetCellsAliases", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetCellsAliases(ctx, &vtadminpb.GetCellsAliasesRequest{})
+		assert.NotEmpty(t, resp.Aliases, "actor %+v should be permitted to GetCellsAliases", actor)
+		assert.ElementsMatch(t, resp.Aliases, []*vtadminpb.ClusterCellsAliases{{Cluster: &vtadminpb.Cluster{Id: "other", Name: "other"}, Aliases: map[string]*topodatapb.CellsAlias{"other": {Cells: []string{"other1"}}}}})
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetCellsAliases(ctx, &vtadminpb.GetCellsAliasesRequest{})
+		assert.NotEmpty(t, resp.Aliases, "actor %+v should be permitted to GetCellsAliases", actor)
+		assert.ElementsMatch(t, resp.Aliases, []*vtadminpb.ClusterCellsAliases{{Cluster: &vtadminpb.Cluster{Id: "test", Name: "test"}, Aliases: map[string]*topodatapb.CellsAlias{"zone": {Cells: []string{"zone1"}}}}, {Cluster: &vtadminpb.Cluster{Id: "other", Name: "other"}, Aliases: map[string]*topodatapb.CellsAlias{"other": {Cells: []string{"other1"}}}}})
+	})
+}
+
 func testClusters(t testing.TB) []*cluster.Cluster {
 	configs := []testutil.TestClusterConfig{
 		{
@@ -663,6 +740,17 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 				}{
 					Response: &vtctldatapb.GetCellInfoNamesResponse{
 						Names: []string{"zone1"},
+					},
+				},
+				GetCellsAliasesResults: &struct {
+					Response *vtctldatapb.GetCellsAliasesResponse
+					Error    error
+				}{
+					Response: &vtctldatapb.GetCellsAliasesResponse{
+						Aliases: map[string]*topodatapb.CellsAlias{
+							"zone": {
+								Cells: []string{"zone1"}},
+						},
 					},
 				},
 				GetKeyspacesResults: &struct {
@@ -728,6 +816,17 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 				}{
 					Response: &vtctldatapb.GetCellInfoNamesResponse{
 						Names: []string{"other1"},
+					},
+				},
+				GetCellsAliasesResults: &struct {
+					Response *vtctldatapb.GetCellsAliasesResponse
+					Error    error
+				}{
+					Response: &vtctldatapb.GetCellsAliasesResponse{
+						Aliases: map[string]*topodatapb.CellsAlias{
+							"other": {
+								Cells: []string{"other1"}},
+						},
 					},
 				},
 				GetKeyspacesResults: &struct {

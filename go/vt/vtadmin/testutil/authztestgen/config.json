@@ -31,6 +31,11 @@
                     "value": "Response: &vtctldatapb.GetCellInfoNamesResponse{\nNames: []string{\"zone1\"},\n},"
                 },
                 {
+                    "field": "GetCellsAliasesResults",
+                    "type": "&struct{\nResponse *vtctldatapb.GetCellsAliasesResponse\nError error}",
+                    "value": "Response: &vtctldatapb.GetCellsAliasesResponse{\nAliases: map[string]*topodatapb.CellsAlias{\n\"zone\": {\nCells: []string{\"zone1\"}},\n},\n},"
+                },
+                {
                     "field": "GetKeyspacesResults",
                     "type": "&struct{\nKeyspaces []*vtctldatapb.Keyspace\nError error}",
                     "value": "Keyspaces: []*vtctldatapb.Keyspace{\n{\nName: \"test\",\nKeyspace: &topodatapb.Keyspace{},\n},\n},"
@@ -62,6 +67,11 @@
                     "field": "GetCellInfoNamesResults",
                     "type": "&struct{\nResponse *vtctldatapb.GetCellInfoNamesResponse\nError error}",
                     "value": "Response: &vtctldatapb.GetCellInfoNamesResponse{\nNames: []string{\"other1\"},\n},"
+                },
+                {
+                    "field": "GetCellsAliasesResults",
+                    "type": "&struct{\nResponse *vtctldatapb.GetCellsAliasesResponse\nError error}",
+                    "value": "Response: &vtctldatapb.GetCellsAliasesResponse{\nAliases: map[string]*topodatapb.CellsAlias{\n\"other\": {\nCells: []string{\"other1\"}},\n},\n},"
                 },
                 {
                     "field": "GetKeyspacesResults",
@@ -367,6 +377,54 @@
                     "assertions": [
                         "require.NoError(t, err)",
                         "assert.NotEmpty(t, resp.Clusters, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "GetCellsAliases",
+            "rules": [
+                {
+                    "resource": "CellsAlias",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-all"],
+                    "clusters": ["*"]
+                },
+                {
+                    "resource": "CellsAlias",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-other"],
+                    "clusters": ["other"]
+                }
+            ],
+            "request": "&vtadminpb.GetCellsAliasesRequest{}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "unauthorized"},
+                    "is_permitted": false,
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.NoError(t, err)",
+                        "assert.Empty(t, resp.Aliases, $$)"
+                    ]
+                },
+                {
+                    "name": "partial access",
+                    "actor": {"name": "allowed-other"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.Aliases, $$)",
+                        "assert.ElementsMatch(t, resp.Aliases, []*vtadminpb.ClusterCellsAliases{{Cluster: &vtadminpb.Cluster{Id: \"other\", Name: \"other\"}, Aliases: map[string]*topodatapb.CellsAlias{\"other\": {Cells: []string{\"other1\"}}}}})"
+                    ]
+                },
+                {
+                    "name": "full access",
+                    "actor": {"name": "allowed-all"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.Aliases, $$)",
+                        "assert.ElementsMatch(t, resp.Aliases, []*vtadminpb.ClusterCellsAliases{{Cluster: &vtadminpb.Cluster{Id: \"test\", Name: \"test\"}, Aliases: map[string]*topodatapb.CellsAlias{\"zone\": {Cells: []string{\"zone1\"}}}}, {Cluster: &vtadminpb.Cluster{Id: \"other\", Name: \"other\"}, Aliases: map[string]*topodatapb.CellsAlias{\"other\": {Cells: []string{\"other1\"}}}}})"
                     ]
                 }
             ]
