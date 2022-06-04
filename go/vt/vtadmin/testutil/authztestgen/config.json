@@ -16,9 +16,24 @@
                     "value": "\"zone1-0000000100\": nil,"
                 },
                 {
+                    "field": "FindAllShardsInKeyspaceResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.FindAllShardsInKeyspaceResponse\nError error}",
+                    "value": "\"test\": {\nResponse: &vtctldatapb.FindAllShardsInKeyspaceResponse{\nShards: map[string]*vtctldatapb.Shard{\n\"-\": {\nKeyspace: \"test\",\nName: \"-\",\nShard: &topodatapb.Shard{},\n},\n},\n},\n},"
+                },
+                {
+                    "field": "GetBackupsResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.GetBackupsResponse\nError error}",
+                    "value": "\"test/-\": {\nResponse: &vtctldatapb.GetBackupsResponse{\nBackups: []*mysqlctlpb.BackupInfo{\n{},\n},\n},\n},"
+                },
+                {
                     "field": "GetCellInfoNamesResults",
                     "type": "&struct{\nResponse *vtctldatapb.GetCellInfoNamesResponse\nError error}",
                     "value": "Response: &vtctldatapb.GetCellInfoNamesResponse{\nNames: []string{\"zone1\"},\n},"
+                },
+                {
+                    "field": "GetKeyspacesResults",
+                    "type": "&struct{\nKeyspaces []*vtctldatapb.Keyspace\nError error}",
+                    "value": "Keyspaces: []*vtctldatapb.Keyspace{\n{\nName: \"test\",\nKeyspace: &topodatapb.Keyspace{},\n},\n},"
                 }
             ],
             "db_tablet_list": [
@@ -26,6 +41,27 @@
                     "tablet": {
                         "alias": {"cell": "zone1", "uid": 100}
                     }
+                }
+            ]
+        },
+        {
+            "id": "other",
+            "name": "other",
+            "vtctldclient_mock_data": [
+                {
+                    "field": "FindAllShardsInKeyspaceResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.FindAllShardsInKeyspaceResponse\nError error}",
+                    "value": "\"otherks\": {\nResponse: &vtctldatapb.FindAllShardsInKeyspaceResponse{\nShards: map[string]*vtctldatapb.Shard{\n\"-\": {\nKeyspace: \"otherks\",\nName: \"-\",\nShard: &topodatapb.Shard{},\n},\n},\n},\n},"
+                },
+                {
+                    "field": "GetBackupsResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.GetBackupsResponse\nError error}",
+                    "value": "\"otherks/-\": {\nResponse: &vtctldatapb.GetBackupsResponse{\nBackups: []*mysqlctlpb.BackupInfo{\n{}, {}, {},\n},\n},\n},"
+                },
+                {
+                    "field": "GetKeyspacesResults",
+                    "type": "&struct{\nKeyspaces []*vtctldatapb.Keyspace\nError error}",
+                    "value": "Keyspaces: []*vtctldatapb.Keyspace{\n{\nName: \"otherks\",\nKeyspace: &topodatapb.Keyspace{},\n},\n},"
                 }
             ]
         }
@@ -192,6 +228,52 @@
                     "assertions": [
                         "require.NoError(t, err)",
                         "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "GetBackups",
+            "rules": [
+                {
+                    "resource": "Backup",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-all"],
+                    "clusters": ["*"]
+                },
+                {
+                    "resource": "Backup",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-other"],
+                    "clusters": ["other"]
+                }
+            ],
+            "request": "&vtadminpb.GetBackupsRequest{}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "unauthorized"},
+                    "is_permitted": false,
+                    "assertions": [
+                        "assert.Empty(t, resp.Backups, $$)"
+                    ]
+                },
+                {
+                    "name": "partial access",
+                    "actor": {"name": "allowed-other"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.Backups, $$)",
+                        "assert.Len(t, resp.Backups, 3, \"'other' actor should be able to see the 3 backups in cluster 'other'\")"
+                    ]
+                },
+                {
+                    "name": "full access",
+                    "actor": {"name": "allowed-all"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.Backups, $$)",
+                        "assert.Len(t, resp.Backups, 4, \"'all' actor should be able to see backups in all clusters\")"
                     ]
                 }
             ]
