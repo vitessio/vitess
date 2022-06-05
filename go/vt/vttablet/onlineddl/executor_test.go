@@ -31,32 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-func TestConstraintOriginalNameRegexp(t *testing.T) {
-	tt := []struct {
-		name     string
-		original string
-	}{
-		{
-			name:     "check1",
-			original: "check1",
-		},
-		{
-			name:     "chk_7c7de6cb4f9b5842b4d0271f40756883_check1",
-			original: "check1",
-		},
-		{
-			name:     "fk_7c7de6cb4f9b5842b4d0271f40756883_check1",
-			original: "check1",
-		},
-	}
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			submatch := constraintOriginalNameRegexp.FindStringSubmatch(tc.name)
-			require.NotEmpty(t, submatch)
-			assert.Equal(t, tc.original, submatch[3])
-		})
-	}
-}
 func TestValidateAndEditCreateTableStatement(t *testing.T) {
 	e := Executor{}
 	tt := []struct {
@@ -120,6 +94,49 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, tc.countConstraints, len(uniqueConstraintNames))
 			assert.Equal(t, tc.countConstraints, len(constraintMap))
+		})
+	}
+}
+
+func TestAddInstantAlgorithm(t *testing.T) {
+	e := Executor{}
+	tt := []struct {
+		alter  string
+		expect string
+	}{
+		{
+			alter:  "alter table t add column i2 int not null",
+			expect: "ALTER TABLE `t` ADD COLUMN `i2` int NOT NULL, ALGORITHM = INSTANT",
+		},
+		{
+			alter:  "alter table t add column i2 int not null, lock=none",
+			expect: "ALTER TABLE `t` ADD COLUMN `i2` int NOT NULL, LOCK NONE, ALGORITHM = INSTANT",
+		},
+		{
+			alter:  "alter table t add column i2 int not null, algorithm=inplace",
+			expect: "ALTER TABLE `t` ADD COLUMN `i2` int NOT NULL, ALGORITHM = INSTANT",
+		},
+		{
+			alter:  "alter table t add column i2 int not null, algorithm=inplace, lock=none",
+			expect: "ALTER TABLE `t` ADD COLUMN `i2` int NOT NULL, ALGORITHM = INSTANT, LOCK NONE",
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.alter, func(t *testing.T) {
+			stmt, err := sqlparser.ParseStrictDDL(tc.alter)
+			require.NoError(t, err)
+			alterTable, ok := stmt.(*sqlparser.AlterTable)
+			require.True(t, ok)
+
+			e.addInstantAlgorithm(alterTable)
+			alterInstant := sqlparser.CanonicalString(alterTable)
+
+			assert.Equal(t, tc.expect, alterInstant)
+
+			stmt, err = sqlparser.ParseStrictDDL(alterInstant)
+			require.NoError(t, err)
+			_, ok = stmt.(*sqlparser.AlterTable)
+			require.True(t, ok)
 		})
 	}
 }

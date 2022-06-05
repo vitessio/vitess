@@ -444,6 +444,10 @@ vtadmin_web_install:
 vtadmin_web_proto_types: vtadmin_web_install
 	./web/vtadmin/bin/generate-proto-types.sh
 
+vtadmin_authz_testgen:
+	go generate ./go/vt/vtadmin/
+	go fmt ./go/vt/vtadmin/
+
 # Generate github CI actions workflow files for unit tests and cluster endtoend tests based on templates in the test/templates directory
 # Needs to be called if the templates change or if a new test "shard" is created. We do not need to rebuild tests if only the test/config.json
 # is changed by adding a new test to an existing shard. Any new or modified files need to be committed into git

@@ -97,7 +97,7 @@ This step is carried out by the **schemaload** container
 
 We need to create a few tables into our new cluster. To do that, we can run the `ApplySchema` command.	
 ```	
-vitess/examples/compose$ ./lvtctl.sh ApplySchema -sql "$(cat tables/create_messages.sql)" test_keyspace	
+vitess/examples/compose$ ./lvtctl.sh ApplySchema -- --sql "$(cat tables/create_messages.sql)" test_keyspace	
 ```
 
 ### Create Vschema	
@@ -105,7 +105,7 @@ This step is carried out by the **schemaload** container
 
 Create Vschema
 ```	
-vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"sharded": false }' test_keyspace	
+vitess/examples/compose$ ./lvtctl.sh ApplyVschema -- --vschema '{"sharded": false }' test_keyspace	
 ```
 
 ### Connect to vgate and run queries

@@ -25,22 +25,19 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
-	cmp "vitess.io/vitess/go/test/utils"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
+	cmp "vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/query"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -63,6 +60,7 @@ create table vitess_message(
 
 	# required indexes
 	primary key(id),
+	index next_idx(time_next),
 	index poller_idx(time_acked, priority, time_next desc)
 
 	# add any secondary indexes or foreign keys - no restrictions
@@ -200,6 +198,7 @@ create table vitess_message3(
 
 	# required indexes
 	primary key(id),
+	index next_idx(time_next),
 	index poller_idx(time_acked, priority, time_next desc)
 
 	# add any secondary indexes or foreign keys - no restrictions
@@ -271,6 +270,87 @@ func TestThreeColMessage(t *testing.T) {
 
 	// Verify Ack.
 	qr := utils.Exec(t, conn, "update vitess_message3 set time_acked = 123, time_next = null where id = 1 and time_acked is null")
+	assert.Equal(t, uint64(1), qr.RowsAffected)
+}
+
+var createSpecificStreamingColsMessage = `create table vitess_message4(
+	# required columns
+	id bigint NOT NULL COMMENT 'often an event id, can also be auto-increment or a sequence',
+	priority tinyint NOT NULL DEFAULT '50' COMMENT 'lower number priorities process first',
+	epoch bigint NOT NULL DEFAULT '0' COMMENT 'Vitess increments this each time it sends a message, and is used for incremental backoff doubling',
+	time_next bigint DEFAULT 0 COMMENT 'the earliest time the message will be sent in epoch nanoseconds. Must be null if time_acked is set',
+	time_acked bigint DEFAULT NULL COMMENT 'the time the message was acked in epoch nanoseconds. Must be null if time_next is set',
+
+	# add as many custom fields here as required
+	# optional - these are suggestions
+	tenant_id bigint,
+	message json,
+
+	# custom to this test
+	msg1 varchar(128),
+	msg2 bigint,
+
+	# required indexes
+	primary key(id),
+	index next_idx(time_next),
+	index poller_idx(time_acked, priority, time_next desc)
+
+	# add any secondary indexes or foreign keys - no restrictions
+) comment 'vitess_message,vt_message_cols=id|msg1,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
+
+func TestSpecificStreamingColsMessage(t *testing.T) {
+	ctx := context.Background()
+
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	streamConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer streamConn.Close()
+
+	utils.Exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
+	utils.Exec(t, conn, createSpecificStreamingColsMessage)
+	defer utils.Exec(t, conn, "drop table vitess_message4")
+
+	utils.Exec(t, streamConn, "set workload = 'olap'")
+	err = streamConn.ExecuteStreamFetch("stream * from vitess_message4")
+	require.NoError(t, err)
+
+	wantFields := []*querypb.Field{{
+		Name: "id",
+		Type: sqltypes.Int64,
+	}, {
+		Name: "msg1",
+		Type: sqltypes.VarChar,
+	}}
+	gotFields, err := streamConn.Fields()
+	for i, field := range gotFields {
+		// Remove other artifacts.
+		gotFields[i] = &querypb.Field{
+			Name: field.Name,
+			Type: field.Type,
+		}
+	}
+	require.NoError(t, err)
+	cmp.MustMatch(t, wantFields, gotFields)
+
+	utils.Exec(t, conn, "insert into vitess_message4(id, msg1, msg2) values(1, 'hello world', 3)")
+
+	got, err := streamConn.FetchNext(nil)
+	require.NoError(t, err)
+	want := []sqltypes.Value{
+		sqltypes.NewInt64(1),
+		sqltypes.NewVarChar("hello world"),
+	}
+	cmp.MustMatch(t, want, got)
+
+	// Verify Ack.
+	qr := utils.Exec(t, conn, "update vitess_message4 set time_acked = 123, time_next = null where id = 1 and time_acked is null")
 	assert.Equal(t, uint64(1), qr.RowsAffected)
 }
 

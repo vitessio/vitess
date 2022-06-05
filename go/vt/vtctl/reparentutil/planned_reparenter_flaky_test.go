@@ -1641,6 +1641,10 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 				ctx = _ctx
 			}
 
+			durability, err := GetDurabilityPolicy("none")
+			require.NoError(t, err)
+			tt.opts.durability = durability
+
 			pos, err := pr.performGracefulPromotion(
 				ctx,
 				tt.ev,
@@ -1790,10 +1794,12 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 				ctx = _ctx
 			}
 
+			durability, err := GetDurabilityPolicy("none")
+			require.NoError(t, err)
 			pos, err := pr.performInitialPromotion(
 				ctx,
 				tt.primaryElect,
-				PlannedReparentOptions{},
+				PlannedReparentOptions{durability: durability},
 			)
 
 			if tt.shouldErr {
@@ -2505,7 +2511,9 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 				ctx = _ctx
 			}
 
-			rp, err := pr.performPotentialPromotion(ctx, tt.keyspace, tt.shard, tt.primaryElect, tt.tabletMap)
+			durability, err := GetDurabilityPolicy("none")
+			require.NoError(t, err)
+			rp, err := pr.performPotentialPromotion(ctx, tt.keyspace, tt.shard, tt.primaryElect, tt.tabletMap, PlannedReparentOptions{durability: durability})
 			if tt.shouldErr {
 				assert.Error(t, err)
 
@@ -3242,6 +3250,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 		name string
 		tmc  tmclient.TabletManagerClient
 
+		durability              string
 		ev                      *events.Reparent
 		reparentJournalPosition string
 		tabletMap               map[string]*topo.TabletInfo
@@ -3250,7 +3259,8 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 		shouldErr bool
 	}{
 		{
-			name: "success",
+			name:       "success - durability = none",
+			durability: "none",
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
@@ -3259,6 +3269,11 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 					"zone1-0000000200": nil,
 					"zone1-0000000201": nil,
 					"zone1-0000000202": nil,
+				},
+				SetReplicationSourceSemiSync: map[string]bool{
+					"zone1-0000000200": false,
+					"zone1-0000000201": false,
+					"zone1-0000000202": false,
 				},
 			},
 			ev: &events.Reparent{
@@ -3305,6 +3320,73 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 							Uid:  202,
 						},
 						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:       "success - durability = semi_sync",
+			durability: "semi_sync",
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+					"zone1-0000000201": nil,
+					"zone1-0000000202": nil,
+				},
+				SetReplicationSourceSemiSync: map[string]bool{
+					"zone1-0000000200": true,
+					"zone1-0000000201": true,
+					"zone1-0000000202": false,
+				},
+			},
+			ev: &events.Reparent{
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000202": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  202,
+						},
+						Type: topodatapb.TabletType_RDONLY,
 					},
 				},
 			},
@@ -3578,7 +3660,14 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 			t.Parallel()
 
 			pr := NewPlannedReparenter(nil, tt.tmc, logger)
-			err := pr.reparentTablets(ctx, tt.ev, tt.reparentJournalPosition, tt.tabletMap, tt.opts)
+			durabilityPolicy := "none"
+			if tt.durability != "" {
+				durabilityPolicy = tt.durability
+			}
+			durability, err := GetDurabilityPolicy(durabilityPolicy)
+			require.NoError(t, err)
+			tt.opts.durability = durability
+			err = pr.reparentTablets(ctx, tt.ev, tt.reparentJournalPosition, tt.tabletMap, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
 

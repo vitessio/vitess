@@ -154,6 +154,11 @@ SET GLOBAL old_alter_table = ON;
 			}
 		}
 
+		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
+		_, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+		if err != nil {
+			return 1, err
+		}
 		if err := localCluster.VtctlclientProcess.InitializeShard(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
 			return 1, err
 		}

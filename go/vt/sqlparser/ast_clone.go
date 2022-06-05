@@ -59,6 +59,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAndExpr(in)
 	case Argument:
 		return in
+	case *ArgumentLessWindowExpr:
+		return CloneRefOfArgumentLessWindowExpr(in)
 	case *AutoIncSpec:
 		return CloneRefOfAutoIncSpec(in)
 	case *Begin:
@@ -145,12 +147,20 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfExtractFuncExpr(in)
 	case *ExtractedSubquery:
 		return CloneRefOfExtractedSubquery(in)
+	case *FirstOrLastValueExpr:
+		return CloneRefOfFirstOrLastValueExpr(in)
 	case *Flush:
 		return CloneRefOfFlush(in)
 	case *Force:
 		return CloneRefOfForce(in)
 	case *ForeignKeyDefinition:
 		return CloneRefOfForeignKeyDefinition(in)
+	case *FrameClause:
+		return CloneRefOfFrameClause(in)
+	case *FramePoint:
+		return CloneRefOfFramePoint(in)
+	case *FromFirstLastClause:
+		return CloneRefOfFromFirstLastClause(in)
 	case *FuncExpr:
 		return CloneRefOfFuncExpr(in)
 	case GroupBy:
@@ -229,6 +239,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfJtOnResponse(in)
 	case *KeyState:
 		return CloneRefOfKeyState(in)
+	case *LagLeadExpr:
+		return CloneRefOfLagLeadExpr(in)
 	case *Limit:
 		return CloneRefOfLimit(in)
 	case ListArg:
@@ -249,10 +261,20 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfMemberOfExpr(in)
 	case *ModifyColumn:
 		return CloneRefOfModifyColumn(in)
+	case *NTHValueExpr:
+		return CloneRefOfNTHValueExpr(in)
+	case *NamedWindow:
+		return CloneRefOfNamedWindow(in)
+	case NamedWindows:
+		return CloneNamedWindows(in)
 	case *Nextval:
 		return CloneRefOfNextval(in)
 	case *NotExpr:
 		return CloneRefOfNotExpr(in)
+	case *NtileExpr:
+		return CloneRefOfNtileExpr(in)
+	case *NullTreatmentClause:
+		return CloneRefOfNullTreatmentClause(in)
 	case *NullVal:
 		return CloneRefOfNullVal(in)
 	case *Offset:
@@ -273,6 +295,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfOtherAdmin(in)
 	case *OtherRead:
 		return CloneRefOfOtherRead(in)
+	case *OverClause:
+		return CloneRefOfOverClause(in)
 	case *ParenTableExpr:
 		return CloneRefOfParenTableExpr(in)
 	case *ParsedComments:
@@ -297,6 +321,14 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return in
 	case *ReferenceDefinition:
 		return CloneRefOfReferenceDefinition(in)
+	case *RegexpInstrExpr:
+		return CloneRefOfRegexpInstrExpr(in)
+	case *RegexpLikeExpr:
+		return CloneRefOfRegexpLikeExpr(in)
+	case *RegexpReplaceExpr:
+		return CloneRefOfRegexpReplaceExpr(in)
+	case *RegexpSubstrExpr:
+		return CloneRefOfRegexpSubstrExpr(in)
 	case *Release:
 		return CloneRefOfRelease(in)
 	case *RenameIndex:
@@ -413,6 +445,12 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfWhen(in)
 	case *Where:
 		return CloneRefOfWhere(in)
+	case *WindowDefinition:
+		return CloneRefOfWindowDefinition(in)
+	case WindowDefinitions:
+		return CloneWindowDefinitions(in)
+	case *WindowSpecification:
+		return CloneRefOfWindowSpecification(in)
 	case *With:
 		return CloneRefOfWith(in)
 	case *XorExpr:
@@ -590,6 +628,16 @@ func CloneRefOfAndExpr(n *AndExpr) *AndExpr {
 	out := *n
 	out.Left = CloneExpr(n.Left)
 	out.Right = CloneExpr(n.Right)
+	return &out
+}
+
+// CloneRefOfArgumentLessWindowExpr creates a deep clone of the input.
+func CloneRefOfArgumentLessWindowExpr(n *ArgumentLessWindowExpr) *ArgumentLessWindowExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -1051,6 +1099,18 @@ func CloneRefOfExtractedSubquery(n *ExtractedSubquery) *ExtractedSubquery {
 	return &out
 }
 
+// CloneRefOfFirstOrLastValueExpr creates a deep clone of the input.
+func CloneRefOfFirstOrLastValueExpr(n *FirstOrLastValueExpr) *FirstOrLastValueExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.NullTreatmentClause = CloneRefOfNullTreatmentClause(n.NullTreatmentClause)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
+	return &out
+}
+
 // CloneRefOfFlush creates a deep clone of the input.
 func CloneRefOfFlush(n *Flush) *Flush {
 	if n == nil {
@@ -1080,6 +1140,36 @@ func CloneRefOfForeignKeyDefinition(n *ForeignKeyDefinition) *ForeignKeyDefiniti
 	out.Source = CloneColumns(n.Source)
 	out.IndexName = CloneColIdent(n.IndexName)
 	out.ReferenceDefinition = CloneRefOfReferenceDefinition(n.ReferenceDefinition)
+	return &out
+}
+
+// CloneRefOfFrameClause creates a deep clone of the input.
+func CloneRefOfFrameClause(n *FrameClause) *FrameClause {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Start = CloneRefOfFramePoint(n.Start)
+	out.End = CloneRefOfFramePoint(n.End)
+	return &out
+}
+
+// CloneRefOfFramePoint creates a deep clone of the input.
+func CloneRefOfFramePoint(n *FramePoint) *FramePoint {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	return &out
+}
+
+// CloneRefOfFromFirstLastClause creates a deep clone of the input.
+func CloneRefOfFromFirstLastClause(n *FromFirstLastClause) *FromFirstLastClause {
+	if n == nil {
+		return nil
+	}
+	out := *n
 	return &out
 }
 
@@ -1502,6 +1592,20 @@ func CloneRefOfKeyState(n *KeyState) *KeyState {
 	return &out
 }
 
+// CloneRefOfLagLeadExpr creates a deep clone of the input.
+func CloneRefOfLagLeadExpr(n *LagLeadExpr) *LagLeadExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.N = CloneExpr(n.N)
+	out.Default = CloneExpr(n.Default)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
+	out.NullTreatmentClause = CloneRefOfNullTreatmentClause(n.NullTreatmentClause)
+	return &out
+}
+
 // CloneRefOfLimit creates a deep clone of the input.
 func CloneRefOfLimit(n *Limit) *Limit {
 	if n == nil {
@@ -1583,6 +1687,42 @@ func CloneRefOfModifyColumn(n *ModifyColumn) *ModifyColumn {
 	return &out
 }
 
+// CloneRefOfNTHValueExpr creates a deep clone of the input.
+func CloneRefOfNTHValueExpr(n *NTHValueExpr) *NTHValueExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.N = CloneExpr(n.N)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
+	out.FromFirstLastClause = CloneRefOfFromFirstLastClause(n.FromFirstLastClause)
+	out.NullTreatmentClause = CloneRefOfNullTreatmentClause(n.NullTreatmentClause)
+	return &out
+}
+
+// CloneRefOfNamedWindow creates a deep clone of the input.
+func CloneRefOfNamedWindow(n *NamedWindow) *NamedWindow {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Windows = CloneWindowDefinitions(n.Windows)
+	return &out
+}
+
+// CloneNamedWindows creates a deep clone of the input.
+func CloneNamedWindows(n NamedWindows) NamedWindows {
+	if n == nil {
+		return nil
+	}
+	res := make(NamedWindows, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneRefOfNamedWindow(x))
+	}
+	return res
+}
+
 // CloneRefOfNextval creates a deep clone of the input.
 func CloneRefOfNextval(n *Nextval) *Nextval {
 	if n == nil {
@@ -1600,6 +1740,26 @@ func CloneRefOfNotExpr(n *NotExpr) *NotExpr {
 	}
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
+	return &out
+}
+
+// CloneRefOfNtileExpr creates a deep clone of the input.
+func CloneRefOfNtileExpr(n *NtileExpr) *NtileExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.N = CloneExpr(n.N)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
+	return &out
+}
+
+// CloneRefOfNullTreatmentClause creates a deep clone of the input.
+func CloneRefOfNullTreatmentClause(n *NullTreatmentClause) *NullTreatmentClause {
+	if n == nil {
+		return nil
+	}
+	out := *n
 	return &out
 }
 
@@ -1701,6 +1861,17 @@ func CloneRefOfOtherRead(n *OtherRead) *OtherRead {
 		return nil
 	}
 	out := *n
+	return &out
+}
+
+// CloneRefOfOverClause creates a deep clone of the input.
+func CloneRefOfOverClause(n *OverClause) *OverClause {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.WindowName = CloneColIdent(n.WindowName)
+	out.WindowSpec = CloneRefOfWindowSpecification(n.WindowSpec)
 	return &out
 }
 
@@ -1832,6 +2003,62 @@ func CloneRefOfReferenceDefinition(n *ReferenceDefinition) *ReferenceDefinition 
 	return &out
 }
 
+// CloneRefOfRegexpInstrExpr creates a deep clone of the input.
+func CloneRefOfRegexpInstrExpr(n *RegexpInstrExpr) *RegexpInstrExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.Pattern = CloneExpr(n.Pattern)
+	out.Position = CloneExpr(n.Position)
+	out.Occurrence = CloneExpr(n.Occurrence)
+	out.ReturnOption = CloneExpr(n.ReturnOption)
+	out.MatchType = CloneExpr(n.MatchType)
+	return &out
+}
+
+// CloneRefOfRegexpLikeExpr creates a deep clone of the input.
+func CloneRefOfRegexpLikeExpr(n *RegexpLikeExpr) *RegexpLikeExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.Pattern = CloneExpr(n.Pattern)
+	out.MatchType = CloneExpr(n.MatchType)
+	return &out
+}
+
+// CloneRefOfRegexpReplaceExpr creates a deep clone of the input.
+func CloneRefOfRegexpReplaceExpr(n *RegexpReplaceExpr) *RegexpReplaceExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.Pattern = CloneExpr(n.Pattern)
+	out.Repl = CloneExpr(n.Repl)
+	out.Occurrence = CloneExpr(n.Occurrence)
+	out.Position = CloneExpr(n.Position)
+	out.MatchType = CloneExpr(n.MatchType)
+	return &out
+}
+
+// CloneRefOfRegexpSubstrExpr creates a deep clone of the input.
+func CloneRefOfRegexpSubstrExpr(n *RegexpSubstrExpr) *RegexpSubstrExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.Pattern = CloneExpr(n.Pattern)
+	out.Occurrence = CloneExpr(n.Occurrence)
+	out.Position = CloneExpr(n.Position)
+	out.MatchType = CloneExpr(n.MatchType)
+	return &out
+}
+
 // CloneRefOfRelease creates a deep clone of the input.
 func CloneRefOfRelease(n *Release) *Release {
 	if n == nil {
@@ -1931,6 +2158,7 @@ func CloneRefOfSelect(n *Select) *Select {
 	out.With = CloneRefOfWith(n.With)
 	out.GroupBy = CloneGroupBy(n.GroupBy)
 	out.Having = CloneRefOfWhere(n.Having)
+	out.Windows = CloneNamedWindows(n.Windows)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	out.Into = CloneRefOfSelectInto(n.Into)
@@ -2459,6 +2687,42 @@ func CloneRefOfWhere(n *Where) *Where {
 	return &out
 }
 
+// CloneRefOfWindowDefinition creates a deep clone of the input.
+func CloneRefOfWindowDefinition(n *WindowDefinition) *WindowDefinition {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneColIdent(n.Name)
+	out.WindowSpec = CloneRefOfWindowSpecification(n.WindowSpec)
+	return &out
+}
+
+// CloneWindowDefinitions creates a deep clone of the input.
+func CloneWindowDefinitions(n WindowDefinitions) WindowDefinitions {
+	if n == nil {
+		return nil
+	}
+	res := make(WindowDefinitions, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneRefOfWindowDefinition(x))
+	}
+	return res
+}
+
+// CloneRefOfWindowSpecification creates a deep clone of the input.
+func CloneRefOfWindowSpecification(n *WindowSpecification) *WindowSpecification {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneColIdent(n.Name)
+	out.PartitionClause = CloneExprs(n.PartitionClause)
+	out.OrderClause = CloneOrderBy(n.OrderClause)
+	out.FrameClause = CloneRefOfFrameClause(n.FrameClause)
+	return &out
+}
+
 // CloneRefOfWith creates a deep clone of the input.
 func CloneRefOfWith(n *With) *With {
 	if n == nil {
@@ -2540,6 +2804,8 @@ func CloneCallable(in Callable) Callable {
 		return nil
 	}
 	switch in := in.(type) {
+	case *ArgumentLessWindowExpr:
+		return CloneRefOfArgumentLessWindowExpr(in)
 	case *ConvertExpr:
 		return CloneRefOfConvertExpr(in)
 	case *ConvertUsingExpr:
@@ -2548,6 +2814,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfCurTimeFuncExpr(in)
 	case *ExtractFuncExpr:
 		return CloneRefOfExtractFuncExpr(in)
+	case *FirstOrLastValueExpr:
+		return CloneRefOfFirstOrLastValueExpr(in)
 	case *FuncExpr:
 		return CloneRefOfFuncExpr(in)
 	case *GroupConcatExpr:
@@ -2592,10 +2860,26 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfJSONValueMergeExpr(in)
 	case *JSONValueModifierExpr:
 		return CloneRefOfJSONValueModifierExpr(in)
+	case *LagLeadExpr:
+		return CloneRefOfLagLeadExpr(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
 	case *MemberOfExpr:
 		return CloneRefOfMemberOfExpr(in)
+	case *NTHValueExpr:
+		return CloneRefOfNTHValueExpr(in)
+	case *NamedWindow:
+		return CloneRefOfNamedWindow(in)
+	case *NtileExpr:
+		return CloneRefOfNtileExpr(in)
+	case *RegexpInstrExpr:
+		return CloneRefOfRegexpInstrExpr(in)
+	case *RegexpLikeExpr:
+		return CloneRefOfRegexpLikeExpr(in)
+	case *RegexpReplaceExpr:
+		return CloneRefOfRegexpReplaceExpr(in)
+	case *RegexpSubstrExpr:
+		return CloneRefOfRegexpSubstrExpr(in)
 	case *SubstrExpr:
 		return CloneRefOfSubstrExpr(in)
 	case *TimestampFuncExpr:
@@ -2734,6 +3018,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfAndExpr(in)
 	case Argument:
 		return in
+	case *ArgumentLessWindowExpr:
+		return CloneRefOfArgumentLessWindowExpr(in)
 	case *BetweenExpr:
 		return CloneRefOfBetweenExpr(in)
 	case *BinaryExpr:
@@ -2762,6 +3048,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfExtractFuncExpr(in)
 	case *ExtractedSubquery:
 		return CloneRefOfExtractedSubquery(in)
+	case *FirstOrLastValueExpr:
+		return CloneRefOfFirstOrLastValueExpr(in)
 	case *FuncExpr:
 		return CloneRefOfFuncExpr(in)
 	case *GroupConcatExpr:
@@ -2812,6 +3100,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfJSONValueMergeExpr(in)
 	case *JSONValueModifierExpr:
 		return CloneRefOfJSONValueModifierExpr(in)
+	case *LagLeadExpr:
+		return CloneRefOfLagLeadExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -2820,14 +3110,28 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfMatchExpr(in)
 	case *MemberOfExpr:
 		return CloneRefOfMemberOfExpr(in)
+	case *NTHValueExpr:
+		return CloneRefOfNTHValueExpr(in)
+	case *NamedWindow:
+		return CloneRefOfNamedWindow(in)
 	case *NotExpr:
 		return CloneRefOfNotExpr(in)
+	case *NtileExpr:
+		return CloneRefOfNtileExpr(in)
 	case *NullVal:
 		return CloneRefOfNullVal(in)
 	case *Offset:
 		return CloneRefOfOffset(in)
 	case *OrExpr:
 		return CloneRefOfOrExpr(in)
+	case *RegexpInstrExpr:
+		return CloneRefOfRegexpInstrExpr(in)
+	case *RegexpLikeExpr:
+		return CloneRefOfRegexpLikeExpr(in)
+	case *RegexpReplaceExpr:
+		return CloneRefOfRegexpReplaceExpr(in)
+	case *RegexpSubstrExpr:
+		return CloneRefOfRegexpSubstrExpr(in)
 	case *Subquery:
 		return CloneRefOfSubquery(in)
 	case *SubstrExpr:
@@ -2880,6 +3184,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfAndExpr(in)
 	case Argument:
 		return in
+	case *ArgumentLessWindowExpr:
+		return CloneRefOfArgumentLessWindowExpr(in)
 	case *BetweenExpr:
 		return CloneRefOfBetweenExpr(in)
 	case *BinaryExpr:
@@ -2908,6 +3214,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfExtractFuncExpr(in)
 	case *ExtractedSubquery:
 		return CloneRefOfExtractedSubquery(in)
+	case *FirstOrLastValueExpr:
+		return CloneRefOfFirstOrLastValueExpr(in)
 	case *FuncExpr:
 		return CloneRefOfFuncExpr(in)
 	case *GroupConcatExpr:
@@ -2958,6 +3266,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfJSONValueMergeExpr(in)
 	case *JSONValueModifierExpr:
 		return CloneRefOfJSONValueModifierExpr(in)
+	case *LagLeadExpr:
+		return CloneRefOfLagLeadExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -2966,14 +3276,28 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfMatchExpr(in)
 	case *MemberOfExpr:
 		return CloneRefOfMemberOfExpr(in)
+	case *NTHValueExpr:
+		return CloneRefOfNTHValueExpr(in)
+	case *NamedWindow:
+		return CloneRefOfNamedWindow(in)
 	case *NotExpr:
 		return CloneRefOfNotExpr(in)
+	case *NtileExpr:
+		return CloneRefOfNtileExpr(in)
 	case *NullVal:
 		return CloneRefOfNullVal(in)
 	case *Offset:
 		return CloneRefOfOffset(in)
 	case *OrExpr:
 		return CloneRefOfOrExpr(in)
+	case *RegexpInstrExpr:
+		return CloneRefOfRegexpInstrExpr(in)
+	case *RegexpLikeExpr:
+		return CloneRefOfRegexpLikeExpr(in)
+	case *RegexpReplaceExpr:
+		return CloneRefOfRegexpReplaceExpr(in)
+	case *RegexpSubstrExpr:
+		return CloneRefOfRegexpSubstrExpr(in)
 	case *Subquery:
 		return CloneRefOfSubquery(in)
 	case *SubstrExpr:
