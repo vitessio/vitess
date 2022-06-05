@@ -692,6 +692,85 @@ func TestGetClusters(t *testing.T) {
 	})
 }
 
+func TestGetGates(t *testing.T) {
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "VTGate",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "VTGate",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
+		assert.NoError(t, err)
+		assert.Empty(t, resp.Gates, "actor %+v should not be permitted to GetGates", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
+		assert.NotEmpty(t, resp.Gates, "actor %+v should be permitted to GetGates", actor)
+		// testutil.BuildCluster creates exactly one gate per cluster
+		assert.Len(t, resp.Gates, 1, "actor %+v should only be able to see VTGate from cluster 'other'", actor)
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
+		assert.NotEmpty(t, resp.Gates, "actor %+v should be permitted to GetGates", actor)
+		// testutil.BuildCluster creates exactly one gate per cluster
+		assert.Len(t, resp.Gates, 2, "actor %+v should be able to see VTGate from all clusters", actor)
+	})
+}
+
 func testClusters(t testing.TB) []*cluster.Cluster {
 	configs := []testutil.TestClusterConfig{
 		{

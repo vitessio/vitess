@@ -428,6 +428,56 @@
                     ]
                 }
             ]
+        },
+        {
+            "method": "GetGates",
+            "rules": [
+                {
+                    "resource": "VTGate",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-all"],
+                    "clusters": ["*"]
+                },
+                {
+                    "resource": "VTGate",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-other"],
+                    "clusters": ["other"]
+                }
+            ],
+            "request": "&vtadminpb.GetGatesRequest{}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "unauthorized"},
+                    "is_permitted": false,
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.NoError(t, err)",
+                        "assert.Empty(t, resp.Gates, $$)"
+                    ]
+                },
+                {
+                    "name": "partial access",
+                    "actor": {"name": "allowed-other"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.Gates, $$)",
+                        "// testutil.BuildCluster creates exactly one gate per cluster",
+                        "assert.Len(t, resp.Gates, 1, \"actor %+v should only be able to see VTGate from cluster 'other'\", actor)"
+                    ]
+                },
+                {
+                    "name": "full access",
+                    "actor": {"name": "allowed-all"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.Gates, $$)",
+                        "// testutil.BuildCluster creates exactly one gate per cluster",
+                        "assert.Len(t, resp.Gates, 2, \"actor %+v should be able to see VTGate from all clusters\", actor)"
+                    ]
+                }
+            ]
         }
     ]
 }
