@@ -52,6 +52,10 @@ type VtctldClient struct {
 		Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 		Error    error
 	}
+	GetBackupsResults map[string]struct {
+		Response *vtctldatapb.GetBackupsResponse
+		Error    error
+	}
 	GetCellInfoNamesResults *struct {
 		Response *vtctldatapb.GetCellInfoNamesResponse
 		Error    error
@@ -68,7 +72,7 @@ type VtctldClient struct {
 		Response *vtctldatapb.GetKeyspaceResponse
 		Error    error
 	}
-	GetKeyspacesResults struct {
+	GetKeyspacesResults *struct {
 		Keyspaces []*vtctldatapb.Keyspace
 		Error     error
 	}
@@ -248,17 +252,18 @@ func (fake *VtctldClient) FindAllShardsInKeyspace(ctx context.Context, req *vtct
 	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
 }
 
-// GetKeyspace is part of the vtctldclient.VtctldClient interface.
-func (fake *VtctldClient) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspaceResponse, error) {
-	if fake.GetKeyspaceResults == nil {
-		return nil, fmt.Errorf("%w: GetKeyspaceResults not set on fake vtctldclient", assert.AnError)
+// GetBackups is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) GetBackups(ctx context.Context, req *vtctldatapb.GetBackupsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetBackupsResponse, error) {
+	if fake.GetBackupsResults == nil {
+		return nil, fmt.Errorf("%w: GetBackupsResults not set on fake vtctldclient", assert.AnError)
 	}
 
-	if result, ok := fake.GetKeyspaceResults[req.Keyspace]; ok {
+	key := fmt.Sprintf("%s/%s", req.Keyspace, req.Shard)
+	if result, ok := fake.GetBackupsResults[key]; ok {
 		return result.Response, result.Error
 	}
 
-	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
 }
 
 // GetCellInfo is part of the vtctldclient.VtctldClient interface.
@@ -277,7 +282,7 @@ func (fake *VtctldClient) GetCellInfo(ctx context.Context, req *vtctldatapb.GetC
 // GetCellInfoNames is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) GetCellInfoNames(ctx context.Context, req *vtctldatapb.GetCellInfoNamesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetCellInfoNamesResponse, error) {
 	if fake.GetCellInfoNamesResults == nil {
-		return nil, fmt.Errorf("%w: GetCellInfoNames not set of fake vtctldclient", assert.AnError)
+		return nil, fmt.Errorf("%w: GetCellInfoNamesResults not set on fake vtctldclient", assert.AnError)
 	}
 
 	return fake.GetCellInfoNamesResults.Response, fake.GetCellInfoNamesResults.Error
@@ -286,14 +291,31 @@ func (fake *VtctldClient) GetCellInfoNames(ctx context.Context, req *vtctldatapb
 // GetCellsAliases is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) GetCellsAliases(ctx context.Context, req *vtctldatapb.GetCellsAliasesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetCellsAliasesResponse, error) {
 	if fake.GetCellsAliasesResults == nil {
-		return nil, fmt.Errorf("%w: GetCellsAliases not set of fake vtctldclient", assert.AnError)
+		return nil, fmt.Errorf("%w: GetCellsAliasesResults not set on fake vtctldclient", assert.AnError)
 	}
 
 	return fake.GetCellsAliasesResults.Response, fake.GetCellsAliasesResults.Error
 }
 
+// GetKeyspace is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspaceResponse, error) {
+	if fake.GetKeyspaceResults == nil {
+		return nil, fmt.Errorf("%w: GetKeyspaceResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	if result, ok := fake.GetKeyspaceResults[req.Keyspace]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
+}
+
 // GetKeyspaces is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKeyspacesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspacesResponse, error) {
+	if fake.GetKeyspacesResults == nil {
+		return nil, fmt.Errorf("%w: GetKeyspacesResults not set on fake vtctldclient", assert.AnError)
+	}
+
 	if fake.GetKeyspacesResults.Error != nil {
 		return nil, fake.GetKeyspacesResults.Error
 	}

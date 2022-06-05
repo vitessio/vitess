@@ -397,7 +397,7 @@ func Test_getShardSets(t *testing.T) {
 						Error: topo.NewError(topo.NoNode, "ks3"), /* we need to fail in a particular way */
 					},
 				},
-				GetKeyspacesResults: struct {
+				GetKeyspacesResults: &struct {
 					Keyspaces []*vtctldatapb.Keyspace
 					Error     error
 				}{
@@ -953,7 +953,7 @@ func Test_reloadKeyspaceSchemas(t *testing.T) {
 				ID:   "test",
 				Name: "test",
 				Vtctld: &fakevtctldclient.VtctldClient{
-					GetKeyspacesResults: struct {
+					GetKeyspacesResults: &struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
 					}{
@@ -1010,7 +1010,7 @@ func Test_reloadKeyspaceSchemas(t *testing.T) {
 				ID:   "test",
 				Name: "test",
 				Vtctld: &fakevtctldclient.VtctldClient{
-					GetKeyspacesResults: struct {
+					GetKeyspacesResults: &struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
 					}{
@@ -1083,7 +1083,7 @@ func Test_reloadKeyspaceSchemas(t *testing.T) {
 				ID:   "test",
 				Name: "test",
 				Vtctld: &fakevtctldclient.VtctldClient{
-					GetKeyspacesResults: struct {
+					GetKeyspacesResults: &struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
 					}{
@@ -1134,7 +1134,7 @@ func Test_reloadKeyspaceSchemas(t *testing.T) {
 				ID:   "test",
 				Name: "test",
 				Vtctld: &fakevtctldclient.VtctldClient{
-					GetKeyspacesResults: struct {
+					GetKeyspacesResults: &struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
 					}{
@@ -1152,7 +1152,7 @@ func Test_reloadKeyspaceSchemas(t *testing.T) {
 				ID:   "test",
 				Name: "test",
 				Vtctld: &fakevtctldclient.VtctldClient{
-					GetKeyspacesResults: struct {
+					GetKeyspacesResults: &struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
 					}{
@@ -1278,7 +1278,7 @@ func Test_reloadShardSchemas(t *testing.T) {
 							},
 						},
 					},
-					GetKeyspacesResults: struct {
+					GetKeyspacesResults: &struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
 					}{
@@ -1406,7 +1406,7 @@ func Test_reloadShardSchemas(t *testing.T) {
 							},
 						},
 					},
-					GetKeyspacesResults: struct {
+					GetKeyspacesResults: &struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
 					}{
@@ -1470,7 +1470,7 @@ func Test_reloadShardSchemas(t *testing.T) {
 							},
 						},
 					},
-					GetKeyspacesResults: struct {
+					GetKeyspacesResults: &struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
 					}{
