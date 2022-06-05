@@ -21,6 +21,7 @@ package vtadmin_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -834,6 +835,97 @@ func TestGetKeyspace(t *testing.T) {
 	})
 }
 
+func TestGetKeyspaces(t *testing.T) {
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Keyspace",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "Keyspace",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetKeyspaces(ctx, &vtadminpb.GetKeyspacesRequest{})
+		assert.NoError(t, err)
+		assert.Empty(t, resp.Keyspaces, "actor %+v should not be permitted to GetKeyspaces", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetKeyspaces(ctx, &vtadminpb.GetKeyspacesRequest{})
+		assert.NotEmpty(t, resp.Keyspaces, "actor %+v should be permitted to GetKeyspaces", actor)
+		ksMap := map[string][]string{}
+		for _, ks := range resp.Keyspaces {
+			if _, ok := ksMap[ks.Cluster.Id]; !ok {
+				ksMap[ks.Cluster.Id] = []string{}
+			}
+			ksMap[ks.Cluster.Id] = append(ksMap[ks.Cluster.Id], ks.Keyspace.Name)
+		}
+		assert.Equal(t, ksMap, map[string][]string{"other": {"otherks"}}, "actor %+v should be permitted to GetKeyspaces", actor)
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetKeyspaces(ctx, &vtadminpb.GetKeyspacesRequest{})
+		assert.NotEmpty(t, resp.Keyspaces, "actor %+v should be permitted to GetKeyspaces", actor)
+		ksMap := map[string][]string{}
+		for _, ks := range resp.Keyspaces {
+			if _, ok := ksMap[ks.Cluster.Id]; !ok {
+				ksMap[ks.Cluster.Id] = []string{}
+			}
+			ksMap[ks.Cluster.Id] = append(ksMap[ks.Cluster.Id], ks.Keyspace.Name)
+		}
+		assert.Equal(t, ksMap, map[string][]string{"test": {"test"}, "other": {"otherks"}}, "actor %+v should be permitted to GetKeyspaces", actor)
+	})
+}
+
 func testClusters(t testing.TB) []*cluster.Cluster {
 	configs := []testutil.TestClusterConfig{
 		{
@@ -931,6 +1023,12 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 					},
 				},
 			},
+			Config: &cluster.Config{
+				TopoReadPoolConfig: &cluster.RPCPoolConfig{
+					Size:        100,
+					WaitTimeout: time.Millisecond * 50,
+				},
+			},
 		}, {
 			Cluster: &vtadminpb.Cluster{
 				Id:   "other",
@@ -997,6 +1095,12 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 				},
 			},
 			Tablets: []*vtadminpb.Tablet{},
+			Config: &cluster.Config{
+				TopoReadPoolConfig: &cluster.RPCPoolConfig{
+					Size:        100,
+					WaitTimeout: time.Millisecond * 50,
+				},
+			},
 		},
 	}
 

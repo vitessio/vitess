@@ -516,6 +516,64 @@
                     ]
                 }
             ]
+        },
+        {
+            "method": "GetKeyspaces",
+            "rules": [
+                {
+                    "resource": "Keyspace",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-all"],
+                    "clusters": ["*"]
+                },
+                {
+                    "resource": "Keyspace",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-other"],
+                    "clusters": ["other"]
+                }
+            ],
+            "request": "&vtadminpb.GetKeyspacesRequest{}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "unauthorized"},
+                    "is_permitted": false,
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.NoError(t, err)",
+                        "assert.Empty(t, resp.Keyspaces, $$)"
+                    ]
+                },
+                {
+                    "name": "partial access",
+                    "actor": {"name": "allowed-other"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.Keyspaces, $$)",
+                        "ksMap := map[string][]string{}",
+                        "for _, ks := range resp.Keyspaces {",
+                        "if _, ok := ksMap[ks.Cluster.Id]; !ok {\n ksMap[ks.Cluster.Id] = []string{}\n}",
+                        "ksMap[ks.Cluster.Id] = append(ksMap[ks.Cluster.Id], ks.Keyspace.Name)",
+                        "}",
+                        "assert.Equal(t, ksMap, map[string][]string{\"other\": {\"otherks\"}}, $$)"
+                    ]
+                },
+                {
+                    "name": "full access",
+                    "actor": {"name": "allowed-all"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.Keyspaces, $$)",
+                        "ksMap := map[string][]string{}",
+                        "for _, ks := range resp.Keyspaces {",
+                        "if _, ok := ksMap[ks.Cluster.Id]; !ok {\n ksMap[ks.Cluster.Id] = []string{}\n}",
+                        "ksMap[ks.Cluster.Id] = append(ksMap[ks.Cluster.Id], ks.Keyspace.Name)",
+                        "}",
+                        "assert.Equal(t, ksMap, map[string][]string{\"test\": {\"test\"}, \"other\": {\"otherks\"}}, $$)"
+                    ]
+                }
+            ]
         }
     ]
 }
