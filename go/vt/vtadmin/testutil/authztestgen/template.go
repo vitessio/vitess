@@ -39,6 +39,7 @@ package {{ .Package }}
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -140,6 +141,12 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 					},
 				},
 				{{- end }}
+			},
+			Config: &cluster.Config{
+				TopoReadPoolConfig: &cluster.RPCPoolConfig{
+					Size: 100,
+					WaitTimeout: time.Millisecond * 50,
+				},
 			},
 		},
 		{{- end -}}
