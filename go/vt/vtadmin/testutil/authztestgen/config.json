@@ -36,6 +36,11 @@
                     "value": "Response: &vtctldatapb.GetCellsAliasesResponse{\nAliases: map[string]*topodatapb.CellsAlias{\n\"zone\": {\nCells: []string{\"zone1\"}},\n},\n},"
                 },
                 {
+                    "field": "GetKeyspaceResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.GetKeyspaceResponse\nError error}",
+                    "value": "\"test\": {\nResponse: &vtctldatapb.GetKeyspaceResponse{\nKeyspace: &vtctldatapb.Keyspace{\nName: \"test\",\nKeyspace: &topodatapb.Keyspace{},\n},\n},\n},"
+                },
+                {
                     "field": "GetKeyspacesResults",
                     "type": "&struct{\nKeyspaces []*vtctldatapb.Keyspace\nError error}",
                     "value": "Keyspaces: []*vtctldatapb.Keyspace{\n{\nName: \"test\",\nKeyspace: &topodatapb.Keyspace{},\n},\n},"
@@ -475,6 +480,39 @@
                         "assert.NotEmpty(t, resp.Gates, $$)",
                         "// testutil.BuildCluster creates exactly one gate per cluster",
                         "assert.Len(t, resp.Gates, 2, \"actor %+v should be able to see VTGate from all clusters\", actor)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "GetKeyspace",
+            "rules": [
+                {
+                    "resource": "Keyspace",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.GetKeyspaceRequest{\nClusterId: \"test\",\nKeyspace: \"test\",\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
                     ]
                 }
             ]
