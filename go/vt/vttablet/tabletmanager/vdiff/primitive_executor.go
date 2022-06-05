@@ -54,7 +54,7 @@ type primitiveExecutor struct {
 func newPrimitiveExecutor(ctx context.Context, prim vtgateEngine.Primitive, name string) *primitiveExecutor {
 	pe := &primitiveExecutor{
 		prim:     prim,
-		resultch: make(chan *sqltypes.Result, 1),
+		resultch: make(chan *sqltypes.Result),
 		name:     name,
 	}
 	vcursor := &contextVCursor{ctx: ctx}

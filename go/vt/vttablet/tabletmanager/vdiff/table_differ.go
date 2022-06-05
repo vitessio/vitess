@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 
 	"google.golang.org/protobuf/encoding/prototext"
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
@@ -279,8 +278,8 @@ func (td *tableDiffer) syncTargetStreams(ctx context.Context) error {
 func (td *tableDiffer) startTargetDataStream(ctx context.Context) error {
 	log.Infof("startTargetDataStream")
 	ct := td.wd.ct
-	gtidch := make(chan string, 1)
-	ct.targetShardStreamer.result = make(chan *sqltypes.Result, 1)
+	gtidch := make(chan string)
+	ct.targetShardStreamer.result = make(chan *sqltypes.Result)
 	go td.streamOneShard(ctx, ct.targetShardStreamer, td.tablePlan.targetQuery, gtidch)
 	gtid, ok := <-gtidch
 	if !ok {
@@ -294,8 +293,8 @@ func (td *tableDiffer) startTargetDataStream(ctx context.Context) error {
 func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
 	log.Infof("startSourceDataStreams")
 	if err := td.forEachSource(func(source *migrationSource) error {
-		source.result = make(chan *sqltypes.Result, 1)
-		gtidch := make(chan string, 1)
+		source.result = make(chan *sqltypes.Result)
+		gtidch := make(chan string)
 		go td.streamOneShard(ctx, source.shardStreamer, td.tablePlan.sourceQuery, gtidch)
 
 		gtid, ok := <-gtidch
@@ -339,9 +338,7 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			TabletType: participant.tablet.Type,
 		}
 		var fields []*querypb.Field
-		return conn.VStreamRows(ctx, target, query, nil, func(vsrr *binlogdatapb.VStreamRowsResponse) error {
-			// TODO: figure out if we can safely avoid the clone ???
-			vsr := proto.Clone(vsrr).(*binlogdatapb.VStreamRowsResponse)
+		return conn.VStreamRows(ctx, target, query, nil, func(vsr *binlogdatapb.VStreamRowsResponse) error {
 			log.Infof("VStreamRows start %s:%d", participant.tablet.Alias.String(), len(vsr.Rows))
 
 			if len(fields) == 0 {
