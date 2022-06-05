@@ -82,9 +82,7 @@ func TestPlan(t *testing.T) {
 				out = err.Error()
 			} else {
 				bout, err := json.Marshal(plan)
-				if err != nil {
-					t.Fatalf("Error marshalling %v: %v", plan, err)
-				}
+				require.NoError(t, err, "Error marshalling %v: %v", plan, err)
 				out = string(bout)
 			}
 			if out != tcase.output {

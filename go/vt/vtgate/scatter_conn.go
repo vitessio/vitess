@@ -792,9 +792,12 @@ func lockInfo(target *querypb.Target, session *SafeSession, lockFuncType sqlpars
 		info.reservedID = session.LockSession.ReservedId
 		info.alias = session.LockSession.TabletAlias
 	}
-	if lockFuncType != sqlparser.GetLock {
-		return info, nil
-	}
+	// TODO: after release 14.0, uncomment this line.
+	// This commented for backward compatiblity as there is a specific check in vttablet for lock functions,
+	// to always be on reserved connection.
+	//if lockFuncType != sqlparser.GetLock {
+	//	return info, nil
+	//}
 	if info.reservedID == 0 {
 		info.actionNeeded = reserve
 	}
