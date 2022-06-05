@@ -24,15 +24,55 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type testCase struct {
+	name, typ, sourceKs, targetKs string
+	sourceShards, targetShards    string
+	tables                        string
+	workflow                      string
+	tabletBaseID                  int
+}
+
+var testCases = []*testCase{
+	{
+		name:         "MoveTables unsharded to two shards",
+		workflow:     "p1c2",
+		typ:          "MoveTables",
+		sourceKs:     "product",
+		targetKs:     "customer",
+		sourceShards: "0",
+		targetShards: "-80,80-",
+		tabletBaseID: 200,
+		tables:       "customer,Lead,Lead-1",
+	},
+	{
+		name:         "Reshard Split/Merge 2 to 3",
+		workflow:     "c2c3",
+		typ:          "Reshard",
+		sourceKs:     "customer",
+		targetKs:     "customer",
+		sourceShards: "-80,80-",
+		targetShards: "-40,40-a0,a0-",
+		tabletBaseID: 400,
+	},
+	{
+		name:         "Reshard Merge 3 to 1",
+		workflow:     "c3c1",
+		typ:          "Reshard",
+		sourceKs:     "customer",
+		targetKs:     "customer",
+		sourceShards: "-40,40-a0,a0-",
+		targetShards: "0",
+		tabletBaseID: 700,
+	},
+}
+
 func TestVDiff2(t *testing.T) {
 	allCellNames = "zone1"
 	defaultCellName := "zone1"
-	workflow := "wf1"
 	sourceKs := "product"
 	sourceShards := []string{"0"}
 	targetKs := "customer"
 	targetShards := []string{"-80", "80-"}
-	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	extraVTTabletArgs = []string{"--vstream_packet_size=1"}
 
 	vc = NewVitessCluster(t, "TestVDiff2", []string{allCellNames}, mainClusterConfig)
@@ -54,7 +94,7 @@ func TestVDiff2(t *testing.T) {
 
 	insertInitialData(t)
 
-	// Insert null and empty enum values for testing vdiff1 comparisons for those values.
+	// Insert null and empty enum values for testing vdiff comparisons for those values.
 	// If we add this to the initial data list, the counts in several other tests will need to change
 	query := `insert into customer(cid, name, typ, sport) values(1001, null, 'soho','')`
 	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:%s", sourceKs, sourceShards[0]), query)
@@ -66,76 +106,40 @@ func TestVDiff2(t *testing.T) {
 	err = vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, targetShards[1]), 1)
 	require.NoError(t, err)
 
-	custKs := vc.Cells[defaultCell.Name].Keyspaces[targetKs]
-	customerTab1 := custKs.Shards[targetShards[0]].Tablets[fmt.Sprintf("%s-200", defaultCell.Name)].Vttablet
-	customerTab2 := custKs.Shards[targetShards[1]].Tablets[fmt.Sprintf("%s-300", defaultCell.Name)].Vttablet
-	tables := "customer"
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("MoveTables", "--", "--source", sourceKs, "--tables",
-		tables, "Create", ksWorkflow)
-	require.NoError(t, err, output)
-	require.NotEmpty(t, output, "No output returned from MoveTables")
-
-	catchup(t, customerTab1, workflow, "MoveTables")
-	catchup(t, customerTab2, workflow, "MoveTables")
-
-	vdiff(t, targetKs, workflowName, "", true, true, nil)
-
-	// now test 2 => 3 shards split/merge
-	require.NoError(t, vc.AddShards(t, cells, custKs, "-40,40-a0,a0-", 0, 0, 400))
-	err = vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, "-40"), 1)
-	require.NoError(t, err)
-	err = vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, "40-a0"), 1)
-	require.NoError(t, err)
-	err = vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, "a0-"), 1)
-	require.NoError(t, err)
-
-	ksWorkflow = "customer.c2c3"
-	workflowName := "c2c3"
-	if err := vc.VtctlClient.ExecuteCommand("Reshard", "--", "--source_shards", "-80,80-", "--target_shards", "-40,40-a0,a0-", "Create", ksWorkflow); err != nil {
-		t.Fatalf("Reshard create failed with %+v\n", err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			testWorkflow(t, vc, tc, cells)
+		})
 	}
-	require.NoError(t, err, output)
-	require.NotEmpty(t, output, "No output returned from Reshard")
+}
 
-	customerTab3 := custKs.Shards["-40"].Tablets[fmt.Sprintf("%s-400", defaultCell.Name)].Vttablet
-	catchup(t, customerTab3, workflowName, "Reshard")
-	customerTab4 := custKs.Shards["40-a0"].Tablets[fmt.Sprintf("%s-500", defaultCell.Name)].Vttablet
-	catchup(t, customerTab4, workflowName, "Reshard")
-	customerTab5 := custKs.Shards["a0-"].Tablets[fmt.Sprintf("%s-600", defaultCell.Name)].Vttablet
-	catchup(t, customerTab5, workflowName, "Reshard")
-
-	vdiff(t, targetKs, workflowName, "", true, true, nil)
-	if err := vc.VtctlClient.ExecuteCommand("Reshard", "--", "SwitchTraffic", ksWorkflow); err != nil {
-		t.Fatalf("Reshard SwitchTraffic failed with %+v\n", err)
+func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) {
+	arrTargetShards := strings.Split(tc.targetShards, ",")
+	if tc.typ == "Reshard" {
+		tks := vc.Cells[cells[0].Name].Keyspaces[tc.targetKs]
+		require.NoError(t, vc.AddShards(t, cells, tks, tc.targetShards, 0, 0, tc.tabletBaseID))
 	}
-	require.NoError(t, err, output)
-
-	if err := vc.VtctlClient.ExecuteCommand("Reshard", "--", "Complete", ksWorkflow); err != nil {
-		t.Fatalf("Reshard Complete failed with %+v\n", err)
+	ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
+	var args []string
+	args = append(args, tc.typ, "--")
+	args = append(args, "--source", tc.sourceKs)
+	if tc.typ == "Reshard" {
+		args = append(args, "--source_shards", tc.sourceShards, "--target_shards", tc.targetShards)
 	}
-	require.NoError(t, err, output)
-
-	// now test 3=>1 merge
-
-	require.NoError(t, vc.AddShards(t, cells, custKs, "0", 0, 0, 700))
-	err = vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, "0"), 1)
+	args = append(args, "--tables", tc.tables)
+	args = append(args, "Create")
+	args = append(args, ksWorkflow)
+	err := vc.VtctlClient.ExecuteCommand(args...)
 	require.NoError(t, err)
 
-	ksWorkflow = "customer.c3c1"
-	workflowName = "c3c1"
-	if err := vc.VtctlClient.ExecuteCommand("Reshard", "--", "--source_shards", "-40,40-a0,a0-", "--target_shards", "0", "Create", ksWorkflow); err != nil {
-		t.Fatalf("Reshard create failed with %+v\n", err)
+	for _, shard := range arrTargetShards {
+		tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
+		catchup(t, tab, tc.workflow, tc.typ)
 	}
-	require.NoError(t, err, output)
-	require.NotEmpty(t, output, "No output returned from Reshard")
+	vdiff(t, tc.targetKs, tc.workflow, cells[0].Name, true, true, nil)
 
-	customerTab7 := custKs.Shards["0"].Tablets[fmt.Sprintf("%s-700", defaultCell.Name)].Vttablet
-	catchup(t, customerTab7, workflowName, "Reshard")
-
-	vdiff(t, targetKs, workflowName, "", true, true, nil)
-	if err := vc.VtctlClient.ExecuteCommand("Reshard", "--", "SwitchTraffic", ksWorkflow); err != nil {
-		t.Fatalf("Reshard SwitchTraffic failed with %+v\n", err)
-	}
-	require.NoError(t, err, output)
-
+	err = vc.VtctlClient.ExecuteCommand(tc.typ, "--", "SwitchTraffic", ksWorkflow)
+	require.NoError(t, err)
+	err = vc.VtctlClient.ExecuteCommand(tc.typ, "--", "Complete", ksWorkflow)
+	require.NoError(t, err)
 }

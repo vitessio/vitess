@@ -396,7 +396,6 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 				}
 				// If we had a mismatch on any table then the vdiff as a unit does too
 				if mm, _ := row.ToBool("has_mismatch"); mm {
-					log.Infof(">>>>>>>>>>> mismatch due to %+v", row)
 					summary.HasMismatch = true
 				}
 				table := row.AsString("table_name", "")

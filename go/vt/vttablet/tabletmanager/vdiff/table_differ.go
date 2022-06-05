@@ -364,8 +364,6 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 				//log.Infof("no rows, no fields %+v, %s", fields, participant.tablet.Alias)
 				return nil
 			}
-			log.Infof(">>>>>>>>>> workflow %s: received %d rows, %d fields, from %s, rows %+v",
-				td.wd.ct.workflow, len(vsr.Rows), len(vsr.Fields), participant.tablet.Alias, vsr.Rows)
 			p3qr := &querypb.QueryResult{
 				Fields: fields,
 				Rows:   vsr.Rows,
