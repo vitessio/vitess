@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 
 	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
@@ -278,8 +279,8 @@ func (td *tableDiffer) syncTargetStreams(ctx context.Context) error {
 func (td *tableDiffer) startTargetDataStream(ctx context.Context) error {
 	log.Infof("startTargetDataStream")
 	ct := td.wd.ct
-	gtidch := make(chan string)
-	ct.targetShardStreamer.result = make(chan *sqltypes.Result)
+	gtidch := make(chan string, 1)
+	ct.targetShardStreamer.result = make(chan *sqltypes.Result, 1)
 	go td.streamOneShard(ctx, ct.targetShardStreamer, td.tablePlan.targetQuery, gtidch)
 	gtid, ok := <-gtidch
 	if !ok {
@@ -293,8 +294,8 @@ func (td *tableDiffer) startTargetDataStream(ctx context.Context) error {
 func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
 	log.Infof("startSourceDataStreams")
 	if err := td.forEachSource(func(source *migrationSource) error {
-		source.result = make(chan *sqltypes.Result)
-		gtidch := make(chan string)
+		gtidch := make(chan string, 1)
+		source.result = make(chan *sqltypes.Result, 1)
 		go td.streamOneShard(ctx, source.shardStreamer, td.tablePlan.sourceQuery, gtidch)
 
 		gtid, ok := <-gtidch
@@ -338,7 +339,16 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			TabletType: participant.tablet.Type,
 		}
 		var fields []*querypb.Field
-		return conn.VStreamRows(ctx, target, query, nil, func(vsr *binlogdatapb.VStreamRowsResponse) error {
+		return conn.VStreamRows(ctx, target, query, nil, func(vsrRaw *binlogdatapb.VStreamRowsResponse) error {
+			// We clone (deep copy) the VStreamRowsResponse -- which contains a vstream packet with N rows and
+			// their corresponding GTID position/snapshot -- so that we can safely process it while the next
+			// VStreamRowsResponse message is getting prepared by the shardStreamer. Without doing this, we
+			// would have to serialize the row processing by using unbuffered channels which would present a
+			// major performance bottleneck.
+			// This need arises from the gRPC VStreamRowsResponse pooling and re-use/recycling done for
+			// gRPCQueryClient.VStreamRows in vttablet/grpctabletconn/conn.
+			vsr := proto.Clone(vsrRaw).(*binlogdatapb.VStreamRowsResponse)
+
 			log.Infof("VStreamRows start %s:%d", participant.tablet.Alias.String(), len(vsr.Rows))
 
 			if len(fields) == 0 {
