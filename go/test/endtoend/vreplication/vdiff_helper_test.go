@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	vdiffTimeout        = time.Second * 10
+	vdiffTimeout        = time.Second * 120
 	runVDiffsSideBySide = true
 )
 
