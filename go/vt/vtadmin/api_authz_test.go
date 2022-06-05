@@ -546,75 +546,6 @@ func TestGetCellInfos(t *testing.T) {
 	})
 }
 
-func TestGetClusters(t *testing.T) {
-	opts := vtadmin.Options{
-		RBAC: &rbac.Config{
-			Rules: []*struct {
-				Resource string
-				Actions  []string
-				Subjects []string
-				Clusters []string
-			}{
-				{
-					Resource: "Cluster",
-					Actions:  []string{"get"},
-					Subjects: []string{"user:allowed"},
-					Clusters: []string{"*"},
-				},
-			},
-		},
-	}
-	err := opts.RBAC.Reify()
-	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
-
-	api := vtadmin.NewAPI(testClusters(t), opts)
-	t.Cleanup(func() {
-		if err := api.Close(); err != nil {
-			t.Logf("api did not close cleanly: %s", err.Error())
-		}
-	})
-
-	t.Run("unauthenticated", func(t *testing.T) {
-		t.Parallel()
-		var actor *rbac.Actor
-
-		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
-
-		resp, _ := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
-		assert.Empty(t, resp.Clusters, "actor %+v should not be permitted to GetClusters", actor)
-	})
-
-	t.Run("unauthorized actor", func(t *testing.T) {
-		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
-
-		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
-
-		resp, _ := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
-		assert.Empty(t, resp.Clusters, "actor %+v should not be permitted to GetClusters", actor)
-	})
-
-	t.Run("authorized actor", func(t *testing.T) {
-		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
-
-		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
-
-		resp, err := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
-		require.NoError(t, err)
-		assert.NotEmpty(t, resp.Clusters, "actor %+v should be permitted to GetClusters", actor)
-	})
-}
-
 func TestGetCellsAliases(t *testing.T) {
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
@@ -689,6 +620,75 @@ func TestGetCellsAliases(t *testing.T) {
 		resp, _ := api.GetCellsAliases(ctx, &vtadminpb.GetCellsAliasesRequest{})
 		assert.NotEmpty(t, resp.Aliases, "actor %+v should be permitted to GetCellsAliases", actor)
 		assert.ElementsMatch(t, resp.Aliases, []*vtadminpb.ClusterCellsAliases{{Cluster: &vtadminpb.Cluster{Id: "test", Name: "test"}, Aliases: map[string]*topodatapb.CellsAlias{"zone": {Cells: []string{"zone1"}}}}, {Cluster: &vtadminpb.Cluster{Id: "other", Name: "other"}, Aliases: map[string]*topodatapb.CellsAlias{"other": {Cells: []string{"other1"}}}}})
+	})
+}
+
+func TestGetClusters(t *testing.T) {
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Cluster",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthenticated", func(t *testing.T) {
+		t.Parallel()
+		var actor *rbac.Actor
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
+		assert.Empty(t, resp.Clusters, "actor %+v should not be permitted to GetClusters", actor)
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
+		assert.Empty(t, resp.Clusters, "actor %+v should not be permitted to GetClusters", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
+		require.NoError(t, err)
+		assert.NotEmpty(t, resp.Clusters, "actor %+v should be permitted to GetClusters", actor)
 	})
 }
 

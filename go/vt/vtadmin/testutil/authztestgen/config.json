@@ -344,44 +344,6 @@
             ]
         },
         {
-            "method": "GetClusters",
-            "rules": [
-                {
-                    "resource": "Cluster",
-                    "actions": ["get"],
-                    "subjects": ["user:allowed"],
-                    "clusters": ["*"]
-                }
-            ],
-            "request": "&vtadminpb.GetClustersRequest{}",
-            "cases": [
-                {
-                    "name": "unauthenticated",
-                    "actor": null,
-                    "assertions": [
-                        "assert.Empty(t, resp.Clusters, $$)"
-                    ]
-                },
-                {
-                    "name": "unauthorized actor",
-                    "actor": {"name": "other"},
-                    "assertions": [
-                        "assert.Empty(t, resp.Clusters, $$)"
-                    ]
-                },
-                {
-                    "name": "authorized actor",
-                    "actor": {"name": "allowed"},
-                    "is_permitted": true,
-                    "include_error_var": true,
-                    "assertions": [
-                        "require.NoError(t, err)",
-                        "assert.NotEmpty(t, resp.Clusters, $$)"
-                    ]
-                }
-            ]
-        },
-        {
             "method": "GetCellsAliases",
             "rules": [
                 {
@@ -425,6 +387,44 @@
                     "assertions": [
                         "assert.NotEmpty(t, resp.Aliases, $$)",
                         "assert.ElementsMatch(t, resp.Aliases, []*vtadminpb.ClusterCellsAliases{{Cluster: &vtadminpb.Cluster{Id: \"test\", Name: \"test\"}, Aliases: map[string]*topodatapb.CellsAlias{\"zone\": {Cells: []string{\"zone1\"}}}}, {Cluster: &vtadminpb.Cluster{Id: \"other\", Name: \"other\"}, Aliases: map[string]*topodatapb.CellsAlias{\"other\": {Cells: []string{\"other1\"}}}}})"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "GetClusters",
+            "rules": [
+                {
+                    "resource": "Cluster",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.GetClustersRequest{}",
+            "cases": [
+                {
+                    "name": "unauthenticated",
+                    "actor": null,
+                    "assertions": [
+                        "assert.Empty(t, resp.Clusters, $$)"
+                    ]
+                },
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "assertions": [
+                        "assert.Empty(t, resp.Clusters, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "is_permitted": true,
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotEmpty(t, resp.Clusters, $$)"
                     ]
                 }
             ]
