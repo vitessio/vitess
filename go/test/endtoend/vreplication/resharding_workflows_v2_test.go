@@ -148,12 +148,16 @@ func tstWorkflowReverseWrites(t *testing.T) {
 	require.NoError(t, tstWorkflowAction(t, workflowActionReverseTraffic, "primary", ""))
 }
 
+// tstWorkflowSwitchReadsAndWrites tests that SwitchWrites w/o any user provided --tablet_types
+// value switches all traffic
 func tstWorkflowSwitchReadsAndWrites(t *testing.T) {
-	require.NoError(t, tstWorkflowAction(t, workflowActionSwitchTraffic, "replica,rdonly,primary", ""))
+	require.NoError(t, tstWorkflowAction(t, workflowActionSwitchTraffic, "", ""))
 }
 
+// tstWorkflowReversesReadsAndWrites tests that SwitchWrites w/o any user provided --tablet_types
+// value switches all traffic in reverse
 func tstWorkflowReverseReadsAndWrites(t *testing.T) {
-	require.NoError(t, tstWorkflowAction(t, workflowActionReverseTraffic, "replica,rdonly,primary", ""))
+	require.NoError(t, tstWorkflowAction(t, workflowActionReverseTraffic, "", ""))
 }
 
 func tstWorkflowComplete(t *testing.T) error {
@@ -237,6 +241,11 @@ func getCurrentState(t *testing.T) string {
 // but CI currently fails on creating multiple clusters even after the previous ones are torn down
 
 func TestBasicV2Workflows(t *testing.T) {
+	ogv := defaultRdonly
+	defaultRdonly = 1
+	defer func() {
+		defaultRdonly = ogv
+	}()
 	vc = setupCluster(t)
 	defer vtgateConn.Close()
 	defer vc.TearDown(t)
@@ -548,6 +557,7 @@ func testRestOfWorkflow(t *testing.T) {
 	validateWritesRouteToSource(t)
 
 	tstWorkflowSwitchReadsAndWrites(t)
+	validateReadsRouteToTarget(t, "rdonly")
 	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToTarget(t)
 	waitForLowLag(t, keyspace, "wf1_reverse")
@@ -563,6 +573,7 @@ func testRestOfWorkflow(t *testing.T) {
 	// fully switch and complete
 	waitForLowLag(t, "customer", "wf1")
 	tstWorkflowSwitchReadsAndWrites(t)
+	validateReadsRouteToTarget(t, "rdonly")
 	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToTarget(t)
 
