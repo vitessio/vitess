@@ -85,6 +85,7 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	shards          []cluster.Shard
 	vtParams        mysql.ConnParams
+	mysqlVersion    string
 
 	hostname              = "localhost"
 	keyspaceName          = "ks"
@@ -256,6 +257,12 @@ func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
+
+	mysqlVersion = onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
+	require.NotEmpty(t, mysqlVersion)
+
+	_, flavorFamily, _ := mysql.GetFlavor(mysqlVersion, nil)
+	require.NotEqual(t, mysql.UnknownFlavorFamily, flavorFamily)
 
 	var uuids []string
 	ddlStrategy := "online"
@@ -642,6 +649,40 @@ func TestSchemaChange(t *testing.T) {
 		wg.Wait()
 		checkMigratedTable(t, tableName, alterHints[1])
 		testSelectTableMetrics(t)
+	})
+
+	// INSTANT DDL
+	t.Run("INSTANT DDL: add column", func(t *testing.T) {
+		uuid := testOnlineDDLStatementForTable(t, "alter table stress_test add column i_instant int not null default 0", ddlStrategy+" --fast-over-revertible", "vtgate", "i_instant")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, true)
+
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+		specialPlan := row.AsString("special_plan", "")
+		artifacts := row.AsString("artifacts", "")
+		if flavorFamily == mysql.MySQL80FlavorFamily {
+			// instant DDL expected to apply in 8.0
+			assert.Contains(t, specialPlan, "instant-ddl")
+			assert.Empty(t, artifacts)
+		} else {
+			// instant DDL not possible, this is a normal vrepl migration
+			assert.Empty(t, specialPlan)
+			assert.NotEmpty(t, artifacts)
+		}
+	})
+	t.Run("INSTANT DDL: fail revert", func(t *testing.T) {
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+		uuids = append(uuids, uuid)
+		if flavorFamily == mysql.MySQL80FlavorFamily {
+			// instant DDL expected to apply in 8.0, therefore revert is impossible
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		} else {
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		}
 	})
 
 	// DROP

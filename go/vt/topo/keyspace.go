@@ -194,6 +194,20 @@ func (ts *Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceIn
 	}, nil
 }
 
+// GetKeyspaceDurability reads the given keyspace and returns its durabilty policy
+func (ts *Server) GetKeyspaceDurability(ctx context.Context, keyspace string) (string, error) {
+	keyspaceInfo, err := ts.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		return "", err
+	}
+	// Get the durability policy from the keyspace information
+	// If it is unspecified, use the default durability which is "none" for backward compatibility
+	if keyspaceInfo.GetDurabilityPolicy() != "" {
+		return keyspaceInfo.GetDurabilityPolicy(), nil
+	}
+	return "none", nil
+}
+
 // UpdateKeyspace updates the keyspace data. It checks the keyspace is locked.
 func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 	// make sure it is locked first

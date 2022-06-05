@@ -39,7 +39,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -98,11 +97,6 @@ func main() {
 		syslogger.Info(startMsg) // nolint:errcheck
 	} else {
 		log.Warningf("cannot connect to syslog: %v", err)
-	}
-
-	if err := reparentutil.SetDurabilityPolicy("none"); err != nil {
-		log.Errorf("error in setting durability policy: %v", err)
-		exit.Return(1)
 	}
 
 	closer := trace.StartTracing("vtctl")
