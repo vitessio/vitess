@@ -71,6 +71,12 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfBetweenExpr(in)
 	case *BinaryExpr:
 		return CloneRefOfBinaryExpr(in)
+	case *BitAnd:
+		return CloneRefOfBitAnd(in)
+	case *BitOr:
+		return CloneRefOfBitOr(in)
+	case *BitXor:
+		return CloneRefOfBitXor(in)
 	case BoolVal:
 		return in
 	case *CallProc:
@@ -387,6 +393,14 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfShowThrottledApps(in)
 	case *StarExpr:
 		return CloneRefOfStarExpr(in)
+	case *Std:
+		return CloneRefOfStd(in)
+	case *StdDev:
+		return CloneRefOfStdDev(in)
+	case *StdPop:
+		return CloneRefOfStdPop(in)
+	case *StdSamp:
+		return CloneRefOfStdSamp(in)
 	case *Stream:
 		return CloneRefOfStream(in)
 	case *SubPartition:
@@ -447,6 +461,12 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneValues(in)
 	case *ValuesFuncExpr:
 		return CloneRefOfValuesFuncExpr(in)
+	case *VarPop:
+		return CloneRefOfVarPop(in)
+	case *VarSamp:
+		return CloneRefOfVarSamp(in)
+	case *Variance:
+		return CloneRefOfVariance(in)
 	case VindexParam:
 		return CloneVindexParam(in)
 	case *VindexSpec:
@@ -703,6 +723,36 @@ func CloneRefOfBinaryExpr(n *BinaryExpr) *BinaryExpr {
 	out := *n
 	out.Left = CloneExpr(n.Left)
 	out.Right = CloneExpr(n.Right)
+	return &out
+}
+
+// CloneRefOfBitAnd creates a deep clone of the input.
+func CloneRefOfBitAnd(n *BitAnd) *BitAnd {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Args = CloneExprs(n.Args)
+	return &out
+}
+
+// CloneRefOfBitOr creates a deep clone of the input.
+func CloneRefOfBitOr(n *BitOr) *BitOr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Args = CloneExprs(n.Args)
+	return &out
+}
+
+// CloneRefOfBitXor creates a deep clone of the input.
+func CloneRefOfBitXor(n *BitXor) *BitXor {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Args = CloneExprs(n.Args)
 	return &out
 }
 
@@ -2375,6 +2425,46 @@ func CloneRefOfStarExpr(n *StarExpr) *StarExpr {
 	return &out
 }
 
+// CloneRefOfStd creates a deep clone of the input.
+func CloneRefOfStd(n *Std) *Std {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Args = CloneExprs(n.Args)
+	return &out
+}
+
+// CloneRefOfStdDev creates a deep clone of the input.
+func CloneRefOfStdDev(n *StdDev) *StdDev {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Args = CloneExprs(n.Args)
+	return &out
+}
+
+// CloneRefOfStdPop creates a deep clone of the input.
+func CloneRefOfStdPop(n *StdPop) *StdPop {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Args = CloneExprs(n.Args)
+	return &out
+}
+
+// CloneRefOfStdSamp creates a deep clone of the input.
+func CloneRefOfStdSamp(n *StdSamp) *StdSamp {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Args = CloneExprs(n.Args)
+	return &out
+}
+
 // CloneRefOfStream creates a deep clone of the input.
 func CloneRefOfStream(n *Stream) *Stream {
 	if n == nil {
@@ -2709,6 +2799,36 @@ func CloneRefOfValuesFuncExpr(n *ValuesFuncExpr) *ValuesFuncExpr {
 	return &out
 }
 
+// CloneRefOfVarPop creates a deep clone of the input.
+func CloneRefOfVarPop(n *VarPop) *VarPop {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Args = CloneExprs(n.Args)
+	return &out
+}
+
+// CloneRefOfVarSamp creates a deep clone of the input.
+func CloneRefOfVarSamp(n *VarSamp) *VarSamp {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Args = CloneExprs(n.Args)
+	return &out
+}
+
+// CloneRefOfVariance creates a deep clone of the input.
+func CloneRefOfVariance(n *Variance) *Variance {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Args = CloneExprs(n.Args)
+	return &out
+}
+
 // CloneVindexParam creates a deep clone of the input.
 func CloneVindexParam(n VindexParam) VindexParam {
 	return *CloneRefOfVindexParam(&n)
@@ -2823,6 +2943,12 @@ func CloneAggrFunc(in AggrFunc) AggrFunc {
 	switch in := in.(type) {
 	case *Avg:
 		return CloneRefOfAvg(in)
+	case *BitAnd:
+		return CloneRefOfBitAnd(in)
+	case *BitOr:
+		return CloneRefOfBitOr(in)
+	case *BitXor:
+		return CloneRefOfBitXor(in)
 	case *Count:
 		return CloneRefOfCount(in)
 	case *CountStar:
@@ -2833,8 +2959,22 @@ func CloneAggrFunc(in AggrFunc) AggrFunc {
 		return CloneRefOfMax(in)
 	case *Min:
 		return CloneRefOfMin(in)
+	case *Std:
+		return CloneRefOfStd(in)
+	case *StdDev:
+		return CloneRefOfStdDev(in)
+	case *StdPop:
+		return CloneRefOfStdPop(in)
+	case *StdSamp:
+		return CloneRefOfStdSamp(in)
 	case *Sum:
 		return CloneRefOfSum(in)
+	case *VarPop:
+		return CloneRefOfVarPop(in)
+	case *VarSamp:
+		return CloneRefOfVarSamp(in)
+	case *Variance:
+		return CloneRefOfVariance(in)
 	default:
 		// this should never happen
 		return nil
@@ -3123,6 +3263,12 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfBetweenExpr(in)
 	case *BinaryExpr:
 		return CloneRefOfBinaryExpr(in)
+	case *BitAnd:
+		return CloneRefOfBitAnd(in)
+	case *BitOr:
+		return CloneRefOfBitOr(in)
+	case *BitXor:
+		return CloneRefOfBitXor(in)
 	case BoolVal:
 		return in
 	case *CaseExpr:
@@ -3239,6 +3385,14 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfRegexpReplaceExpr(in)
 	case *RegexpSubstrExpr:
 		return CloneRefOfRegexpSubstrExpr(in)
+	case *Std:
+		return CloneRefOfStd(in)
+	case *StdDev:
+		return CloneRefOfStdDev(in)
+	case *StdPop:
+		return CloneRefOfStdPop(in)
+	case *StdSamp:
+		return CloneRefOfStdSamp(in)
 	case *Subquery:
 		return CloneRefOfSubquery(in)
 	case *SubstrExpr:
@@ -3255,6 +3409,12 @@ func CloneExpr(in Expr) Expr {
 		return CloneValTuple(in)
 	case *ValuesFuncExpr:
 		return CloneRefOfValuesFuncExpr(in)
+	case *VarPop:
+		return CloneRefOfVarPop(in)
+	case *VarSamp:
+		return CloneRefOfVarSamp(in)
+	case *Variance:
+		return CloneRefOfVariance(in)
 	case *WeightStringFuncExpr:
 		return CloneRefOfWeightStringFuncExpr(in)
 	case *XorExpr:
@@ -3301,6 +3461,12 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfBetweenExpr(in)
 	case *BinaryExpr:
 		return CloneRefOfBinaryExpr(in)
+	case *BitAnd:
+		return CloneRefOfBitAnd(in)
+	case *BitOr:
+		return CloneRefOfBitOr(in)
+	case *BitXor:
+		return CloneRefOfBitXor(in)
 	case BoolVal:
 		return in
 	case *CaseExpr:
@@ -3417,6 +3583,14 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfRegexpReplaceExpr(in)
 	case *RegexpSubstrExpr:
 		return CloneRefOfRegexpSubstrExpr(in)
+	case *Std:
+		return CloneRefOfStd(in)
+	case *StdDev:
+		return CloneRefOfStdDev(in)
+	case *StdPop:
+		return CloneRefOfStdPop(in)
+	case *StdSamp:
+		return CloneRefOfStdSamp(in)
 	case *Subquery:
 		return CloneRefOfSubquery(in)
 	case *SubstrExpr:
@@ -3433,6 +3607,12 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneValTuple(in)
 	case *ValuesFuncExpr:
 		return CloneRefOfValuesFuncExpr(in)
+	case *VarPop:
+		return CloneRefOfVarPop(in)
+	case *VarSamp:
+		return CloneRefOfVarSamp(in)
+	case *Variance:
+		return CloneRefOfVariance(in)
 	case *WeightStringFuncExpr:
 		return CloneRefOfWeightStringFuncExpr(in)
 	case *XorExpr:

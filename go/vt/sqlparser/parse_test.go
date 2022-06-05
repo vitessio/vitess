@@ -36,33 +36,6 @@ import (
 )
 
 var (
-	validSQL1 = []struct {
-		input                string
-		output               string
-		partialDDL           bool
-		ignoreNormalizerTest bool
-	}{
-		{input: "select /* function with distinct */ count(a) from t"},
-		{input: "select /* function with distinct */ count(a) 'total col' from t",
-			output: "select /* function with distinct */ count(a) as 'total col' from t"},
-		{input: "select /* function with distinct */ count(distinct a) from t"},
-		{input: "select /* function with distinct */ count(distinct(a)) from t",
-			output: "select /* function with distinct */ count(distinct a) from t"},
-		{input: "select /* function with distinct */ count(*) from t"},
-		{input: "select avg(a) from products"},
-		{input: "select avg(distinct(a)) from products"},
-		{input: "select avg(a) 'Avg Price' from products"},
-		{input: "select format(avg(distinct a), 2) from products"},
-		{input: "select max(a) from products"},
-		{input: "select min(a) from products"},
-		{input: "select sum(a) from products"},
-		{input: "select sum(distinct(a)) from products",
-			output: "select sum(distinct a) from products"},
-		{input: "select sum(distinct a) from products"},
-		{input: "select sum(a) 'sum Price' from products",
-			output: "select sum(a) as `sum Price` from products"},
-		{input: "select sum(a * b) from products"},
-	}
 	validSQL = []struct {
 		input                string
 		output               string
@@ -3087,11 +3060,70 @@ var (
 	}, {
 		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ASC RANGE BETWEEN 10 PRECEDING AND 10 FOLLOWING);",
 		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc range between 10 preceding and 10 following)",
-	}}
+	}, {
+		input: "select /* function with distinct */ count(a) from t",
+	}, {
+		input:  "select /* function with distinct */ count(a) 'total col' from t",
+		output: "select /* function with distinct */ count(a) as `total col` from t",
+	}, {
+		input: "select /* function with distinct */ count(distinct a) from t",
+	}, {
+		input:  "select /* function with distinct */ count(distinct(a)) from t",
+		output: "select /* function with distinct */ count(distinct a) from t",
+	}, {
+		input: "select /* function with distinct */ count(*) from t",
+	}, {
+		input: "select avg(a) from products",
+	}, {
+		input:  "select avg(distinct(a)) from products",
+		output: "select avg(distinct a) from products",
+	}, {
+		input:  "select avg(a) 'Avg Price' from products",
+		output: "select avg(a) as `Avg Price` from products",
+	}, {
+		input: "select format(avg(distinct a), 2) from products",
+	}, {
+		input: "select max(a) from products",
+	}, {
+		input: "select min(a) from products",
+	}, {
+		input: "select sum(a) from products",
+	}, {
+		input:  "select sum(distinct(a)) from products",
+		output: "select sum(distinct a) from products",
+	}, {
+		input: "select sum(distinct a) from products",
+	}, {
+		input:  "select sum(a) 'sum Price' from products",
+		output: "select sum(a) as `sum Price` from products",
+	}, {
+		input: "select sum(a * b) from products",
+	}, {
+		input: "select bit_and(a) from products",
+	}, {
+		input: "select bit_or(a) from products",
+	}, {
+		input: "select bit_xor(a) from products",
+	}, {
+		input: "select std(a) from products",
+	}, {
+		input: "select stddev(a) from products",
+	}, {
+		input: "select stddev_pop(a) from products",
+	}, {
+		input: "select stddev_samp(a) from products",
+	}, {
+		input: "select var_pop(a) from products",
+	}, {
+		input: "select var_samp(a) from products",
+	}, {
+		input: "select variance(a) from products",
+	},
+	}
 )
 
 func TestValid(t *testing.T) {
-	for _, tcase := range validSQL1 {
+	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
 			if tcase.output == "" {
 				tcase.output = tcase.input
@@ -3293,7 +3325,38 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ROWS -10 FOLLOWING);",
 		err:   "syntax error at position 246",
-	}}
+	}, {
+		input: "SELECT BIT_AND(DISTINCT a) FROM products",
+		err:   "syntax error at position 24 near 'DISTINCT'",
+	}, {
+		input: "SELECT BIT_OR(DISTINCT a) FROM products",
+		err:   "syntax error at position 23 near 'DISTINCT'",
+	}, {
+		input: "SELECT BIT_XOR(DISTINCT a) FROM products",
+		err:   "syntax error at position 24 near 'DISTINCT'",
+	}, {
+		input: "SELECT STD(DISTINCT a) FROM products",
+		err:   "syntax error at position 20 near 'DISTINCT'",
+	}, {
+		input: "SELECT STDDEV(DISTINCT a) FROM products",
+		err:   "syntax error at position 23 near 'DISTINCT'",
+	}, {
+		input: "SELECT STDDEV_POP(DISTINCT a) FROM products",
+		err:   "syntax error at position 27 near 'DISTINCT'",
+	}, {
+		input: "SELECT STDDEV_SAMP(DISTINCT a) FROM products",
+		err:   "syntax error at position 28 near 'DISTINCT'",
+	}, {
+		input: "SELECT VAR_POP(DISTINCT a) FROM products",
+		err:   "syntax error at position 24 near 'DISTINCT'",
+	}, {
+		input: "SELECT VAR_SAMP(DISTINCT a) FROM products",
+		err:   "syntax error at position 25 near 'DISTINCT'",
+	}, {
+		input: "SELECT VARIANCE(DISTINCT a) FROM products",
+		err:   "syntax error at position 25 near 'DISTINCT'",
+	},
+	}
 
 	for _, tcase := range invalidSQL {
 		_, err := Parse(tcase.input)

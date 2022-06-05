@@ -2609,3 +2609,53 @@ func (node *Sum) Format(buf *TrackedBuffer) {
 	}
 	buf.astPrintf(node, "%v)", node.Args)
 }
+
+func (node *BitAnd) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(", node.AggrName())
+	buf.astPrintf(node, "%v)", node.Args)
+}
+
+func (node *BitOr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(", node.AggrName())
+	buf.astPrintf(node, "%v)", node.Args)
+}
+
+func (node *BitXor) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(", node.AggrName())
+	buf.astPrintf(node, "%v)", node.Args)
+}
+
+func (node *Std) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(", node.AggrName())
+	buf.astPrintf(node, "%v)", node.Args)
+}
+
+func (node *StdDev) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(", node.AggrName())
+	buf.astPrintf(node, "%v)", node.Args)
+}
+
+func (node *StdPop) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(", node.AggrName())
+	buf.astPrintf(node, "%v)", node.Args)
+}
+
+func (node *StdSamp) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(", node.AggrName())
+	buf.astPrintf(node, "%v)", node.Args)
+}
+
+func (node *VarPop) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(", node.AggrName())
+	buf.astPrintf(node, "%v)", node.Args)
+}
+
+func (node *VarSamp) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(", node.AggrName())
+	buf.astPrintf(node, "%v)", node.Args)
+}
+
+func (node *Variance) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(", node.AggrName())
+	buf.astPrintf(node, "%v)", node.Args)
+}

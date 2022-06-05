@@ -70,6 +70,12 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfBetweenExpr(in, f)
 	case *BinaryExpr:
 		return VisitRefOfBinaryExpr(in, f)
+	case *BitAnd:
+		return VisitRefOfBitAnd(in, f)
+	case *BitOr:
+		return VisitRefOfBitOr(in, f)
+	case *BitXor:
+		return VisitRefOfBitXor(in, f)
 	case BoolVal:
 		return VisitBoolVal(in, f)
 	case *CallProc:
@@ -386,6 +392,14 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfShowThrottledApps(in, f)
 	case *StarExpr:
 		return VisitRefOfStarExpr(in, f)
+	case *Std:
+		return VisitRefOfStd(in, f)
+	case *StdDev:
+		return VisitRefOfStdDev(in, f)
+	case *StdPop:
+		return VisitRefOfStdPop(in, f)
+	case *StdSamp:
+		return VisitRefOfStdSamp(in, f)
 	case *Stream:
 		return VisitRefOfStream(in, f)
 	case *SubPartition:
@@ -446,6 +460,12 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitValues(in, f)
 	case *ValuesFuncExpr:
 		return VisitRefOfValuesFuncExpr(in, f)
+	case *VarPop:
+		return VisitRefOfVarPop(in, f)
+	case *VarSamp:
+		return VisitRefOfVarSamp(in, f)
+	case *Variance:
+		return VisitRefOfVariance(in, f)
 	case VindexParam:
 		return VisitVindexParam(in, f)
 	case *VindexSpec:
@@ -788,6 +808,42 @@ func VisitRefOfBinaryExpr(in *BinaryExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Right, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfBitAnd(in *BitAnd, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.Args, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfBitOr(in *BitOr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.Args, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfBitXor(in *BitXor, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.Args, f); err != nil {
 		return err
 	}
 	return nil
@@ -3036,6 +3092,54 @@ func VisitRefOfStarExpr(in *StarExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfStd(in *Std, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.Args, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfStdDev(in *StdDev, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.Args, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfStdPop(in *StdPop, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.Args, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfStdSamp(in *StdSamp, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.Args, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfStream(in *Stream, f Visit) error {
 	if in == nil {
 		return nil
@@ -3484,6 +3588,42 @@ func VisitRefOfValuesFuncExpr(in *ValuesFuncExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfVarPop(in *VarPop, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.Args, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfVarSamp(in *VarSamp, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.Args, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfVariance(in *Variance, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.Args, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitVindexParam(in VindexParam, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
@@ -3641,6 +3781,12 @@ func VisitAggrFunc(in AggrFunc, f Visit) error {
 	switch in := in.(type) {
 	case *Avg:
 		return VisitRefOfAvg(in, f)
+	case *BitAnd:
+		return VisitRefOfBitAnd(in, f)
+	case *BitOr:
+		return VisitRefOfBitOr(in, f)
+	case *BitXor:
+		return VisitRefOfBitXor(in, f)
 	case *Count:
 		return VisitRefOfCount(in, f)
 	case *CountStar:
@@ -3651,8 +3797,22 @@ func VisitAggrFunc(in AggrFunc, f Visit) error {
 		return VisitRefOfMax(in, f)
 	case *Min:
 		return VisitRefOfMin(in, f)
+	case *Std:
+		return VisitRefOfStd(in, f)
+	case *StdDev:
+		return VisitRefOfStdDev(in, f)
+	case *StdPop:
+		return VisitRefOfStdPop(in, f)
+	case *StdSamp:
+		return VisitRefOfStdSamp(in, f)
 	case *Sum:
 		return VisitRefOfSum(in, f)
+	case *VarPop:
+		return VisitRefOfVarPop(in, f)
+	case *VarSamp:
+		return VisitRefOfVarSamp(in, f)
+	case *Variance:
+		return VisitRefOfVariance(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -3923,6 +4083,12 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfBetweenExpr(in, f)
 	case *BinaryExpr:
 		return VisitRefOfBinaryExpr(in, f)
+	case *BitAnd:
+		return VisitRefOfBitAnd(in, f)
+	case *BitOr:
+		return VisitRefOfBitOr(in, f)
+	case *BitXor:
+		return VisitRefOfBitXor(in, f)
 	case BoolVal:
 		return VisitBoolVal(in, f)
 	case *CaseExpr:
@@ -4039,6 +4205,14 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfRegexpReplaceExpr(in, f)
 	case *RegexpSubstrExpr:
 		return VisitRefOfRegexpSubstrExpr(in, f)
+	case *Std:
+		return VisitRefOfStd(in, f)
+	case *StdDev:
+		return VisitRefOfStdDev(in, f)
+	case *StdPop:
+		return VisitRefOfStdPop(in, f)
+	case *StdSamp:
+		return VisitRefOfStdSamp(in, f)
 	case *Subquery:
 		return VisitRefOfSubquery(in, f)
 	case *SubstrExpr:
@@ -4055,6 +4229,12 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitValTuple(in, f)
 	case *ValuesFuncExpr:
 		return VisitRefOfValuesFuncExpr(in, f)
+	case *VarPop:
+		return VisitRefOfVarPop(in, f)
+	case *VarSamp:
+		return VisitRefOfVarSamp(in, f)
+	case *Variance:
+		return VisitRefOfVariance(in, f)
 	case *WeightStringFuncExpr:
 		return VisitRefOfWeightStringFuncExpr(in, f)
 	case *XorExpr:
@@ -4097,6 +4277,12 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfBetweenExpr(in, f)
 	case *BinaryExpr:
 		return VisitRefOfBinaryExpr(in, f)
+	case *BitAnd:
+		return VisitRefOfBitAnd(in, f)
+	case *BitOr:
+		return VisitRefOfBitOr(in, f)
+	case *BitXor:
+		return VisitRefOfBitXor(in, f)
 	case BoolVal:
 		return VisitBoolVal(in, f)
 	case *CaseExpr:
@@ -4213,6 +4399,14 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfRegexpReplaceExpr(in, f)
 	case *RegexpSubstrExpr:
 		return VisitRefOfRegexpSubstrExpr(in, f)
+	case *Std:
+		return VisitRefOfStd(in, f)
+	case *StdDev:
+		return VisitRefOfStdDev(in, f)
+	case *StdPop:
+		return VisitRefOfStdPop(in, f)
+	case *StdSamp:
+		return VisitRefOfStdSamp(in, f)
 	case *Subquery:
 		return VisitRefOfSubquery(in, f)
 	case *SubstrExpr:
@@ -4229,6 +4423,12 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitValTuple(in, f)
 	case *ValuesFuncExpr:
 		return VisitRefOfValuesFuncExpr(in, f)
+	case *VarPop:
+		return VisitRefOfVarPop(in, f)
+	case *VarSamp:
+		return VisitRefOfVarSamp(in, f)
+	case *Variance:
+		return VisitRefOfVariance(in, f)
 	case *WeightStringFuncExpr:
 		return VisitRefOfWeightStringFuncExpr(in, f)
 	case *XorExpr:

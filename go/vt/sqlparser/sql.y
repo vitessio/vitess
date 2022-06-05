@@ -341,7 +341,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> JSON_ARRAY JSON_OBJECT JSON_QUOTE
 %token <str> JSON_DEPTH JSON_TYPE JSON_LENGTH JSON_VALID
 %token <str> JSON_ARRAY_APPEND JSON_ARRAY_INSERT JSON_INSERT JSON_MERGE JSON_MERGE_PATCH JSON_MERGE_PRESERVE JSON_REMOVE JSON_REPLACE JSON_SET JSON_UNQUOTE
-%token <str> COUNT AVG MAX MIN SUM GROUP_CONCAT
+%token <str> COUNT AVG MAX MIN SUM GROUP_CONCAT BIT_AND BIT_OR BIT_XOR STD STDDEV STDDEV_POP STDDEV_SAMP VAR_POP VAR_SAMP VARIANCE
 %token <str> REGEXP_INSTR REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR
 
 // Match
@@ -5635,6 +5635,46 @@ UTC_DATE func_paren_opt
   {
     $$ = &Avg{Name:$1 , Distinct:$3, Args:$4}
   }
+| BIT_AND openb expression_list closeb
+  {
+    $$ = &BitAnd{Name:$1 , Args:$3}
+  }
+| BIT_OR openb expression_list closeb
+  {
+    $$ = &BitOr{Name:$1 , Args:$3}
+  }
+| BIT_XOR openb expression_list closeb
+   {
+     $$ = &BitXor{Name:$1 , Args:$3}
+   }
+| STD openb expression_list closeb
+    {
+      $$ = &Std{Name:$1 , Args:$3}
+    }
+| STDDEV openb expression_list closeb
+    {
+      $$ = &StdDev{Name:$1 , Args:$3}
+    }
+| STDDEV_POP openb expression_list closeb
+    {
+      $$ = &StdPop{Name:$1 , Args:$3}
+    }
+| STDDEV_SAMP openb expression_list closeb
+    {
+      $$ = &StdSamp{Name:$1 , Args:$3}
+    }
+| VAR_POP openb expression_list closeb
+     {
+       $$ = &VarPop{Name:$1 , Args:$3}
+     }
+| VAR_SAMP openb expression_list closeb
+     {
+       $$ = &VarSamp{Name:$1 , Args:$3}
+     }
+| VARIANCE openb expression_list closeb
+     {
+       $$ = &Variance{Name:$1 , Args:$3}
+     }
 | GROUP_CONCAT openb distinct_opt expression_list order_by_opt separator_opt limit_opt closeb
   {
     $$ = &GroupConcatExpr{Name:$1, Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
@@ -7183,6 +7223,9 @@ non_reserved_keyword:
 | BEGIN
 | BIGINT
 | BIT
+| BIT_AND
+| BIT_OR
+| BIT_XOR
 | BLOB
 | BOOL
 | BOOLEAN
@@ -7451,6 +7494,10 @@ non_reserved_keyword:
 | STATS_SAMPLE_PAGES
 | STATUS
 | STORAGE
+| STD
+| STDDEV
+| STDDEV_POP
+| STDDEV_SAMP
 | STREAM
 | SUBPARTITION
 | SUBPARTITIONS
@@ -7487,9 +7534,12 @@ non_reserved_keyword:
 | USER
 | USER_RESOURCES
 | VALIDATION
+| VAR_POP
+| VAR_SAMP
 | VARBINARY
 | VARCHAR
 | VARIABLES
+| VARIANCE
 | VCPU
 | VGTID_EXECUTED
 | VIEW
