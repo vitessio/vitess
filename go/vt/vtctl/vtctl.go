@@ -2501,7 +2501,9 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		vrwp.Cells = *cells
 		vrwp.TabletTypes = *tabletTypes
 		if vrwp.TabletTypes == "" {
-			vrwp.TabletTypes = "in_order:REPLICA,PRIMARY"
+			// When no tablet types are specified we are supposed to switch all traffic so
+			// we override the normal default for tablet_types.
+			vrwp.TabletTypes = "in_order:RDONLY,REPLICA,PRIMARY"
 		}
 		vrwp.Timeout = *timeout
 		vrwp.EnableReverseReplication = *reverseReplication
