@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -102,6 +103,7 @@ func TestCreateKeyspace(t *testing.T) {
 		assert.NotNil(t, resp, "actor %+v should be permitted to CreateKeyspace", actor)
 	})
 }
+
 func TestCreateShard(t *testing.T) {
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
@@ -170,6 +172,7 @@ func TestCreateShard(t *testing.T) {
 		assert.NotNil(t, resp, "actor %+v should be permitted to CreateShard", actor)
 	})
 }
+
 func TestDeleteKeyspace(t *testing.T) {
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
@@ -236,6 +239,7 @@ func TestDeleteKeyspace(t *testing.T) {
 		assert.NotNil(t, resp, "actor %+v should be permitted to DeleteKeyspace", actor)
 	})
 }
+
 func TestDeleteShards(t *testing.T) {
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
@@ -312,6 +316,7 @@ func TestDeleteShards(t *testing.T) {
 		assert.NotNil(t, resp, "actor %+v should be permitted to DeleteShards", actor)
 	})
 }
+
 func TestDeleteTablet(t *testing.T) {
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
@@ -380,6 +385,167 @@ func TestDeleteTablet(t *testing.T) {
 		assert.NotNil(t, resp, "actor %+v should be permitted to DeleteTablet", actor)
 	})
 }
+
+func TestGetBackups(t *testing.T) {
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Backup",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "Backup",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetBackups(ctx, &vtadminpb.GetBackupsRequest{})
+		assert.NoError(t, err)
+		assert.Empty(t, resp.Backups, "actor %+v should not be permitted to GetBackups", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetBackups(ctx, &vtadminpb.GetBackupsRequest{})
+		assert.NotEmpty(t, resp.Backups, "actor %+v should be permitted to GetBackups", actor)
+		assert.Len(t, resp.Backups, 3, "'other' actor should be able to see the 3 backups in cluster 'other'")
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetBackups(ctx, &vtadminpb.GetBackupsRequest{})
+		assert.NotEmpty(t, resp.Backups, "actor %+v should be permitted to GetBackups", actor)
+		assert.Len(t, resp.Backups, 4, "'all' actor should be able to see backups in all clusters")
+	})
+}
+
+func TestGetCellInfos(t *testing.T) {
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "CellInfo",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "CellInfo",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetCellInfos(ctx, &vtadminpb.GetCellInfosRequest{
+			NamesOnly: true,
+		})
+		assert.NoError(t, err)
+		assert.Empty(t, resp.CellInfos, "actor %+v should not be permitted to GetCellInfos", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetCellInfos(ctx, &vtadminpb.GetCellInfosRequest{
+			NamesOnly: true,
+		})
+		assert.NotEmpty(t, resp.CellInfos, "actor %+v should be permitted to GetCellInfos", actor)
+		assert.ElementsMatch(t, resp.CellInfos, []*vtadminpb.ClusterCellInfo{{Cluster: &vtadminpb.Cluster{Id: "other", Name: "other"}, Name: "other1"}})
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetCellInfos(ctx, &vtadminpb.GetCellInfosRequest{
+			NamesOnly: true,
+		})
+		assert.NotEmpty(t, resp.CellInfos, "actor %+v should be permitted to GetCellInfos", actor)
+		assert.ElementsMatch(t, resp.CellInfos, []*vtadminpb.ClusterCellInfo{{Cluster: &vtadminpb.Cluster{Id: "test", Name: "test"}, Name: "zone1"}, {Cluster: &vtadminpb.Cluster{Id: "other", Name: "other"}, Name: "other1"}})
+	})
+}
+
 func TestGetClusters(t *testing.T) {
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
@@ -449,6 +615,83 @@ func TestGetClusters(t *testing.T) {
 	})
 }
 
+func TestGetCellsAliases(t *testing.T) {
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "CellsAlias",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "CellsAlias",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetCellsAliases(ctx, &vtadminpb.GetCellsAliasesRequest{})
+		assert.NoError(t, err)
+		assert.Empty(t, resp.Aliases, "actor %+v should not be permitted to GetCellsAliases", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetCellsAliases(ctx, &vtadminpb.GetCellsAliasesRequest{})
+		assert.NotEmpty(t, resp.Aliases, "actor %+v should be permitted to GetCellsAliases", actor)
+		assert.ElementsMatch(t, resp.Aliases, []*vtadminpb.ClusterCellsAliases{{Cluster: &vtadminpb.Cluster{Id: "other", Name: "other"}, Aliases: map[string]*topodatapb.CellsAlias{"other": {Cells: []string{"other1"}}}}})
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetCellsAliases(ctx, &vtadminpb.GetCellsAliasesRequest{})
+		assert.NotEmpty(t, resp.Aliases, "actor %+v should be permitted to GetCellsAliases", actor)
+		assert.ElementsMatch(t, resp.Aliases, []*vtadminpb.ClusterCellsAliases{{Cluster: &vtadminpb.Cluster{Id: "test", Name: "test"}, Aliases: map[string]*topodatapb.CellsAlias{"zone": {Cells: []string{"zone1"}}}}, {Cluster: &vtadminpb.Cluster{Id: "other", Name: "other"}, Aliases: map[string]*topodatapb.CellsAlias{"other": {Cells: []string{"other1"}}}}})
+	})
+}
+
 func testClusters(t testing.TB) []*cluster.Cluster {
 	configs := []testutil.TestClusterConfig{
 		{
@@ -463,12 +706,62 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 				DeleteTabletsResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
+				FindAllShardsInKeyspaceResults: map[string]struct {
+					Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+							Shards: map[string]*vtctldatapb.Shard{
+								"-": {
+									Keyspace: "test",
+									Name:     "-",
+									Shard:    &topodatapb.Shard{},
+								},
+							},
+						},
+					},
+				},
+				GetBackupsResults: map[string]struct {
+					Response *vtctldatapb.GetBackupsResponse
+					Error    error
+				}{
+					"test/-": {
+						Response: &vtctldatapb.GetBackupsResponse{
+							Backups: []*mysqlctlpb.BackupInfo{
+								{},
+							},
+						},
+					},
+				},
 				GetCellInfoNamesResults: &struct {
 					Response *vtctldatapb.GetCellInfoNamesResponse
 					Error    error
 				}{
 					Response: &vtctldatapb.GetCellInfoNamesResponse{
 						Names: []string{"zone1"},
+					},
+				},
+				GetCellsAliasesResults: &struct {
+					Response *vtctldatapb.GetCellsAliasesResponse
+					Error    error
+				}{
+					Response: &vtctldatapb.GetCellsAliasesResponse{
+						Aliases: map[string]*topodatapb.CellsAlias{
+							"zone": {
+								Cells: []string{"zone1"}},
+						},
+					},
+				},
+				GetKeyspacesResults: &struct {
+					Keyspaces []*vtctldatapb.Keyspace
+					Error     error
+				}{
+					Keyspaces: []*vtctldatapb.Keyspace{
+						{
+							Name:     "test",
+							Keyspace: &topodatapb.Keyspace{},
+						},
 					},
 				},
 			},
@@ -483,6 +776,72 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 					},
 				},
 			},
+		}, {
+			Cluster: &vtadminpb.Cluster{
+				Id:   "other",
+				Name: "other",
+			},
+			VtctldClient: &fakevtctldclient.VtctldClient{
+				FindAllShardsInKeyspaceResults: map[string]struct {
+					Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+					Error    error
+				}{
+					"otherks": {
+						Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+							Shards: map[string]*vtctldatapb.Shard{
+								"-": {
+									Keyspace: "otherks",
+									Name:     "-",
+									Shard:    &topodatapb.Shard{},
+								},
+							},
+						},
+					},
+				},
+				GetBackupsResults: map[string]struct {
+					Response *vtctldatapb.GetBackupsResponse
+					Error    error
+				}{
+					"otherks/-": {
+						Response: &vtctldatapb.GetBackupsResponse{
+							Backups: []*mysqlctlpb.BackupInfo{
+								{}, {}, {},
+							},
+						},
+					},
+				},
+				GetCellInfoNamesResults: &struct {
+					Response *vtctldatapb.GetCellInfoNamesResponse
+					Error    error
+				}{
+					Response: &vtctldatapb.GetCellInfoNamesResponse{
+						Names: []string{"other1"},
+					},
+				},
+				GetCellsAliasesResults: &struct {
+					Response *vtctldatapb.GetCellsAliasesResponse
+					Error    error
+				}{
+					Response: &vtctldatapb.GetCellsAliasesResponse{
+						Aliases: map[string]*topodatapb.CellsAlias{
+							"other": {
+								Cells: []string{"other1"}},
+						},
+					},
+				},
+				GetKeyspacesResults: &struct {
+					Keyspaces []*vtctldatapb.Keyspace
+					Error     error
+				}{
+					Keyspaces: []*vtctldatapb.Keyspace{
+						{
+							Name:     "otherks",
+							Keyspace: &topodatapb.Keyspace{},
+						},
+					},
+				},
+			},
+			Tablets: []*vtadminpb.Tablet{},
 		},
 	}
 
