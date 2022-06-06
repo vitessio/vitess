@@ -20,6 +20,7 @@ package vtadmin_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -948,6 +949,99 @@ func TestGetKeyspaces(t *testing.T) {
 	})
 }
 
+func TestGetShardReplicationPositions(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "ShardReplicationPosition",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "ShardReplicationPosition",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetShardReplicationPositions(ctx, &vtadminpb.GetShardReplicationPositionsRequest{})
+		assert.NoError(t, err)
+		assert.Empty(t, resp.ReplicationPositions, "actor %+v should not be permitted to GetShardReplicationPositions", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetShardReplicationPositions(ctx, &vtadminpb.GetShardReplicationPositionsRequest{})
+		assert.NotEmpty(t, resp.ReplicationPositions, "actor %+v should be permitted to GetShardReplicationPositions", actor)
+		posMap := map[string][]string{}
+		for _, pos := range resp.ReplicationPositions {
+			if _, ok := posMap[pos.Cluster.Id]; !ok {
+				posMap[pos.Cluster.Id] = []string{}
+			}
+			posMap[pos.Cluster.Id] = append(posMap[pos.Cluster.Id], fmt.Sprintf("%s/%s", pos.Keyspace, pos.Shard))
+		}
+		assert.Equal(t, posMap, map[string][]string{"other": {"otherks/-"}}, "actor %+v should be permitted to GetShardReplicationPositions", actor)
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetShardReplicationPositions(ctx, &vtadminpb.GetShardReplicationPositionsRequest{})
+		assert.NotEmpty(t, resp.ReplicationPositions, "actor %+v should be permitted to GetShardReplicationPositions", actor)
+		posMap := map[string][]string{}
+		for _, pos := range resp.ReplicationPositions {
+			if _, ok := posMap[pos.Cluster.Id]; !ok {
+				posMap[pos.Cluster.Id] = []string{}
+			}
+			posMap[pos.Cluster.Id] = append(posMap[pos.Cluster.Id], fmt.Sprintf("%s/%s", pos.Keyspace, pos.Shard))
+		}
+		assert.Equal(t, posMap, map[string][]string{"test": {"test/-"}, "other": {"otherks/-"}}, "actor %+v should be permitted to GetShardReplicationPositions", actor)
+	})
+}
+
 func TestGetSrvVSchema(t *testing.T) {
 	t.Parallel()
 
@@ -1201,6 +1295,14 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 						},
 					},
 				},
+				ShardReplicationPositionsResults: map[string]struct {
+					Response *vtctldatapb.ShardReplicationPositionsResponse
+					Error    error
+				}{
+					"test/-": {
+						Response: &vtctldatapb.ShardReplicationPositionsResponse{},
+					},
+				},
 			},
 			Tablets: []*vtadminpb.Tablet{
 				{
@@ -1291,6 +1393,14 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 						Response: &vtctldatapb.GetSrvVSchemaResponse{
 							SrvVSchema: &vschemapb.SrvVSchema{},
 						},
+					},
+				},
+				ShardReplicationPositionsResults: map[string]struct {
+					Response *vtctldatapb.ShardReplicationPositionsResponse
+					Error    error
+				}{
+					"otherks/-": {
+						Response: &vtctldatapb.ShardReplicationPositionsResponse{},
 					},
 				},
 			},

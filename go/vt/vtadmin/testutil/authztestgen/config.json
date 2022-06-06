@@ -49,6 +49,11 @@
                     "field": "GetSrvVSchemaResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetSrvVSchemaResponse\nError error}",
                     "value": "\"zone1\": {\nResponse: &vtctldatapb.GetSrvVSchemaResponse{\nSrvVSchema: &vschemapb.SrvVSchema{},\n},\n},"
+                },
+                {
+                    "field": "ShardReplicationPositionsResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.ShardReplicationPositionsResponse\nError error}",
+                    "value": "\"test/-\": {\nResponse: &vtctldatapb.ShardReplicationPositionsResponse{},\n},"
                 }
             ],
             "db_tablet_list": [
@@ -92,6 +97,11 @@
                     "field": "GetSrvVSchemaResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetSrvVSchemaResponse\nError error}",
                     "value": "\"other1\": {\nResponse: &vtctldatapb.GetSrvVSchemaResponse{\nSrvVSchema: &vschemapb.SrvVSchema{},\n},\n},"
+                },
+                {
+                    "field": "ShardReplicationPositionsResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.ShardReplicationPositionsResponse\nError error}",
+                    "value": "\"otherks/-\": {\nResponse: &vtctldatapb.ShardReplicationPositionsResponse{},\n},"
                 }
             ]
         }
@@ -582,6 +592,64 @@
                         "ksMap[ks.Cluster.Id] = append(ksMap[ks.Cluster.Id], ks.Keyspace.Name)",
                         "}",
                         "assert.Equal(t, ksMap, map[string][]string{\"test\": {\"test\"}, \"other\": {\"otherks\"}}, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "GetShardReplicationPositions",
+            "rules": [
+                {
+                    "resource": "ShardReplicationPosition",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-all"],
+                    "clusters": ["*"]
+                },
+                {
+                    "resource": "ShardReplicationPosition",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-other"],
+                    "clusters": ["other"]
+                }
+            ],
+            "request": "&vtadminpb.GetShardReplicationPositionsRequest{}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "unauthorized"},
+                    "is_permitted": false,
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.NoError(t, err)",
+                        "assert.Empty(t, resp.ReplicationPositions, $$)"
+                    ]
+                },
+                {
+                    "name": "partial access",
+                    "actor": {"name": "allowed-other"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.ReplicationPositions, $$)",
+                        "posMap := map[string][]string{}",
+                        "for _, pos := range resp.ReplicationPositions {",
+                        "if _, ok := posMap[pos.Cluster.Id]; !ok {\n posMap[pos.Cluster.Id] = []string{}\n}",
+                        "posMap[pos.Cluster.Id] = append(posMap[pos.Cluster.Id], fmt.Sprintf(\"%s/%s\", pos.Keyspace, pos.Shard))",
+                        "}",
+                        "assert.Equal(t, posMap, map[string][]string{\"other\": {\"otherks/-\"}}, $$)"
+                    ]
+                },
+                {
+                    "name": "full access",
+                    "actor": {"name": "allowed-all"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.ReplicationPositions, $$)",
+                        "posMap := map[string][]string{}",
+                        "for _, pos := range resp.ReplicationPositions {",
+                        "if _, ok := posMap[pos.Cluster.Id]; !ok {\n posMap[pos.Cluster.Id] = []string{}\n}",
+                        "posMap[pos.Cluster.Id] = append(posMap[pos.Cluster.Id], fmt.Sprintf(\"%s/%s\", pos.Keyspace, pos.Shard))",
+                        "}",
+                        "assert.Equal(t, posMap, map[string][]string{\"test\": {\"test/-\"}, \"other\": {\"otherks/-\"}}, $$)"
                     ]
                 }
             ]

@@ -38,6 +38,7 @@ package {{ .Package }}
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
