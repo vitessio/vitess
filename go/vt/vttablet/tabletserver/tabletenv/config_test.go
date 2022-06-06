@@ -121,6 +121,7 @@ consolidator: enable
 consolidatorStreamQuerySize: 2097152
 consolidatorStreamTotalSize: 134217728
 gracePeriods: {}
+gtidSetTimeout: 1
 healthcheck:
   degradedThresholdSeconds: 30
   intervalSeconds: 20
@@ -217,6 +218,7 @@ func TestFlags(t *testing.T) {
 		QueryCacheLFU:                           cache.DefaultConfig.LFU,
 		SchemaReloadIntervalSeconds:             1800,
 		SignalSchemaChangeReloadIntervalSeconds: 5,
+		GtidSetTimeout:                          1,
 		TrackSchemaVersions:                     false,
 		MessagePostponeParallelism:              4,
 		CacheResultFields:                       true,

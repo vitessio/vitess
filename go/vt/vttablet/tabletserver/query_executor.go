@@ -623,7 +623,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 // execSelect sends a query to mysql only if another identical query is not running. Otherwise, it waits and
 // reuses the result. If the plan is missing field info, it sends the query to mysql requesting full info.
 func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
-	if qre.tsv.qe.enableQueryPlanFieldCaching && qre.plan.Fields != nil && qre.options.GtidSet == "" {
+	if qre.tsv.qe.enableQueryPlanFieldCaching && qre.plan.Fields != nil && qre.options != nil && qre.options.GtidSet == "" {
 		result, err := qre.qFetch(qre.logStats, qre.plan.FullQuery, qre.bindVars)
 		if err != nil {
 			return nil, err
@@ -643,7 +643,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	if qre.options.GtidSet != "" {
+	if qre.options != nil && qre.options.GtidSet != "" {
 		qr, err := qre.execDBConn(conn, qre.generateGtidQuery(), false)
 		if err != nil {
 			return nil, err
@@ -1054,11 +1054,7 @@ func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
 }
 
 func (qre *QueryExecutor) generateGtidQuery() string {
-	var buf strings.Builder
-	buf.WriteString("select wait_for_executed_gtid_set('")
-	buf.WriteString(qre.options.GtidSet)
-	buf.WriteString("', ")
-	buf.WriteString(fmt.Sprintf("%.2f", qre.tsv.config.GtidSetTimeout.Get().Seconds()))
-	buf.WriteString(")")
-	return buf.String()
+	return fmt.Sprintf("select wait_for_executed_gtid_set('%s', %.2f)",
+		qre.options.GtidSet,
+		qre.tsv.config.GtidSetTimeout.Get().Seconds())
 }
