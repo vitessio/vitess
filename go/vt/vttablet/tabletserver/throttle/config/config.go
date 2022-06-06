@@ -27,11 +27,3 @@ type ConfigurationSettings struct {
 	EnableProfiling bool // enable pprof profiling http api
 	Stores          StoresSettings
 }
-
-// PostReadAdjustments validates and fixes config
-func (settings *ConfigurationSettings) PostReadAdjustments() error {
-	if err := settings.Stores.postReadAdjustments(); err != nil {
-		return err
-	}
-	return nil
-}
