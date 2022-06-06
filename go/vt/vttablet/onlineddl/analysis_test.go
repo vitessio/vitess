@@ -74,6 +74,12 @@ func TestAnalyzeInstantDDL(t *testing.T) {
 			instant: true,
 		},
 		{
+			version: "8.0.21",
+			create:  "create table t(id int, i1 int not null, i2 int generated always as (i1 + 1) stored, primary key(id))",
+			alter:   "alter table t drop column i2",
+			instant: false,
+		},
+		{
 			version: "8.0.29",
 			create:  "create table t(id int, i1 int not null, primary key(id))",
 			alter:   "alter table t add column i2 int not null after id",
