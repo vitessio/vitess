@@ -14,9 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
-
-	metrics "github.com/rcrowley/go-metrics"
 )
 
 const (
@@ -118,18 +117,18 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, storeTyp
 	atomic.StoreInt64(&check.throttler.lastCheckTimeNano, time.Now().UnixNano())
 
 	go func(statusCode int) {
-		metrics.GetOrRegisterCounter("throttler.check.any.total", nil).Inc(1)
-		metrics.GetOrRegisterCounter(fmt.Sprintf("throttler.check.%s.total", appName), nil).Inc(1)
+		stats.GetOrNewCounter("throttler.check.any.total", "total number of checks").Add(1)
+		stats.GetOrNewCounter(fmt.Sprintf("throttler.check.%s.total", appName), fmt.Sprintf("total number of checks for %s", appName)).Add(1)
 
-		metrics.GetOrRegisterCounter(fmt.Sprintf("throttler.check.any.%s.%s.total", storeType, storeName), nil).Inc(1)
-		metrics.GetOrRegisterCounter(fmt.Sprintf("throttler.check.%s.%s.%s.total", appName, storeType, storeName), nil).Inc(1)
+		stats.GetOrNewCounter(fmt.Sprintf("throttler.check.any.%s.%s.total", storeType, storeName), "").Add(1)
+		stats.GetOrNewCounter(fmt.Sprintf("throttler.check.%s.%s.%s.total", appName, storeType, storeName), "").Add(1)
 
 		if statusCode != http.StatusOK {
-			metrics.GetOrRegisterCounter("throttler.check.any.error", nil).Inc(1)
-			metrics.GetOrRegisterCounter(fmt.Sprintf("throttler.check.%s.error", appName), nil).Inc(1)
+			stats.GetOrNewCounter("throttler.check.any.error", "total number of failed checks").Add(1)
+			stats.GetOrNewCounter(fmt.Sprintf("throttler.check.%s.error", appName), fmt.Sprintf("total number of failed checks for %s", appName)).Add(1)
 
-			metrics.GetOrRegisterCounter(fmt.Sprintf("throttler.check.any.%s.%s.error", storeType, storeName), nil).Inc(1)
-			metrics.GetOrRegisterCounter(fmt.Sprintf("throttler.check.%s.%s.%s.error", appName, storeType, storeName), nil).Inc(1)
+			stats.GetOrNewCounter(fmt.Sprintf("throttler.check.any.%s.%s.error", storeType, storeName), "").Add(1)
+			stats.GetOrNewCounter(fmt.Sprintf("throttler.check.%s.%s.%s.error", appName, storeType, storeName), "").Add(1)
 		}
 
 		check.throttler.markRecentApp(appName, remoteAddr)
@@ -161,7 +160,7 @@ func (check *ThrottlerCheck) localCheck(ctx context.Context, metricName string) 
 		check.throttler.markMetricHealthy(metricName)
 	}
 	if timeSinceHealthy, found := check.throttler.timeSinceMetricHealthy(metricName); found {
-		metrics.GetOrRegisterGauge(fmt.Sprintf("throttler.check.%s.%s.seconds_since_healthy", storeType, storeName), nil).Update(int64(timeSinceHealthy.Seconds()))
+		stats.GetOrNewGauge(fmt.Sprintf("throttler.check.%s.%s.seconds_since_healthy", storeType, storeName), fmt.Sprintf("seconds since last healthy cehck for %s.%s", storeType, storeName)).Set(int64(timeSinceHealthy.Seconds()))
 	}
 
 	return checkResult
@@ -173,7 +172,7 @@ func (check *ThrottlerCheck) reportAggregated(metricName string, metricResult ba
 		return
 	}
 	if value, err := metricResult.Get(); err == nil {
-		metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("throttler.aggregated.%s.%s", storeType, storeName), nil).Update(value)
+		stats.GetOrNewGaugeFloat64(fmt.Sprintf("throttler.aggregated.%s.%s", storeType, storeName), fmt.Sprintf("aggregated value for %s.%s", storeType, storeName)).Set(value)
 	}
 }
 
