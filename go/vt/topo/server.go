@@ -58,7 +58,7 @@ import (
 
 const (
 	// GlobalCell is the name of the global cell.  It is special
-	// as it contains the global topology, and references the other cellConns.
+	// as it contains the global topology, and references the other cells.
 	GlobalCell = "global"
 
 	// GlobalReadOnlyCell is the name of the global read-only cell
@@ -100,7 +100,7 @@ type Factory interface {
 	// HasGlobalReadOnlyCell returns true if the global cell
 	// has read-only replicas of the topology data. The global topology
 	// is usually more expensive to read from / write to, as it is
-	// replicated over many cellConns. Some topology services provide
+	// replicated over many cells. Some topology services provide
 	// more efficient way to read the data, like Observer servers
 	// for Zookeeper. If this returns true, we will maintain
 	// two connections for the global topology: the 'global' cell
@@ -241,7 +241,7 @@ func Open() *Server {
 }
 
 // ConnForCell returns a Conn object for the given cell.
-// It caches Conn objects from previously requested cellConns.
+// It caches Conn objects from previously requested cells.
 func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	// Global cell is the easy case.
 	if cell == GlobalCell {
