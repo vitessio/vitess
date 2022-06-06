@@ -144,6 +144,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitExprs(in, f)
 	case *ExtractFuncExpr:
 		return VisitRefOfExtractFuncExpr(in, f)
+	case *ExtractValueExpr:
+		return VisitRefOfExtractValueExpr(in, f)
 	case *ExtractedSubquery:
 		return VisitRefOfExtractedSubquery(in, f)
 	case *FirstOrLastValueExpr:
@@ -422,6 +424,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfUpdateExpr(in, f)
 	case UpdateExprs:
 		return VisitUpdateExprs(in, f)
+	case *UpdateXMLExpr:
+		return VisitRefOfUpdateXMLExpr(in, f)
 	case *Use:
 		return VisitRefOfUse(in, f)
 	case *VStream:
@@ -1307,6 +1311,21 @@ func VisitRefOfExtractFuncExpr(in *ExtractFuncExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfExtractValueExpr(in *ExtractValueExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Fragment, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.XPathExpr, f); err != nil {
 		return err
 	}
 	return nil
@@ -3318,6 +3337,24 @@ func VisitUpdateExprs(in UpdateExprs, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfUpdateXMLExpr(in *UpdateXMLExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Target, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.XPathExpr, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.NewXML, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfUse(in *Use, f Visit) error {
 	if in == nil {
 		return nil
@@ -3620,6 +3657,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfCurTimeFuncExpr(in, f)
 	case *ExtractFuncExpr:
 		return VisitRefOfExtractFuncExpr(in, f)
+	case *ExtractValueExpr:
+		return VisitRefOfExtractValueExpr(in, f)
 	case *FirstOrLastValueExpr:
 		return VisitRefOfFirstOrLastValueExpr(in, f)
 	case *FuncExpr:
@@ -3692,6 +3731,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfTimestampFuncExpr(in, f)
 	case *TrimFuncExpr:
 		return VisitRefOfTrimFuncExpr(in, f)
+	case *UpdateXMLExpr:
+		return VisitRefOfUpdateXMLExpr(in, f)
 	case *ValuesFuncExpr:
 		return VisitRefOfValuesFuncExpr(in, f)
 	case *WeightStringFuncExpr:
@@ -3838,6 +3879,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfExistsExpr(in, f)
 	case *ExtractFuncExpr:
 		return VisitRefOfExtractFuncExpr(in, f)
+	case *ExtractValueExpr:
+		return VisitRefOfExtractValueExpr(in, f)
 	case *ExtractedSubquery:
 		return VisitRefOfExtractedSubquery(in, f)
 	case *FirstOrLastValueExpr:
@@ -3934,6 +3977,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfTrimFuncExpr(in, f)
 	case *UnaryExpr:
 		return VisitRefOfUnaryExpr(in, f)
+	case *UpdateXMLExpr:
+		return VisitRefOfUpdateXMLExpr(in, f)
 	case ValTuple:
 		return VisitValTuple(in, f)
 	case *ValuesFuncExpr:
@@ -4000,6 +4045,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfExistsExpr(in, f)
 	case *ExtractFuncExpr:
 		return VisitRefOfExtractFuncExpr(in, f)
+	case *ExtractValueExpr:
+		return VisitRefOfExtractValueExpr(in, f)
 	case *ExtractedSubquery:
 		return VisitRefOfExtractedSubquery(in, f)
 	case *FirstOrLastValueExpr:
@@ -4096,6 +4143,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfTrimFuncExpr(in, f)
 	case *UnaryExpr:
 		return VisitRefOfUnaryExpr(in, f)
+	case *UpdateXMLExpr:
+		return VisitRefOfUpdateXMLExpr(in, f)
 	case ValTuple:
 		return VisitValTuple(in, f)
 	case *ValuesFuncExpr:

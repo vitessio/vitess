@@ -33,7 +33,7 @@ func (c *optionalTLSCreds) ServerHandshake(conn net.Conn) (net.Conn, credentials
 		return nil, nil, err
 	}
 
-	var wc net.Conn = NewWrappedConn(conn, bytes)
+	wc := NewWrappedConn(conn, bytes)
 	if isTLS {
 		return c.TransportCredentials.ServerHandshake(wc)
 	}

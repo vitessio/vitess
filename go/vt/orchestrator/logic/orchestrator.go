@@ -413,11 +413,6 @@ func ContinuousDiscovery() {
 	go ometrics.InitMetrics()
 	go acceptSignals()
 	go kv.InitKVStores()
-	err := inst.SetDurabilityPolicy(config.Config.Durability)
-	if err != nil {
-		log.Infof("Error setting the durability policy: %v", err)
-		os.Exit(1)
-	}
 
 	if *config.RuntimeCLIFlags.GrabElection {
 		process.GrabElection()
@@ -507,6 +502,7 @@ func ContinuousDiscovery() {
 				}
 			}()
 		case <-tabletTopoTick:
+			go RefreshAllKeyspaces()
 			go RefreshTablets(false /* forceRefresh */)
 		}
 	}
