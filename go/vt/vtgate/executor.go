@@ -187,7 +187,8 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 		}
 		log.Warningf("%q exceeds warning threshold of max memory rows: %v", piiSafeSQL, *warnMemoryRows)
 	}
-
+	logStats.InTransaction = safeSession.InTransaction()
+	logStats.SessionUUID = safeSession.GetSessionUUID()
 	logStats.Send()
 	return result, err
 }
@@ -319,7 +320,8 @@ func (e *Executor) StreamExecute(
 		}
 		log.Warningf("%q exceeds warning threshold of max memory rows: %v", piiSafeSQL, *warnMemoryRows)
 	}
-
+	logStats.InTransaction = safeSession.InTransaction()
+	logStats.SessionUUID = safeSession.GetSessionUUID()
 	logStats.Send()
 	return err
 
@@ -1177,6 +1179,8 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *Safe
 	// To avoid spamming the log with no-op rollback records, ignore it if
 	// it was a no-op record (i.e. didn't issue any queries)
 	if !(logStats.StmtType == "ROLLBACK" && logStats.ShardQueries == 0) {
+		logStats.InTransaction = safeSession.InTransaction()
+		logStats.SessionUUID = safeSession.GetSessionUUID()
 		logStats.Send()
 	}
 	return fld, err
