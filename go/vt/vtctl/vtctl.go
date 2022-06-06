@@ -192,7 +192,7 @@ var commands = []commandGroup{
 			{
 				name:   "DeleteTablet",
 				method: commandDeleteTablet,
-				params: "[-allow_primary] <tablet alias> ...",
+				params: "[--allow_primary] <tablet alias> ...",
 				help:   "Deletes tablet(s) from the topology.",
 			},
 			{
@@ -400,7 +400,7 @@ var commands = []commandGroup{
 			{
 				name:   "CreateKeyspace",
 				method: commandCreateKeyspace,
-				params: "[--sharding_column_name=name] [--sharding_column_type=type] [--served_from=tablettype1:ks1,tablettype2:ks2,...] [--force] [--keyspace_type=type] [--base_keyspace=base_keyspace] [--snapshot_time=time] <keyspace name>",
+				params: "[--sharding_column_name=name] [--sharding_column_type=type] [--served_from=tablettype1:ks1,tablettype2:ks2,...] [--force] [--keyspace_type=type] [--base_keyspace=base_keyspace] [--snapshot_time=time] [--durability-policy=policy_name] <keyspace name>",
 				help:   "Creates the specified keyspace. keyspace_type can be NORMAL or SNAPSHOT. For a SNAPSHOT keyspace you must specify the name of a base_keyspace, and a snapshot_time in UTC, in RFC3339 time format, e.g. 2006-01-02T15:04:05+00:00",
 			},
 			{
@@ -1929,6 +1929,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	keyspaceType := subFlags.String("keyspace_type", "", "Specifies the type of the keyspace")
 	baseKeyspace := subFlags.String("base_keyspace", "", "Specifies the base keyspace for a snapshot keyspace")
 	timestampStr := subFlags.String("snapshot_time", "", "Specifies the snapshot time for this keyspace")
+	durabilityPolicy := subFlags.String("durability-policy", "none", "Type of durability to enforce for this keyspace. Default is none. Possible values include 'semi_sync' and others as dictated by registered plugins.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1978,6 +1979,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		KeyspaceType:       ktype,
 		BaseKeyspace:       *baseKeyspace,
 		SnapshotTime:       snapshotTime,
+		DurabilityPolicy:   *durabilityPolicy,
 	}
 	if len(servedFrom) > 0 {
 		for name, value := range servedFrom {

@@ -72,9 +72,7 @@ type API struct {
 
 	authz *rbac.Authorizer
 
-	// See https://github.com/vitessio/vitess/issues/7723 for why this exists.
-	vtexplainLock sync.Mutex
-	options       Options
+	options Options
 }
 
 // Options wraps the configuration options for different components of the
@@ -355,8 +353,8 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
 	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
 	router.HandleFunc("/schemas/reload", httpAPI.Adapt(vtadminhttp.ReloadSchemas)).Name("API.ReloadSchemas").Methods("PUT", "OPTIONS")
-	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/emergency_reparent", httpAPI.Adapt(vtadminhttp.EmergencyReparentShard)).Name("API.EmergencyReparentShard").Methods("POST")
-	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/planned_reparent", httpAPI.Adapt(vtadminhttp.PlannedReparentShard)).Name("API.PlannedReparentShard").Methods("POST")
+	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/emergency_failover", httpAPI.Adapt(vtadminhttp.EmergencyFailoverShard)).Name("API.EmergencyFailoverShard").Methods("POST")
+	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/planned_failover", httpAPI.Adapt(vtadminhttp.PlannedFailoverShard)).Name("API.PlannedFailoverShard").Methods("POST")
 	router.HandleFunc("/shard_replication_positions", httpAPI.Adapt(vtadminhttp.GetShardReplicationPositions)).Name("API.GetShardReplicationPositions")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateShard)).Name("API.CreateShard").Methods("POST")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.DeleteShards)).Name("API.DeleteShards").Methods("DELETE")
@@ -368,13 +366,13 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/tablet/{tablet}/healthcheck", httpAPI.Adapt(vtadminhttp.RunHealthCheck)).Name("API.RunHealthCheck")
 	router.HandleFunc("/tablet/{tablet}/ping", httpAPI.Adapt(vtadminhttp.PingTablet)).Name("API.PingTablet")
 	router.HandleFunc("/tablet/{tablet}/refresh", httpAPI.Adapt(vtadminhttp.RefreshState)).Name("API.RefreshState").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/refresh_replication_source", httpAPI.Adapt(vtadminhttp.RefreshTabletReplicationSource)).Name("API.RefreshTabletReplicationSource").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/reload_schema", httpAPI.Adapt(vtadminhttp.ReloadTabletSchema)).Name("API.ReloadTabletSchema").Methods("PUT", "OPTIONS")
-	router.HandleFunc("/tablet/{tablet}/reparent", httpAPI.Adapt(vtadminhttp.ReparentTablet)).Name("API.ReparentTablet").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/set_read_only", httpAPI.Adapt(vtadminhttp.SetReadOnly)).Name("API.SetReadOnly").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/set_read_write", httpAPI.Adapt(vtadminhttp.SetReadWrite)).Name("API.SetReadWrite").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/start_replication", httpAPI.Adapt(vtadminhttp.StartReplication)).Name("API.StartReplication").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/stop_replication", httpAPI.Adapt(vtadminhttp.StopReplication)).Name("API.StopReplication").Methods("PUT", "OPTIONS")
-	router.HandleFunc("/tablet/{tablet}/tablet_externally_reparented", httpAPI.Adapt(vtadminhttp.TabletExternallyReparented)).Name("API.TabletExternallyReparented").Methods("POST")
+	router.HandleFunc("/tablet/{tablet}/externally_promoted", httpAPI.Adapt(vtadminhttp.TabletExternallyPromoted)).Name("API.TabletExternallyPromoted").Methods("POST")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
 	router.HandleFunc("/vtctlds", httpAPI.Adapt(vtadminhttp.GetVtctlds)).Name("API.GetVtctlds")
@@ -517,9 +515,9 @@ func (api *API) DeleteTablet(ctx context.Context, req *vtadminpb.DeleteTabletReq
 	}, nil
 }
 
-// EmergencyReparentShard is part of the vtadminpb.VTAdminServer interface.
-func (api *API) EmergencyReparentShard(ctx context.Context, req *vtadminpb.EmergencyReparentShardRequest) (*vtadminpb.EmergencyReparentShardResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.EmergencyReparentShard")
+// EmergencyFailoverShard is part of the vtadminpb.VTAdminServer interface.
+func (api *API) EmergencyFailoverShard(ctx context.Context, req *vtadminpb.EmergencyFailoverShardRequest) (*vtadminpb.EmergencyFailoverShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.EmergencyFailoverShard")
 	defer span.Finish()
 
 	c, err := api.getClusterForRequest(req.ClusterId)
@@ -527,11 +525,11 @@ func (api *API) EmergencyReparentShard(ctx context.Context, req *vtadminpb.Emerg
 		return nil, err
 	}
 
-	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ShardResource, rbac.EmergencyReparentShardAction) {
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ShardResource, rbac.EmergencyFailoverShardAction) {
 		return nil, nil
 	}
 
-	return c.EmergencyReparentShard(ctx, req.Options)
+	return c.EmergencyFailoverShard(ctx, req.Options)
 }
 
 // FindSchema is part of the vtadminpb.VTAdminServer interface.
@@ -616,6 +614,10 @@ func (api *API) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsRequest
 		rec     concurrency.AllErrorRecorder
 		backups []*vtadminpb.ClusterBackup
 	)
+
+	if req.RequestOptions == nil {
+		req.RequestOptions = &vtctldatapb.GetBackupsRequest{}
+	}
 
 	for _, c := range clusters {
 		if !api.authz.IsAuthorized(ctx, c.ID, rbac.BackupResource, rbac.GetAction) {
@@ -1405,9 +1407,9 @@ func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest
 	}, nil
 }
 
-// PlannedReparentShard is part of the vtadminpb.VTAdminServer interface.
-func (api *API) PlannedReparentShard(ctx context.Context, req *vtadminpb.PlannedReparentShardRequest) (*vtadminpb.PlannedReparentShardResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.PlannedReparentShard")
+// PlannedFailoverShard is part of the vtadminpb.VTAdminServer interface.
+func (api *API) PlannedFailoverShard(ctx context.Context, req *vtadminpb.PlannedFailoverShardRequest) (*vtadminpb.PlannedFailoverShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.PlannedFailoverShard")
 	defer span.Finish()
 
 	c, err := api.getClusterForRequest(req.ClusterId)
@@ -1415,11 +1417,11 @@ func (api *API) PlannedReparentShard(ctx context.Context, req *vtadminpb.Planned
 		return nil, err
 	}
 
-	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ShardResource, rbac.PlannedReparentShardAction) {
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ShardResource, rbac.PlannedFailoverShardAction) {
 		return nil, nil
 	}
 
-	return c.PlannedReparentShard(ctx, req.Options)
+	return c.PlannedFailoverShard(ctx, req.Options)
 }
 
 // RefreshState is part of the vtadminpb.VTAdminServer interface.
@@ -1440,6 +1442,19 @@ func (api *API) RefreshState(ctx context.Context, req *vtadminpb.RefreshStateReq
 		Status:  "ok",
 		Cluster: c.ToProto(),
 	}, nil
+}
+
+// RefreshTabletReplicationSource is part of the vtadminpb.VTAdminServer interface.
+func (api *API) RefreshTabletReplicationSource(ctx context.Context, req *vtadminpb.RefreshTabletReplicationSourceRequest) (*vtadminpb.RefreshTabletReplicationSourceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.RefreshTabletReplicationSource")
+	defer span.Finish()
+
+	tablet, c, err := api.getTabletForAction(ctx, span, rbac.RefreshTabletReplicationSourceAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.RefreshTabletReplicationSource(ctx, tablet)
 }
 
 // ReloadSchemas is part of the vtadminpb.VTAdminServer interface.
@@ -1486,19 +1501,6 @@ func (api *API) ReloadSchemas(ctx context.Context, req *vtadminpb.ReloadSchemasR
 	}
 
 	return &resp, nil
-}
-
-// ReparentTablet is part of the vtadminpb.VTAdminServer interface.
-func (api *API) ReparentTablet(ctx context.Context, req *vtadminpb.ReparentTabletRequest) (*vtadminpb.ReparentTabletResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.ReparentTablet")
-	defer span.Finish()
-
-	tablet, c, err := api.getTabletForAction(ctx, span, rbac.ReparentTabletAction, req.Alias, req.ClusterIds)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.ReparentTablet(ctx, tablet)
 }
 
 // RunHealthCheck is part of the vtadminpb.VTAdminServer interface.
@@ -1611,17 +1613,17 @@ func (api *API) StopReplication(ctx context.Context, req *vtadminpb.StopReplicat
 	}, nil
 }
 
-// TabletExternallyReparented is part of the vtadminpb.VTAdminServer interface.
-func (api *API) TabletExternallyReparented(ctx context.Context, req *vtadminpb.TabletExternallyReparentedRequest) (*vtadminpb.TabletExternallyReparentedResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.TabletExternallyReparented")
+// TabletExternallyPromoted is part of the vtadminpb.VTAdminServer interface.
+func (api *API) TabletExternallyPromoted(ctx context.Context, req *vtadminpb.TabletExternallyPromotedRequest) (*vtadminpb.TabletExternallyPromotedResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.TabletExternallyPromoted")
 	defer span.Finish()
 
-	tablet, c, err := api.getTabletForShardAction(ctx, span, rbac.TabletExternallyReparentedAction, req.Alias, req.ClusterIds)
+	tablet, c, err := api.getTabletForShardAction(ctx, span, rbac.TabletExternallyPromotedAction, req.Alias, req.ClusterIds)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.TabletExternallyReparented(ctx, tablet)
+	return c.TabletExternallyPromoted(ctx, tablet)
 }
 
 // ValidateKeyspace is part of the vtadminpb.VTAdminServer interface.
@@ -1836,33 +1838,22 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		return nil, er.Error()
 	}
 
-	opts := &vtexplain.Options{ReplicationMode: "ROW"}
-
-	lockWaitStart := time.Now()
-
-	api.vtexplainLock.Lock()
-	defer api.vtexplainLock.Unlock()
-
-	lockWaitTime := time.Since(lockWaitStart)
-	log.Infof("vtexplain lock wait time: %s", lockWaitTime)
-
-	span.Annotate("vtexplain_lock_wait_time", lockWaitTime.String())
-
-	if err := vtexplain.Init(srvVSchema, schema, shardMap, opts); err != nil {
+	vte, err := vtexplain.Init(srvVSchema, schema, shardMap, &vtexplain.Options{ReplicationMode: "ROW"})
+	if err != nil {
 		return nil, fmt.Errorf("error initilaizing vtexplain: %w", err)
 	}
+	defer vte.Stop()
 
-	defer vtexplain.Stop()
-
-	plans, err := vtexplain.Run(req.Sql)
+	plans, err := vte.Run(req.Sql)
 	if err != nil {
 		return nil, fmt.Errorf("error running vtexplain: %w", err)
 	}
 
-	response, err := vtexplain.ExplainsAsText(plans)
+	response, err := vte.ExplainsAsText(plans)
 	if err != nil {
 		return nil, fmt.Errorf("error converting vtexplain to text output: %w", err)
 	}
+
 	return &vtadminpb.VTExplainResponse{
 		Response: response,
 	}, nil

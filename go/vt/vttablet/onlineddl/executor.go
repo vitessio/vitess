@@ -109,6 +109,7 @@ var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-onli
 var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
 var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Hour, "How long should vttablet keep an old migrated table before purging it")
 var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
+var maxConstraintNameLength = 64
 
 const (
 	maxPasswordLength                        = 32 // MySQL's *replication* password may not exceed 32 characters
@@ -888,6 +889,119 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 	return deferFunc, nil
 }
 
+// validateAndEditCreateTableStatement inspects the CreateTable AST and does the following:
+// - extra validation (no FKs for now...)
+// - generate new and unique names for all constraints (CHECK and FK; yes, why not handle FK names; even as we don't support FKs today, we may in the future)
+func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, onlineDDL *schema.OnlineDDL, createTable *sqlparser.CreateTable) (constraintMap map[string]string, err error) {
+	constraintMap = map[string]string{}
+	hashExists := map[string]bool{}
+
+	// newConstraintName generates a new, unique name for a constraint. Our problem is that a MySQL
+	// constraint's name is unique in the schema (!). And so as we duplicate the original table, we must
+	// create completely new names for all constraints.
+	// Moreover, we really want this name to be consistent across all shards. We therefore use a deterministic
+	// UUIDv5 (SHA) function over the migration UUID, table name, and constraint's _contents_.
+	// We _also_ include the original constraint name as prefix, as room allows
+	// for example, if the original constraint name is "check_1",
+	// we might generate "check_1_cps1okb4uafunfqusi2lp22u3".
+	// If we then again migrate a table whose constraint name is "check_1_cps1okb4uafunfqusi2lp22u3	" we
+	// get for example "check_1_19l09s37kbhj4axnzmi10e18k" (hash changes, and we still try to preserve original name)
+	newConstraintName := func(seed string, oldName string) string {
+		oldName = schemadiff.ExtractConstraintOriginalName(oldName)
+
+		hash := textutil.UUIDv5Base36(onlineDDL.UUID, onlineDDL.Table, seed)
+		for i := 1; hashExists[hash]; i++ {
+			hash = textutil.UUIDv5Base36(onlineDDL.UUID, onlineDDL.Table, seed, fmt.Sprintf("%d", i))
+		}
+		hashExists[hash] = true
+		suffix := "_" + hash
+		maxAllowedNameLength := maxConstraintNameLength - len(suffix)
+		newName := oldName
+		if len(newName) > maxAllowedNameLength {
+			newName = newName[0:maxAllowedNameLength]
+		}
+		newName = newName + suffix
+		return newName
+	}
+	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.ForeignKeyDefinition:
+			return false, schema.ErrForeignKeyFound
+		case *sqlparser.ConstraintDefinition:
+			oldName := node.Name.String()
+			newName := newConstraintName(sqlparser.CanonicalString(node.Details), oldName)
+			node.Name = sqlparser.NewColIdent(newName)
+			constraintMap[oldName] = newName
+		}
+		return true, nil
+	}
+	if err := sqlparser.Walk(validateWalk, createTable); err != nil {
+		return constraintMap, err
+	}
+	return constraintMap, nil
+}
+
+// validateAndEditAlterTableStatement inspects the AlterTable statement and:
+// - modifies any CONSTRAINT name according to given name mapping
+func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, alterTable *sqlparser.AlterTable, constraintMap map[string]string) (err error) {
+	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.DropKey:
+			if node.Type == sqlparser.CheckKeyType {
+				// drop a check constraint
+				mappedName, ok := constraintMap[node.Name.String()]
+				if !ok {
+					return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Found DROP CONSTRAINT: %v, but could not find constraint name in map", sqlparser.CanonicalString(node))
+				}
+				node.Name = sqlparser.NewColIdent(mappedName)
+			}
+		}
+		return true, nil
+	}
+	if err := sqlparser.Walk(validateWalk, alterTable); err != nil {
+		return err
+	}
+	return nil
+}
+
+// createTableLike creates the table named by `newTableName` in the likeness of onlineDDL.Table
+// This function emulates MySQL's `CREATE TABLE LIKE ...` statement. The difference is that this function takes control over the generated CONSTRAINT names,
+// if any, such that they are detrministic across shards, as well as preserve original names where possible.
+func (e *Executor) createTableLike(ctx context.Context, newTableName string, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (constraintMap map[string]string, err error) {
+	existingShowCreateTable, err := e.showCreateTable(ctx, onlineDDL.Table)
+	if err != nil {
+		return nil, err
+	}
+	stmt, err := sqlparser.ParseStrictDDL(existingShowCreateTable)
+	if err != nil {
+		return nil, err
+	}
+	createTable, ok := stmt.(*sqlparser.CreateTable)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CreateTable statement, got: %v", sqlparser.CanonicalString(stmt))
+	}
+	createTable.SetTable(createTable.GetTable().Qualifier.CompliantName(), newTableName)
+	// manipulate CreateTable statement: take care of constraints names which have to be
+	// unique across the schema
+	constraintMap, err = e.validateAndEditCreateTableStatement(ctx, onlineDDL, createTable)
+	if err != nil {
+		return nil, err
+	}
+	// Create the table
+	if _, err := conn.ExecuteFetch(sqlparser.CanonicalString(createTable), 0, false); err != nil {
+		return nil, err
+	}
+	return constraintMap, nil
+}
+
+// initVreplicationOriginalMigration performs the first steps towards running a VRepl ALTER migration:
+// - analyze the original table
+// - formalize a new CreateTable statement
+// - inspect the ALTER TABLE query
+// - formalize an AlterTable statement
+// - create the vrepl table
+// - modify the vrepl table
+// - Create and return a VRepl instance
 func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (v *VRepl, err error) {
 	restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
 	defer restoreSQLModeFunc()
@@ -899,22 +1013,31 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
+	constraintMap, err := e.createTableLike(ctx, vreplTableName, onlineDDL, conn)
+	if err != nil {
+		return nil, err
+	}
 	{
-		// Apply CREATE TABLE for materialized table
-		parsed := sqlparser.BuildParsedQuery(sqlCreateTableLike, vreplTableName, onlineDDL.Table)
-		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+		stmt, err := sqlparser.ParseStrictDDL(onlineDDL.SQL)
+		if err != nil {
+			return nil, err
+		}
+		alterTable, ok := stmt.(*sqlparser.AlterTable)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AlterTable statement, got: %v", sqlparser.CanonicalString(stmt))
+		}
+		// ALTER TABLE should apply to the vrepl table
+		alterTable.SetTable(alterTable.GetTable().Qualifier.CompliantName(), vreplTableName)
+		// Also, change any constraint names:
+		if err := e.validateAndEditAlterTableStatement(ctx, alterTable, constraintMap); err != nil {
 			return v, err
 		}
-	}
-	alterOptions := e.parseAlterOptions(ctx, onlineDDL)
-	{
 		// Apply ALTER TABLE to materialized table
-		parsed := sqlparser.BuildParsedQuery(sqlAlterTableOptions, vreplTableName, alterOptions)
-		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+		if _, err := conn.ExecuteFetch(sqlparser.CanonicalString(alterTable), 0, false); err != nil {
 			return v, err
 		}
 	}
-	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, alterOptions)
+	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, onlineDDL.SQL)
 	return v, nil
 }
 
@@ -2418,6 +2541,94 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 	return nil
 }
 
+// addInstantAlgorithm adds or modifies the AlterTable's ALGORITHM to INSTANT
+func (e *Executor) addInstantAlgorithm(alterTable *sqlparser.AlterTable) {
+	instantOpt := sqlparser.AlgorithmValue("INSTANT")
+	for i, opt := range alterTable.AlterOptions {
+		if _, ok := opt.(sqlparser.AlgorithmValue); ok {
+			// replace an existing algorithm
+			alterTable.AlterOptions[i] = instantOpt
+			return
+		}
+	}
+	// append an algorithm
+	alterTable.AlterOptions = append(alterTable.AlterOptions, instantOpt)
+}
+
+// executeSpecialAlterDDLActionMigrationIfApplicable sees if the given migration can be executed via special execution path, that isn't a full blown online schema change process.
+func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context.Context, onlineDDL *schema.OnlineDDL) (specialMigrationExecuted bool, err error) {
+	// Before we jump on to strategies... Some ALTERs can be optimized without having to run through
+	// a full online schema change process. Let's find out if this is the case!
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+
+	specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL, conn.ServerVersion)
+	if err != nil {
+		return false, err
+	}
+	if specialPlan == nil {
+		return false, nil
+	}
+	switch specialPlan.operation {
+	case instantDDLSpecialOperation:
+		e.addInstantAlgorithm(specialPlan.alterTable)
+		onlineDDL.SQL = sqlparser.CanonicalString(specialPlan.alterTable)
+		if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
+			return false, err
+		}
+	case dropRangePartitionSpecialOperation:
+		dropPartition := func() error {
+			artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+			if err != nil {
+				return err
+			}
+			if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTableName); err != nil {
+				return err
+			}
+
+			// Apply CREATE TABLE for artifact table
+			if _, err := e.createTableLike(ctx, artifactTableName, onlineDDL, conn); err != nil {
+				return err
+			}
+			// Remove partitioning
+			parsed := sqlparser.BuildParsedQuery(sqlAlterTableRemovePartitioning, artifactTableName)
+			if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+				return err
+			}
+			// Exchange with partition
+			partitionName := specialPlan.Detail("partition_name")
+			parsed = sqlparser.BuildParsedQuery(sqlAlterTableExchangePartition, onlineDDL.Table, partitionName, artifactTableName)
+			if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+				return err
+			}
+			// Drop table's partition
+			parsed = sqlparser.BuildParsedQuery(sqlAlterTableDropPartition, onlineDDL.Table, partitionName)
+			if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+				return err
+			}
+			return nil
+		}
+		if err := dropPartition(); err != nil {
+			return false, err
+		}
+	case addRangePartitionSpecialOperation:
+		if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
+			return false, err
+		}
+	default:
+		return false, nil
+	}
+	if err := e.updateMigrationSpecialPlan(ctx, onlineDDL.UUID, specialPlan.String()); err != nil {
+		return true, err
+	}
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
+	return true, nil
+}
+
+// executeAlterDDLActionMigration
 func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	failMigration := func(err error) error {
 		return e.failMigration(ctx, onlineDDL, err)
@@ -2445,8 +2656,19 @@ func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL
 		}
 		return nil
 	}
+	// This is a real TABLE and not a VIEW
 
-	// This is a real TABLE
+	// Before we jump on to strategies... Some ALTERs can be optimized without having to run through
+	// a full online schema change process. Let's find out if this is the case!
+	specialMigrationExecuted, err := e.executeSpecialAlterDDLActionMigrationIfApplicable(ctx, onlineDDL)
+	if err != nil {
+		return failMigration(err)
+	}
+	if specialMigrationExecuted {
+		return nil
+	}
+
+	// OK, nothing special about this ALTER. Let's go ahead and execute it.
 	switch onlineDDL.Strategy {
 	case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 		go func() {
@@ -3352,6 +3574,18 @@ func (e *Executor) updateArtifacts(ctx context.Context, uuid string, artifacts .
 
 func (e *Executor) clearArtifacts(ctx context.Context, uuid string) error {
 	query, err := sqlparser.ParseAndBind(sqlClearArtifacts,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationSpecialPlan(ctx context.Context, uuid string, specialPlan string) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateSpecialPlan,
+		sqltypes.StringBindVariable(specialPlan),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {

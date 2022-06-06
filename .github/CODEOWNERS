@@ -35,6 +35,7 @@ bootstrap.sh @deepthi
 /go/vt/vtctl/grpcvtctldserver @ajm188 @doeg @notfelineit
 /go/vt/vtctl/vtctldclient @ajm188 @doeg @notfelineit
 /go/vt/vtctld @ajm188 @deepthi @doeg @notfelineit @rohit-nayak-ps
+/go/vt/vtexplain @systay
 /go/vt/vtgate @harshit-gangal @systay @frouioui
 /go/vt/vttablet/tabletmanager @deepthi @shlomi-noach
 /go/vt/vttablet/tabletmanager/vreplication @rohit-nayak-ps @mattlord

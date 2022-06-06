@@ -1370,11 +1370,21 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	// changes, we should be checking that this failure is indeed needed to be fixed. We do this after locking the shard to be sure
 	// that the data that we use now is up-to-date.
 	if isActionableRecovery {
+		ksInfo, err := ts.GetKeyspace(ctx, analysisEntry.AnalyzedKeyspace)
+		if err != nil {
+			return false, nil, err
+		}
+		if ksInfo.GetDurabilityPolicy() != "" && ksInfo.GetDurabilityPolicy() != config.Config.Durability {
+			err = log.Errorf("executeCheckAndRecoverFunction: Analysis: %+v, InstanceKey: %+v: Keyspace has a different durability policy configured than this vtorc instance: %v",
+				analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, analysisEntry.AnalyzedKeyspace)
+			return false, nil, err
+		}
+
 		// TODO (@GuptaManan100): Refresh only the shard tablet information instead of all the tablets
 		RefreshTablets(true /* forceRefresh */)
 		alreadyFixed, err := checkIfAlreadyFixed(analysisEntry)
 		if err != nil {
-			log.Errorf("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+"skipProcesses: %v: error while trying to find if the problem is already fixed: %v",
+			log.Errorf("executeCheckAndRecoverFunction: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+"skipProcesses: %v: error while trying to find if the problem is already fixed: %v",
 				analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, candidateInstanceKey, skipProcesses, err)
 			return false, nil, err
 		}

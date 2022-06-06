@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -134,24 +136,29 @@ func validateThatQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *c
 	return newCount == count+1
 }
 
-func getQueryCount(url string, query string) int {
-	var headings, row []string
-	var rows [][]string
+func getHTTPBody(url string) string {
 	resp, err := http.Get(url)
 	if err != nil {
-		fmt.Printf("http Get returns %+v\n", err)
-		return 0
+		log.Infof("http Get returns %+v", err)
+		return ""
 	}
 	if resp.StatusCode != 200 {
-		fmt.Printf("http Get returns status %d\n", resp.StatusCode)
-		return 0
+		log.Infof("http Get returns status %d", resp.StatusCode)
+		return ""
 	}
 	respByte, _ := io.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	body := string(respByte)
+	return body
+}
+
+func getQueryCount(url string, query string) int {
+	var headings, row []string
+	var rows [][]string
+	body := getHTTPBody(url)
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(body))
 	if err != nil {
-		fmt.Printf("goquery parsing returns %+v\n", err)
+		log.Infof("goquery parsing returns %+v\n", err)
 		return 0
 	}
 
@@ -179,7 +186,7 @@ func getQueryCount(url string, query string) int {
 		})
 	})
 	if queryIndex == -1 || countIndex == -1 {
-		fmt.Println("Queryz response is incorrect")
+		log.Infof("Queryz response is incorrect")
 		return 0
 	}
 	for _, row := range rows {
@@ -308,4 +315,14 @@ func osExec(t *testing.T, command string, args []string) (string, error) {
 	cmd := exec.Command(command, args...)
 	output, err := cmd.CombinedOutput()
 	return string(output), err
+}
+
+func getDebugVar(t *testing.T, port int, varPath []string) (string, error) {
+	var val []byte
+	var err error
+	url := fmt.Sprintf("http://localhost:%d/debug/vars", port)
+	body := getHTTPBody(url)
+	val, _, _, err = jsonparser.Get([]byte(body), varPath...)
+	require.NoError(t, err)
+	return string(val), nil
 }
