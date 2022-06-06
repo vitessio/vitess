@@ -29,8 +29,11 @@ var (
 	// Remove any BindVars or Sql, and anything after it
 	reTruncateError = regexp.MustCompile(`[,:] BindVars:|[,:] Sql:`)
 
-	// Keep code = foo, Duplicate entry, or syntax error, but remove anything after it
-	reTruncateErrorAfter = regexp.MustCompile(`code = \S+|Duplicate entry|syntax error at position \d+`)
+	// Keep syntax error, but remove anything after it
+	reTruncateErrorAfterSyntaxError = regexp.MustCompile(`syntax error at position \d+`)
+
+	// Keep Duplicate entry, but replace '...' with '<val>' using reReplaceSingleQuotesWithinDuplicate regexp
+	reTruncateErrorAfterDuplicate = regexp.MustCompile(`Duplicate entry '(.*)' for key`)
 )
 
 /* Error messages often have PII in them. That can come from vttablet or from mysql, so by the time it gets to vtgate,
@@ -38,11 +41,10 @@ it's an opaque string. To avoid leaking PII into, we normalize error messages be
 We remove five different sorts of strings:
 */
 
-// * Anything after /code = \S+/
-// * Anything after /Duplicate entry/
-// * Anything after /syntax error at position \d+/
 // * [,:] BindVars: .*/
 // * [,:] Sql: '.*/'
+// * Anything after /syntax error at position \d+/
+// * Anything after /Duplicate entry/ --> replace '...' with '<val>'
 
 /* We also truncate the error message at a maximum length of 256 bytes, if it's somehow longer than that after normalizing.*/
 
@@ -50,9 +52,14 @@ func NormalizeError(str string) string {
 	if idx := reTruncateError.FindStringIndex(str); idx != nil {
 		str = str[0:idx[0]]
 	}
-	if idx := reTruncateErrorAfter.FindStringIndex(str); idx != nil {
+	if idx := reTruncateErrorAfterSyntaxError.FindStringIndex(str); idx != nil {
 		str = str[0:idx[1]]
 	}
+	if idx := reTruncateErrorAfterDuplicate.FindStringSubmatchIndex(str); len(idx) >= 4 {
+		// replace string '...' with '<val>' to mask real values
+		str = str[0:idx[2]] + "<val>" + str[idx[3]:]
+	}
+
 	if len(str) > maxErrorLength {
 		return str[0:maxErrorLength]
 	}

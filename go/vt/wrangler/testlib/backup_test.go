@@ -17,6 +17,7 @@ limitations under the License.
 package testlib
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path"
@@ -29,8 +30,6 @@ import (
 
 	"vitess.io/vitess/go/vt/discovery"
 
-	"context"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -41,7 +40,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -49,7 +47,6 @@ import (
 )
 
 func TestBackupRestore(t *testing.T) {
-	_ = reparentutil.SetDurabilityPolicy("none")
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
@@ -79,9 +76,7 @@ func TestBackupRestore(t *testing.T) {
 	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
-	root, err := os.MkdirTemp("", "backuptest")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
@@ -264,7 +259,6 @@ func TestBackupRestore(t *testing.T) {
 // While doing a backup or a restore, we wait for a change of the replica's position before completing the action
 // This is because otherwise ReplicationLagSeconds is not accurate and the tablet may go into SERVING when it should not
 func TestBackupRestoreLagged(t *testing.T) {
-	_ = reparentutil.SetDurabilityPolicy("none")
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
@@ -294,9 +288,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
-	root, err := os.MkdirTemp("", "backuptest")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
@@ -471,7 +463,6 @@ func TestBackupRestoreLagged(t *testing.T) {
 }
 
 func TestRestoreUnreachablePrimary(t *testing.T) {
-	_ = reparentutil.SetDurabilityPolicy("none")
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
@@ -501,9 +492,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
-	root, err := os.MkdirTemp("", "backuptest")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
@@ -631,7 +620,6 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 }
 
 func TestDisableActiveReparents(t *testing.T) {
-	_ = reparentutil.SetDurabilityPolicy("none")
 	*mysqlctl.DisableActiveReparents = true
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
@@ -664,9 +652,7 @@ func TestDisableActiveReparents(t *testing.T) {
 	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
-	root, err := os.MkdirTemp("", "backuptest")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
