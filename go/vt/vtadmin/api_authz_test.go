@@ -1666,6 +1666,85 @@ func TestGetWorkflow(t *testing.T) {
 	})
 }
 
+func TestGetWorkflows(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Workflow",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "Workflow",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetWorkflows(ctx, &vtadminpb.GetWorkflowsRequest{})
+		require.NoError(t, err)
+		assert.Empty(t, resp.WorkflowsByCluster, "actor %+v should not be permitted to GetWorkflows", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetWorkflows(ctx, &vtadminpb.GetWorkflowsRequest{})
+		assert.NotEmpty(t, resp.WorkflowsByCluster, "actor %+v should be permitted to GetWorkflows", actor)
+		assert.Equal(t, resp.WorkflowsByCluster, map[string]*vtadminpb.ClusterWorkflows{"other": {Workflows: []*vtadminpb.Workflow{{Cluster: &vtadminpb.Cluster{Id: "other", Name: "other"}, Keyspace: "otherks", Workflow: &vtctldatapb.Workflow{Name: "otherks_workflow"}}}}}, "actor %+v should be permitted to GetWorkflows", actor)
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetWorkflows(ctx, &vtadminpb.GetWorkflowsRequest{})
+		assert.NotEmpty(t, resp.WorkflowsByCluster, "actor %+v should be permitted to GetWorkflows", actor)
+		assert.Equal(t, resp.WorkflowsByCluster, map[string]*vtadminpb.ClusterWorkflows{"test": {Workflows: []*vtadminpb.Workflow{{Cluster: &vtadminpb.Cluster{Id: "test", Name: "test"}, Keyspace: "test", Workflow: &vtctldatapb.Workflow{Name: "testworkflow"}}}}, "other": {Workflows: []*vtadminpb.Workflow{{Cluster: &vtadminpb.Cluster{Id: "other", Name: "other"}, Keyspace: "otherks", Workflow: &vtctldatapb.Workflow{Name: "otherks_workflow"}}}}}, "actor %+v should be permitted to GetWorkflows", actor)
+	})
+}
+
 func testClusters(t testing.TB) []*cluster.Cluster {
 	configs := []testutil.TestClusterConfig{
 		{
@@ -1901,6 +1980,19 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 							VSchema: &vschemapb.Keyspace{},
 						},
 					},
+				},
+				GetWorkflowsResults: map[string]struct {
+					Response *vtctldatapb.GetWorkflowsResponse
+					Error    error
+				}{
+					"otherks": {
+						Response: &vtctldatapb.GetWorkflowsResponse{
+							Workflows: []*vtctldatapb.Workflow{
+								{
+									Name: "otherks_workflow",
+								},
+							},
+						}},
 				},
 			},
 			Tablets: []*vtadminpb.Tablet{
