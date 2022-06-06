@@ -258,7 +258,7 @@ var keywords = []keyword{
 	{"export", EXPORT},
 	{"extended", EXTENDED},
 	{"extract", EXTRACT},
-	{"extractvalue", EXTRACTVALUE},
+	{"extractvalue", ExtractValue},
 	{"false", FALSE},
 	{"fetch", UNUSED},
 	{"fields", FIELDS},

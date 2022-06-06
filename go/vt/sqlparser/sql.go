@@ -496,7 +496,7 @@ const REGEXP_INSTR = 57793
 const REGEXP_LIKE = 57794
 const REGEXP_REPLACE = 57795
 const REGEXP_SUBSTR = 57796
-const EXTRACTVALUE = 57797
+const ExtractValue = 57797
 const UpdateXML = 57798
 const MATCH = 57799
 const AGAINST = 57800
@@ -1119,7 +1119,7 @@ var yyToknames = [...]string{
 	"REGEXP_LIKE",
 	"REGEXP_REPLACE",
 	"REGEXP_SUBSTR",
-	"EXTRACTVALUE",
+	"ExtractValue",
 	"UpdateXML",
 	"MATCH",
 	"AGAINST",
