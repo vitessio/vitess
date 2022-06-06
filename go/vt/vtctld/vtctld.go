@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -60,12 +59,6 @@ const (
 func InitVtctld(ts *topo.Server) error {
 	if *deprecatedOnlineDDLCheckInterval != 0 {
 		log.Warningf("the flag '--online_ddl_check_interval' is deprecated and will be removed in future versions. It is currently unused.")
-	}
-
-	err := reparentutil.SetDurabilityPolicy("none")
-	if err != nil {
-		log.Errorf("error in setting durability policy: %v", err)
-		return err
 	}
 
 	actionRepo := NewActionRepository(ts)

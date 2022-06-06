@@ -52,7 +52,7 @@ var executeOptions = &querypb.ExecuteOptions{
 var primarySession *vtgatepb.Session
 
 func init() {
-	getSandbox(KsTestUnsharded).VSchema = `
+	createSandbox(KsTestUnsharded).VSchema = `
 {
 	"sharded": false,
 	"tables": {
@@ -60,7 +60,7 @@ func init() {
 	}
 }
 `
-	getSandbox(KsTestBadVSchema).VSchema = `
+	createSandbox(KsTestBadVSchema).VSchema = `
 {
 	"sharded": true,
 	"tables": {

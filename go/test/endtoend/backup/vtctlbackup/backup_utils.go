@@ -187,6 +187,11 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 	if err := localCluster.VtctlclientProcess.InitTablet(replica1, cell, keyspaceName, hostname, shard.Name); err != nil {
 		return 1, err
 	}
+	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
+	_, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	if err != nil {
+		return 1, err
+	}
 
 	for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
 		if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {

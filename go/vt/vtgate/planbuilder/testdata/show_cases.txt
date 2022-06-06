@@ -53,10 +53,10 @@ Gen4 plan same as above
 Gen4 plan same as above
 
 # Show Table status with a keyspace name with a condition
-"SHOW table StatUs In user WHERE Rows > 70"
+"SHOW table StatUs In user WHERE `Rows` > 70"
 {
   "QueryType": "SHOW",
-  "Original": "SHOW table StatUs In user WHERE Rows \u003e 70",
+  "Original": "SHOW table StatUs In user WHERE `Rows` \u003e 70",
   "Instructions": {
     "OperatorType": "Send",
     "Keyspace": {

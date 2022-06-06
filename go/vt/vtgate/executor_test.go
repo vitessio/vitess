@@ -746,7 +746,7 @@ func TestExecutorShow(t *testing.T) {
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
-	query = "show vitess_shards like 'TestSharded/%'"
+	query = "show vitess_shards like 'TestExecutor/%'"
 	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
 	require.NoError(t, err)
 
@@ -755,13 +755,13 @@ func TestExecutorShow(t *testing.T) {
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Shards"),
 		Rows: [][]sqltypes.Value{
-			buildVarCharRow("TestSharded/-20"),
-			buildVarCharRow("TestSharded/e0-"),
+			buildVarCharRow("TestExecutor/-20"),
+			buildVarCharRow("TestExecutor/e0-"),
 		},
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
-	query = "show vitess_shards like 'TestShard%/%'"
+	query = "show vitess_shards like 'TestExec%/%'"
 	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
 	require.NoError(t, err)
 
@@ -770,8 +770,8 @@ func TestExecutorShow(t *testing.T) {
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Shards"),
 		Rows: [][]sqltypes.Value{
-			buildVarCharRow("TestSharded/-20"),
-			buildVarCharRow("TestSharded/e0-"),
+			buildVarCharRow("TestExecutor/-20"),
+			buildVarCharRow("TestExecutor/e0-"),
 		},
 	}
 	utils.MustMatch(t, wantqr, qr, query)
@@ -844,7 +844,6 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("TestExecutor", "keyspace_id", "numeric", "", ""),
 			buildVarCharRow("TestExecutor", "krcol_unique_vdx", "keyrange_lookuper_unique", "", ""),
 			buildVarCharRow("TestExecutor", "krcol_vdx", "keyrange_lookuper", "", ""),
-			buildVarCharRow("TestExecutor", "multicol_vdx", "multicol", "column_bytes=1,3,4; column_count=3; column_vindex=hash,binary,unicode_loose_xxhash", ""),
 			buildVarCharRow("TestExecutor", "music_user_map", "lookup_hash_unique", "from=music_id; table=music_user_map; to=user_id", "music"),
 			buildVarCharRow("TestExecutor", "name_lastname_keyspace_id_map", "lookup", "from=name,lastname; table=name_lastname_keyspace_id_map; to=keyspace_id", "user2"),
 			buildVarCharRow("TestExecutor", "name_user_map", "lookup_hash", "from=name; table=name_user_map; to=user_id", "user"),
@@ -852,6 +851,7 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("TestExecutor", "t1_lkp_vdx", "consistent_lookup_unique", "from=unq_col; table=t1_lkp_idx; to=keyspace_id", "t1"),
 			buildVarCharRow("TestExecutor", "t2_lu_vdx", "lookup_hash_unique", "from=lu_col; table=TestUnsharded.lu_idx; to=keyspace_id", "t2_wo_lookup"),
 			buildVarCharRow("TestExecutor", "t2_wo_lu_vdx", "lookup_unique", "from=wo_lu_col; table=TestUnsharded.wo_lu_idx; to=keyspace_id; write_only=true", "t2_wo_lookup"),
+			buildVarCharRow("TestMultiCol", "multicol_vdx", "multicol", "column_bytes=1,3,4; column_count=3; column_vindex=hash,binary,unicode_loose_xxhash", ""),
 		},
 	}
 	utils.MustMatch(t, wantqr, qr, query)
@@ -967,7 +967,7 @@ func TestExecutorShow(t *testing.T) {
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Shards"),
 		Rows: [][]sqltypes.Value{
-			buildVarCharRow("TestSharded/-20"),
+			buildVarCharRow("TestMultiCol/-20"),
 			buildVarCharRow("TestXBadVSchema/e0-"),
 		},
 	}

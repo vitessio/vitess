@@ -452,6 +452,28 @@ func (qp *QueryProjection) NeedsDistinct() bool {
 }
 
 func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
+orderBy:
+	for _, orderExpr := range qp.OrderExprs {
+		if qp.isOrderByExprInGroupBy(orderExpr) {
+			continue orderBy
+		}
+		orderExpr := orderExpr.Inner.Expr
+		for _, expr := range qp.SelectExprs {
+			col, ok := expr.Col.(*sqlparser.AliasedExpr)
+			if !ok {
+				continue
+			}
+			if sqlparser.EqualsExpr(col.Expr, orderExpr) {
+				continue orderBy // we found the expression we were looking for!
+			}
+		}
+		qp.SelectExprs = append(qp.SelectExprs, SelectExpr{
+			Col:  &sqlparser.AliasedExpr{Expr: orderExpr},
+			Aggr: sqlparser.ContainsAggregation(orderExpr),
+		})
+		qp.AddedColumn++
+	}
+
 	for idx, expr := range qp.SelectExprs {
 		aliasedExpr, err := expr.GetAliasedExpr()
 		if err != nil {
@@ -483,6 +505,12 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: aggregation function '%s'", funcName)
 		}
 
+		if opcode == engine.AggregateCount {
+			if _, isStar := fExpr.Exprs[0].(*sqlparser.StarExpr); isStar {
+				opcode = engine.AggregateCountStar
+			}
+		}
+
 		if fExpr.Distinct {
 			switch opcode {
 			case engine.AggregateCount:
@@ -499,28 +527,6 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 			Index:    &idxCopy,
 			Distinct: fExpr.Distinct,
 		})
-	}
-	for i, orderExpr := range qp.OrderExprs {
-		newIdx := i + len(qp.SelectExprs)
-		if !qp.isOrderByExprInGroupBy(orderExpr) {
-
-			original := &sqlparser.AliasedExpr{Expr: orderExpr.Inner.Expr}
-			found := false
-			for _, aggr := range out {
-				if sqlparser.EqualsRefOfAliasedExpr(aggr.Original, original) {
-					found = true
-					break
-				}
-			}
-			if found {
-				continue
-			}
-			out = append(out, Aggr{
-				Original: original,
-				OpCode:   engine.AggregateRandom,
-				Index:    &newIdx,
-			})
-		}
 	}
 	return
 }

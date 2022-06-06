@@ -1270,7 +1270,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "count(0)",
+            "Aggregates": "sum(0) AS count",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1288,7 +1288,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "count(0)",
+            "Aggregates": "sum(0) AS count",
             "Inputs": [
               {
                 "OperatorType": "Route",

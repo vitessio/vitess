@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,4 +64,15 @@ func WaitForVReplicationStatus(t *testing.T, vtParams *mysql.ConnParams, shards 
 		time.Sleep(1 * time.Second)
 	}
 	return lastKnownStatus
+}
+
+func GetMySQLVersion(t *testing.T, tablet *cluster.Vttablet) string {
+	query := `select @@version as version`
+	rs, err := tablet.VttabletProcess.QueryTablet(query, "", true)
+	assert.NoError(t, err)
+	row := rs.Named().Row()
+	assert.NotNil(t, row)
+	version := row["version"].ToString()
+	assert.NotEmpty(t, row)
+	return version
 }

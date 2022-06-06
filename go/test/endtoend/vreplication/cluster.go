@@ -493,14 +493,17 @@ func (vc *VitessCluster) AddShards(t testing.TB, cells []*Cell, keyspace *Keyspa
 				tablets = append(tablets, tablet)
 				dbProcesses = append(dbProcesses, proc)
 			}
-			for i := 0; i < numRdonly; i++ {
-				log.Infof("Adding RdOnly tablet")
-				tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "rdonly", tabletID+tabletIndex)
-				require.NoError(t, err)
-				require.NotNil(t, tablet)
-				tabletIndex++
-				tablets = append(tablets, tablet)
-				dbProcesses = append(dbProcesses, proc)
+			// Only create RDONLY tablets in the default cell
+			if cell.Name == cluster.DefaultCell {
+				for i := 0; i < numRdonly; i++ {
+					log.Infof("Adding RdOnly tablet")
+					tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "rdonly", tabletID+tabletIndex)
+					require.NoError(t, err)
+					require.NotNil(t, tablet)
+					tabletIndex++
+					tablets = append(tablets, tablet)
+					dbProcesses = append(dbProcesses, proc)
+				}
 			}
 
 			for ind, proc := range dbProcesses {

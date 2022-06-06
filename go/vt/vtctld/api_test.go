@@ -80,7 +80,7 @@ func TestAPI(t *testing.T) {
 	defer server.Close()
 
 	// Populate topo. Remove ServedTypes from shards to avoid ordering issues.
-	ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{ShardingColumnName: "shardcol"})
+	ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{ShardingColumnName: "shardcol", DurabilityPolicy: "semi_sync"})
 	ts.CreateShard(ctx, "ks1", "-80")
 	ts.CreateShard(ctx, "ks1", "80-")
 
@@ -226,8 +226,11 @@ func TestAPI(t *testing.T) {
 		method, path, body, want string
 		statusCode               int
 	}{
+		// Create snapshot keyspace with durability policy specified
+		{"POST", "vtctl/", `["CreateKeyspace", "-keyspace_type=SNAPSHOT", "-base_keyspace=ks1", "-snapshot_time=2006-01-02T15:04:05+00:00", "-durability-policy=semi_sync", "ks3"]`, `{
+  "Error": "durability-policy cannot be specified while creating a snapshot keyspace"`, http.StatusOK},
 		// Create snapshot keyspace using API
-		{"POST", "vtctl/", `["CreateKeyspace", "-keyspace_type=SNAPSHOT", "-base_keyspace=ks1", "-snapshot_time=2006-01-02T15:04:05+00:00", "-durability-policy=semi_sync","ks3"]`, `{
+		{"POST", "vtctl/", `["CreateKeyspace", "-keyspace_type=SNAPSHOT", "-base_keyspace=ks1", "-snapshot_time=2006-01-02T15:04:05+00:00", "ks3"]`, `{
 		   "Error": "",
 		   "Output": ""
 		}`, http.StatusOK},
@@ -302,7 +305,7 @@ func TestAPI(t *testing.T) {
 				"keyspace_type":0,
 				"base_keyspace":"",
 				"snapshot_time":null,
-				"durability_policy":""
+				"durability_policy":"semi_sync"
 			}`, http.StatusOK},
 		{"GET", "keyspaces/nonexistent", "", "404 page not found", http.StatusNotFound},
 		{"POST", "keyspaces/ks1?action=TestKeyspaceAction", "", `{
@@ -437,11 +440,11 @@ func TestAPI(t *testing.T) {
 		// vtctl RunCommand
 		{"POST", "vtctl/", `["GetKeyspace","ks1"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [],\n  \"keyspace_type\": 0,\n  \"base_keyspace\": \"\",\n  \"snapshot_time\": null,\n  \"durability_policy\": \"\"\n}\n\n"
+		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [],\n  \"keyspace_type\": 0,\n  \"base_keyspace\": \"\",\n  \"snapshot_time\": null,\n  \"durability_policy\": \"semi_sync\"\n}\n\n"
 		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetKeyspace","ks3"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"sharding_column_name\": \"\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [],\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  },\n  \"durability_policy\": \"semi_sync\"\n}\n\n"
+		   "Output": "{\n  \"sharding_column_name\": \"\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [],\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  },\n  \"durability_policy\": \"none\"\n}\n\n"
 		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetVSchema","ks3"]`, `{
 		   "Error": "",
