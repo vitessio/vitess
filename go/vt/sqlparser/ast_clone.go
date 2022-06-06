@@ -145,6 +145,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneExprs(in)
 	case *ExtractFuncExpr:
 		return CloneRefOfExtractFuncExpr(in)
+	case *ExtractValueExpr:
+		return CloneRefOfExtractValueExpr(in)
 	case *ExtractedSubquery:
 		return CloneRefOfExtractedSubquery(in)
 	case *FirstOrLastValueExpr:
@@ -1083,6 +1085,17 @@ func CloneRefOfExtractFuncExpr(n *ExtractFuncExpr) *ExtractFuncExpr {
 	}
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
+	return &out
+}
+
+// CloneRefOfExtractValueExpr creates a deep clone of the input.
+func CloneRefOfExtractValueExpr(n *ExtractValueExpr) *ExtractValueExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Fragment = CloneExpr(n.Fragment)
+	out.XPathExpr = CloneExpr(n.XPathExpr)
 	return &out
 }
 
@@ -2814,6 +2827,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfCurTimeFuncExpr(in)
 	case *ExtractFuncExpr:
 		return CloneRefOfExtractFuncExpr(in)
+	case *ExtractValueExpr:
+		return CloneRefOfExtractValueExpr(in)
 	case *FirstOrLastValueExpr:
 		return CloneRefOfFirstOrLastValueExpr(in)
 	case *FuncExpr:
@@ -3046,6 +3061,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfExistsExpr(in)
 	case *ExtractFuncExpr:
 		return CloneRefOfExtractFuncExpr(in)
+	case *ExtractValueExpr:
+		return CloneRefOfExtractValueExpr(in)
 	case *ExtractedSubquery:
 		return CloneRefOfExtractedSubquery(in)
 	case *FirstOrLastValueExpr:
@@ -3212,6 +3229,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfExistsExpr(in)
 	case *ExtractFuncExpr:
 		return CloneRefOfExtractFuncExpr(in)
+	case *ExtractValueExpr:
+		return CloneRefOfExtractValueExpr(in)
 	case *ExtractedSubquery:
 		return CloneRefOfExtractedSubquery(in)
 	case *FirstOrLastValueExpr:

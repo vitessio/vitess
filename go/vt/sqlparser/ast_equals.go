@@ -392,6 +392,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfExtractFuncExpr(a, b)
+	case *ExtractValueExpr:
+		b, ok := inB.(*ExtractValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExtractValueExpr(a, b)
 	case *ExtractedSubquery:
 		b, ok := inB.(*ExtractedSubquery)
 		if !ok {
@@ -2069,6 +2075,18 @@ func EqualsRefOfExtractFuncExpr(a, b *ExtractFuncExpr) bool {
 	}
 	return a.IntervalTypes == b.IntervalTypes &&
 		EqualsExpr(a.Expr, b.Expr)
+}
+
+// EqualsRefOfExtractValueExpr does deep equals between the two objects.
+func EqualsRefOfExtractValueExpr(a, b *ExtractValueExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Fragment, b.Fragment) &&
+		EqualsExpr(a.XPathExpr, b.XPathExpr)
 }
 
 // EqualsRefOfExtractedSubquery does deep equals between the two objects.
@@ -4158,6 +4176,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfExtractFuncExpr(a, b)
+	case *ExtractValueExpr:
+		b, ok := inB.(*ExtractValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExtractValueExpr(a, b)
 	case *FirstOrLastValueExpr:
 		b, ok := inB.(*FirstOrLastValueExpr)
 		if !ok {
@@ -4707,6 +4731,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfExtractFuncExpr(a, b)
+	case *ExtractValueExpr:
+		b, ok := inB.(*ExtractValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExtractValueExpr(a, b)
 	case *ExtractedSubquery:
 		b, ok := inB.(*ExtractedSubquery)
 		if !ok {
@@ -5163,6 +5193,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfExtractFuncExpr(a, b)
+	case *ExtractValueExpr:
+		b, ok := inB.(*ExtractValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExtractValueExpr(a, b)
 	case *ExtractedSubquery:
 		b, ok := inB.(*ExtractedSubquery)
 		if !ok {

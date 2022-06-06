@@ -144,6 +144,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitExprs(in, f)
 	case *ExtractFuncExpr:
 		return VisitRefOfExtractFuncExpr(in, f)
+	case *ExtractValueExpr:
+		return VisitRefOfExtractValueExpr(in, f)
 	case *ExtractedSubquery:
 		return VisitRefOfExtractedSubquery(in, f)
 	case *FirstOrLastValueExpr:
@@ -1307,6 +1309,21 @@ func VisitRefOfExtractFuncExpr(in *ExtractFuncExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfExtractValueExpr(in *ExtractValueExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Fragment, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.XPathExpr, f); err != nil {
 		return err
 	}
 	return nil
@@ -3620,6 +3637,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfCurTimeFuncExpr(in, f)
 	case *ExtractFuncExpr:
 		return VisitRefOfExtractFuncExpr(in, f)
+	case *ExtractValueExpr:
+		return VisitRefOfExtractValueExpr(in, f)
 	case *FirstOrLastValueExpr:
 		return VisitRefOfFirstOrLastValueExpr(in, f)
 	case *FuncExpr:
@@ -3838,6 +3857,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfExistsExpr(in, f)
 	case *ExtractFuncExpr:
 		return VisitRefOfExtractFuncExpr(in, f)
+	case *ExtractValueExpr:
+		return VisitRefOfExtractValueExpr(in, f)
 	case *ExtractedSubquery:
 		return VisitRefOfExtractedSubquery(in, f)
 	case *FirstOrLastValueExpr:
@@ -4000,6 +4021,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfExistsExpr(in, f)
 	case *ExtractFuncExpr:
 		return VisitRefOfExtractFuncExpr(in, f)
+	case *ExtractValueExpr:
+		return VisitRefOfExtractValueExpr(in, f)
 	case *ExtractedSubquery:
 		return VisitRefOfExtractedSubquery(in, f)
 	case *FirstOrLastValueExpr:

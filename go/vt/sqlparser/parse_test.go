@@ -3060,6 +3060,15 @@ var (
 	}, {
 		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ASC RANGE BETWEEN 10 PRECEDING AND 10 FOLLOWING);",
 		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc range between 10 preceding and 10 following)",
+	}, {
+		input:  "SELECT ExtractValue('<a><b/></a>', '/a/b')",
+		output: "select extractvalue('<a><b/></a>', '/a/b') from dual",
+	}, {
+		input:  "SELECT @i, ExtractValue(@xml, '//b[$@i]')",
+		output: "select @i, extractvalue(@xml, '//b[$@i]') from dual",
+	}, {
+		input:  "SELECT ExtractValue(TRIM('<a><c/></a>'), 'count(/a/b)')",
+		output: "select extractvalue(trim('<a><c/></a>'), 'count(/a/b)') from dual",
 	}}
 )
 

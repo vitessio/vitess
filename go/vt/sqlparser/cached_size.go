@@ -1087,6 +1087,24 @@ func (cached *ExtractFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *ExtractValueExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Fragment vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Fragment.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field XPathExpr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.XPathExpr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *ExtractedSubquery) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

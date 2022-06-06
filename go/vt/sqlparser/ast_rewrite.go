@@ -144,6 +144,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteExprs(parent, node, replacer)
 	case *ExtractFuncExpr:
 		return a.rewriteRefOfExtractFuncExpr(parent, node, replacer)
+	case *ExtractValueExpr:
+		return a.rewriteRefOfExtractValueExpr(parent, node, replacer)
 	case *ExtractedSubquery:
 		return a.rewriteRefOfExtractedSubquery(parent, node, replacer)
 	case *FirstOrLastValueExpr:
@@ -2295,6 +2297,38 @@ func (a *application) rewriteRefOfExtractFuncExpr(parent SQLNode, node *ExtractF
 	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*ExtractFuncExpr).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfExtractValueExpr(parent SQLNode, node *ExtractValueExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Fragment, func(newNode, parent SQLNode) {
+		parent.(*ExtractValueExpr).Fragment = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.XPathExpr, func(newNode, parent SQLNode) {
+		parent.(*ExtractValueExpr).XPathExpr = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -7355,6 +7389,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
 	case *ExtractFuncExpr:
 		return a.rewriteRefOfExtractFuncExpr(parent, node, replacer)
+	case *ExtractValueExpr:
+		return a.rewriteRefOfExtractValueExpr(parent, node, replacer)
 	case *FirstOrLastValueExpr:
 		return a.rewriteRefOfFirstOrLastValueExpr(parent, node, replacer)
 	case *FuncExpr:
@@ -7573,6 +7609,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfExistsExpr(parent, node, replacer)
 	case *ExtractFuncExpr:
 		return a.rewriteRefOfExtractFuncExpr(parent, node, replacer)
+	case *ExtractValueExpr:
+		return a.rewriteRefOfExtractValueExpr(parent, node, replacer)
 	case *ExtractedSubquery:
 		return a.rewriteRefOfExtractedSubquery(parent, node, replacer)
 	case *FirstOrLastValueExpr:
@@ -7735,6 +7773,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfExistsExpr(parent, node, replacer)
 	case *ExtractFuncExpr:
 		return a.rewriteRefOfExtractFuncExpr(parent, node, replacer)
+	case *ExtractValueExpr:
+		return a.rewriteRefOfExtractValueExpr(parent, node, replacer)
 	case *ExtractedSubquery:
 		return a.rewriteRefOfExtractedSubquery(parent, node, replacer)
 	case *FirstOrLastValueExpr:

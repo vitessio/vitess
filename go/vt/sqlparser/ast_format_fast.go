@@ -2147,6 +2147,15 @@ func (node *LagLeadExpr) formatFast(buf *TrackedBuffer) {
 	}
 }
 
+// formatFast formats the node
+func (node *ExtractValueExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("extractvalue(")
+	buf.printExpr(node, node.Fragment, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.XPathExpr, true)
+	buf.WriteByte(')')
+}
+
 // formatFast formats the node.
 func (node *SubstrExpr) formatFast(buf *TrackedBuffer) {
 	if node.To == nil {

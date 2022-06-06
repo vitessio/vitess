@@ -1628,6 +1628,11 @@ func (node *LagLeadExpr) Format(buf *TrackedBuffer) {
 	}
 }
 
+// Format formats the node
+func (node *ExtractValueExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "extractvalue(%v, %v)", node.Fragment, node.XPathExpr)
+}
+
 // Format formats the node.
 func (node *SubstrExpr) Format(buf *TrackedBuffer) {
 	if node.To == nil {
