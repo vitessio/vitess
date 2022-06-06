@@ -27,9 +27,9 @@ spec:
       resources:
         requests:
           cpu: 100m
-          memory: 256Mi
+          memory: 128Mi
         limits:
-          memory: 256Mi
+          memory: 512Mi
   vitessDashboard:
     cells:
     - zone1
@@ -38,10 +38,10 @@ spec:
     replicas: 1
     resources:
       limits:
-        memory: 128Mi
+        memory: 256Mi
       requests:
         cpu: 100m
-        memory: 128Mi
+        memory: 64Mi
 
   keyspaces:
   - name: commerce
@@ -64,17 +64,17 @@ spec:
                 db_charset: utf8mb4
               resources:
                 limits:
-                  memory: 256Mi
+                  memory: 512Mi
                 requests:
                   cpu: 100m
-                  memory: 256Mi
+                  memory: 128Mi
             mysqld:
               resources:
                 limits:
-                  memory: 256Mi
+                  memory: 512Mi
                 requests:
                   cpu: 100m
-                  memory: 256Mi
+                  memory: 128Mi
             dataVolumeClaimTemplate:
               accessModes: ["ReadWriteOnce"]
               resources:
