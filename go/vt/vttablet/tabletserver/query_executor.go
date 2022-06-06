@@ -623,7 +623,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 // execSelect sends a query to mysql only if another identical query is not running. Otherwise, it waits and
 // reuses the result. If the plan is missing field info, it sends the query to mysql requesting full info.
 func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
-	if qre.tsv.qe.enableQueryPlanFieldCaching && qre.plan.Fields != nil {
+	if qre.tsv.qe.enableQueryPlanFieldCaching && qre.plan.Fields != nil && qre.options.GtidSet == "" {
 		result, err := qre.qFetch(qre.logStats, qre.plan.FullQuery, qre.bindVars)
 		if err != nil {
 			return nil, err
@@ -642,6 +642,17 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
 	if err != nil {
 		return nil, err
+	}
+	if qre.options.GtidSet != "" {
+		qr, err := qre.execDBConn(conn, qre.generateGtidQuery(), false)
+		if err != nil {
+			return nil, err
+		}
+		if qr.Rows[0][0].ToString() != "0" {
+			// TODO: maybe a metric here will be better.
+			log.Infof("replica not update date with gtid_set: %s. continue reading stale data", qre.options.GtidSet)
+			// TODO: maybe we should return from here and give vtgate the control to take call on such case.
+		}
 	}
 	return qre.execDBConn(conn, sql, true)
 }
@@ -1040,4 +1051,14 @@ func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
 	tableName := qre.plan.TableName().String()
 	qre.tsv.Stats().UserTableQueryCount.Add([]string{tableName, username, queryType}, 1)
 	qre.tsv.Stats().UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, duration)
+}
+
+func (qre *QueryExecutor) generateGtidQuery() string {
+	var buf strings.Builder
+	buf.WriteString("select wait_for_executed_gtid_set('")
+	buf.WriteString(qre.options.GtidSet)
+	buf.WriteString("', ")
+	buf.WriteString(fmt.Sprintf("%.2f", qre.tsv.config.GtidSetTimeout.Get().Seconds()))
+	buf.WriteString(")")
+	return buf.String()
 }

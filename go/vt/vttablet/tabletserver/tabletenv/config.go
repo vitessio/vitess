@@ -134,6 +134,7 @@ func init() {
 	flagutil.DualFormatBoolVar(&currentConfig.EnableTxThrottler, "enable_tx_throttler", defaultConfig.EnableTxThrottler, "If true replication-lag-based throttling on transactions will be enabled.")
 	flagutil.DualFormatStringVar(&currentConfig.TxThrottlerConfig, "tx_throttler_config", defaultConfig.TxThrottlerConfig, "The configuration of the transaction throttler as a text formatted throttlerdata.Configuration protocol buffer message")
 	flagutil.DualFormatStringListVar(&currentConfig.TxThrottlerHealthCheckCells, "tx_throttler_healthcheck_cells", defaultConfig.TxThrottlerHealthCheckCells, "A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.")
+	SecondsVar(&currentConfig.GtidSetTimeout, "gtid_set_timeout", defaultConfig.GtidSetTimeout, "time in seconds to wait for provided gtid executed set to be applied")
 
 	flag.BoolVar(&enableHotRowProtection, "enable_hot_row_protection", false, "If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.")
 	flag.BoolVar(&enableHotRowProtectionDryRun, "enable_hot_row_protection_dry_run", false, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
@@ -275,6 +276,7 @@ type TabletConfig struct {
 	MessagePostponeParallelism              int     `json:"messagePostponeParallelism,omitempty"`
 	CacheResultFields                       bool    `json:"cacheResultFields,omitempty"`
 	SignalWhenSchemaChange                  bool    `json:"signalWhenSchemaChange,omitempty"`
+	GtidSetTimeout                          Seconds `json:"gtidSetTimeout,omitempty"`
 
 	ExternalConnections map[string]*dbconfigs.DBConfigs `json:"externalConnections,omitempty"`
 
@@ -495,6 +497,7 @@ var defaultConfig = TabletConfig{
 	MessagePostponeParallelism:              4,
 	CacheResultFields:                       true,
 	SignalWhenSchemaChange:                  false, // while this feature is experimental, the safe default is off
+	GtidSetTimeout:                          1,
 
 	EnableTxThrottler:           false,
 	TxThrottlerConfig:           defaultTxThrottlerConfig(),
