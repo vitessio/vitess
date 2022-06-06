@@ -71,3 +71,31 @@ func TestGaugeFunc(t *testing.T) {
 		t.Errorf("want 1, got %v", v.String())
 	}
 }
+
+func TestGaugeFloat64(t *testing.T) {
+	var gotname string
+	var gotv *GaugeFloat64
+	clear()
+	Register(func(name string, v expvar.Var) {
+		gotname = name
+		gotv = v.(*GaugeFloat64)
+	})
+	v := NewGaugeFloat64("f", "help")
+	if gotname != "f" {
+		t.Errorf("want Int, got %s", gotname)
+	}
+	if gotv != v {
+		t.Errorf("want %#v, got %#v", v, gotv)
+	}
+	v.Set(3.14)
+	if v.Get() != 3.14 {
+		t.Errorf("want 1, got %v", v.Get())
+	}
+	if v.String() != "3.14" {
+		t.Errorf("want 1, got %v", v.Get())
+	}
+	v.Reset()
+	if v.Get() != 0 {
+		t.Errorf("want 0, got %v", v.Get())
+	}
+}
