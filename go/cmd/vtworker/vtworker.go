@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/worker"
 
 	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
@@ -85,11 +84,6 @@ func main() {
 	if *servenv.Version {
 		servenv.AppVersion.Print()
 		os.Exit(0)
-	}
-
-	if err := reparentutil.SetDurabilityPolicy("none"); err != nil {
-		log.Errorf("error in setting durability policy: %v", err)
-		exit.Return(1)
 	}
 
 	ts := topo.Open()

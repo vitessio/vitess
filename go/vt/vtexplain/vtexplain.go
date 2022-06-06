@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -137,9 +136,8 @@ type (
 		spCount        int
 
 		// time simulator
-		batchTime         *sync2.Batcher
-		globalTabletEnv   *tabletEnv
-		globalTabletEnvMu sync.Mutex
+		batchTime       *sync2.Batcher
+		globalTabletEnv *tabletEnv
 	}
 )
 

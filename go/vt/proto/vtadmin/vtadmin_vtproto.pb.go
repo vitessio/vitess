@@ -1427,7 +1427,7 @@ func (m *DeleteTabletResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 	return len(dAtA) - i, nil
 }
 
-func (m *EmergencyReparentShardRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *EmergencyFailoverShardRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -1440,12 +1440,12 @@ func (m *EmergencyReparentShardRequest) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *EmergencyReparentShardRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *EmergencyFailoverShardRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *EmergencyReparentShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *EmergencyFailoverShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -1477,7 +1477,7 @@ func (m *EmergencyReparentShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int
 	return len(dAtA) - i, nil
 }
 
-func (m *EmergencyReparentShardResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *EmergencyFailoverShardResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -1490,12 +1490,12 @@ func (m *EmergencyReparentShardResponse) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *EmergencyReparentShardResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *EmergencyFailoverShardResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *EmergencyReparentShardResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *EmergencyFailoverShardResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -3335,7 +3335,7 @@ func (m *PingTabletResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *PlannedReparentShardRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *PlannedFailoverShardRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -3348,12 +3348,12 @@ func (m *PlannedReparentShardRequest) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *PlannedReparentShardRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *PlannedFailoverShardRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *PlannedReparentShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *PlannedFailoverShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -3385,7 +3385,7 @@ func (m *PlannedReparentShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int, 
 	return len(dAtA) - i, nil
 }
 
-func (m *PlannedReparentShardResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *PlannedFailoverShardResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -3398,12 +3398,12 @@ func (m *PlannedReparentShardResponse) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *PlannedReparentShardResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *PlannedFailoverShardResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *PlannedReparentShardResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *PlannedFailoverShardResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -3889,7 +3889,7 @@ func (m *ReloadSchemasResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 	return len(dAtA) - i, nil
 }
 
-func (m *ReparentTabletRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *RefreshTabletReplicationSourceRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -3902,12 +3902,12 @@ func (m *ReparentTabletRequest) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ReparentTabletRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *RefreshTabletReplicationSourceRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *ReparentTabletRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *RefreshTabletReplicationSourceRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -3941,7 +3941,7 @@ func (m *ReparentTabletRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 	return len(dAtA) - i, nil
 }
 
-func (m *ReparentTabletResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *RefreshTabletReplicationSourceResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -3954,12 +3954,12 @@ func (m *ReparentTabletResponse) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ReparentTabletResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *RefreshTabletReplicationSourceResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *ReparentTabletResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *RefreshTabletReplicationSourceResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -4484,7 +4484,7 @@ func (m *StopReplicationResponse) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 	return len(dAtA) - i, nil
 }
 
-func (m *TabletExternallyReparentedRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *TabletExternallyPromotedRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -4497,12 +4497,12 @@ func (m *TabletExternallyReparentedRequest) MarshalVT() (dAtA []byte, err error)
 	return dAtA[:n], nil
 }
 
-func (m *TabletExternallyReparentedRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *TabletExternallyPromotedRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *TabletExternallyReparentedRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *TabletExternallyPromotedRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -4536,7 +4536,7 @@ func (m *TabletExternallyReparentedRequest) MarshalToSizedBufferVT(dAtA []byte) 
 	return len(dAtA) - i, nil
 }
 
-func (m *TabletExternallyReparentedResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *TabletExternallyPromotedResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -4549,12 +4549,12 @@ func (m *TabletExternallyReparentedResponse) MarshalVT() (dAtA []byte, err error
 	return dAtA[:n], nil
 }
 
-func (m *TabletExternallyReparentedResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *TabletExternallyPromotedResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *TabletExternallyReparentedResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *TabletExternallyPromotedResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -5457,7 +5457,7 @@ func (m *DeleteTabletResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *EmergencyReparentShardRequest) SizeVT() (n int) {
+func (m *EmergencyFailoverShardRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -5477,7 +5477,7 @@ func (m *EmergencyReparentShardRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *EmergencyReparentShardResponse) SizeVT() (n int) {
+func (m *EmergencyFailoverShardResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -6265,7 +6265,7 @@ func (m *PingTabletResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *PlannedReparentShardRequest) SizeVT() (n int) {
+func (m *PlannedFailoverShardRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -6285,7 +6285,7 @@ func (m *PlannedReparentShardRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *PlannedReparentShardResponse) SizeVT() (n int) {
+func (m *PlannedFailoverShardResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -6501,7 +6501,7 @@ func (m *ReloadSchemasResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *ReparentTabletRequest) SizeVT() (n int) {
+func (m *RefreshTabletReplicationSourceRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -6523,7 +6523,7 @@ func (m *ReparentTabletRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *ReparentTabletResponse) SizeVT() (n int) {
+func (m *RefreshTabletReplicationSourceResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -6745,7 +6745,7 @@ func (m *StopReplicationResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *TabletExternallyReparentedRequest) SizeVT() (n int) {
+func (m *TabletExternallyPromotedRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -6767,7 +6767,7 @@ func (m *TabletExternallyReparentedRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *TabletExternallyReparentedResponse) SizeVT() (n int) {
+func (m *TabletExternallyPromotedResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -10643,7 +10643,7 @@ func (m *DeleteTabletResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *EmergencyReparentShardRequest) UnmarshalVT(dAtA []byte) error {
+func (m *EmergencyFailoverShardRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -10666,10 +10666,10 @@ func (m *EmergencyReparentShardRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: EmergencyReparentShardRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: EmergencyFailoverShardRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: EmergencyReparentShardRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: EmergencyFailoverShardRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -10762,7 +10762,7 @@ func (m *EmergencyReparentShardRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *EmergencyReparentShardResponse) UnmarshalVT(dAtA []byte) error {
+func (m *EmergencyFailoverShardResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -10785,10 +10785,10 @@ func (m *EmergencyReparentShardResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: EmergencyReparentShardResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: EmergencyFailoverShardResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: EmergencyReparentShardResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: EmergencyFailoverShardResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -14892,7 +14892,7 @@ func (m *PingTabletResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *PlannedReparentShardRequest) UnmarshalVT(dAtA []byte) error {
+func (m *PlannedFailoverShardRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -14915,10 +14915,10 @@ func (m *PlannedReparentShardRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: PlannedReparentShardRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: PlannedFailoverShardRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: PlannedReparentShardRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: PlannedFailoverShardRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -15011,7 +15011,7 @@ func (m *PlannedReparentShardRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *PlannedReparentShardResponse) UnmarshalVT(dAtA []byte) error {
+func (m *PlannedFailoverShardResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -15034,10 +15034,10 @@ func (m *PlannedReparentShardResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: PlannedReparentShardResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: PlannedFailoverShardResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: PlannedReparentShardResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: PlannedFailoverShardResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -16236,7 +16236,7 @@ func (m *ReloadSchemasResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ReparentTabletRequest) UnmarshalVT(dAtA []byte) error {
+func (m *RefreshTabletReplicationSourceRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -16259,10 +16259,10 @@ func (m *ReparentTabletRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ReparentTabletRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: RefreshTabletReplicationSourceRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ReparentTabletRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: RefreshTabletReplicationSourceRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -16355,7 +16355,7 @@ func (m *ReparentTabletRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ReparentTabletResponse) UnmarshalVT(dAtA []byte) error {
+func (m *RefreshTabletReplicationSourceResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -16378,10 +16378,10 @@ func (m *ReparentTabletResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ReparentTabletResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: RefreshTabletReplicationSourceResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ReparentTabletResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: RefreshTabletReplicationSourceResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -17596,7 +17596,7 @@ func (m *StopReplicationResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *TabletExternallyReparentedRequest) UnmarshalVT(dAtA []byte) error {
+func (m *TabletExternallyPromotedRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -17619,10 +17619,10 @@ func (m *TabletExternallyReparentedRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: TabletExternallyReparentedRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: TabletExternallyPromotedRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: TabletExternallyReparentedRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: TabletExternallyPromotedRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -17715,7 +17715,7 @@ func (m *TabletExternallyReparentedRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *TabletExternallyReparentedResponse) UnmarshalVT(dAtA []byte) error {
+func (m *TabletExternallyPromotedResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -17738,10 +17738,10 @@ func (m *TabletExternallyReparentedResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: TabletExternallyReparentedResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: TabletExternallyPromotedResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: TabletExternallyReparentedResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: TabletExternallyPromotedResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
