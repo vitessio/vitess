@@ -193,10 +193,7 @@ func TestChannel(t *testing.T) {
 func TestFile(t *testing.T) {
 	logger := New("logger", 10)
 
-	dir, err := os.MkdirTemp("", "streamlog_file")
-	if err != nil {
-		t.Fatalf("error getting tempdir: %v", err)
-	}
+	dir := t.TempDir()
 
 	logPath := path.Join(dir, "test.log")
 	logChan, err := logger.LogToFile(logPath, testLogf)

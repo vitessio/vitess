@@ -17,6 +17,7 @@ limitations under the License.
 package testlib
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path"
@@ -28,8 +29,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/discovery"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -77,9 +76,7 @@ func TestBackupRestore(t *testing.T) {
 	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
-	root, err := os.MkdirTemp("", "backuptest")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
@@ -291,9 +288,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
-	root, err := os.MkdirTemp("", "backuptest")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
@@ -497,9 +492,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
-	root, err := os.MkdirTemp("", "backuptest")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
@@ -659,9 +652,7 @@ func TestDisableActiveReparents(t *testing.T) {
 	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
-	root, err := os.MkdirTemp("", "backuptest")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
