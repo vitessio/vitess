@@ -192,6 +192,9 @@ func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, create
 		if col == nil {
 			return false
 		}
+		if col.Type.Options == nil {
+			return false
+		}
 		if col.Type.Options.As == nil {
 			return false
 		}

@@ -2112,25 +2112,6 @@ Gen4 plan same as above
   "Original": "select id from music where id is null",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "EqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from music where 1 != 1",
-    "Query": "select id from music where id is null",
-    "Table": "music",
-    "Values": [
-      "NULL"
-    ],
-    "Vindex": "music_user_map"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select id from music where id is null",
-  "Instructions": {
-    "OperatorType": "Route",
     "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
@@ -2141,6 +2122,7 @@ Gen4 plan same as above
     "Table": "music"
   }
 }
+Gen4 plan same as above
 
 # SELECT with IS NOT NULL
 "select id from music where id is not null"
@@ -4073,25 +4055,6 @@ Gen4 plan same as above
   "Original": "select id from music where id is null and user_id in (1,2)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "EqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from music where 1 != 1",
-    "Query": "select id from music where id is null and user_id in (1, 2)",
-    "Table": "music",
-    "Values": [
-      "NULL"
-    ],
-    "Vindex": "music_user_map"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select id from music where id is null and user_id in (1,2)",
-  "Instructions": {
-    "OperatorType": "Route",
     "Variant": "IN",
     "Keyspace": {
       "Name": "user",
@@ -4106,3 +4069,4 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above

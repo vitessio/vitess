@@ -149,6 +149,11 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 				return 1, err
 			}
 		}
+		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
+		_, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+		if err != nil {
+			return 1, err
+		}
 
 		// create database for primary and replica
 		for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
