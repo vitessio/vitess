@@ -690,7 +690,7 @@ func CloneRefOfAvg(n *Avg) *Avg {
 		return nil
 	}
 	out := *n
-	out.Args = CloneExprs(n.Args)
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 
@@ -732,7 +732,7 @@ func CloneRefOfBitAnd(n *BitAnd) *BitAnd {
 		return nil
 	}
 	out := *n
-	out.Args = CloneExprs(n.Args)
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 
@@ -742,7 +742,7 @@ func CloneRefOfBitOr(n *BitOr) *BitOr {
 		return nil
 	}
 	out := *n
-	out.Args = CloneExprs(n.Args)
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 
@@ -752,7 +752,7 @@ func CloneRefOfBitXor(n *BitXor) *BitXor {
 		return nil
 	}
 	out := *n
-	out.Args = CloneExprs(n.Args)
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 
@@ -1762,7 +1762,7 @@ func CloneRefOfMax(n *Max) *Max {
 		return nil
 	}
 	out := *n
-	out.Args = CloneExprs(n.Args)
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 
@@ -1783,7 +1783,7 @@ func CloneRefOfMin(n *Min) *Min {
 		return nil
 	}
 	out := *n
-	out.Args = CloneExprs(n.Args)
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 
@@ -2431,7 +2431,7 @@ func CloneRefOfStd(n *Std) *Std {
 		return nil
 	}
 	out := *n
-	out.Args = CloneExprs(n.Args)
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 
@@ -2441,7 +2441,7 @@ func CloneRefOfStdDev(n *StdDev) *StdDev {
 		return nil
 	}
 	out := *n
-	out.Args = CloneExprs(n.Args)
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 
@@ -2451,7 +2451,7 @@ func CloneRefOfStdPop(n *StdPop) *StdPop {
 		return nil
 	}
 	out := *n
-	out.Args = CloneExprs(n.Args)
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 
@@ -2461,7 +2461,7 @@ func CloneRefOfStdSamp(n *StdSamp) *StdSamp {
 		return nil
 	}
 	out := *n
-	out.Args = CloneExprs(n.Args)
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 
@@ -2554,7 +2554,7 @@ func CloneRefOfSum(n *Sum) *Sum {
 		return nil
 	}
 	out := *n
-	out.Args = CloneExprs(n.Args)
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 
@@ -2805,7 +2805,7 @@ func CloneRefOfVarPop(n *VarPop) *VarPop {
 		return nil
 	}
 	out := *n
-	out.Args = CloneExprs(n.Args)
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 
@@ -2815,7 +2815,7 @@ func CloneRefOfVarSamp(n *VarSamp) *VarSamp {
 		return nil
 	}
 	out := *n
-	out.Args = CloneExprs(n.Args)
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 
@@ -2825,7 +2825,7 @@ func CloneRefOfVariance(n *Variance) *Variance {
 		return nil
 	}
 	out := *n
-	out.Args = CloneExprs(n.Args)
+	out.Arg = CloneExpr(n.Arg)
 	return &out
 }
 

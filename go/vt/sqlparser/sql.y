@@ -5611,69 +5611,69 @@ UTC_DATE func_paren_opt
   {
     $$ = &CurTimeFuncExpr{Name:NewColIdent("current_time"), Fsp: $2}
   }
-| COUNT openb distinct_opt '*' closeb
+| COUNT openb '*' closeb
   {
-    $$ = &CountStar{Name:$1, Distinct:$3}
+    $$ = &CountStar{Name:$1}
   }
 | COUNT openb distinct_opt expression_list closeb
   {
     $$ = &Count{Name:$1, Distinct:$3, Args:$4}
   }
-| MAX openb distinct_opt expression_list closeb
+| MAX openb distinct_opt expression closeb
   {
-    $$ = &Max{Name:$1 , Distinct:$3, Args:$4}
+    $$ = &Max{Name:$1 , Distinct:$3, Arg:$4}
   }
-| MIN openb distinct_opt expression_list closeb
+| MIN openb distinct_opt expression closeb
   {
-    $$ = &Min{Name:$1 , Distinct:$3, Args:$4}
+    $$ = &Min{Name:$1 , Distinct:$3, Arg:$4}
   }
-| SUM openb distinct_opt expression_list closeb
+| SUM openb distinct_opt expression closeb
   {
-    $$ = &Sum{Name:$1 , Distinct:$3, Args:$4}
+    $$ = &Sum{Name:$1 , Distinct:$3, Arg:$4}
   }
-| AVG openb distinct_opt expression_list closeb
+| AVG openb distinct_opt expression closeb
   {
-    $$ = &Avg{Name:$1 , Distinct:$3, Args:$4}
+    $$ = &Avg{Name:$1 , Distinct:$3, Arg:$4}
   }
-| BIT_AND openb expression_list closeb
+| BIT_AND openb expression closeb
   {
-    $$ = &BitAnd{Name:$1 , Args:$3}
+    $$ = &BitAnd{Name:$1 , Arg:$3}
   }
-| BIT_OR openb expression_list closeb
+| BIT_OR openb expression closeb
   {
-    $$ = &BitOr{Name:$1 , Args:$3}
+    $$ = &BitOr{Name:$1 , Arg:$3}
   }
-| BIT_XOR openb expression_list closeb
+| BIT_XOR openb expression closeb
    {
-     $$ = &BitXor{Name:$1 , Args:$3}
+     $$ = &BitXor{Name:$1 , Arg:$3}
    }
-| STD openb expression_list closeb
+| STD openb expression closeb
     {
-      $$ = &Std{Name:$1 , Args:$3}
+      $$ = &Std{Name:$1 , Arg:$3}
     }
-| STDDEV openb expression_list closeb
+| STDDEV openb expression closeb
     {
-      $$ = &StdDev{Name:$1 , Args:$3}
+      $$ = &StdDev{Name:$1 , Arg:$3}
     }
-| STDDEV_POP openb expression_list closeb
+| STDDEV_POP openb expression closeb
     {
-      $$ = &StdPop{Name:$1 , Args:$3}
+      $$ = &StdPop{Name:$1 , Arg:$3}
     }
-| STDDEV_SAMP openb expression_list closeb
+| STDDEV_SAMP openb expression closeb
     {
-      $$ = &StdSamp{Name:$1 , Args:$3}
+      $$ = &StdSamp{Name:$1 , Arg:$3}
     }
-| VAR_POP openb expression_list closeb
+| VAR_POP openb expression closeb
      {
-       $$ = &VarPop{Name:$1 , Args:$3}
+       $$ = &VarPop{Name:$1 , Arg:$3}
      }
-| VAR_SAMP openb expression_list closeb
+| VAR_SAMP openb expression closeb
      {
-       $$ = &VarSamp{Name:$1 , Args:$3}
+       $$ = &VarSamp{Name:$1 , Arg:$3}
      }
-| VARIANCE openb expression_list closeb
+| VARIANCE openb expression closeb
      {
-       $$ = &Variance{Name:$1 , Args:$3}
+       $$ = &Variance{Name:$1 , Arg:$3}
      }
 | GROUP_CONCAT openb distinct_opt expression_list order_by_opt separator_opt limit_opt closeb
   {

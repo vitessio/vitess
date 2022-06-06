@@ -327,27 +327,21 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 // If true, it will also return the aliased expression that needs to be pushed
 // down into the underlying route.
 func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, opcode engine.AggregateOpcode) (bool, *sqlparser.AliasedExpr, error) {
-	if !sqlparser.IsDistinct(expr.Expr) {
+	var innerAliased *sqlparser.AliasedExpr
+	aggr, ok := expr.Expr.(sqlparser.AggrFunc)
+
+	if !ok {
+		return false, nil, fmt.Errorf("syntax error: %s", sqlparser.String(expr))
+	}
+
+	if !aggr.IsDistinct() {
 		return false, nil, nil
 	}
 	if opcode != engine.AggregateCount && opcode != engine.AggregateSum && opcode != engine.AggregateCountStar {
 		return false, nil, nil
 	}
 
-	var innerAliased *sqlparser.AliasedExpr
-	aggr, ok := expr.Expr.(sqlparser.AggrFunc)
-	if ok {
-		if cStar, ok := aggr.(*sqlparser.CountStar); ok {
-			if cStar.Distinct {
-				return false, nil, fmt.Errorf("syntax error: %s", sqlparser.String(cStar))
-			}
-		}
-		innerAliased = &sqlparser.AliasedExpr{Expr: aggr.GetArg() /*As: expr.As*/}
-	}
-
-	if !ok {
-		return false, nil, fmt.Errorf("syntax error: %s", sqlparser.String(expr))
-	}
+	innerAliased = &sqlparser.AliasedExpr{Expr: aggr.GetArg()}
 
 	rb, ok := oa.input.(*route)
 	if !ok {
@@ -367,10 +361,8 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, expr *sql
 // compare those instead. This is because we currently don't have the
 // ability to mimic mysql's collation behavior.
 func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
-	fmt.Printf("ordered_agg wireup %d \n", len(oa.groupByKeys))
 	for i, gbk := range oa.groupByKeys {
 		rc := oa.resultColumns[gbk.KeyCol]
-		fmt.Printf("ordered_agg rc: %v \n", rc)
 		if sqltypes.IsText(rc.column.typ) {
 			weightcolNumber, err := oa.input.SupplyWeightString(gbk.KeyCol, gbk.FromGroupBy)
 			if err != nil {

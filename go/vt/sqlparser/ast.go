@@ -2635,7 +2635,7 @@ type (
 		Expr
 		AggrName() string
 		GetArg() Expr
-		isDistinct() bool
+		IsDistinct() bool
 		GetArgs() Exprs
 	}
 
@@ -2646,81 +2646,80 @@ type (
 	}
 
 	CountStar struct {
-		Distinct bool
-		Name     string
+		Name string
 	}
 
 	Avg struct {
-		Args     Exprs
+		Arg      Expr
 		Distinct bool
 		Name     string
 	}
 
 	Max struct {
-		Args     Exprs
+		Arg      Expr
 		Distinct bool
 		Name     string
 	}
 
 	Min struct {
-		Args     Exprs
+		Arg      Expr
 		Distinct bool
 		Name     string
 	}
 
 	Sum struct {
-		Args     Exprs
+		Arg      Expr
 		Distinct bool
 		Name     string
 	}
 
 	BitAnd struct {
-		Args Exprs
+		Arg  Expr
 		Name string
 	}
 
 	BitOr struct {
-		Args Exprs
+		Arg  Expr
 		Name string
 	}
 
 	BitXor struct {
-		Args Exprs
+		Arg  Expr
 		Name string
 	}
 
 	Std struct {
-		Args Exprs
+		Arg  Expr
 		Name string
 	}
 
 	StdDev struct {
-		Args Exprs
+		Arg  Expr
 		Name string
 	}
 
 	StdPop struct {
-		Args Exprs
+		Arg  Expr
 		Name string
 	}
 
 	StdSamp struct {
-		Args Exprs
+		Arg  Expr
 		Name string
 	}
 
 	VarPop struct {
-		Args Exprs
+		Arg  Expr
 		Name string
 	}
 
 	VarSamp struct {
-		Args Exprs
+		Arg  Expr
 		Name string
 	}
 
 	Variance struct {
-		Args Exprs
+		Arg  Expr
 		Name string
 	}
 
@@ -2843,59 +2842,59 @@ func (*VarPop) iExpr()          {}
 func (*VarSamp) iExpr()         {}
 func (*Variance) iExpr()        {}
 
-func (sum *Sum) GetArg() Expr                   { return sum.Args[0] }
-func (min *Min) GetArg() Expr                   { return min.Args[0] }
-func (max *Max) GetArg() Expr                   { return max.Args[0] }
-func (avg *Avg) GetArg() Expr                   { return avg.Args[0] }
+func (sum *Sum) GetArg() Expr                   { return sum.Arg }
+func (min *Min) GetArg() Expr                   { return min.Arg }
+func (max *Max) GetArg() Expr                   { return max.Arg }
+func (avg *Avg) GetArg() Expr                   { return avg.Arg }
 func (*CountStar) GetArg() Expr                 { return nil }
 func (count *Count) GetArg() Expr               { return count.Args[0] }
 func (grpConcat *GroupConcatExpr) GetArg() Expr { return grpConcat.Exprs[0] }
-func (bAnd *BitAnd) GetArg() Expr               { return bAnd.Args[0] }
-func (bOr *BitOr) GetArg() Expr                 { return bOr.Args[0] }
-func (bXor *BitXor) GetArg() Expr               { return bXor.Args[0] }
-func (std *Std) GetArg() Expr                   { return std.Args[0] }
-func (stdD *StdDev) GetArg() Expr               { return stdD.Args[0] }
-func (stdP *StdPop) GetArg() Expr               { return stdP.Args[0] }
-func (stdS *StdSamp) GetArg() Expr              { return stdS.Args[0] }
-func (varP *VarPop) GetArg() Expr               { return varP.Args[0] }
-func (varS *VarSamp) GetArg() Expr              { return varS.Args[0] }
-func (variance *Variance) GetArg() Expr         { return variance.Args[0] }
+func (bAnd *BitAnd) GetArg() Expr               { return bAnd.Arg }
+func (bOr *BitOr) GetArg() Expr                 { return bOr.Arg }
+func (bXor *BitXor) GetArg() Expr               { return bXor.Arg }
+func (std *Std) GetArg() Expr                   { return std.Arg }
+func (stdD *StdDev) GetArg() Expr               { return stdD.Arg }
+func (stdP *StdPop) GetArg() Expr               { return stdP.Arg }
+func (stdS *StdSamp) GetArg() Expr              { return stdS.Arg }
+func (varP *VarPop) GetArg() Expr               { return varP.Arg }
+func (varS *VarSamp) GetArg() Expr              { return varS.Arg }
+func (variance *Variance) GetArg() Expr         { return variance.Arg }
 
-func (sum *Sum) GetArgs() Exprs                   { return sum.Args }
-func (min *Min) GetArgs() Exprs                   { return min.Args }
-func (max *Max) GetArgs() Exprs                   { return max.Args }
-func (avg *Avg) GetArgs() Exprs                   { return avg.Args }
+func (sum *Sum) GetArgs() Exprs                   { return Exprs{sum.Arg} }
+func (min *Min) GetArgs() Exprs                   { return Exprs{min.Arg} }
+func (max *Max) GetArgs() Exprs                   { return Exprs{max.Arg} }
+func (avg *Avg) GetArgs() Exprs                   { return Exprs{avg.Arg} }
 func (*CountStar) GetArgs() Exprs                 { return nil }
 func (count *Count) GetArgs() Exprs               { return count.Args }
 func (grpConcat *GroupConcatExpr) GetArgs() Exprs { return grpConcat.Exprs }
-func (bAnd *BitAnd) GetArgs() Exprs               { return bAnd.Args }
-func (bOr *BitOr) GetArgs() Exprs                 { return bOr.Args }
-func (bXor *BitXor) GetArgs() Exprs               { return bXor.Args }
-func (std *Std) GetArgs() Exprs                   { return std.Args }
-func (stdD *StdDev) GetArgs() Exprs               { return stdD.Args }
-func (stdP *StdPop) GetArgs() Exprs               { return stdP.Args }
-func (stdS *StdSamp) GetArgs() Exprs              { return stdS.Args }
-func (varP *VarPop) GetArgs() Exprs               { return varP.Args }
-func (varS *VarSamp) GetArgs() Exprs              { return varS.Args }
-func (variance *Variance) GetArgs() Exprs         { return variance.Args }
+func (bAnd *BitAnd) GetArgs() Exprs               { return Exprs{bAnd.Arg} }
+func (bOr *BitOr) GetArgs() Exprs                 { return Exprs{bOr.Arg} }
+func (bXor *BitXor) GetArgs() Exprs               { return Exprs{bXor.Arg} }
+func (std *Std) GetArgs() Exprs                   { return Exprs{std.Arg} }
+func (stdD *StdDev) GetArgs() Exprs               { return Exprs{stdD.Arg} }
+func (stdP *StdPop) GetArgs() Exprs               { return Exprs{stdP.Arg} }
+func (stdS *StdSamp) GetArgs() Exprs              { return Exprs{stdS.Arg} }
+func (varP *VarPop) GetArgs() Exprs               { return Exprs{varP.Arg} }
+func (varS *VarSamp) GetArgs() Exprs              { return Exprs{varS.Arg} }
+func (variance *Variance) GetArgs() Exprs         { return Exprs{variance.Arg} }
 
-func (sum *Sum) isDistinct() bool                   { return sum.Distinct }
-func (min *Min) isDistinct() bool                   { return min.Distinct }
-func (max *Max) isDistinct() bool                   { return max.Distinct }
-func (avg *Avg) isDistinct() bool                   { return avg.Distinct }
-func (cStar *CountStar) isDistinct() bool           { return cStar.Distinct }
-func (count *Count) isDistinct() bool               { return count.Distinct }
-func (grpConcat *GroupConcatExpr) isDistinct() bool { return grpConcat.Distinct }
-func (bAnd *BitAnd) isDistinct() bool               { return false }
-func (bOr *BitOr) isDistinct() bool                 { return false }
-func (bXor *BitXor) isDistinct() bool               { return false }
-func (std *Std) isDistinct() bool                   { return false }
-func (stdD *StdDev) isDistinct() bool               { return false }
-func (stdP *StdPop) isDistinct() bool               { return false }
-func (stdS *StdSamp) isDistinct() bool              { return false }
-func (varP *VarPop) isDistinct() bool               { return false }
-func (varS *VarSamp) isDistinct() bool              { return false }
-func (variance *Variance) isDistinct() bool         { return false }
+func (sum *Sum) IsDistinct() bool                   { return sum.Distinct }
+func (min *Min) IsDistinct() bool                   { return min.Distinct }
+func (max *Max) IsDistinct() bool                   { return max.Distinct }
+func (avg *Avg) IsDistinct() bool                   { return avg.Distinct }
+func (cStar *CountStar) IsDistinct() bool           { return false }
+func (count *Count) IsDistinct() bool               { return count.Distinct }
+func (grpConcat *GroupConcatExpr) IsDistinct() bool { return grpConcat.Distinct }
+func (bAnd *BitAnd) IsDistinct() bool               { return false }
+func (bOr *BitOr) IsDistinct() bool                 { return false }
+func (bXor *BitXor) IsDistinct() bool               { return false }
+func (std *Std) IsDistinct() bool                   { return false }
+func (stdD *StdDev) IsDistinct() bool               { return false }
+func (stdP *StdPop) IsDistinct() bool               { return false }
+func (stdS *StdSamp) IsDistinct() bool              { return false }
+func (varP *VarPop) IsDistinct() bool               { return false }
+func (varS *VarSamp) IsDistinct() bool              { return false }
+func (variance *Variance) IsDistinct() bool         { return false }
 
 func (sum *Sum) AggrName() string                   { return sum.Name }
 func (min *Min) AggrName() string                   { return min.Name }

@@ -506,14 +506,6 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 			continue
 		}
 
-		// if it is aggregator then we need to assign argument of aggregator which is ColName type
-		if cStar, ok := expr.Func.(*sqlparser.CountStar); ok {
-			if cStar.Distinct {
-				err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(expr.Original))
-				return
-			}
-		}
-
 		inner, innerWS, err := hp.qp.GetSimplifiedExpr(expr.Func.GetArg())
 		if err != nil {
 			return nil, nil, nil, err

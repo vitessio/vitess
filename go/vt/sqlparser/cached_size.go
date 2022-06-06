@@ -351,14 +351,9 @@ func (cached *Avg) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(48)
 	}
-	// field Args vitess.io/vitess/go/vt/sqlparser.Exprs
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Args)) * int64(16))
-		for _, elem := range cached.Args {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
+	// field Arg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Arg.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
@@ -441,16 +436,11 @@ func (cached *BitAnd) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(32)
 	}
-	// field Args vitess.io/vitess/go/vt/sqlparser.Exprs
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Args)) * int64(16))
-		for _, elem := range cached.Args {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
+	// field Arg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Arg.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
@@ -462,16 +452,11 @@ func (cached *BitOr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(32)
 	}
-	// field Args vitess.io/vitess/go/vt/sqlparser.Exprs
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Args)) * int64(16))
-		for _, elem := range cached.Args {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
+	// field Arg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Arg.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
@@ -483,16 +468,11 @@ func (cached *BitXor) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(32)
 	}
-	// field Args vitess.io/vitess/go/vt/sqlparser.Exprs
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Args)) * int64(16))
-		for _, elem := range cached.Args {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
+	// field Arg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Arg.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
@@ -845,7 +825,7 @@ func (cached *CountStar) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(16)
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
@@ -2269,14 +2249,9 @@ func (cached *Max) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(48)
 	}
-	// field Args vitess.io/vitess/go/vt/sqlparser.Exprs
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Args)) * int64(16))
-		for _, elem := range cached.Args {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
+	// field Arg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Arg.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
@@ -2308,14 +2283,9 @@ func (cached *Min) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(48)
 	}
-	// field Args vitess.io/vitess/go/vt/sqlparser.Exprs
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Args)) * int64(16))
-		for _, elem := range cached.Args {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
+	// field Arg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Arg.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
@@ -3270,16 +3240,11 @@ func (cached *Std) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(32)
 	}
-	// field Args vitess.io/vitess/go/vt/sqlparser.Exprs
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Args)) * int64(16))
-		for _, elem := range cached.Args {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
+	// field Arg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Arg.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
@@ -3291,16 +3256,11 @@ func (cached *StdDev) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(32)
 	}
-	// field Args vitess.io/vitess/go/vt/sqlparser.Exprs
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Args)) * int64(16))
-		for _, elem := range cached.Args {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
+	// field Arg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Arg.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
@@ -3312,16 +3272,11 @@ func (cached *StdPop) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(32)
 	}
-	// field Args vitess.io/vitess/go/vt/sqlparser.Exprs
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Args)) * int64(16))
-		for _, elem := range cached.Args {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
+	// field Arg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Arg.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
@@ -3333,16 +3288,11 @@ func (cached *StdSamp) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(32)
 	}
-	// field Args vitess.io/vitess/go/vt/sqlparser.Exprs
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Args)) * int64(16))
-		for _, elem := range cached.Args {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
+	// field Arg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Arg.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
@@ -3469,14 +3419,9 @@ func (cached *Sum) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(48)
 	}
-	// field Args vitess.io/vitess/go/vt/sqlparser.Exprs
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Args)) * int64(16))
-		for _, elem := range cached.Args {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
+	// field Arg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Arg.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
@@ -3811,16 +3756,11 @@ func (cached *VarPop) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(32)
 	}
-	// field Args vitess.io/vitess/go/vt/sqlparser.Exprs
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Args)) * int64(16))
-		for _, elem := range cached.Args {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
+	// field Arg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Arg.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
@@ -3832,16 +3772,11 @@ func (cached *VarSamp) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(32)
 	}
-	// field Args vitess.io/vitess/go/vt/sqlparser.Exprs
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Args)) * int64(16))
-		for _, elem := range cached.Args {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
+	// field Arg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Arg.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
@@ -3853,16 +3788,11 @@ func (cached *Variance) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(32)
 	}
-	// field Args vitess.io/vitess/go/vt/sqlparser.Exprs
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Args)) * int64(16))
-		for _, elem := range cached.Args {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
+	// field Arg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Arg.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))

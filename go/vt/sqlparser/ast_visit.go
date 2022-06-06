@@ -765,7 +765,7 @@ func VisitRefOfAvg(in *Avg, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Args, f); err != nil {
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil
@@ -819,7 +819,7 @@ func VisitRefOfBitAnd(in *BitAnd, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Args, f); err != nil {
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil
@@ -831,7 +831,7 @@ func VisitRefOfBitOr(in *BitOr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Args, f); err != nil {
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil
@@ -843,7 +843,7 @@ func VisitRefOfBitXor(in *BitXor, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Args, f); err != nil {
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil
@@ -2206,7 +2206,7 @@ func VisitRefOfMax(in *Max, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Args, f); err != nil {
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil
@@ -2233,7 +2233,7 @@ func VisitRefOfMin(in *Min, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Args, f); err != nil {
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil
@@ -3099,7 +3099,7 @@ func VisitRefOfStd(in *Std, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Args, f); err != nil {
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil
@@ -3111,7 +3111,7 @@ func VisitRefOfStdDev(in *StdDev, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Args, f); err != nil {
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil
@@ -3123,7 +3123,7 @@ func VisitRefOfStdPop(in *StdPop, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Args, f); err != nil {
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil
@@ -3135,7 +3135,7 @@ func VisitRefOfStdSamp(in *StdSamp, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Args, f); err != nil {
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil
@@ -3260,7 +3260,7 @@ func VisitRefOfSum(in *Sum, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Args, f); err != nil {
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil
@@ -3595,7 +3595,7 @@ func VisitRefOfVarPop(in *VarPop, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Args, f); err != nil {
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil
@@ -3607,7 +3607,7 @@ func VisitRefOfVarSamp(in *VarSamp, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Args, f); err != nil {
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil
@@ -3619,7 +3619,7 @@ func VisitRefOfVariance(in *Variance, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Args, f); err != nil {
+	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
 	return nil

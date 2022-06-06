@@ -1825,14 +1825,6 @@ func ContainsAggregation(e SQLNode) bool {
 	return hasAggregates
 }
 
-func IsDistinct(expr Expr) bool {
-	if aggr, ok := expr.(AggrFunc); ok {
-		return aggr.isDistinct()
-	}
-
-	return false
-}
-
 // GetFirstSelect gets the first select statement
 func GetFirstSelect(selStmt SelectStatement) *Select {
 	if selStmt == nil {

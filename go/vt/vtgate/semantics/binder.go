@@ -131,12 +131,7 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		}
 		b.recursive[node] = ts
 		b.direct[node] = ts
-	case sqlparser.AggrFunc:
-		cStar, ok := node.(*sqlparser.CountStar)
-		if !ok {
-			break
-		}
-
+	case *sqlparser.CountStar:
 		scope := b.scoper.currentScope()
 		var ts TableSet
 		for _, table := range scope.tables {
@@ -145,8 +140,8 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 				ts.MergeInPlace(b.tc.tableSetFor(expr))
 			}
 		}
-		b.recursive[cStar] = ts
-		b.direct[cStar] = ts
+		b.recursive[node] = ts
+		b.direct[node] = ts
 	}
 	return nil
 }

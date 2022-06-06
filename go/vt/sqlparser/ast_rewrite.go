@@ -1071,8 +1071,8 @@ func (a *application) rewriteRefOfAvg(parent SQLNode, node *Avg, replacer replac
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
-		parent.(*Avg).Args = newNode.(Exprs)
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*Avg).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -1191,8 +1191,8 @@ func (a *application) rewriteRefOfBitAnd(parent SQLNode, node *BitAnd, replacer 
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
-		parent.(*BitAnd).Args = newNode.(Exprs)
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*BitAnd).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -1218,8 +1218,8 @@ func (a *application) rewriteRefOfBitOr(parent SQLNode, node *BitOr, replacer re
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
-		parent.(*BitOr).Args = newNode.(Exprs)
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*BitOr).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -1245,8 +1245,8 @@ func (a *application) rewriteRefOfBitXor(parent SQLNode, node *BitXor, replacer 
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
-		parent.(*BitXor).Args = newNode.(Exprs)
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*BitXor).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -4231,8 +4231,8 @@ func (a *application) rewriteRefOfMax(parent SQLNode, node *Max, replacer replac
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
-		parent.(*Max).Args = newNode.(Exprs)
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*Max).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -4290,8 +4290,8 @@ func (a *application) rewriteRefOfMin(parent SQLNode, node *Min, replacer replac
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
-		parent.(*Min).Args = newNode.(Exprs)
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*Min).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -6215,8 +6215,8 @@ func (a *application) rewriteRefOfStd(parent SQLNode, node *Std, replacer replac
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
-		parent.(*Std).Args = newNode.(Exprs)
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*Std).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -6242,8 +6242,8 @@ func (a *application) rewriteRefOfStdDev(parent SQLNode, node *StdDev, replacer 
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
-		parent.(*StdDev).Args = newNode.(Exprs)
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*StdDev).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -6269,8 +6269,8 @@ func (a *application) rewriteRefOfStdPop(parent SQLNode, node *StdPop, replacer 
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
-		parent.(*StdPop).Args = newNode.(Exprs)
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*StdPop).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -6296,8 +6296,8 @@ func (a *application) rewriteRefOfStdSamp(parent SQLNode, node *StdSamp, replace
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
-		parent.(*StdSamp).Args = newNode.(Exprs)
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*StdSamp).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -6567,8 +6567,8 @@ func (a *application) rewriteRefOfSum(parent SQLNode, node *Sum, replacer replac
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
-		parent.(*Sum).Args = newNode.(Exprs)
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*Sum).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -7350,8 +7350,8 @@ func (a *application) rewriteRefOfVarPop(parent SQLNode, node *VarPop, replacer 
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
-		parent.(*VarPop).Args = newNode.(Exprs)
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*VarPop).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -7377,8 +7377,8 @@ func (a *application) rewriteRefOfVarSamp(parent SQLNode, node *VarSamp, replace
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
-		parent.(*VarSamp).Args = newNode.(Exprs)
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*VarSamp).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -7404,8 +7404,8 @@ func (a *application) rewriteRefOfVariance(parent SQLNode, node *Variance, repla
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
-		parent.(*Variance).Args = newNode.(Exprs)
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*Variance).Arg = newNode.(Expr)
 	}) {
 		return false
 	}

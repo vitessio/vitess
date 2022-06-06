@@ -302,15 +302,12 @@ func (qp *QueryProjection) GetGrouping() []GroupBy {
 
 func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		fExpr, ok := node.(sqlparser.Expr)
-		if ok {
-			if aggrFunc, isAggregate := fExpr.(sqlparser.AggrFunc); isAggregate {
-				if aggrFunc.GetArgs() != nil &&
-					len(aggrFunc.GetArgs()) != 1 {
-					return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(fExpr))
-				}
-				return true, nil
+		if aggrFunc, isAggregate := node.(sqlparser.AggrFunc); isAggregate {
+			if aggrFunc.GetArgs() != nil &&
+				len(aggrFunc.GetArgs()) != 1 {
+				return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(node))
 			}
+			return true, nil
 		}
 
 		return true, nil
@@ -515,7 +512,9 @@ orderBy:
 			}
 		}
 
-		if sqlparser.IsDistinct(aliasedExpr.Expr) {
+		aggr, _ := aliasedExpr.Expr.(sqlparser.AggrFunc)
+
+		if aggr.IsDistinct() {
 			switch opcode {
 			case engine.AggregateCount:
 				opcode = engine.AggregateCountDistinct
@@ -526,11 +525,11 @@ orderBy:
 
 		out = append(out, Aggr{
 			Original: aliasedExpr,
-			Func:     aliasedExpr.Expr.(sqlparser.AggrFunc),
+			Func:     aggr,
 			OpCode:   opcode,
 			Alias:    aliasedExpr.ColumnName(),
 			Index:    &idxCopy,
-			Distinct: sqlparser.IsDistinct(aliasedExpr.Expr),
+			Distinct: aggr.IsDistinct(),
 		})
 	}
 	return
