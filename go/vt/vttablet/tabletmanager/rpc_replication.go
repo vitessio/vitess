@@ -536,18 +536,9 @@ func (tm *TabletManager) ResetReplicationParameters(ctx context.Context) error {
 		return err
 	}
 	defer tm.unlock()
-	wasReplicating := false
-	status, err := tm.MysqlDaemon.ReplicationStatus()
-	if err != nil {
-		if err != mysql.ErrNotReplica {
-			return err
-		}
-	} else if status.IOHealthy() || status.SQLHealthy() {
-		wasReplicating = true
-	}
 
 	tm.replManager.setReplicationStopped(true)
-	err = tm.MysqlDaemon.StopReplication(tm.hookExtraEnv())
+	err := tm.MysqlDaemon.StopReplication(tm.hookExtraEnv())
 	if err != nil {
 		return err
 	}
@@ -555,11 +546,6 @@ func (tm *TabletManager) ResetReplicationParameters(ctx context.Context) error {
 	err = tm.MysqlDaemon.ResetReplicationParameters(ctx)
 	if err != nil {
 		return err
-	}
-
-	if wasReplicating {
-		tm.replManager.setReplicationStopped(false)
-		return tm.MysqlDaemon.StartReplication(tm.hookExtraEnv())
 	}
 	return nil
 }
