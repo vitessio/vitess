@@ -307,6 +307,10 @@ func (e *Exporter) NewGauge(name string, help string) *stats.Gauge {
 	return lvar
 }
 
+func (e *Exporter) NewGaugeFloat64(name string, help string) *stats.GaugeFloat64 {
+	return nil
+}
+
 // NewCounterFunc creates a name-spaced equivalent for stats.NewCounterFunc.
 func (e *Exporter) NewCounterFunc(name string, help string, f func() int64) *stats.CounterFunc {
 	if e.name == "" || name == "" {
