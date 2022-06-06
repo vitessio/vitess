@@ -51,6 +51,7 @@ type MysqlDaemon interface {
 	SetSemiSyncEnabled(source, replica bool) error
 	SemiSyncEnabled() (source, replica bool)
 	SemiSyncReplicationStatus() (bool, error)
+	ResetReplicationParameters(ctx context.Context) error
 
 	// reparenting related methods
 	ResetReplication(ctx context.Context) error

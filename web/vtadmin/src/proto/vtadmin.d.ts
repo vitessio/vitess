@@ -20658,6 +20658,174 @@ export namespace tabletmanagerdata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a ResetReplicationParametersRequest. */
+    interface IResetReplicationParametersRequest {
+    }
+
+    /** Represents a ResetReplicationParametersRequest. */
+    class ResetReplicationParametersRequest implements IResetReplicationParametersRequest {
+
+        /**
+         * Constructs a new ResetReplicationParametersRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IResetReplicationParametersRequest);
+
+        /**
+         * Creates a new ResetReplicationParametersRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ResetReplicationParametersRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IResetReplicationParametersRequest): tabletmanagerdata.ResetReplicationParametersRequest;
+
+        /**
+         * Encodes the specified ResetReplicationParametersRequest message. Does not implicitly {@link tabletmanagerdata.ResetReplicationParametersRequest.verify|verify} messages.
+         * @param message ResetReplicationParametersRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IResetReplicationParametersRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ResetReplicationParametersRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.ResetReplicationParametersRequest.verify|verify} messages.
+         * @param message ResetReplicationParametersRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IResetReplicationParametersRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ResetReplicationParametersRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ResetReplicationParametersRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ResetReplicationParametersRequest;
+
+        /**
+         * Decodes a ResetReplicationParametersRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ResetReplicationParametersRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ResetReplicationParametersRequest;
+
+        /**
+         * Verifies a ResetReplicationParametersRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ResetReplicationParametersRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ResetReplicationParametersRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ResetReplicationParametersRequest;
+
+        /**
+         * Creates a plain object from a ResetReplicationParametersRequest message. Also converts values to other types if specified.
+         * @param message ResetReplicationParametersRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ResetReplicationParametersRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ResetReplicationParametersRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ResetReplicationParametersResponse. */
+    interface IResetReplicationParametersResponse {
+    }
+
+    /** Represents a ResetReplicationParametersResponse. */
+    class ResetReplicationParametersResponse implements IResetReplicationParametersResponse {
+
+        /**
+         * Constructs a new ResetReplicationParametersResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IResetReplicationParametersResponse);
+
+        /**
+         * Creates a new ResetReplicationParametersResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ResetReplicationParametersResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IResetReplicationParametersResponse): tabletmanagerdata.ResetReplicationParametersResponse;
+
+        /**
+         * Encodes the specified ResetReplicationParametersResponse message. Does not implicitly {@link tabletmanagerdata.ResetReplicationParametersResponse.verify|verify} messages.
+         * @param message ResetReplicationParametersResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IResetReplicationParametersResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ResetReplicationParametersResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.ResetReplicationParametersResponse.verify|verify} messages.
+         * @param message ResetReplicationParametersResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IResetReplicationParametersResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ResetReplicationParametersResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ResetReplicationParametersResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ResetReplicationParametersResponse;
+
+        /**
+         * Decodes a ResetReplicationParametersResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ResetReplicationParametersResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ResetReplicationParametersResponse;
+
+        /**
+         * Verifies a ResetReplicationParametersResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ResetReplicationParametersResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ResetReplicationParametersResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ResetReplicationParametersResponse;
+
+        /**
+         * Creates a plain object from a ResetReplicationParametersResponse message. Also converts values to other types if specified.
+         * @param message ResetReplicationParametersResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ResetReplicationParametersResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ResetReplicationParametersResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a SetReplicationSourceRequest. */
     interface ISetReplicationSourceRequest {
 

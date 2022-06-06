@@ -963,6 +963,10 @@ func (itmc *internalTabletManagerClient) ReplicaWasPromoted(context.Context, *to
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) ResetReplicationParameters(context.Context, *topodatapb.Tablet) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) ReplicaWasRestarted(context.Context, *topodatapb.Tablet, *topodatapb.TabletAlias) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }

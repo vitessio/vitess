@@ -412,6 +412,17 @@ func (fs *fuzzStore) callReplicaWasPromoted() error {
 	return nil
 }
 
+// callResetReplicationParameters implements a wrapper
+// for fuzzing ResetReplicationParameters
+func (fs *fuzzStore) callResetReplicationParameters() error {
+	tablet, err := fs.getTablet()
+	if err != nil {
+		return err
+	}
+	_ = fs.client.ResetReplicationParameters(context.Background(), tablet)
+	return nil
+}
+
 // callPromoteReplica implements a wrapper
 // for fuzzing PromoteReplica
 func (fs *fuzzStore) callPromoteReplica() error {
@@ -645,6 +656,8 @@ func (fs *fuzzStore) executeInRandomOrder() {
 			err = fs.callInitReplica()
 		case 23:
 			err = fs.callPopulateReparentJournal()
+		case 24:
+			err = fs.callResetReplicaionParameters()
 		}
 
 		// err means that fuzzStore doesn't have any data

@@ -130,6 +130,14 @@ func (mariadbFlavor) resetReplicationCommands(c *Conn) []string {
 	return resetCommands
 }
 
+// resetReplicationParametersCommands is part of the Flavor interface.
+func (mariadbFlavor) resetReplicationParametersCommands(c *Conn) []string {
+	resetCommands := []string{
+		"RESET SLAVE ALL", // "ALL" makes it forget source host:port.
+	}
+	return resetCommands
+}
+
 // setReplicationPositionCommands is part of the Flavor interface.
 func (mariadbFlavor) setReplicationPositionCommands(pos Position) []string {
 	return []string{

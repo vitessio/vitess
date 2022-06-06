@@ -216,6 +216,11 @@ func (client *FakeTabletManagerClient) ReplicaWasPromoted(ctx context.Context, t
 	return nil
 }
 
+// ResetReplicationParameters is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) ResetReplicationParameters(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return nil
+}
+
 // ReplicaWasRestarted is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) ReplicaWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error {
 	return nil

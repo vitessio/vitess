@@ -183,6 +183,13 @@ func (flv *filePosFlavor) resetReplicationCommands(c *Conn) []string {
 	}
 }
 
+// resetReplicationParametersCommands is part of the Flavor interface.
+func (flv *filePosFlavor) resetReplicationParametersCommands(c *Conn) []string {
+	return []string{
+		"unsupported",
+	}
+}
+
 // setReplicationPositionCommands is part of the Flavor interface.
 func (flv *filePosFlavor) setReplicationPositionCommands(pos Position) []string {
 	return []string{

@@ -118,6 +118,8 @@ type RPCTM interface {
 
 	ReplicaWasPromoted(ctx context.Context) error
 
+	ResetReplicationParameters(ctx context.Context) error
+
 	SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error
 
 	StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (StopReplicationAndGetStatusResponse, error)

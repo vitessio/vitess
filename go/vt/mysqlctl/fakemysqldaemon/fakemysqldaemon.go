@@ -299,6 +299,13 @@ func (fmd *FakeMysqlDaemon) ResetReplication(ctx context.Context) error {
 	})
 }
 
+// ResetReplicationParameters is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) ResetReplicationParameters(ctx context.Context) error {
+	return fmd.ExecuteSuperQueryList(ctx, []string{
+		"FAKE RESET REPLICA ALL",
+	})
+}
+
 // PrimaryPosition is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) PrimaryPosition() (mysql.Position, error) {
 	return fmd.CurrentPrimaryPosition, nil

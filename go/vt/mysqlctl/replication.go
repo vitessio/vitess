@@ -381,6 +381,18 @@ func (mysqld *Mysqld) ResetReplication(ctx context.Context) error {
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
+// ResetReplicationParameters resets the replica replication parameters for this host.
+func (mysqld *Mysqld) ResetReplicationParameters(ctx context.Context) error {
+	conn, connErr := getPoolReconnect(ctx, mysqld.dbaPool)
+	if connErr != nil {
+		return connErr
+	}
+	defer conn.Recycle()
+
+	cmds := conn.ResetReplicationParametersCommands()
+	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
+}
+
 // +------+---------+---------------------+------+-------------+------+----------------------------------------------------------------+------------------+
 // | Id   | User    | Host                | db   | Command     | Time | State                                                          | Info             |
 // +------+---------+---------------------+------+-------------+------+----------------------------------------------------------------+------------------+

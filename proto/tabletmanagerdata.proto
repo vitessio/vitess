@@ -410,6 +410,13 @@ message ReplicaWasPromotedRequest {
 message ReplicaWasPromotedResponse {
 }
 
+message ResetReplicationParametersRequest {
+}
+
+message ResetReplicationParametersResponse {
+}
+
+
 message SetReplicationSourceRequest {
   topodata.TabletAlias parent = 1;
   int64 time_created_ns = 2;

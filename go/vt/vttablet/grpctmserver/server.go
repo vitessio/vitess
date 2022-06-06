@@ -419,6 +419,13 @@ func (s *server) ReplicaWasPromoted(ctx context.Context, request *tabletmanagerd
 	return response, s.tm.ReplicaWasPromoted(ctx)
 }
 
+func (s *server) ResetReplicationParameters(ctx context.Context, request *tabletmanagerdatapb.ResetReplicationParametersRequest) (response *tabletmanagerdatapb.ResetReplicationParametersResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "ResetReplicationParameters", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.ResetReplicationParametersResponse{}
+	return response, s.tm.ResetReplicationParameters(ctx)
+}
+
 func (s *server) SetReplicationSource(ctx context.Context, request *tabletmanagerdatapb.SetReplicationSourceRequest) (response *tabletmanagerdatapb.SetReplicationSourceResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "SetReplicationSource", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)

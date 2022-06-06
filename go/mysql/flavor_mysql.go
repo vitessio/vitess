@@ -117,6 +117,14 @@ func (mysqlFlavor) resetReplicationCommands(c *Conn) []string {
 	return resetCommands
 }
 
+// resetReplicationParametersCommands is part of the Flavor interface.
+func (mysqlFlavor) resetReplicationParametersCommands(c *Conn) []string {
+	resetCommands := []string{
+		"RESET SLAVE ALL", // "ALL" makes it forget source host:port.
+	}
+	return resetCommands
+}
+
 // setReplicationPositionCommands is part of the Flavor interface.
 func (mysqlFlavor) setReplicationPositionCommands(pos Position) []string {
 	return []string{

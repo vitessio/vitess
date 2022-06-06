@@ -178,6 +178,9 @@ type TabletManagerClient interface {
 	// ReplicaWasPromoted tells the remote tablet it is now the primary
 	ReplicaWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error
 
+	// ResetReplicationParameters resets the replica replication parameters
+	ResetReplicationParameters(ctx context.Context, tablet *topodatapb.Tablet) error
+
 	// SetReplicationSource tells a tablet to start replicating from the
 	// passed in tablet alias, and wait for the row in the
 	// reparent_journal table (if timeCreatedNS is non-zero).

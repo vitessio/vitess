@@ -790,6 +790,17 @@ func (client *Client) ReplicaWasPromoted(ctx context.Context, tablet *topodatapb
 	return err
 }
 
+// ResetReplicationParameters is part of the tmclient.TabletManagerClient interface.
+func (client *Client) ResetReplicationParameters(ctx context.Context, tablet *topodatapb.Tablet) error {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer closer.Close()
+	_, err = c.ResetReplicationParameters(ctx, &tabletmanagerdatapb.ResetReplicationParametersRequest{})
+	return err
+}
+
 // SetReplicationSource is part of the tmclient.TabletManagerClient interface.
 func (client *Client) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
