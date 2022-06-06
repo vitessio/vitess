@@ -42,7 +42,7 @@ import (
 )
 
 func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	_ = subFlags.Bool("v2", true, "")
+	_ = subFlags.Bool("v2", false, "Use VDiff2")
 
 	timeout := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on primary migrations. The migration will be cancelled on a timeout.")
 	maxRows := subFlags.Int64("limit", math.MaxInt64, "Max rows to stop comparing after")

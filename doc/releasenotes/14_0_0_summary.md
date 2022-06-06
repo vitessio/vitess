@@ -190,7 +190,29 @@ When `--heartbeat_on_demand_duration` is set to a positive value, then the throt
 
 ### VDiff2
 
-We introduced a new version of VDiff -- currently marked as Experimental -- that executes the VDiff on tablets rather than in vtctld. While this is experimental we encourage you to try it out and provide feedback! This input will be invaluable as we improve this feature on the march toward a production-ready version.
+We introduced a new version of VDiff -- currently marked as Experimental -- that executes the VDiff on tablets rather than in vtctld. While this is experimental we encourage you to try it out and provide feedback! This input will be invaluable as we improve this feature on the march toward a production-ready version. You can try it out by adding the `--v2` flag to your VDiff command. Here's an example:
+```
+$ vtctlclient --server=localhost:15999 VDiff -- --v2 customer.commerce2customer
+VDiff bf9dfc5f-e5e6-11ec-823d-0aa62e50dd24 scheduled on target shards, use show to view progress
+
+$ vtctlclient --server=localhost:15999 VDiff -- --v2 customer.commerce2customer show last
+
+VDiff Summary for customer.commerce2customer (bf9dfc5f-e5e6-11ec-823d-0aa62e50dd24)
+State: completed
+HasMismatch: false
+
+Use "--format=json" for more detailed output.
+
+$ vtctlclient --server=localhost:15999 VDiff -- --v2 --format=json customer.commerce2customer show last
+{
+	"Workflow": "commerce2customer",
+	"Keyspace": "customer",
+	"State": "completed",
+	"UUID": "bf9dfc5f-e5e6-11ec-823d-0aa62e50dd24",
+	"HasMismatch": false,
+	"Shards": "0"
+}
+```
 
 :information_source:  NOTE: even before it's marked as production-ready (feature complete and tested widely in 1+ releases), it should be safe to use and is likely to provide much better results for very large tables.
 

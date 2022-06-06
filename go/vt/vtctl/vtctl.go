@@ -2776,7 +2776,7 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 		log.Infof("*** Using (experimental) VDiff2 ***")
 		return commandVDiff2(ctx, wr, subFlags, args)
 	}
-	_ = subFlags.Bool("v2", true, "")
+	_ = subFlags.Bool("v2", false, "Use VDiff2")
 
 	sourceCell := subFlags.String("source_cell", "", "The source cell to compare from; default is any available cell")
 	targetCell := subFlags.String("target_cell", "", "The target cell to compare with; default is any available cell")
