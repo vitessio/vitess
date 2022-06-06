@@ -657,7 +657,7 @@ func (fs *fuzzStore) executeInRandomOrder() {
 		case 23:
 			err = fs.callPopulateReparentJournal()
 		case 24:
-			err = fs.callResetReplicaionParameters()
+			err = fs.callResetReplicationParameters()
 		}
 
 		// err means that fuzzStore doesn't have any data
