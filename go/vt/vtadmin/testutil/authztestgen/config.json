@@ -451,6 +451,7 @@
                 }
             ],
             "request": "&vtadminpb.GetGatesRequest{}",
+            "serialize_cases": true,
             "cases": [
                 {
                     "name": "unauthorized actor",

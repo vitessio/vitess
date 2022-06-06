@@ -39,6 +39,8 @@ import (
 )
 
 func TestCreateKeyspace(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -106,6 +108,8 @@ func TestCreateKeyspace(t *testing.T) {
 }
 
 func TestCreateShard(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -175,6 +179,8 @@ func TestCreateShard(t *testing.T) {
 }
 
 func TestDeleteKeyspace(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -242,6 +248,8 @@ func TestDeleteKeyspace(t *testing.T) {
 }
 
 func TestDeleteShards(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -319,6 +327,8 @@ func TestDeleteShards(t *testing.T) {
 }
 
 func TestDeleteTablet(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -388,6 +398,8 @@ func TestDeleteTablet(t *testing.T) {
 }
 
 func TestGetBackups(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -465,6 +477,8 @@ func TestGetBackups(t *testing.T) {
 }
 
 func TestGetCellInfos(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -548,6 +562,8 @@ func TestGetCellInfos(t *testing.T) {
 }
 
 func TestGetCellsAliases(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -625,6 +641,8 @@ func TestGetCellsAliases(t *testing.T) {
 }
 
 func TestGetClusters(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -694,6 +712,8 @@ func TestGetClusters(t *testing.T) {
 }
 
 func TestGetGates(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -728,7 +748,6 @@ func TestGetGates(t *testing.T) {
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
-		t.Parallel()
 		actor := &rbac.Actor{Name: "unauthorized"}
 
 		ctx := context.Background()
@@ -742,7 +761,6 @@ func TestGetGates(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
-		t.Parallel()
 		actor := &rbac.Actor{Name: "allowed-other"}
 
 		ctx := context.Background()
@@ -757,7 +775,6 @@ func TestGetGates(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
-		t.Parallel()
 		actor := &rbac.Actor{Name: "allowed-all"}
 
 		ctx := context.Background()
@@ -773,6 +790,8 @@ func TestGetGates(t *testing.T) {
 }
 
 func TestGetKeyspace(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -836,6 +855,8 @@ func TestGetKeyspace(t *testing.T) {
 }
 
 func TestGetKeyspaces(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {

@@ -58,6 +58,8 @@ import (
 
 {{ range .Tests }}
 func Test{{ .Method }}(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct{
@@ -90,7 +92,7 @@ func Test{{ .Method }}(t *testing.T) {
 	{{ with $test := . -}}
 	{{ range .Cases }}
 	t.Run("{{ .Name }}", func(t *testing.T) {
-		t.Parallel()
+		{{- if not $test.SerializeCases -}}t.Parallel(){{- end }}
 		{{ getActor .Actor }}
 
 		ctx := context.Background()
