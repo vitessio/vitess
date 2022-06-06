@@ -25,7 +25,7 @@ import (
 
 // shardStreamer streams rows from one shard.
 // shardStreamer satisfies engine.StreamExecutor, and can be added to Primitives of engine.MergeSort.
-// each tableDiffer has one shardStreamer per source and one for the target
+// Each tableDiffer has one shardStreamer per source and one for the target.
 type shardStreamer struct {
 	tablet *topodatapb.Tablet // tablet currently picked to stream from
 	shard  string
@@ -35,7 +35,7 @@ type shardStreamer struct {
 	err              error
 }
 
-// StreamExecute implements the StreamExecutor interface of the Primitive executor
+// StreamExecute implements the StreamExecutor interface of the Primitive executor and
 // it simply waits for a result to be available for this shard and sends it to the merge sorter
 func (sm *shardStreamer) StreamExecute(vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool,
 	callback func(*sqltypes.Result) error) error {

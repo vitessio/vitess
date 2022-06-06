@@ -114,8 +114,7 @@ func (ct *controller) run(ctx context.Context) {
 		return
 	}
 	if len(qr.Rows) == 0 {
-		err := fmt.Errorf("Missing vdiff row for %s", query)
-		log.Errorf("", err)
+		log.Errorf("Missing vdiff row for %s", query)
 		return
 	}
 
@@ -171,7 +170,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 		}
 		var bls binlogdatapb.BinlogSource
 		if err := prototext.Unmarshal(sourceBytes, &bls); err != nil {
-			log.Errorf("Failed to unmarshal vdiff binlog source: %v", err)
+			log.Errorf("Failed to unmarshal vdiff binlog source: %w", err)
 			return err
 		}
 		source.shard = bls.Shard
@@ -196,7 +195,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 		return err
 	}
 	if err := wd.diff(ctx); err != nil {
-		log.Infof("wd.diff error %v", err)
+		log.Infof("wd.diff error %w", err)
 		return err
 	}
 

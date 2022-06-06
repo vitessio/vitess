@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2022 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -123,10 +123,7 @@ func vdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2
 			require.Equal(t, strings.Join(want.shards, ","), info.Shards)
 			require.Equal(t, want.hasMismatch, info.HasMismatch)
 		} else {
-			if info.State != "completed" {
-				panic(info.State)
-			}
-			require.Equal(t, "completed", info.State)
+			require.Equal(t, info.State, "completed")
 			require.False(t, info.HasMismatch)
 
 		}

@@ -289,8 +289,6 @@ func displayVDiff2ShowRecent(wr *wrangler.Wrangler, format, keyspace, workflowNa
 	if err != nil {
 		return err
 	}
-	log.Infof("recent: %+v", recent)
-	log.Flush()
 	if format == "json" {
 		jsonText, err := json.MarshalIndent(recent, "", "\t")
 		if err != nil {
@@ -386,9 +384,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 				tableSummaryMap = make(map[string]vdiffTableSummary, 0)
 				reports = make(map[string]map[string]vdiff.DiffReport, 0)
 			}
-			log.Infof("rows are %+v", qr.Named().Rows)
 			for _, row := range qr.Named().Rows {
-				log.Infof("table row is %+v", row)
 				if first {
 					first = false
 					summary.State, _ = row.ToString("vdiff_state")
@@ -423,14 +419,10 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 				diffReport := row.AsString("report", "")
 				dr := vdiff.DiffReport{}
 				if diffReport != "" {
-					log.Infof("unmarshalling diff report: %s, %+v", diffReport, row)
-					log.Flush()
 					err := json.Unmarshal([]byte(diffReport), &dr)
 					if err != nil {
 						return nil, err
 					}
-					log.Infof("DONE unmarshalling diff report")
-					log.Flush()
 					ts.RowsCompared += dr.ProcessedRows
 					ts.MismatchedRows += dr.MismatchedRows
 					ts.MatchingRows += dr.MatchingRows
@@ -465,9 +457,7 @@ func displayVDiff2CreateResponse(wr *wrangler.Wrangler, format string, uuid stri
 			UUID string
 		}
 		resp := &CreateResponse{UUID: uuid}
-		log.Infof("VDiff scheduled on target shards, use show to view progress")
 		jsonText, _ := json.MarshalIndent(resp, "", "\t")
-		log.Infof("response is %+v, %s", resp, jsonText)
 		wr.Logger().Printf(string(jsonText) + "\n")
 	} else {
 		wr.Logger().Printf("VDiff %s scheduled on target shards, use show to view progress\n", uuid)

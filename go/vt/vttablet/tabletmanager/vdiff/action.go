@@ -133,9 +133,6 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 			if qr, err = withDDL.Exec(context.Background(), sqlGetAllVDiffs, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 				return nil, err
 			}
-			if len(qr.Rows) == 0 {
-
-			}
 			resp.Output = sqltypes.ResultToProto3(qr)
 		case LastActionArg:
 		default:

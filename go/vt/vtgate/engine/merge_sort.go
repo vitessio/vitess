@@ -248,7 +248,6 @@ func runOneStream(ctx context.Context, vcursor VCursor, input StreamExecutor, bi
 			bindVars,
 			wantfields,
 			func(qr *sqltypes.Result) error {
-				//log.Infof("runOneStream StreamExecute %d fields, %d rows", len(qr.Fields), len(qr.Rows))
 				if len(qr.Fields) != 0 {
 					select {
 					case handle.fields <- qr.Fields:

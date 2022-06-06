@@ -89,7 +89,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	log.Infof("Locking target keyspace %s", targetKeyspace)
 	ctx, unlock, lockErr := td.wd.ct.ts.LockKeyspace(ctx, targetKeyspace, "vdiff")
 	if lockErr != nil {
-		log.Errorf("LockKeyspace failed: %v", lockErr)
+		log.Errorf("LockKeyspace failed: %w", lockErr)
 		return lockErr
 	}
 
@@ -97,7 +97,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	defer func() {
 		unlock(&err)
 		if err != nil {
-			log.Errorf("UnlockKeyspace %s failed: %v", targetKeyspace, lockErr)
+			log.Errorf("UnlockKeyspace %s failed: %w", targetKeyspace, lockErr)
 		}
 	}()
 
@@ -106,7 +106,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	}
 	defer func() {
 		if err := td.restartTargetVReplicationStreams(ctx); err != nil {
-			log.Errorf("error restarting target streams: %s", err)
+			log.Errorf("error restarting target streams: %w", err)
 		}
 	}()
 
@@ -195,7 +195,7 @@ func (td *tableDiffer) selectTablets(ctx context.Context, cell, tabletTypes stri
 	go func() {
 		defer wg.Done()
 		err1 = td.forEachSource(func(source *migrationSource) error {
-			//todo: handle external sources for Mount/Migrate
+			// TODO: handle external sources to support Mount+Migrate
 			tablet, err := pickTablet(ctx, ct.ts, cell, ct.sourceKeyspace, source.shard, tabletTypes)
 			if err != nil {
 				return err
@@ -236,7 +236,6 @@ func pickTablet(ctx context.Context, ts *topo.Server, cell, keyspace, shard, tab
 
 func (td *tableDiffer) syncSourceStreams(ctx context.Context) error {
 	// source can be replica, wait for them to at least reach max gtid of all target streams
-	log.Infof("syncSourceStreams start")
 	ct := td.wd.ct
 	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds)*time.Second)
 	defer cancel()
@@ -254,7 +253,6 @@ func (td *tableDiffer) syncSourceStreams(ctx context.Context) error {
 }
 
 func (td *tableDiffer) syncTargetStreams(ctx context.Context) error {
-	log.Infof("syncTargetStreams start")
 	ct := td.wd.ct
 	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds)*time.Second)
 	defer cancel()
@@ -277,14 +275,13 @@ func (td *tableDiffer) syncTargetStreams(ctx context.Context) error {
 }
 
 func (td *tableDiffer) startTargetDataStream(ctx context.Context) error {
-	log.Infof("startTargetDataStream")
 	ct := td.wd.ct
 	gtidch := make(chan string, 1)
 	ct.targetShardStreamer.result = make(chan *sqltypes.Result, 1)
 	go td.streamOneShard(ctx, ct.targetShardStreamer, td.tablePlan.targetQuery, gtidch)
 	gtid, ok := <-gtidch
 	if !ok {
-		log.Infof("streaming error: %s", ct.targetShardStreamer.err)
+		log.Infof("streaming error: %w", ct.targetShardStreamer.err)
 		return ct.targetShardStreamer.err
 	}
 	ct.targetShardStreamer.snapshotPosition = gtid
@@ -292,7 +289,6 @@ func (td *tableDiffer) startTargetDataStream(ctx context.Context) error {
 }
 
 func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
-	log.Infof("startSourceDataStreams")
 	if err := td.forEachSource(func(source *migrationSource) error {
 		gtidch := make(chan string, 1)
 		source.result = make(chan *sqltypes.Result, 1)
@@ -311,7 +307,6 @@ func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
 }
 
 func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) error {
-	log.Infof("restartTargetVReplicationStreams")
 	ct := td.wd.ct
 	query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s", encodeString(ct.vde.dbName), encodeString(ct.workflow))
 	log.Infof("restarting target replication with %s", query)
@@ -341,27 +336,22 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 		var fields []*querypb.Field
 		return conn.VStreamRows(ctx, target, query, nil, func(vsrRaw *binlogdatapb.VStreamRowsResponse) error {
 			// We clone (deep copy) the VStreamRowsResponse -- which contains a vstream packet with N rows and
-			// their corresponding GTID position/snapshot -- so that we can safely process it while the next
-			// VStreamRowsResponse message is getting prepared by the shardStreamer. Without doing this, we
-			// would have to serialize the row processing by using unbuffered channels which would present a
-			// major performance bottleneck.
+			// their corresponding GTID position/snapshot along with the LastPK in the row set -- so that we
+			// can safely process it while the next VStreamRowsResponse message is getting prepared by the
+			// shardStreamer. Without doing this, we would have to serialize the row processing by using
+			// unbuffered channels which would present a major performance bottleneck.
 			// This need arises from the gRPC VStreamRowsResponse pooling and re-use/recycling done for
-			// gRPCQueryClient.VStreamRows in vttablet/grpctabletconn/conn.
+			// gRPCQueryClient.VStreamRows() in vttablet/grpctabletconn/conn.
 			vsr := proto.Clone(vsrRaw).(*binlogdatapb.VStreamRowsResponse)
-
-			log.Infof("VStreamRows start %s:%d", participant.tablet.Alias.String(), len(vsr.Rows))
 
 			if len(fields) == 0 {
 				if len(vsr.Fields) == 0 {
 					return fmt.Errorf("did not received expected fields in response %+v", vsr)
 				}
-				//log.Infof("received fields from %s", participant.tablet.Alias)
 				fields = vsr.Fields
-				//log.Infof("fields received were %+v, %s", fields, participant.tablet.Alias)
 				gtidch <- vsr.Gtid
 			}
 			if len(vsr.Rows) == 0 && len(vsr.Fields) == 0 {
-				//log.Infof("no rows, no fields %+v, %s", fields, participant.tablet.Alias)
 				return nil
 			}
 			p3qr := &querypb.QueryResult{
@@ -374,13 +364,11 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			if vsr.Fields == nil {
 				result.Fields = nil
 			}
-			//log.Infof("%s pushing1 %d fields, %d rows", participant.tablet.Alias.String(), len(result.Fields),len(result.Rows))//, result.Rows)
 			select {
 			case participant.result <- result:
 			case <-ctx.Done():
 				return vterrors.Wrap(ctx.Err(), "VStreamRows")
 			}
-			//log.Infof("%s pushing2 %d rows", participant.tablet.Alias.String(), len(result.Rows))//, result.Rows)
 			return nil
 		})
 	}()
@@ -427,6 +415,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 	mismatch := false
 
 	for {
+		// TODO: store the progress in the _vt vdiff tables so that it can be exposed via the CLI interface
 		if dr.ProcessedRows%1e7 == 0 { // log progress every 10 million rows
 			log.Infof("VDiff progress:: table %s: %d rows", td.table.Name, dr.ProcessedRows)
 			if err := td.updateRowsCompared(dbClient, dr.ProcessedRows); err != nil {
@@ -441,28 +430,23 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 			}
 		}
 		*rowsToCompare--
-		//log.Infof("VDiff progress:: table %s: %d rows", td.table.Name, dr.ProcessedRows)
 		if *rowsToCompare < 0 {
 			log.Infof("Stopping vdiff, specified limit reached")
 			return dr, nil
 		}
 		if advanceSource {
-			//log.Infof("waiting for source row")
 			sourceRow, err = sourceExecutor.next()
 			if err != nil {
 				log.Error(err)
 				return nil, err
 			}
-			//log.Infof("got source row")// %+v", sourceRow)
 		}
 		if advanceTarget {
-			//log.Infof("waiting for target row")
 			targetRow, err = targetExecutor.next()
 			if err != nil {
 				log.Error(err)
 				return nil, err
 			}
-			//log.Infof("got target row")// %+v", targetRow)
 		}
 
 		if sourceRow == nil && targetRow == nil {

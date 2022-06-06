@@ -208,7 +208,7 @@ func (vre *Engine) Open(ctx context.Context) {
 		vre.cancelRetry = cancel
 		go vre.retry(ctx, err)
 	}
-	log.Infof("VReplication engine opened")
+	log.Infof("VReplication engine opened successfully")
 }
 
 func (vre *Engine) openLocked(ctx context.Context) error {
@@ -249,7 +249,6 @@ func (vre *Engine) retry(ctx context.Context, err error) {
 		default:
 		}
 		if err := vre.openLocked(ctx); err == nil {
-			log.Infof("Vreplication engine opened successfully")
 			// Don't invoke cancelRetry because openLocked
 			// will hold on to this context for later cancelation.
 			vre.cancelRetry = nil
