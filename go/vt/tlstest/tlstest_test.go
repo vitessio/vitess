@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -48,11 +47,7 @@ func TestClientServerWithCombineCerts(t *testing.T) {
 // And then performs a few tests on them.
 func testClientServer(t *testing.T, combineCerts bool) {
 	// Our test root.
-	root, err := os.MkdirTemp("", "tlstest")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	clientServerKeyPairs := CreateClientServerCertPairs(root)
 	serverCA := ""
@@ -240,11 +235,7 @@ func TestClientTLSConfigCaching(t *testing.T) {
 
 func testConfigGeneration(t *testing.T, rootPrefix string, generateConfig func(ClientServerKeyPairs) (*tls.Config, error), getCertPool func(tlsConfig *tls.Config) *x509.CertPool) {
 	// Our test root.
-	root, err := os.MkdirTemp("", rootPrefix)
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	const configsToGenerate = 1
 
@@ -287,11 +278,7 @@ func testConfigGeneration(t *testing.T, rootPrefix string, generateConfig func(C
 
 func testNumberOfCertsWithOrWithoutCombining(t *testing.T, numCertsExpected int, combine bool) {
 	// Our test root.
-	root, err := os.MkdirTemp("", "tlstest")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	clientServerKeyPairs := CreateClientServerCertPairs(root)
 	serverCA := ""
@@ -366,11 +353,7 @@ func assertTLSHandshakeFails(t *testing.T, serverConfig, clientConfig *tls.Confi
 }
 
 func TestClientServerWithRevokedServerCert(t *testing.T) {
-	root, err := os.MkdirTemp("", "tlstest")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	clientServerKeyPairs := CreateClientServerCertPairs(root)
 
@@ -426,11 +409,7 @@ func TestClientServerWithRevokedServerCert(t *testing.T) {
 }
 
 func TestClientServerWithRevokedClientCert(t *testing.T) {
-	root, err := os.MkdirTemp("", "tlstest")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	clientServerKeyPairs := CreateClientServerCertPairs(root)
 
