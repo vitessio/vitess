@@ -482,6 +482,10 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 				clusters[a.SuggestedClusterAlias].primaryKey = &a.AnalyzedInstanceKey
 			}
 			durabilityPolicy := m.GetString("durability_policy")
+			if durabilityPolicy == "" {
+				log.Errorf("ignoring keyspace %v because no durability_policy is set. Please set it using SetKeyspaceDurabilityPolicy", a.AnalyzedKeyspace)
+				return nil
+			}
 			durability, err := reparentutil.GetDurabilityPolicy(durabilityPolicy)
 			if err != nil {
 				log.Errorf("can't get the durability policy %v - %v. Skipping keyspace - %v.", durabilityPolicy, err, a.AnalyzedKeyspace)
