@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
@@ -1269,6 +1270,99 @@ func TestGetTablet(t *testing.T) {
 	})
 }
 
+func TestGetTablets(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Tablet",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "Tablet",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetTablets(ctx, &vtadminpb.GetTabletsRequest{})
+		require.NoError(t, err)
+		assert.Nil(t, resp.Tablets, "actor %+v should not be permitted to GetTablets", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetTablets(ctx, &vtadminpb.GetTabletsRequest{})
+		assert.NotEmpty(t, resp.Tablets, "actor %+v should be permitted to GetTablets", actor)
+		clusterAliases := map[string][]string{}
+		for _, tablet := range resp.Tablets {
+			if _, ok := clusterAliases[tablet.Cluster.Id]; !ok {
+				clusterAliases[tablet.Cluster.Id] = []string{}
+			}
+			clusterAliases[tablet.Cluster.Id] = append(clusterAliases[tablet.Cluster.Id], topoproto.TabletAliasString(tablet.Tablet.Alias))
+		}
+		assert.Equal(t, clusterAliases, map[string][]string{"other": {"other1-0000000100"}}, "actor %+v should be permitted to GetTablets", actor)
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetTablets(ctx, &vtadminpb.GetTabletsRequest{})
+		assert.NotEmpty(t, resp.Tablets, "actor %+v should be permitted to GetTablets", actor)
+		clusterAliases := map[string][]string{}
+		for _, tablet := range resp.Tablets {
+			if _, ok := clusterAliases[tablet.Cluster.Id]; !ok {
+				clusterAliases[tablet.Cluster.Id] = []string{}
+			}
+			clusterAliases[tablet.Cluster.Id] = append(clusterAliases[tablet.Cluster.Id], topoproto.TabletAliasString(tablet.Tablet.Alias))
+		}
+		assert.Equal(t, clusterAliases, map[string][]string{"test": {"zone1-0000000100"}, "other": {"other1-0000000100"}}, "actor %+v should be permitted to GetTablets", actor)
+	})
+}
+
 func testClusters(t testing.TB) []*cluster.Cluster {
 	configs := []testutil.TestClusterConfig{
 		{
@@ -1473,7 +1567,17 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 					},
 				},
 			},
-			Tablets: []*vtadminpb.Tablet{},
+			Tablets: []*vtadminpb.Tablet{
+				{
+					Cluster: &vtadminpb.Cluster{Id: "other", Name: "other"},
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "other1",
+							Uid:  100,
+						},
+					},
+				},
+			},
 			Config: &cluster.Config{
 				TopoReadPoolConfig: &cluster.RPCPoolConfig{
 					Size:        100,

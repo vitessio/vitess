@@ -103,6 +103,13 @@
                     "type": "map[string]struct{\nResponse *vtctldatapb.ShardReplicationPositionsResponse\nError error}",
                     "value": "\"otherks/-\": {\nResponse: &vtctldatapb.ShardReplicationPositionsResponse{},\n},"
                 }
+            ],
+            "db_tablet_list": [
+                {
+                    "tablet": {
+                        "alias": {"cell": "other1", "uid": 100}
+                    }
+                }
             ]
         }
     ],
@@ -773,6 +780,63 @@
                     "assertions": [
                         "require.NoError(t, err)",
                         "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "GetTablets",
+            "rules": [
+                {
+                    "resource": "Tablet",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-all"],
+                    "clusters": ["*"]
+                },
+                {
+                    "resource": "Tablet",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-other"],
+                    "clusters": ["other"]
+                }
+            ],
+            "request": "&vtadminpb.GetTabletsRequest{}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "unauthorized"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.Nil(t, resp.Tablets, $$)"
+                    ]
+                },
+                {
+                    "name": "partial access",
+                    "actor": {"name": "allowed-other"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.Tablets, $$)",
+                        "clusterAliases := map[string][]string{}",
+                        "for _, tablet := range resp.Tablets {",
+                        "if _, ok := clusterAliases[tablet.Cluster.Id]; !ok {\nclusterAliases[tablet.Cluster.Id] = []string{}\n}",
+                        "clusterAliases[tablet.Cluster.Id] = append(clusterAliases[tablet.Cluster.Id], topoproto.TabletAliasString(tablet.Tablet.Alias))",
+                        "}",
+                        "assert.Equal(t, clusterAliases, map[string][]string{\"other\": {\"other1-0000000100\"}}, $$)"
+                    ]
+                },
+                {
+                    "name": "full access",
+                    "actor": {"name": "allowed-all"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.Tablets, $$)",
+                        "clusterAliases := map[string][]string{}",
+                        "for _, tablet := range resp.Tablets {",
+                        "if _, ok := clusterAliases[tablet.Cluster.Id]; !ok {\nclusterAliases[tablet.Cluster.Id] = []string{}\n}",
+                        "clusterAliases[tablet.Cluster.Id] = append(clusterAliases[tablet.Cluster.Id], topoproto.TabletAliasString(tablet.Tablet.Alias))",
+                        "}",
+                        "assert.Equal(t, clusterAliases, map[string][]string{\"test\": {\"zone1-0000000100\"}, \"other\": {\"other1-0000000100\"}}, $$)"
                     ]
                 }
             ]
