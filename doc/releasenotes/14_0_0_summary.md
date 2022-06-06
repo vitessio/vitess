@@ -210,5 +210,6 @@ The `Durability` configuration is deprecated and removed from VTOrc. Instead VTO
 the topo server. This allows VTOrc to monitor and repair multiple keyspaces which have different durability policies in use.
 
 **VTOrc will ignore the keyspaces which have no durability policy specified in the keyspace record. So on upgrading to v14, users must run
-the command `SetKeyspaceDurabilityPolicy` specified above, to ensure VTOrc continues to work as desired.**
+the command `SetKeyspaceDurabilityPolicy` specified above, to ensure VTOrc continues to work as desired. The recommended upgrade 
+path is to upgrade vtctld, run `SetKeyspaceDurabilityPolicy` and then upgrade VTOrc.**
 
