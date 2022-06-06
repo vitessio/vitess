@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -359,6 +360,31 @@ func (fake *VtctldClient) GetSrvVSchema(ctx context.Context, req *vtctldatapb.Ge
 	}
 
 	return nil, fmt.Errorf("%w: no result set for key %s", assert.AnError, req.Cell)
+}
+
+// GetSrvVSchemas is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetSrvVSchemasRequest, opts ...grpc.CallOption) (resp *vtctldatapb.GetSrvVSchemasResponse, err error) {
+	resp = &vtctldatapb.GetSrvVSchemasResponse{
+		SrvVSchemas: map[string]*vschemapb.SrvVSchema{},
+	}
+
+	cells := req.Cells
+	if len(req.Cells) == 0 {
+		for cell := range fake.GetSrvVSchemaResults {
+			cells = append(cells, cell)
+		}
+	}
+
+	for _, cell := range cells {
+		r, err := fake.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: cell}, opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		resp.SrvVSchemas[cell] = r.SrvVSchema
+	}
+
+	return resp, nil
 }
 
 // GetVSchema is part of the vtctldclient.VtctldClient interface.
