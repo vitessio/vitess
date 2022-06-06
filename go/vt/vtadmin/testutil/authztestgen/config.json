@@ -940,6 +940,57 @@
                     ]
                 }
             ]
+        },
+        {
+            "method": "GetVtctlds",
+            "rules": [
+                {
+                    "resource": "Vtctld",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-all"],
+                    "clusters": ["*"]
+                },
+                {
+                    "resource": "Vtctld",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-other"],
+                    "clusters": ["other"]
+                }
+            ],
+            "request": "&vtadminpb.GetVtctldsRequest{}",
+            "serialize_cases": true,
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "unauthorized"},
+                    "is_permitted": false,
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.NoError(t, err)",
+                        "assert.Empty(t, resp.Vtctlds, $$)"
+                    ]
+                },
+                {
+                    "name": "partial access",
+                    "actor": {"name": "allowed-other"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.Vtctlds, $$)",
+                        "// testutil.BuildCluster creates exactly one gate per cluster",
+                        "assert.Len(t, resp.Vtctlds, 1, \"actor %+v should only be able to see Vtctld from cluster 'other'\", actor)"
+                    ]
+                },
+                {
+                    "name": "full access",
+                    "actor": {"name": "allowed-all"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.Vtctlds, $$)",
+                        "// testutil.BuildCluster creates exactly one gate per cluster",
+                        "assert.Len(t, resp.Vtctlds, 2, \"actor %+v should be able to see Vtctld from all clusters\", actor)"
+                    ]
+                }
+            ]
         }
     ]
 }
