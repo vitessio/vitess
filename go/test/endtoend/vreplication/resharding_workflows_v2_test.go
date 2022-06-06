@@ -51,8 +51,8 @@ const (
 )
 
 var (
-	targetTab1, targetTab2, targetReplicaTab1 *cluster.VttabletProcess
-	sourceReplicaTab, sourceTab               *cluster.VttabletProcess
+	targetTab1, targetTab2, targetReplicaTab1, targetRdonlyTab1 *cluster.VttabletProcess
+	sourceTab, sourceReplicaTab, sourceRdonlyTab                *cluster.VttabletProcess
 
 	lastOutput          string
 	currentWorkflowType wrangler.VReplicationWorkflowType
@@ -241,10 +241,9 @@ func getCurrentState(t *testing.T) string {
 // but CI currently fails on creating multiple clusters even after the previous ones are torn down
 
 func TestBasicV2Workflows(t *testing.T) {
-	ogv := defaultRdonly
 	defaultRdonly = 1
 	defer func() {
-		defaultRdonly = ogv
+		defaultRdonly = 0
 	}()
 	vc = setupCluster(t)
 	defer vtgateConn.Close()
@@ -557,11 +556,12 @@ func testRestOfWorkflow(t *testing.T) {
 	validateWritesRouteToSource(t)
 
 	tstWorkflowSwitchReadsAndWrites(t)
-	validateReadsRouteToTarget(t, "rdonly")
 	validateReadsRouteToTarget(t, "replica")
+	validateReadsRoute(t, "rdonly", targetRdonlyTab1)
 	validateWritesRouteToTarget(t)
 	waitForLowLag(t, keyspace, "wf1_reverse")
 	tstWorkflowReverseReadsAndWrites(t)
+	validateReadsRoute(t, "rdonly", sourceRdonlyTab)
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
@@ -573,7 +573,7 @@ func testRestOfWorkflow(t *testing.T) {
 	// fully switch and complete
 	waitForLowLag(t, "customer", "wf1")
 	tstWorkflowSwitchReadsAndWrites(t)
-	validateReadsRouteToTarget(t, "rdonly")
+	validateReadsRoute(t, "rdonly", targetRdonlyTab1)
 	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToTarget(t)
 
@@ -599,13 +599,15 @@ func setupCluster(t *testing.T) *VitessCluster {
 	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "product", "0"), 2)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 
-	sourceReplicaTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-101"].Vttablet
 	sourceTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
+	sourceReplicaTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-101"].Vttablet
+	sourceRdonlyTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-102"].Vttablet
 
 	return vc
 }
@@ -627,10 +629,17 @@ func setupCustomerKeyspace(t *testing.T) {
 	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "80-"), 2); err != nil {
 		t.Fatal(err)
 	}
+	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "-80"), 2); err != nil {
+		t.Fatal(err)
+	}
+	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "80-"), 2); err != nil {
+		t.Fatal(err)
+	}
 	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 	targetTab1 = custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
 	targetTab2 = custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
 	targetReplicaTab1 = custKs.Shards["-80"].Tablets["zone1-201"].Vttablet
+	targetRdonlyTab1 = custKs.Shards["-80"].Tablets["zone1-202"].Vttablet
 }
 
 func TestSwitchReadsWritesInAnyOrder(t *testing.T) {
@@ -759,8 +768,9 @@ func createAdditionalCustomerShards(t *testing.T, shards string) {
 	targetTab1 = custKs.Shards["40-80"].Tablets["zone1-500"].Vttablet
 	targetReplicaTab1 = custKs.Shards["-40"].Tablets["zone1-401"].Vttablet
 
-	sourceReplicaTab = custKs.Shards["-80"].Tablets["zone1-201"].Vttablet
 	sourceTab = custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
+	sourceReplicaTab = custKs.Shards["-80"].Tablets["zone1-201"].Vttablet
+	sourceRdonlyTab = custKs.Shards["-80"].Tablets["zone1-202"].Vttablet
 }
 
 func tstApplySchemaOnlineDDL(t *testing.T, sql string, keyspace string) {

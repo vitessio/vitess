@@ -2499,8 +2499,9 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		vrwp.TabletTypes = *tabletTypes
 	case vReplicationWorkflowActionSwitchTraffic, vReplicationWorkflowActionReverseTraffic:
 		vrwp.Cells = *cells
-		vrwp.TabletTypes = *tabletTypes
-		if vrwp.TabletTypes == "" {
+		if userProvidedFlag(subFlags, "tablet_types") {
+			vrwp.TabletTypes = *tabletTypes
+		} else {
 			// When no tablet types are specified we are supposed to switch all traffic so
 			// we override the normal default for tablet_types.
 			vrwp.TabletTypes = "in_order:RDONLY,REPLICA,PRIMARY"
@@ -4277,4 +4278,15 @@ func PrintAllCommands(logger logutil.Logger) {
 		}
 		logger.Printf("\n")
 	}
+}
+
+// userProvidedFlag returns true if the flag was explicitly provided by the user.
+func userProvidedFlag(flags *flag.FlagSet, name string) bool {
+	found := false
+	flags.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
 }
