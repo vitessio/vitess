@@ -332,10 +332,6 @@ func (mysqlFlavor80) baseShowTablesWithSizes() string {
 // supportsCapability is part of the Flavor interface.
 func (mysqlFlavor80) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
 	switch capability {
-	case FastDropTableFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 23)
-	case TransactionalGtidExecutedFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 17)
 	case InstantDDLFlavorCapability,
 		InstantAddLastColumnFlavorCapability,
 		InstantAddDropVirtualColumnFlavorCapability,
@@ -343,6 +339,10 @@ func (mysqlFlavor80) supportsCapability(serverVersion string, capability FlavorC
 		return true, nil
 	case InstantAddDropColumnFlavorCapability:
 		return ServerVersionAtLeast(serverVersion, 8, 0, 29)
+	case TransactionalGtidExecutedFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 17)
+	case FastDropTableFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 23)
 	default:
 		return false, nil
 	}
