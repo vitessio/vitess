@@ -2499,7 +2499,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		vrwp.TabletTypes = *tabletTypes
 	case vReplicationWorkflowActionSwitchTraffic, vReplicationWorkflowActionReverseTraffic:
 		vrwp.Cells = *cells
-		if userProvidedFlag(subFlags, "tablet_types") {
+		if userPassedFlag(subFlags, "tablet_types") {
 			vrwp.TabletTypes = *tabletTypes
 		} else {
 			// When no tablet types are specified we are supposed to switch all traffic so
@@ -4280,13 +4280,14 @@ func PrintAllCommands(logger logutil.Logger) {
 	}
 }
 
-// userProvidedFlag returns true if the flag was explicitly provided by the user.
-func userProvidedFlag(flags *flag.FlagSet, name string) bool {
-	found := false
+// userPassedFlag returns true if the flag name given was provided
+// as a command-line argument by the user.
+func userPassedFlag(flags *flag.FlagSet, name string) bool {
+	passed := false
 	flags.Visit(func(f *flag.Flag) {
 		if f.Name == name {
-			found = true
+			passed = true
 		}
 	})
-	return found
+	return passed
 }

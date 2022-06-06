@@ -599,7 +599,7 @@ func setupCluster(t *testing.T) *VitessCluster {
 	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "product", "0"), 2)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "product", "0"), 1)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	verifyClusterHealth(t, vc)
@@ -629,10 +629,10 @@ func setupCustomerKeyspace(t *testing.T) {
 	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "80-"), 2); err != nil {
 		t.Fatal(err)
 	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "-80"), 2); err != nil {
+	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "-80"), 1); err != nil {
 		t.Fatal(err)
 	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "80-"), 2); err != nil {
+	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "80-"), 1); err != nil {
 		t.Fatal(err)
 	}
 	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
@@ -760,6 +760,9 @@ func createAdditionalCustomerShards(t *testing.T, shards string) {
 			require.NoError(t, err)
 		}
 		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", ksName, shardName), 2); err != nil {
+			require.NoError(t, err)
+		}
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", ksName, shardName), 1); err != nil {
 			require.NoError(t, err)
 		}
 	}
