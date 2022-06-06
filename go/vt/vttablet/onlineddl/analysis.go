@@ -182,7 +182,10 @@ func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, create
 		}
 		for _, col := range createTable.TableSpec.Columns {
 			if strings.EqualFold(colName, col.Name.String()) {
-				return col.Type.Options.As != nil
+				if col.Type.Options.As == nil {
+					return false
+				}
+				return col.Type.Options.Storage == sqlparser.VirtualStorage
 			}
 		}
 		return false

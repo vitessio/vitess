@@ -3061,6 +3061,21 @@ var (
 		input:  "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ASC RANGE BETWEEN 10 PRECEDING AND 10 FOLLOWING);",
 		output: "select `time`, subject, val, first_value(val) over w as `first`, last_value(val) over w as `last`, nth_value(val, 2) over w as `second`, nth_value(val, 4) over w as fourth from observations window w AS ( partition by subject order by `time` asc range between 10 preceding and 10 following)",
 	}, {
+		input:  "SELECT ExtractValue('<a><b/></a>', '/a/b')",
+		output: "select extractvalue('<a><b/></a>', '/a/b') from dual",
+	}, {
+		input:  "SELECT @i, ExtractValue(@xml, '//b[$@i]')",
+		output: "select @i, extractvalue(@xml, '//b[$@i]') from dual",
+	}, {
+		input:  "SELECT ExtractValue(TRIM('<a><c/></a>'), 'count(/a/b)')",
+		output: "select extractvalue(trim('<a><c/></a>'), 'count(/a/b)') from dual",
+	}, {
+		input:  "SELECT UpdateXML(@xml, '//b:c', '<g:h>555</g:h>')",
+		output: "select updatexml(@xml, '//b:c', '<g:h>555</g:h>') from dual",
+	}, {
+		input:  "SELECT UpdateXML('<a><d></d><b>ccc</b><d></d></a>', '/a/d', '<e>fff</e>') AS val5",
+		output: "select updatexml('<a><d></d><b>ccc</b><d></d></a>', '/a/d', '<e>fff</e>') as val5 from dual",
+	}, {
 		input: "select get_lock('a', 10), is_free_lock('b'), is_used_lock('c'), release_all_locks(), release_lock('d') from dual",
 	}}
 )
@@ -5474,27 +5489,11 @@ func BenchmarkParse3(b *testing.B) {
 }
 
 func TestValidUnionCases(t *testing.T) {
-	testOutputTempDir, err := os.MkdirTemp("", "parse_test")
-	require.NoError(t, err)
-	defer func() {
-		if !t.Failed() {
-			os.RemoveAll(testOutputTempDir)
-		}
-	}()
-
-	testFile(t, "union_cases.txt", testOutputTempDir)
+	testFile(t, "union_cases.txt", t.TempDir())
 }
 
 func TestValidSelectCases(t *testing.T) {
-	testOutputTempDir, err := os.MkdirTemp("", "parse_test")
-	require.NoError(t, err)
-	defer func() {
-		if !t.Failed() {
-			os.RemoveAll(testOutputTempDir)
-		}
-	}()
-
-	testFile(t, "select_cases.txt", testOutputTempDir)
+	testFile(t, "select_cases.txt", t.TempDir())
 }
 
 type testCase struct {

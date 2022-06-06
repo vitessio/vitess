@@ -145,6 +145,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneExprs(in)
 	case *ExtractFuncExpr:
 		return CloneRefOfExtractFuncExpr(in)
+	case *ExtractValueExpr:
+		return CloneRefOfExtractValueExpr(in)
 	case *ExtractedSubquery:
 		return CloneRefOfExtractedSubquery(in)
 	case *FirstOrLastValueExpr:
@@ -425,6 +427,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfUpdateExpr(in)
 	case UpdateExprs:
 		return CloneUpdateExprs(in)
+	case *UpdateXMLExpr:
+		return CloneRefOfUpdateXMLExpr(in)
 	case *Use:
 		return CloneRefOfUse(in)
 	case *VStream:
@@ -1085,6 +1089,17 @@ func CloneRefOfExtractFuncExpr(n *ExtractFuncExpr) *ExtractFuncExpr {
 	}
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
+	return &out
+}
+
+// CloneRefOfExtractValueExpr creates a deep clone of the input.
+func CloneRefOfExtractValueExpr(n *ExtractValueExpr) *ExtractValueExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Fragment = CloneExpr(n.Fragment)
+	out.XPathExpr = CloneExpr(n.XPathExpr)
 	return &out
 }
 
@@ -2584,6 +2599,18 @@ func CloneUpdateExprs(n UpdateExprs) UpdateExprs {
 	return res
 }
 
+// CloneRefOfUpdateXMLExpr creates a deep clone of the input.
+func CloneRefOfUpdateXMLExpr(n *UpdateXMLExpr) *UpdateXMLExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Target = CloneExpr(n.Target)
+	out.XPathExpr = CloneExpr(n.XPathExpr)
+	out.NewXML = CloneExpr(n.NewXML)
+	return &out
+}
+
 // CloneRefOfUse creates a deep clone of the input.
 func CloneRefOfUse(n *Use) *Use {
 	if n == nil {
@@ -2827,6 +2854,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfCurTimeFuncExpr(in)
 	case *ExtractFuncExpr:
 		return CloneRefOfExtractFuncExpr(in)
+	case *ExtractValueExpr:
+		return CloneRefOfExtractValueExpr(in)
 	case *FirstOrLastValueExpr:
 		return CloneRefOfFirstOrLastValueExpr(in)
 	case *FuncExpr:
@@ -2899,6 +2928,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfTimestampFuncExpr(in)
 	case *TrimFuncExpr:
 		return CloneRefOfTrimFuncExpr(in)
+	case *UpdateXMLExpr:
+		return CloneRefOfUpdateXMLExpr(in)
 	case *ValuesFuncExpr:
 		return CloneRefOfValuesFuncExpr(in)
 	case *WeightStringFuncExpr:
@@ -3059,6 +3090,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfExistsExpr(in)
 	case *ExtractFuncExpr:
 		return CloneRefOfExtractFuncExpr(in)
+	case *ExtractValueExpr:
+		return CloneRefOfExtractValueExpr(in)
 	case *ExtractedSubquery:
 		return CloneRefOfExtractedSubquery(in)
 	case *FirstOrLastValueExpr:
@@ -3157,6 +3190,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfTrimFuncExpr(in)
 	case *UnaryExpr:
 		return CloneRefOfUnaryExpr(in)
+	case *UpdateXMLExpr:
+		return CloneRefOfUpdateXMLExpr(in)
 	case ValTuple:
 		return CloneValTuple(in)
 	case *ValuesFuncExpr:
@@ -3227,6 +3262,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfExistsExpr(in)
 	case *ExtractFuncExpr:
 		return CloneRefOfExtractFuncExpr(in)
+	case *ExtractValueExpr:
+		return CloneRefOfExtractValueExpr(in)
 	case *ExtractedSubquery:
 		return CloneRefOfExtractedSubquery(in)
 	case *FirstOrLastValueExpr:
@@ -3325,6 +3362,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfTrimFuncExpr(in)
 	case *UnaryExpr:
 		return CloneRefOfUnaryExpr(in)
+	case *UpdateXMLExpr:
+		return CloneRefOfUpdateXMLExpr(in)
 	case ValTuple:
 		return CloneValTuple(in)
 	case *ValuesFuncExpr:

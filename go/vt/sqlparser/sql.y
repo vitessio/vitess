@@ -341,6 +341,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> JSON_DEPTH JSON_TYPE JSON_LENGTH JSON_VALID
 %token <str> JSON_ARRAY_APPEND JSON_ARRAY_INSERT JSON_INSERT JSON_MERGE JSON_MERGE_PATCH JSON_MERGE_PRESERVE JSON_REMOVE JSON_REPLACE JSON_SET JSON_UNQUOTE
 %token <str> REGEXP_INSTR REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR
+%token <str> ExtractValue UpdateXML
 %token <str> GET_LOCK RELEASE_LOCK RELEASE_ALL_LOCKS IS_FREE_LOCK IS_USED_LOCK
 
 // Match
@@ -439,7 +440,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> select_option algorithm_view security_view security_view_opt
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
-%type <expr> expression frame_expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions
+%type <expr> expression frame_expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions xml_expressions
 %type <expr> interval_value simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg
 %type <tableExprs> from_opt table_references from_clause
 %type <tableExpr> table_reference table_factor join_table json_table_function
@@ -5837,6 +5838,7 @@ UTC_DATE func_paren_opt
     $$ =  &LagLeadExpr{ Type:$1 , Expr: $3, N: $5, Default: $6, NullTreatmentClause:$8, OverClause: $9}
   }
 | regular_expressions
+| xml_expressions
 
 null_int_variable_arg:
   null_as_literal
@@ -5931,6 +5933,16 @@ regular_expressions:
   {
     // Match type is kept expression as TRIM( ' m  ') is accepted
     $$ = &RegexpSubstrExpr{Expr:$3, Pattern:$5, Position: $7, Occurrence: $9, MatchType: $11}
+  }
+
+xml_expressions:
+  ExtractValue openb expression ',' expression closeb
+  {
+    $$ = &ExtractValueExpr{Fragment:$3, XPathExpr:$5}
+  }
+| UpdateXML openb expression ',' expression ',' expression closeb
+  {
+    $$ = &UpdateXMLExpr{ Target:$3, XPathExpr:$5, NewXML:$7 }
   }
 
 returning_type_opt:
@@ -7252,6 +7264,7 @@ non_reserved_keyword:
 | EXPIRE
 | EXPORT
 | EXTENDED
+| ExtractValue %prec FUNCTION_CALL_NON_KEYWORD
 | FLOAT_TYPE
 | FIELDS
 | FIRST
@@ -7483,6 +7496,7 @@ non_reserved_keyword:
 | UNSIGNED
 | UNTHROTTLE
 | UNUSED
+| UpdateXML %prec FUNCTION_CALL_NON_KEYWORD
 | UPGRADE
 | USER
 | USER_RESOURCES
