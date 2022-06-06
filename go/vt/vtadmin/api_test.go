@@ -75,7 +75,7 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -164,7 +164,7 @@ func TestFindSchema(t *testing.T) {
 						ShouldErr: true,
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -189,7 +189,7 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -224,7 +224,7 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -271,7 +271,7 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -326,7 +326,7 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -372,7 +372,7 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -427,7 +427,7 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -473,7 +473,7 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -628,7 +628,7 @@ func TestFindSchema(t *testing.T) {
 						},
 					},
 				},
-				GetKeyspacesResults: struct {
+				GetKeyspacesResults: &struct {
 					Keyspaces []*vtctldatapb.Keyspace
 					Error     error
 				}{
@@ -722,7 +722,7 @@ func TestFindSchema(t *testing.T) {
 						},
 					},
 				},
-				GetKeyspacesResults: struct {
+				GetKeyspacesResults: &struct {
 					Keyspaces []*vtctldatapb.Keyspace
 					Error     error
 				}{
@@ -2314,7 +2314,7 @@ func TestGetSchemas(t *testing.T) {
 						},
 					},
 				},
-				GetKeyspacesResults: struct {
+				GetKeyspacesResults: &struct {
 					Keyspaces []*vtctldatapb.Keyspace
 					Error     error
 				}{
@@ -2408,7 +2408,7 @@ func TestGetSchemas(t *testing.T) {
 						},
 					},
 				},
-				GetKeyspacesResults: struct {
+				GetKeyspacesResults: &struct {
 					Keyspaces []*vtctldatapb.Keyspace
 					Error     error
 				}{
@@ -3625,7 +3625,7 @@ func TestGetVSchemas(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -3653,7 +3653,7 @@ func TestGetVSchemas(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -3708,7 +3708,7 @@ func TestGetVSchemas(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -3736,7 +3736,7 @@ func TestGetVSchemas(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -3785,7 +3785,7 @@ func TestGetVSchemas(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -3813,7 +3813,7 @@ func TestGetVSchemas(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -3835,7 +3835,7 @@ func TestGetVSchemas(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -3861,7 +3861,7 @@ func TestGetVSchemas(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -4171,7 +4171,7 @@ func TestGetWorkflows(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -4206,7 +4206,7 @@ func TestGetWorkflows(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -4287,7 +4287,7 @@ func TestGetWorkflows(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -4322,7 +4322,7 @@ func TestGetWorkflows(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -4411,7 +4411,7 @@ func TestGetWorkflows(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -4446,7 +4446,7 @@ func TestGetWorkflows(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -4518,7 +4518,7 @@ func TestGetWorkflows(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -4553,7 +4553,7 @@ func TestGetWorkflows(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
-						GetKeyspacesResults: struct {
+						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
 						}{
@@ -5147,3 +5147,6 @@ func init() {
 	// attempts to read that value by way of grpc.NewServer().
 	grpccommon.EnableTracingOpt()
 }
+
+//go:generate -command authztestgen go run ./testutil/authztestgen
+//go:generate authztestgen -c ./testutil/authztestgen/config.json -o ./api_authz_test.go

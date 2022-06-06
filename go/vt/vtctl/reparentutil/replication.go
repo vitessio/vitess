@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
@@ -123,6 +124,7 @@ func FindValidEmergencyReparentCandidates(
 		case len(errantGTIDs) != 0:
 			// This tablet has errant GTIDs. It's not a valid candidate for
 			// reparent, so don't insert it into the final mapping.
+			log.Errorf("skipping %v because we detected errant GTIDs - %v", alias, errantGTIDs)
 			continue
 		}
 
@@ -182,7 +184,16 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 		return nil
 	}
 
-	isSemiSync := IsReplicaSemiSync(shardPrimary.Tablet, tablet)
+	durabilityName, err := ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	if err != nil {
+		return err
+	}
+	durability, err := GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return err
+	}
+
+	isSemiSync := IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet)
 	return tmc.SetReplicationSource(ctx, tablet, shardPrimary.Alias, 0, "", false, isSemiSync)
 }
 
@@ -206,6 +217,7 @@ func stopReplicationAndBuildStatusMaps(
 	waitReplicasTimeout time.Duration,
 	ignoredTablets sets.String,
 	tabletToWaitFor *topodatapb.TabletAlias,
+	durability Durabler,
 	logger logutil.Logger,
 ) (*replicationSnapshot, error) {
 	event.DispatchUpdate(ev, "stop replication on all replicas")
@@ -243,10 +255,10 @@ func stopReplicationAndBuildStatusMaps(
 
 				primaryStatus, err = tmc.DemotePrimary(groupCtx, tabletInfo.Tablet)
 				if err != nil {
-					msg := "replica %v thinks it's primary but we failed to demote it"
-					err = vterrors.Wrapf(err, msg+": %v", alias, err)
+					msg := "replica %v thinks it's primary but we failed to demote it: %v"
+					err = vterrors.Wrapf(err, msg, alias, err)
 
-					logger.Warningf(msg, alias)
+					logger.Warningf(msg, alias, err)
 					return
 				}
 
@@ -308,7 +320,7 @@ func stopReplicationAndBuildStatusMaps(
 		return res, nil
 	}
 	// check that the tablets we were able to reach are sufficient for us to guarantee that no new write will be accepted by any tablet
-	revokeSuccessful := haveRevoked(res.reachableTablets, allTablets)
+	revokeSuccessful := haveRevoked(durability, res.reachableTablets, allTablets)
 	if !revokeSuccessful {
 		return nil, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety: %v", errRecorder.Error())
 	}
