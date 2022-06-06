@@ -3069,6 +3069,12 @@ var (
 	}, {
 		input:  "SELECT ExtractValue(TRIM('<a><c/></a>'), 'count(/a/b)')",
 		output: "select extractvalue(trim('<a><c/></a>'), 'count(/a/b)') from dual",
+	}, {
+		input:  "SELECT UpdateXML(@xml, '//b:c', '<g:h>555</g:h>')",
+		output: "select updatexml(@xml, '//b:c', '<g:h>555</g:h>') from dual",
+	}, {
+		input:  "SELECT UpdateXML('<a><d></d><b>ccc</b><d></d></a>', '/a/d', '<e>fff</e>') AS val5",
+		output: "select updatexml('<a><d></d><b>ccc</b><d></d></a>', '/a/d', '<e>fff</e>') as val5 from dual",
 	}}
 )
 

@@ -341,7 +341,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> JSON_DEPTH JSON_TYPE JSON_LENGTH JSON_VALID
 %token <str> JSON_ARRAY_APPEND JSON_ARRAY_INSERT JSON_INSERT JSON_MERGE JSON_MERGE_PATCH JSON_MERGE_PRESERVE JSON_REMOVE JSON_REPLACE JSON_SET JSON_UNQUOTE
 %token <str> REGEXP_INSTR REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR
-%token <str> EXTRACTVALUE
+%token <str> EXTRACTVALUE UpdateXML
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -5919,6 +5919,10 @@ xml_expressions:
   {
     $$ = &ExtractValueExpr{Fragment:$3, XPathExpr:$5}
   }
+| UpdateXML openb expression ',' expression ',' expression closeb
+  {
+    $$ = &UpdateXMLExpr{ Target:$3, XPathExpr:$5, NewXML:$7 }
+  }
 
 returning_type_opt:
   {
@@ -7466,6 +7470,7 @@ non_reserved_keyword:
 | UNSIGNED
 | UNTHROTTLE
 | UNUSED
+| UpdateXML %prec FUNCTION_CALL_NON_KEYWORD
 | UPGRADE
 | USER
 | USER_RESOURCES

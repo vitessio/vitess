@@ -601,6 +601,7 @@ var keywords = []keyword{
 	{"unsigned", UNSIGNED},
 	{"unthrottle", UNTHROTTLE},
 	{"update", UPDATE},
+	{"updatexml", UpdateXML},
 	{"upgrade", UPGRADE},
 	{"usage", UNUSED},
 	{"use", USE},

@@ -424,6 +424,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfUpdateExpr(parent, node, replacer)
 	case UpdateExprs:
 		return a.rewriteUpdateExprs(parent, node, replacer)
+	case *UpdateXMLExpr:
+		return a.rewriteRefOfUpdateXMLExpr(parent, node, replacer)
 	case *Use:
 		return a.rewriteRefOfUse(parent, node, replacer)
 	case *VStream:
@@ -6793,6 +6795,43 @@ func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, repla
 	}
 	return true
 }
+func (a *application) rewriteRefOfUpdateXMLExpr(parent SQLNode, node *UpdateXMLExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Target, func(newNode, parent SQLNode) {
+		parent.(*UpdateXMLExpr).Target = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.XPathExpr, func(newNode, parent SQLNode) {
+		parent.(*UpdateXMLExpr).XPathExpr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.NewXML, func(newNode, parent SQLNode) {
+		parent.(*UpdateXMLExpr).NewXML = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfUse(parent SQLNode, node *Use, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7463,6 +7502,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
 	case *TrimFuncExpr:
 		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
+	case *UpdateXMLExpr:
+		return a.rewriteRefOfUpdateXMLExpr(parent, node, replacer)
 	case *ValuesFuncExpr:
 		return a.rewriteRefOfValuesFuncExpr(parent, node, replacer)
 	case *WeightStringFuncExpr:
@@ -7707,6 +7748,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
 	case *UnaryExpr:
 		return a.rewriteRefOfUnaryExpr(parent, node, replacer)
+	case *UpdateXMLExpr:
+		return a.rewriteRefOfUpdateXMLExpr(parent, node, replacer)
 	case ValTuple:
 		return a.rewriteValTuple(parent, node, replacer)
 	case *ValuesFuncExpr:
@@ -7871,6 +7914,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
 	case *UnaryExpr:
 		return a.rewriteRefOfUnaryExpr(parent, node, replacer)
+	case *UpdateXMLExpr:
+		return a.rewriteRefOfUpdateXMLExpr(parent, node, replacer)
 	case ValTuple:
 		return a.rewriteValTuple(parent, node, replacer)
 	case *ValuesFuncExpr:

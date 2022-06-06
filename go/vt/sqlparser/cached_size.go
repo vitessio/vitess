@@ -3501,6 +3501,28 @@ func (cached *UpdateExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *UpdateXMLExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Target vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Target.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field XPathExpr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.XPathExpr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field NewXML vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.NewXML.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *Use) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
