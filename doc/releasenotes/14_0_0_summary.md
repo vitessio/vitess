@@ -217,3 +217,28 @@ $ vtctlclient --server=localhost:15999 VDiff -- --v2 --format=json customer.comm
 :information_source:  NOTE: even before it's marked as production-ready (feature complete and tested widely in 1+ releases), it should be safe to use and is likely to provide much better results for very large tables.
 
 For additional details, please see the [RFC](https://github.com/vitessio/vitess/issues/10134) and the [README](https://github.com/vitessio/vitess/tree/main/go/vt/vttablet/tabletmanager/vdiff/README.md).
+
+### Durability Policy
+
+#### Deprecation of durability_policy Flag
+The durability policy for a keyspace is now stored in the keyspace record in the topo server.
+The `durability_policy` flag used by vtctl, vtctld, and vtworker binaries has been deprecated.
+
+#### New and Augmented Commands
+The vtctld command `CreateKeyspace` has been augmented to take in an additional argument called `durability-policy` which will
+allow users to set the desired durability policy for a keyspace at creation time.
+
+For existing keyspaces, a new command `SetKeyspaceDurabilityPolicy` has been added, which allows users to change the
+durability policy of an existing keyspace.
+
+If semi-sync is not being used then durability policy should be set to `none` for the keyspace. This is also the default option.
+
+If semi-sync is being used then durability policy should be set to `semi_sync` for the keyspace and `--enable_semi_sync` should be set on vttablets.
+
+### Deprecation of Durability Configuration
+The `Durability` configuration is deprecated and removed from VTOrc. Instead VTOrc will find the durability policy of the keyspace from
+the topo server. This allows VTOrc to monitor and repair multiple keyspaces which have different durability policies in use.
+
+**VTOrc will ignore the keyspaces which have no durability policy specified in the keyspace record. So on upgrading to v14, users must run
+the command `SetKeyspaceDurabilityPolicy` specified above, to ensure VTOrc continues to work as desired. The recommended upgrade 
+path is to upgrade vtctld, run `SetKeyspaceDurabilityPolicy` and then upgrade VTOrc.**
