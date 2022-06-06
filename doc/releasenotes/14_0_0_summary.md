@@ -191,8 +191,8 @@ When `--heartbeat_on_demand_duration` is set to a positive value, then the throt
 ### Durability Policy
 
 #### Deprecation of durability_policy Flag
-The flag `durability_policy` added to vtctl, vtctld and vtworker binaries has now been deprecated.
-Instead the durability policy for a given keyspace will be stored in the keyspace record in the topo-server.
+The durability policy for a keyspace is now stored in the keyspace record in the topo server.
+The `durability_policy` flag used by vtctl, vtctld, and vtworker binaries has been deprecated.
 
 #### New and Augmented Commands
 The vtctld command `CreateKeyspace` has been augmented to take in an additional argument called `durability-policy` which will
@@ -203,12 +203,12 @@ durability policy of an existing keyspace.
 
 If semi-sync is not being used then durability policy should be set to `none` for the keyspace. This is also the default option.
 
-If semi-sync is being used then durability policy should be set to `semi_sync` for the keyspace and `-enable_semi_sync` should be set on vttablets.
+If semi-sync is being used then durability policy should be set to `semi_sync` for the keyspace and `--enable_semi_sync` should be set on vttablets.
 
 ### Deprecation of Durability Configuration
 The `Durability` configuration is deprecated and removed from VTOrc. Instead VTOrc will find the durability policy of the keyspace from
 the topo server. This allows VTOrc to monitor and repair multiple keyspaces which have different durability policies in use.
 
-It will ignore the keyspaces which have no durability policy specified in the keyspace record. So on upgrading to v14, users must run
-the command `SetKeyspaceDurabilityPolicy` specified above, to ensure VTOrc continues to work as desired.
+**VTOrc will ignore the keyspaces which have no durability policy specified in the keyspace record. So on upgrading to v14, users must run
+the command `SetKeyspaceDurabilityPolicy` specified above, to ensure VTOrc continues to work as desired.**
 
