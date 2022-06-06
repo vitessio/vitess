@@ -74,15 +74,15 @@ const (
 
 	/* shard-specific actions */
 
-	EmergencyReparentShardAction     Action = "emergency_reparent_shard"
-	PlannedReparentShardAction       Action = "planned_reparent_shard"
-	TabletExternallyReparentedAction Action = "tablet_externally_reparented" // NOTE: even though "tablet" is in the name, this actually operates on the tablet's shard.
+	EmergencyFailoverShardAction   Action = "emergency_failover_shard"
+	PlannedFailoverShardAction     Action = "planned_failover_shard"
+	TabletExternallyPromotedAction Action = "tablet_externally_promoted" // NOTE: even though "tablet" is in the name, this actually operates on the tablet's shard.
 
 	/* tablet-specific actions */
 
-	ManageTabletReplicationAction Action = "manage_tablet_replication" // Start/Stop Replication
-	ManageTabletWritabilityAction Action = "manage_tablet_writability" // SetRead{Only,Write}
-	ReparentTabletAction          Action = "reparent_tablet"
+	ManageTabletReplicationAction        Action = "manage_tablet_replication" // Start/Stop Replication
+	ManageTabletWritabilityAction        Action = "manage_tablet_writability" // SetRead{Only,Write}
+	RefreshTabletReplicationSourceAction Action = "refresh_tablet_replication_source"
 )
 
 // Resource is an enum representing all resources managed by vtadmin.

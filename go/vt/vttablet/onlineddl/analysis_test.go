@@ -37,6 +37,7 @@ func TestAnalyzeInstantDDL(t *testing.T) {
 		expectError bool
 		instant     bool
 	}{
+		// add/drop columns
 		{
 			version: "5.7.28",
 			create:  "create table t(id int, i1 int not null, primary key(id))",
@@ -74,6 +75,12 @@ func TestAnalyzeInstantDDL(t *testing.T) {
 			instant: true,
 		},
 		{
+			version: "8.0.21",
+			create:  "create table t(id int, i1 int not null, i2 int generated always as (i1 + 1) stored, primary key(id))",
+			alter:   "alter table t drop column i2",
+			instant: false,
+		},
+		{
 			version: "8.0.29",
 			create:  "create table t(id int, i1 int not null, primary key(id))",
 			alter:   "alter table t add column i2 int not null after id",
@@ -95,6 +102,43 @@ func TestAnalyzeInstantDDL(t *testing.T) {
 			version: "8.0.29",
 			create:  "create table t(id int, i1 int not null, primary key(id))",
 			alter:   "alter table t add column i2 int not null after id, add column i3 int not null, drop column i1",
+			instant: true,
+		},
+		// change/remove column default
+		{
+			version: "8.0.21",
+			create:  "create table t(id int, i1 int not null, primary key(id))",
+			alter:   "alter table t modify column i1 int not null default 0",
+			instant: true,
+		},
+		{
+			version: "8.0.21",
+			create:  "create table t(id int, i1 int not null, primary key(id))",
+			alter:   "alter table t modify column i1 int not null default 3",
+			instant: true,
+		},
+		{
+			version: "8.0.21",
+			create:  "create table t(id int, i1 int not null, primary key(id))",
+			alter:   "alter table t modify column i1 int default null",
+			instant: false,
+		},
+		{
+			version: "8.0.21",
+			create:  "create table t(id int, i1 int not null, primary key(id))",
+			alter:   "alter table t modify column i1 bigint not null default 3",
+			instant: false,
+		},
+		{
+			version: "8.0.21",
+			create:  "create table t(id int, i1 int, primary key(id))",
+			alter:   "alter table t modify column i1 int default 0",
+			instant: true,
+		},
+		{
+			version: "8.0.21",
+			create:  "create table t(id int, i1 int, primary key(id))",
+			alter:   "alter table t modify column i1 int default null",
 			instant: true,
 		},
 	}

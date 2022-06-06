@@ -177,13 +177,13 @@ describe('Advanced', () => {
             });
         });
 
-        describe('Reparent', () => {
-            it('reparents', async () => {
+        describe('Refresh Replication Source', () => {
+            it('refreshes replication source', async () => {
                 const tablet = makeTablet();
                 const alias = formatAlias(tablet.tablet?.alias) as string;
                 renderHelper(<Advanced alias={alias} clusterID={tablet.cluster?.id as string} tablet={tablet} />);
 
-                const container = screen.getByTitle('Reparent');
+                const container = screen.getByTitle('Refresh Replication Source');
                 const button = within(container).getByRole('button');
 
                 // This action does not require confirmation
@@ -198,13 +198,13 @@ describe('Advanced', () => {
                     expect(global.fetch).toHaveBeenCalledTimes(1);
                 });
 
-                expect(global.fetch).toHaveBeenCalledWith(`/api/tablet/${alias}/reparent`, {
+                expect(global.fetch).toHaveBeenCalledWith(`/api/tablet/${alias}/refresh_replication_source`, {
                     credentials: undefined,
                     method: 'put',
                 });
             });
 
-            it('prevents reparenting if primary', () => {
+            it('prevents refreshing if primary', () => {
                 const tablet = makePrimaryTablet();
                 renderHelper(
                     <Advanced
@@ -214,7 +214,7 @@ describe('Advanced', () => {
                     />
                 );
 
-                const container = screen.getByTitle('Reparent');
+                const container = screen.getByTitle('Refresh Replication Source');
                 const button = within(container).getByRole('button');
                 expect(button).toHaveAttribute('disabled');
             });
