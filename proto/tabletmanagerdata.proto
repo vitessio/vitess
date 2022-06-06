@@ -416,6 +416,12 @@ message ResetReplicationParametersRequest {
 message ResetReplicationParametersResponse {
 }
 
+message FullStatusRequest {
+}
+
+message FullStatusResponse {
+  replicationdata.FullStatus status = 1;
+}
 
 message SetReplicationSourceRequest {
   topodata.TabletAlias parent = 1;

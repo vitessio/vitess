@@ -20826,6 +20826,174 @@ export namespace tabletmanagerdata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a FullStatusRequest. */
+    interface IFullStatusRequest {
+    }
+
+    /** Represents a FullStatusRequest. */
+    class FullStatusRequest implements IFullStatusRequest {
+
+        /**
+         * Constructs a new FullStatusRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IFullStatusRequest);
+
+        /**
+         * Creates a new FullStatusRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns FullStatusRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IFullStatusRequest): tabletmanagerdata.FullStatusRequest;
+
+        /**
+         * Encodes the specified FullStatusRequest message. Does not implicitly {@link tabletmanagerdata.FullStatusRequest.verify|verify} messages.
+         * @param message FullStatusRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IFullStatusRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified FullStatusRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.FullStatusRequest.verify|verify} messages.
+         * @param message FullStatusRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IFullStatusRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a FullStatusRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns FullStatusRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.FullStatusRequest;
+
+        /**
+         * Decodes a FullStatusRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns FullStatusRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.FullStatusRequest;
+
+        /**
+         * Verifies a FullStatusRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a FullStatusRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns FullStatusRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.FullStatusRequest;
+
+        /**
+         * Creates a plain object from a FullStatusRequest message. Also converts values to other types if specified.
+         * @param message FullStatusRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.FullStatusRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this FullStatusRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a FullStatusResponse. */
+    interface IFullStatusResponse {
+    }
+
+    /** Represents a FullStatusResponse. */
+    class FullStatusResponse implements IFullStatusResponse {
+
+        /**
+         * Constructs a new FullStatusResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IFullStatusResponse);
+
+        /**
+         * Creates a new FullStatusResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns FullStatusResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IFullStatusResponse): tabletmanagerdata.FullStatusResponse;
+
+        /**
+         * Encodes the specified FullStatusResponse message. Does not implicitly {@link tabletmanagerdata.FullStatusResponse.verify|verify} messages.
+         * @param message FullStatusResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IFullStatusResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified FullStatusResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.FullStatusResponse.verify|verify} messages.
+         * @param message FullStatusResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IFullStatusResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a FullStatusResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns FullStatusResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.FullStatusResponse;
+
+        /**
+         * Decodes a FullStatusResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns FullStatusResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.FullStatusResponse;
+
+        /**
+         * Verifies a FullStatusResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a FullStatusResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns FullStatusResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.FullStatusResponse;
+
+        /**
+         * Creates a plain object from a FullStatusResponse message. Also converts values to other types if specified.
+         * @param message FullStatusResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.FullStatusResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this FullStatusResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a SetReplicationSourceRequest. */
     interface ISetReplicationSourceRequest {
 

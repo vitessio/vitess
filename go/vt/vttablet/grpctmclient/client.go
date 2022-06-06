@@ -530,6 +530,20 @@ func (client *Client) ReplicationStatus(ctx context.Context, tablet *topodatapb.
 	return response.Status, nil
 }
 
+// FullStatus is part of the tmclient.TabletManagerClient interface.
+func (client *Client) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.FullStatus(ctx, &tabletmanagerdatapb.FullStatusRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return response.Status, nil
+}
+
 // PrimaryStatus is part of the tmclient.TabletManagerClient interface.
 func (client *Client) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)

@@ -115,6 +115,9 @@ type TabletManagerClient interface {
 	// ReplicationStatus returns the tablet's mysql replication status.
 	ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error)
 
+	// FullStatus returns the tablet's mysql replication status.
+	FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error)
+
 	// StopReplication stops the mysql replication
 	StopReplication(ctx context.Context, tablet *topodatapb.Tablet) error
 

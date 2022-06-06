@@ -52,6 +52,17 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 	return mysql.ReplicationStatusToProto(status), nil
 }
 
+// FullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
+func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error) {
+	status, err := tm.MysqlDaemon.ReplicationStatus()
+	if err != nil {
+		return nil, err
+	}
+	return &replicationdatapb.FullStatus{
+		ReplicationStatus: mysql.ReplicationStatusToProto(status),
+	}, nil
+}
+
 // PrimaryStatus returns the replication status for a primary tablet.
 func (tm *TabletManager) PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
 	status, err := tm.MysqlDaemon.PrimaryStatus(ctx)

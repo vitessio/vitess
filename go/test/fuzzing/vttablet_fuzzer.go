@@ -368,6 +368,17 @@ func (fs *fuzzStore) callReplicationStatus() error {
 	return nil
 }
 
+// callFullStatus implements a wrapper
+// for fuzzing FullStatus
+func (fs *fuzzStore) callFullStatus() error {
+	tablet, err := fs.getTablet()
+	if err != nil {
+		return err
+	}
+	_, _ = fs.client.FullStatus(context.Background(), tablet)
+	return nil
+}
+
 // callPrimaryStatus implements a wrapper
 // for fuzzing PrimaryStatus
 func (fs *fuzzStore) callPrimaryStatus() error {
@@ -658,6 +669,8 @@ func (fs *fuzzStore) executeInRandomOrder() {
 			err = fs.callPopulateReparentJournal()
 		case 24:
 			err = fs.callResetReplicationParameters()
+		case 25:
+			err = fs.callFullStatus()
 		}
 
 		// err means that fuzzStore doesn't have any data

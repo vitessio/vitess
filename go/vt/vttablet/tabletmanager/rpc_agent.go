@@ -81,6 +81,8 @@ type RPCTM interface {
 
 	ReplicationStatus(ctx context.Context) (*replicationdatapb.Status, error)
 
+	FullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error)
+
 	StopReplication(ctx context.Context) error
 
 	StopReplicationMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error)

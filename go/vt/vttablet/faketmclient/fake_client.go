@@ -176,6 +176,11 @@ func (client *FakeTabletManagerClient) ReplicationStatus(ctx context.Context, ta
 	return &replicationdatapb.Status{}, nil
 }
 
+// FullStatus is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+	return &replicationdatapb.FullStatus{}, nil
+}
+
 // StopReplication is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) StopReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return nil

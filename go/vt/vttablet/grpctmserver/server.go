@@ -261,6 +261,17 @@ func (s *server) ReplicationStatus(ctx context.Context, request *tabletmanagerda
 	return response, err
 }
 
+func (s *server) FullStatus(ctx context.Context, request *tabletmanagerdatapb.FullStatusRequest) (response *tabletmanagerdatapb.FullStatusResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "FullStatus", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.FullStatusResponse{}
+	status, err := s.tm.FullStatus(ctx)
+	if err == nil {
+		response.Status = status
+	}
+	return response, err
+}
+
 func (s *server) PrimaryStatus(ctx context.Context, request *tabletmanagerdatapb.PrimaryStatusRequest) (response *tabletmanagerdatapb.PrimaryStatusResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "PrimaryStatus", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)

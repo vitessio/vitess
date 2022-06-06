@@ -147,3 +147,28 @@ func TestResetReplicationParameters(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, res.Rows, 0)
 }
+
+// TestFullStatus tests that the RPC FullStatus works as intended.
+func TestFullStatus(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
+	// Create new tablet
+	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")
+	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+	err := tablet.MysqlctlProcess.Start()
+	require.NoError(t, err)
+
+	log.Info(fmt.Sprintf("Started vttablet %v", tablet))
+	// Start vttablet process as replica. It won't be able to serve because there's no db.
+	err = clusterInstance.StartVttablet(tablet, "NOT_SERVING", false, cell, "dbtest", hostname, "0")
+	require.NoError(t, err)
+
+	// Set a replication source on the tablet and start replication
+	_, err = tablet.VttabletProcess.QueryTablet("stop slave;change master to master_host = 'localhost', master_port = 123;start slave;", keyspaceName, false)
+	require.NoError(t, err)
+
+	// Check that full status gives the correct result
+	status, err := tmcFullStatus(context.Background(), tablet.GrpcPort)
+	require.NoError(t, err)
+	log.Errorf("%v", status)
+}

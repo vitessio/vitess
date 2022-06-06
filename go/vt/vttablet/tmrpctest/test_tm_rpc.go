@@ -694,6 +694,10 @@ var testReplicationStatus = &replicationdatapb.Status{
 	ConnectRetry:          12,
 }
 
+var testFullStatus = &replicationdatapb.FullStatus{
+	ReplicationStatus: testReplicationStatus,
+}
+
 var testPrimaryStatus = &replicationdatapb.PrimaryStatus{Position: "MariaDB/1-345-789"}
 
 func (fra *fakeRPCTM) PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
@@ -718,6 +722,23 @@ func tmRPCTestReplicationStatus(ctx context.Context, t *testing.T, client tmclie
 func tmRPCTestReplicationStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.ReplicationStatus(ctx, tablet)
 	expectHandleRPCPanic(t, "ReplicationStatus", false /*verbose*/, err)
+}
+
+func (fra *fakeRPCTM) FullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return testFullStatus, nil
+}
+
+func tmRPCTestFullStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	rs, err := client.FullStatus(ctx, tablet)
+	compareError(t, "FullStatus", err, rs, testFullStatus)
+}
+
+func tmRPCTestFullStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.FullStatus(ctx, tablet)
+	expectHandleRPCPanic(t, "FullStatus", false /*verbose*/, err)
 }
 
 var testReplicationPosition = "MariaDB/5-456-890"
@@ -1275,6 +1296,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestPrimaryPosition(ctx, t, client, tablet)
 
 	tmRPCTestReplicationStatus(ctx, t, client, tablet)
+	tmRPCTestFullStatus(ctx, t, client, tablet)
 	tmRPCTestPrimaryPosition(ctx, t, client, tablet)
 	tmRPCTestStopReplication(ctx, t, client, tablet)
 	tmRPCTestStopReplicationMinimum(ctx, t, client, tablet)
@@ -1330,6 +1352,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	// Replication related methods
 	tmRPCTestPrimaryPositionPanic(ctx, t, client, tablet)
 	tmRPCTestReplicationStatusPanic(ctx, t, client, tablet)
+	tmRPCTestFullStatusPanic(ctx, t, client, tablet)
 	tmRPCTestStopReplicationPanic(ctx, t, client, tablet)
 	tmRPCTestStopReplicationMinimumPanic(ctx, t, client, tablet)
 	tmRPCTestStartReplicationPanic(ctx, t, client, tablet)
