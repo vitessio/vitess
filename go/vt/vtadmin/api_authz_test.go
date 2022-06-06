@@ -1363,6 +1363,71 @@ func TestGetTablets(t *testing.T) {
 	})
 }
 
+func TestGetVSchema(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "VSchema",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetVSchema(ctx, &vtadminpb.GetVSchemaRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to GetVSchema", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetVSchema(ctx, &vtadminpb.GetVSchemaRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to GetVSchema", actor)
+	})
+}
+
 func testClusters(t testing.TB) []*cluster.Cluster {
 	configs := []testutil.TestClusterConfig{
 		{
@@ -1464,6 +1529,16 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 				}{
 					"test/-": {
 						Response: &vtctldatapb.ShardReplicationPositionsResponse{},
+					},
+				},
+				GetVSchemaResults: map[string]struct {
+					Response *vtctldatapb.GetVSchemaResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.GetVSchemaResponse{
+							VSchema: &vschemapb.Keyspace{},
+						},
 					},
 				},
 			},

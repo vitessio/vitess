@@ -54,6 +54,11 @@
                     "field": "ShardReplicationPositionsResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.ShardReplicationPositionsResponse\nError error}",
                     "value": "\"test/-\": {\nResponse: &vtctldatapb.ShardReplicationPositionsResponse{},\n},"
+                },
+                {
+                    "field": "GetVSchemaResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.GetVSchemaResponse\nError error}",
+                    "value": "\"test\": {\nResponse: &vtctldatapb.GetVSchemaResponse{\nVSchema: &vschemapb.Keyspace{},\n},\n},"
                 }
             ],
             "db_tablet_list": [
@@ -837,6 +842,39 @@
                         "clusterAliases[tablet.Cluster.Id] = append(clusterAliases[tablet.Cluster.Id], topoproto.TabletAliasString(tablet.Tablet.Alias))",
                         "}",
                         "assert.Equal(t, clusterAliases, map[string][]string{\"test\": {\"zone1-0000000100\"}, \"other\": {\"other1-0000000100\"}}, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "GetVSchema",
+            "rules": [
+                {
+                    "resource": "VSchema",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.GetVSchemaRequest{\nClusterId: \"test\",\nKeyspace: \"test\",\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
                     ]
                 }
             ]
