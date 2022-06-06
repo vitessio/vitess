@@ -1,13 +1,13 @@
 ## Major Changes
 
-## Command-line syntax deprecations
+### Command-line syntax deprecations
 
 Vitess has begun a transition to a new library for CLI flag parsing.
 In order to facilitate a smooth transition, certain syntaxes that will not be supported in the future now issue deprecation warnings when used.
 
 The messages you will likely see, along with explanations and migrations, are:
 
-### "Use of single-dash long flags is deprecated"
+#### "Use of single-dash long flags is deprecated"
 
 Single-dash usage will be only possible for short flags (e.g. `-v` is okay, but `-verbose` is not).
 
@@ -23,7 +23,7 @@ To:
 $ vttablet --tablet_alias zone1-100 --init_keyspace mykeyspace ... # new way
 ```
 
-### "Detected a dashed argument after a position argument."
+#### "Detected a dashed argument after a position argument."
 
 As the full deprecation text goes on to (attempt to) explain, mixing flags and positional arguments will change in a future version that will break scripts.
 
@@ -187,3 +187,11 @@ The throttler now checks in with the heartbeat writer to request heartbeats, any
 When `--heartbeat_on_demand_duration` is not set, there is no change in behavior.
 
 When `--heartbeat_on_demand_duration` is set to a positive value, then the throttler ensures that the heartbeat writer generated heartbeats for at least the following duration. This also means at the first throttler check, it's possible that heartbeats are idle, and so the first check will fail. As heartbeats start running, followup checks will get a more accurate lag evaluation and will respond accordingly. In a sense, it's a "cold engine" scenario, where the engine takes time to start up, and then runs smoothly.
+
+### VDiff2
+
+We introduced a new version of VDiff -- currently marked as Experimental -- that executes the VDiff on tablets rather than in vtctld. While this is experimental we encourage you to try it out and provide feedback! This input will be invaluable as we improve this feature on the march toward a production-ready version.
+
+:information_source:  NOTE: even before it's marked as production-ready (feature complete and tested widely in 1+ releases), it should be safe to use and is likely to provide much better results for very large tables.
+
+For additional details, please see the [RFC](https://github.com/vitessio/vitess/issues/10134) and the [README](https://github.com/vitessio/vitess/tree/main/go/vt/vttablet/tabletmanager/vdiff/README.md).
