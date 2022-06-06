@@ -176,19 +176,34 @@ func analyzeAddRangePartition(alterTable *sqlparser.AlterTable, createTable *sql
 }
 
 func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, createTable *sqlparser.CreateTable, serverVersion string) (bool, error) {
-	isVirtualColumn := func(colName string) bool {
+	findColumn := func(colName string) *sqlparser.ColumnDefinition {
 		if createTable == nil {
-			return false
+			return nil
 		}
 		for _, col := range createTable.TableSpec.Columns {
 			if strings.EqualFold(colName, col.Name.String()) {
-				if col.Type.Options.As == nil {
-					return false
-				}
-				return col.Type.Options.Storage == sqlparser.VirtualStorage
+				return col
 			}
 		}
-		return false
+		return nil
+	}
+	isVirtualColumn := func(colName string) bool {
+		col := findColumn(colName)
+		if col == nil {
+			return false
+		}
+		if col.Type.Options == nil {
+			return false
+		}
+		if col.Type.Options.As == nil {
+			return false
+		}
+		return col.Type.Options.Storage == sqlparser.VirtualStorage
+	}
+	colStringWithoutDefault := func(col *sqlparser.ColumnDefinition) string {
+		colWithoutDefault := sqlparser.CloneRefOfColumnDefinition(col)
+		colWithoutDefault.Type.Options.Default = nil
+		return sqlparser.CanonicalString(colWithoutDefault)
 	}
 	// Up to 8.0.26 we could only ADD COLUMN as last column
 	switch opt := alterOption.(type) {
@@ -205,6 +220,19 @@ func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, create
 			return true, nil
 		}
 		return mysql.ServerVersionAtLeast(serverVersion, 8, 0, 29)
+	case *sqlparser.ModifyColumn:
+		if col := findColumn(opt.NewColDefinition.Name.String()); col != nil {
+			// Check if only diff is change of default
+			// we temporarily remove the DEFAULT expression (if any) from both
+			// table and ALTER statement, and compare the columns: if they're otherwise equal,
+			// then the only change can be an addition/change/removal of DEFAULT, which
+			// is instant-table.
+			tableColDefinition := colStringWithoutDefault(col)
+			newColDefinition := colStringWithoutDefault(opt.NewColDefinition)
+
+			return tableColDefinition == newColDefinition, nil
+		}
+		return false, nil
 	default:
 		return false, nil
 	}
