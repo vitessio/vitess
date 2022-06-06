@@ -50,6 +50,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/kv"
 	"vitess.io/vitess/go/vt/orchestrator/metrics/query"
 	"vitess.io/vitess/go/vt/orchestrator/util"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
@@ -253,6 +254,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	var waitGroup sync.WaitGroup
 	var serverUUIDWaitGroup sync.WaitGroup
 	var tablet *topodatapb.Tablet
+	var durability reparentutil.Durabler
 	readingStartTime := time.Now()
 	instance := NewInstance()
 	instanceFound := false
@@ -289,6 +291,11 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		// This can happen because Orc rediscovers instances by alt hostnames,
 		// lit localhost, ip, etc.
 		// TODO(sougou): disable this ability.
+		goto Cleanup
+	}
+
+	durability, err = GetDurabilityPolicy(tablet)
+	if err != nil {
 		goto Cleanup
 	}
 
@@ -685,7 +692,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	// We need to update candidate_database_instance.
 	// We register the rule even if it hasn't changed,
 	// to bump the last_suggested time.
-	instance.PromotionRule = PromotionRule(tablet)
+	instance.PromotionRule = PromotionRule(durability, tablet)
 	err = RegisterCandidateInstance(NewCandidateDatabaseInstance(instanceKey, instance.PromotionRule).WithCurrentTime())
 	logReadTopologyInstanceError(instanceKey, "RegisterCandidateInstance", err)
 

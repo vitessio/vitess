@@ -46,7 +46,11 @@ var ErrTabletAliasNil = errors.New("tablet alias is nil")
 // The proactive propagation allows a competing Orchestrator from discovering
 // the successful action of a previous one, which reduces churn.
 func SwitchPrimary(newPrimaryKey, oldPrimaryKey InstanceKey) error {
-	newPrimaryTablet, err := ChangeTabletType(newPrimaryKey, topodatapb.TabletType_PRIMARY, SemiSyncAckers(newPrimaryKey) > 0)
+	durability, err := GetDurabilityPolicy(newPrimaryKey)
+	if err != nil {
+		return err
+	}
+	newPrimaryTablet, err := ChangeTabletType(newPrimaryKey, topodatapb.TabletType_PRIMARY, SemiSyncAckers(durability, newPrimaryKey) > 0)
 	if err != nil {
 		return err
 	}
@@ -80,7 +84,7 @@ func SwitchPrimary(newPrimaryKey, oldPrimaryKey InstanceKey) error {
 		log.Errore(err)
 		return nil
 	}
-	if _, err := ChangeTabletType(oldPrimaryKey, topodatapb.TabletType_REPLICA, IsReplicaSemiSync(newPrimaryKey, oldPrimaryKey)); err != nil {
+	if _, err := ChangeTabletType(oldPrimaryKey, topodatapb.TabletType_REPLICA, IsReplicaSemiSync(durability, newPrimaryKey, oldPrimaryKey)); err != nil {
 		// This is best effort.
 		log.Errore(err)
 	}

@@ -200,7 +200,6 @@ stringData:
   orc_config.json: |
     {
       "Debug": true,
-      "Durability": "none",
       "MySQLTopologyUser": "orc_client_user",
       "MySQLTopologyPassword": "orc_client_user_password",
       "MySQLReplicaUser": "vt_repl",
