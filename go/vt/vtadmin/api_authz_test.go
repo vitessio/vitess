@@ -1013,6 +1013,99 @@ func TestGetSrvVSchema(t *testing.T) {
 	})
 }
 
+func TestGetSrvVSchemas(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "SrvVSchema",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "SrvVSchema",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetSrvVSchemas(ctx, &vtadminpb.GetSrvVSchemasRequest{})
+		require.NoError(t, err)
+		assert.Nil(t, resp.SrvVSchemas, "actor %+v should not be permitted to GetSrvVSchemas", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetSrvVSchemas(ctx, &vtadminpb.GetSrvVSchemasRequest{})
+		assert.NotEmpty(t, resp.SrvVSchemas, "actor %+v should be permitted to GetSrvVSchemas", actor)
+		clusterCells := map[string][]string{}
+		for _, svs := range resp.SrvVSchemas {
+			if _, ok := clusterCells[svs.Cluster.Id]; !ok {
+				clusterCells[svs.Cluster.Id] = []string{}
+			}
+			clusterCells[svs.Cluster.Id] = append(clusterCells[svs.Cluster.Id], svs.Cell)
+		}
+		assert.Equal(t, clusterCells, map[string][]string{"other": {"other1"}}, "actor %+v should be permitted to GetSrvVSchemas", actor)
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetSrvVSchemas(ctx, &vtadminpb.GetSrvVSchemasRequest{})
+		assert.NotEmpty(t, resp.SrvVSchemas, "actor %+v should be permitted to GetSrvVSchemas", actor)
+		clusterCells := map[string][]string{}
+		for _, svs := range resp.SrvVSchemas {
+			if _, ok := clusterCells[svs.Cluster.Id]; !ok {
+				clusterCells[svs.Cluster.Id] = []string{}
+			}
+			clusterCells[svs.Cluster.Id] = append(clusterCells[svs.Cluster.Id], svs.Cell)
+		}
+		assert.Equal(t, clusterCells, map[string][]string{"test": {"zone1"}, "other": {"other1"}}, "actor %+v should be permitted to GetSrvVSchemas", actor)
+	})
+}
+
 func testClusters(t testing.TB) []*cluster.Cluster {
 	configs := []testutil.TestClusterConfig{
 		{
@@ -1187,6 +1280,16 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 						{
 							Name:     "otherks",
 							Keyspace: &topodatapb.Keyspace{},
+						},
+					},
+				},
+				GetSrvVSchemaResults: map[string]struct {
+					Response *vtctldatapb.GetSrvVSchemaResponse
+					Error    error
+				}{
+					"other1": {
+						Response: &vtctldatapb.GetSrvVSchemaResponse{
+							SrvVSchema: &vschemapb.SrvVSchema{},
 						},
 					},
 				},

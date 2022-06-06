@@ -87,6 +87,11 @@
                     "field": "GetKeyspacesResults",
                     "type": "&struct{\nKeyspaces []*vtctldatapb.Keyspace\nError error}",
                     "value": "Keyspaces: []*vtctldatapb.Keyspace{\n{\nName: \"otherks\",\nKeyspace: &topodatapb.Keyspace{},\n},\n},"
+                },
+                {
+                    "field": "GetSrvVSchemaResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.GetSrvVSchemaResponse\nError error}",
+                    "value": "\"other1\": {\nResponse: &vtctldatapb.GetSrvVSchemaResponse{\nSrvVSchema: &vschemapb.SrvVSchema{},\n},\n},"
                 }
             ]
         }
@@ -610,6 +615,63 @@
                     "assertions": [
                         "require.NoError(t, err)",
                         "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "GetSrvVSchemas",
+            "rules": [
+                {
+                    "resource": "SrvVSchema",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-all"],
+                    "clusters": ["*"]
+                },
+                {
+                    "resource": "SrvVSchema",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-other"],
+                    "clusters": ["other"]
+                }
+            ],
+            "request": "&vtadminpb.GetSrvVSchemasRequest{}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "unauthorized"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.Nil(t, resp.SrvVSchemas, $$)"
+                    ]
+                },
+                {
+                    "name": "partial access",
+                    "actor": {"name": "allowed-other"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.SrvVSchemas, $$)",
+                        "clusterCells := map[string][]string{}",
+                        "for _, svs := range resp.SrvVSchemas {",
+                        "if _, ok := clusterCells[svs.Cluster.Id]; !ok {\nclusterCells[svs.Cluster.Id] = []string{}\n}",
+                        "clusterCells[svs.Cluster.Id] = append(clusterCells[svs.Cluster.Id], svs.Cell)",
+                        "}",
+                        "assert.Equal(t, clusterCells, map[string][]string{\"other\": {\"other1\"}}, $$)"
+                    ]
+                },
+                {
+                    "name": "full access",
+                    "actor": {"name": "allowed-all"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.SrvVSchemas, $$)",
+                        "clusterCells := map[string][]string{}",
+                        "for _, svs := range resp.SrvVSchemas {",
+                        "if _, ok := clusterCells[svs.Cluster.Id]; !ok {\nclusterCells[svs.Cluster.Id] = []string{}\n}",
+                        "clusterCells[svs.Cluster.Id] = append(clusterCells[svs.Cluster.Id], svs.Cell)",
+                        "}",
+                        "assert.Equal(t, clusterCells, map[string][]string{\"test\": {\"zone1\"}, \"other\": {\"other1\"}}, $$)"
                     ]
                 }
             ]
