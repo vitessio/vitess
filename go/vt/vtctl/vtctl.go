@@ -1954,6 +1954,9 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 
 	var snapshotTime *vttime.Time
 	if ktype == topodatapb.KeyspaceType_SNAPSHOT {
+		if *durabilityPolicy != "none" {
+			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "durability-policy cannot be specified while creating a snapshot keyspace")
+		}
 		if *baseKeyspace == "" {
 			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "base_keyspace must be specified while creating a snapshot keyspace")
 		}
