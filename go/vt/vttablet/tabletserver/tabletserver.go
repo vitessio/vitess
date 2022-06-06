@@ -31,8 +31,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rcrowley/go-metrics"
-	"github.com/rcrowley/go-metrics/exp"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/acl"
@@ -1729,10 +1727,6 @@ func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(throttledApps)
-	})
-	tsv.exporter.HandleFunc("/throttler/metrics", func(w http.ResponseWriter, r *http.Request) {
-		handler := exp.ExpHandler(metrics.DefaultRegistry)
-		handler.ServeHTTP(w, r)
 	})
 }
 
