@@ -211,6 +211,9 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		}, nil
 	case *sqlparser.Select:
 		plan, err = analyzeSelect(stmt, tables)
+		if err != nil {
+			return nil, err
+		}
 		if plan != nil && plan.PlanID != PlanSelectImpossible && !isReservedConn {
 			err = checkForPoolingUnsafeConstructs(statement)
 			if err != nil {
