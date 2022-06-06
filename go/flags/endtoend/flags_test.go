@@ -1388,7 +1388,7 @@ max_rate_approach_threshold: 0.9
   --unhealthy_threshold duration
 	replication lag after which a replica is considered unhealthy (default 2h0m0s)
   --use_super_read_only
-	Set super_read_only flag when performing planned failover. (default false)
+	Set super_read_only flag when performing planned failover.
   --v value
 	log level for V logs
   --version
