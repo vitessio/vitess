@@ -59,6 +59,11 @@
                     "field": "GetVSchemaResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetVSchemaResponse\nError error}",
                     "value": "\"test\": {\nResponse: &vtctldatapb.GetVSchemaResponse{\nVSchema: &vschemapb.Keyspace{},\n},\n},"
+                },
+                {
+                    "field": "GetWorkflowsResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.GetWorkflowsResponse\nError error}",
+                    "value": "\"test\": {\nResponse: &vtctldatapb.GetWorkflowsResponse{\nWorkflows: []*vtctldatapb.Workflow{\n{\nName: \"testworkflow\",\n},\n},\n}},"
                 }
             ],
             "db_tablet_list": [
@@ -988,6 +993,39 @@
                         "assert.NotEmpty(t, resp.Vtctlds, $$)",
                         "// testutil.BuildCluster creates exactly one gate per cluster",
                         "assert.Len(t, resp.Vtctlds, 2, \"actor %+v should be able to see Vtctld from all clusters\", actor)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "GetWorkflow",
+            "rules": [
+                {
+                    "resource": "Workflow",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.GetWorkflowRequest{\nClusterId: \"test\",\nKeyspace: \"test\",\nName: \"testworkflow\",\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
                     ]
                 }
             ]

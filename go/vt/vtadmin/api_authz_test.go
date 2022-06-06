@@ -1599,6 +1599,73 @@ func TestGetVtctlds(t *testing.T) {
 	})
 }
 
+func TestGetWorkflow(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Workflow",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetWorkflow(ctx, &vtadminpb.GetWorkflowRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+			Name:      "testworkflow",
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to GetWorkflow", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetWorkflow(ctx, &vtadminpb.GetWorkflowRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+			Name:      "testworkflow",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to GetWorkflow", actor)
+	})
+}
+
 func testClusters(t testing.TB) []*cluster.Cluster {
 	configs := []testutil.TestClusterConfig{
 		{
@@ -1711,6 +1778,19 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 							VSchema: &vschemapb.Keyspace{},
 						},
 					},
+				},
+				GetWorkflowsResults: map[string]struct {
+					Response *vtctldatapb.GetWorkflowsResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.GetWorkflowsResponse{
+							Workflows: []*vtctldatapb.Workflow{
+								{
+									Name: "testworkflow",
+								},
+							},
+						}},
 				},
 			},
 			Tablets: []*vtadminpb.Tablet{
