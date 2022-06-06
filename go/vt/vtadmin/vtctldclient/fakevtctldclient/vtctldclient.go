@@ -80,6 +80,10 @@ type VtctldClient struct {
 		Response *vtctldatapb.GetSchemaResponse
 		Error    error
 	}
+	GetSrvVSchemaResults map[string]struct {
+		Response *vtctldatapb.GetSrvVSchemaResponse
+		Error    error
+	}
 	GetVSchemaResults map[string]struct {
 		Response *vtctldatapb.GetVSchemaResponse
 		Error    error
@@ -342,6 +346,19 @@ func (fake *VtctldClient) GetSchema(ctx context.Context, req *vtctldatapb.GetSch
 	}
 
 	return nil, fmt.Errorf("%w: no result set for tablet alias %s", assert.AnError, key)
+}
+
+// GetSrvVSchema is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) GetSrvVSchema(ctx context.Context, req *vtctldatapb.GetSrvVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSrvVSchemaResponse, error) {
+	if fake.GetSrvVSchemaResults == nil {
+		return nil, fmt.Errorf("%w: GetSrvVSchemaResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	if result, ok := fake.GetSrvVSchemaResults[req.Cell]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for key %s", assert.AnError, req.Cell)
 }
 
 // GetVSchema is part of the vtctldclient.VtctldClient interface.
