@@ -107,6 +107,11 @@
                     "field": "ShardReplicationPositionsResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.ShardReplicationPositionsResponse\nError error}",
                     "value": "\"otherks/-\": {\nResponse: &vtctldatapb.ShardReplicationPositionsResponse{},\n},"
+                },
+                {
+                    "field": "GetVSchemaResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.GetVSchemaResponse\nError error}",
+                    "value": "\"otherks\": {\nResponse: &vtctldatapb.GetVSchemaResponse{\nVSchema: &vschemapb.Keyspace{},\n},\n},"
                 }
             ],
             "db_tablet_list": [
@@ -875,6 +880,63 @@
                     "assertions": [
                         "require.NoError(t, err)",
                         "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "GetVSchemas",
+            "rules": [
+                {
+                    "resource": "VSchema",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-all"],
+                    "clusters": ["*"]
+                },
+                {
+                    "resource": "VSchema",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-other"],
+                    "clusters": ["other"]
+                }
+            ],
+            "request": "&vtadminpb.GetVSchemasRequest{}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "unauthorized"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.Nil(t, resp.VSchemas, $$)"
+                    ]
+                },
+                {
+                    "name": "partial access",
+                    "actor": {"name": "allowed-other"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.VSchemas, $$)",
+                        "clusterKeyspaces := map[string][]string{}",
+                        "for _, vs := range resp.VSchemas {",
+                        "if _, ok := clusterKeyspaces[vs.Cluster.Id]; !ok {\nclusterKeyspaces[vs.Cluster.Id] = []string{}\n}",
+                        "clusterKeyspaces[vs.Cluster.Id] = append(clusterKeyspaces[vs.Cluster.Id], vs.Name)",
+                        "}",
+                        "assert.Equal(t, clusterKeyspaces, map[string][]string{\"other\": {\"otherks\"}}, $$)"
+                    ]
+                },
+                {
+                    "name": "full access",
+                    "actor": {"name": "allowed-all"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.VSchemas, $$)",
+                        "clusterKeyspaces := map[string][]string{}",
+                        "for _, vs := range resp.VSchemas {",
+                        "if _, ok := clusterKeyspaces[vs.Cluster.Id]; !ok {\nclusterKeyspaces[vs.Cluster.Id] = []string{}\n}",
+                        "clusterKeyspaces[vs.Cluster.Id] = append(clusterKeyspaces[vs.Cluster.Id], vs.Name)",
+                        "}",
+                        "assert.Equal(t, clusterKeyspaces, map[string][]string{\"test\": {\"test\"}, \"other\": {\"otherks\"}}, $$)"
                     ]
                 }
             ]
