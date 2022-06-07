@@ -21953,6 +21953,660 @@ export namespace tabletmanagerdata {
          */
         public toJSON(): { [k: string]: any };
     }
+
+    /** Properties of a VDiffRequest. */
+    interface IVDiffRequest {
+
+        /** VDiffRequest keyspace */
+        keyspace?: (string|null);
+
+        /** VDiffRequest workflow */
+        workflow?: (string|null);
+
+        /** VDiffRequest command */
+        command?: (string|null);
+
+        /** VDiffRequest sub_command */
+        sub_command?: (string|null);
+
+        /** VDiffRequest vdiff_uuid */
+        vdiff_uuid?: (string|null);
+
+        /** VDiffRequest options */
+        options?: (tabletmanagerdata.IVDiffOptions|null);
+    }
+
+    /** Represents a VDiffRequest. */
+    class VDiffRequest implements IVDiffRequest {
+
+        /**
+         * Constructs a new VDiffRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IVDiffRequest);
+
+        /** VDiffRequest keyspace. */
+        public keyspace: string;
+
+        /** VDiffRequest workflow. */
+        public workflow: string;
+
+        /** VDiffRequest command. */
+        public command: string;
+
+        /** VDiffRequest sub_command. */
+        public sub_command: string;
+
+        /** VDiffRequest vdiff_uuid. */
+        public vdiff_uuid: string;
+
+        /** VDiffRequest options. */
+        public options?: (tabletmanagerdata.IVDiffOptions|null);
+
+        /**
+         * Creates a new VDiffRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IVDiffRequest): tabletmanagerdata.VDiffRequest;
+
+        /**
+         * Encodes the specified VDiffRequest message. Does not implicitly {@link tabletmanagerdata.VDiffRequest.verify|verify} messages.
+         * @param message VDiffRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IVDiffRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.VDiffRequest.verify|verify} messages.
+         * @param message VDiffRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IVDiffRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.VDiffRequest;
+
+        /**
+         * Decodes a VDiffRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.VDiffRequest;
+
+        /**
+         * Verifies a VDiffRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.VDiffRequest;
+
+        /**
+         * Creates a plain object from a VDiffRequest message. Also converts values to other types if specified.
+         * @param message VDiffRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.VDiffRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a VDiffResponse. */
+    interface IVDiffResponse {
+
+        /** VDiffResponse id */
+        id?: (number|Long|null);
+
+        /** VDiffResponse output */
+        output?: (query.IQueryResult|null);
+
+        /** VDiffResponse vdiff_uuid */
+        vdiff_uuid?: (string|null);
+    }
+
+    /** Represents a VDiffResponse. */
+    class VDiffResponse implements IVDiffResponse {
+
+        /**
+         * Constructs a new VDiffResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IVDiffResponse);
+
+        /** VDiffResponse id. */
+        public id: (number|Long);
+
+        /** VDiffResponse output. */
+        public output?: (query.IQueryResult|null);
+
+        /** VDiffResponse vdiff_uuid. */
+        public vdiff_uuid: string;
+
+        /**
+         * Creates a new VDiffResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IVDiffResponse): tabletmanagerdata.VDiffResponse;
+
+        /**
+         * Encodes the specified VDiffResponse message. Does not implicitly {@link tabletmanagerdata.VDiffResponse.verify|verify} messages.
+         * @param message VDiffResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IVDiffResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.VDiffResponse.verify|verify} messages.
+         * @param message VDiffResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IVDiffResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.VDiffResponse;
+
+        /**
+         * Decodes a VDiffResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.VDiffResponse;
+
+        /**
+         * Verifies a VDiffResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.VDiffResponse;
+
+        /**
+         * Creates a plain object from a VDiffResponse message. Also converts values to other types if specified.
+         * @param message VDiffResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.VDiffResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a VDiffPickerOptions. */
+    interface IVDiffPickerOptions {
+
+        /** VDiffPickerOptions tablet_types */
+        tablet_types?: (string|null);
+
+        /** VDiffPickerOptions source_cell */
+        source_cell?: (string|null);
+
+        /** VDiffPickerOptions target_cell */
+        target_cell?: (string|null);
+    }
+
+    /** Represents a VDiffPickerOptions. */
+    class VDiffPickerOptions implements IVDiffPickerOptions {
+
+        /**
+         * Constructs a new VDiffPickerOptions.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IVDiffPickerOptions);
+
+        /** VDiffPickerOptions tablet_types. */
+        public tablet_types: string;
+
+        /** VDiffPickerOptions source_cell. */
+        public source_cell: string;
+
+        /** VDiffPickerOptions target_cell. */
+        public target_cell: string;
+
+        /**
+         * Creates a new VDiffPickerOptions instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffPickerOptions instance
+         */
+        public static create(properties?: tabletmanagerdata.IVDiffPickerOptions): tabletmanagerdata.VDiffPickerOptions;
+
+        /**
+         * Encodes the specified VDiffPickerOptions message. Does not implicitly {@link tabletmanagerdata.VDiffPickerOptions.verify|verify} messages.
+         * @param message VDiffPickerOptions message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IVDiffPickerOptions, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffPickerOptions message, length delimited. Does not implicitly {@link tabletmanagerdata.VDiffPickerOptions.verify|verify} messages.
+         * @param message VDiffPickerOptions message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IVDiffPickerOptions, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffPickerOptions message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffPickerOptions
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.VDiffPickerOptions;
+
+        /**
+         * Decodes a VDiffPickerOptions message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffPickerOptions
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.VDiffPickerOptions;
+
+        /**
+         * Verifies a VDiffPickerOptions message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffPickerOptions message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffPickerOptions
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.VDiffPickerOptions;
+
+        /**
+         * Creates a plain object from a VDiffPickerOptions message. Also converts values to other types if specified.
+         * @param message VDiffPickerOptions
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.VDiffPickerOptions, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffPickerOptions to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a VDiffReportOptions. */
+    interface IVDiffReportOptions {
+
+        /** VDiffReportOptions only_p_k_s */
+        only_p_k_s?: (boolean|null);
+
+        /** VDiffReportOptions debug_query */
+        debug_query?: (boolean|null);
+
+        /** VDiffReportOptions format */
+        format?: (string|null);
+    }
+
+    /** Represents a VDiffReportOptions. */
+    class VDiffReportOptions implements IVDiffReportOptions {
+
+        /**
+         * Constructs a new VDiffReportOptions.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IVDiffReportOptions);
+
+        /** VDiffReportOptions only_p_k_s. */
+        public only_p_k_s: boolean;
+
+        /** VDiffReportOptions debug_query. */
+        public debug_query: boolean;
+
+        /** VDiffReportOptions format. */
+        public format: string;
+
+        /**
+         * Creates a new VDiffReportOptions instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffReportOptions instance
+         */
+        public static create(properties?: tabletmanagerdata.IVDiffReportOptions): tabletmanagerdata.VDiffReportOptions;
+
+        /**
+         * Encodes the specified VDiffReportOptions message. Does not implicitly {@link tabletmanagerdata.VDiffReportOptions.verify|verify} messages.
+         * @param message VDiffReportOptions message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IVDiffReportOptions, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffReportOptions message, length delimited. Does not implicitly {@link tabletmanagerdata.VDiffReportOptions.verify|verify} messages.
+         * @param message VDiffReportOptions message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IVDiffReportOptions, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffReportOptions message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffReportOptions
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.VDiffReportOptions;
+
+        /**
+         * Decodes a VDiffReportOptions message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffReportOptions
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.VDiffReportOptions;
+
+        /**
+         * Verifies a VDiffReportOptions message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffReportOptions message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffReportOptions
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.VDiffReportOptions;
+
+        /**
+         * Creates a plain object from a VDiffReportOptions message. Also converts values to other types if specified.
+         * @param message VDiffReportOptions
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.VDiffReportOptions, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffReportOptions to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a VDiffCoreOptions. */
+    interface IVDiffCoreOptions {
+
+        /** VDiffCoreOptions tables */
+        tables?: (string|null);
+
+        /** VDiffCoreOptions resumable */
+        resumable?: (boolean|null);
+
+        /** VDiffCoreOptions max_rows */
+        max_rows?: (number|Long|null);
+
+        /** VDiffCoreOptions checksum */
+        checksum?: (boolean|null);
+
+        /** VDiffCoreOptions sample_pct */
+        sample_pct?: (number|Long|null);
+
+        /** VDiffCoreOptions timeout_seconds */
+        timeout_seconds?: (number|Long|null);
+
+        /** VDiffCoreOptions max_extra_rows_to_compare */
+        max_extra_rows_to_compare?: (number|Long|null);
+    }
+
+    /** Represents a VDiffCoreOptions. */
+    class VDiffCoreOptions implements IVDiffCoreOptions {
+
+        /**
+         * Constructs a new VDiffCoreOptions.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IVDiffCoreOptions);
+
+        /** VDiffCoreOptions tables. */
+        public tables: string;
+
+        /** VDiffCoreOptions resumable. */
+        public resumable: boolean;
+
+        /** VDiffCoreOptions max_rows. */
+        public max_rows: (number|Long);
+
+        /** VDiffCoreOptions checksum. */
+        public checksum: boolean;
+
+        /** VDiffCoreOptions sample_pct. */
+        public sample_pct: (number|Long);
+
+        /** VDiffCoreOptions timeout_seconds. */
+        public timeout_seconds: (number|Long);
+
+        /** VDiffCoreOptions max_extra_rows_to_compare. */
+        public max_extra_rows_to_compare: (number|Long);
+
+        /**
+         * Creates a new VDiffCoreOptions instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffCoreOptions instance
+         */
+        public static create(properties?: tabletmanagerdata.IVDiffCoreOptions): tabletmanagerdata.VDiffCoreOptions;
+
+        /**
+         * Encodes the specified VDiffCoreOptions message. Does not implicitly {@link tabletmanagerdata.VDiffCoreOptions.verify|verify} messages.
+         * @param message VDiffCoreOptions message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IVDiffCoreOptions, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffCoreOptions message, length delimited. Does not implicitly {@link tabletmanagerdata.VDiffCoreOptions.verify|verify} messages.
+         * @param message VDiffCoreOptions message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IVDiffCoreOptions, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffCoreOptions message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffCoreOptions
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.VDiffCoreOptions;
+
+        /**
+         * Decodes a VDiffCoreOptions message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffCoreOptions
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.VDiffCoreOptions;
+
+        /**
+         * Verifies a VDiffCoreOptions message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffCoreOptions message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffCoreOptions
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.VDiffCoreOptions;
+
+        /**
+         * Creates a plain object from a VDiffCoreOptions message. Also converts values to other types if specified.
+         * @param message VDiffCoreOptions
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.VDiffCoreOptions, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffCoreOptions to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a VDiffOptions. */
+    interface IVDiffOptions {
+
+        /** VDiffOptions picker_options */
+        picker_options?: (tabletmanagerdata.IVDiffPickerOptions|null);
+
+        /** VDiffOptions core_options */
+        core_options?: (tabletmanagerdata.IVDiffCoreOptions|null);
+
+        /** VDiffOptions report_options */
+        report_options?: (tabletmanagerdata.IVDiffReportOptions|null);
+    }
+
+    /** Represents a VDiffOptions. */
+    class VDiffOptions implements IVDiffOptions {
+
+        /**
+         * Constructs a new VDiffOptions.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IVDiffOptions);
+
+        /** VDiffOptions picker_options. */
+        public picker_options?: (tabletmanagerdata.IVDiffPickerOptions|null);
+
+        /** VDiffOptions core_options. */
+        public core_options?: (tabletmanagerdata.IVDiffCoreOptions|null);
+
+        /** VDiffOptions report_options. */
+        public report_options?: (tabletmanagerdata.IVDiffReportOptions|null);
+
+        /**
+         * Creates a new VDiffOptions instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffOptions instance
+         */
+        public static create(properties?: tabletmanagerdata.IVDiffOptions): tabletmanagerdata.VDiffOptions;
+
+        /**
+         * Encodes the specified VDiffOptions message. Does not implicitly {@link tabletmanagerdata.VDiffOptions.verify|verify} messages.
+         * @param message VDiffOptions message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IVDiffOptions, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffOptions message, length delimited. Does not implicitly {@link tabletmanagerdata.VDiffOptions.verify|verify} messages.
+         * @param message VDiffOptions message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IVDiffOptions, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffOptions message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffOptions
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.VDiffOptions;
+
+        /**
+         * Decodes a VDiffOptions message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffOptions
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.VDiffOptions;
+
+        /**
+         * Verifies a VDiffOptions message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffOptions message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffOptions
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.VDiffOptions;
+
+        /**
+         * Creates a plain object from a VDiffOptions message. Also converts values to other types if specified.
+         * @param message VDiffOptions
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.VDiffOptions, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffOptions to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
 }
 
 /** Namespace query. */
