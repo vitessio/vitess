@@ -99,6 +99,11 @@
                     "field": "StopReplicationResults",
                     "type": "map[string]error",
                     "value": "\"zone1-0000000100\": nil,"
+                },
+                {
+                    "field": "TabletExternallyReparentedResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.TabletExternallyReparentedResponse\nError error\n}",
+                    "value": "\"zone1-0000000100\": {\nResponse: &vtctldatapb.TabletExternallyReparentedResponse{},\n},"
                 }
             ],
             "db_tablet_list": [
@@ -1359,6 +1364,39 @@
                 }
             ],
             "request": "&vtadminpb.StopReplicationRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "TabletExternallyPromoted",
+            "rules": [
+                {
+                    "resource": "Shard",
+                    "actions": ["tablet_externally_promoted"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.TabletExternallyPromotedRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
             "cases": [
                 {
                     "name": "unauthorized actor",
