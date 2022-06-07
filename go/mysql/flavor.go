@@ -49,6 +49,8 @@ const (
 	InstantAddDropVirtualColumnFlavorCapability
 	InstantAddDropColumnFlavorCapability
 	InstantChangeColumnDefaultFlavorCapability
+	MySQLJSONFlavorCapability
+	MySQLUpgradeInServerFlavorCapability
 )
 
 const (
