@@ -337,7 +337,7 @@ func (e *Executor) triggerNextCheckInterval() {
 // allowConcurrentMigration checks if the given migration is allowed to run concurrently.
 // First, the migration itself must declare --allow-concurrent. But then, there's also some
 // restrictions on which migrations exactly are allowed such concurrency.
-func (e *Executor) allowConcurrentMigration(onlineDDL *schema.OnlineDDL) (action sqlparser.DDLAction, allowConcurrnet bool) {
+func (e *Executor) allowConcurrentMigration(onlineDDL *schema.OnlineDDL) (action sqlparser.DDLAction, allowConcurrent bool) {
 	if !onlineDDL.StrategySetting().IsAllowConcurrent() {
 		return action, false
 	}
