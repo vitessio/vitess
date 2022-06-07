@@ -77,12 +77,20 @@ func TestSingleWordCamel(t *testing.T) {
 			expect: "",
 		},
 		{
+			word:   "_",
+			expect: "_",
+		},
+		{
 			word:   "a",
 			expect: "A",
 		},
 		{
 			word:   "A",
 			expect: "A",
+		},
+		{
+			word:   "_A",
+			expect: "_a",
 		},
 		{
 			word:   "mysql",
