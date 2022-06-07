@@ -998,7 +998,7 @@ func (sm *shardStreamer) StreamExecute(vcursor engine.VCursor, bindVars map[stri
 }
 
 // humanInt formats large integers to a value easier to the eye: 100000=100k 1e12=1b 234000000=234m ...
-func humanInt(n int64) string {
+func humanInt(n int64) string { // nolint
 	var val float64
 	var unit string
 	switch true {

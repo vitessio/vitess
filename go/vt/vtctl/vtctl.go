@@ -96,10 +96,10 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/textutil"
-
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/textutil"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/flagutil"
@@ -2762,7 +2762,22 @@ func commandVerticalSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFl
 	return wr.VerticalSplitClone(ctx, fromKeyspace, toKeyspace, tables)
 }
 
+func useVDiffV2(args []string) bool {
+	for _, arg := range args {
+		if arg == "-v2" || arg == "--v2" {
+			return true
+		}
+	}
+	return false
+}
+
 func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if useVDiffV2(args) {
+		log.Infof("*** Using (experimental) VDiff2 ***")
+		return commandVDiff2(ctx, wr, subFlags, args)
+	}
+	_ = subFlags.Bool("v2", false, "Use VDiff2")
+
 	sourceCell := subFlags.String("source_cell", "", "The source cell to compare from; default is any available cell")
 	targetCell := subFlags.String("target_cell", "", "The target cell to compare with; default is any available cell")
 	tabletTypes := subFlags.String("tablet_types", "in_order:RDONLY,REPLICA,PRIMARY", "Tablet types for source and target")
@@ -2772,7 +2787,7 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	onlyPks := subFlags.Bool("only_pks", false, "When reporting missing rows, only show primary keys in the report.")
 	format := subFlags.String("format", "", "Format of report") //"json" or ""
 	tables := subFlags.String("tables", "", "Only run vdiff for these tables in the workflow")
-	maxExtraRowsToCompare := subFlags.Int("max_extra_rows_to_compare", 1000, "If there are collation differences between the soruce and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
+	maxExtraRowsToCompare := subFlags.Int("max_extra_rows_to_compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2787,8 +2802,16 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	if *maxRows <= 0 {
 		return fmt.Errorf("maximum number of rows to compare needs to be greater than 0")
 	}
-	_, err = wr.
-		VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime, *format, *maxRows, *tables, *debugQuery, *onlyPks, *maxExtraRowsToCompare)
+
+	now := time.Now()
+	defer func() {
+		if *format == "" {
+			wr.Logger().Printf("\nVDiff took %d seconds\n", int64(time.Since(now).Seconds()))
+		}
+	}()
+
+	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime, *format,
+		*maxRows, *tables, *debugQuery, *onlyPks, *maxExtraRowsToCompare)
 	if err != nil {
 		log.Errorf("vdiff returning with error: %v", err)
 		if strings.Contains(err.Error(), "context deadline exceeded") {
@@ -2938,11 +2961,11 @@ func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("<keyspace.workflow> is required")
 	}
-	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
+	keyspace, workflowName, err := splitKeyspaceWorkflow(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	dryRunResults, err := wr.SwitchReads(ctx, keyspace, workflow, servedTypes, cells, direction, *dryRun)
+	dryRunResults, err := wr.SwitchReads(ctx, keyspace, workflowName, servedTypes, cells, direction, *dryRun)
 	if err != nil {
 		return err
 	}
