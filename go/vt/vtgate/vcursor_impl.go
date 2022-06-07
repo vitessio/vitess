@@ -414,21 +414,34 @@ func (vc *vcursorImpl) Planner() (plancontext.PlannerVersion, error) {
 		return vc.safeSession.Options.PlannerVersion, nil
 	}
 
-	if plannerVersionDeprecated != nil {
-		if plannerVersion != nil && *plannerVersionDeprecated != *plannerVersion {
-			return plancontext.PlannerVersion(0), fmt.Errorf("can't specify planner-version and planner_version with different versions")
-		}
-		log.Warningf("planner_version is deprecated. please use planner-version instead")
-		plannerVersion = plannerVersionDeprecated
+	versionStr, err := CheckPlannerVersionFlag(plannerVersion, plannerVersionDeprecated)
+	if err != nil {
+		return plancontext.PlannerVersion(0), err
 	}
 
-	version, done := plancontext.PlannerNameToVersion(*plannerVersion)
+	version, done := plancontext.PlannerNameToVersion(versionStr)
 	if done {
 		return version, nil
 	}
 
 	log.Warning("unknown planner version configured. using the default")
 	return planbuilder.V3, nil
+}
+
+// CheckPlannerVersionFlag takes two string references and checks that just one
+// has a value or that they agree with each other.
+func CheckPlannerVersionFlag(correct, deprecated *string) (string, error) {
+	if deprecated != nil && *deprecated != "" {
+		if plannerVersion != nil && *deprecated != *plannerVersion {
+			return "", fmt.Errorf("can't specify planner-version and planner_version with different versions")
+		}
+		log.Warningf("planner_version is deprecated. please use planner-version instead")
+		return *deprecated, nil
+	}
+	if correct == nil {
+		return "", nil
+	}
+	return *correct, nil
 }
 
 // GetSemTable implements the ContextVSchema interface

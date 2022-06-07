@@ -27,6 +27,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate"
+
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/log"
@@ -208,12 +210,9 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) (*VtProce
 	if charset == "" {
 		charset = DefaultCharset
 	}
-	if args.PlannerVersionDeprecated != "" {
-		if args.PlannerVersion != "" && args.PlannerVersionDeprecated != args.PlannerVersion {
-			return nil, fmt.Errorf("can't specify planner-version and planner_version with different versions")
-		}
-		log.Warningf("planner_version is deprecated. please use planner-version instead")
-		args.PlannerVersion = args.PlannerVersionDeprecated
+	verStr, err := vtgate.CheckPlannerVersionFlag(&args.PlannerVersion, &args.PlannerVersionDeprecated)
+	if err != nil {
+		return nil, err
 	}
 
 	protoTopo, _ := prototext.Marshal(args.Topology)
@@ -230,7 +229,7 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) (*VtProce
 		"--enable_query_plan_field_caching=false",
 		"--dbddl_plugin", "vttest",
 		"--foreign_key_mode", args.ForeignKeyMode,
-		"--planner-version", args.PlannerVersion,
+		"--planner-version", verStr,
 		fmt.Sprintf("--enable_online_ddl=%t", args.EnableOnlineDDL),
 		fmt.Sprintf("--enable_direct_ddl=%t", args.EnableDirectDDL),
 		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettings),
