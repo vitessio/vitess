@@ -1868,6 +1868,7 @@ func (e *Executor) UnthrottleMigration(ctx context.Context, uuid string) (result
 	if err := e.lagThrottler.CheckIsReady(); err != nil {
 		return nil, err
 	}
+	defer e.triggerNextCheckInterval()
 	_ = e.lagThrottler.UnthrottleApp(uuid)
 	return emptyResult, nil
 }
