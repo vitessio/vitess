@@ -408,18 +408,27 @@ func (vc *vcursorImpl) FindKeyspace(keyspace string) (*vindexes.Keyspace, error)
 }
 
 // Planner implements the ContextVSchema interface
-func (vc *vcursorImpl) Planner() plancontext.PlannerVersion {
+func (vc *vcursorImpl) Planner() (plancontext.PlannerVersion, error) {
 	if vc.safeSession.Options != nil &&
 		vc.safeSession.Options.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
-		return vc.safeSession.Options.PlannerVersion
+		return vc.safeSession.Options.PlannerVersion, nil
 	}
+
+	if plannerVersionDeprecated != nil {
+		if plannerVersion != nil && *plannerVersionDeprecated != *plannerVersion {
+			return plancontext.PlannerVersion(0), fmt.Errorf("can't specify planner-version and planner_version with different versions")
+		}
+		log.Warningf("planner_version is deprecated. please use planner-version instead")
+		plannerVersion = plannerVersionDeprecated
+	}
+
 	version, done := plancontext.PlannerNameToVersion(*plannerVersion)
 	if done {
-		return version
+		return version, nil
 	}
 
 	log.Warning("unknown planner version configured. using the default")
-	return planbuilder.V3
+	return planbuilder.V3, nil
 }
 
 // GetSemTable implements the ContextVSchema interface

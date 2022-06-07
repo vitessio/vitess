@@ -80,9 +80,10 @@ var (
 	warnPayloadSize    = flag.Int("warn_payload_size", 0, "The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.")
 
 	// Put set-passthrough under a flag.
-	sysVarSetEnabled = flag.Bool("enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
-	setVarEnabled    = flag.Bool("enable_set_var", true, "This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections")
-	plannerVersion   = flag.String("planner_version", "gen4", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
+	sysVarSetEnabled         = flag.Bool("enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
+	setVarEnabled            = flag.Bool("enable_set_var", true, "This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections")
+	plannerVersion           = flag.String("planner-version", "gen4", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
+	plannerVersionDeprecated = flag.String("planner_version", "", "Deprecated flag. Use planner_version instead")
 
 	// lockHeartbeatTime is used to set the next heartbeat time.
 	lockHeartbeatTime = flag.Duration("lock_heartbeat_time", 5*time.Second, "If there is lock function used. This will keep the lock connection active by using this heartbeat")

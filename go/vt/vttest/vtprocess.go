@@ -190,7 +190,7 @@ var QueryServerArgs = []string{
 // VtcomboProcess returns a VtProcess handle for a local `vtcombo` service,
 // configured with the given Config.
 // The process must be manually started by calling WaitStart()
-func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProcess {
+func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) (*VtProcess, error) {
 	vt := &VtProcess{
 		Name:         "vtcombo",
 		Directory:    env.Directory(),
@@ -208,6 +208,13 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	if charset == "" {
 		charset = DefaultCharset
 	}
+	if args.PlannerVersionDeprecated != "" {
+		if args.PlannerVersion != "" && args.PlannerVersionDeprecated != args.PlannerVersion {
+			return nil, fmt.Errorf("can't specify planner-version and planner_version with different versions")
+		}
+		log.Warningf("planner_version is deprecated. please use planner-version instead")
+		args.PlannerVersion = args.PlannerVersionDeprecated
+	}
 
 	protoTopo, _ := prototext.Marshal(args.Topology)
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
@@ -223,7 +230,7 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 		"--enable_query_plan_field_caching=false",
 		"--dbddl_plugin", "vttest",
 		"--foreign_key_mode", args.ForeignKeyMode,
-		"--planner_version", args.PlannerVersion,
+		"--planner-version", args.PlannerVersion,
 		fmt.Sprintf("--enable_online_ddl=%t", args.EnableOnlineDDL),
 		fmt.Sprintf("--enable_direct_ddl=%t", args.EnableDirectDDL),
 		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettings),
@@ -292,5 +299,5 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 		}...)
 	}
 
-	return vt
+	return vt, nil
 }

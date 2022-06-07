@@ -92,7 +92,11 @@ func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) st
 	planner, ok := getPlannerFromQuery(stmt)
 	if !ok {
 		// if the query doesn't specify the planner, we check what the configuration is
-		planner = vschema.Planner()
+		var err error
+		planner, err = vschema.Planner()
+		if err != nil {
+			return nil, err
+		}
 	}
 	switch planner {
 	case Gen4CompareV3:
