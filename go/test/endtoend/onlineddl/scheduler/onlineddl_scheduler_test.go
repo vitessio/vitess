@@ -153,26 +153,29 @@ func TestSchemaChange(t *testing.T) {
 	var t1uuid string
 	var t2uuid string
 
-	testCompareTableTimes := func(t *testing.T, t1uuid, t2uuid string) {
-		t.Run("Compare t1, t2 times", func(t *testing.T) {
-			var t1endTime, t2startTime string
-			{
-				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
-				require.NotNil(t, rs)
-				for _, row := range rs.Named().Rows {
-					t1endTime = row.AsString("completed_timestamp", "")
-					assert.NotEmpty(t, t1endTime)
-				}
-			}
-			{
-				rs := onlineddl.ReadMigrations(t, &vtParams, t2uuid)
-				require.NotNil(t, rs)
-				for _, row := range rs.Named().Rows {
-					t2startTime = row.AsString("started_timestamp", "")
-					assert.NotEmpty(t, t2startTime)
-				}
-			}
-			assert.GreaterOrEqual(t, t2startTime, t1endTime)
+	testReadTimestamp := func(t *testing.T, uuid string, timestampColumn string) (timestamp string) {
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			timestamp = row.AsString(timestampColumn, "")
+			assert.NotEmpty(t, timestamp)
+		}
+		return timestamp
+	}
+	testTableSequentialTimes := func(t *testing.T, uuid1, uuid2 string) {
+		// expect uuid2 to start after uuid1 completes
+		t.Run("Compare t1, t2 sequential times", func(t *testing.T) {
+			endTime1 := testReadTimestamp(t, uuid1, "completed_timestamp")
+			startTime2 := testReadTimestamp(t, uuid2, "started_timestamp")
+			assert.GreaterOrEqual(t, startTime2, endTime1)
+		})
+	}
+	testTableCompletionTimes := func(t *testing.T, uuid1, uuid2 string) {
+		// expect uuid1 to complete before uuid2
+		t.Run("Compare t1, t2 completion times", func(t *testing.T) {
+			endTime1 := testReadTimestamp(t, uuid1, "completed_timestamp")
+			endTime2 := testReadTimestamp(t, uuid2, "completed_timestamp")
+			assert.GreaterOrEqual(t, endTime2, endTime1)
 		})
 	}
 	testAllowConcurrent := func(t *testing.T, name string, uuid string, expect int64) {
@@ -199,7 +202,7 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
 			checkTable(t, t2Name, true)
 		}
-		testCompareTableTimes(t, t1uuid, t2uuid)
+		testTableSequentialTimes(t, t1uuid, t2uuid)
 	})
 	t.Run("ALTER both tables non-concurrent", func(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", true) // skip wait
@@ -217,7 +220,7 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
 		})
-		testCompareTableTimes(t, t1uuid, t2uuid)
+		testTableSequentialTimes(t, t1uuid, t2uuid)
 	})
 	t.Run("ALTER both tables non-concurrent, postponed", func(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy+" -postpone-completion", "vtgate", "", "", true) // skip wait
@@ -248,7 +251,7 @@ func TestSchemaChange(t *testing.T) {
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
 		})
-		testCompareTableTimes(t, t1uuid, t2uuid)
+		testTableSequentialTimes(t, t1uuid, t2uuid)
 	})
 	t.Run("ALTER both tables, elligible for concurrenct", func(t *testing.T) {
 		// ALTER TABLE is allowed to run concurrently when no other ALTER is busy with copy state. Our tables are tiny so we expect to find both migrations running
@@ -256,6 +259,7 @@ func TestSchemaChange(t *testing.T) {
 		t2uuid = testOnlineDDLStatement(t, trivialAlterT2Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true) // skip wait
 
 		testAllowConcurrent(t, "t1", t1uuid, 1)
+		testAllowConcurrent(t, "t2", t2uuid, 1)
 		t.Run("expect both running", func(t *testing.T) {
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
@@ -273,6 +277,8 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
 		})
 		t.Run("complete t1", func(t *testing.T) {
+			// t1 should still be running!
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			// Issue a complete and wait for successful completion
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
 			// This part may take a while, because we depend on vreplication polling
@@ -280,7 +286,7 @@ func TestSchemaChange(t *testing.T) {
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		})
-		testCompareTableTimes(t, t2uuid, t1uuid)
+		testTableCompletionTimes(t, t2uuid, t1uuid)
 	})
 	t.Run("REVERT both tables concurrent, postponed", func(t *testing.T) {
 		t1uuid = testRevertMigration(t, t1uuid, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", true)
