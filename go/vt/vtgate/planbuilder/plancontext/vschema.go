@@ -34,7 +34,7 @@ type VSchema interface {
 	AllKeyspace() ([]*vindexes.Keyspace, error)
 	FindKeyspace(keyspace string) (*vindexes.Keyspace, error)
 	GetSemTable() *semantics.SemTable
-	Planner() (PlannerVersion, error)
+	Planner() PlannerVersion
 	SetPlannerVersion(pv PlannerVersion)
 	ConnCollation() collations.ID
 

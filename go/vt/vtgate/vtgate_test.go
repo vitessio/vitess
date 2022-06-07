@@ -75,7 +75,7 @@ func init() {
 `
 	hcVTGateTest = discovery.NewFakeHealthCheck(nil)
 	*transactionMode = "MULTI"
-	Init(context.Background(), hcVTGateTest, new(sandboxTopo), "aa", nil)
+	Init(context.Background(), hcVTGateTest, new(sandboxTopo), "aa", nil, querypb.ExecuteOptions_Gen4)
 
 	*mysqlServerPort = 0
 	*mysqlAuthServerImpl = "none"

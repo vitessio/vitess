@@ -554,8 +554,8 @@ func (vw *vschemaWrapper) FindKeyspace(keyspace string) (*vindexes.Keyspace, err
 	return nil, nil
 }
 
-func (vw *vschemaWrapper) Planner() (plancontext.PlannerVersion, error) {
-	return vw.version, nil
+func (vw *vschemaWrapper) Planner() plancontext.PlannerVersion {
+	return vw.version
 }
 
 // SetPlannerVersion implements the ContextVSchema interface

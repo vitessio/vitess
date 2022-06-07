@@ -28,6 +28,8 @@ import (
 	"strings"
 	"time"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/vt/vttest"
 
 	"google.golang.org/protobuf/proto"
@@ -246,7 +248,7 @@ func main() {
 	vtgate.QueryLogzHandler = "/debug/vtgate/querylogz"
 	vtgate.QueryzHandler = "/debug/vtgate/queryz"
 	// pass nil for healthcheck, it will get created
-	vtg := vtgate.Init(context.Background(), nil, resilientServer, tpb.Cells[0], tabletTypesToWait)
+	vtg := vtgate.Init(context.Background(), nil, resilientServer, tpb.Cells[0], tabletTypesToWait, querypb.ExecuteOptions_DEFAULT_PLANNER)
 
 	// vtctld configuration and init
 	err = vtctld.InitVtctld(ts)
