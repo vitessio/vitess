@@ -93,6 +93,7 @@ type VtctldClient struct {
 		Response *vtctldatapb.GetWorkflowsResponse
 		Error    error
 	}
+	PingTabletResults           map[string]error
 	PlannedReparentShardResults map[string]struct {
 		Response *vtctldatapb.PlannedReparentShardResponse
 		Error    error
@@ -411,6 +412,24 @@ func (fake *VtctldClient) GetWorkflows(ctx context.Context, req *vtctldatapb.Get
 	}
 
 	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
+}
+
+// PingTablet is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) PingTablet(ctx context.Context, req *vtctldatapb.PingTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.PingTabletResponse, error) {
+	if fake.PingTabletResults == nil {
+		return nil, fmt.Errorf("%w: PingTabletResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(req.TabletAlias)
+	if err, ok := fake.PingTabletResults[key]; ok {
+		if err != nil {
+			return nil, err
+		}
+
+		return &vtctldatapb.PingTabletResponse{}, nil
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
 }
 
 // PlannedReparentShard is part of the vtctldclient.VtctldClient interface.
