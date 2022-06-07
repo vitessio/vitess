@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
 
@@ -117,18 +118,12 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, storeTyp
 	atomic.StoreInt64(&check.throttler.lastCheckTimeNano, time.Now().UnixNano())
 
 	go func(statusCode int) {
-		stats.GetOrNewCounter("throttler.check.any.total", "total number of checks").Add(1)
-		stats.GetOrNewCounter(fmt.Sprintf("throttler.check.%s.total", appName), fmt.Sprintf("total number of checks for %s", appName)).Add(1)
-
-		stats.GetOrNewCounter(fmt.Sprintf("throttler.check.any.%s.%s.total", storeType, storeName), "").Add(1)
-		stats.GetOrNewCounter(fmt.Sprintf("throttler.check.%s.%s.%s.total", appName, storeType, storeName), "").Add(1)
+		stats.GetOrNewCounter("ThrottlerCheckAnyTotal", "total number of checks").Add(1)
+		stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%s%sTotal", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), "").Add(1)
 
 		if statusCode != http.StatusOK {
-			stats.GetOrNewCounter("throttler.check.any.error", "total number of failed checks").Add(1)
-			stats.GetOrNewCounter(fmt.Sprintf("throttler.check.%s.error", appName), fmt.Sprintf("total number of failed checks for %s", appName)).Add(1)
-
-			stats.GetOrNewCounter(fmt.Sprintf("throttler.check.any.%s.%s.error", storeType, storeName), "").Add(1)
-			stats.GetOrNewCounter(fmt.Sprintf("throttler.check.%s.%s.%s.error", appName, storeType, storeName), "").Add(1)
+			stats.GetOrNewCounter("ThrottlerCheckAnyError", "total number of failed checks").Add(1)
+			stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%s%sError", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), "").Add(1)
 		}
 
 		check.throttler.markRecentApp(appName, remoteAddr)
@@ -160,7 +155,7 @@ func (check *ThrottlerCheck) localCheck(ctx context.Context, metricName string) 
 		check.throttler.markMetricHealthy(metricName)
 	}
 	if timeSinceHealthy, found := check.throttler.timeSinceMetricHealthy(metricName); found {
-		stats.GetOrNewGauge(fmt.Sprintf("throttler.check.%s.%s.seconds_since_healthy", storeType, storeName), fmt.Sprintf("seconds since last healthy cehck for %s.%s", storeType, storeName)).Set(int64(timeSinceHealthy.Seconds()))
+		stats.GetOrNewGauge(fmt.Sprintf("ThrottlerCheck%s%sSecondsSinceHealthy", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), fmt.Sprintf("seconds since last healthy cehck for %s.%s", storeType, storeName)).Set(int64(timeSinceHealthy.Seconds()))
 	}
 
 	return checkResult
@@ -172,7 +167,7 @@ func (check *ThrottlerCheck) reportAggregated(metricName string, metricResult ba
 		return
 	}
 	if value, err := metricResult.Get(); err == nil {
-		stats.GetOrNewGaugeFloat64(fmt.Sprintf("throttler.aggregated.%s.%s", storeType, storeName), fmt.Sprintf("aggregated value for %s.%s", storeType, storeName)).Set(value)
+		stats.GetOrNewGaugeFloat64(fmt.Sprintf("ThrottlerAggregated%s%s", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), fmt.Sprintf("aggregated value for %s.%s", storeType, storeName)).Set(value)
 	}
 }
 
