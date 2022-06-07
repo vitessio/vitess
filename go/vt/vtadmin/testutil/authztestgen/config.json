@@ -84,6 +84,11 @@
                     "field": "RunHealthCheckResults",
                     "type": "map[string]error",
                     "value": "\"zone1-0000000100\": nil,"
+                },
+                {
+                    "field": "SetWritableResults",
+                    "type": "map[string]error",
+                    "value": "\"zone1-0000000100\": nil,"
                 }
             ],
             "db_tablet_list": [
@@ -1212,6 +1217,39 @@
                 }
             ],
             "request": "&vtadminpb.RunHealthCheckRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "SetReadOnly",
+            "rules": [
+                {
+                    "resource": "Tablet",
+                    "actions": ["manage_tablet_writability"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.SetReadOnlyRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
             "cases": [
                 {
                     "name": "unauthorized actor",
