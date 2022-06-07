@@ -694,7 +694,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"vtgate_queries_subquery": {
 			"File": "unused.go",
@@ -703,7 +703,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"vtgate_queries_union": {
 			"File": "unused.go",
@@ -712,7 +712,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"vtgate_queries_insert": {
 			"File": "unused.go",
@@ -748,7 +748,7 @@
 			"Manual": false,
 			"Shard": "vtgate_schema",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": ["upgrade_downgrade_query_serving_schema"]
 		},
 		"vtgate_schematracker_loadkeyspace": {
 			"File": "unused.go",
@@ -775,7 +775,7 @@
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": ["upgrade_downgrade_query_serving_schema"]
 		},
 		"vtgate_schematracker_sharded_prs": {
 			"File": "unused.go",
@@ -784,7 +784,7 @@
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": ["upgrade_downgrade_query_serving_schema"]
 		},
 		"vtgate_schematracker_unsharded": {
 			"File": "unused.go",
@@ -793,7 +793,7 @@
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": ["upgrade_downgrade_query_serving_schema"]
 		},
 		"vtgate_mysql80": {
 			"File": "unused.go",
@@ -919,7 +919,7 @@
 			"Manual": false,
 			"Shard": "vtgate_vschema",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": ["upgrade_downgrade_query_serving_schema"]
 		},
 		"vtgate_readafterwrite": {
 			"File": "unused.go",
