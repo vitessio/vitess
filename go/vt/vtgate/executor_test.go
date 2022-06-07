@@ -1665,7 +1665,7 @@ func assertCacheContains(t *testing.T, e *Executor, want []string) {
 }
 
 func getPlanCached(t *testing.T, e *Executor, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *LogStats) {
-	logStats := NewLogStats(ctx, "Test", "", nil)
+	logStats := NewLogStats(ctx, "Test", "", "", nil)
 	plan, err := e.getPlan(vcursor, sql, comments, bindVars, &SafeSession{
 		Session: &vtgatepb.Session{Options: &querypb.ExecuteOptions{SkipQueryPlanCache: skipQueryPlanCache}},
 	}, logStats)
