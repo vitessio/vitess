@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"os"
 
-	"vitess.io/vitess/go/vt/vtgate"
+	"vitess.io/vitess/go/vt/env"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -149,7 +149,7 @@ func parseAndRun() error {
 		return err
 	}
 
-	verStr, err := vtgate.CheckPlannerVersionFlag(plannerVersionStr, badPlannerVersion)
+	verStr, err := env.CheckPlannerVersionFlag(plannerVersionStr, badPlannerVersion)
 	if err != nil {
 		return err
 	}
