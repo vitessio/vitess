@@ -79,6 +79,11 @@
                     "field": "ReparentTabletResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.ReparentTabletResponse\nError error\n}",
                     "value": "\"zone1-0000000100\": {\nResponse: &vtctldatapb.ReparentTabletResponse{},\n},"
+                },
+                {
+                    "field": "RunHealthCheckResults",
+                    "type": "map[string]error",
+                    "value": "\"zone1-0000000100\": nil,"
                 }
             ],
             "db_tablet_list": [
@@ -1174,6 +1179,39 @@
                 }
             ],
             "request": "&vtadminpb.RefreshTabletReplicationSourceRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "RunHealthCheck",
+            "rules": [
+                {
+                    "resource": "Tablet",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.RunHealthCheckRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
             "cases": [
                 {
                     "name": "unauthorized actor",
