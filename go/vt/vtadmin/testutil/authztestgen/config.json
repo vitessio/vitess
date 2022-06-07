@@ -64,6 +64,11 @@
                     "field": "GetWorkflowsResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetWorkflowsResponse\nError error}",
                     "value": "\"test\": {\nResponse: &vtctldatapb.GetWorkflowsResponse{\nWorkflows: []*vtctldatapb.Workflow{\n{\nName: \"testworkflow\",\n},\n},\n}},"
+                },
+                {
+                    "field": "PingTabletResults",
+                    "type": "map[string]error",
+                    "value": "\"zone1-0000000100\": nil,"
                 }
             ],
             "db_tablet_list": [
@@ -1078,6 +1083,39 @@
                     "assertions": [
                         "assert.NotEmpty(t, resp.WorkflowsByCluster, $$)",
                         "assert.Equal(t, resp.WorkflowsByCluster, map[string]*vtadminpb.ClusterWorkflows{\"test\": {Workflows: []*vtadminpb.Workflow{{Cluster: &vtadminpb.Cluster{Id: \"test\", Name: \"test\"}, Keyspace: \"test\", Workflow: &vtctldatapb.Workflow{Name: \"testworkflow\"}}}}, \"other\": {Workflows: []*vtadminpb.Workflow{{Cluster: &vtadminpb.Cluster{Id: \"other\", Name: \"other\"}, Keyspace: \"otherks\", Workflow: &vtctldatapb.Workflow{Name: \"otherks_workflow\"}}}}}, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "PingTablet",
+            "rules": [
+                {
+                    "resource": "Tablet",
+                    "actions": ["ping"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.PingTabletRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
                     ]
                 }
             ]
