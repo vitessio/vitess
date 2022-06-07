@@ -187,3 +187,29 @@ The throttler now checks in with the heartbeat writer to request heartbeats, any
 When `--heartbeat_on_demand_duration` is not set, there is no change in behavior.
 
 When `--heartbeat_on_demand_duration` is set to a positive value, then the throttler ensures that the heartbeat writer generated heartbeats for at least the following duration. This also means at the first throttler check, it's possible that heartbeats are idle, and so the first check will fail. As heartbeats start running, followup checks will get a more accurate lag evaluation and will respond accordingly. In a sense, it's a "cold engine" scenario, where the engine takes time to start up, and then runs smoothly.
+
+### Durability Policy
+
+#### Deprecation of durability_policy Flag
+The durability policy for a keyspace is now stored in the keyspace record in the topo server.
+The `durability_policy` flag used by vtctl, vtctld, and vtworker binaries has been deprecated.
+
+#### New and Augmented Commands
+The vtctld command `CreateKeyspace` has been augmented to take in an additional argument called `durability-policy` which will
+allow users to set the desired durability policy for a keyspace at creation time.
+
+For existing keyspaces, a new command `SetKeyspaceDurabilityPolicy` has been added, which allows users to change the
+durability policy of an existing keyspace.
+
+If semi-sync is not being used then durability policy should be set to `none` for the keyspace. This is also the default option.
+
+If semi-sync is being used then durability policy should be set to `semi_sync` for the keyspace and `--enable_semi_sync` should be set on vttablets.
+
+### Deprecation of Durability Configuration
+The `Durability` configuration is deprecated and removed from VTOrc. Instead VTOrc will find the durability policy of the keyspace from
+the topo server. This allows VTOrc to monitor and repair multiple keyspaces which have different durability policies in use.
+
+**VTOrc will ignore the keyspaces which have no durability policy specified in the keyspace record. So on upgrading to v14, users must run
+the command `SetKeyspaceDurabilityPolicy` specified above, to ensure VTOrc continues to work as desired. The recommended upgrade 
+path is to upgrade vtctld, run `SetKeyspaceDurabilityPolicy` and then upgrade VTOrc.**
+

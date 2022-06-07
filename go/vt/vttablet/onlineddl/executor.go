@@ -2557,8 +2557,9 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 		return false, err
 	}
 	defer conn.Close()
+	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
 
-	specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL, conn.ServerVersion)
+	specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL, capableOf)
 	if err != nil {
 		return false, err
 	}
