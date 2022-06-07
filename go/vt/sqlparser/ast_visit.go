@@ -254,6 +254,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfLockOption(in, f)
 	case *LockTables:
 		return VisitRefOfLockTables(in, f)
+	case *LockingFunc:
+		return VisitRefOfLockingFunc(in, f)
 	case MatchAction:
 		return VisitMatchAction(in, f)
 	case *MatchExpr:
@@ -2102,6 +2104,21 @@ func VisitRefOfLockTables(in *LockTables, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfLockingFunc(in *LockingFunc, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Timeout, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfMatchExpr(in *MatchExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3941,6 +3958,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitListArg(in, f)
 	case *Literal:
 		return VisitRefOfLiteral(in, f)
+	case *LockingFunc:
+		return VisitRefOfLockingFunc(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
@@ -4107,6 +4126,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitListArg(in, f)
 	case *Literal:
 		return VisitRefOfLiteral(in, f)
+	case *LockingFunc:
+		return VisitRefOfLockingFunc(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:

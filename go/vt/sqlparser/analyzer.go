@@ -449,18 +449,9 @@ func IsSimpleTuple(node Expr) bool {
 
 //IsLockingFunc returns true for all functions that are used to work with mysql advisory locks
 func IsLockingFunc(node Expr) bool {
-	switch p := node.(type) {
-	case *FuncExpr:
-		_, found := lockingFunctions[p.Name.Lowered()]
-		return found
+	switch node.(type) {
+	case *LockingFunc:
+		return true
 	}
 	return false
-}
-
-var lockingFunctions = map[string]any{
-	"get_lock":          nil,
-	"is_free_lock":      nil,
-	"is_used_lock":      nil,
-	"release_all_locks": nil,
-	"release_lock":      nil,
 }

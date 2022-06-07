@@ -1270,8 +1270,8 @@ func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*
 }
 
 // ExecuteLock implements the IExecutor interface
-func (e *Executor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error) {
-	return e.scatterConn.ExecuteLock(ctx, rs, query, session)
+func (e *Executor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error) {
+	return e.scatterConn.ExecuteLock(ctx, rs, query, session, lockFuncType)
 }
 
 // ExecuteMessageStream implements the IExecutor interface
@@ -1374,4 +1374,9 @@ func getTabletThrottlerStatus(tabletHostPort string) (string, error) {
 
 	status := fmt.Sprintf("{\"state\":\"%s\",\"load\":%.2f,\"message\":\"%s\"}", httpStatusStr, load, elements.Message)
 	return status, nil
+}
+
+// ReleaseLock implements the IExecutor interface
+func (e *Executor) ReleaseLock(ctx context.Context, session *SafeSession) error {
+	return e.txConn.ReleaseLock(ctx, session)
 }

@@ -255,6 +255,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfLockOption(in)
 	case *LockTables:
 		return CloneRefOfLockTables(in)
+	case *LockingFunc:
+		return CloneRefOfLockingFunc(in)
 	case MatchAction:
 		return in
 	case *MatchExpr:
@@ -1666,6 +1668,17 @@ func CloneRefOfLockTables(n *LockTables) *LockTables {
 	}
 	out := *n
 	out.Tables = CloneTableAndLockTypes(n.Tables)
+	return &out
+}
+
+// CloneRefOfLockingFunc creates a deep clone of the input.
+func CloneRefOfLockingFunc(n *LockingFunc) *LockingFunc {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneExpr(n.Name)
+	out.Timeout = CloneExpr(n.Timeout)
 	return &out
 }
 
@@ -3139,6 +3152,8 @@ func CloneExpr(in Expr) Expr {
 		return in
 	case *Literal:
 		return CloneRefOfLiteral(in)
+	case *LockingFunc:
+		return CloneRefOfLockingFunc(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
 	case *MemberOfExpr:
@@ -3309,6 +3324,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return in
 	case *Literal:
 		return CloneRefOfLiteral(in)
+	case *LockingFunc:
+		return CloneRefOfLockingFunc(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
 	case *MemberOfExpr:
