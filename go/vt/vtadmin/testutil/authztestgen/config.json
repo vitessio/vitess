@@ -94,6 +94,11 @@
                     "field": "StartReplicationResults",
                     "type": "map[string]error",
                     "value": "\"zone1-0000000100\": nil,"
+                },
+                {
+                    "field": "StopReplicationResults",
+                    "type": "map[string]error",
+                    "value": "\"zone1-0000000100\": nil,"
                 }
             ],
             "db_tablet_list": [
@@ -1321,6 +1326,39 @@
                 }
             ],
             "request": "&vtadminpb.StartReplicationRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "StopReplication",
+            "rules": [
+                {
+                    "resource": "Tablet",
+                    "actions": ["manage_tablet_replication"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.StopReplicationRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
             "cases": [
                 {
                     "name": "unauthorized actor",
