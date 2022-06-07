@@ -410,6 +410,10 @@ func (vc *vcursorImpl) FindKeyspace(keyspace string) (*vindexes.Keyspace, error)
 
 // Planner implements the ContextVSchema interface
 func (vc *vcursorImpl) Planner() plancontext.PlannerVersion {
+	if vc.safeSession.Options != nil &&
+		vc.safeSession.Options.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
+		return vc.safeSession.Options.PlannerVersion
+	}
 	return vc.pv
 }
 
