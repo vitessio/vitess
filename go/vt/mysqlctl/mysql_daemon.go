@@ -48,6 +48,7 @@ type MysqlDaemon interface {
 	StopIOThread(ctx context.Context) error
 	ReplicationStatus() (mysql.ReplicationStatus, error)
 	PrimaryStatus(ctx context.Context) (mysql.PrimaryStatus, error)
+	GetGTIDPurged(ctx context.Context) (mysql.Position, error)
 	SetSemiSyncEnabled(source, replica bool) error
 	SemiSyncEnabled() (source, replica bool)
 	SemiSyncReplicationStatus() (bool, error)

@@ -20912,6 +20912,9 @@ export namespace tabletmanagerdata {
 
     /** Properties of a FullStatusResponse. */
     interface IFullStatusResponse {
+
+        /** FullStatusResponse status */
+        status?: (replicationdata.IFullStatus|null);
     }
 
     /** Represents a FullStatusResponse. */
@@ -20922,6 +20925,9 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IFullStatusResponse);
+
+        /** FullStatusResponse status. */
+        public status?: (replicationdata.IFullStatus|null);
 
         /**
          * Creates a new FullStatusResponse instance using the specified properties.
@@ -29684,6 +29690,168 @@ export namespace replicationdata {
 
         /**
          * Converts this PrimaryStatus to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a FullStatus. */
+    interface IFullStatus {
+
+        /** FullStatus replication_status */
+        replication_status?: (replicationdata.IStatus|null);
+
+        /** FullStatus primary_status */
+        primary_status?: (replicationdata.IPrimaryStatus|null);
+
+        /** FullStatus gtid_purged */
+        gtid_purged?: (string|null);
+
+        /** FullStatus version */
+        version?: (string|null);
+
+        /** FullStatus read_only */
+        read_only?: (boolean|null);
+
+        /** FullStatus binlog_format */
+        binlog_format?: (string|null);
+
+        /** FullStatus log_bin_enabled */
+        log_bin_enabled?: (string|null);
+
+        /** FullStatus log_replica_updates */
+        log_replica_updates?: (string|null);
+
+        /** FullStatus semi_sync_primary_enabled */
+        semi_sync_primary_enabled?: (boolean|null);
+
+        /** FullStatus semi_sync_replica_enabled */
+        semi_sync_replica_enabled?: (boolean|null);
+
+        /** FullStatus semi_sync_primary_status */
+        semi_sync_primary_status?: (boolean|null);
+
+        /** FullStatus semi_sync_replica_status */
+        semi_sync_replica_status?: (boolean|null);
+
+        /** FullStatus semi_sync_primary_clients */
+        semi_sync_primary_clients?: (boolean|null);
+    }
+
+    /** Represents a FullStatus. */
+    class FullStatus implements IFullStatus {
+
+        /**
+         * Constructs a new FullStatus.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: replicationdata.IFullStatus);
+
+        /** FullStatus replication_status. */
+        public replication_status?: (replicationdata.IStatus|null);
+
+        /** FullStatus primary_status. */
+        public primary_status?: (replicationdata.IPrimaryStatus|null);
+
+        /** FullStatus gtid_purged. */
+        public gtid_purged: string;
+
+        /** FullStatus version. */
+        public version: string;
+
+        /** FullStatus read_only. */
+        public read_only: boolean;
+
+        /** FullStatus binlog_format. */
+        public binlog_format: string;
+
+        /** FullStatus log_bin_enabled. */
+        public log_bin_enabled: string;
+
+        /** FullStatus log_replica_updates. */
+        public log_replica_updates: string;
+
+        /** FullStatus semi_sync_primary_enabled. */
+        public semi_sync_primary_enabled: boolean;
+
+        /** FullStatus semi_sync_replica_enabled. */
+        public semi_sync_replica_enabled: boolean;
+
+        /** FullStatus semi_sync_primary_status. */
+        public semi_sync_primary_status: boolean;
+
+        /** FullStatus semi_sync_replica_status. */
+        public semi_sync_replica_status: boolean;
+
+        /** FullStatus semi_sync_primary_clients. */
+        public semi_sync_primary_clients: boolean;
+
+        /**
+         * Creates a new FullStatus instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns FullStatus instance
+         */
+        public static create(properties?: replicationdata.IFullStatus): replicationdata.FullStatus;
+
+        /**
+         * Encodes the specified FullStatus message. Does not implicitly {@link replicationdata.FullStatus.verify|verify} messages.
+         * @param message FullStatus message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: replicationdata.IFullStatus, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified FullStatus message, length delimited. Does not implicitly {@link replicationdata.FullStatus.verify|verify} messages.
+         * @param message FullStatus message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: replicationdata.IFullStatus, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a FullStatus message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns FullStatus
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): replicationdata.FullStatus;
+
+        /**
+         * Decodes a FullStatus message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns FullStatus
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): replicationdata.FullStatus;
+
+        /**
+         * Verifies a FullStatus message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a FullStatus message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns FullStatus
+         */
+        public static fromObject(object: { [k: string]: any }): replicationdata.FullStatus;
+
+        /**
+         * Creates a plain object from a FullStatus message. Also converts values to other types if specified.
+         * @param message FullStatus
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: replicationdata.FullStatus, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this FullStatus to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

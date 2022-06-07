@@ -56,6 +56,19 @@ func (mysqlFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	return parseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
 
+// purgedGTIDSet is part of the Flavor interface.
+func (mysqlFlavor) purgedGTIDSet(c *Conn) (GTIDSet, error) {
+	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
+	qr, err := c.ExecuteFetch("SELECT @@global.gtid_purged", 1, false)
+	if err != nil {
+		return nil, err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_purged: %#v", qr)
+	}
+	return parseMysql56GTIDSet(qr.Rows[0][0].ToString())
+}
+
 func (mysqlFlavor) startReplicationCommand() string {
 	return "START SLAVE"
 }

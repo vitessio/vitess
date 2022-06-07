@@ -315,6 +315,17 @@ func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (mysql.PrimaryStatus, e
 	return conn.ShowPrimaryStatus()
 }
 
+// GetGTIDPurged returns the gtid purged statuses
+func (mysqld *Mysqld) GetGTIDPurged(ctx context.Context) (mysql.Position, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return mysql.Position{}, err
+	}
+	defer conn.Recycle()
+
+	return conn.GetGTIDPurged()
+}
+
 // PrimaryPosition returns the primary replication position.
 func (mysqld *Mysqld) PrimaryPosition() (mysql.Position, error) {
 	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)

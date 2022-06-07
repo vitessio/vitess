@@ -17,13 +17,12 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"time"
-
-	"context"
 )
 
 type filePosFlavor struct {
@@ -60,6 +59,11 @@ func (flv *filePosFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 		file: resultMap["File"],
 		pos:  pos,
 	}, nil
+}
+
+// purgedGTIDSet is part of the Flavor interface.
+func (flv *filePosFlavor) purgedGTIDSet(c *Conn) (GTIDSet, error) {
+	return nil, nil
 }
 
 func (flv *filePosFlavor) startReplicationCommand() string {

@@ -292,6 +292,11 @@ func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (mysql.PrimarySta
 	}, nil
 }
 
+// GetGTIDPurged is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) GetGTIDPurged(ctx context.Context) (mysql.Position, error) {
+	return mysql.Position{}, nil
+}
+
 // ResetReplication is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) ResetReplication(ctx context.Context) error {
 	return fmd.ExecuteSuperQueryList(ctx, []string{

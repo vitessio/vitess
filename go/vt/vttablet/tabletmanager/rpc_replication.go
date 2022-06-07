@@ -54,12 +54,50 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 
 // FullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
 func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error) {
-	status, err := tm.MysqlDaemon.ReplicationStatus()
+	// Replication status - "SHOW REPLICA STATUS"
+	replicationStatus, err := tm.MysqlDaemon.ReplicationStatus()
 	if err != nil {
 		return nil, err
 	}
+
+	// Primary status - "SHOW MASTER STATUS"
+	primaryStatus, err := tm.MysqlDaemon.PrimaryStatus(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Purged GTID set
+	purgedGTIDs, err := tm.MysqlDaemon.GetGTIDPurged(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// string version = 4;
+
+	// Read only - "SHOW VARIABLES LIKE 'read_only'"
+	readOnly, err := tm.MysqlDaemon.IsReadOnly()
+	if err != nil {
+		return nil, err
+	}
+
+	// string binlog_format = 6;
+	// string log_bin_enabled = 7;
+	// string log_replica_updates = 8;
+
+	// Semi sync settings - "show global variables like 'rpl_semi_sync_%_enabled'"
+	primarySemiSync, replicaSemiSync := tm.MysqlDaemon.SemiSyncEnabled()
+
+	//  bool semi_sync_primary_status = 11;
+	//  bool semi_sync_replica_status = 12;
+	//  bool semi_sync_primary_clients = 13;
+
 	return &replicationdatapb.FullStatus{
-		ReplicationStatus: mysql.ReplicationStatusToProto(status),
+		ReplicationStatus:      mysql.ReplicationStatusToProto(replicationStatus),
+		PrimaryStatus:          mysql.PrimaryStatusToProto(primaryStatus),
+		GtidPurged:             mysql.EncodePosition(purgedGTIDs),
+		ReadOnly:               readOnly,
+		SemiSyncPrimaryEnabled: primarySemiSync,
+		SemiSyncReplicaEnabled: replicaSemiSync,
 	}, nil
 }
 

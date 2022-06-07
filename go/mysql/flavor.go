@@ -71,6 +71,9 @@ type flavor interface {
 	// primaryGTIDSet returns the current GTIDSet of a server.
 	primaryGTIDSet(c *Conn) (GTIDSet, error)
 
+	// purgedGTIDSet returns the purged GTIDSet of a server.
+	purgedGTIDSet(c *Conn) (GTIDSet, error)
+
 	// startReplicationCommand returns the command to start the replication.
 	startReplicationCommand() string
 
@@ -263,6 +266,17 @@ func (c *Conn) IsMariaDB() bool {
 // PrimaryPosition returns the current primary's replication position.
 func (c *Conn) PrimaryPosition() (Position, error) {
 	gtidSet, err := c.flavor.primaryGTIDSet(c)
+	if err != nil {
+		return Position{}, err
+	}
+	return Position{
+		GTIDSet: gtidSet,
+	}, nil
+}
+
+// GetGTIDPurged returns the tablet's GTIDs which are purged.
+func (c *Conn) GetGTIDPurged() (Position, error) {
+	gtidSet, err := c.flavor.purgedGTIDSet(c)
 	if err != nil {
 		return Position{}, err
 	}

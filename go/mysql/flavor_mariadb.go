@@ -53,6 +53,11 @@ func (mariadbFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	return parseMariadbGTIDSet(qr.Rows[0][0].ToString())
 }
 
+// purgedGTIDSet is part of the Flavor interface.
+func (mariadbFlavor) purgedGTIDSet(c *Conn) (GTIDSet, error) {
+	return nil, nil
+}
+
 func (mariadbFlavor) startReplicationUntilAfter(pos Position) string {
 	return fmt.Sprintf("START SLAVE UNTIL master_gtid_pos = \"%s\"", pos)
 }
