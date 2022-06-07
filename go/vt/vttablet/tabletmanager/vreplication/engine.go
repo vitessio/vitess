@@ -203,10 +203,12 @@ func (vre *Engine) Open(ctx context.Context) {
 	}
 
 	if err := vre.openLocked(ctx); err != nil {
+		log.Infof("openLocked error: %s", err)
 		ctx, cancel := context.WithCancel(ctx)
 		vre.cancelRetry = cancel
 		go vre.retry(ctx, err)
 	}
+	log.Infof("VReplication engine opened successfully")
 }
 
 func (vre *Engine) openLocked(ctx context.Context) error {
