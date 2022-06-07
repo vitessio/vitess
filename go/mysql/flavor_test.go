@@ -14,6 +14,7 @@ limitations under the License.
 package mysql
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -90,30 +91,48 @@ func TestServerVersionAtLeast(t *testing.T) {
 
 func TestGetFlavor(t *testing.T) {
 	testcases := []struct {
-		version string
-		family  FlavorFamilty
+		version    string
+		capability FlavorCapability
+		isCapable  bool
 	}{
 		{
-			version: "8.0.14",
-			family:  MySQL80FlavorFamily,
+			version:    "8.0.14",
+			capability: InstantDDLFlavorCapability,
+			isCapable:  true,
 		},
 		{
-			version: "8.0.0",
-			family:  MySQL80FlavorFamily,
+			version:    "8.0.20",
+			capability: TransactionalGtidExecutedFlavorCapability,
+			isCapable:  true,
 		},
 		{
-			version: "5.6.7",
-			family:  MySQL56FlavorFamily,
+			version:    "8.0.0",
+			capability: InstantAddLastColumnFlavorCapability,
+			isCapable:  true,
 		},
 		{
-			version: "5.7.29",
-			family:  MySQL57FlavorFamily,
+			version:    "8.0.0",
+			capability: InstantAddDropColumnFlavorCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "5.6.7",
+			capability: InstantDDLFlavorCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "5.7.29",
+			capability: TransactionalGtidExecutedFlavorCapability,
+			isCapable:  false,
 		},
 	}
 	for _, tc := range testcases {
-		t.Run(tc.version, func(t *testing.T) {
-			_, family, _ := GetFlavor(tc.version, nil)
-			assert.Equal(t, tc.family, family)
+		name := fmt.Sprintf("%s %v", tc.version, tc.capability)
+		t.Run(name, func(t *testing.T) {
+			_, capableOf, _ := GetFlavor(tc.version, nil)
+			isCapable, err := capableOf(tc.capability)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.isCapable, isCapable)
 		})
 	}
 }

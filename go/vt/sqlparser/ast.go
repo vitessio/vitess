@@ -2745,6 +2745,16 @@ type (
 		XPathExpr Expr
 		NewXML    Expr
 	}
+
+	// LockingFuncType is an enum that get types of LockingFunc
+	LockingFuncType int8
+
+	// LockingFunc represents the advisory lock functions.
+	LockingFunc struct {
+		Type    LockingFuncType
+		Name    Expr
+		Timeout Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2818,6 +2828,7 @@ func (*LagLeadExpr) iExpr()                        {}
 func (*NamedWindow) iExpr()                        {}
 func (*ExtractValueExpr) iExpr()                   {}
 func (*UpdateXMLExpr) iExpr()                      {}
+func (*LockingFunc) iExpr()                        {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}

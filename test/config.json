@@ -1237,6 +1237,15 @@
 			"Shard": "vreplication_migrate",
 			"RetryMax": 1,
 			"Tags": []
+		},
+		"topo_connection_cache": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/topoconncache", "-run", "TestVtctldListAllTablets"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "topo_connection_cache",
+			"RetryMax": 1,
+			"Tags": []
 		}
 	}
 }

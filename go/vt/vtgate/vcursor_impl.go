@@ -67,10 +67,11 @@ type iExecute interface {
 	Execute(ctx context.Context, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 	ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool) (qr *sqltypes.Result, errs []error)
 	StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error) []error
-	ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error)
+	ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
 	Commit(ctx context.Context, safeSession *SafeSession) error
 	ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
 	ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
+	ReleaseLock(ctx context.Context, session *SafeSession) error
 
 	showVitessReplicationStatus(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
 	showShards(ctx context.Context, filter *sqlparser.ShowFilter, destTabletType topodatapb.TabletType) (*sqltypes.Result, error)
@@ -528,6 +529,12 @@ func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedS
 	return errs
 }
 
+// ExecuteLock is for executing advisory lock statements.
+func (vc *vcursorImpl) ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error) {
+	query.Sql = vc.marginComments.Leading + query.Sql + vc.marginComments.Trailing
+	return vc.executor.ExecuteLock(vc.ctx, rs, query, vc.safeSession, lockFuncType)
+}
+
 // ExecuteStandalone is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
 	rss := []*srvtopo.ResolvedShard{rs}
@@ -541,11 +548,6 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 	// execute DMLs through ExecuteStandalone.
 	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, bqs, NewAutocommitSession(vc.safeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows)
 	return qr, vterrors.Aggregate(errs)
-}
-
-func (vc *vcursorImpl) ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error) {
-	query.Sql = vc.marginComments.Leading + query.Sql + vc.marginComments.Trailing
-	return vc.executor.ExecuteLock(vc.ctx, rs, query, vc.safeSession)
 }
 
 // ExecuteKeyspaceID is part of the engine.VCursor interface.
@@ -730,13 +732,13 @@ func (vc *vcursorImpl) SetSkipQueryPlanCache(skipQueryPlanCache bool) error {
 	return nil
 }
 
-// SetSkipQueryPlanCache implements the SessionActions interface
+// SetSQLSelectLimit implements the SessionActions interface
 func (vc *vcursorImpl) SetSQLSelectLimit(limit int64) error {
 	vc.safeSession.GetOrCreateOptions().SqlSelectLimit = limit
 	return nil
 }
 
-// SetSkipQueryPlanCache implements the SessionActions interface
+// SetTransactionMode implements the SessionActions interface
 func (vc *vcursorImpl) SetTransactionMode(mode vtgatepb.TransactionMode) {
 	vc.safeSession.TransactionMode = mode
 }
@@ -757,12 +759,12 @@ func (vc *vcursorImpl) SetFoundRows(foundRows uint64) {
 	vc.safeSession.foundRowsHandled = true
 }
 
-// SetReadAfterWriteGTID implements the SessionActions interface
+// SetDDLStrategy implements the SessionActions interface
 func (vc *vcursorImpl) SetDDLStrategy(strategy string) {
 	vc.safeSession.SetDDLStrategy(strategy)
 }
 
-// SetReadAfterWriteGTID implements the SessionActions interface
+// GetDDLStrategy implements the SessionActions interface
 func (vc *vcursorImpl) GetDDLStrategy() string {
 	return vc.safeSession.GetDDLStrategy()
 }
@@ -806,6 +808,21 @@ func (vc *vcursorImpl) HasCreatedTempTable() {
 // GetWarnings implements the SessionActions interface
 func (vc *vcursorImpl) GetWarnings() []*querypb.QueryWarning {
 	return vc.safeSession.GetWarnings()
+}
+
+// AnyAdvisoryLockTaken implements the SessionActions interface
+func (vc *vcursorImpl) AnyAdvisoryLockTaken() bool {
+	return vc.safeSession.HasAdvisoryLock()
+}
+
+// AddAdvisoryLock implements the SessionActions interface
+func (vc *vcursorImpl) AddAdvisoryLock(name string) {
+	vc.safeSession.AddAdvisoryLock(name)
+}
+
+// RemoveAdvisoryLock implements the SessionActions interface
+func (vc *vcursorImpl) RemoveAdvisoryLock(name string) {
+	vc.safeSession.RemoveAdvisoryLock(name)
 }
 
 // GetDBDDLPluginName implements the VCursor interface
@@ -971,4 +988,8 @@ func (vc *vcursorImpl) SetExec(name string, value string) error {
 
 func (vc *vcursorImpl) CanUseSetVar() bool {
 	return sqlparser.IsMySQL80AndAbove() && *setVarEnabled
+}
+
+func (vc *vcursorImpl) ReleaseLock() error {
+	return vc.executor.ReleaseLock(vc.ctx, vc.safeSession)
 }

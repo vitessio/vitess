@@ -146,6 +146,8 @@ message Session {
 
   // enable_system_settings defines if we can use reserved connections.
   bool enable_system_settings = 23;
+
+  map<string, int64> advisory_lock = 24;
 }
 
 // ReadAfterWrite contains information regarding gtid set and timeout

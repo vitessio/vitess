@@ -3356,3 +3356,16 @@ func (node *JSONUnquoteExpr) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.JSONValue, true)
 	buf.WriteString(")")
 }
+
+// formatFast formats the node.
+func (node *LockingFunc) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Type.ToString() + "(")
+	if node.Type != ReleaseAllLocks {
+		buf.printExpr(node, node.Name, true)
+	}
+	if node.Type == GetLock {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Timeout, true)
+	}
+	buf.WriteString(")")
+}

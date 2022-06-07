@@ -532,6 +532,7 @@ func (session *SafeSession) ResetLock() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.LockSession = nil
+	session.AdvisoryLock = nil
 }
 
 // ResetAll resets the shard sessions and lock session.
@@ -547,6 +548,7 @@ func (session *SafeSession) ResetAll() {
 	session.PreSessions = nil
 	session.PostSessions = nil
 	session.LockSession = nil
+	session.AdvisoryLock = nil
 }
 
 // ResetShard reset the shard session for the provided tablet alias.
@@ -732,4 +734,56 @@ func (session *SafeSession) RemoveInternalSavepoint() {
 	if strings.Contains(session.Savepoints[sLast], session.savepointName) {
 		session.Savepoints = session.Savepoints[0:sLast]
 	}
+}
+
+// HasAdvisoryLock returns if any advisory lock is taken
+func (session *SafeSession) HasAdvisoryLock() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	return len(session.AdvisoryLock) != 0
+}
+
+// AddAdvisoryLock adds the advisory lock to the list.
+func (session *SafeSession) AddAdvisoryLock(name string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.AdvisoryLock == nil {
+		session.AdvisoryLock = map[string]int64{name: 1}
+		return
+	}
+	count, exists := session.AdvisoryLock[name]
+	if exists {
+		count++
+	}
+	session.AdvisoryLock[name] = count
+}
+
+// RemoveAdvisoryLock removes the advisory lock from the list.
+func (session *SafeSession) RemoveAdvisoryLock(name string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.AdvisoryLock == nil {
+		return
+	}
+	count, exists := session.AdvisoryLock[name]
+	if !exists {
+		return
+	}
+	count--
+	if count == 0 {
+		delete(session.AdvisoryLock, name)
+		return
+	}
+	session.AdvisoryLock[name] = count
+}
+
+// ClearAdvisoryLock clears the advisory lock list.
+func (session *SafeSession) ClearAdvisoryLock() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	session.AdvisoryLock = nil
 }
