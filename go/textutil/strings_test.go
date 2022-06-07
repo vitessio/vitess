@@ -66,3 +66,37 @@ func TestSplitUnescape(t *testing.T) {
 		assert.Equal(t, expected, elems)
 	}
 }
+
+func TestSingleWordCamel(t *testing.T) {
+	tt := []struct {
+		word   string
+		expect string
+	}{
+		{
+			word:   "",
+			expect: "",
+		},
+		{
+			word:   "a",
+			expect: "A",
+		},
+		{
+			word:   "A",
+			expect: "A",
+		},
+		{
+			word:   "mysql",
+			expect: "Mysql",
+		},
+		{
+			word:   "mySQL",
+			expect: "Mysql",
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.word, func(t *testing.T) {
+			camel := SingleWordCamel(tc.word)
+			assert.Equal(t, tc.expect, camel)
+		})
+	}
+}
