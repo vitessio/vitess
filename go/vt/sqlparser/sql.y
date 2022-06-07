@@ -342,6 +342,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> JSON_ARRAY_APPEND JSON_ARRAY_INSERT JSON_INSERT JSON_MERGE JSON_MERGE_PATCH JSON_MERGE_PRESERVE JSON_REMOVE JSON_REPLACE JSON_SET JSON_UNQUOTE
 %token <str> REGEXP_INSTR REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR
 %token <str> ExtractValue UpdateXML
+%token <str> GET_LOCK RELEASE_LOCK RELEASE_ALL_LOCKS IS_FREE_LOCK IS_USED_LOCK
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -5668,6 +5669,26 @@ UTC_DATE func_paren_opt
   {
     $$ = &TrimFuncExpr{TrimArg:$3, StringArg: $5}
   }
+| GET_LOCK openb expression ',' expression closeb
+  {
+    $$ = &LockingFunc{Type: GetLock, Name:$3, Timeout:$5}
+  }
+| IS_FREE_LOCK openb expression closeb
+  {
+    $$ = &LockingFunc{Type: IsFreeLock, Name:$3}
+  }
+| IS_USED_LOCK openb expression closeb
+  {
+    $$ = &LockingFunc{Type: IsUsedLock, Name:$3}
+  }
+| RELEASE_ALL_LOCKS openb closeb
+  {
+    $$ = &LockingFunc{Type: ReleaseAllLocks}
+  }
+| RELEASE_LOCK openb expression closeb
+  {
+    $$ = &LockingFunc{Type: ReleaseLock, Name:$3}
+  }
 | JSON_SCHEMA_VALID openb expression ',' expression closeb
   {
     $$ = &JSONSchemaValidFuncExpr{ Schema: $3, Document: $5}
@@ -7257,6 +7278,7 @@ non_reserved_keyword:
 | GEOMCOLLECTION
 | GEOMETRY
 | GEOMETRYCOLLECTION
+| GET_LOCK %prec FUNCTION_CALL_NON_KEYWORD
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
 | GTID_EXECUTED
@@ -7275,6 +7297,8 @@ non_reserved_keyword:
 | INVISIBLE
 | INVOKER
 | INDEXES
+| IS_FREE_LOCK %prec FUNCTION_CALL_NON_KEYWORD
+| IS_USED_LOCK %prec FUNCTION_CALL_NON_KEYWORD
 | ISOLATION
 | JSON
 | JSON_ARRAY %prec FUNCTION_CALL_NON_KEYWORD
@@ -7396,6 +7420,8 @@ non_reserved_keyword:
 | REGEXP_REPLACE %prec FUNCTION_CALL_NON_KEYWORD
 | REGEXP_SUBSTR %prec FUNCTION_CALL_NON_KEYWORD
 | RELAY
+| RELEASE_ALL_LOCKS %prec FUNCTION_CALL_NON_KEYWORD
+| RELEASE_LOCK %prec FUNCTION_CALL_NON_KEYWORD
 | REMOVE
 | REORGANIZE
 | REPAIR

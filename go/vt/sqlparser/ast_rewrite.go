@@ -254,6 +254,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfLockOption(parent, node, replacer)
 	case *LockTables:
 		return a.rewriteRefOfLockTables(parent, node, replacer)
+	case *LockingFunc:
+		return a.rewriteRefOfLockingFunc(parent, node, replacer)
 	case MatchAction:
 		return a.rewriteMatchAction(parent, node, replacer)
 	case *MatchExpr:
@@ -4032,6 +4034,38 @@ func (a *application) rewriteRefOfLockTables(parent SQLNode, node *LockTables, r
 	}
 	return true
 }
+func (a *application) rewriteRefOfLockingFunc(parent SQLNode, node *LockingFunc, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*LockingFunc).Name = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Timeout, func(newNode, parent SQLNode) {
+		parent.(*LockingFunc).Timeout = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7712,6 +7746,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
 		return a.rewriteRefOfLiteral(parent, node, replacer)
+	case *LockingFunc:
+		return a.rewriteRefOfLockingFunc(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *MemberOfExpr:
@@ -7878,6 +7914,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
 		return a.rewriteRefOfLiteral(parent, node, replacer)
+	case *LockingFunc:
+		return a.rewriteRefOfLockingFunc(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *MemberOfExpr:

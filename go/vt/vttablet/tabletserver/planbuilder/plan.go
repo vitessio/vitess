@@ -202,13 +202,6 @@ func (plan *Plan) TableNames() (names []string) {
 
 // Build builds a plan based on the schema.
 func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isReservedConn bool, dbName string) (plan *Plan, err error) {
-	if !isReservedConn {
-		err = checkForPoolingUnsafeConstructs(statement)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
 		plan, err = &Plan{
@@ -218,6 +211,15 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		}, nil
 	case *sqlparser.Select:
 		plan, err = analyzeSelect(stmt, tables)
+		if err != nil {
+			return nil, err
+		}
+		if plan != nil && plan.PlanID != PlanSelectImpossible && !isReservedConn {
+			err = checkForPoolingUnsafeConstructs(statement)
+			if err != nil {
+				return nil, err
+			}
+		}
 	case *sqlparser.Insert:
 		plan, err = analyzeInsert(stmt, tables)
 	case *sqlparser.Update:
@@ -225,6 +227,9 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 	case *sqlparser.Delete:
 		plan, err = analyzeDelete(stmt, tables)
 	case *sqlparser.Set:
+		if !isReservedConn {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed without a reserved connections", sqlparser.String(stmt))
+		}
 		plan, err = analyzeSet(stmt), nil
 	case sqlparser.DDLStatement:
 		// DDLs and some other statements below don't get fully parsed.
@@ -335,18 +340,22 @@ func checkForPoolingUnsafeConstructs(expr sqlparser.SQLNode) error {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed without a reserved connections", sqlparser.String(node))
 	}
 
-	return sqlparser.Walk(func(in sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := in.(type) {
-		case *sqlparser.Set:
-			return false, genError(node)
-		case *sqlparser.FuncExpr:
-			if sqlparser.IsLockingFunc(node) {
-				return false, genError(node)
-			}
-		}
+	if _, isSetStmt := expr.(*sqlparser.Set); isSetStmt {
+		return genError(expr)
+	}
 
-		// TODO: This could be smarter about not walking down parts of the AST that can't contain
-		// function calls.
+	sel, isSel := expr.(*sqlparser.Select)
+	if !isSel {
+		return nil
+	}
+	return sqlparser.Walk(func(in sqlparser.SQLNode) (kontinue bool, err error) {
+		lFunc, isLFunc := in.(*sqlparser.LockingFunc)
+		if !isLFunc {
+			return true, nil
+		}
+		if lFunc.Type == sqlparser.GetLock {
+			return false, genError(lFunc)
+		}
 		return true, nil
-	}, expr)
+	}, sel.SelectExprs)
 }
