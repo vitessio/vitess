@@ -166,7 +166,7 @@ func Init(vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options) error {
 
 	err = initVtgateExecutor(vSchemaStr, ksShardMapStr, opts)
 	if err != nil {
-		return fmt.Errorf("initVtgateExecutor: %v", err)
+		return fmt.Errorf("initVtgateExecutor: %v", err.Error())
 	}
 
 	return nil

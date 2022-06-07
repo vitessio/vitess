@@ -26,3 +26,8 @@ begin;
 update user set nickname='alice' where id=1;
 update user set nickname='bob' where id=3;
 commit;
+
+/* update in a transaction with single query going to multiple shard */
+begin;
+update user set nickname='alice' where id in (1,4);
+commit;

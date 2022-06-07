@@ -59,7 +59,7 @@ func TestWeightStringsComprehensive(t *testing.T) {
 	conn := mysqlconn(t)
 	defer conn.Close()
 
-	allCollations := defaultenv.AllCollations()
+	allCollations := collations.Local().AllCollations()
 	sort.Slice(allCollations, func(i, j int) bool {
 		return allCollations[i].ID() < allCollations[j].ID()
 	})
@@ -103,7 +103,7 @@ func TestCJKWeightStrings(t *testing.T) {
 	conn := mysqlconn(t)
 	defer conn.Close()
 
-	allCollations := defaultenv.AllCollations()
+	allCollations := collations.Local().AllCollations()
 	testdata, _ := filepath.Glob("../internal/charset/testdata/*.txt")
 	for _, testfile := range testdata {
 		charset := filepath.Base(testfile)
