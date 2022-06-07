@@ -451,3 +451,8 @@ Gen4 plan same as above
 "SELECT * FROM JSON_TABLE('[ {\"c1\": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt"
 "unsupported: json_table expressions"
 Gen4 plan same as above
+
+# mix lock with other expr
+"select get_lock('xyz', 10), 1 from dual"
+"unsupported: lock function and other expression in same select query"
+Gen4 plan same as above

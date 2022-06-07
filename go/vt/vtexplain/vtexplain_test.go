@@ -123,8 +123,7 @@ func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testi
 			t.Errorf("Text output did not match (-want +got):\n%s", diff)
 
 			if testOutputTempDir == "" {
-				testOutputTempDir, err = os.MkdirTemp("", "vtexplain_output")
-				require.NoError(t, err, "error getting tempdir")
+				testOutputTempDir = t.TempDir()
 			}
 			gotFile := fmt.Sprintf("%s/%s-output.txt", testOutputTempDir, testcase)
 			os.WriteFile(gotFile, []byte(explainText), 0644)

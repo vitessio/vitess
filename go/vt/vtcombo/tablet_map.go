@@ -739,6 +739,10 @@ func (itc *internalTabletConn) VStreamResults(
 // internalTabletManagerClient implements tmclient.TabletManagerClient
 type internalTabletManagerClient struct{}
 
+func (itmc *internalTabletManagerClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
+	return nil, fmt.Errorf("VDiff not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) LockTables(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }

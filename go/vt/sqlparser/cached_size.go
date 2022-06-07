@@ -1184,6 +1184,24 @@ func (cached *ExtractFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *ExtractValueExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Fragment vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Fragment.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field XPathExpr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.XPathExpr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *ExtractedSubquery) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2215,6 +2233,24 @@ func (cached *LockTables) CachedSize(alloc bool) int64 {
 		for _, elem := range cached.Tables {
 			size += elem.CachedSize(true)
 		}
+	}
+	return size
+}
+func (cached *LockingFunc) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Name.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Timeout vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Timeout.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	return size
 }
@@ -3690,6 +3726,28 @@ func (cached *UpdateExpr) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(true)
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *UpdateXMLExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Target vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Target.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field XPathExpr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.XPathExpr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field NewXML vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.NewXML.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size

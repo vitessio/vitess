@@ -1106,7 +1106,7 @@ func TestSelectBindvars(t *testing.T) {
 	})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from `user` where `name` in ::__vals",
+		Sql: "select id from `user` where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name1": sqltypes.BytesBindVariable([]byte("foo1")),
 			"name2": sqltypes.BytesBindVariable([]byte("foo2")),
@@ -1137,7 +1137,7 @@ func TestSelectBindvars(t *testing.T) {
 
 	// When there are no matching rows in the vindex, vtgate still needs the field info
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from `user` where `name` = :name",
+		Sql: "select id from `user` where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name": sqltypes.StringBindVariable("nonexistent"),
 		},
@@ -2917,8 +2917,9 @@ func TestSelectLock(t *testing.T) {
 			TabletAlias: sbc1.Tablet().Alias,
 			ReservedId:  1,
 		},
-		FoundRows: 1,
-		RowCount:  -1,
+		AdvisoryLock: map[string]int64{"lock name": 1},
+		FoundRows:    1,
+		RowCount:     -1,
 	}
 
 	_, err := exec(executor, session, "select get_lock('lock name', 10) from dual")
@@ -2931,7 +2932,12 @@ func TestSelectLock(t *testing.T) {
 		Sql:           "select release_lock('lock name') from dual",
 		BindVariables: map[string]*querypb.BindVariable{},
 	})
-	exec(executor, session, "select release_lock('lock name') from dual")
+	wantSession.AdvisoryLock = nil
+	wantSession.LockSession = nil
+
+	_, err = exec(executor, session, "select release_lock('lock name') from dual")
+	require.NoError(t, err)
+	wantSession.LastLockHeartbeat = session.Session.LastLockHeartbeat // copying as this is current timestamp value.
 	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, wantSession, session.Session, "")
 }

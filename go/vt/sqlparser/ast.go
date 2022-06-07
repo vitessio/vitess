@@ -2821,6 +2821,33 @@ type (
 
 	// LagLeadExprType is an enum to get types of LagLeadExpr.
 	LagLeadExprType int8
+
+	// ExtractValueExpr stands for EXTRACTVALUE() XML function
+	// Extract a value from an XML string using XPath notation
+	// For more details, visit https://dev.mysql.com/doc/refman/8.0/en/xml-functions.html#function_extractvalue
+	ExtractValueExpr struct {
+		Fragment  Expr
+		XPathExpr Expr
+	}
+
+	// UpdateXMLExpr stands for UpdateXML() XML function
+	// Return replaced XML fragment
+	// For more details, visit https://dev.mysql.com/doc/refman/8.0/en/xml-functions.html#function_updatexml
+	UpdateXMLExpr struct {
+		Target    Expr
+		XPathExpr Expr
+		NewXML    Expr
+	}
+
+	// LockingFuncType is an enum that get types of LockingFunc
+	LockingFuncType int8
+
+	// LockingFunc represents the advisory lock functions.
+	LockingFunc struct {
+		Type    LockingFuncType
+		Name    Expr
+		Timeout Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2981,6 +3008,9 @@ func (*NtileExpr) iExpr()                          {}
 func (*NTHValueExpr) iExpr()                       {}
 func (*LagLeadExpr) iExpr()                        {}
 func (*NamedWindow) iExpr()                        {}
+func (*ExtractValueExpr) iExpr()                   {}
+func (*UpdateXMLExpr) iExpr()                      {}
+func (*LockingFunc) iExpr()                        {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3026,6 +3056,8 @@ func (*NtileExpr) iCallable()                          {}
 func (*NTHValueExpr) iCallable()                       {}
 func (*LagLeadExpr) iCallable()                        {}
 func (*NamedWindow) iCallable()                        {}
+func (*ExtractValueExpr) iCallable()                   {}
+func (*UpdateXMLExpr) iCallable()                      {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

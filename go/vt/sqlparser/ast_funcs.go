@@ -1505,6 +1505,24 @@ func (ty JSONValueMergeType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty LockingFuncType) ToString() string {
+	switch ty {
+	case GetLock:
+		return GetLockStr
+	case IsFreeLock:
+		return IsFreeLockStr
+	case IsUsedLock:
+		return IsUsedLockStr
+	case ReleaseAllLocks:
+		return ReleaseAllLocksStr
+	case ReleaseLock:
+		return ReleaseLockStr
+	default:
+		return "Unknown LockingFuncType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty ExplainType) ToString() string {
 	switch ty {
 	case EmptyType:

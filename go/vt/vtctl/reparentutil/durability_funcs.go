@@ -23,12 +23,12 @@ import (
 )
 
 // SemiSyncAckersForPrimary returns the list of tablets which are capable of sending Semi-Sync Acks for the given primary tablet
-func SemiSyncAckersForPrimary(primary *topodatapb.Tablet, allTablets []*topodatapb.Tablet) (semiSyncAckers []*topodatapb.Tablet) {
+func SemiSyncAckersForPrimary(durability Durabler, primary *topodatapb.Tablet, allTablets []*topodatapb.Tablet) (semiSyncAckers []*topodatapb.Tablet) {
 	for _, tablet := range allTablets {
 		if topoproto.TabletAliasEqual(primary.Alias, tablet.Alias) {
 			continue
 		}
-		if IsReplicaSemiSync(primary, tablet) {
+		if IsReplicaSemiSync(durability, primary, tablet) {
 			semiSyncAckers = append(semiSyncAckers, tablet)
 		}
 	}
@@ -37,7 +37,7 @@ func SemiSyncAckersForPrimary(primary *topodatapb.Tablet, allTablets []*topodata
 
 // haveRevokedForTablet checks whether we have reached enough tablets such that the given primary eligible tablet cannot accept any new writes
 // The tablets reached should have their replication stopped and must be set to read only.
-func haveRevokedForTablet(primaryEligible *topodatapb.Tablet, tabletsReached []*topodatapb.Tablet, allTablets []*topodatapb.Tablet) bool {
+func haveRevokedForTablet(durability Durabler, primaryEligible *topodatapb.Tablet, tabletsReached []*topodatapb.Tablet, allTablets []*topodatapb.Tablet) bool {
 	// if we have reached the primaryEligible tablet and stopped its replication and marked it read only, then it will not
 	// accept any new writes
 	if topoproto.IsTabletInList(primaryEligible, tabletsReached) {
@@ -45,13 +45,13 @@ func haveRevokedForTablet(primaryEligible *topodatapb.Tablet, tabletsReached []*
 	}
 
 	// semiSyncAckersReached is the list of reachable tablets capable of sending semi sync Acks for the given primaryEligible tablet
-	semiSyncAckersReached := SemiSyncAckersForPrimary(primaryEligible, tabletsReached)
+	semiSyncAckersReached := SemiSyncAckersForPrimary(durability, primaryEligible, tabletsReached)
 
 	// allSemiSyncAckers is the list of reachable tablets capable of sending semi sync Acks for the given primaryEligible tablet
-	allSemiSyncAckers := SemiSyncAckersForPrimary(primaryEligible, allTablets)
+	allSemiSyncAckers := SemiSyncAckersForPrimary(durability, primaryEligible, allTablets)
 
 	// numOfSemiSyncAcksRequired is the number of semi sync Acks that the primaryEligible tablet requires
-	numOfSemiSyncAcksRequired := SemiSyncAckers(primaryEligible)
+	numOfSemiSyncAcksRequired := SemiSyncAckers(durability, primaryEligible)
 
 	// if we have reached enough semi-sync Acking tablets such that the primaryEligible cannot accept a write
 	// we have revoked from the tablet
@@ -61,12 +61,12 @@ func haveRevokedForTablet(primaryEligible *topodatapb.Tablet, tabletsReached []*
 // haveRevoked checks whether we have reached enough tablets to guarantee that no tablet eligible to become a primary can accept any write
 // All the tablets reached must have their replication stopped and set to read only for us to guarantee that we have revoked access
 // from all the primary eligible tablets (prevent them from accepting any new writes)
-func haveRevoked(tabletsReached []*topodatapb.Tablet, allTablets []*topodatapb.Tablet) bool {
+func haveRevoked(durability Durabler, tabletsReached []*topodatapb.Tablet, allTablets []*topodatapb.Tablet) bool {
 	for _, tablet := range allTablets {
-		if PromotionRule(tablet) == promotionrule.MustNot {
+		if PromotionRule(durability, tablet) == promotionrule.MustNot {
 			continue
 		}
-		if !haveRevokedForTablet(tablet, tabletsReached, allTablets) {
+		if !haveRevokedForTablet(durability, tablet, tabletsReached, allTablets) {
 			return false
 		}
 	}
@@ -74,7 +74,7 @@ func haveRevoked(tabletsReached []*topodatapb.Tablet, allTablets []*topodatapb.T
 }
 
 // canEstablishForTablet checks whether we have reached enough tablets to say that the given primary eligible tablet will be able to accept new writes
-func canEstablishForTablet(primaryEligible *topodatapb.Tablet, tabletsReached []*topodatapb.Tablet) bool {
+func canEstablishForTablet(durability Durabler, primaryEligible *topodatapb.Tablet, tabletsReached []*topodatapb.Tablet) bool {
 	// if we have not reached the primaryEligible tablet, then it cannot be considered eligible to accept writes
 	// since it might have been stopped
 	if !topoproto.IsTabletInList(primaryEligible, tabletsReached) {
@@ -82,10 +82,10 @@ func canEstablishForTablet(primaryEligible *topodatapb.Tablet, tabletsReached []
 	}
 
 	// semiSyncAckersReached is the list of reachable tablets capable of sending semi sync Acks for the given primaryEligible tablet
-	semiSyncAckersReached := SemiSyncAckersForPrimary(primaryEligible, tabletsReached)
+	semiSyncAckersReached := SemiSyncAckersForPrimary(durability, primaryEligible, tabletsReached)
 
 	// numOfSemiSyncAcksRequired is the number of semi sync Acks that the primaryEligible tablet requires
-	numOfSemiSyncAcksRequired := SemiSyncAckers(primaryEligible)
+	numOfSemiSyncAcksRequired := SemiSyncAckers(durability, primaryEligible)
 
 	// if we have reached enough semi-sync Acking tablets such that the primaryEligible can accept a write
 	// we can safely promote this tablet

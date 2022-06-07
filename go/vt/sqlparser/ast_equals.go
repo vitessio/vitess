@@ -428,6 +428,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfExtractFuncExpr(a, b)
+	case *ExtractValueExpr:
+		b, ok := inB.(*ExtractValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExtractValueExpr(a, b)
 	case *ExtractedSubquery:
 		b, ok := inB.(*ExtractedSubquery)
 		if !ok {
@@ -752,6 +758,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfLockTables(a, b)
+	case *LockingFunc:
+		b, ok := inB.(*LockingFunc)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLockingFunc(a, b)
 	case MatchAction:
 		b, ok := inB.(MatchAction)
 		if !ok {
@@ -1304,6 +1316,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsUpdateExprs(a, b)
+	case *UpdateXMLExpr:
+		b, ok := inB.(*UpdateXMLExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUpdateXMLExpr(a, b)
 	case *Use:
 		b, ok := inB.(*Use)
 		if !ok {
@@ -2240,6 +2258,18 @@ func EqualsRefOfExtractFuncExpr(a, b *ExtractFuncExpr) bool {
 		EqualsExpr(a.Expr, b.Expr)
 }
 
+// EqualsRefOfExtractValueExpr does deep equals between the two objects.
+func EqualsRefOfExtractValueExpr(a, b *ExtractValueExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Fragment, b.Fragment) &&
+		EqualsExpr(a.XPathExpr, b.XPathExpr)
+}
+
 // EqualsRefOfExtractedSubquery does deep equals between the two objects.
 func EqualsRefOfExtractedSubquery(a, b *ExtractedSubquery) bool {
 	if a == b {
@@ -2897,6 +2927,19 @@ func EqualsRefOfLockTables(a, b *LockTables) bool {
 		return false
 	}
 	return EqualsTableAndLockTypes(a.Tables, b.Tables)
+}
+
+// EqualsRefOfLockingFunc does deep equals between the two objects.
+func EqualsRefOfLockingFunc(a, b *LockingFunc) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsExpr(a.Name, b.Name) &&
+		EqualsExpr(a.Timeout, b.Timeout)
 }
 
 // EqualsRefOfMatchExpr does deep equals between the two objects.
@@ -4043,6 +4086,19 @@ func EqualsUpdateExprs(a, b UpdateExprs) bool {
 	return true
 }
 
+// EqualsRefOfUpdateXMLExpr does deep equals between the two objects.
+func EqualsRefOfUpdateXMLExpr(a, b *UpdateXMLExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Target, b.Target) &&
+		EqualsExpr(a.XPathExpr, b.XPathExpr) &&
+		EqualsExpr(a.NewXML, b.NewXML)
+}
+
 // EqualsRefOfUse does deep equals between the two objects.
 func EqualsRefOfUse(a, b *Use) bool {
 	if a == b {
@@ -4568,6 +4624,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfExtractFuncExpr(a, b)
+	case *ExtractValueExpr:
+		b, ok := inB.(*ExtractValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExtractValueExpr(a, b)
 	case *FirstOrLastValueExpr:
 		b, ok := inB.(*FirstOrLastValueExpr)
 		if !ok {
@@ -4784,6 +4846,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfTrimFuncExpr(a, b)
+	case *UpdateXMLExpr:
+		b, ok := inB.(*UpdateXMLExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUpdateXMLExpr(a, b)
 	case *ValuesFuncExpr:
 		b, ok := inB.(*ValuesFuncExpr)
 		if !ok {
@@ -5153,6 +5221,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfExtractFuncExpr(a, b)
+	case *ExtractValueExpr:
+		b, ok := inB.(*ExtractValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExtractValueExpr(a, b)
 	case *ExtractedSubquery:
 		b, ok := inB.(*ExtractedSubquery)
 		if !ok {
@@ -5333,6 +5407,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfLiteral(a, b)
+	case *LockingFunc:
+		b, ok := inB.(*LockingFunc)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLockingFunc(a, b)
 	case *MatchExpr:
 		b, ok := inB.(*MatchExpr)
 		if !ok {
@@ -5483,6 +5563,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfUnaryExpr(a, b)
+	case *UpdateXMLExpr:
+		b, ok := inB.(*UpdateXMLExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUpdateXMLExpr(a, b)
 	case ValTuple:
 		b, ok := inB.(ValTuple)
 		if !ok {
@@ -5705,6 +5791,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfExtractFuncExpr(a, b)
+	case *ExtractValueExpr:
+		b, ok := inB.(*ExtractValueExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExtractValueExpr(a, b)
 	case *ExtractedSubquery:
 		b, ok := inB.(*ExtractedSubquery)
 		if !ok {
@@ -5885,6 +5977,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfLiteral(a, b)
+	case *LockingFunc:
+		b, ok := inB.(*LockingFunc)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLockingFunc(a, b)
 	case *MatchExpr:
 		b, ok := inB.(*MatchExpr)
 		if !ok {
@@ -6035,6 +6133,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfUnaryExpr(a, b)
+	case *UpdateXMLExpr:
+		b, ok := inB.(*UpdateXMLExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUpdateXMLExpr(a, b)
 	case ValTuple:
 		b, ok := inB.(ValTuple)
 		if !ok {

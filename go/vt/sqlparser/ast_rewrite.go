@@ -156,6 +156,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteExprs(parent, node, replacer)
 	case *ExtractFuncExpr:
 		return a.rewriteRefOfExtractFuncExpr(parent, node, replacer)
+	case *ExtractValueExpr:
+		return a.rewriteRefOfExtractValueExpr(parent, node, replacer)
 	case *ExtractedSubquery:
 		return a.rewriteRefOfExtractedSubquery(parent, node, replacer)
 	case *FirstOrLastValueExpr:
@@ -264,6 +266,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfLockOption(parent, node, replacer)
 	case *LockTables:
 		return a.rewriteRefOfLockTables(parent, node, replacer)
+	case *LockingFunc:
+		return a.rewriteRefOfLockingFunc(parent, node, replacer)
 	case MatchAction:
 		return a.rewriteMatchAction(parent, node, replacer)
 	case *MatchExpr:
@@ -448,6 +452,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfUpdateExpr(parent, node, replacer)
 	case UpdateExprs:
 		return a.rewriteUpdateExprs(parent, node, replacer)
+	case *UpdateXMLExpr:
+		return a.rewriteRefOfUpdateXMLExpr(parent, node, replacer)
 	case *Use:
 		return a.rewriteRefOfUse(parent, node, replacer)
 	case *VStream:
@@ -2499,6 +2505,38 @@ func (a *application) rewriteRefOfExtractFuncExpr(parent SQLNode, node *ExtractF
 	}
 	return true
 }
+func (a *application) rewriteRefOfExtractValueExpr(parent SQLNode, node *ExtractValueExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Fragment, func(newNode, parent SQLNode) {
+		parent.(*ExtractValueExpr).Fragment = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.XPathExpr, func(newNode, parent SQLNode) {
+		parent.(*ExtractValueExpr).XPathExpr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfExtractedSubquery(parent SQLNode, node *ExtractedSubquery, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4181,6 +4219,38 @@ func (a *application) rewriteRefOfLockTables(parent SQLNode, node *LockTables, r
 			a.cur.parent = parent
 			a.cur.node = node
 		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfLockingFunc(parent SQLNode, node *LockingFunc, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*LockingFunc).Name = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Timeout, func(newNode, parent SQLNode) {
+		parent.(*LockingFunc).Timeout = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -7139,6 +7209,43 @@ func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, repla
 	}
 	return true
 }
+func (a *application) rewriteRefOfUpdateXMLExpr(parent SQLNode, node *UpdateXMLExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Target, func(newNode, parent SQLNode) {
+		parent.(*UpdateXMLExpr).Target = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.XPathExpr, func(newNode, parent SQLNode) {
+		parent.(*UpdateXMLExpr).XPathExpr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.NewXML, func(newNode, parent SQLNode) {
+		parent.(*UpdateXMLExpr).NewXML = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfUse(parent SQLNode, node *Use, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7860,6 +7967,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
 	case *ExtractFuncExpr:
 		return a.rewriteRefOfExtractFuncExpr(parent, node, replacer)
+	case *ExtractValueExpr:
+		return a.rewriteRefOfExtractValueExpr(parent, node, replacer)
 	case *FirstOrLastValueExpr:
 		return a.rewriteRefOfFirstOrLastValueExpr(parent, node, replacer)
 	case *FuncExpr:
@@ -7932,6 +8041,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
 	case *TrimFuncExpr:
 		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
+	case *UpdateXMLExpr:
+		return a.rewriteRefOfUpdateXMLExpr(parent, node, replacer)
 	case *ValuesFuncExpr:
 		return a.rewriteRefOfValuesFuncExpr(parent, node, replacer)
 	case *WeightStringFuncExpr:
@@ -8090,6 +8201,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfExistsExpr(parent, node, replacer)
 	case *ExtractFuncExpr:
 		return a.rewriteRefOfExtractFuncExpr(parent, node, replacer)
+	case *ExtractValueExpr:
+		return a.rewriteRefOfExtractValueExpr(parent, node, replacer)
 	case *ExtractedSubquery:
 		return a.rewriteRefOfExtractedSubquery(parent, node, replacer)
 	case *FirstOrLastValueExpr:
@@ -8150,6 +8263,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
 		return a.rewriteRefOfLiteral(parent, node, replacer)
+	case *LockingFunc:
+		return a.rewriteRefOfLockingFunc(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *Max:
@@ -8200,6 +8315,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
 	case *UnaryExpr:
 		return a.rewriteRefOfUnaryExpr(parent, node, replacer)
+	case *UpdateXMLExpr:
+		return a.rewriteRefOfUpdateXMLExpr(parent, node, replacer)
 	case ValTuple:
 		return a.rewriteValTuple(parent, node, replacer)
 	case *ValuesFuncExpr:
@@ -8284,6 +8401,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfExistsExpr(parent, node, replacer)
 	case *ExtractFuncExpr:
 		return a.rewriteRefOfExtractFuncExpr(parent, node, replacer)
+	case *ExtractValueExpr:
+		return a.rewriteRefOfExtractValueExpr(parent, node, replacer)
 	case *ExtractedSubquery:
 		return a.rewriteRefOfExtractedSubquery(parent, node, replacer)
 	case *FirstOrLastValueExpr:
@@ -8344,6 +8463,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
 		return a.rewriteRefOfLiteral(parent, node, replacer)
+	case *LockingFunc:
+		return a.rewriteRefOfLockingFunc(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *Max:
@@ -8394,6 +8515,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
 	case *UnaryExpr:
 		return a.rewriteRefOfUnaryExpr(parent, node, replacer)
+	case *UpdateXMLExpr:
+		return a.rewriteRefOfUpdateXMLExpr(parent, node, replacer)
 	case ValTuple:
 		return a.rewriteValTuple(parent, node, replacer)
 	case *ValuesFuncExpr:

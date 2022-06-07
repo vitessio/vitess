@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vreplication
 
 import (
@@ -493,14 +509,17 @@ func (vc *VitessCluster) AddShards(t testing.TB, cells []*Cell, keyspace *Keyspa
 				tablets = append(tablets, tablet)
 				dbProcesses = append(dbProcesses, proc)
 			}
-			for i := 0; i < numRdonly; i++ {
-				log.Infof("Adding RdOnly tablet")
-				tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "rdonly", tabletID+tabletIndex)
-				require.NoError(t, err)
-				require.NotNil(t, tablet)
-				tabletIndex++
-				tablets = append(tablets, tablet)
-				dbProcesses = append(dbProcesses, proc)
+			// Only create RDONLY tablets in the default cell
+			if cell.Name == cluster.DefaultCell {
+				for i := 0; i < numRdonly; i++ {
+					log.Infof("Adding RdOnly tablet")
+					tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "rdonly", tabletID+tabletIndex)
+					require.NoError(t, err)
+					require.NotNil(t, tablet)
+					tabletIndex++
+					tablets = append(tablets, tablet)
+					dbProcesses = append(dbProcesses, proc)
+				}
 			}
 
 			for ind, proc := range dbProcesses {
