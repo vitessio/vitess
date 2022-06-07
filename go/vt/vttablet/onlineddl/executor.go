@@ -380,7 +380,7 @@ func (e *Executor) proposedMigrationConflictsWithRunningMigration(runningMigrati
 		return true
 	}
 	if proposedMigrationAction == sqlparser.AlterDDLAction {
-		// A new ALTER migration conflicts with an existing migration if th eexisting migration is still not ready to complete.
+		// A new ALTER migration conflicts with an existing migration if the existing migration is still not ready to complete.
 		// Specifically, if the running migration is an ALTER, and is still busy with copying rows (copy_state), then
 		// we consider the two to be conflicting. But, if the running migration is done copying rows, and is now only
 		// applying binary logs, and is up-to-date, then we consider a new ALTER migration to be non-conflicting.
@@ -396,13 +396,13 @@ func (e *Executor) isAnyConflictingMigrationRunning(onlineDDL *schema.OnlineDDL)
 	e.ownedRunningMigrations.Range(func(_, val any) bool {
 		runningMigration, ok := val.(*schema.OnlineDDL)
 		if !ok {
-			return true
+			return true // continue iteration
 		}
 		if e.proposedMigrationConflictsWithRunningMigration(runningMigration, onlineDDL) {
 			conflictFound = true
 			return false // stop iteration, no need to review other migrations
 		}
-		return true
+		return true // continue iteration
 	})
 	return conflictFound
 }
