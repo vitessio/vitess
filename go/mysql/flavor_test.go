@@ -125,6 +125,16 @@ func TestGetFlavor(t *testing.T) {
 			capability: TransactionalGtidExecutedFlavorCapability,
 			isCapable:  false,
 		},
+		{
+			version:    "5.6.7",
+			capability: MySQLJSONFlavorCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "5.7.29",
+			capability: MySQLJSONFlavorCapability,
+			isCapable:  true,
+		},
 	}
 	for _, tc := range testcases {
 		name := fmt.Sprintf("%s %v", tc.version, tc.capability)
