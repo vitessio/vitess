@@ -1271,6 +1271,39 @@
                     ]
                 }
             ]
+        },
+        {
+            "method": "SetReadWrite",
+            "rules": [
+                {
+                    "resource": "Tablet",
+                    "actions": ["manage_tablet_writability"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.SetReadWriteRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
         }
     ]
 }
