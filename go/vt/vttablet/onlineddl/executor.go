@@ -1877,6 +1877,7 @@ func (e *Executor) UnthrottleAllMigrations(ctx context.Context) (result *sqltype
 	if err := e.lagThrottler.CheckIsReady(); err != nil {
 		return nil, err
 	}
+	defer e.triggerNextCheckInterval()
 	_ = e.lagThrottler.UnthrottleApp(throttlerOnlineDDLApp)
 	return emptyResult, nil
 }
