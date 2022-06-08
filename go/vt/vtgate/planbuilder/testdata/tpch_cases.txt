@@ -131,7 +131,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(1) AS order_count",
+    "Aggregates": "sum_count_star(1) AS order_count",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -1061,7 +1061,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum(1) AS numwait",
+            "Aggregates": "sum_count_star(1) AS numwait",
             "GroupBy": "(0|2)",
             "Inputs": [
               {
