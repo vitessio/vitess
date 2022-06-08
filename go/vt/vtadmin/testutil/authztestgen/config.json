@@ -114,6 +114,11 @@
                     "field": "TabletExternallyReparentedResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.TabletExternallyReparentedResponse\nError error\n}",
                     "value": "\"zone1-0000000100\": {\nResponse: &vtctldatapb.TabletExternallyReparentedResponse{},\n},"
+                },
+                {
+                    "field": "ValidateKeyspaceResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.ValidateKeyspaceResponse\nError error\n}",
+                    "value": "\"test\": {\nResponse: &vtctldatapb.ValidateKeyspaceResponse{},\n},"
                 }
             ],
             "db_tablet_list": [
@@ -1480,6 +1485,39 @@
                     "include_error_var": true,
                     "assertions": [
                         "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "ValidateKeyspace",
+            "rules": [
+                {
+                    "resource": "Keyspace",
+                    "actions": ["put"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.ValidateKeyspaceRequest{\nClusterId: \"test\",\nKeyspace: \"test\",\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
                         "assert.Nil(t, resp, $$)"
                     ]
                 },
