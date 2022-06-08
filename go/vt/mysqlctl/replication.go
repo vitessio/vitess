@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -565,6 +566,31 @@ func (mysqld *Mysqld) SemiSyncEnabled() (primary, replica bool) {
 	primary = (vars["rpl_semi_sync_master_enabled"] == "ON")
 	replica = (vars["rpl_semi_sync_slave_enabled"] == "ON")
 	return primary, replica
+}
+
+// SemiSyncStatus returns the current status of semi-sync for primary and replica.
+func (mysqld *Mysqld) SemiSyncStatus() (primary, replica bool) {
+	vars, err := mysqld.fetchStatuses(context.TODO(), "Rpl_semi_sync_%_status")
+	if err != nil {
+		return false, false
+	}
+	primary = vars["Rpl_semi_sync_master_status"] == "ON"
+	replica = vars["Rpl_semi_sync_slave_status"] == "ON"
+	return primary, replica
+}
+
+// SemiSyncClients returns the number of semi-sync clients for the primary.
+func (mysqld *Mysqld) SemiSyncClients() int32 {
+	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW STATUS LIKE 'Rpl_semi_sync_master_clients'")
+	if err != nil {
+		return 0
+	}
+	if len(qr.Rows) != 1 {
+		return 0
+	}
+	countStr := qr.Rows[0][1].ToString()
+	count, _ := strconv.Atoi(countStr)
+	return int32(count)
 }
 
 // SemiSyncReplicationStatus returns whether semi-sync is currently used by replication.

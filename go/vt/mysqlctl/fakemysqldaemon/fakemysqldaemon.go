@@ -611,6 +611,20 @@ func (fmd *FakeMysqlDaemon) SemiSyncEnabled() (primary, replica bool) {
 	return fmd.SemiSyncPrimaryEnabled, fmd.SemiSyncReplicaEnabled
 }
 
+// SemiSyncStatus is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SemiSyncStatus() (bool, bool) {
+	// The fake assumes the status worked.
+	if fmd.SemiSyncPrimaryEnabled {
+		return true, false
+	}
+	return false, fmd.SemiSyncReplicaEnabled
+}
+
+// SemiSyncClients is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SemiSyncClients() int32 {
+	return 0
+}
+
 // SemiSyncReplicationStatus is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus() (bool, error) {
 	// The fake assumes the status worked.

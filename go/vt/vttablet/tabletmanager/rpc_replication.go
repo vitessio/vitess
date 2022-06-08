@@ -90,9 +90,11 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	// Semi sync settings - "show global variables like 'rpl_semi_sync_%_enabled'"
 	primarySemiSync, replicaSemiSync := tm.MysqlDaemon.SemiSyncEnabled()
 
-	//  bool semi_sync_primary_status = 11;
-	//  bool semi_sync_replica_status = 12;
-	//  bool semi_sync_primary_clients = 13;
+	// Semi sync status - "show status like 'Rpl_semi_sync_%_status'"
+	primarySemiSyncStatus, replicaSemiSyncStatus := tm.MysqlDaemon.SemiSyncStatus()
+
+	//  Semi sync clients count - "show status like 'semi_sync_primary_clients'"
+	semiSyncClients := tm.MysqlDaemon.SemiSyncClients()
 
 	return &replicationdatapb.FullStatus{
 		ReplicationStatus:      mysql.ReplicationStatusToProto(replicationStatus),
@@ -105,6 +107,9 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		LogReplicaUpdates:      logReplicaUpdates,
 		SemiSyncPrimaryEnabled: primarySemiSync,
 		SemiSyncReplicaEnabled: replicaSemiSync,
+		SemiSyncPrimaryStatus:  primarySemiSyncStatus,
+		SemiSyncReplicaStatus:  replicaSemiSyncStatus,
+		SemiSyncPrimaryClients: semiSyncClients,
 	}, nil
 }
 

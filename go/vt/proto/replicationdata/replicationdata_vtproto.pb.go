@@ -289,13 +289,8 @@ func (m *FullStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.SemiSyncPrimaryClients {
-		i--
-		if m.SemiSyncPrimaryClients {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
+	if m.SemiSyncPrimaryClients != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.SemiSyncPrimaryClients))
 		i--
 		dAtA[i] = 0x68
 	}
@@ -579,8 +574,8 @@ func (m *FullStatus) SizeVT() (n int) {
 	if m.SemiSyncReplicaStatus {
 		n += 2
 	}
-	if m.SemiSyncPrimaryClients {
-		n += 2
+	if m.SemiSyncPrimaryClients != 0 {
+		n += 1 + sov(uint64(m.SemiSyncPrimaryClients))
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -1634,7 +1629,7 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field SemiSyncPrimaryClients", wireType)
 			}
-			var v int
+			m.SemiSyncPrimaryClients = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -1644,12 +1639,11 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int(b&0x7F) << shift
+				m.SemiSyncPrimaryClients |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.SemiSyncPrimaryClients = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

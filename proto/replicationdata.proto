@@ -79,5 +79,5 @@ message FullStatus {
   bool semi_sync_replica_enabled = 10;
   bool semi_sync_primary_status = 11;
   bool semi_sync_replica_status = 12;
-  bool semi_sync_primary_clients = 13;
+  int32 semi_sync_primary_clients = 13;
 }
