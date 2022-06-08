@@ -1,5 +1,16 @@
 ## Major Changes
 
+### New query support
+
+#### Support for aggregation across shards
+Vitess can now plan and execute most aggregation queries across multiple shards and/or keyspaces.
+
+#### INSERT from SELECT
+Support has been added for inserting new data from SELECT queries.
+
+### UPDATE from SELECT
+Similarly, we have added support for UPDATE with scalar sub-queries.
+
 ### Command-line syntax deprecations
 
 Vitess has begun a transition to a new library for CLI flag parsing.
@@ -242,3 +253,6 @@ the topo server. This allows VTOrc to monitor and repair multiple keyspaces whic
 **VTOrc will ignore the keyspaces which have no durability policy specified in the keyspace record. So on upgrading to v14, users must run
 the command `SetKeyspaceDurabilityPolicy` specified above, to ensure VTOrc continues to work as desired. The recommended upgrade 
 path is to upgrade vtctld, run `SetKeyspaceDurabilityPolicy` and then upgrade VTOrc.**
+
+### Advisory locking optimisations
+Work has gone into making the advisory locks (`get_lock()`, `release_lock()`, et al) release reserved connections faster and in more situations than before.
