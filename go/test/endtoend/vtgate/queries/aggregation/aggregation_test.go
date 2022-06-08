@@ -340,3 +340,16 @@ func TestAggOnTopOfLimit(t *testing.T) {
 		})
 	}
 }
+
+func TestEmptyTableAggr(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	for _, workload := range []string{"oltp", "olap"} {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
+			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
+			mcmp.AssertMatches(" select /*vt+ PLANNER=gen4 */ count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
+		})
+	}
+}
