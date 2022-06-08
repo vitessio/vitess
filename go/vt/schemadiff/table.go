@@ -1323,25 +1323,25 @@ func heuristicallyDetectColumnRenames(
 	hints *DiffHints,
 ) ([]*sqlparser.DropColumn, []*sqlparser.AddColumns, []*sqlparser.RenameColumn) {
 	renameColumns := []*sqlparser.RenameColumn{}
-	// What we're doing next is to try and identify a column RENAME.
-	// We do so by cross referencing dropped and added columns.
-	// The check is heuristic, and looks like this:
-	// We consider a column renamed iff:
-	// - the DROP and ADD column definitions are identical other than the column name, and
-	// - the DROPped and ADDded column are both FIRST, or they come AFTER the same column, and
-	// - the DROPped and ADDded column are both last, or they come before the same column
-	// This v1 chcek therefore cannot handle a case where two successive columns are renamed.
-	// the problem is complex, and with successive renamed, or drops and adds, it can be
-	// impossible to tell apart different scenarios.
-	// At any case, once we heuristically decide that we found a RENAME, we cancel the DROP,
-	// cancel the ADD, and inject a RENAME in place of both.
-
-	// findRenamedColumn cross referenced dropped and added columns to find a single renamed column. If such is found:
-	// we remove the entry from DROPped columns, remove the entry from ADDed columns, add an entry for RENAMEd columns,
-	// and return 'true'.
-	// Successive calls to this function will then find the next heuristic RENAMEs.
-	// the function returns 'false' if it is unabl eto heuristically find a RENAME.
 	findRenamedColumn := func() bool {
+		// What we're doing next is to try and identify a column RENAME.
+		// We do so by cross referencing dropped and added columns.
+		// The check is heuristic, and looks like this:
+		// We consider a column renamed iff:
+		// - the DROP and ADD column definitions are identical other than the column name, and
+		// - the DROPped and ADDded column are both FIRST, or they come AFTER the same column, and
+		// - the DROPped and ADDded column are both last, or they come before the same column
+		// This v1 chcek therefore cannot handle a case where two successive columns are renamed.
+		// the problem is complex, and with successive renamed, or drops and adds, it can be
+		// impossible to tell apart different scenarios.
+		// At any case, once we heuristically decide that we found a RENAME, we cancel the DROP,
+		// cancel the ADD, and inject a RENAME in place of both.
+
+		// findRenamedColumn cross referenced dropped and added columns to find a single renamed column. If such is found:
+		// we remove the entry from DROPped columns, remove the entry from ADDed columns, add an entry for RENAMEd columns,
+		// and return 'true'.
+		// Successive calls to this function will then find the next heuristic RENAMEs.
+		// the function returns 'false' if it is unabl eto heuristically find a RENAME.
 		for iDrop, dropCol1 := range dropColumns {
 			for iAdd, addCol2 := range addColumns {
 				col1Details := t1ColumnsMap[dropCol1.Name.Name.Lowered()]
