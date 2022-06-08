@@ -93,6 +93,7 @@ type VtctldClient struct {
 		Response *vtctldatapb.GetWorkflowsResponse
 		Error    error
 	}
+	PingTabletResults           map[string]error
 	PlannedReparentShardResults map[string]struct {
 		Response *vtctldatapb.PlannedReparentShardResponse
 		Error    error
@@ -114,6 +115,7 @@ type VtctldClient struct {
 		Response *vtctldatapb.ReparentTabletResponse
 		Error    error
 	}
+	RunHealthCheckResults            map[string]error
 	SetWritableResults               map[string]error
 	ShardReplicationPositionsResults map[string]struct {
 		Response *vtctldatapb.ShardReplicationPositionsResponse
@@ -413,6 +415,24 @@ func (fake *VtctldClient) GetWorkflows(ctx context.Context, req *vtctldatapb.Get
 	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
 }
 
+// PingTablet is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) PingTablet(ctx context.Context, req *vtctldatapb.PingTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.PingTabletResponse, error) {
+	if fake.PingTabletResults == nil {
+		return nil, fmt.Errorf("%w: PingTabletResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(req.TabletAlias)
+	if err, ok := fake.PingTabletResults[key]; ok {
+		if err != nil {
+			return nil, err
+		}
+
+		return &vtctldatapb.PingTabletResponse{}, nil
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
 // PlannedReparentShard is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) PlannedReparentShard(ctx context.Context, req *vtctldatapb.PlannedReparentShardRequest, opts ...grpc.CallOption) (*vtctldatapb.PlannedReparentShardResponse, error) {
 	if fake.PlannedReparentShardResults == nil {
@@ -495,6 +515,24 @@ func (fake *VtctldClient) ReparentTablet(ctx context.Context, req *vtctldatapb.R
 	key := topoproto.TabletAliasString(req.Tablet)
 	if result, ok := fake.ReparentTabletResults[key]; ok {
 		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// RunHealthCheck is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) RunHealthCheck(ctx context.Context, req *vtctldatapb.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldatapb.RunHealthCheckResponse, error) {
+	if fake.RunHealthCheckResults == nil {
+		return nil, fmt.Errorf("%w: RunHealthCheckResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(req.TabletAlias)
+	if err, ok := fake.RunHealthCheckResults[key]; ok {
+		if err != nil {
+			return nil, err
+		}
+
+		return &vtctldatapb.RunHealthCheckResponse{}, nil
 	}
 
 	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
