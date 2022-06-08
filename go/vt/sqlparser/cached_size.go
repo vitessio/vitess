@@ -2770,6 +2770,20 @@ func (cached *Release) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	return size
 }
+func (cached *RenameColumn) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field OldName *vitess.io/vitess/go/vt/sqlparser.ColName
+	size += cached.OldName.CachedSize(true)
+	// field NewName *vitess.io/vitess/go/vt/sqlparser.ColName
+	size += cached.NewName.CachedSize(true)
+	return size
+}
 func (cached *RenameIndex) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -6,6 +6,7 @@ on:
 
 jobs:
   build:
+    name: Static Code Checks Etc
     runs-on: ubuntu-latest
 
     steps:
