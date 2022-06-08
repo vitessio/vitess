@@ -131,7 +131,6 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	logStats := testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
 	assert.EqualValues(t, 0, logStats.CommitTime, "logstats: expected zero CommitTime")
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
-	assert.EqualValues(t, true, logStats.InTransaction, "logstats: expected InTransaction to be true after BEGIN")
 
 	// commit.
 	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
@@ -139,7 +138,6 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	logStats = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	assert.EqualValues(t, 0, logStats.CommitTime, "logstats: expected zero CommitTime")
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
-	assert.EqualValues(t, true, logStats.InTransaction, "logstats: expected InTransaction to be true")
 
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "commit", nil)
 	if err != nil {
@@ -157,7 +155,6 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 		t.Errorf("logstats: expected non-zero CommitTime")
 	}
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
-	assert.EqualValues(t, false, logStats.InTransaction, "logstats: expected InTransaction to be false after COMMIT")
 
 	// rollback.
 	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
@@ -176,7 +173,6 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 		t.Errorf("logstats: expected non-zero CommitTime")
 	}
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
-	assert.EqualValues(t, false, logStats.InTransaction, "logstats: expected InTransaction to be false after ROLLBACK")
 
 	// CloseSession doesn't log anything
 	err = executor.CloseSession(ctx, session)
@@ -228,7 +224,6 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	}
 	logStats := testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
-	assert.EqualValues(t, true, logStats.InTransaction, "logstats: expected InTransaction to be true after BEGIN")
 
 	// commit.
 	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
@@ -242,11 +237,9 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	logStats = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	assert.EqualValues(t, 0, logStats.CommitTime)
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
-	assert.EqualValues(t, true, logStats.InTransaction, "logstats: expected InTransaction to be true")
 	logStats = testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 1)
 	assert.NotEqual(t, 0, logStats.CommitTime)
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
-	assert.EqualValues(t, false, logStats.InTransaction, "logstats: expected InTransaction to be false")
 
 	// rollback.
 	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
@@ -264,7 +257,6 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	_ = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	logStats = testQueryLog(t, logChan, "TestExecute", "ROLLBACK", "rollback", 1)
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
-	assert.EqualValues(t, false, logStats.InTransaction, "logstats: expected InTransaction to be false")
 }
 
 func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
@@ -303,7 +295,6 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 	assert.Zero(t, sbclookup.CommitCount.Get())
 	logStats := testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
-	assert.EqualValues(t, true, logStats.InTransaction, "logstats: expected InTransaction to be true after BEGIN")
 
 	// commit.
 	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
@@ -317,11 +308,9 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 	logStats = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	assert.EqualValues(t, 0, logStats.CommitTime)
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
-	assert.EqualValues(t, true, logStats.InTransaction, "logstats: expected InTransaction to be true")
 	logStats = testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 1)
 	assert.NotEqual(t, 0, logStats.CommitTime)
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
-	assert.EqualValues(t, false, logStats.InTransaction, "logstats: expected InTransaction to be false after COMMIT")
 
 	// rollback.
 	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
@@ -390,13 +379,11 @@ func TestExecutorAutocommit(t *testing.T) {
 	if logStats.RowsReturned == 0 {
 		t.Errorf("logstats: expected non-zero RowsReturned")
 	}
-	assert.EqualValues(t, true, logStats.InTransaction, "logstats: expected InTransaction to be true in autocommit=0")
 
 	// autocommit = 1
 	_, err = executor.Execute(ctx, "TestExecute", session, "set autocommit=1", nil)
 	require.NoError(t, err)
 	logStats = testQueryLog(t, logChan, "TestExecute", "SET", "set session autocommit = 1", 0)
-	assert.EqualValues(t, false, logStats.InTransaction, "logstats: expected InTransaction to be false in autocommit=1")
 
 	// Setting autocommit=1 commits existing transaction.
 	if got, want := sbclookup.CommitCount.Get(), startCount+1; got != want {
@@ -411,7 +398,6 @@ func TestExecutorAutocommit(t *testing.T) {
 	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id=1", 1)
 	assert.NotZero(t, logStats.CommitTime, "logstats: expected non-zero CommitTime")
 	assert.NotEqual(t, uint64(0), logStats.RowsAffected, "logstats: expected non-zero RowsAffected")
-	assert.EqualValues(t, false, logStats.InTransaction, "logstats: expected InTransaction to be false")
 
 	// autocommit = 1, "begin"
 	session.ResetTx()
@@ -437,7 +423,6 @@ func TestExecutorAutocommit(t *testing.T) {
 	if logStats.RowsAffected == 0 {
 		t.Errorf("logstats: expected non-zero RowsAffected")
 	}
-	assert.EqualValues(t, true, logStats.InTransaction, "logstats: expected InTransaction to be true")
 
 	_, err = executor.Execute(ctx, "TestExecute", session, "commit", nil)
 	require.NoError(t, err)
