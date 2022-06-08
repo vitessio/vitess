@@ -360,7 +360,7 @@ func (c *Conn) ResetReplicationCommands() []string {
 // ResetReplicationParametersCommands returns the commands to reset
 // replication parameters on the host.
 func (c *Conn) ResetReplicationParametersCommands() []string {
-	return c.flavor.resetReplicationCommands(c)
+	return c.flavor.resetReplicationParametersCommands(c)
 }
 
 // SetReplicationPositionCommands returns the commands to set the
