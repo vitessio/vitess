@@ -507,6 +507,31 @@ func (mysqld *Mysqld) DisableBinlogPlayback() error {
 	return nil
 }
 
+// GetBinlogInformation gets the binlog format, whether binlog is enabled and if updates on replica logging is enabled.
+func (mysqld *Mysqld) GetBinlogInformation(ctx context.Context) (string, bool, bool, error) {
+	qr, err := mysqld.FetchSuperQuery(ctx, "select @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates")
+	if err != nil {
+		return "", false, false, err
+	}
+	if len(qr.Rows) != 1 {
+		return "", false, false, errors.New("unable to read global variables binlog_format, log_bin and log_slave_updates")
+	}
+	res := qr.Named().Row()
+	binlogFormat, err := res.ToString("@@global.binlog_format")
+	if err != nil {
+		return "", false, false, err
+	}
+	logBin, err := res.ToInt64("@@global.log_bin")
+	if err != nil {
+		return "", false, false, err
+	}
+	logReplicaUpdates, err := res.ToInt64("@@global.log_slave_updates")
+	if err != nil {
+		return "", false, false, err
+	}
+	return binlogFormat, logBin == 1, logReplicaUpdates == 1, nil
+}
+
 // SetSemiSyncEnabled enables or disables semi-sync replication for
 // primary and/or replica mode.
 func (mysqld *Mysqld) SetSemiSyncEnabled(primary, replica bool) error {

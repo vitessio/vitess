@@ -53,6 +53,7 @@ type MysqlDaemon interface {
 	SemiSyncEnabled() (source, replica bool)
 	SemiSyncReplicationStatus() (bool, error)
 	ResetReplicationParameters(ctx context.Context) error
+	GetBinlogInformation(ctx context.Context) (binlogFormat string, logEnabled bool, logReplicaUpdate bool, err error)
 
 	// reparenting related methods
 	ResetReplication(ctx context.Context) error

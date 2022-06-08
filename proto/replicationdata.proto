@@ -73,8 +73,8 @@ message FullStatus {
   string version = 4;
   bool read_only = 5;
   string binlog_format = 6;
-  string log_bin_enabled = 7;
-  string log_replica_updates = 8;
+  bool log_bin_enabled = 7;
+  bool log_replica_updates = 8;
   bool semi_sync_primary_enabled = 9;
   bool semi_sync_replica_enabled = 10;
   bool semi_sync_primary_status = 11;

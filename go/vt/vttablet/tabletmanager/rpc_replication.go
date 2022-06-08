@@ -84,6 +84,10 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	// string binlog_format = 6;
 	// string log_bin_enabled = 7;
 	// string log_replica_updates = 8;
+	binlogFormat, logBin, logReplicaUpdates, err := tm.MysqlDaemon.GetBinlogInformation(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	// Semi sync settings - "show global variables like 'rpl_semi_sync_%_enabled'"
 	primarySemiSync, replicaSemiSync := tm.MysqlDaemon.SemiSyncEnabled()
@@ -98,6 +102,9 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		GtidPurged:             mysql.EncodePosition(purgedGTIDs),
 		Version:                version,
 		ReadOnly:               readOnly,
+		BinlogFormat:           binlogFormat,
+		LogBinEnabled:          logBin,
+		LogReplicaUpdates:      logReplicaUpdates,
 		SemiSyncPrimaryEnabled: primarySemiSync,
 		SemiSyncReplicaEnabled: replicaSemiSync,
 	}, nil

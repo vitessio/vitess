@@ -141,6 +141,9 @@ func TestFullStatus(t *testing.T) {
 	assert.False(t, status.ReadOnly)
 	assert.True(t, status.SemiSyncPrimaryEnabled)
 	assert.True(t, status.SemiSyncReplicaEnabled)
+	assert.Equal(t, "ROW", status.BinlogFormat)
+	assert.True(t, status.LogReplicaUpdates)
+	assert.True(t, status.LogBinEnabled)
 	assert.Contains(t, status.Version, "5.7")
 
 	// Check that full status gives the correct result for a replica tablet
@@ -154,5 +157,8 @@ func TestFullStatus(t *testing.T) {
 	assert.True(t, status.ReadOnly)
 	assert.False(t, status.SemiSyncPrimaryEnabled)
 	assert.True(t, status.SemiSyncReplicaEnabled)
+	assert.Equal(t, "ROW", status.BinlogFormat)
+	assert.True(t, status.LogReplicaUpdates)
+	assert.True(t, status.LogBinEnabled)
 	assert.Contains(t, status.Version, "5.7")
 }

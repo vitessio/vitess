@@ -29717,10 +29717,10 @@ export namespace replicationdata {
         binlog_format?: (string|null);
 
         /** FullStatus log_bin_enabled */
-        log_bin_enabled?: (string|null);
+        log_bin_enabled?: (boolean|null);
 
         /** FullStatus log_replica_updates */
-        log_replica_updates?: (string|null);
+        log_replica_updates?: (boolean|null);
 
         /** FullStatus semi_sync_primary_enabled */
         semi_sync_primary_enabled?: (boolean|null);
@@ -29766,10 +29766,10 @@ export namespace replicationdata {
         public binlog_format: string;
 
         /** FullStatus log_bin_enabled. */
-        public log_bin_enabled: string;
+        public log_bin_enabled: boolean;
 
         /** FullStatus log_replica_updates. */
-        public log_replica_updates: string;
+        public log_replica_updates: boolean;
 
         /** FullStatus semi_sync_primary_enabled. */
         public semi_sync_primary_enabled: boolean;

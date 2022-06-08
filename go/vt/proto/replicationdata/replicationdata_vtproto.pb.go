@@ -339,19 +339,25 @@ func (m *FullStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x48
 	}
-	if len(m.LogReplicaUpdates) > 0 {
-		i -= len(m.LogReplicaUpdates)
-		copy(dAtA[i:], m.LogReplicaUpdates)
-		i = encodeVarint(dAtA, i, uint64(len(m.LogReplicaUpdates)))
+	if m.LogReplicaUpdates {
 		i--
-		dAtA[i] = 0x42
+		if m.LogReplicaUpdates {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
 	}
-	if len(m.LogBinEnabled) > 0 {
-		i -= len(m.LogBinEnabled)
-		copy(dAtA[i:], m.LogBinEnabled)
-		i = encodeVarint(dAtA, i, uint64(len(m.LogBinEnabled)))
+	if m.LogBinEnabled {
 		i--
-		dAtA[i] = 0x3a
+		if m.LogBinEnabled {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x38
 	}
 	if len(m.BinlogFormat) > 0 {
 		i -= len(m.BinlogFormat)
@@ -555,13 +561,11 @@ func (m *FullStatus) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	l = len(m.LogBinEnabled)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
+	if m.LogBinEnabled {
+		n += 2
 	}
-	l = len(m.LogReplicaUpdates)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
+	if m.LogReplicaUpdates {
+		n += 2
 	}
 	if m.SemiSyncPrimaryEnabled {
 		n += 2
@@ -1507,10 +1511,10 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 			m.BinlogFormat = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 7:
-			if wireType != 2 {
+			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field LogBinEnabled", wireType)
 			}
-			var stringLen uint64
+			var v int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -1520,29 +1524,17 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.LogBinEnabled = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
+			m.LogBinEnabled = bool(v != 0)
 		case 8:
-			if wireType != 2 {
+			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field LogReplicaUpdates", wireType)
 			}
-			var stringLen uint64
+			var v int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -1552,24 +1544,12 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.LogReplicaUpdates = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
+			m.LogReplicaUpdates = bool(v != 0)
 		case 9:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field SemiSyncPrimaryEnabled", wireType)

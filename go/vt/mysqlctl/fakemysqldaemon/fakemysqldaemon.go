@@ -311,6 +311,13 @@ func (fmd *FakeMysqlDaemon) ResetReplicationParameters(ctx context.Context) erro
 	})
 }
 
+// GetBinlogInformation is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GetBinlogInformation(ctx context.Context) (binlogFormat string, logEnabled bool, logReplicaUpdate bool, err error) {
+	return "ROW", true, true, fmd.ExecuteSuperQueryList(ctx, []string{
+		"FAKE select @@global",
+	})
+}
+
 // PrimaryPosition is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) PrimaryPosition() (mysql.Position, error) {
 	return fmd.CurrentPrimaryPosition, nil
