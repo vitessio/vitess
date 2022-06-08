@@ -239,13 +239,3 @@ func (e *InvalidColumnInForeignKeyConstraintError) Error() string {
 	return fmt.Sprintf("invalid column %s referenced by foreign key constraint %s in table %s",
 		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table))
 }
-
-type ColumnRenamedError struct {
-	Table  string
-	Column string
-}
-
-func (e *ColumnRenamedError) Error() string {
-	return fmt.Sprintf("column %s renamed in table %s",
-		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Table))
-}
