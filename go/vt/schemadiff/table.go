@@ -1325,6 +1325,11 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 			addColumns = append(addColumns, addColumn)
 		}
 	}
+	findRenamedColumn := func() bool {
+		return false
+	}
+	for findRenamedColumn() {
+	}
 	for _, c := range dropColumns {
 		alterTable.AlterOptions = append(alterTable.AlterOptions, c)
 	}
