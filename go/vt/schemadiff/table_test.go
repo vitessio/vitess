@@ -40,6 +40,7 @@ func TestCreateTableDiff(t *testing.T) {
 		errorMsg   string
 		autoinc    int
 		rotation   int
+		colrename  int
 		constraint int
 	}{
 		{
@@ -125,6 +126,30 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, ts timestamp null, `i` bigint unsigned default null)",
 			diff:  "alter table t1 drop column c, modify column i bigint unsigned, add column ts timestamp null after id",
 			cdiff: "ALTER TABLE `t1` DROP COLUMN `c`, MODIFY COLUMN `i` bigint unsigned, ADD COLUMN `ts` timestamp NULL AFTER `id`",
+		},
+		// columns, rename
+		{
+			name:  "rename mid column. consider different",
+			from:  "create table t1 (id int primary key, i1 int not null, c char(3) default '')",
+			to:    "create table t2 (id int primary key, i2 int not null, c char(3) default '')",
+			diff:  "alter table t1 drop column i1, add column i2 int not null after id",
+			cdiff: "ALTER TABLE `t1` DROP COLUMN `i1`, ADD COLUMN `i2` int NOT NULL AFTER `id`",
+		},
+		{
+			name:      "rename mid column. error",
+			from:      "create table t1 (id int primary key, i1 int not null, c char(3) default '')",
+			to:        "create table t2 (id int primary key, i2 int not null, c char(3) default '')",
+			colrename: ColumnRenameError,
+			isError:   true,
+			errorMsg:  "renamed in table",
+		},
+		{
+			name:      "rename last column. error",
+			from:      "create table t1 (id int primary key, i1 int not null)",
+			to:        "create table t2 (id int primary key, i2 int not null)",
+			colrename: ColumnRenameError,
+			isError:   true,
+			errorMsg:  "renamed in table",
 		},
 		// columns, reordering
 		{
@@ -930,6 +955,7 @@ func TestCreateTableDiff(t *testing.T) {
 			hints.AutoIncrementStrategy = ts.autoinc
 			hints.RangeRotationStrategy = ts.rotation
 			hints.ConstraintNamesStrategy = ts.constraint
+			hints.ColumnRenameStrategy = ts.colrename
 			alter, err := c.Diff(other, &hints)
 
 			require.Equal(t, len(ts.diffs), len(ts.cdiffs))

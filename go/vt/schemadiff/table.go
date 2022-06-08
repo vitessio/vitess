@@ -573,7 +573,10 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		// ordered columns for both tables:
 		t1Columns := c.CreateTable.TableSpec.Columns
 		t2Columns := other.CreateTable.TableSpec.Columns
-		c.diffColumns(alterTable, t1Columns, t2Columns, hints, (diffedTableCharset != ""))
+		err := c.diffColumns(alterTable, t1Columns, t2Columns, hints, (diffedTableCharset != ""))
+		if err != nil {
+			return nil, err
+		}
 	}
 	{
 		// diff keys
@@ -1184,21 +1187,54 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	t2Columns []*sqlparser.ColumnDefinition,
 	hints *DiffHints,
 	tableCharsetChanged bool,
-) {
+) error {
+	if hints.ColumnRenameStrategy == ColumnRenameError {
+		colWithMaskedName := func(col *sqlparser.ColumnDefinition) string {
+			col = sqlparser.CloneRefOfColumnDefinition(col)
+			col.Name = sqlparser.NewColIdent("mask")
+			return sqlparser.CanonicalString(col)
+
+		}
+		// This is a first implementation to identify a column RENAME heuristic. It is far
+		// from complete, but still covers the main use case
+		if len(t2Columns) == len(t2Columns) {
+			for i, t1Col := range t1Columns {
+				t2Col := t2Columns[i]
+				if strings.EqualFold(t1Col.Name.String(), t2Col.Name.String()) {
+					continue
+				}
+				// column names are different. But are the columns identical other than the name?
+				if colWithMaskedName(t1Col) == colWithMaskedName(t2Col) {
+					return &ColumnRenamedError{Table: alterTable.GetTable().Name.String(), Column: t1Col.Name.String()}
+				}
+			}
+		}
+	}
+	getColumnsMap := func(cols []*sqlparser.ColumnDefinition) map[string]*columnDetails {
+		var prevCol *columnDetails
+		m := map[string]*columnDetails{}
+		for _, col := range cols {
+			colDetails := &columnDetails{
+				col:     col,
+				prevCol: prevCol,
+			}
+			if prevCol != nil {
+				prevCol.nextCol = colDetails
+			}
+			prevCol = colDetails
+			m[col.Name.Lowered()] = colDetails
+		}
+		return m
+	}
 	// map columns by names for easy access
-	t1ColumnsMap := map[string]*sqlparser.ColumnDefinition{}
-	t2ColumnsMap := map[string]*sqlparser.ColumnDefinition{}
-	for _, col := range t1Columns {
-		t1ColumnsMap[col.Name.Lowered()] = col
-	}
-	for _, col := range t2Columns {
-		t2ColumnsMap[col.Name.Lowered()] = col
-	}
+	t1ColumnsMap := getColumnsMap(t1Columns)
+	t2ColumnsMap := getColumnsMap(t2Columns)
 
 	// For purpose of column reordering detection, we maintain a list of
 	// shared columns, by order of appearance in t1
 	t1SharedColumns := []*sqlparser.ColumnDefinition{}
 
+	dropColumns := []*sqlparser.DropColumn{}
 	// evaluate dropped columns
 	//
 	for _, t1Col := range t1Columns {
@@ -1209,7 +1245,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 			dropColumn := &sqlparser.DropColumn{
 				Name: getColName(&t1Col.Name),
 			}
-			alterTable.AlterOptions = append(alterTable.AlterOptions, dropColumn)
+			dropColumns = append(dropColumns, dropColumn)
 		}
 	}
 
@@ -1225,12 +1261,13 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 
 	// evaluate modified columns
 	//
+	modifyColumns := []*sqlparser.ModifyColumn{}
 	columnReordering := evaluateColumnReordering(t1SharedColumns, t2SharedColumns)
 	for _, t2Col := range t2SharedColumns {
 		t2ColName := t2Col.Name.Lowered()
 		// we know that column exists in both tables
 		t1Col := t1ColumnsMap[t2ColName]
-		t1ColEntity := NewColumnDefinitionEntity(t1Col)
+		t1ColEntity := NewColumnDefinitionEntity(t1Col.col)
 		t2ColEntity := NewColumnDefinitionEntity(t2Col)
 
 		// check diff between before/after columns:
@@ -1260,7 +1297,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		}
 		if modifyColumnDiff != nil {
 			// column definition or ordering has changed
-			alterTable.AlterOptions = append(alterTable.AlterOptions, modifyColumnDiff.modifyColumn)
+			modifyColumns = append(modifyColumns, modifyColumnDiff.modifyColumn)
 		}
 	}
 	// Evaluate added columns
@@ -1268,6 +1305,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	// Every added column is obviously a diff. But on top of that, we are also interested to know
 	// if the column is added somewhere in between existing columns rather than appended to the
 	// end of existing columns list.
+	addColumns := []*sqlparser.AddColumns{}
 	expectAppendIndex := len(t2SharedColumns)
 	for t2ColIndex, t2Col := range t2Columns {
 		if _, ok := t1ColumnsMap[t2Col.Name.Lowered()]; !ok {
@@ -1284,9 +1322,19 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 				}
 			}
 			expectAppendIndex++
-			alterTable.AlterOptions = append(alterTable.AlterOptions, addColumn)
+			addColumns = append(addColumns, addColumn)
 		}
 	}
+	for _, c := range dropColumns {
+		alterTable.AlterOptions = append(alterTable.AlterOptions, c)
+	}
+	for _, c := range modifyColumns {
+		alterTable.AlterOptions = append(alterTable.AlterOptions, c)
+	}
+	for _, c := range addColumns {
+		alterTable.AlterOptions = append(alterTable.AlterOptions, c)
+	}
+	return nil
 }
 
 // Create implements Entity interface

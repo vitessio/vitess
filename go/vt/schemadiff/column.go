@@ -22,6 +22,26 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+func colWithMaskedName(col *sqlparser.ColumnDefinition) string {
+	col = sqlparser.CloneRefOfColumnDefinition(col)
+	col.Name = sqlparser.NewColIdent("mask")
+	return sqlparser.CanonicalString(col)
+
+}
+
+type columnDetails struct {
+	col     *sqlparser.ColumnDefinition
+	prevCol *columnDetails
+	nextCol *columnDetails
+}
+
+func (c *columnDetails) identicalOtherThanName(other *sqlparser.ColumnDefinition) bool {
+	if other == nil {
+		return false
+	}
+	return colWithMaskedName(c.col) == colWithMaskedName(other)
+}
+
 func getColName(colIdent *sqlparser.ColIdent) *sqlparser.ColName {
 	return &sqlparser.ColName{Name: *colIdent}
 }
