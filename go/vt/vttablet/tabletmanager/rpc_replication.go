@@ -56,13 +56,13 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error) {
 	// Replication status - "SHOW REPLICA STATUS"
 	replicationStatus, err := tm.MysqlDaemon.ReplicationStatus()
-	if err != nil {
+	if err != nil && err != mysql.ErrNotReplica {
 		return nil, err
 	}
 
 	// Primary status - "SHOW MASTER STATUS"
 	primaryStatus, err := tm.MysqlDaemon.PrimaryStatus(ctx)
-	if err != nil {
+	if err != nil && err != mysql.ErrNoPrimaryStatus {
 		return nil, err
 	}
 
