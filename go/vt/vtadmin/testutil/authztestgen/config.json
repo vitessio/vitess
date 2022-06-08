@@ -76,6 +76,11 @@
                     "value": "\"zone1-0000000100\": nil,"
                 },
                 {
+                    "field": "PlannedReparentShardResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.PlannedReparentShardResponse\nError error}",
+                    "value": "\"test/-\": {\nResponse: &vtctldatapb.PlannedReparentShardResponse{},\n},"
+                },
+                {
                     "field": "RefreshStateResults",
                     "type": "map[string]error",
                     "value": "\"zone1-0000000100\": nil,"
@@ -1178,6 +1183,39 @@
                     "include_error_var": true,
                     "assertions": [
                         "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "PlannedFailoverShard",
+            "rules": [
+                {
+                    "resource": "Shard",
+                    "actions": ["planned_failover_shard"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.PlannedFailoverShardRequest{\nClusterId: \"test\",\nOptions: &vtctldatapb.PlannedReparentShardRequest{\nKeyspace: \"test\",\nShard: \"-\",\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
                         "assert.Nil(t, resp, $$)"
                     ]
                 },
