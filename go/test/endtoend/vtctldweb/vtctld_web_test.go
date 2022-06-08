@@ -120,25 +120,10 @@ func TestCreateKs(t *testing.T) {
 			err := ele.SendKeys("test_keyspace3")
 			require.Nil(t, err)
 			assertDialogCommand(t, dialog, []string{"CreateKeyspace", "-force=false", "test_keyspace3"})
-
-		case 1:
-			err := ele.SendKeys("test_id")
-			require.Nil(t, err)
-			assertDialogCommand(t, dialog, []string{"CreateKeyspace", "-sharding_column_name=test_id", "-sharding_column_type=UINT64", "-force=false", "test_keyspace3"})
 		}
 	}
 
-	dropdown, err := dialog.FindElement(selenium.ByTagName, "p-dropdown")
-	require.Nil(t, err)
-
-	click(t, dropdown)
-
-	options, err := dropdown.FindElements(selenium.ByTagName, "li")
-	require.Nil(t, err)
-
-	click(t, options[1])
-
-	assertDialogCommand(t, dialog, []string{"CreateKeyspace", "-sharding_column_name=test_id", "-sharding_column_type=BYTES", "-force=false", "test_keyspace3"})
+	assertDialogCommand(t, dialog, []string{"CreateKeyspace", "-force=false", "test_keyspace3"})
 
 	create, err := dialog.FindElement(selenium.ByID, "vt-action")
 	require.Nil(t, err)
@@ -157,7 +142,7 @@ func TestCreateKs(t *testing.T) {
 	require.Nil(t, err)
 	click(t, menu)
 
-	options, err = testKs[2].FindElements(selenium.ByTagName, "li")
+	options, err := testKs[2].FindElements(selenium.ByTagName, "li")
 	require.Nil(t, err)
 	for _, v := range options {
 		if text(t, v) == "Delete" {
