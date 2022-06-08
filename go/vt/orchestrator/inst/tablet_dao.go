@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -131,6 +132,18 @@ func ResetReplicationParameters(instanceKey InstanceKey) error {
 		return err
 	}
 	return nil
+}
+
+// FullStatus gets the full status of the MySQL running in vttablet.
+func FullStatus(instanceKey InstanceKey) (*replicationdatapb.FullStatus, error) {
+	tablet, err := ReadTablet(instanceKey)
+	if err != nil {
+		return nil, err
+	}
+	tmc := tmclient.NewTabletManagerClient()
+	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	return tmc.FullStatus(tmcCtx, tablet)
 }
 
 // ReadTablet reads the vitess tablet record.

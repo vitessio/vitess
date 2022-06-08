@@ -29,6 +29,8 @@ import (
 	"sync"
 	"time"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+
 	"github.com/go-sql-driver/mysql"
 
 	"github.com/patrickmn/go-cache"
@@ -255,6 +257,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	var serverUUIDWaitGroup sync.WaitGroup
 	var tablet *topodatapb.Tablet
 	var durability reparentutil.Durabler
+	var fullStatus *replicationdatapb.FullStatus
 	readingStartTime := time.Now()
 	instance := NewInstance()
 	instanceFound := false
@@ -295,6 +298,11 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	}
 
 	durability, err = GetDurabilityPolicy(tablet)
+	if err != nil {
+		goto Cleanup
+	}
+
+	fullStatus, err = FullStatus(*instanceKey)
 	if err != nil {
 		goto Cleanup
 	}
@@ -345,6 +353,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		default:
 			resolvedHostname = instance.Key.Hostname
 		}
+		instance.Version = fullStatus.Version
 
 		if instance.LogBinEnabled {
 			waitGroup.Add(1)
