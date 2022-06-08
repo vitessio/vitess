@@ -27,6 +27,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -64,6 +66,7 @@ const (
 )
 
 var withDDL *withddl.WithDDL
+var withDDL2 *withddl.WithDDL
 var withDDLInitialQueries []string
 
 const (
@@ -79,6 +82,14 @@ func init() {
 	withDDL = withddl.New(allddls)
 
 	withDDLInitialQueries = append(withDDLInitialQueries, binlogplayer.WithDDLInitialQueries...)
+
+	/* this should replace the above code eventually */
+	allddls2 := append([]string{}, binlogplayer.CreateVReplicationTable()...)
+	allddls2 = append(allddls2, binlogplayer.AlterVReplicationTable...)
+	allddls2 = append(allddls2, createReshardingJournalTable, createCopyState)
+	allddls2 = append(allddls2, createVReplicationLogTable)
+	allddls2 = append(allddls2, withDDLInitialQueries...)
+	withDDL2 = withddl.New(allddls2)
 }
 
 // this are the default tablet_types that will be used by the tablet picker to find sources for a vreplication stream
@@ -212,6 +223,11 @@ func (vre *Engine) Open(ctx context.Context) {
 }
 
 func (vre *Engine) openLocked(ctx context.Context) error {
+	if err := vre.ensureValidSchema(ctx); err != nil {
+		log.Infof("SchemaInitializer: error in ensuring valid schema %s", err)
+		// lets not return from here but we will eventually return from here but not now.
+		//return err
+	}
 
 	rows, err := vre.readAllRows(ctx)
 	if err != nil {
@@ -222,6 +238,47 @@ func (vre *Engine) openLocked(ctx context.Context) error {
 	vre.isOpen = true
 	vre.initControllers(rows)
 	vre.updateStats()
+	return nil
+}
+
+// We plan to refactor so that we remove WithDDL, just define the list of DDLs required to reach the desired
+// and execute vreplication queries normally.
+func (vre *Engine) ensureValidSchema(ctx context.Context) error {
+	log.Info("SchemaInitializer: initializing vreplication engine...")
+	f := func() error {
+		dbClient := vre.dbClientFactoryFiltered()
+		if err := dbClient.Connect(); err != nil {
+			return err
+		}
+		defer dbClient.Close()
+		log.Infof("executing dba scripts...")
+		err := vre.mysqld.ExecuteSuperQueryList(ctx, []string{mysql.UnSetSuperUser})
+		if err != nil {
+			log.Infof("fail - unsetting super read-only user %s", err)
+			return err
+		}
+		log.Infof("unsetting super read-only user")
+
+		_, _ = withDDL2.Exec(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+
+		//_, err = vre.ExecWithDBA(mysql.SetSuperUser)
+		err = vre.mysqld.ExecuteSuperQueryList(ctx, []string{mysql.SetSuperUser})
+		if err != nil {
+			log.Infof("fail - setting super read-only user %s ", err)
+			return err
+		}
+		log.Infof("setting super read-only user")
+
+		return nil
+	}
+	if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Init VReplication Schema", f, false); err != nil {
+		log.Infof("SchemaInitializer: error registering schema initializer %s", err)
+		return err
+	}
+	if err := mysql.SchemaInitializer.InitializeSchema(); err != nil {
+		log.Infof("SchemaInitializer: error in initializing schema %s", err)
+		return err
+	}
 	return nil
 }
 

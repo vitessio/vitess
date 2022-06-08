@@ -32,10 +32,13 @@ fi
 
 # start vtctld
 CELL=zone1 ./scripts/vtctld-up.sh
-
+const1="/vt_0000000"
+const2="/mysql.sock"
 # start vttablets for keyspace commerce
 for i in 100 101 102; do
 	CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
+	TMPPATH="${VTDATAROOT}${const1}${i}${const2}"
+	command mysql -S "${TMPPATH}" -u vt_dba < switch_super_user_on.sql
 	CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ./scripts/vttablet-up.sh
 done
 
@@ -45,11 +48,18 @@ vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-p
 # set one of the replicas to primary
 vtctldclient PlannedReparentShard commerce/0 --new-primary zone1-100
 
+
+TMPPATH="${VTDATAROOT}${const1}100${const2}"
+echo "$TMPPATH"
+command mysql -S "${TMPPATH}" -u vt_dba < switch_super_user_off.sql
 # create the schema
 vtctldclient ApplySchema --sql-file create_commerce_schema.sql commerce
 
 # create the vschema
 vtctldclient ApplyVSchema --vschema-file vschema_commerce_initial.json commerce
+
+sleep 30
+command mysql -S "${TMPPATH}" -u vt_dba < switch_super_user_off.sql
 
 # start vtgate
 CELL=zone1 ./scripts/vtgate-up.sh

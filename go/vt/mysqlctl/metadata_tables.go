@@ -18,8 +18,6 @@ package mysqlctl
 
 import (
 	"bytes"
-	"fmt"
-
 	"context"
 
 	"vitess.io/vitess/go/mysql"
@@ -31,29 +29,29 @@ import (
 // Note that definitions of local_metadata and shard_metadata should be the same
 // as in testing which is defined in config/init_db.sql.
 const (
-	sqlCreateLocalMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.local_metadata (
+	SQLCreateLocalMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.local_metadata (
   name VARCHAR(255) NOT NULL,
   value MEDIUMBLOB NOT NULL,
   PRIMARY KEY (name)
   ) ENGINE=InnoDB`
-	sqlCreateShardMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.shard_metadata (
+	SQLCreateShardMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.shard_metadata (
   name VARCHAR(255) NOT NULL,
   value MEDIUMBLOB NOT NULL,
   PRIMARY KEY (name)
   ) ENGINE=InnoDB`
-	sqlUpdateLocalMetadataTable = "UPDATE _vt.local_metadata SET db_name='%s' WHERE db_name=''"
-	sqlUpdateShardMetadataTable = "UPDATE _vt.shard_metadata SET db_name='%s' WHERE db_name=''"
+	SQLUpdateLocalMetadataTable = "UPDATE _vt.local_metadata SET db_name='%s' WHERE db_name=''"
+	SQLUpdateShardMetadataTable = "UPDATE _vt.shard_metadata SET db_name='%s' WHERE db_name=''"
 )
 
 var (
-	sqlAlterLocalMetadataTable = []string{
+	SQLAlterLocalMetadataTable = []string{
 		`ALTER TABLE _vt.local_metadata ADD COLUMN db_name VARBINARY(255) NOT NULL DEFAULT ''`,
 		`ALTER TABLE _vt.local_metadata DROP PRIMARY KEY, ADD PRIMARY KEY(name, db_name)`,
 		// VARCHAR(255) is not long enough to hold replication positions, hence changing to
 		// MEDIUMBLOB.
 		`ALTER TABLE _vt.local_metadata CHANGE value value MEDIUMBLOB NOT NULL`,
 	}
-	sqlAlterShardMetadataTable = []string{
+	SQLAlterShardMetadataTable = []string{
 		`ALTER TABLE _vt.shard_metadata ADD COLUMN db_name VARBINARY(255) NOT NULL DEFAULT ''`,
 		`ALTER TABLE _vt.shard_metadata DROP PRIMARY KEY, ADD PRIMARY KEY(name, db_name)`,
 	}
@@ -79,28 +77,33 @@ type MetadataManager struct{}
 // This function is semantically equivalent to calling createMetadataTables
 // followed immediately by upsertLocalMetadata.
 func (m *MetadataManager) PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string, dbName string) error {
-	log.Infof("Populating _vt.local_metadata table...")
+	log.Infof("Populating _vt.local_metadata table...%s %v", dbName, localMetadata)
 
 	// Get a non-pooled DBA connection.
-	conn, err := mysqld.GetDbaConnection(context.TODO())
+	/*conn, err := mysqld.GetDbaConnection(context.TODO())
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer conn.Close()*/
 
 	// Disable replication on this session. We close the connection after using
 	// it, so there's no need to re-enable replication when we're done.
-	if _, err := conn.ExecuteFetch("SET @@session.sql_log_bin = 0", 0, false); err != nil {
-		return err
-	}
+	//if _, err := conn.ExecuteFetch("SET @@session.sql_log_bin = 0", 0, false); err != nil {
+	//	return err
+	//}
 
 	// Create the database and table if necessary.
-	if err := createMetadataTables(conn, dbName); err != nil {
-		return err
-	}
+	//if err := createMetadataTables(conn, dbName); err != nil {
+	//return err
+	//}
 
 	// Populate local_metadata from the passed list of values.
-	return upsertLocalMetadata(conn, localMetadata, dbName)
+	if err := mysql.SchemaInitializer.InitializeSchema(); err != nil {
+		log.Infof("error is %s", err)
+		return err
+	}
+	return nil
+	//return upsertLocalMetadata(conn, localMetadata, dbName)
 }
 
 // UpsertLocalMetadata adds the given metadata map to the _vt.local_metadata
@@ -130,7 +133,7 @@ func (m *MetadataManager) UpsertLocalMetadata(mysqld MysqlDaemon, localMetadata 
 	return upsertLocalMetadata(conn, localMetadata, dbName)
 }
 
-func createMetadataTables(conn *dbconnpool.DBConnection, dbName string) error {
+/*func createMetadataTables(conn *dbconnpool.DBConnection, dbName string) error {
 	if _, err := conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS _vt", 0, false); err != nil {
 		return err
 	}
@@ -147,11 +150,11 @@ func createMetadataTables(conn *dbconnpool.DBConnection, dbName string) error {
 }
 
 func createLocalMetadataTable(conn *dbconnpool.DBConnection, dbName string) error {
-	if _, err := conn.ExecuteFetch(sqlCreateLocalMetadataTable, 0, false); err != nil {
+	if _, err := conn.ExecuteFetch(SQLCreateLocalMetadataTable, 0, false); err != nil {
 		return err
 	}
 
-	for _, sql := range sqlAlterLocalMetadataTable {
+	for _, sql := range SQLAlterLocalMetadataTable {
 		if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
 			// Ignore "Duplicate column name 'db_name'" errors which can happen on every restart.
 			if merr, ok := err.(*mysql.SQLError); !ok || merr.Num != mysql.ERDupFieldName {
@@ -161,7 +164,7 @@ func createLocalMetadataTable(conn *dbconnpool.DBConnection, dbName string) erro
 		}
 	}
 
-	sql := fmt.Sprintf(sqlUpdateLocalMetadataTable, dbName)
+	sql := fmt.Sprintf(SQLUpdateLocalMetadataTable, dbName)
 	if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
 		log.Errorf("Error executing %v: %v, continuing. Please check the data in _vt.local_metadata and take corrective action.", sql, err)
 	}
@@ -170,11 +173,11 @@ func createLocalMetadataTable(conn *dbconnpool.DBConnection, dbName string) erro
 }
 
 func createShardMetadataTable(conn *dbconnpool.DBConnection, dbName string) error {
-	if _, err := conn.ExecuteFetch(sqlCreateShardMetadataTable, 0, false); err != nil {
+	if _, err := conn.ExecuteFetch(SQLCreateShardMetadataTable, 0, false); err != nil {
 		return err
 	}
 
-	for _, sql := range sqlAlterShardMetadataTable {
+	for _, sql := range SQLAlterShardMetadataTable {
 		if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
 			// Ignore "Duplicate column name 'db_name'" errors which can happen on every restart.
 			if merr, ok := err.(*mysql.SQLError); !ok || merr.Num != mysql.ERDupFieldName {
@@ -184,13 +187,13 @@ func createShardMetadataTable(conn *dbconnpool.DBConnection, dbName string) erro
 		}
 	}
 
-	sql := fmt.Sprintf(sqlUpdateShardMetadataTable, dbName)
+	sql := fmt.Sprintf(SQLUpdateShardMetadataTable, dbName)
 	if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
 		log.Errorf("Error executing %v: %v, continuing. Please check the data in _vt.shard_metadata and take corrective action.", sql, err)
 	}
 
 	return nil
-}
+}*/
 
 // upsertLocalMetadata adds the given metadata map to the _vt.local_metadata
 // table, updating any rows that exist for a given `_vt.local_metadata.name`

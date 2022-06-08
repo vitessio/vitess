@@ -261,21 +261,48 @@ func (e *Executor) initSchema(ctx context.Context) error {
 
 	defer e.env.LogError()
 
-	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	for _, ddl := range ApplyDDL {
-		_, err := conn.ExecuteFetch(ddl, math.MaxInt32, false)
-		if mysql.IsSchemaApplyError(err) {
-			continue
-		}
+	log.Infof("init Schema for OnlineDDL ...")
+	f := func() error {
+		conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
 		if err != nil {
 			return err
 		}
+		defer conn.Close()
+
+		_, err = conn.ExecuteFetch(mysql.UnSetSuperUser, 1, false)
+		if err != nil {
+			log.Infof("unsetting super read-only user %s", err)
+			return err
+		}
+
+		for _, ddl := range ApplyDDL {
+			_, err := conn.ExecuteFetch(ddl, math.MaxInt32, false)
+			if mysql.IsSchemaApplyError(err) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+		}
+
+		_, err = conn.ExecuteFetch(mysql.SetSuperUser, 1, false)
+		if err != nil {
+			log.Infof("setting super read-only user %s", err)
+			return err
+		}
+		return nil
 	}
+
+	if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Initial Schema For OnlineDDL", f, false); err != nil {
+		log.Infof("error is %s", err)
+		return err
+	}
+	if err := mysql.SchemaInitializer.InitializeSchema(); err != nil {
+		log.Infof("error is %s", err)
+		return err
+	}
+	log.Infof("init Schema for OnlineDDL END...")
+
 	e.schemaInitialized = true
 	return nil
 }
@@ -3400,69 +3427,102 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	if _, err := e.execQuery(ctx, sqlFixCompletedTimestamp); err != nil {
-		// This query fixes a bug where stale migrations were marked as 'failed' without updating 'completed_timestamp'
-		// see https://github.com/vitessio/vitess/issues/8499
-		// Running this query retroactively sets completed_timestamp
-		// This 'if' clause can be removed in version v13
-		return err
-	}
-	query, err := sqlparser.ParseAndBind(sqlSelectUncollectedArtifacts,
-		sqltypes.Int64BindVariable(int64((*retainOnlineDDLTables).Seconds())),
-	)
-	if err != nil {
-		return err
-	}
-	r, err := e.execQuery(ctx, query)
-	if err != nil {
-		return err
-	}
-	for _, row := range r.Named().Rows {
-		uuid := row["migration_uuid"].ToString()
-		artifacts := row["artifacts"].ToString()
-		logPath := row["log_path"].ToString()
+	log.Infof("gcArtifacts ...")
 
-		// Remove tables:
-		artifactTables := textutil.SplitDelimitedList(artifacts)
-
-		timeNow := time.Now()
-		for i, artifactTable := range artifactTables {
-			// We wish to generate distinct timestamp values for each table in this UUID,
-			// because all tables will be renamed as _something_UUID_timestamp. Since UUID
-			// is shared for all artifacts in this loop, we differentiate via timestamp
-			t := timeNow.Add(time.Duration(i) * time.Second).UTC()
-			if err := e.gcArtifactTable(ctx, artifactTable, uuid, t); err != nil {
-				return err
-			}
-			log.Infof("Executor.gcArtifacts: renamed away artifact %s", artifactTable)
+	f := func() error {
+		conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
+		if err != nil {
+			return err
 		}
-
-		// Remove logs:
-		{
-			// logPath is in 'hostname:/path/to/logs' format
-			tokens := strings.SplitN(logPath, ":", 2)
-			logPath = tokens[len(tokens)-1]
-			if err := os.RemoveAll(logPath); err != nil {
-				return err
-			}
+		defer conn.Close()
+		_, err = conn.ExecuteFetch(mysql.UnSetSuperUser, 1, false)
+		if err != nil {
+			log.Infof("unsetting super read-only user %s", err)
+			return err
 		}
-
-		// while the next function only applies to 'online' strategy ALTER and REVERT, there is no
-		// harm in invoking it for other migrations.
-		if err := e.deleteVReplicationEntry(ctx, uuid); err != nil {
+		_, err = conn.ExecuteFetch(sqlFixCompletedTimestamp, math.MaxInt32, true)
+		if err != nil {
 			return err
 		}
 
-		if err := e.updateMigrationTimestamp(ctx, "cleanup_timestamp", uuid); err != nil {
+		query, err := sqlparser.ParseAndBind(sqlSelectUncollectedArtifacts,
+			sqltypes.Int64BindVariable(int64((*retainOnlineDDLTables).Seconds())),
+		)
+		if err != nil {
 			return err
 		}
+		r, err := e.execQuery(ctx, query)
+		if err != nil {
+			return err
+		}
+		for _, row := range r.Named().Rows {
+			uuid := row["migration_uuid"].ToString()
+			artifacts := row["artifacts"].ToString()
+			logPath := row["log_path"].ToString()
+
+			// Remove tables:
+			artifactTables := textutil.SplitDelimitedList(artifacts)
+
+			timeNow := time.Now()
+			for i, artifactTable := range artifactTables {
+				// We wish to generate distinct timestamp values for each table in this UUID,
+				// because all tables will be renamed as _something_UUID_timestamp. Since UUID
+				// is shared for all artifacts in this loop, we differentiate via timestamp
+				t := timeNow.Add(time.Duration(i) * time.Second).UTC()
+				if err := e.gcArtifactTable(ctx, artifactTable, uuid, t); err != nil {
+					return err
+				}
+				log.Infof("Executor.gcArtifacts: renamed away artifact %s", artifactTable)
+			}
+
+			// Remove logs:
+			{
+				// logPath is in 'hostname:/path/to/logs' format
+				tokens := strings.SplitN(logPath, ":", 2)
+				logPath = tokens[len(tokens)-1]
+				if err := os.RemoveAll(logPath); err != nil {
+					return err
+				}
+			}
+
+			// while the next function only applies to 'online' strategy ALTER and REVERT, there is no
+			// harm in invoking it for other migrations.
+			if err := e.deleteVReplicationEntry(ctx, uuid); err != nil {
+				return err
+			}
+
+			if err := e.updateMigrationTimestamp(ctx, "cleanup_timestamp", uuid); err != nil {
+				return err
+			}
+		}
+
+		_, err = conn.ExecuteFetch(mysql.SetSuperUser, 1, false)
+		if err != nil {
+			log.Infof("setting super read-only user %s", err)
+			return err
+		}
+
+		return nil
 	}
+
+	if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Artifacts Schema", f, true); err != nil {
+		log.Infof("error is %s", err)
+		return err
+	}
+
+	if err := mysql.SchemaInitializer.InitializeSchema(); err != nil {
+		log.Infof("error is %s", err)
+		return err
+	}
+
+	log.Infof("gcArtifacts END...")
 
 	return nil
 }
 
 // onMigrationCheckTick runs all migrations life cycle
 func (e *Executor) onMigrationCheckTick() {
+	log.Info("onMigrationCheckTick...")
 	// This function can be called by multiple triggers. First, there's the normal ticker.
 	// Then, any time a migration completes, we set a timer to trigger this function.
 	// also, any time a new INSERT arrives, we set a timer to trigger this function.
@@ -3839,15 +3899,54 @@ func (e *Executor) updateMigrationUserThrottleRatio(ctx context.Context, uuid st
 func (e *Executor) retryMigrationWhere(ctx context.Context, whereExpr string) (result *sqltypes.Result, err error) {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
-	parsed := sqlparser.BuildParsedQuery(sqlRetryMigrationWhere, ":tablet", whereExpr)
-	bindVars := map[string]*querypb.BindVariable{
-		"tablet": sqltypes.StringBindVariable(e.TabletAliasString()),
+
+	log.Infof("retryMigrationWhere ...")
+
+	f := func() error {
+		parsed := sqlparser.BuildParsedQuery(sqlRetryMigrationWhere, ":tablet", whereExpr)
+		bindVars := map[string]*querypb.BindVariable{
+			"tablet": sqltypes.StringBindVariable(e.TabletAliasString()),
+		}
+		bound, err := parsed.GenerateQuery(bindVars, nil)
+		if err != nil {
+			return err
+		}
+		conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+		_, err = conn.ExecuteFetch(mysql.UnSetSuperUser, 1, false)
+		if err != nil {
+			log.Infof("unsetting super read-only user %s", err)
+			return err
+		}
+		_, err = conn.ExecuteFetch(bound, math.MaxInt32, true)
+		if err != nil {
+			return err
+		}
+
+		_, err = conn.ExecuteFetch(mysql.SetSuperUser, 1, false)
+		if err != nil {
+			log.Infof("setting super read-only user %s", err)
+			return err
+		}
+
+		return nil
 	}
-	bound, err := parsed.GenerateQuery(bindVars, nil)
-	if err != nil {
-		return nil, err
+
+	if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Retry Migration Schema", f, true); err != nil {
+		log.Infof("error is %s", err)
+		return result, err
 	}
-	result, err = e.execQuery(ctx, bound)
+
+	if err := mysql.SchemaInitializer.InitializeSchema(); err != nil {
+		log.Infof("error is %s", err)
+		return result, err
+	}
+
+	log.Infof("retryMigrationWhere END...")
+
 	return result, err
 }
 
@@ -4188,6 +4287,7 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 		return sqltypes.ResultToProto3(result), nil
 	}
 
+	log.Info("init schema in VExec")
 	if err := e.initSchema(ctx); err != nil {
 		log.Error(err)
 		return nil, err

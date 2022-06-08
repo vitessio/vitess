@@ -41,6 +41,7 @@ import (
 var (
 	enableSemiSync   = flag.Bool("enable_semi_sync", false, "Enable semi-sync when configuring replication, on primary and replica tablets only (rdonly tablets will not ack).")
 	setSuperReadOnly = flag.Bool("use_super_read_only", false, "Set super_read_only flag when performing planned failover.")
+	reparentQueries  []string
 )
 
 // ReplicationStatus returns the replication status
@@ -230,6 +231,11 @@ func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 // InitPrimary enables writes and returns the replication position.
 func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string, error) {
 	log.Infof("InitPrimary")
+
+	// combine all queires
+	reparentQueries = append([]string{}, mysqlctl.CreateReparentJournal()...)
+	reparentQueries = append(reparentQueries, mysqlctl.AlterReparentJournal()...)
+
 	if err := tm.lock(ctx); err != nil {
 		return "", err
 	}
@@ -249,16 +255,22 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 		}
 	}
 
-	// we need to insert something in the binlogs, so we can get the
-	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
-	cmds := mysqlctl.CreateReparentJournal()
-	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+	if _, err := tm.ensureReparentJournal(ctx); err != nil {
 		return "", err
 	}
 
-	// Execute ALTER statement on reparent_journal table and ignore errors
-	cmds = mysqlctl.AlterReparentJournal()
-	_ = tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
+	/*
+		// we need to insert something in the binlogs, so we can get the
+		// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
+		cmds := mysqlctl.CreateReparentJournal()
+		if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+			return "", err
+		}
+
+		// Execute ALTER statement on reparent_journal table and ignore errors
+		cmds = mysqlctl.AlterReparentJournal()
+		_ = tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
+	*/
 
 	// get the current replication position
 	pos, err := tm.MysqlDaemon.PrimaryPosition()
@@ -266,20 +278,63 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 		return "", err
 	}
 
+	log.Info("changeTypeLocked...")
 	// Set the server read-write, from now on we can accept real
 	// client writes. Note that if semi-sync replication is enabled,
 	// we'll still need some replicas to be able to commit transactions.
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, convertBoolToSemiSyncAction(semiSync)); err != nil {
 		return "", err
 	}
-
+	log.Info("fix semi sync...")
 	// Enforce semi-sync after changing the tablet)type to PRIMARY. Otherwise, the
 	// primary will hang while trying to create the database.
 	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, convertBoolToSemiSyncAction(semiSync)); err != nil {
 		return "", err
 	}
-
+	log.Info("init primary done...")
 	return mysql.EncodePosition(pos), nil
+}
+
+// We plan to refactor so that we remove WithDDL, just define the list of DDLs required to reach the desired
+// and execute vreplication queries normally.
+func (tm *TabletManager) ensureReparentJournal(ctx context.Context) (bool, error) {
+	log.Infof("ensureReparentJournal for Tablet Manager")
+	f := func() error {
+		//ctx := context.Background()
+		conn2, err := tm.MysqlDaemon.GetDbaConnection(ctx)
+		if err != nil {
+			return err
+		}
+		defer conn2.Close()
+		_, err = conn2.ExecuteFetch(mysql.UnSetSuperUser, 1, false)
+		if err != nil {
+			log.Infof("unsetting super read-only user %s", err)
+			return err
+		}
+		if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, reparentQueries); err != nil {
+			return err
+		}
+
+		_, err = conn2.ExecuteFetch(mysql.SetSuperUser, 1, false)
+		if err != nil {
+			log.Infof("setting super read-only user %s", err)
+			return err
+		}
+		return nil
+	}
+
+	if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Initial TM Schema", f, true); err != nil {
+		log.Infof("error is %s", err)
+		return false, err
+	}
+
+	if err := mysql.SchemaInitializer.InitializeSchema(); err != nil {
+		log.Infof("error is %s", err)
+		return false, err
+	}
+	log.Infof("ensureReparentJournal for Tablet Manager END")
+
+	return true, nil
 }
 
 // PopulateReparentJournal adds an entry into the reparent_journal table.
