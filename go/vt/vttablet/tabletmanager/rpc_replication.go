@@ -81,9 +81,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		return nil, err
 	}
 
-	// string binlog_format = 6;
-	// string log_bin_enabled = 7;
-	// string log_replica_updates = 8;
+	// Binlog Information - "select @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates"
 	binlogFormat, logBin, logReplicaUpdates, err := tm.MysqlDaemon.GetBinlogInformation(ctx)
 	if err != nil {
 		return nil, err
