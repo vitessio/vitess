@@ -118,6 +118,21 @@ func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType,
 	return ti.Tablet, nil
 }
 
+// ResetReplicationParameters resets the replication parameters on the given tablet.
+func ResetReplicationParameters(instanceKey InstanceKey) error {
+	tablet, err := ReadTablet(instanceKey)
+	if err != nil {
+		return err
+	}
+	tmc := tmclient.NewTabletManagerClient()
+	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	if err := tmc.ResetReplicationParameters(tmcCtx, tablet); err != nil {
+		return err
+	}
+	return nil
+}
+
 // ReadTablet reads the vitess tablet record.
 func ReadTablet(instanceKey InstanceKey) (*topodatapb.Tablet, error) {
 	query := `

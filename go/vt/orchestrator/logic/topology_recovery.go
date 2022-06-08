@@ -642,7 +642,7 @@ func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry inst.Replicatio
 	}()
 
 	// Reset replication on current primary.
-	_, err = inst.ResetReplicationOperation(&analysisEntry.AnalyzedInstanceKey)
+	err = inst.ResetReplicationParameters(analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		return false, topologyRecovery, err
 	}
