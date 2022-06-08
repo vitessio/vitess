@@ -17,8 +17,10 @@ limitations under the License.
 package planbuilder
 
 import (
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -47,13 +49,16 @@ type routeGen4 struct {
 	// eroute is the primitive being built.
 	eroute *engine.Route
 
+	// is the engine primitive we will return from the Primitive() method. Note that it could be different than eroute
+	enginePrimitive engine.Primitive
+
 	// tables keeps track of which tables this route is covering
 	tables semantics.TableSet
 }
 
 // Primitive implements the logicalPlan interface
 func (rb *routeGen4) Primitive() engine.Primitive {
-	return rb.eroute
+	return rb.enginePrimitive
 }
 
 // SetLimit adds a LIMIT clause to the route.
@@ -62,15 +67,49 @@ func (rb *routeGen4) SetLimit(limit *sqlparser.Limit) {
 }
 
 // WireupGen4 implements the logicalPlan interface
-func (rb *routeGen4) WireupGen4(_ *semantics.SemTable) error {
+func (rb *routeGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
 	rb.prepareTheAST()
 
-	rb.eroute.Query = sqlparser.String(rb.Select)
+	{
+		rb.eroute.Query = sqlparser.String(rb.Select)
+		buffer := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery)
+		node := buffer.WriteNode(rb.Select)
+		query := node.ParsedQuery()
+		rb.eroute.FieldQuery = query.Query
+	}
 
-	buffer := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery)
-	node := buffer.WriteNode(rb.Select)
-	query := node.ParsedQuery()
-	rb.eroute.FieldQuery = query.Query
+	plannable, ok := rb.eroute.RoutingParameters.Vindex.(vindexes.LookupPlannable)
+	if !ok {
+		rb.enginePrimitive = rb.eroute
+		return nil
+	}
+
+	rb.eroute.RoutingParameters.Opcode = engine.ByDestination
+
+	query, err := plannable.LookupQuery()
+	if err != nil {
+		return err
+	}
+
+	stmt, reserved, err := sqlparser.Parse2(query)
+	if err != nil {
+		return err
+	}
+	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
+
+	lookupPrimitive, err := gen4SelectStmtPlanner(query, querypb.ExecuteOptions_Gen4, stmt.(sqlparser.SelectStatement), reservedVars, ctx.VSchema)
+	if err != nil {
+		return err
+	}
+
+	rb.enginePrimitive = &engine.VindexLookup{
+		Vindex:   rb.eroute.Vindex,
+		Keyspace: rb.eroute.Keyspace,
+		Values:   rb.eroute.Values,
+		Lookup:   lookupPrimitive,
+		SendTo:   rb.eroute,
+	}
+
 	return nil
 }
 

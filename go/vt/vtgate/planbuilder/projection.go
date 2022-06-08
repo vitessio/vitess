@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -39,10 +40,10 @@ type projection struct {
 var _ logicalPlan = (*projection)(nil)
 
 // WireupGen4 implements the logicalPlan interface
-func (p *projection) WireupGen4(semTable *semantics.SemTable) error {
+func (p *projection) WireupGen4(ctx *plancontext.PlanningContext) error {
 	columns := make([]evalengine.Expr, 0, len(p.columns))
 	for _, expr := range p.columns {
-		convert, err := evalengine.Translate(expr, semTable)
+		convert, err := evalengine.Translate(expr, ctx.SemTable)
 		if err != nil {
 			return err
 		}
@@ -53,7 +54,7 @@ func (p *projection) WireupGen4(semTable *semantics.SemTable) error {
 		Exprs: columns,
 	}
 
-	return p.source.WireupGen4(semTable)
+	return p.source.WireupGen4(ctx)
 }
 
 // Inputs implements the logicalPlan interface

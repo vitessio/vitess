@@ -20,7 +20,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 var _ logicalPlan = (*mergeSort)(nil)
@@ -85,8 +85,8 @@ func (ms *mergeSort) Wireup(plan logicalPlan, jt *jointab) error {
 	return ms.input.Wireup(plan, jt)
 }
 
-func (ms *mergeSort) WireupGen4(semTable *semantics.SemTable) error {
-	return ms.input.WireupGen4(semTable)
+func (ms *mergeSort) WireupGen4(ctx *plancontext.PlanningContext) error {
+	return ms.input.WireupGen4(ctx)
 }
 
 // OutputColumns implements the logicalPlan interface

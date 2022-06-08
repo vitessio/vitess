@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -49,12 +50,12 @@ type hashJoin struct {
 }
 
 // WireupGen4 implements the logicalPlan interface
-func (hj *hashJoin) WireupGen4(semTable *semantics.SemTable) error {
-	err := hj.Left.WireupGen4(semTable)
+func (hj *hashJoin) WireupGen4(ctx *plancontext.PlanningContext) error {
+	err := hj.Left.WireupGen4(ctx)
 	if err != nil {
 		return err
 	}
-	return hj.Right.WireupGen4(semTable)
+	return hj.Right.WireupGen4(ctx)
 }
 
 // Primitive implements the logicalPlan interface

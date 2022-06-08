@@ -299,3 +299,7 @@ func (lu *LookupUnique) MarshalJSON() ([]byte, error) {
 func (lu *LookupUnique) IsBackfilling() bool {
 	return lu.writeOnly
 }
+
+func (lu *LookupUnique) LookupQuery() (string, error) {
+	return lu.lkp.sel, nil
+}

@@ -1,1 +1,63 @@
 # Add your test case here for debugging and run go test -run=One.
+"select id from user where costly = 'aa' and name = 'bb'"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where costly = 'aa' and name = 'bb'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where costly = 'aa' and `name` = 'bb'",
+    "Table": "`user`",
+    "Values": [
+      "VARCHAR(\"bb\")"
+    ],
+    "Vindex": "name_user_map"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where costly = 'aa' and name = 'bb'",
+  "Instructions": {
+    "OperatorType": "VindexLookup",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Values": [
+      "VARCHAR(\"bb\")"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, col2 from `user` where 1 != 1",
+        "Query": "select col, col2 from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where costly = 'aa' and `name` = 'bb'",
+        "Table": "`user`",
+        "Values": [
+          "VARCHAR(\"bb\")"
+        ],
+        "Vindex": "name_user_map"
+      }
+    ]
+  }
+}
