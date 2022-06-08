@@ -27,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
@@ -180,11 +179,6 @@ func tmcStartReplication(ctx context.Context, tabletGrpcPort int) error {
 func tmcResetReplicationParameters(ctx context.Context, tabletGrpcPort int) error {
 	vttablet := getTablet(tabletGrpcPort)
 	return tmClient.ResetReplicationParameters(ctx, vttablet)
-}
-
-func tmcFullStatus(ctx context.Context, tabletGrpcPort int) (*replicationdatapb.FullStatus, error) {
-	vttablet := getTablet(tabletGrpcPort)
-	return tmClient.FullStatus(ctx, vttablet)
 }
 
 func tmcPrimaryPosition(ctx context.Context, tabletGrpcPort int) (string, error) {

@@ -21,9 +21,11 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -119,4 +121,36 @@ func TestReplicationStopped(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[3], tablets[:1])
 	// Confirm that tablets[2] which had replication stopped initially still has its replication stopped
 	utils.CheckReplicationStatus(context.Background(), t, tablets[2], false, false)
+}
+
+// TestFullStatus tests that the RPC FullStatus works as intended.
+func TestFullStatus(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+
+	// Check that full status gives the correct result for a primary tablet
+	status, err := utils.TmcFullStatus(context.Background(), tablets[0])
+	require.NoError(t, err)
+	// For a primary tablet there is no replication status
+	assert.Empty(t, status.ReplicationStatus.Position)
+	assert.Contains(t, status.PrimaryStatus.String(), "vt-0000000101-bin")
+	assert.Equal(t, status.GtidPurged, "MySQL56/")
+	assert.False(t, status.ReadOnly)
+	assert.True(t, status.SemiSyncPrimaryEnabled)
+	assert.True(t, status.SemiSyncReplicaEnabled)
+
+	// Check that full status gives the correct result for a replica tablet
+	status, err = utils.TmcFullStatus(context.Background(), tablets[1])
+	require.NoError(t, err)
+	assert.Contains(t, status.ReplicationStatus.Position, "MySQL56/"+status.ReplicationStatus.SourceUuid)
+	assert.EqualValues(t, mysql.ReplicationStateRunning, status.ReplicationStatus.IoState)
+	assert.EqualValues(t, mysql.ReplicationStateRunning, status.ReplicationStatus.SqlState)
+	assert.Contains(t, status.PrimaryStatus.String(), "vt-0000000102-bin")
+	assert.Equal(t, status.GtidPurged, "MySQL56/")
+	assert.True(t, status.ReadOnly)
+	assert.False(t, status.SemiSyncPrimaryEnabled)
+	assert.True(t, status.SemiSyncReplicaEnabled)
 }
