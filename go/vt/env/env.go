@@ -24,6 +24,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 const (
@@ -99,4 +101,20 @@ func VtMysqlBaseDir() (string, error) {
 		return "", errors.New("VT_MYSQL_BASEDIR is not set. Please set $VT_MYSQL_BASEDIR")
 	}
 	return root, nil
+}
+
+// CheckPlannerVersionFlag takes two string references and checks that just one
+// has a value or that they agree with each other.
+func CheckPlannerVersionFlag(correct, deprecated *string) (string, error) {
+	if deprecated != nil && *deprecated != "" {
+		if correct != nil && *deprecated != *correct {
+			return "", fmt.Errorf("can't specify planner-version and planner_version with different versions")
+		}
+		log.Warningf("planner_version is deprecated. please use planner-version instead")
+		return *deprecated, nil
+	}
+	if correct == nil {
+		return "", nil
+	}
+	return *correct, nil
 }
