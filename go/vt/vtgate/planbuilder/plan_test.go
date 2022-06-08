@@ -97,6 +97,10 @@ var _ vindexes.Lookup = (*lookupIndex)(nil)
 // nameLkpIndex satisfies Lookup, NonUnique.
 type nameLkpIndex struct{ name string }
 
+func (v *nameLkpIndex) LookupQuery() (string, error) {
+	return "select col, col2 from user", nil
+}
+
 func (v *nameLkpIndex) String() string   { return v.name }
 func (*nameLkpIndex) Cost() int          { return 3 }
 func (*nameLkpIndex) IsUnique() bool     { return false }
@@ -119,6 +123,7 @@ func newNameLkpIndex(name string, _ map[string]string) (vindexes.Vindex, error) 
 
 var _ vindexes.Vindex = (*nameLkpIndex)(nil)
 var _ vindexes.Lookup = (*nameLkpIndex)(nil)
+var _ vindexes.LookupPlannable = (*nameLkpIndex)(nil)
 
 // costlyIndex satisfies Lookup, NonUnique.
 type costlyIndex struct{ name string }

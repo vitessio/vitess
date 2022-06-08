@@ -124,7 +124,8 @@ func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select
 	if err != nil {
 		return nil, err
 	}
-	err = plan.WireupGen4(semTable)
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, vschema.Planner())
+	err = plan.WireupGen4(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -170,8 +171,10 @@ func newBuildSelectPlan(
 	// record any warning as planner warning.
 	vschema.PlannerWarning(semTable.Warning)
 
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+
 	if ks := semTable.SingleUnshardedKeyspace(); ks != nil {
-		return unshardedShortcut(selStmt, ks, semTable)
+		return unshardedShortcut(ctx, selStmt, ks)
 	}
 
 	// From this point on, we know it is not an unsharded query and return the NotUnshardedErr if there is any
@@ -184,7 +187,6 @@ func newBuildSelectPlan(
 		return nil, err
 	}
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 	logical, err := abstract.CreateLogicalOperatorFromAST(selStmt, semTable)
 	if err != nil {
 		return nil, err
@@ -216,7 +218,7 @@ func newBuildSelectPlan(
 		}
 	}
 
-	if err := plan.WireupGen4(semTable); err != nil {
+	if err := plan.WireupGen4(ctx); err != nil {
 		return nil, err
 	}
 
@@ -300,7 +302,7 @@ func gen4UpdateStmtPlanner(
 
 	setLockOnAllSelect(err, plan)
 
-	if err := plan.WireupGen4(semTable); err != nil {
+	if err := plan.WireupGen4(ctx); err != nil {
 		return nil, err
 	}
 

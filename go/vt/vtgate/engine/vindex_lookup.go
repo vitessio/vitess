@@ -23,12 +23,20 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 var _ Primitive = (*VindexLookup)(nil)
 
 type VindexLookup struct {
-	*RoutingParameters
+	// The vindex to use to do the Map
+	Vindex vindexes.Vindex
+
+	// Keyspace specifies the keyspace to send the query to.
+	Keyspace *vindexes.Keyspace
+
+	// Values specifies the vindex values to use for routing.
+	Values []evalengine.Expr
 
 	// If we need to fetch data in order to do the map, this is where we get it
 	Lookup Primitive
@@ -39,12 +47,12 @@ type VindexLookup struct {
 
 // RouteType implements the Primitive interface
 func (vr *VindexLookup) RouteType() string {
-	return vr.Opcode.String()
+	return "VindexLookup"
 }
 
 // GetKeyspaceName implements the Primitive interface
 func (vr *VindexLookup) GetKeyspaceName() string {
-	return vr.Keyspace.Name
+	return vr.SendTo.GetKeyspaceName()
 }
 
 // GetTableName implements the Primitive interface
@@ -137,7 +145,6 @@ func (vr *VindexLookup) description() PrimitiveDescription {
 
 	return PrimitiveDescription{
 		OperatorType: "VindexLookup",
-		Variant:      vr.Opcode.String(),
 		Keyspace:     vr.Keyspace,
 		Other:        other,
 	}
