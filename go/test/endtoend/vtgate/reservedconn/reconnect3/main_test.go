@@ -21,8 +21,11 @@ import (
 	"flag"
 	"os"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/stretchr/testify/require"
 
@@ -89,7 +92,21 @@ func TestMysqlDownServingChange(t *testing.T) {
 		primaryTablet.MysqlctlProcess.Stop())
 	require.NoError(t,
 		clusterInstance.VtctlclientProcess.ExecuteCommand("EmergencyReparentShard", "-keyspace_shard", "ks/0"))
+	require.NoError(t, waitForVTGateAndVTTablet())
 
 	// This should work without any error.
 	_ = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ * from test")
+}
+
+func waitForVTGateAndVTTablet() error {
+	timeout := time.Now().Add(5 * time.Minute)
+	for time.Now().Before(timeout) {
+		err := clusterInstance.WaitForTabletsToHealthyInVtgate()
+		if err != nil {
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		return nil
+	}
+	return vterrors.New(vtrpcpb.Code_INTERNAL, "timeout")
 }
