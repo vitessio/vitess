@@ -1300,7 +1300,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 			addColumns = append(addColumns, addColumn)
 		}
 	}
-	renameColumns := []*sqlparser.ChangeColumn{}
+	renameColumns := []*sqlparser.RenameColumn{}
 	if hints.ColumnRenameStrategy == ColumnRenameHeuristicStatement {
 		// What we're doing next is to try and identify a column RENAME.
 		// We do so by cross referencing dropped and added columns.
@@ -1333,11 +1333,9 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 					if col1Details.prevColName() == col2Details.prevColName() && col1Details.nextColName() == col2Details.nextColName() {
 						dropColumns = append(dropColumns[0:iDrop], dropColumns[iDrop+1:]...)
 						addColumns = append(addColumns[0:iAdd], addColumns[iAdd+1:]...)
-						renameColumn := &sqlparser.ChangeColumn{
-							OldColumn:        dropCol1.Name,
-							NewColDefinition: addCol2.Columns[0],
-							First:            addCol2.First,
-							After:            addCol2.After,
+						renameColumn := &sqlparser.RenameColumn{
+							OldName: dropCol1.Name,
+							NewName: getColName(&addCol2.Columns[0].Name),
 						}
 						renameColumns = append(renameColumns, renameColumn)
 						return true
@@ -1625,22 +1623,19 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			if !found {
 				return &ApplyColumnNotFoundError{Table: c.Name(), Column: opt.NewColDefinition.Name.String()}
 			}
-		case *sqlparser.ChangeColumn:
+		case *sqlparser.RenameColumn:
 			// we expect the column to exist
 			found := false
 			for i, col := range c.TableSpec.Columns {
-				if strings.EqualFold(col.Name.String(), opt.OldColumn.Name.String()) {
+				if strings.EqualFold(col.Name.String(), opt.OldName.Name.String()) {
 					found = true
 					// redefine. see if we need to position it anywhere other than end of table
-					c.TableSpec.Columns[i] = opt.NewColDefinition
-					if err := reorderColumn(i, opt.First, opt.After); err != nil {
-						return err
-					}
+					c.TableSpec.Columns[i].Name = opt.NewName.Name
 					break
 				}
 			}
 			if !found {
-				return &ApplyColumnNotFoundError{Table: c.Name(), Column: opt.NewColDefinition.Name.String()}
+				return &ApplyColumnNotFoundError{Table: c.Name(), Column: opt.OldName.Name.String()}
 			}
 		case *sqlparser.AlterColumn:
 			// we expect the column to exist
