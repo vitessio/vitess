@@ -173,11 +173,7 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 					if err != nil {
 						return false
 					}
-					if valueInt >= endPointsCount {
-						return true
-					} else {
-						return false
-					}
+					return valueInt >= endPointsCount
 				}
 			}
 		}
