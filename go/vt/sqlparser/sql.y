@@ -2894,6 +2894,10 @@ alter_option:
   {
     $$ = &ModifyColumn{NewColDefinition:$3, First:$4, After:$5}
   }
+| RENAME COLUMN column_name TO column_name
+  {
+    $$ = &RenameColumn{OldName: $3, NewName: $5}
+  }
 | CONVERT TO charset_or_character_set charset collate_opt
   {
     $$ = &AlterCharset{CharacterSet:$4, Collate:$5}

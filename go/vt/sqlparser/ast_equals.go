@@ -962,6 +962,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfRelease(a, b)
+	case *RenameColumn:
+		b, ok := inB.(*RenameColumn)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRenameColumn(a, b)
 	case *RenameIndex:
 		b, ok := inB.(*RenameIndex)
 		if !ok {
@@ -3248,6 +3254,18 @@ func EqualsRefOfRelease(a, b *Release) bool {
 	return EqualsColIdent(a.Name, b.Name)
 }
 
+// EqualsRefOfRenameColumn does deep equals between the two objects.
+func EqualsRefOfRenameColumn(a, b *RenameColumn) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsRefOfColName(a.OldName, b.OldName) &&
+		EqualsRefOfColName(a.NewName, b.NewName)
+}
+
 // EqualsRefOfRenameIndex does deep equals between the two objects.
 func EqualsRefOfRenameIndex(a, b *RenameIndex) bool {
 	if a == b {
@@ -4139,6 +4157,12 @@ func EqualsAlterOption(inA, inB AlterOption) bool {
 			return false
 		}
 		return EqualsRefOfOrderByOption(a, b)
+	case *RenameColumn:
+		b, ok := inB.(*RenameColumn)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRenameColumn(a, b)
 	case *RenameIndex:
 		b, ok := inB.(*RenameIndex)
 		if !ok {
