@@ -141,6 +141,7 @@ func TestFullStatus(t *testing.T) {
 	assert.False(t, status.ReadOnly)
 	assert.True(t, status.SemiSyncPrimaryEnabled)
 	assert.True(t, status.SemiSyncReplicaEnabled)
+	assert.Contains(t, status.Version, "5.7")
 
 	// Check that full status gives the correct result for a replica tablet
 	status, err = utils.TmcFullStatus(context.Background(), tablets[1])
@@ -153,4 +154,5 @@ func TestFullStatus(t *testing.T) {
 	assert.True(t, status.ReadOnly)
 	assert.False(t, status.SemiSyncPrimaryEnabled)
 	assert.True(t, status.SemiSyncReplicaEnabled)
+	assert.Contains(t, status.Version, "5.7")
 }

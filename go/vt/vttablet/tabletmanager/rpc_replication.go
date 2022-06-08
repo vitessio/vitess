@@ -72,7 +72,8 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		return nil, err
 	}
 
-	// string version = 4;
+	// Version string "majorVersion.minorVersion.patchRelease"
+	version := tm.MysqlDaemon.GetVersionString()
 
 	// Read only - "SHOW VARIABLES LIKE 'read_only'"
 	readOnly, err := tm.MysqlDaemon.IsReadOnly()
@@ -95,6 +96,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		ReplicationStatus:      mysql.ReplicationStatusToProto(replicationStatus),
 		PrimaryStatus:          mysql.PrimaryStatusToProto(primaryStatus),
 		GtidPurged:             mysql.EncodePosition(purgedGTIDs),
+		Version:                version,
 		ReadOnly:               readOnly,
 		SemiSyncPrimaryEnabled: primarySemiSync,
 		SemiSyncReplicaEnabled: replicaSemiSync,
