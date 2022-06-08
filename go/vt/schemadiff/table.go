@@ -1300,54 +1300,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 			addColumns = append(addColumns, addColumn)
 		}
 	}
-	renameColumns := []*sqlparser.RenameColumn{}
-	if hints.ColumnRenameStrategy == ColumnRenameHeuristicStatement {
-		// What we're doing next is to try and identify a column RENAME.
-		// We do so by cross referencing dropped and added columns.
-		// The check is heuristic, and looks like this:
-		// We consider a column renamed iff:
-		// - the DROP and ADD column definitions are identical other than the column name, and
-		// - the DROPped and ADDded column are both FIRST, or they come AFTER the same column, and
-		// - the DROPped and ADDded column are both last, or they come before the same column
-		// This v1 chcek therefore cannot handle a case where two successive columns are renamed.
-		// the problem is complex, and with successive renamed, or drops and adds, it can be
-		// impossible to tell apart different scenarios.
-		// At any case, once we heuristically decide that we found a RENAME, we cancel the DROP,
-		// cancel the ADD, and inject a RENAME in place of both.
-
-		// findRenamedColumn cross referenced dropped and added columns to find a single renamed column. If such is found:
-		// we remove the entry from DROPped columns, remove the entry from ADDed columns, add an entry for RENAMEd columns,
-		// and return 'true'.
-		// Successive calls to this function will then find the next heuristic RENAMEs.
-		// the function returns 'false' if it is unabl eto heuristically find a RENAME.
-		findRenamedColumn := func() bool {
-			for iDrop, dropCol1 := range dropColumns {
-				for iAdd, addCol2 := range addColumns {
-					col1Details := t1ColumnsMap[dropCol1.Name.Name.Lowered()]
-					if !col1Details.identicalOtherThanName(addCol2.Columns[0]) {
-						continue
-					}
-					// columns look alike, other than their names, which we know are different.
-					// are these two columns otherwise appear to be in same position?
-					col2Details := t2ColumnsMap[addCol2.Columns[0].Name.Lowered()]
-					if col1Details.prevColName() == col2Details.prevColName() && col1Details.nextColName() == col2Details.nextColName() {
-						dropColumns = append(dropColumns[0:iDrop], dropColumns[iDrop+1:]...)
-						addColumns = append(addColumns[0:iAdd], addColumns[iAdd+1:]...)
-						renameColumn := &sqlparser.RenameColumn{
-							OldName: dropCol1.Name,
-							NewName: getColName(&addCol2.Columns[0].Name),
-						}
-						renameColumns = append(renameColumns, renameColumn)
-						return true
-					}
-				}
-			}
-			return false
-		}
-		for findRenamedColumn() {
-			// Iteratively detect all RENAMEs
-		}
-	}
+	dropColumns, addColumns, renameColumns := heuristicallyDetectColumnRenames(dropColumns, addColumns, t1ColumnsMap, t2ColumnsMap, hints)
 	for _, c := range dropColumns {
 		alterTable.AlterOptions = append(alterTable.AlterOptions, c)
 	}
@@ -1360,6 +1313,67 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	for _, c := range addColumns {
 		alterTable.AlterOptions = append(alterTable.AlterOptions, c)
 	}
+}
+
+func heuristicallyDetectColumnRenames(
+	dropColumns []*sqlparser.DropColumn,
+	addColumns []*sqlparser.AddColumns,
+	t1ColumnsMap map[string]*columnDetails,
+	t2ColumnsMap map[string]*columnDetails,
+	hints *DiffHints,
+) ([]*sqlparser.DropColumn, []*sqlparser.AddColumns, []*sqlparser.RenameColumn) {
+	renameColumns := []*sqlparser.RenameColumn{}
+	// What we're doing next is to try and identify a column RENAME.
+	// We do so by cross referencing dropped and added columns.
+	// The check is heuristic, and looks like this:
+	// We consider a column renamed iff:
+	// - the DROP and ADD column definitions are identical other than the column name, and
+	// - the DROPped and ADDded column are both FIRST, or they come AFTER the same column, and
+	// - the DROPped and ADDded column are both last, or they come before the same column
+	// This v1 chcek therefore cannot handle a case where two successive columns are renamed.
+	// the problem is complex, and with successive renamed, or drops and adds, it can be
+	// impossible to tell apart different scenarios.
+	// At any case, once we heuristically decide that we found a RENAME, we cancel the DROP,
+	// cancel the ADD, and inject a RENAME in place of both.
+
+	// findRenamedColumn cross referenced dropped and added columns to find a single renamed column. If such is found:
+	// we remove the entry from DROPped columns, remove the entry from ADDed columns, add an entry for RENAMEd columns,
+	// and return 'true'.
+	// Successive calls to this function will then find the next heuristic RENAMEs.
+	// the function returns 'false' if it is unabl eto heuristically find a RENAME.
+	findRenamedColumn := func() bool {
+		for iDrop, dropCol1 := range dropColumns {
+			for iAdd, addCol2 := range addColumns {
+				col1Details := t1ColumnsMap[dropCol1.Name.Name.Lowered()]
+				if !col1Details.identicalOtherThanName(addCol2.Columns[0]) {
+					continue
+				}
+				// columns look alike, other than their names, which we know are different.
+				// are these two columns otherwise appear to be in same position?
+				col2Details := t2ColumnsMap[addCol2.Columns[0].Name.Lowered()]
+				if col1Details.prevColName() == col2Details.prevColName() && col1Details.nextColName() == col2Details.nextColName() {
+					dropColumns = append(dropColumns[0:iDrop], dropColumns[iDrop+1:]...)
+					addColumns = append(addColumns[0:iAdd], addColumns[iAdd+1:]...)
+					renameColumn := &sqlparser.RenameColumn{
+						OldName: dropCol1.Name,
+						NewName: getColName(&addCol2.Columns[0].Name),
+					}
+					renameColumns = append(renameColumns, renameColumn)
+					return true
+				}
+			}
+		}
+		return false
+	}
+	switch hints.ColumnRenameStrategy {
+	case ColumnRenameAssumeDifferent:
+		// do nothing
+	case ColumnRenameHeuristicStatement:
+		for findRenamedColumn() {
+			// Iteratively detect all RENAMEs
+		}
+	}
+	return dropColumns, addColumns, renameColumns
 }
 
 // Create implements Entity interface
