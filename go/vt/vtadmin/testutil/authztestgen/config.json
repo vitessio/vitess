@@ -16,6 +16,11 @@
                     "value": "\"zone1-0000000100\": nil,"
                 },
                 {
+                    "field": "EmergencyReparentShardResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.EmergencyReparentShardResponse\nError error}",
+                    "value": "\"test/-\": {\nResponse: &vtctldatapb.EmergencyReparentShardResponse{},\n},"
+                },
+                {
                     "field": "FindAllShardsInKeyspaceResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.FindAllShardsInKeyspaceResponse\nError error}",
                     "value": "\"test\": {\nResponse: &vtctldatapb.FindAllShardsInKeyspaceResponse{\nShards: map[string]*vtctldatapb.Shard{\n\"-\": {\nKeyspace: \"test\",\nName: \"-\",\nShard: &topodatapb.Shard{},\n},\n},\n},\n},"
@@ -324,6 +329,39 @@
                     "include_error_var": true,
                     "assertions": [
                         "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "EmergencyFailoverShard",
+            "rules": [
+                {
+                    "resource": "Shard",
+                    "actions": ["emergency_failover_shard"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.EmergencyFailoverShardRequest{\nClusterId: \"test\",\nOptions: &vtctldatapb.EmergencyReparentShardRequest{\nKeyspace: \"test\",\nShard: \"-\",\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
                         "assert.Nil(t, resp, $$)"
                     ]
                 },

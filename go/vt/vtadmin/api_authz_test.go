@@ -400,6 +400,77 @@ func TestDeleteTablet(t *testing.T) {
 	})
 }
 
+func TestEmergencyFailoverShard(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Shard",
+					Actions:  []string{"emergency_failover_shard"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.EmergencyFailoverShard(ctx, &vtadminpb.EmergencyFailoverShardRequest{
+			ClusterId: "test",
+			Options: &vtctldatapb.EmergencyReparentShardRequest{
+				Keyspace: "test",
+				Shard:    "-",
+			},
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to EmergencyFailoverShard", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.EmergencyFailoverShard(ctx, &vtadminpb.EmergencyFailoverShardRequest{
+			ClusterId: "test",
+			Options: &vtctldatapb.EmergencyReparentShardRequest{
+				Keyspace: "test",
+				Shard:    "-",
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to EmergencyFailoverShard", actor)
+	})
+}
+
 func TestGetBackups(t *testing.T) {
 	t.Parallel()
 
@@ -2379,6 +2450,14 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 				},
 				DeleteTabletsResults: map[string]error{
 					"zone1-0000000100": nil,
+				},
+				EmergencyReparentShardResults: map[string]struct {
+					Response *vtctldatapb.EmergencyReparentShardResponse
+					Error    error
+				}{
+					"test/-": {
+						Response: &vtctldatapb.EmergencyReparentShardResponse{},
+					},
 				},
 				FindAllShardsInKeyspaceResults: map[string]struct {
 					Response *vtctldatapb.FindAllShardsInKeyspaceResponse
