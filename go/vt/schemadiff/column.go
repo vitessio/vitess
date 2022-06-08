@@ -29,10 +29,11 @@ func colWithMaskedName(col *sqlparser.ColumnDefinition) string {
 
 }
 
+// columnDetails decorates a column with more details, used by diffing logic
 type columnDetails struct {
 	col     *sqlparser.ColumnDefinition
-	prevCol *columnDetails
-	nextCol *columnDetails
+	prevCol *columnDetails // previous in sequence in table definition
+	nextCol *columnDetails // next in sequence in table definition
 }
 
 func (c *columnDetails) identicalOtherThanName(other *sqlparser.ColumnDefinition) bool {
@@ -40,6 +41,20 @@ func (c *columnDetails) identicalOtherThanName(other *sqlparser.ColumnDefinition
 		return false
 	}
 	return colWithMaskedName(c.col) == colWithMaskedName(other)
+}
+
+func (c *columnDetails) prevColName() string {
+	if c.prevCol == nil {
+		return ""
+	}
+	return c.prevCol.col.Name.String()
+}
+
+func (c *columnDetails) nextColName() string {
+	if c.nextCol == nil {
+		return ""
+	}
+	return c.nextCol.col.Name.String()
 }
 
 func getColName(colIdent *sqlparser.ColIdent) *sqlparser.ColName {

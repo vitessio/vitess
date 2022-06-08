@@ -73,7 +73,7 @@ const (
 
 const (
 	ColumnRenameAssumeDifferent = iota
-	ColumnRenameError
+	ColumnRenameHeuristicStatement
 )
 
 // DiffHints is an assortment of rules for diffing entities

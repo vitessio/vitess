@@ -573,10 +573,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		// ordered columns for both tables:
 		t1Columns := c.CreateTable.TableSpec.Columns
 		t2Columns := other.CreateTable.TableSpec.Columns
-		err := c.diffColumns(alterTable, t1Columns, t2Columns, hints, (diffedTableCharset != ""))
-		if err != nil {
-			return nil, err
-		}
+		c.diffColumns(alterTable, t1Columns, t2Columns, hints, (diffedTableCharset != ""))
 	}
 	{
 		// diff keys
@@ -1187,29 +1184,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	t2Columns []*sqlparser.ColumnDefinition,
 	hints *DiffHints,
 	tableCharsetChanged bool,
-) error {
-	if hints.ColumnRenameStrategy == ColumnRenameError {
-		colWithMaskedName := func(col *sqlparser.ColumnDefinition) string {
-			col = sqlparser.CloneRefOfColumnDefinition(col)
-			col.Name = sqlparser.NewColIdent("mask")
-			return sqlparser.CanonicalString(col)
-
-		}
-		// This is a first implementation to identify a column RENAME heuristic. It is far
-		// from complete, but still covers the main use case
-		if len(t2Columns) == len(t2Columns) {
-			for i, t1Col := range t1Columns {
-				t2Col := t2Columns[i]
-				if strings.EqualFold(t1Col.Name.String(), t2Col.Name.String()) {
-					continue
-				}
-				// column names are different. But are the columns identical other than the name?
-				if colWithMaskedName(t1Col) == colWithMaskedName(t2Col) {
-					return &ColumnRenamedError{Table: alterTable.GetTable().Name.String(), Column: t1Col.Name.String()}
-				}
-			}
-		}
-	}
+) {
 	getColumnsMap := func(cols []*sqlparser.ColumnDefinition) map[string]*columnDetails {
 		var prevCol *columnDetails
 		m := map[string]*columnDetails{}
@@ -1325,10 +1300,55 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 			addColumns = append(addColumns, addColumn)
 		}
 	}
-	findRenamedColumn := func() bool {
-		return false
-	}
-	for findRenamedColumn() {
+	renameColumns := []*sqlparser.ChangeColumn{}
+	if hints.ColumnRenameStrategy == ColumnRenameHeuristicStatement {
+		// What we're doing next is to try and identify a column RENAME.
+		// We do so by cross referencing dropped and added columns.
+		// The check is heuristic, and looks like this:
+		// We consider a column renamed iff:
+		// - the DROP and ADD column definitions are identical other than the column name, and
+		// - the DROPped and ADDded column are both FIRST, or they come AFTER the same column, and
+		// - the DROPped and ADDded column are both last, or they come before the same column
+		// This v1 chcek therefore cannot handle a case where two successive columns are renamed.
+		// the problem is complex, and with successive renamed, or drops and adds, it can be
+		// impossible to tell apart different scenarios.
+		// At any case, once we heuristically decide that we found a RENAME, we cancel the DROP,
+		// cancel the ADD, and inject a RENAME in place of both.
+
+		// findRenamedColumn cross referenced dropped and added columns to find a single renamed column. If such is found:
+		// we remove the entry from DROPped columns, remove the entry from ADDed columns, add an entry for RENAMEd columns,
+		// and return 'true'.
+		// Successive calls to this function will then find the next heuristic RENAMEs.
+		// the function returns 'false' if it is unabl eto heuristically find a RENAME.
+		findRenamedColumn := func() bool {
+			for iDrop, dropCol1 := range dropColumns {
+				for iAdd, addCol2 := range addColumns {
+					col1Details := t1ColumnsMap[dropCol1.Name.Name.Lowered()]
+					if !col1Details.identicalOtherThanName(addCol2.Columns[0]) {
+						continue
+					}
+					// columns look alike, other than their names, which we know are different.
+					// are these two columns otherwise appear to be in same position?
+					col2Details := t2ColumnsMap[addCol2.Columns[0].Name.Lowered()]
+					if col1Details.prevColName() == col2Details.prevColName() && col1Details.nextColName() == col2Details.nextColName() {
+						dropColumns = append(dropColumns[0:iDrop], dropColumns[iDrop+1:]...)
+						addColumns = append(addColumns[0:iAdd], addColumns[iAdd+1:]...)
+						renameColumn := &sqlparser.ChangeColumn{
+							OldColumn:        dropCol1.Name,
+							NewColDefinition: addCol2.Columns[0],
+							First:            addCol2.First,
+							After:            addCol2.After,
+						}
+						renameColumns = append(renameColumns, renameColumn)
+						return true
+					}
+				}
+			}
+			return false
+		}
+		for findRenamedColumn() {
+			// Iteratively detect all RENAMEs
+		}
 	}
 	for _, c := range dropColumns {
 		alterTable.AlterOptions = append(alterTable.AlterOptions, c)
@@ -1336,10 +1356,12 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	for _, c := range modifyColumns {
 		alterTable.AlterOptions = append(alterTable.AlterOptions, c)
 	}
+	for _, c := range renameColumns {
+		alterTable.AlterOptions = append(alterTable.AlterOptions, c)
+	}
 	for _, c := range addColumns {
 		alterTable.AlterOptions = append(alterTable.AlterOptions, c)
 	}
-	return nil
 }
 
 // Create implements Entity interface
@@ -1591,6 +1613,23 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			found := false
 			for i, col := range c.TableSpec.Columns {
 				if strings.EqualFold(col.Name.String(), opt.NewColDefinition.Name.String()) {
+					found = true
+					// redefine. see if we need to position it anywhere other than end of table
+					c.TableSpec.Columns[i] = opt.NewColDefinition
+					if err := reorderColumn(i, opt.First, opt.After); err != nil {
+						return err
+					}
+					break
+				}
+			}
+			if !found {
+				return &ApplyColumnNotFoundError{Table: c.Name(), Column: opt.NewColDefinition.Name.String()}
+			}
+		case *sqlparser.ChangeColumn:
+			// we expect the column to exist
+			found := false
+			for i, col := range c.TableSpec.Columns {
+				if strings.EqualFold(col.Name.String(), opt.OldColumn.Name.String()) {
 					found = true
 					// redefine. see if we need to position it anywhere other than end of table
 					c.TableSpec.Columns[i] = opt.NewColDefinition
