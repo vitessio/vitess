@@ -94,11 +94,6 @@ var generateSQLPatches = []string{
 	`,
 	`
 		ALTER TABLE
-			database_instance
-			ADD COLUMN uptime INT UNSIGNED NOT NULL AFTER last_seen
-	`,
-	`
-		ALTER TABLE
 			cluster_alias
 			ADD UNIQUE KEY alias_uidx (alias)
 	`,

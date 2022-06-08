@@ -310,28 +310,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	instance.Key = *instanceKey
 	{
 		// We begin with a few operations we can run concurrently, and which do not depend on anything
-		{
-			waitGroup.Add(1)
-			go func() {
-				defer waitGroup.Done()
-				var dummy string
-				// show global status works just as well with 5.6 & 5.7 (5.7 moves variables to performance_schema)
-				err := db.QueryRow("show global status like 'Uptime'").Scan(&dummy, &instance.Uptime)
-
-				if err != nil {
-					logReadTopologyInstanceError(instanceKey, "show global status like 'Uptime'", err)
-
-					// We do not "goto Cleanup" here, although it should be the correct flow.
-					// Reason is 5.7's new security feature that requires GRANTs on performance_schema.global_variables.
-					// There is a wrong decisionmaking in this design and the migration path to 5.7 will be difficult.
-					// I don't want orchestrator to put even more burden on this. The 'Uptime' variable is not that important
-					// so as to completely fail reading a 5.7 instance.
-					// This is supposed to be fixed in 5.7.9
-				}
-				errorChan <- err
-			}()
-		}
-
 		var mysqlHostname, mysqlReportHost string
 		err = db.QueryRow("select @@global.hostname, ifnull(@@global.report_host, ''), @@global.server_id, @@global.version, @@global.version_comment, @@global.read_only, @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates").Scan(
 			&mysqlHostname, &mysqlReportHost, &instance.ServerID, &instance.Version, &instance.VersionComment, &instance.ReadOnly, &instance.BinlogFormat, &instance.LogBinEnabled, &instance.LogReplicationUpdatesEnabled)
@@ -977,7 +955,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 
 	instance.Key.Hostname = m.GetString("hostname")
 	instance.Key.Port = m.GetInt("port")
-	instance.Uptime = m.GetUint("uptime")
 	instance.ServerID = m.GetUint("server_id")
 	instance.ServerUUID = m.GetString("server_uuid")
 	instance.Version = m.GetString("version")
@@ -2285,7 +2262,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"last_checked",
 		"last_attempted_check",
 		"last_check_partial_success",
-		"uptime",
 		"server_id",
 		"server_uuid",
 		"version",
@@ -2378,7 +2354,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		// updated with NOW()
 		args = append(args, instance.Key.Hostname)
 		args = append(args, instance.Key.Port)
-		args = append(args, instance.Uptime)
 		args = append(args, instance.ServerID)
 		args = append(args, instance.ServerUUID)
 		args = append(args, instance.Version)

@@ -36,7 +36,6 @@ const ReasonableDiscoveryLatency = 500 * time.Millisecond
 type Instance struct {
 	Key                          InstanceKey
 	InstanceAlias                string
-	Uptime                       uint
 	ServerID                     uint
 	ServerUUID                   string
 	Version                      string
