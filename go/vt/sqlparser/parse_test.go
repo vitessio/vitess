@@ -1150,6 +1150,8 @@ var (
 	}, {
 		input: "alter table a modify column foo int default 1 first",
 	}, {
+		input: "alter table a rename column foo to bar",
+	}, {
 		input:  "alter table a add foo varchar(255) generated always as (concat(bar, ' ', baz)) stored",
 		output: "alter table a add column foo varchar(255) as (concat(bar, ' ', baz)) stored",
 	}, {

@@ -2200,6 +2200,11 @@ func (node *ModifyColumn) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node
+func (node *RenameColumn) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "rename column %v to %v", node.OldName, node.NewName)
+}
+
+// Format formats the node
 func (node *AlterCharset) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "convert to character set %#s", node.CharacterSet)
 	if node.Collate != "" {

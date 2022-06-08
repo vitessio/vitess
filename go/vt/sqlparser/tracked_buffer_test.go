@@ -125,6 +125,10 @@ func TestCanonicalOutput(t *testing.T) {
 			"ALTER TABLE `t1` MODIFY COLUMN `a` int FIRST, MODIFY COLUMN `b` int AFTER `a`",
 		},
 		{
+			"alter table t2 rename column foo to bar",
+			"ALTER TABLE `t2` RENAME COLUMN `foo` TO `bar`",
+		},
+		{
 			"alter table t1 drop key `PRIMARY`, add primary key (id,n)",
 			"ALTER TABLE `t1` DROP KEY `PRIMARY`, ADD PRIMARY KEY (`id`, `n`)",
 		},

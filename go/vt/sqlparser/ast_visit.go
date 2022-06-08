@@ -336,6 +336,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfRegexpSubstrExpr(in, f)
 	case *Release:
 		return VisitRefOfRelease(in, f)
+	case *RenameColumn:
+		return VisitRefOfRenameColumn(in, f)
 	case *RenameIndex:
 		return VisitRefOfRenameIndex(in, f)
 	case *RenameTable:
@@ -2703,6 +2705,21 @@ func VisitRefOfRelease(in *Release, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfRenameColumn(in *RenameColumn, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfColName(in.OldName, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfColName(in.NewName, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfRenameIndex(in *RenameIndex, f Visit) error {
 	if in == nil {
 		return nil
@@ -3661,6 +3678,8 @@ func VisitAlterOption(in AlterOption, f Visit) error {
 		return VisitRefOfModifyColumn(in, f)
 	case *OrderByOption:
 		return VisitRefOfOrderByOption(in, f)
+	case *RenameColumn:
+		return VisitRefOfRenameColumn(in, f)
 	case *RenameIndex:
 		return VisitRefOfRenameIndex(in, f)
 	case *RenameTableName:
