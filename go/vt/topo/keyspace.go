@@ -49,6 +49,11 @@ func (ki *KeyspaceInfo) KeyspaceName() string {
 	return ki.keyspace
 }
 
+// SetKeyspaceName sets the keyspace name
+func (ki *KeyspaceInfo) SetKeyspaceName(name string) {
+	ki.keyspace = name
+}
+
 // GetServedFrom returns a Keyspace_ServedFrom record if it exists.
 func (ki *KeyspaceInfo) GetServedFrom(tabletType topodatapb.TabletType) *topodatapb.Keyspace_ServedFrom {
 	for _, ksf := range ki.ServedFroms {

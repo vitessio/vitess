@@ -63,6 +63,10 @@ type FakeTabletManagerClient struct {
 	tmc tmclient.TabletManagerClient
 }
 
+func (client *FakeTabletManagerClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
+	return nil, nil
+}
+
 //
 // Various read-only methods
 //

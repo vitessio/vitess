@@ -55,6 +55,11 @@ type fakeRPCTM struct {
 	mu sync.Mutex
 }
 
+func (fra *fakeRPCTM) VDiff(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (fra *fakeRPCTM) LockTables(ctx context.Context) error {
 	panic("implement me")
 }

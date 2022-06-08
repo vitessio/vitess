@@ -43,10 +43,11 @@ type ClusterConfig struct {
 }
 
 type Test struct {
-	Method  string        `json:"method"`
-	Rules   []*AuthzRules `json:"rules"`
-	Request string        `json:"request"`
-	Cases   []*TestCase   `json:"cases"`
+	Method         string        `json:"method"`
+	Rules          []*AuthzRules `json:"rules"`
+	Request        string        `json:"request"`
+	SerializeCases bool          `json:"serialize_cases"`
+	Cases          []*TestCase   `json:"cases"`
 }
 
 type TestCase struct {

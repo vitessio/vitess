@@ -1370,16 +1370,10 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	// changes, we should be checking that this failure is indeed needed to be fixed. We do this after locking the shard to be sure
 	// that the data that we use now is up-to-date.
 	if isActionableRecovery {
-		ksInfo, err := ts.GetKeyspace(ctx, analysisEntry.AnalyzedKeyspace)
+		err := RefreshKeyspace(analysisEntry.AnalyzedKeyspace)
 		if err != nil {
 			return false, nil, err
 		}
-		if ksInfo.GetDurabilityPolicy() != "" && ksInfo.GetDurabilityPolicy() != config.Config.Durability {
-			err = log.Errorf("executeCheckAndRecoverFunction: Analysis: %+v, InstanceKey: %+v: Keyspace has a different durability policy configured than this vtorc instance: %v",
-				analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, analysisEntry.AnalyzedKeyspace)
-			return false, nil, err
-		}
-
 		// TODO (@GuptaManan100): Refresh only the shard tablet information instead of all the tablets
 		RefreshTablets(true /* forceRefresh */)
 		alreadyFixed, err := checkIfAlreadyFixed(analysisEntry)
@@ -1804,9 +1798,13 @@ func fixPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis, can
 	defer func() {
 		resolveRecovery(topologyRecovery, nil)
 	}()
-
+	durability, err := inst.GetDurabilityPolicy(analysisEntry.AnalyzedInstanceKey)
+	if err != nil {
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("can't read durability policy - %v.", err))
+		return false, topologyRecovery, err
+	}
 	// TODO(sougou): this code pattern has reached DRY limits. Reuse.
-	count := inst.SemiSyncAckers(analysisEntry.AnalyzedInstanceKey)
+	count := inst.SemiSyncAckers(durability, analysisEntry.AnalyzedInstanceKey)
 	err = inst.SetSemiSyncPrimary(&analysisEntry.AnalyzedInstanceKey, count > 0)
 	//AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- fixPrimary: applying semi-sync %v: success=%t", count > 0, (err == nil)))
 	if err != nil {

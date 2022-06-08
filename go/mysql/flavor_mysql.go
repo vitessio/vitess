@@ -324,9 +324,12 @@ func (mysqlFlavor56) baseShowTablesWithSizes() string {
 	return TablesWithSize56
 }
 
-// supportsFastDropTable is part of the Flavor interface.
-func (mysqlFlavor56) supportsFastDropTable(c *Conn) (bool, error) {
-	return false, nil
+// supportsCapability is part of the Flavor interface.
+func (mysqlFlavor56) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	default:
+		return false, nil
+	}
 }
 
 // baseShowTablesWithSizes is part of the Flavor interface.
@@ -334,9 +337,14 @@ func (mysqlFlavor57) baseShowTablesWithSizes() string {
 	return TablesWithSize57
 }
 
-// supportsFastDropTable is part of the Flavor interface.
-func (mysqlFlavor57) supportsFastDropTable(c *Conn) (bool, error) {
-	return false, nil
+// supportsCapability is part of the Flavor interface.
+func (mysqlFlavor57) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	case MySQLJSONFlavorCapability:
+		return true, nil
+	default:
+		return false, nil
+	}
 }
 
 // baseShowTablesWithSizes is part of the Flavor interface.
@@ -344,7 +352,25 @@ func (mysqlFlavor80) baseShowTablesWithSizes() string {
 	return TablesWithSize80
 }
 
-// supportsFastDropTable is part of the Flavor interface.
-func (mysqlFlavor80) supportsFastDropTable(c *Conn) (bool, error) {
-	return c.ServerVersionAtLeast(8, 0, 23)
+// supportsCapability is part of the Flavor interface.
+func (mysqlFlavor80) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	case InstantDDLFlavorCapability,
+		InstantAddLastColumnFlavorCapability,
+		InstantAddDropVirtualColumnFlavorCapability,
+		InstantChangeColumnDefaultFlavorCapability:
+		return true, nil
+	case InstantAddDropColumnFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 29)
+	case TransactionalGtidExecutedFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 17)
+	case FastDropTableFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 23)
+	case MySQLJSONFlavorCapability:
+		return true, nil
+	case MySQLUpgradeInServerFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 16)
+	default:
+		return false, nil
+	}
 }

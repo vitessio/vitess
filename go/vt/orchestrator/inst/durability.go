@@ -22,19 +22,8 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
-var (
-	// durabilityPolicy is the durability policy in use for VTOrc
-	durabilityPolicy reparentutil.Durabler
-)
-
-// SetDurabilityPolicy is used to set the durability policy for VTOrc once during startup
-func SetDurabilityPolicy(name string) (err error) {
-	durabilityPolicy, err = reparentutil.GetDurabilityPolicy(name)
-	return err
-}
-
 // IsReplicaSemiSync returns the replica semi-sync setting for the instance.
-func IsReplicaSemiSync[V InstanceKey | *topodatapb.Tablet](primaryInstance V, replicaInstance V) bool {
+func IsReplicaSemiSync[V InstanceKey | *topodatapb.Tablet](durabilityPolicy reparentutil.Durabler, primaryInstance V, replicaInstance V) bool {
 	primary, err := getTablet(primaryInstance)
 	if err != nil {
 		return false
@@ -48,7 +37,7 @@ func IsReplicaSemiSync[V InstanceKey | *topodatapb.Tablet](primaryInstance V, re
 
 // SemiSyncAckers returns the primary semi-sync setting for the instance.
 // 0 means none. Non-zero specifies the number of required ackers.
-func SemiSyncAckers[V InstanceKey | *topodatapb.Tablet](instance V) int {
+func SemiSyncAckers[V InstanceKey | *topodatapb.Tablet](durabilityPolicy reparentutil.Durabler, instance V) int {
 	primary, err := getTablet(instance)
 	if err != nil {
 		return 0
@@ -57,7 +46,7 @@ func SemiSyncAckers[V InstanceKey | *topodatapb.Tablet](instance V) int {
 }
 
 // PromotionRule returns the promotion rule for the instance.
-func PromotionRule[V InstanceKey | *topodatapb.Tablet](instance V) promotionrule.CandidatePromotionRule {
+func PromotionRule[V InstanceKey | *topodatapb.Tablet](durabilityPolicy reparentutil.Durabler, instance V) promotionrule.CandidatePromotionRule {
 	tablet, err := getTablet(instance)
 	if err != nil {
 		return promotionrule.MustNot
@@ -78,4 +67,17 @@ func getTablet[V InstanceKey | *topodatapb.Tablet](instance V) (*topodatapb.Tabl
 		instanceTablet = node
 	}
 	return instanceTablet, nil
+}
+
+// GetDurabilityPolicy gets the durability policy for the keyspace of the given instance
+func GetDurabilityPolicy[V InstanceKey | *topodatapb.Tablet](instance V) (reparentutil.Durabler, error) {
+	tablet, err := getTablet(instance)
+	if err != nil {
+		return nil, err
+	}
+	ki, err := ReadKeyspace(tablet.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+	return reparentutil.GetDurabilityPolicy(ki.DurabilityPolicy)
 }
