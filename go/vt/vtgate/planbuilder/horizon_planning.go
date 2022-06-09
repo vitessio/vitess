@@ -421,11 +421,12 @@ func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets
 		}
 
 		aggrParams[idx] = &engine.AggregateParams{
-			Opcode:   opcode,
-			Col:      offset,
-			Alias:    aggr.Alias,
-			Expr:     aggr.Original.Expr,
-			Original: aggr.Original,
+			Opcode:     opcode,
+			Col:        offset,
+			Alias:      aggr.Alias,
+			Expr:       aggr.Original.Expr,
+			Original:   aggr.Original,
+			OrigOpcode: aggr.OpCode,
 		}
 	}
 	return aggrParams, nil

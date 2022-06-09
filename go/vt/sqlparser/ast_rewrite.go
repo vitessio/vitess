@@ -350,6 +350,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfRegexpSubstrExpr(parent, node, replacer)
 	case *Release:
 		return a.rewriteRefOfRelease(parent, node, replacer)
+	case *RenameColumn:
+		return a.rewriteRefOfRenameColumn(parent, node, replacer)
 	case *RenameIndex:
 		return a.rewriteRefOfRenameIndex(parent, node, replacer)
 	case *RenameTable:
@@ -5557,6 +5559,38 @@ func (a *application) rewriteRefOfRelease(parent SQLNode, node *Release, replace
 	}
 	return true
 }
+func (a *application) rewriteRefOfRenameColumn(parent SQLNode, node *RenameColumn, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteRefOfColName(node, node.OldName, func(newNode, parent SQLNode) {
+		parent.(*RenameColumn).OldName = newNode.(*ColName)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfColName(node, node.NewName, func(newNode, parent SQLNode) {
+		parent.(*RenameColumn).NewName = newNode.(*ColName)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfRenameIndex(parent SQLNode, node *RenameIndex, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7937,6 +7971,8 @@ func (a *application) rewriteAlterOption(parent SQLNode, node AlterOption, repla
 		return a.rewriteRefOfModifyColumn(parent, node, replacer)
 	case *OrderByOption:
 		return a.rewriteRefOfOrderByOption(parent, node, replacer)
+	case *RenameColumn:
+		return a.rewriteRefOfRenameColumn(parent, node, replacer)
 	case *RenameIndex:
 		return a.rewriteRefOfRenameIndex(parent, node, replacer)
 	case *RenameTableName:

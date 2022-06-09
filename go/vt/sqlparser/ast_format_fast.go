@@ -2866,6 +2866,14 @@ func (node *ModifyColumn) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node
+func (node *RenameColumn) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("rename column ")
+	node.OldName.formatFast(buf)
+	buf.WriteString(" to ")
+	node.NewName.formatFast(buf)
+}
+
+// formatFast formats the node
 func (node *AlterCharset) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("convert to character set ")
 	buf.WriteString(node.CharacterSet)

@@ -265,8 +265,8 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 
 func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin logicalPlan) (rc *resultColumn, colNumber int, err error) {
 	aggrFunc, _ := expr.Expr.(sqlparser.AggrFunc)
-	opcode := engine.SupportedAggregates[strings.ToLower(aggrFunc.AggrName())]
-
+	origOpcode := engine.SupportedAggregates[strings.ToLower(aggrFunc.AggrName())]
+	opcode := origOpcode
 	if len(aggrFunc.GetArgs()) != 1 {
 		return nil, 0, fmt.Errorf("unsupported: only one expression allowed inside aggregates: %s", sqlparser.String(expr))
 	}
@@ -299,9 +299,10 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 			opcode = engine.AggregateSumDistinct
 		}
 		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
-			Opcode: opcode,
-			Col:    innerCol,
-			Alias:  expr.ColumnName(),
+			Opcode:     opcode,
+			Col:        innerCol,
+			Alias:      expr.ColumnName(),
+			OrigOpcode: origOpcode,
 		})
 	} else {
 		newBuilder, _, innerCol, err := planProjection(pb, oa.input, expr, origin)
@@ -310,8 +311,9 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 		}
 		pb.plan = newBuilder
 		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
-			Opcode: opcode,
-			Col:    innerCol,
+			Opcode:     opcode,
+			Col:        innerCol,
+			OrigOpcode: origOpcode,
 		})
 	}
 

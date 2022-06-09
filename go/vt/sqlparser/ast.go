@@ -163,6 +163,12 @@ type (
 		After            *ColName
 	}
 
+	// RenameColumn is used to change the column definition in alter table command
+	RenameColumn struct {
+		OldName *ColName
+		NewName *ColName
+	}
+
 	// AlterCharset is used to set the default or change the character set and collation in alter table command
 	AlterCharset struct {
 		CharacterSet string
@@ -744,6 +750,7 @@ func (*AlterCheck) iAlterOption()              {}
 func (*AlterIndex) iAlterOption()              {}
 func (*ChangeColumn) iAlterOption()            {}
 func (*ModifyColumn) iAlterOption()            {}
+func (*RenameColumn) iAlterOption()            {}
 func (*AlterCharset) iAlterOption()            {}
 func (*KeyState) iAlterOption()                {}
 func (*TablespaceOperation) iAlterOption()     {}

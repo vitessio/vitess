@@ -351,6 +351,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfRegexpSubstrExpr(in)
 	case *Release:
 		return CloneRefOfRelease(in)
+	case *RenameColumn:
+		return CloneRefOfRenameColumn(in)
 	case *RenameIndex:
 		return CloneRefOfRenameIndex(in)
 	case *RenameTable:
@@ -2208,6 +2210,17 @@ func CloneRefOfRelease(n *Release) *Release {
 	return &out
 }
 
+// CloneRefOfRenameColumn creates a deep clone of the input.
+func CloneRefOfRenameColumn(n *RenameColumn) *RenameColumn {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.OldName = CloneRefOfColName(n.OldName)
+	out.NewName = CloneRefOfColName(n.NewName)
+	return &out
+}
+
 // CloneRefOfRenameIndex creates a deep clone of the input.
 func CloneRefOfRenameIndex(n *RenameIndex) *RenameIndex {
 	if n == nil {
@@ -3059,6 +3072,8 @@ func CloneAlterOption(in AlterOption) AlterOption {
 		return CloneRefOfModifyColumn(in)
 	case *OrderByOption:
 		return CloneRefOfOrderByOption(in)
+	case *RenameColumn:
+		return CloneRefOfRenameColumn(in)
 	case *RenameIndex:
 		return CloneRefOfRenameIndex(in)
 	case *RenameTableName:
